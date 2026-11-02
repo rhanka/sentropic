@@ -1,13 +1,23 @@
 import { db } from '../../src/db/client';
-import { users, userSessions, webauthnCredentials, webauthnChallenges, magicLinks, emailVerificationCodes, workspaces, workspaceMemberships, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { workspaces, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
 import { createSession } from '../../src/services/session-manager';
-import type { UserRole } from '../../src/db/schema';
 import { verifyEmailCode } from '../../src/services/email-verification';
+import { createCmUser } from '../../src/services/identity/cm-users';
+import { createCmCredential, createCmEmailCode, sha256Hex } from '../../src/services/identity/cm-proofs';
+import { enrolCmWorkspace, putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
+import { getWebAuthnConfig } from '../../src/services/webauthn-config';
+import { cmDeleteForEmails, cmDeleteForUsers } from './cm-identity-test-store';
 
 /**
- * Test helpers for authentication integration tests
+ * Test helpers for authentication integration tests.
+ *
+ * Lot A4: identity fixtures live in the cluster-mesh cm_identity stores; the
+ * legacy public identity tables (users, userSessions, webauthn, magicLinks,
+ * emailVerificationCodes, workspaceMemberships) no longer exist.
  */
+
+export type UserRole = 'guest' | 'editor' | 'admin_org' | 'admin_app';
 
 export interface TestUser {
   id: string;
@@ -66,12 +76,8 @@ function getTrackedAuthScope(owner = resolveTrackedAuthOwner()): TrackedAuthScop
  */
 export async function cleanupAuthData() {
   if (process.env.TEST_CLEANUP_SCOPE !== 'tracked') {
-    await db.delete(userSessions);
-    await db.delete(webauthnCredentials);
-    await db.delete(webauthnChallenges);
-    await db.delete(magicLinks);
-    await db.delete(emailVerificationCodes);
-    await db.delete(users);
+    const { cmPurgeAllIdentity } = await import('./cm-identity-test-store');
+    await cmPurgeAllIdentity();
     return;
   }
 
@@ -85,18 +91,8 @@ export async function cleanupAuthData() {
   const emails = Array.from(scope.emails);
   trackedAuthScopes.delete(owner);
 
-  if (emails.length > 0) {
-    await db.delete(emailVerificationCodes).where(inArray(emailVerificationCodes.email, emails));
-    await db.delete(magicLinks).where(inArray(magicLinks.email, emails));
-  }
-
-  if (userIds.length > 0) {
-    await db.delete(webauthnChallenges).where(inArray(webauthnChallenges.userId, userIds));
-    await db.delete(webauthnCredentials).where(inArray(webauthnCredentials.userId, userIds));
-    await db.delete(userSessions).where(inArray(userSessions.userId, userIds));
-    await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.userId, userIds));
-    await db.delete(users).where(inArray(users.id, userIds));
-  }
+  await cmDeleteForEmails(emails);
+  await cmDeleteForUsers(userIds);
 }
 
 /**
@@ -123,16 +119,15 @@ export async function createTestUser(options: {
   const resolvedEmail = email ?? uniqueTestEmail(role);
 
   const userId = crypto.randomUUID();
-  
-  // Create user
-  await db.insert(users).values({
-    id: userId,
+
+  // Create user in the CM identity store
+  await createCmUser({
+    userId,
     email: resolvedEmail,
     displayName,
     role,
     emailVerified,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    accountStatus: 'active',
   });
   const trackedScope = getTrackedAuthScope();
   trackedScope.userIds.add(userId);
@@ -145,24 +140,23 @@ export async function createTestUser(options: {
     workspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({
       id: workspaceId,
-      ownerUserId: userId,
       name: `Test Workspace ${workspaceId.slice(0, 6)}`,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(workspaceMemberships).values({
+    await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
+    await putCmWorkspaceMember(
       workspaceId,
       userId,
-      role: role === 'guest' ? 'viewer' : role === 'editor' ? 'editor' : 'admin',
-      createdAt: new Date(),
-    });
+      role === 'guest' ? 'viewer' : role === 'editor' ? 'editor' : 'admin',
+    );
   } else if (role === 'admin_app') {
     workspaceId = ADMIN_WORKSPACE_ID;
   }
 
   // Create session if requested
   if (withSession) {
-    const session = await createSession(userId, role, { deviceName });
+    const session = await createSession(userId, role, { name: deviceName });
     sessionToken = session.sessionToken;
   }
 
@@ -211,19 +205,18 @@ export async function createTestUsersWithRoles(): Promise<{
 export async function createMockCredential(userId: string, deviceName: string = 'Test Device') {
   const credentialId = crypto.randomUUID();
   const uniqueCredentialId = `mock-credential-${credentialId}-base64`;
-  
-  await db.insert(webauthnCredentials).values({
-    id: credentialId,
-    credentialId: uniqueCredentialId,
+
+  const created = await createCmCredential({
     userId,
-    deviceName,
-    publicKeyCose: Buffer.from('mock-public-key-data').toString('base64'),
+    credentialId: uniqueCredentialId,
+    publicKey: Buffer.from('mock-public-key-data').toString('base64'),
     counter: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    name: deviceName,
+    rpId: getWebAuthnConfig().rpID,
+    now: new Date(),
   });
 
-  return credentialId;
+  return created.id;
 }
 
 /**
@@ -369,8 +362,7 @@ export async function unauthenticatedRequest(
  * Clean up test user and sessions (legacy function for compatibility)
  */
 export async function cleanupTestUser(userId: string): Promise<void> {
-  await db.delete(users).where(eq(users.id, userId));
-  // Sessions will be deleted via CASCADE
+  await cmDeleteForUsers([userId]);
 }
 
 /**
@@ -389,28 +381,24 @@ export function getAuthHeaders(sessionToken: string): Record<string, string> {
 export async function generateTestVerificationToken(email: string): Promise<string> {
   const normalizedEmail = email.trim().toLowerCase();
   const testCode = '123456';
-  const { createHash } = await import('crypto');
-  const codeHash = createHash('sha256').update(testCode).digest('hex');
+  const codeHash = sha256Hex(testCode);
 
   // Keep tests deterministic and parallel-safe by bypassing runtime rate-limits.
-  await db.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, normalizedEmail));
+  await cmDeleteForEmails([normalizedEmail]);
 
-  const codeId = crypto.randomUUID();
-  await db.insert(emailVerificationCodes).values({
-    id: codeId,
-    codeHash,
+  await createCmEmailCode({
     email: normalizedEmail,
+    codeHash,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-    used: false,
-    createdAt: new Date(),
+    now: new Date(),
   });
-  
+
   // Now verify the code to get the token
   const result = await verifyEmailCode({ email, code: testCode });
-  
+
   if (!result.valid || !result.verificationToken) {
     throw new Error('Failed to generate verification token for test');
   }
-  
+
   return result.verificationToken;
 }

@@ -1,28 +1,13 @@
-import type {
-  AuthHonoAccountStatus,
-  AuthHonoCookiePort,
-  AuthHonoSessionRecord,
-  AuthHonoSessionService,
-  AuthHonoUserRecord,
-} from '@sentropic/auth-hono';
-import { count, eq } from 'drizzle-orm';
-import { db } from '../../db/client';
-import { userSessions, users } from '../../db/schema';
-import {
-  refreshSession as refreshSessionTokens,
-  revokeSession as revokeSessionById,
-  validateSession,
-} from '../session-manager';
+import type { AuthHonoCookiePort } from '@sentropic/auth-hono';
 import { readDeviceCodeSnapshot } from '../device-code-store';
+import { countCmSessions } from '../identity/cm-sessions';
+import { findCmUserById } from '../identity/cm-users';
 
 /**
  * Sentropic adapters for `@sentropic/auth-hono` session route handlers.
  *
- * Shared by the Cluster Mesh session namespace and reusable by the auth middleware
- * and WebAuthn login/register rewirings. The session service implements only the
- * methods consumed by the package session route handlers (`refreshSession`,
- * `validateSessionToken`, `revokeSession`); `createSession`, `listUserSessions`,
- * and `revokeAllSessions` remain app-owned and are intentionally not delegated.
+ * Cookie serialization remains host configuration. Every identity operation
+ * enters the CM session service through a fresh transaction binding.
  */
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -64,115 +49,21 @@ export const authHonoCookiePort: AuthHonoCookiePort = {
     serializeCookie(SESSION_COOKIE, token, maxAgeFrom(expiresAt)),
 };
 
-const toAuthHonoSessionRecord = (
-  row: typeof userSessions.$inferSelect
-): AuthHonoSessionRecord => ({
-  createdAt: row.createdAt,
-  deviceName: row.deviceName,
-  expiresAt: row.expiresAt,
-  id: row.id,
-  ipAddress: row.ipAddress,
-  lastActivityAt: row.lastActivityAt ?? row.createdAt,
-  mfaVerified: row.mfaVerified,
-  refreshTokenHash: row.refreshTokenHash,
-  revokedAt: null,
-  sessionTokenHash: row.sessionTokenHash,
-  userAgent: row.userAgent,
-  userId: row.userId,
-});
-
-const toAuthHonoUserRecord = (row: typeof users.$inferSelect): AuthHonoUserRecord => ({
-  accountStatus: row.accountStatus as AuthHonoAccountStatus,
-  approvalDueAt: row.approvalDueAt,
-  createdAt: row.createdAt,
-  displayName: row.displayName,
-  email: row.email,
-  emailVerified: row.emailVerified,
-  id: row.id,
-  role: row.role,
-  updatedAt: row.updatedAt ?? row.createdAt,
-});
-
-export const authHonoSessionService: AuthHonoSessionService = {
-  async createSession() {
-    throw new Error('Session creation remains app-owned in Sentropic API.');
-  },
-
-  async listUserSessions() {
-    throw new Error('Session listing remains app-owned in Sentropic API.');
-  },
-
-  async refreshSession(refreshToken) {
-    const tokens = await refreshSessionTokens(refreshToken);
-    if (!tokens) {
-      return null;
-    }
-    return {
-      expiresAt: tokens.expiresAt,
-      refreshToken: tokens.refreshToken,
-      sessionId: tokens.sessionId,
-      sessionToken: tokens.sessionToken,
-    };
-  },
-
-  async revokeAllSessions() {
-    throw new Error('Global session revocation remains app-owned in Sentropic API.');
-  },
-
-  async revokeSession(sessionId) {
-    await revokeSessionById(sessionId);
-    return true;
-  },
-
-  async validateSessionToken(sessionToken) {
-    const payload = await validateSession(sessionToken);
-    if (!payload) {
-      return null;
-    }
-
-    const [sessionRow] = await db
-      .select()
-      .from(userSessions)
-      .where(eq(userSessions.id, payload.sessionId))
-      .limit(1);
-    const [userRow] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, payload.userId))
-      .limit(1);
-
-    if (!sessionRow || !userRow) {
-      return null;
-    }
-
-    return {
-      role: payload.role,
-      session: {
-        displayName: userRow.displayName,
-        email: userRow.email,
-        role: payload.role,
-        sessionId: payload.sessionId,
-        userId: payload.userId,
-      },
-      sessionRecord: toAuthHonoSessionRecord(sessionRow),
-      user: toAuthHonoUserRecord(userRow),
-    };
-  },
-};
+export { cmAuthSessionService as authHonoSessionService } from '../identity/cm-session-facade';
 
 export async function findSessionUser(userId: string) {
-  const [user] = await db.select({
-    email: users.email,
-    displayName: users.displayName,
-    role: users.role,
-  }).from(users).where(eq(users.id, userId)).limit(1);
-  return user ?? null;
+  const user = await findCmUserById(userId);
+  if (!user) return null;
+  return {
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+  };
 }
 
 export async function readSessionShadowSnapshot() {
-  const [sessions] = await db.select({ value: count() }).from(userSessions);
   return {
-    sessions: sessions?.value ?? 0,
+    sessions: await countCmSessions(),
     devices: readDeviceCodeSnapshot(),
   };
 }

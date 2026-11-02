@@ -5,14 +5,13 @@ import {
   markChallengeUsed,
   purgeExpiredChallenges,
 } from '../../../src/services/challenge-manager';
-import { db } from '../../../src/db/client';
-import { webauthnChallenges, users } from '../../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { cmPurgeAllIdentity, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 
 describe('Challenge Manager Service', () => {
   // Clean up challenges after each test
   afterEach(async () => {
-    await db.delete(webauthnChallenges);
+    await cmPurgeAllIdentity();
   });
 
   describe('generateChallenge', () => {
@@ -37,15 +36,7 @@ describe('Challenge Manager Service', () => {
 
     it('should generate authentication challenge with userId', async () => {
       const userId = crypto.randomUUID();
-      await db.insert(users).values({
-        id: userId,
-        email: `test-${userId}@example.com`,
-        displayName: 'Test User',
-        role: 'editor',
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await createCmUser({ userId, email: `test-${userId}@example.com`, displayName: 'Test User', role: 'editor', emailVerified: true, accountStatus: 'active' });
       const challenge = await generateChallenge({
         userId,
         type: 'authentication',
@@ -143,15 +134,7 @@ describe('Challenge Manager Service', () => {
 
     it('should reject challenge with wrong userId', async () => {
       const userId = crypto.randomUUID();
-      await db.insert(users).values({
-        id: userId,
-        email: `test-${userId}@example.com`,
-        displayName: 'Test User',
-        role: 'editor',
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await createCmUser({ userId, email: `test-${userId}@example.com`, displayName: 'Test User', role: 'editor', emailVerified: true, accountStatus: 'active' });
       const challenge = await generateChallenge({
         userId,
         type: 'authentication',
@@ -174,13 +157,9 @@ describe('Challenge Manager Service', () => {
       await markChallengeUsed(challenge.challenge);
       
       // Verify it's marked as used in DB
-      const [record] = await db
-        .select()
-        .from(webauthnChallenges)
-        .where(eq(webauthnChallenges.challenge, challenge.challenge))
-        .limit(1);
+      const rows = await cmQuery<{ state: string }>(`SELECT "state" FROM ${cmTable('identity_single_use_proofs')} WHERE "kind" = 'webauthn_challenge' AND "challenge" = $1`, [challenge.challenge]);
       
-      expect(record.used).toBe(true);
+      expect(rows[0]?.state).toBe('consumed');
     });
   });
 
@@ -197,13 +176,9 @@ describe('Challenge Manager Service', () => {
       expect(purgedCount).toBe(1);
       
       // Valid challenge should still exist
-      const [stillExists] = await db
-        .select()
-        .from(webauthnChallenges)
-        .where(eq(webauthnChallenges.id, valid.id))
-        .limit(1);
+      const stillRows = await cmQuery<{ proof_id: string }>(`SELECT "proof_id" FROM ${cmTable('identity_single_use_proofs')} WHERE "kind" = 'webauthn_challenge' AND "proof_id" = $1`, [valid.id]);
       
-      expect(stillExists).toBeDefined();
+      expect(stillRows.length).toBe(1);
     });
 
     it('should return 0 if no expired challenges', async () => {

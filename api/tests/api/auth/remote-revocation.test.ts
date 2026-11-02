@@ -10,7 +10,12 @@ import { request as httpRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
-import { serviceClients, settings, users, userSessions, workspaces } from '../../../src/db/schema';
+import { serviceClients, settings, workspaces } from '../../../src/db/schema';
+import { createCmUser, findCmUserById, updateCmUser } from '../../../src/services/identity/cm-users';
+import { findCmSessionById, listCmSessionsForUser } from '../../../src/services/identity/cm-sessions';
+import { enrolCmWorkspace, putCmWorkspaceMember } from '../../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../../src/services/workspace-service';
+import { cmCountActiveSessionsForUser, cmDeleteForUsers, cmQuery, cmReinsertSession, cmTable } from '../../utils/cm-identity-test-store';
 import { env } from '../../../src/config/env';
 import { createSession, revokeSession, revokeAllSessions, validateSession } from '../../../src/services/session-manager';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
@@ -19,7 +24,7 @@ import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
 import { remoteRawHash } from '../../../src/services/auth/remote-contract';
 import { createIdpApp } from '../../../../apps/auth-idp/idp-app';
-import { accountRouter } from '../../../src/routes/namespaces/auth/account';
+import { accountRouter } from '../../../src/routes/namespaces/auth/cm-auth-hono';
 import { adminRouter } from '../../../src/routes/namespaces/admin-product-authority';
 import { runAdminApprovalSweep } from '../../../src/services/admin-approval-sweep';
 import { signRevocation, revocationServiceOrigin } from '../../../src/services/auth/remote-revocation-transport';
@@ -41,7 +46,7 @@ beforeEach(async () => {
   vi.stubEnv('REMOTE_ACTION_REVOCATION_CLIENT_SECRET', crypto.randomUUID());
   vi.stubEnv('REMOTE_ACTION_REVOCATION_RESOURCE', resource);
   userId = crypto.randomUUID();
-  await db.insert(users).values({ id: userId, email: `${userId}@example.test`, emailVerified: true, role: 'editor' });
+  await createCmUser({ userId, email: `${userId}@example.test`, role: 'editor', emailVerified: true, accountStatus: 'active' });
 });
 afterEach(async () => {
   for (const server of servers.splice(0)) {
@@ -49,8 +54,9 @@ afterEach(async () => {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
   await db.delete(settings).where(like(settings.key, 'remote_session_revocation:%'));
-  await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
-  await db.delete(users).where(eq(users.id, userId));
+  const wsRows = await cmQuery<{ workspace_id: string }>(`SELECT "workspace_id" FROM ${cmTable('cm_workspace_members')} WHERE "user_id" = `, [userId]);
+  if (wsRows.length) await db.delete(workspaces).where(inArray(workspaces.id, wsRows.map((r) => r.workspace_id)));
+  await cmDeleteForUsers([userId]);
   await db.delete(serviceClients).where(eq(serviceClients.clientId, clientId));
   Object.assign(env, testEnv);
   vi.unstubAllEnvs(); vi.unstubAllGlobals();
@@ -160,7 +166,7 @@ describe('RC1 product to issuer revocation', () => {
   });
   it.each(['logout', 'logout-all'])('should clear both cookies and return pending 503 for unavailable %s', async operation => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const row = await findCmSessionById(tokens.sessionId);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('issuer unavailable')));
     const app = new Hono().delete('/logout', c => sessionLifecycleHandlers.logout!(c))
@@ -172,13 +178,13 @@ describe('RC1 product to issuer revocation', () => {
     expect(await response.json()).toEqual({ error: 'authority_unavailable', revocation: 'pending' });
     expect(response.headers.get('set-cookie')).toContain('session=;');
     expect(response.headers.get('set-cookie')).toContain('refresh_token=;');
-    expect(await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId))).toEqual([]);
+    expect((await findCmSessionById(tokens.sessionId))?.revokedAt ?? null).toBeTruthy();
     expect(await pendingRemoteRevocations()).toHaveLength(1);
     await bridge();
     await runAdminApprovalSweep();
     expect(await pendingRemoteRevocations()).toEqual([]);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
-    await db.insert(userSessions).values(row);
+    await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each(['missing-mac', 'altered-body', 'stale-stamp', 'wrong-key', 'forged-forwarded-proto'])
@@ -222,18 +228,19 @@ describe('RC1 product to issuer revocation', () => {
   it.each(['self-deactivate', 'self-delete', 'admin-disable', 'admin-delete', 'approval-sweep'])
   ('should tombstone issuer authority through the actual %s lifecycle', async operation => {
     const workspaceId = crypto.randomUUID();
-    await db.insert(workspaces).values({ id: workspaceId, ownerUserId: userId, name: 'RC1 lifecycle' });
+    await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 lifecycle' });
+    await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
+    await putCmWorkspaceMember(workspaceId, userId, 'admin');
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    const [session] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const user = await findCmUserById(userId);
+    const session = await findCmSessionById(tokens.sessionId);
     expect(await resolveRemoteLogin(tokens.sessionToken)).not.toBeNull();
     await bridge();
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
-    if (operation === 'admin-delete') await db.update(users).set({ accountStatus: 'disabled_by_admin' }).where(eq(users.id, userId));
+    if (operation === 'admin-delete') await updateCmUser(userId, { accountStatus: 'disabled_by_admin' });
     if (operation === 'approval-sweep') {
       // Scope the selected candidates; DB writes and issuer delivery remain real.
-      await db.update(users).set({ accountStatus: 'pending_admin_approval',
-        approvalDueAt: new Date(Date.now() + 3_600_000) }).where(eq(users.id, userId));
+      await updateCmUser(userId, { accountStatus: 'pending_admin_approval', approvalDueAt: new Date(Date.now() - 3_600_000) });
       const candidates = { from: () => ({ where: async () => [{ id: userId }] }) };
       vi.spyOn(db, 'select').mockReturnValueOnce(candidates as unknown as ReturnType<typeof db.select>);
       expect((await runAdminApprovalSweep()).expiredCount).toBe(1);
@@ -247,20 +254,22 @@ describe('RC1 product to issuer revocation', () => {
       });
       expect(response.status).toBe(200);
     }
-    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
+    expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
     expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(true);
-    await db.insert(users).values(user).onConflictDoUpdate({ target: users.id, set: user });
-    await db.insert(userSessions).values(session);
+    await createCmUser({ userId: user!.id, email: user!.email ?? `${user!.id}.test`, role: user!.role, emailVerified: user!.emailVerified, accountStatus: user!.accountStatus, approvalDueAt: user!.approvalDueAt });
+    await cmReinsertSession(session!);
     expect(await validateSession(tokens.sessionToken)).toMatchObject({ userId });
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each(['self-deactivate', 'self-delete', 'admin-disable', 'admin-delete'])
   ('should commit %s destruction even when issuer delivery fails', async operation => {
     const workspaceId = crypto.randomUUID();
-    await db.insert(workspaces).values({ id: workspaceId, ownerUserId: userId, name: 'RC1 failed delivery' });
+    await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 failed delivery' });
+    await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
+    await putCmWorkspaceMember(workspaceId, userId, 'admin');
     await createSession(userId, 'editor', undefined, { mfaVerified: true });
-    if (operation === 'admin-delete') await db.update(users).set({ accountStatus: 'disabled_by_admin' }).where(eq(users.id, userId));
+    if (operation === 'admin-delete') await updateCmUser(userId, { accountStatus: 'disabled_by_admin' });
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('issuer unavailable')));
     const admin = operation.startsWith('admin');
@@ -278,8 +287,8 @@ describe('RC1 product to issuer revocation', () => {
       expect(response.headers.get('set-cookie')).toContain('session=;');
       expect(response.headers.get('set-cookie')).toContain('refresh_token=;');
     }
-    if (operation.endsWith('delete')) expect(await db.select().from(users).where(eq(users.id, userId))).toEqual([]);
-    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
+    if (operation.endsWith('delete')) expect(await findCmUserById(userId)).toBeNull();
+    expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
     if (operation.endsWith('delete')) expect(await db.select().from(workspaces).where(eq(workspaces.id, workspaceId))).toEqual([]);
     expect(await pendingRemoteRevocations()).toHaveLength(1);
     await bridge();
@@ -289,12 +298,12 @@ describe('RC1 product to issuer revocation', () => {
   });
   it('should expire every selected user even when all issuer deliveries fail', async () => {
     const otherId = crypto.randomUUID();
-    await db.insert(users).values({ id: otherId, email: `${otherId}@example.test`, emailVerified: true, role: 'editor' });
+    await createCmUser({ userId: otherId, email: `${otherId}@example.test`, role: 'editor', emailVerified: true, accountStatus: 'active' });
     try {
       const first = await createSession(userId, 'editor', undefined, { mfaVerified: true });
       const second = await createSession(otherId, 'editor', undefined, { mfaVerified: true });
-      await db.update(users).set({ accountStatus: 'pending_admin_approval',
-        approvalDueAt: new Date(Date.now() + 3_600_000) }).where(inArray(users.id, [userId, otherId]));
+      await updateCmUser(userId, { accountStatus: 'pending_admin_approval', approvalDueAt: new Date(Date.now() - 3_600_000) });
+      await updateCmUser(otherId, { accountStatus: 'pending_admin_approval', approvalDueAt: new Date(Date.now() - 3_600_000) });
       const candidates = { from: () => ({ where: async () => [{ id: userId }, { id: otherId }] }) };
       vi.spyOn(db, 'select').mockReturnValueOnce(candidates as unknown as ReturnType<typeof db.select>);
       const transport = vi.fn().mockRejectedValue(new Error('issuer unavailable'));
@@ -303,17 +312,18 @@ describe('RC1 product to issuer revocation', () => {
       await expect(runAdminApprovalSweep()).resolves.toEqual({ expiredCount: 2 });
       expect(transport).toHaveBeenCalledTimes(1); // Concurrent deliveries share the failed token request.
       expect(await pendingRemoteRevocations()).toHaveLength(2);
-      expect(await db.select().from(userSessions).where(inArray(userSessions.userId, [userId, otherId]))).toEqual([]);
+      expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
+      expect(await cmCountActiveSessionsForUser(otherId)).toBe(0);
       vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
       expect(await resolveRemoteLogin(first.sessionToken)).toBeNull();
       expect(await resolveRemoteLogin(second.sessionToken)).toBeNull();
-    } finally { await db.delete(users).where(eq(users.id, otherId)); }
+    } finally { await cmDeleteForUsers([otherId]); }
   });
   it.each(['logout', 'revoke-all', 'oauth-logout', 'oauth-revoke-all'])
   ('should persist issuer tombstones for product %s before returning', async operation => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
     if (operation.includes('all')) await createSession(userId, 'editor', undefined, { mfaVerified: true });
-    const rows = await db.select().from(userSessions).where(eq(userSessions.userId, userId));
+    const rows = await listCmSessionsForUser(userId);
     const transport = await bridge();
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     if (operation === 'logout') await revokeSession(tokens.sessionId);
@@ -323,8 +333,8 @@ describe('RC1 product to issuer revocation', () => {
     expect(transport).toHaveBeenCalledTimes(2);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
     for (const row of rows) expect(getRemoteSessionAuthority()!.find(row.id)?.revoked).toBe(true);
-    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
-    await db.insert(userSessions).values(rows);
+    expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
+    for (const row of rows) await cmReinsertSession(row);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each([{ scope: 'remote.evidence.issue' }, { aud: 'other' }, { client_id: 'other' },
@@ -342,11 +352,11 @@ describe('RC1 product to issuer revocation', () => {
   });
   it('should delete the DB session even when issuer delivery fails', async () => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const row = await findCmSessionById(tokens.sessionId);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network unavailable')));
     await expect(revokeSession(tokens.sessionId)).rejects.toMatchObject({ code: 'authority_unavailable' });
-    expect(await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId))).toEqual([]);
+    expect((await findCmSessionById(tokens.sessionId))?.revokedAt ?? null).toBeTruthy();
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
     // Retry still tombstones the issuer record after the shared row is already gone.
@@ -354,22 +364,22 @@ describe('RC1 product to issuer revocation', () => {
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     await revokeSession(tokens.sessionId);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
-    await db.insert(userSessions).values(row);
+    await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each(['lock', 'corrupt-file', 'missing-pvc'])
   ('should delete product sessions and keep issuer authority closed on %s', async failure => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const row = await findCmSessionById(tokens.sessionId);
     await bridge();
     if (failure === 'lock') mkdirSync(join(directory, `${remoteRawHash(tokens.sessionId)}.json.lock`));
     if (failure === 'corrupt-file') writeFileSync(join(directory, `${'0'.repeat(64)}.json`), '{');
     if (failure === 'missing-pvc') rmSync(directory, { recursive: true });
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     await expect(revokeAllSessions(userId)).rejects.toMatchObject({ code: 'authority_unavailable' });
-    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
+    expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
-    await db.insert(userSessions).values(row);
+    await cmReinsertSession(row!);
     await expect(resolveRemoteLogin(tokens.sessionToken)).rejects.toMatchObject({ code: 'authority_unavailable' });
   });
   it('should refuse an active product composition missing its issuer configuration after DB removal', async () => {
@@ -377,7 +387,7 @@ describe('RC1 product to issuer revocation', () => {
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     vi.stubEnv('REMOTE_ACTION_REVOCATION_ISSUER', '');
     await expect(revokeSession(tokens.sessionId)).rejects.toMatchObject({ code: 'authority_unavailable' });
-    expect(await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId))).toEqual([]);
+    expect((await findCmSessionById(tokens.sessionId))?.revokedAt ?? null).toBeTruthy();
   });
   it.each(['browser', 'cookie', 'http', 'extra-field', 'duplicate', 'oversize', 'empty', 'anonymous'])
   ('should refuse %s revocation requests without writing authority', async failure => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../../src/db/client';
-import { objectLocks, workspaceMemberships } from '../../src/db/schema';
+import { objectLocks } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import { eq } from 'drizzle-orm';
 import { createTestUser, cleanupAuthData } from '../utils/auth-helper';
 import { acquireLock, releaseLock, requestUnlock, acceptUnlock, forceUnlock, getActiveLock, __test_clearLocksForUser } from '../../src/services/lock-service';
@@ -18,13 +19,8 @@ describe('lock-service', () => {
     adminMember = await createTestUser({ role: 'editor', withSession: false, email: `admin-${suffix}@example.com` });
     workspaceId = editor.workspaceId;
 
-    await db
-      .insert(workspaceMemberships)
-      .values([
-        { workspaceId, userId: editorB.id, role: 'editor', createdAt: new Date() },
-        { workspaceId, userId: adminMember.id, role: 'admin', createdAt: new Date() },
-      ])
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(workspaceId, editorB.id, 'editor');
+    await putCmWorkspaceMember(workspaceId, adminMember.id, 'admin');
   });
 
   afterEach(async () => {

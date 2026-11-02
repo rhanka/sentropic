@@ -12,6 +12,30 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./ui/WorkspaceMembersScreen.svelte": {
+      "types": "./ui/WorkspaceMembersScreen.svelte.d.ts", "svelte": "./ui/WorkspaceMembersScreen.svelte", "import": "./ui/WorkspaceMembersScreen.svelte"
+    },
+    "./ui/MembershipDecisionsScreen.svelte": {
+      "types": "./ui/MembershipDecisionsScreen.svelte.d.ts", "svelte": "./ui/MembershipDecisionsScreen.svelte", "import": "./ui/MembershipDecisionsScreen.svelte"
+    },
+    "./ui/AdminUsersScreen.svelte": {
+      "types": "./ui/AdminUsersScreen.svelte.d.ts", "svelte": "./ui/AdminUsersScreen.svelte", "import": "./ui/AdminUsersScreen.svelte"
+    },
+    "./ui/management": {
+      "types": "./ui/management-transport.ts", "import": "./ui/management-transport.ts"
+    },
+    "./ui/management-ports": {
+      "types": "./ui/management-ports.ts", "import": "./ui/management-ports.ts"
+    },
+    "./ui/auth-flow": {
+      "types": "./ui/auth-flow.ts", "import": "./ui/auth-flow.ts"
+    },
+    "./ui/LoginScreen.svelte": {
+      "types": "./ui/LoginScreen.svelte.d.ts", "svelte": "./ui/LoginScreen.svelte", "import": "./ui/LoginScreen.svelte"
+    },
+    "./ui/RegistrationScreen.svelte": {
+      "types": "./ui/RegistrationScreen.svelte.d.ts", "svelte": "./ui/RegistrationScreen.svelte", "import": "./ui/RegistrationScreen.svelte"
+    },
     "./speech": {
       "types": "./dist/speech/index.d.ts",
       "import": "./dist/speech/index.js"
@@ -182,6 +206,7 @@
     }
   },
   "files": [
+    "ui",
     "dist",
     "examples/memory-mcp-stdio.mjs",
     "docs/memory-mcp.md",
@@ -196,6 +221,7 @@
     "access": "public"
   },
   "sideEffects": [
+    "./ui/*.svelte",
     "./dist/modules/topology.js",
     "./dist/modules/topology-guard.js",
     "./dist/modules/topology-guard-gateway.js",
@@ -217,6 +243,9 @@
     "hono": "^4.10.7"
   },
   "peerDependencies": {
+    "@sentropic/design-system-svelte": "^0.34.0",
+    "@sentropic/auth-ui": "^0.9.0",
+    "svelte": "^5.0.0",
     "@sentropic/engram": ">=0.22.0 <0.23.0",
     "@sentropic/comments": "^0.3.0",
     "@sentropic/llm-mesh": "0.19.2 || >=0.22.0 <0.33.0",
@@ -228,6 +257,9 @@
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
+    "@sentropic/design-system-svelte": { "optional": true },
+    "@sentropic/auth-ui": { "optional": true },
+    "svelte": { "optional": true },
     "@sentropic/engram": { "optional": true },
     "@sentropic/comments": { "optional": true },
     "@sentropic/llm-mesh": { "optional": true },

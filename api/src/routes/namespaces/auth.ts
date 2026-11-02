@@ -9,13 +9,14 @@ import { requireAuth } from '../../middleware/auth';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { getSentropicOAuthPorts } from '../auth/oauth';
 import { applyAuthAuthorFence, type AuthCompositionRoot } from './auth-cutover';
-import { accountRouter } from './auth/account';
-import { loginHandlers } from './auth/authentication';
-import { credentialHandlers } from './auth/credentials';
-import { emailHandlers } from './auth/email';
+import { accountRouter } from './auth/cm-auth-hono';
+import { cmRegisterHandlers as registerHandlers } from './auth/cm-registration';
+import { cmLoginHandlers as loginHandlers } from './auth/cm-authentication';
+import { cmCredentialHandlers as credentialHandlers } from './auth/cm-credentials';
+import { cmEmailHandlers as emailHandlers } from './auth/cm-email';
 import { createFederationRouter } from './auth/federation';
-import { magicLinkHandlers } from './auth/magic-link';
-import { registerHandlers } from './auth/registration';
+import { cmMagicLinkHandlers as magicLinkHandlers } from './auth/cm-magic-link';
+
 
 export interface AuthPathProjection {
   readonly accountPath: string;

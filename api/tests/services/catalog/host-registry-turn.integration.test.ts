@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
-import { chatSessions, tenantMemberships } from '../../../src/db/schema';
+import { chatSessions } from '../../../src/db/schema';
+import { setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../../src/services/workspace-service';
+import { cmDeleteTenantMembershipsForUser } from '../../utils/cm-identity-test-store';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../../utils/auth-helper';
 
 vi.mock('../../../src/services/llm-runtime', () => ({ callLLMStream: vi.fn() }));
@@ -18,7 +21,7 @@ describe('compiled host registry in real chat model discovery', () => {
     CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '1');
     user = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(user.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
   });
   afterEach(async () => {
     CHAT_COMMON_PROMPTS.reasoning_effort_eval = evaluationTemplate;
@@ -30,7 +33,7 @@ describe('compiled host registry in real chat model discovery', () => {
   it('should offer exact permitted compiled tools to real generation and omit them after revocation', async () => {
     const names = [...(await productArtifactTransport.ready).tools.keys()];
     const other = await createAuthenticatedUser('guest');
-    await db.insert(tenantMemberships).values({ userId: other.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(other.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
     const seen = new Map<string, string[]>();
     vi.mocked(callLLMStream).mockImplementation(async function* (options) {
       seen.set(options.userId!, (options.tools ?? []).flatMap(tool => tool.type === 'function' ? [tool.function.name] : []));
@@ -46,7 +49,7 @@ describe('compiled host registry in real chat model discovery', () => {
     await Promise.all([run(user), run(other)]);
     expect(seen.get(user.id)).toEqual(expect.arrayContaining(names));
     expect(seen.get(other.id)?.filter(name => names.includes(name))).toEqual(['artifacts_get', 'artifacts_list']);
-    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, other.id));
+    await cmDeleteTenantMembershipsForUser(other.id);
     await run(other);
     expect(seen.get(other.id)).toEqual([]);
     vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '0');

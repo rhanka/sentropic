@@ -1505,6 +1505,26 @@
       "collapseDetails": "Replier le détail"
     }
   },
+  "identity": {
+    "membershipTitle": "Appartenances aux tenants",
+    "approvalsIndependent": "L’approbation du compte et celle de l’appartenance au tenant sont deux décisions distinctes.",
+    "tenant": "Identifiant du tenant",
+    "loadDecisions": "Charger les décisions",
+    "requestMembership": "Demander une appartenance",
+    "requestReceived": "Votre demande d’appartenance a été reçue.",
+    "membershipLoadFailed": "Impossible de charger les appartenances. Un accès administrateur du tenant est nécessaire.",
+    "actionFailed": "L’action n’a pas pu être confirmée. Actualisez pour vérifier son état courant.",
+    "person": "Utilisateur",
+    "decidedBy": "Auteur et date de décision",
+    "reject": "Rejeter",
+    "suspend": "Suspendre",
+    "noMemberships": "Aucune appartenance dans ce tenant.",
+    "membershipStatus": {
+      "invited": "Invitée", "requested": "Demandée", "approved": "Approuvée",
+      "rejected": "Rejetée", "suspended": "Suspendue"
+    },
+    "tenantRole": { "member": "Membre", "admin": "Administrateur" }
+  },
   "adminUsers": {
     "title": "Admin · Utilisateurs",
     "embeddedTitle": {
@@ -1545,7 +1565,8 @@
       "approved": "Utilisateur approuvé.",
       "disabled": "Utilisateur désactivé.",
       "reactivated": "Utilisateur réactivé.",
-      "deleted": "Utilisateur supprimé définitivement."
+      "deleted": "Utilisateur supprimé définitivement.",
+      "deletionPending": "Compte supprimé. Les révocations externes sont encore en attente."
     },
     "errors": {
       "load": "Erreur de chargement admin.",

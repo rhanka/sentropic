@@ -1,48 +1,73 @@
 import { createHash } from 'node:crypto';
 import type { AuthUser } from '../../middleware/auth';
-import { pool } from '../../db/client';
-import { resolveTenantAuthoritatively } from '../tenancy/resolve-tenant';
+import { createFreshDecisionProducer } from '@sentropic/cluster-mesh';
+import { runCmIdentityRead } from '../identity/cm-transaction';
+import { findCmApprovedMembership } from '../identity/cm-tenancy';
 import { compositeCatalogRegistry, prepareHostRegistryCatalog } from '../skills/catalog';
 import { createCatalogContextResolver, type CatalogContextInput } from './request-context';
 
-/** First-party HTTP sessions and verified conversation turns have separate session authorities.
- * OAuth consent is not borrowed from a first-party session. Provider grants remain provider-owned.
- * W4.a intentionally binds turns to conversation + current account/memberships, not login liveness:
- * logout or login expiry does not stop a running turn; conversation/account/membership revocation does.
+/** F15: the fresh per-request decision producer (A2.3) is the ONLY authority for
+ * catalog/tool access. The legacy SQL join over `user_sessions`/`users`/
+ * `workspace_memberships`/`tenant_memberships`/`tenants` is gone — those tables
+ * are dropped by control migration 0014; every input is read from the CM stores.
+ *
+ * A refusal yields an EMPTY tool set (never a partial catalogue): the producer
+ * owns that rule, and this module denies the context outright on refusal.
+ * W4.a intentionally binds turns to conversation + current account/memberships, not
+ * login liveness: logout or login expiry does not stop a running turn;
+ * conversation/account/membership revocation does.
  */
-const resolve = createCatalogContextResolver(async input => {
-  const tenant = await resolveTenantAuthoritatively({ workspaceId: input.workspaceId, userId: input.userId });
-  if ('error' in tenant) throw new Error('catalog_access_denied');
-  const sessionTable = input.kind === 'http' ? 'user_sessions' : 'chat_sessions';
-  const sessionConstraint = input.kind === 'http' ? 's.expires_at > clock_timestamp()' : 's.workspace_id = w.id';
-  // Activity touches and conversation title updates are not policy changes.
-  const sessionRevision = input.kind === 'http' ? 's.expires_at::text' : 's.workspace_id';
-  const result = await pool.query<{ role: string; type: string; revision: string }>(
-    `SELECT wm.role, w.type, concat_ws(':', ${sessionRevision}, u.xmin, w.xmin, wm.xmin, tm.xmin, t.xmin) AS revision
-     FROM ${sessionTable} s JOIN users u ON u.id = s.user_id
-     JOIN workspace_memberships wm ON wm.user_id = u.id AND wm.workspace_id = $3
-     JOIN workspaces w ON w.id = wm.workspace_id
-     JOIN tenant_memberships tm ON tm.user_id = u.id AND tm.tenant_id = w.tenant_id
-     JOIN tenants t ON t.id = w.tenant_id
-     WHERE s.id = $2 AND u.id = $1 AND w.tenant_id = $4 AND ${sessionConstraint}
-       AND u.account_status = 'active' AND u.disabled_at IS NULL AND w.hidden_at IS NULL
-       AND tm.status = 'approved' AND t.status = 'active'`,
-    [input.userId, input.sessionId, input.workspaceId, tenant.tenantId],
-  );
-  const row = result.rows[0];
-  if (!row || !['viewer', 'commenter', 'editor', 'admin'].includes(row.role)) throw new Error('catalog_access_denied');
+
+const baseToolNames = (): string[] => {
   const names = compositeCatalogRegistry.list().flatMap(entry =>
     entry.kind === 'skill' ? entry.skill.tools.map(tool => tool.name)
       : entry.kind === 'tool' ? [entry.metadata.name] : []);
-  if (process.env.APP_ARTIFACT_HOST_ENABLED === '1') {
-    // The compiled registry owns public identifiers; never sanitize or reconstruct them here.
-    names.push(...(await prepareHostRegistryCatalog())!.tools.keys());
+  return [...new Set(['search_skills', 'search_catalog', ...names])];
+};
+
+const resolve = createCatalogContextResolver(async input => {
+  // Resolve filesystem assets before the replayable database callback. Every public
+  // identifier, including artifact tools, passes through the F15 catalog mapping.
+  const registry = process.env.APP_ARTIFACT_HOST_ENABLED === '1' ? await prepareHostRegistryCatalog() : null;
+  const toolNames = Object.freeze([...new Set([...baseToolNames(), ...(registry?.tools.keys() ?? [])])]);
+  return runCmIdentityRead(async tx => {
+  const producer = createFreshDecisionProducer({ accounts: tx.stores.accounts, sessions: tx.stores.sessions,
+    tenants: tx.stores.tenants, memberships: tx.stores.memberships, workspaces: tx.stores.workspaces,
+    workspaceMembers: tx.stores.workspaceMembers, conversations: tx.conversations,
+    catalog: { toolsForDecision: () => [...toolNames] } });
+  const now = new Date().toISOString();
+  let conversationSessionId: string | undefined;
+  if (input.kind === 'turn') {
+    const result = await tx.hostTransaction.query<{ cm_conversation_session_id: string | null }>(
+      `SELECT cm_conversation_session_id FROM public.chat_sessions WHERE id = $1 AND user_id = $2 AND workspace_id = $3`,
+      [input.sessionId, input.userId, input.workspaceId]);
+    conversationSessionId = result.rows[0]?.cm_conversation_session_id ?? undefined;
+    if (!conversationSessionId) throw new Error('catalog_access_denied');
   }
-  return { tenantId: tenant.tenantId, membershipRef: `${input.workspaceId}:${input.userId}:${row.role}`,
+  const fresh = await producer.decide(
+    input.kind === 'http'
+      ? { inputKind: 'first_party_http', userId: input.userId, workspaceId: input.workspaceId, sessionId: input.sessionId }
+      : { inputKind: 'conversation_turn', userId: input.userId, workspaceId: input.workspaceId, conversationSessionId: conversationSessionId! },
+    now,
+  );
+  if (!fresh.decision.allow) throw new Error('catalog_access_denied');
+  const { decision } = fresh;
+
+  const membership = await findCmApprovedMembership(input.userId, decision.tenantId);
+  const { rows: [wsRow] } = await tx.hostTransaction.query<{ type: string }>(
+    'SELECT type FROM public.workspaces WHERE id = $1 AND hidden_at IS NULL', [input.workspaceId]);
+  if (!wsRow) throw new Error('catalog_access_denied');
+
+  const policyVersion = createHash('sha256').update(
+    [decision.tid, decision.tenantRole, decision.workspaceRole, membership?.updatedAt.toISOString() ?? '', decision.scopes.join(',')].join('|'),
+  ).digest('hex');
+
+  return { tenantId: decision.tenantId, membershipRef: `${input.workspaceId}:${input.userId}:${decision.workspaceRole}`,
     consentRef: `first-party:${input.kind}:${input.sessionId}`,
-    policyVersion: createHash('sha256').update(row.revision).digest('hex'),
-    roles: [row.role], workspaceType: row.type, readOnly: !['editor', 'admin'].includes(row.role),
-    allowedTools: [...new Set(['search_skills', 'search_catalog', ...names])] };
+    policyVersion,
+    roles: [decision.workspaceRole], workspaceType: wsRow?.type, readOnly: !['editor', 'admin'].includes(decision.workspaceRole),
+    allowedTools: [...new Set(fresh.allowedTools)] };
+  });
 });
 
 export const resolveHttpCatalogContext = (user: AuthUser) => resolve({ kind: 'http',

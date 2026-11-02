@@ -12,7 +12,9 @@ import {
 } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { settings, workspaceMemberships, workspaces } from '../../src/db/schema';
+import { settings, workspaces } from '../../src/db/schema';
+import { listCmWorkspaceMembers } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin } from '../../src/middleware/rbac';
 import type { ClientsCutoverControl } from '../../src/routes/namespaces/clients-cutover';
@@ -109,7 +111,7 @@ describe('cluster mesh clients cutover', () => {
   afterEach(async () => {
     if (createdWorkspaceIds.size > 0) {
       const ids = [...createdWorkspaceIds];
-      await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.workspaceId, ids));
+      for (const id of ids) await cmDeleteWorkspaceMembers(id);
       await db.delete(workspaces).where(inArray(workspaces.id, ids));
       createdWorkspaceIds.clear();
     }
@@ -210,11 +212,9 @@ describe('cluster mesh clients cutover', () => {
     createdWorkspaceIds.add(activeBody.mappedWorkspaceId);
     expect(active.status).toBe(201);
     expect(await db.select().from(workspaces).where(eq(workspaces.id, activeBody.mappedWorkspaceId)))
-      .toEqual([expect.objectContaining({ ownerUserId: editor.id, name: activeBody.mappedWorkspaceName })]);
-    expect(await db.select().from(workspaceMemberships).where(and(
-      eq(workspaceMemberships.workspaceId, activeBody.mappedWorkspaceId),
-      eq(workspaceMemberships.userId, editor.id),
-    ))).toEqual([expect.objectContaining({ role: 'admin' })]);
+      .toEqual([expect.objectContaining({ name: activeBody.mappedWorkspaceName })]);
+    expect(await listCmWorkspaceMembers(activeBody.mappedWorkspaceId))
+      .toEqual([expect.objectContaining({ userId: editor.id, role: 'admin' })]);
 
     const legacy = await invoke(historical, historicalEditor, 'historical:d11');
     const legacyBody = await legacy.json() as { mappedWorkspaceId: string; mappedWorkspaceName: string };

@@ -3,7 +3,9 @@ import { app } from '../../src/app';
 import { createTestId } from '../utils/test-helpers';
 import { createAuthenticatedUser, authenticatedRequest, cleanupAuthData } from '../utils/auth-helper';
 import { db, pool } from '../../src/db/client';
-import { comments, organizations, folders, initiatives, workspaceMemberships } from '../../src/db/schema';
+import { comments, organizations, folders, initiatives } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { toolService } from '../../src/services/tool-service';
@@ -68,10 +70,7 @@ describe('Comments wire-payload characterization (BR-42d Lot 0)', () => {
     user = await createAuthenticatedUser('editor', `wire-owner-${createTestId()}@example.com`);
     editor = await createAuthenticatedUser('editor', `wire-editor-${createTestId()}@example.com`);
     if (user.workspaceId) {
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: user.workspaceId, userId: editor.id, role: 'editor', createdAt: new Date() })
-        .onConflictDoNothing();
+      await putCmWorkspaceMember(user.workspaceId, editor.id, 'editor');
     }
 
     const orgRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations', user.sessionToken!, {
@@ -108,7 +107,7 @@ describe('Comments wire-payload characterization (BR-42d Lot 0)', () => {
       await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
       await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
       await db.delete(organizations).where(eq(organizations.workspaceId, user.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, user.workspaceId));
+      await cmDeleteWorkspaceMembers(user.workspaceId);
     }
     await cleanupAuthData();
   });

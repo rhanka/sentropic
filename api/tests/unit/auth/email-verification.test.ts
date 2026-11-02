@@ -1,7 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { generateEmailVerificationCode } from '../../../src/services/email-verification';
-import { db } from '../../../src/db/client';
-import { emailVerificationCodes } from '../../../src/db/schema';
+import { cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 
 const sendTransactionalEmailMock = vi.hoisted(() => vi.fn());
 
@@ -16,7 +15,7 @@ describe('Email Verification Service', () => {
   });
 
   afterEach(async () => {
-    await db.delete(emailVerificationCodes);
+    await cmQuery(`DELETE FROM ${cmTable('identity_single_use_proofs')} WHERE kind = 'email_code'`);
   });
 
   describe('generateEmailVerificationCode', () => {

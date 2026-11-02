@@ -1,6 +1,7 @@
 import { createOAuthRouter, createWellKnownRouter, TOKEN_EXCHANGE_GRANT_TYPE } from '@sentropic/auth-hono';
 import { ALL_MCP_SCOPES } from '@sentropic/mcp-auth';
 import { Hono, type Context } from 'hono';
+import { runCmAuthHttp } from './auth/cm-http';
 
 import {
   createSentropicOAuthOptions,
@@ -22,10 +23,11 @@ const OAUTH_ROUTES = [
 
 export const createSentropicOAuthIngress = (publicPath: string): Hono => {
   const ingress = new Hono();
-  const forward = (c: Context) => createOAuthRouter({
+  const forward = (c: Context) => runCmAuthHttp(c, null, binding => createOAuthRouter({
     ...createSentropicOAuthOptions(c.req.raw),
+    ports: binding.ports,
     routePrefix: publicPath,
-  }).fetch(c.req.raw);
+  }));
 
   for (const [method, path] of OAUTH_ROUTES) ingress.on(method, path, forward);
   return ingress;

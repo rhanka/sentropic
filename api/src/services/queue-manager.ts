@@ -1,4 +1,5 @@
 import { db, pool } from '../db/client';
+import { getPublicJobStreamId } from './public-job-stream';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { outboxWriter } from './outbox/outbox-writer';
 import {
@@ -35,7 +36,7 @@ import type { TenantContext } from '@sentropic/contracts';
 import { targetFromLive } from '@sentropic/comments';
 import { createId } from '../utils/id';
 import { commentStore, commentEventSink } from './comments/instance';
-import { reconcileTenantId } from './tenancy/resolve-tenant';
+import { reconcileCmTenantId } from './identity/cm-tenancy';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
   generateInitiativeList,
@@ -61,12 +62,12 @@ import {
   contextDocuments,
   contextModificationHistory,
   executionRuns,
-  users,
   workflowDefinitionTasks,
   workflowTaskTransitions,
   workflowTaskResults,
-  workspaceMemberships,
 } from '../db/schema';
+import { findCmUserById } from './identity/cm-users';
+import { listCmWorkspaceMembers } from './identity/cm-tenancy';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
@@ -485,46 +486,7 @@ export interface Job {
   error?: string;
 }
 
-export function getPublicJobStreamId(job: Pick<Job, 'id' | 'type' | 'data'>): string {
-  const rawData = (job.data ?? {}) as unknown as Record<string, unknown>;
-  if (job?.type === 'organization_enrich' && (job.data as OrganizationEnrichJobData | undefined)?.organizationId) {
-    return `organization_${(job.data as OrganizationEnrichJobData).organizationId}`;
-  }
-  if (job?.type === 'initiative_list' && ((job.data as InitiativeListJobData | undefined)?.folderId || rawData.folder_id)) {
-    const folderId =
-      (job.data as InitiativeListJobData).folderId ??
-      String(rawData.folder_id ?? '');
-    return `folder_${folderId}`;
-  }
-  if (job?.type === 'matrix_generate' && ((job.data as MatrixGenerateJobData | undefined)?.folderId || rawData.folder_id)) {
-    const folderId =
-      (job.data as MatrixGenerateJobData).folderId ??
-      String(rawData.folder_id ?? '');
-    return `matrix_${folderId}`;
-  }
-  if (job?.type === 'initiative_detail' && ((job.data as InitiativeDetailJobData | undefined)?.initiativeId || rawData.use_case_id)) {
-    const initiativeId =
-      (job.data as InitiativeDetailJobData).initiativeId ??
-      String(rawData.use_case_id ?? '');
-    return `initiative_${initiativeId}`;
-  }
-  if (job?.type === 'executive_summary' && ((job.data as ExecutiveSummaryJobData | undefined)?.folderId || rawData.folder_id)) {
-    const folderId =
-      (job.data as ExecutiveSummaryJobData).folderId ??
-      String(rawData.folder_id ?? '');
-    return `folder_${folderId}`;
-  }
-  if (job?.type === 'document_summary' && ((job.data as DocumentSummaryJobData | undefined)?.documentId || rawData.document_id)) {
-    const documentId =
-      (job.data as DocumentSummaryJobData).documentId ??
-      String(rawData.document_id ?? '');
-    return `document_${documentId}`;
-  }
-  if (job?.type === 'chat_message' && typeof (job.data as { assistantMessageId?: unknown })?.assistantMessageId === 'string') {
-    return String((job.data as { assistantMessageId: string }).assistantMessageId);
-  }
-  return `job_${job.id}`;
-}
+export { getPublicJobStreamId } from './public-job-stream';
 
 export class QueueManager {
   private isProcessing = false;
@@ -1404,22 +1366,15 @@ export class QueueManager {
   }): Promise<string | null> {
     const preferredUserId = (opts.preferredUserId ?? '').trim();
     if (preferredUserId) {
-      const [preferredUser] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.id, preferredUserId))
-        .limit(1);
+      const preferredUser = await findCmUserById(preferredUserId);
       if (preferredUser?.id) return preferredUser.id;
     }
 
     const workspaceId = (opts.workspaceId ?? '').trim();
     if (!workspaceId) return null;
 
-    const [fallbackMember] = await db
-      .select({ userId: workspaceMemberships.userId })
-      .from(workspaceMemberships)
-      .where(eq(workspaceMemberships.workspaceId, workspaceId))
-      .limit(1);
+    const fallbackMembers = await listCmWorkspaceMembers(workspaceId);
+    const fallbackMember = fallbackMembers[0];
 
     return (fallbackMember?.userId ?? '').trim() || null;
   }
@@ -1450,7 +1405,7 @@ export class QueueManager {
     // `{created, comment_id}` (origin `auto`) per the SPEC §4 matrix.
     // ARCH-11 G1b (§4.3): tenant leg via reconcileTenantId — legacy workspaceId under
     // alias/shadow (zero behavior change), resolved real tenant under strict.
-    const tenantId = await reconcileTenantId({ workspaceId, userId: createdBy, path: 'queue-manager:auto-generation' });
+    const tenantId = await reconcileCmTenantId({ workspaceId, userId: createdBy, path: 'queue-manager:auto-generation' });
     const tenant: TenantContext = { tenantId, workspaceId, userId: createdBy };
     for (const sectionKey of uniqueSectionKeys) {
       const target = targetFromLive({ contextType: opts.contextType, contextId, sectionKey });

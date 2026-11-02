@@ -1,11 +1,15 @@
-import { db } from '../db/client';
-import { emailVerificationCodes } from '../db/schema';
-import { eq, and, gt, desc } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
 import { SignJWT } from 'jose';
 import { env } from '../config/env';
 import { sendTransactionalEmail } from './scw-tem-client';
+import {
+  consumeCmEmailCodeWithTicket,
+  countCmRecentEmailCodes,
+  createCmEmailCode,
+  findCmLatestValidEmailCode,
+  verifyCmRegistrationTicket,
+} from './identity/cm-proofs';
 
 /**
  * Email Verification Code Service
@@ -27,6 +31,9 @@ interface VerifyCodeParams {
 
 const CODE_TTL = 10 * 60; // 10 minutes in seconds
 const VERIFICATION_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
+
+export const resolveEmailVerificationTokenSecret = (): string =>
+  env.JWT_SECRET || 'default-secret-change-in-production';
 
 /**
  * Hash a code for storage (SHA-256)
@@ -58,17 +65,9 @@ export async function generateEmailVerificationCode(
 
   // Check rate limiting: max 3 codes per email in last 10 minutes
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-  const recentCodes = await db
-    .select({ id: emailVerificationCodes.id })
-    .from(emailVerificationCodes)
-    .where(
-      and(
-        eq(emailVerificationCodes.email, normalizedEmail),
-        gt(emailVerificationCodes.createdAt, tenMinutesAgo)
-      )
-    );
+  const recentCount = await countCmRecentEmailCodes(normalizedEmail, tenMinutesAgo);
 
-  if (recentCodes.length >= 3) {
+  if (recentCount >= 3) {
     logger.warn({ email: normalizedEmail }, 'Rate limit exceeded for email verification code');
     throw new Error('Trop de demandes. Veuillez patienter quelques minutes avant de réessayer.');
   }
@@ -76,18 +75,15 @@ export async function generateEmailVerificationCode(
   // Generate 6-digit code
   const code = generateCode();
   const codeHash = hashCode(code);
-  
+
   const expiresAt = new Date(Date.now() + CODE_TTL * 1000);
-  
-  // Store code in database (hashed)
-  await db.insert(emailVerificationCodes).values({
-    id: crypto.randomUUID(),
-    codeHash,
+
+  // Store code in the CM custody store (hashed, single-use proof kind email_code)
+  await createCmEmailCode({
     email: normalizedEmail,
-    verificationToken: null, // Will be set after code verification
+    codeHash,
     expiresAt,
-    used: false,
-    createdAt: new Date(),
+    now: new Date(),
   });
 
   // Send code via the Scaleway TEM HTTP API
@@ -143,37 +139,26 @@ export async function verifyEmailCode(
   const codeHash = hashCode(code);
   const now = new Date();
   
-  // Find code
-  const [codeRecord] = await db
-    .select()
-    .from(emailVerificationCodes)
-    .where(
-      and(
-        eq(emailVerificationCodes.email, normalizedEmail),
-        eq(emailVerificationCodes.codeHash, codeHash),
-        eq(emailVerificationCodes.used, false)
-      )
-    )
-    .orderBy(desc(emailVerificationCodes.createdAt))
-    .limit(1);
-  
-  if (!codeRecord) {
+  // Find latest pending, unexpired code matching the hash
+  const codeRecord = await findCmLatestValidEmailCode(normalizedEmail, codeHash, now);
+
+  if (!codeRecord || codeRecord.used) {
     logger.warn({ email: normalizedEmail }, 'Email verification code not found or already used');
     return { valid: false };
   }
-  
+
   // Check if expired
   if (codeRecord.expiresAt < now) {
-    logger.warn({ 
+    logger.warn({
       codeId: codeRecord.id,
-      expiresAt: codeRecord.expiresAt 
+      expiresAt: codeRecord.expiresAt
     }, 'Email verification code expired');
     return { valid: false };
   }
-  
-  // Mark code as used and generate verification token (JWT)
-  const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET || 'default-secret-change-in-production');
-  const token = await new SignJWT({ 
+
+  // Generate verification token (JWT)
+  const JWT_SECRET = new TextEncoder().encode(resolveEmailVerificationTokenSecret());
+  const token = await new SignJWT({
     email: normalizedEmail,
     codeId: codeRecord.id,
   })
@@ -181,21 +166,19 @@ export async function verifyEmailCode(
     .setIssuedAt()
     .setExpirationTime(`${VERIFICATION_TOKEN_TTL}s`)
     .sign(JWT_SECRET);
-  
-  // Store verification token in code record and mark as used
-  await db
-    .update(emailVerificationCodes)
-    .set({ 
-      used: true,
-      verificationToken: token,
-    })
-    .where(eq(emailVerificationCodes.id, codeRecord.id));
-  
+
+  // Atomically consume the code and issue the registration ticket (hashed token)
+  const consumed = await consumeCmEmailCodeWithTicket(codeRecord.id, normalizedEmail, codeHash, token, now);
+  if (!consumed) {
+    logger.warn({ email: normalizedEmail, codeId: codeRecord.id }, 'Email code consume lost the race');
+    return { valid: false };
+  }
+
   logger.info({
     email: normalizedEmail,
     codeId: codeRecord.id,
   }, 'Email verification code verified');
-  
+
   return {
     valid: true,
     verificationToken: token,
@@ -212,36 +195,30 @@ export async function verifyValidationToken(
   token: string
 ): Promise<{ valid: boolean; email?: string }> {
   try {
-    // Check if token exists in database
-    const [codeRecord] = await db
-      .select({ email: emailVerificationCodes.email })
-      .from(emailVerificationCodes)
-      .where(eq(emailVerificationCodes.verificationToken, token))
-      .limit(1);
-    
-    if (!codeRecord) {
-      logger.warn({ token: token.substring(0, 10) + '...' }, 'Validation token not found');
-      return { valid: false };
-    }
-    
     // Verify JWT token
-    const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET || 'default-secret-change-in-production');
+    const JWT_SECRET = new TextEncoder().encode(resolveEmailVerificationTokenSecret());
     const { jwtVerify } = await import('jose');
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    
-    // Verify token matches email
-    if (payload.email !== codeRecord.email) {
-      logger.warn({ token: token.substring(0, 10) + '...' }, 'Validation token email mismatch');
+    const email = typeof payload.email === 'string' ? payload.email : undefined;
+    if (!email) {
+      logger.warn({ token: token.substring(0, 10) + '...' }, 'Validation token has no email');
       return { valid: false };
     }
-    
+
+    // Atomically consume the pending registration ticket bound to this email
+    const ticketValid = await verifyCmRegistrationTicket(email, token, new Date());
+    if (!ticketValid) {
+      logger.warn({ token: token.substring(0, 10) + '...' }, 'Validation token not found, consumed, or email mismatch');
+      return { valid: false };
+    }
+
     logger.debug({
-      email: codeRecord.email,
+      email,
     }, 'Validation token verified');
-    
+
     return {
       valid: true,
-      email: codeRecord.email,
+      email,
     };
   } catch (error) {
     logger.debug({ err: error }, 'Invalid validation token');

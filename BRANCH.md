@@ -1,46 +1,54 @@
-# Feature: cm-identity-a2-0b
+# Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
 
 ## Objective
-Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder max APPROVE) for the identity core in packages/cluster-mesh: verification custody, lossless import, atomic person deletion.
+One lot: migrate app identity data (users, proofs, invitations, login sessions, tenants, both memberships, workspaces) into the cluster-mesh stores, switch the single author under the r13 D11 protocol with the rollback checkpoint recorded before any legacy table deletion, point every reader/writer at the CM stores, delete the legacy app identity tables/files, replace request-authority with F15, and land the F11 screens.
 
 ## Scope / Guardrails
-- Scope limited to packages/cluster-mesh identity custody, storage, import, deletion, tests, version manifest.
-- One migration max in api/drizzle/*.sql (not used; CM schema assets only).
-- Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree tmp/worktrees/cm-identity-a2-0b.
-- Automated test campaigns on dedicated environments (ENV=test-cm-a2-0b), never root dev.
-- In every make command, ENV=<env> passed as the last argument.
+- Scope limited to the app cutover: api identity read/write paths, one control data migration, ui F11 screens, e2e.
+- One migration max: `api/drizzle/control/0014_app_cm_identity_cutover.sql` (control stream).
+- Make-only workflow, no direct Docker commands; Docker under the packet flock; `make down ENV=<env>` after.
+- Branch development in isolated worktree `tmp/worktrees/app-cm-a4-3` on branch `feat/app-cm-a4` from `origin/feat/cm-identity-a2-0b` (code against the A2.0b contract; missing A2.0b APIs are stack dependencies, recorded in the report, not implemented here).
+- Test campaigns on `ENV=test-app-a4` / `ENV=e2e-app-a4` (ENV last), never root dev.
 - All new text in English.
-- Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
-- Version: 0.26.0-dev.4 (next free cluster-mesh dev version after main 0.26.0-dev.3).
+- No dual writer, no legacy fallback; the app keeps business data only.
+- Pins: A2-lots.md sha256 015d821d066a6bcc368113adf3fa45dd73a32abebc2f37cedb5f4eb1ced8c0c2; r2.md (APPROVED) sha256 f24480ee9e39396c2ecfb71be790e2a5a247976be15980a18b185101542cd518; A2.0b amendment r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; owner-answers-20261030.md sha256 01554c2f81d88f1c96815b5e4a60e7f5c91ad51622d637ca83af5422a578c1c7 (Q-G answered 2026-11-01: interim accepted); gap.fr.md; STOP reports .tmp/rv/lot-A4-2.md and .tmp/rv/lot-A4.2.md; base origin/feat/cm-identity-a2-0b.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/src/identity-contracts/**`
-  - `packages/cluster-mesh/src/storage/identity/**`
-  - `packages/cluster-mesh/src/identity-stores/**`
-  - `packages/cluster-mesh/src/identity/**`
-  - `packages/cluster-mesh/tests/identity/**`
-  - `packages/cluster-mesh/tests/identity-*.spec.ts`
+  - `api/src/**`
+  - `api/tests/**`
+  - `api/drizzle/control/0014_app_cm_identity_cutover.sql` + `api/drizzle/control/meta/**`
+  - `ui/src/**`
+  - `ui/tests/**`
+  - `e2e/tests/**`
+  - `packages/cluster-mesh/ui/**`
+  - `packages/cluster-mesh/tests/ui/**`
   - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/CHANGELOG.md`
+  - `ui/package.json` + `ui/package-lock.json`
+  - `package-lock.json`
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/**`
-  - `ui/**`
-  - `e2e/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `packages/cluster-mesh/src/**` (A2.0b owns backend contracts/implementation; gaps remain stack dependencies)
+  - `packages/cluster-mesh/tests/identity/**`
   - `.github/workflows/**`
+  - `spec/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` public stream (not used; control stream only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- None.
+- [x] BRxx-EX1 — Approved r2 F11 requires CM-owned screens. Allow only `packages/cluster-mesh/ui/**`, `tests/ui/**`, its browser exports/optional peer metadata, and root/UI lock/dependency entries needed to mount them. Backend CM source/tests stay excluded. Impact: one shared screen behavior across root projections; publication/version validation is required after rebase. Rollback: revert the UI projection/package commits together before activation; no data or A2.0b branch changes.
+- [ ] A4-STACK — A2.0b owner: supply the approved r6 combined UOW (`run`, `tx.stores`, `tx.custody`, subject lifecycle), auth-hono binding/runner, importer verifier and V2 planes before app qualification; A4 does not implement these CM APIs.
+- [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
+- [x] A4-OWNERSHIP — r6 §5.3 requires business-authorized ownership. Preserve `public.workspaces.owner_user_id` solely for destruction policy; CM owns membership/tenant access. Membership never substitutes for ownership. Rollback uses the recorded source checkpoint.
+- [x] A4-CONVERSATION — Business chats retain an opaque CM authority reference. Verified HTTP admission opens a separate seven-day conversation lifetime; login expiry/logout never renews or revokes it. Revoked/expired records cannot be reopened. Workspace adoption must revoke/clear the prior binding.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -51,44 +59,153 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [x] **Mono-branch + cherry-pick** (single consolidated lot; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: Single additive contract lot with one test cycle; no parallel sub-branches.
+- Rationale: conductor decision 2026-10-31T22:57Z consolidated A4.1+A4.2+A4.3 into ONE lot (tables interlinked; splitting failed twice: .tmp/rv/lot-A4-2.md, .tmp/rv/lot-A4.2.md). Stacked on feat/cm-identity-a2-0b; draft PR with base feat/cm-identity-a2-0b while A2.0b is open; rebase onto origin/main after A2.0b merges; one CI run on the final head.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this lot; no UAT.
+- F11 screens land in this lot; e2e on ENV=e2e-app-a4 covers them.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read COMMON-RULES, MASTER.md, amendment r6, review r6 APPROVE, lot-A4, patch.
-  - [x] Create isolated worktree tmp/worktrees/cm-identity-a2-0b on feat/cm-identity-a2-0b from origin/main.
-  - [x] Pin sha256 values in BRANCH.md.
-  - [x] Set version 0.26.0-dev.4.
-- [ ] **Lot 1 — Custody contracts (additive, 1.0 frozen)**
-  - [ ] New V1 record/port/error/descriptor exports; IDENTITY_CUSTODY_CONTRACT_VERSION 1.1.0, IDENTITY_ATOMIC_DELETION_CONTRACT_VERSION 2.0.0.
-  - [ ] IdentityCustodyErrorV1 with exact code union; fixed messages; buffer-ownership rules.
-  - [ ] IDENTITY_A20B_DESCRIPTORS exact rows.
-  - [ ] Lot gate: make typecheck-cluster-mesh ENV=test-cm-a2-0b
-- [ ] **Lot 2 — Durable custody on both profiles**
-  - [ ] New tables: account_profiles, webauthn_credentials, single_use_proofs, email_tickets, invitation_digests, login_token_bindings, social_links, subject_fences, deletion ops/attempts, revocation outbox, import receipts, schema versions.
-  - [ ] Postgres + SQLite stores with CAS, uniqueness, expiry strictness.
-  - [ ] Lot gate: custody storage tests on both profiles.
-- [ ] **Lot 3 — Import contract (id-preserving, material-preserving)**
-  - [ ] createIdentityCustodyImporterV1: validate/importBatch/importBatchInTransaction, exclusive-writer fence, identical-receipt replay, whole-batch rollback.
-  - [ ] Field-preserving mapping incl. WebAuthn bytes/counter, unbound proofs, digest invitations, session hashes, social subjects.
-  - [ ] Lot gate: custody-import tests on both profiles.
-- [ ] **Lot 4 — Atomic person deletion (V2)**
-  - [ ] createAtomicPersonDeletionV2 with business participants, orphan assertions, rolled_back receipts, operation journal.
-  - [ ] P4/P5 probes green on both profiles; existing cascade suite unmodified.
-  - [ ] Lot gate: atomic-person-deletion tests on both profiles.
-- [ ] **Lot 5 — Security evidence**
-  - [ ] Secret at rest, SHA-256 exact preimages, zeroization of owned buffers, log redaction canaries.
-  - [ ] Lot gate: security tests on both profiles.
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest cluster-mesh identity suites (both profiles, no skips)
-  - [ ] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
-  - [ ] Final gate step 1: create draft PR using BRANCH.md text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
-  - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read COMMON-RULES, MASTER, A2-lots, r2 §5/§9.3, gap.fr.md, STOP reports, A2.0b r6, owner answers (Q-G recorded), workflow.
+  - [x] Worktree `tmp/worktrees/app-cm-a4-3`, branch `feat/app-cm-a4` from origin/feat/cm-identity-a2-0b head; harness C1 PASS.
+  - [x] BRANCH.md from plan/BRANCH_TEMPLATE.md.
+  - [x] ENV mapping: test-app-a4 / e2e-app-a4; ports API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740.
+  - [x] Resume C1 PASS; review inherited account, challenge and invitation fixtures; restore original email data.
+  - [x] Review inherited session, magic-link and WebAuthn fixtures without weakening assertions.
+  - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
+  - [x] Review session-adoption setup and tenant-bound authorization fixtures against CM stores.
+  - [x] Review remaining adoption race/role fixtures and LLM identity directory fixtures against CM stores.
+  - [x] Preserve OAuth refresh revocation assertions during CM fixture conversion.
+  - [x] Review document, history, stream and lock fixture conversions; preserve original email values.
+  - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
+- [ ] **Lot 1 — CM identity composition + one data migration**
+  - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
+  - [x] Bind the r6 combined UOW to one app PostgreSQL connection, including indeterminate-commit refusal.
+  - [x] Join account/profile registration and partial updates to the active combined UOW; refuse absent profiles.
+  - [ ] Control migration 0014: CM identity schema + id-preserving copy of users/proofs/invitations/login sessions/tenants/memberships/workspaces + rollback checkpoint row; journal integrity test passes.
+  - [ ] Migration tests (both directions of the copy, id preservation, counts).
+  - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
+  - [x] Add import mapping regressions for expired approval, null email, terminal proofs, credential counters and login lineage.
+  - [x] Map account/profile, credential, single-use proof and login source fields to the r6 import records without invented history.
+  - [x] Map invitations, signature-verified email continuations and social links; refuse prohibited provider secrets.
+  - [x] Map tenant/workspace directories, independent memberships and OAuth tenant bindings through their frozen records.
+  - [x] Extract the locked source inventory and assemble one typed batch; refuse live federation flows and non-null social secrets.
+  - [x] Check the exhaustive removed-column inventory and hash the shipped mapping with pinned RP/origin policy; trace historical metadata to the protected checkpoint.
+  - [x] Map pending settings revocations to one deterministic CM delivery group per legacy intent, preserving every target and refusing unknown ownership.
+  - [x] Verify the protected remote snapshot digest, reconcile SQL/file tuples and refuse live orphan or divergent file authority.
+  - [x] Account for every legacy connector event through captured or unresolved records; move metadata invitations to the digest representation.
+  - [x] Load pinned migration assets, verifier policy, protected snapshots and borrowed token keys before transaction entry.
+  - [x] Apply the canonical CM asset and bound importer/custody verifier on the control migration connection, recording D11 before any legacy-row deletion.
+  - [x] Invoke the typed import from the real control migration runner on its SERIALIZABLE connection; dispose keys after success or rollback and skip completed journals.
+  - [x] Delete the manually copied CM core/custody DDL from control migration 0014; the canonical package asset is its schema source.
+  - [x] Delete copied tenancy/enforcement DDL; bootstrap the merged CM schemas through their shipped statement exports.
+  - [x] Delete the raw identity copy SQL and guessed lifecycle/expiry/revision mappings; the typed importer is the only migration writer.
+  - [x] Delete the SQL count-only checkpoint; keep the protected-source D11 checkpoint and real import receipt from the bound runner.
+  - [x] Rebind actual business foreign keys to CM while preserving delete/update/deferral actions; refuse unrepresentable references and record the inventory.
+  - [x] Preserve the existing business workspace owner reference and set it on new personal/business workspace rows.
+  - [x] Preallocate auth entity/workspace id hints outside transaction entry and keep them stable across whole-callback retries; remove locking of a nonexistent workspace.
+  - [x] Add real PostgreSQL host-scope probes for backend/transaction identity, expired handles, swallowed failures, nested control and unawaited queries.
+  - [x] Bind app SQL to expiring host capabilities, refuse nested transaction control and rethrow caught driver failures before publication/commit.
+  - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
+  - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
+  - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
+  - [x] Borrow the unchanged v1 derived key for HKDF-separated connector custody; add authenticated envelopes with owned-buffer disposal.
+  - [x] Define the host control-schema custody contribution and strict minimal-capability/envelope codecs; retain bounded long capabilities.
+  - [x] Verify custody against the actual pending/delivered CM outbox tuple and erase only the acknowledged envelope on its transaction.
+  - [x] Capture source connectors on the active host connection with independent owner/scope checks and exact replay comparison.
+  - [x] Bind the V2 connector plane to the full owner-or-deleted-workspace union, retaining actual owners and verifying every enqueued custody reference before commit.
+  - [x] Add the CM leased delivery drain with short claim/ack/release transactions and atomic custody erasure; network delivery stays outside callbacks.
+  - [x] Drain the CM ledger on periodic sweeps and delete the replaced settings queue/pending/ack module.
+- [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
+  - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
+  - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
+  - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
+  - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
+  - [x] Construct OAuth refresh/state/consent/JWKS participants on the active app executor; no nested transaction in bound refresh/consent.
+  - [x] Stage every OAuth identity handler on the CM bound ports; publish ordinary protocol denials after commit and roll back infrastructure failures.
+  - [x] Delete root OAuth session authority and its settings-outbox writer; only the per-attempt CM binding supplies these methods.
+  - [x] Add private-context execution of the shipped required/optional authentication middleware, returning copied principals only after commit.
+  - [x] Mount the staged middleware before business workspace selection; optional authentication never invokes downstream effects twice or ignores infrastructure failure.
+  - [x] Add transaction-bound auth workspace provisioning and an explicit Q-K configuration parser with key-reader disposal tests.
+  - [x] Add the production auth runner configuration and private HTTP response staging with sanitized failures.
+  - [x] Mount real CM WebAuthn options/authentication and login creation in one completion callback.
+  - [x] Delete the replaced app passkey authentication handler.
+  - [x] Mount CM email and magic-link completions; consume proof and create login before the same commit; delete old email handler.
+  - [x] Bind registration to verified email/invitation context and stage a fresh private HTTP context per attempt.
+  - [x] Remove the replaced registration finalizer and its old route factory mount.
+  - [x] Remove the replaced app registration account/proof writers.
+  - [x] Remove the replaced app registration challenge preparation.
+  - [x] Route credential listing, rename and revocation through a fresh CM binding; add the CM session-service facade.
+  - [x] Delete the replaced app credential handler and its revision-free counter/proof mutations.
+  - [x] Replace the app session adapter implementation with the CM session-service facade.
+  - [x] Remove the app refresh signer and rotation algorithm in favor of CM signed refresh completion.
+  - [x] Remove the app session creation writer; require verified CM assertion completion for MFA lineage.
+  - [x] Remove the app session validation algorithm; middleware and host consumers use CM validation.
+  - [x] Remove the obsolete app JWT signer, key instance and token-claim implementation from session-manager.
+  - [x] Route root revoke/revoke-all/list calls through the CM signed-session service and its single delivery ledger.
+  - [x] Replace remote-file signing authority with a CM subject-fenced signing callback released only after commit.
+  - [x] Remove app SQL session writes and duplicate base-row inserts; refresh projects remotely only after CM CAS commits.
+  - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
+  - [x] Add CM membership-domain adapters with current tenant-admin checks, serialized anti-abuse caps, full decision auditing and CM-authorized OAuth client listing.
+  - [x] Point membership acceptance tests at CM and cover forged global roles and current approver suspension; execution awaits the combined UOW.
+  - [x] Mount CM membership handlers directly in the shared workspace router, with typed refusals and sanitized infrastructure failures.
+  - [x] Delete the replaced `workspaces/product-tenants.ts` identity routes.
+  - [x] Remove the replaced app membership request, decision and directory implementations.
+  - [x] Delete `services/auth/tenant-membership.ts`, including the caller-role trust seam and duplicate transition rules.
+  - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
+  - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
+  - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
+  - [x] Admit conversations before chat job publication and resolve turn authority through the CM reference; F15 refusal leaves the complete tool set empty.
+  - [x] Load artifact assets outside CM callbacks and pass every tool identifier through the F15 catalog mapping.
+  - [x] Fence chat creation with CM subject/workspace locks and atomically revoke conversation authority when deleting its business chat.
+  - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
+  - [x] Add fixed V2 self/admin authorizers with current CM prerequisites and a complete business ownership/reference plan; membership alone never authorizes destruction.
+  - [x] Declare personal-data deletion and nullable shared-attribution dispositions, with a database inventory guard for unclassified person references.
+  - [x] Extract the unchanged persisted job-to-stream mapping for deletion inventory without initializing the queue manager in CM callbacks.
+  - [x] Process every authorized workspace's persisted history/stream/job scope and business dependency graph; detach retained chats/traces and refuse restrictive cross-scope references.
+  - [x] Bind the real V2 business participant with summed affected-row receipts and subject-scoped job deletion/orphan checks across retained workspaces.
+  - [x] Bind remote/catalogue effects and verify absent agent/purpose capability inventory plus scoped r13 bindings/runtimes; any deployed unbound authority blocks deletion.
+  - [x] Construct fixed self/admin V2 coordinators over the combined UOW; require explicitly qualified reservation/deletion/diagnostic/read budgets before entry.
+  - [x] Mount self deletion without pre-disabling outside V2; preserve operation ids and distinguish rollback, pending delivery and complete HTTP outcomes.
+  - [x] Mount admin deletion on its fixed V2 authorizer; remove outside-transaction prerequisite reads and direct remote delivery.
+  - [x] Bind account approve/disable/reactivate and self-deactivate to the frozen CM lifecycle, current actor guards, profile metadata and one-ledger revocation in one callback.
+  - [x] Add the CM-backed admin identity router and one-snapshot authorized user directory projection, leaving business administration separate.
+  - [x] Mount CM-backed administration and delete the replaced user-list/lifecycle/delete handlers from admin-product-authority.
+  - [x] Remove obsolete admin identity schemas/imports and mount transactional CM self-deactivation, including revocation in the same commit boundary.
+  - [x] Delete the replaced app cascade coordinator and its membership-as-ownership business participant.
+  - [x] Delete the obsolete raw settings/tombstone writers and single-workspace deletion helpers with the old account-deletion module.
+  - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
+  - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
+  - [x] Rebind client, consent, membership, credential and restore invalidation to CM identity records.
+  - [x] Correct PostgreSQL index qualification and the OAuth consent account lock column.
+  - [ ] All residual readers of legacy identity tables switched to CM stores (46-file inventory).
+  - [x] Replace omitted artifact authorization and login-credential SQL readers with CM identity sources.
+- [ ] **Lot 3 — Deletions**
+  - [ ] Drop legacy identity tables in migration; delete identity part of api/src/db/schema.ts and the named files; no dual writer, no legacy fallback.
+- [ ] **Lot 4 — F11 screens + e2e**
+  - [x] Add CM-owned login/registration screens and shared completion/continuation behavior with host-only navigation/session ports.
+  - [x] Add the app projection of CM auth screens with host storage/navigation adapters and declare the UI package dependency.
+  - [x] Replace root login/registration flow implementations with CM screen projections; remove their duplicated continuation/session/navigation decisions.
+  - [x] Add shared CM management screen ports and transport for account administration, membership decisions and workspace members.
+  - [x] Relocate the existing account-administration screen into the CM package and project it from settings; portable host-port conversion follows.
+  - [x] Replace the moved screen's duplicate row/status/role declarations with its shared CM management view contract.
+  - [x] Make the CM admin screen portable through host ports and remove root behavior duplication; pending-delivery presentation follows.
+  - [x] Retain deletion operation ids across retries and distinguish completed deletion from pending external revocations in localized admin feedback.
+  - [x] Add the CM membership request/decision screen with tenant-scoped lists, explicit independent approvals, author/time display and stale-response exclusion.
+  - [x] Add the CM workspace-members screen with current-member management gates, committed-role display and scope-bound mutations/refresh.
+  - [x] Share the app's management host ports and localized membership labels; locale changes refresh the projected screen text.
+  - [x] Project CM members in workspace settings and mount the membership decision/request page, including the no-workspace recovery path.
+  - [x] Delete the replaced app member list/add/role/remove behavior and selection watcher; only the CM screen owns those interactions.
+  - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
+- [ ] **Lot 5 — Tests**
+  - [x] Add a real Chromium virtual-authenticator and Maildev registration fixture for F11 qualification, without logging proof material or stubbing identity services.
+  - [x] Add F11/gap browser acceptance for independent approvals, members, live-session suspension, revoke-all and a fresh passkey login; execution remains pending the qualified stack.
+  - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
+  - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
+- [ ] **Lot 6 — Final validation**
+  - [ ] typecheck/lint api+ui; targeted make tests; push often; draft PR base feat/cm-identity-a2-0b.
+  - [ ] ONE CI run on the final head (after rebase onto origin/main once A2.0b merges).
+  - [ ] Report to .tmp/rv/lot-A4.md; stop; do not merge.
