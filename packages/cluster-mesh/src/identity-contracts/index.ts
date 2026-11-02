@@ -4,6 +4,7 @@ export * from './types.js';
 export * from './errors.js';
 export * from './descriptors.js';
 export * from './custody.js';
+export * from './custody-operations.js';
 export * from './custody-errors.js';
 export * from './custody-descriptors.js';
 export * from './ports.js';
