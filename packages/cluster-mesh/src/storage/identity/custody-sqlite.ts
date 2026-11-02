@@ -632,6 +632,7 @@ export const createSqliteIdentityUnitOfWorkV1 = <H>(input: {
         });
       } catch (error) {
         if (attempt < options.maxAttempts && Date.now() < deadline && isSocialRaceRetry(error)) continue;
+        if (isSocialRaceRetry(error)) throw new IdentityCustodyErrorV1(error.finalCode);
         throw error;
       }
     }
