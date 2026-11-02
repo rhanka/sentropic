@@ -1,6 +1,6 @@
 /** Atomic memory composition shared by transport and content journeys. */
 import { randomUUID } from 'node:crypto';
-import { createHttpArtifactApp } from '../../src/http.js';
+import { createHttpArtifactApp, type HttpAppDeps } from '../../src/http.js';
 import { createArtifactsToolExecutor } from '../../src/mcp-core.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../../src/profile/index.js';
 import { createRadarKeyDerivation } from '../../src/server/command-identity.js';
@@ -99,7 +99,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       return releaseId === undefined ? undefined : state.getRelease(releaseId);
     },
   };
-  const app = createHttpArtifactApp({ ...options, profile, coordinator,
+  const appDeps: HttpAppDeps = { ...options, profile, coordinator,
     publicationUrls: (artifactId, releaseId) => ({ stableUrl: `https://artifacts.test/a/${artifactId}`,
       pinnedUrl: `https://artifacts.test/a/${artifactId}/r/${releaseId}` }),
     derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: actors }),
@@ -180,12 +180,14 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
         async putSource(id, source) { writes.get(client)!.push(() => sources.putSource(id, source)); }, async registerBlob() {}, async addReleaseRef() {},
       }),
     },
-  });
+  };
+  const app = createHttpArtifactApp(appDeps);
   const mcp = createArtifactsToolExecutor({ ...options, app, profile });
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
   return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, legacyRecords, quotaReservations,
+    withProfile: (input: ArtifactProviderProfile) => createHttpArtifactApp({ ...appDeps, profile: compileArtifactsProfile(input) }),
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
     executor, suspend: () => { approved = false; },

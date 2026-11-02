@@ -8,6 +8,7 @@ const profile = (strict: boolean, envelope: 1 | 2) => ({
   ...RADAR_ARTIFACTS_PROFILE, profileRevisionId: strict ? 'immo-artifacts.v2' : 'immo-artifacts.p0b.v1',
   requireExpectedCurrentReleaseId: strict, resultEnvelopeVersion: envelope,
   selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities,
+    ...(strict && envelope === 2 ? ['artifacts_list_versions', 'artifacts_revert'] : []),
     'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
   operations: [...RADAR_ARTIFACTS_PROFILE.operations,
     { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
@@ -17,6 +18,49 @@ const world = (strict: boolean, envelope: 1 | 2) => createTransportWorld(['alice
   { profile: profile(strict, envelope) });
 
 describe('R2 explicit profile and result switchovers', () => {
+  it('should replay a v1 receipt across both switchovers before requiring a precondition', async () => {
+    const w = world(false, 1);
+    const ensured = await w.mcp.invoke({ tool: 'artifacts_ensure', invocation: w.invocation(),
+      args: { bindingName: 'page', idempotencyKey: 'ensure' } });
+    const artifactId = (ensured.body as { artifactId: string }).artifactId;
+    const args = { artifactId, idempotencyKey: 'first', files: [{ path: 'index.html', mimeType: 'text/html', text: 'one' }] };
+    const first = await w.mcp.invoke({ tool: 'artifacts_publish', invocation: w.invocation(), args });
+    const strict = w.withProfile(profile(true, 2));
+    const call = (input: object) => strict.handle({ method: 'POST', path: '/publish', actorId: 'alice', body: input }, w.invocation());
+    expect(await call(args)).toMatchObject({ status: 201, body: { ok: true, replayed: true,
+      output: { releaseId: (first.body as { releaseId: string }).releaseId } } });
+    expect(await call({ ...args, idempotencyKey: 'new' })).toMatchObject({ status: 428 });
+    expect(w.quotaReservations).toHaveLength(2);
+    expect(await w.state.listReleases(artifactId)).toHaveLength(1);
+  });
+
+  it('should preserve source, metadata and ACLs while recording paginated revert lineage in v2', async () => {
+    const w = world(true, 2);
+    const call = (tool: string, args: object) => w.mcp.invoke({ tool, args, invocation: w.invocation() });
+    const output = (response: { body: unknown }) => (response.body as { output: Record<string, any> }).output;
+    const artifactId = output(await call('artifacts_ensure', { bindingName: 'page', idempotencyKey: 'ensure' })).artifactId;
+    expect(output(await call('artifacts_get', { artifactId })).currentReleaseId).toBeNull();
+    const first = output(await call('artifacts_publish', { artifactId, idempotencyKey: 'first', expectedCurrentReleaseId: null,
+      title: 'First', files: [{ path: 'index.html', mimeType: 'text/html', text: 'one' }] }));
+    const second = output(await call('artifacts_publish', { artifactId, idempotencyKey: 'edit',
+      expectedCurrentReleaseId: first.releaseId, title: 'Current', edits: [{ path: 'index.html', oldStr: 'one', newStr: 'two' }] }));
+    await call('artifacts_set_access', { artifactId, idempotencyKey: 'share', action: 'grant', principalId: 'bob', grant: 'read' });
+    const reverted = await call('artifacts_revert', { artifactId, targetReleaseId: first.releaseId,
+      expectedCurrentReleaseId: second.releaseId, idempotencyKey: 'revert' });
+    expect(reverted.status).toBe(201);
+    expect(output(reverted)).toMatchObject({ previousReleaseId: second.releaseId,
+      revertedFromReleaseId: first.releaseId, title: 'Current', digest: first.digest, stableUrl: first.stableUrl });
+    const history = output(await call('artifacts_list_versions', { artifactId, limit: 1 }));
+    expect(history.versions).toHaveLength(1);
+    expect(history.versions[0]).toMatchObject({ releaseId: output(reverted).releaseId, authorPrincipalId: 'alice',
+      parentReleaseId: second.releaseId, revertedFromReleaseId: first.releaseId, isCurrent: true, pinnedUrl: expect.any(String) });
+    const page = output(await call('artifacts_list_versions', { artifactId, limit: 1, cursor: history.nextCursor }));
+    expect(page.versions[0].releaseId).toBe(second.releaseId);
+    const source = output(await call('artifacts_get_source', { artifactId }));
+    expect(source.files[0].bytes).toEqual([...Buffer.from('one')]);
+    expect((await w.acls.getArtifactAcl(artifactId))?.grants).toEqual([{ principalId: 'bob', grant: 'read' }]);
+  });
+
   it('should reject inconsistent trusted descriptors and expose the selected revision', () => {
     expect(() => compileArtifactsProfile(profile(false, 2))).toThrow();
     expect(() => compileArtifactsProfile({ ...profile(true, 2), resultEnvelopeVersion: 3 as 2 })).toThrow();
