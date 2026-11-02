@@ -11,6 +11,7 @@ import { authBoundaryPorts } from './auth-boundary.js';
 import { authHonoRuntime, authWebAuthnServices, type WebAuthnAttempt } from './auth-webauthn.js';
 import { finishAuthCompletion, guardAuthStep } from './auth-abort.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
+import { IdentityEmailCreateCollision, IdentitySocialRaceRetrySignal } from '../storage/identity/custody-shared.js';
 
 export const createIdentityAuthHonoTransactionBindingV1 = <H>(supplied: IdentityAuthBindingInput<H>): IdentityAuthHonoTransactionBindingV1 => {
   const input = { ...supplied, rp: { ...supplied.rp, expectedOrigins: [...new Set(supplied.rp.expectedOrigins)] } };
@@ -59,7 +60,11 @@ export const createIdentityAuthHonoTransactionBindingV1 = <H>(supplied: Identity
     },
     resolveFederatedUser: async (value) => {
       check(); if (value.email && value.emailVerifiedByProvider) evidence.add(policy.normalizeEmail(value.email));
-      return authHonoRuntime().resolveOrCreateFederatedUser({ federation, users, accountPolicy: policy,
+      const socialUsers = { ...users, create: async (value: Parameters<typeof users.create>[0]) => {
+        try { return await users.create(value); }
+        catch (error) { if (error instanceof IdentityEmailCreateCollision) throw new IdentitySocialRaceRetrySignal(); throw error; }
+      } };
+      return authHonoRuntime().resolveOrCreateFederatedUser({ federation, users: socialUsers, accountPolicy: policy,
         autoLinkProviders: new Set(input.social.autoLinkProviders), provisionWorkspace: (id) => input.business.provisionWorkspace(id, input.tx),
         isFirstUser: async () => (await users.count()) === 0,
       }, { ...value, now: input.hostPorts.clock.now() });
