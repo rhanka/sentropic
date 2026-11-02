@@ -353,7 +353,9 @@ test('publisher ordering: gateway waits for mesh; N1 lockstep siblings gate mcp-
     assert.ok(jobs[job].if.startsWith('always() &&'));
   };
   waits('publish-mcp-auth', 'publish-oauth-verify');
-  for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
+  for (const [job, upstreams] of Object.entries({ ...TRAIN_UPSTREAMS,
+    'publish-artifacts': [['publish-mcp-platform', 'mcp_platform_publish']],
+  })) {
     for (const [sibling, filter] of upstreams) {
       assert.ok(needsOf(job).includes(sibling), `${job} needs ${sibling}`);
       assert.ok(jobs[job].if.includes(strictWait(sibling, filter)), `${job} waits strictly for ${sibling}`);

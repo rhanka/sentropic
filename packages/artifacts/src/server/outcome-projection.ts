@@ -2,21 +2,38 @@
 import type { AppToolResult } from '@sentropic/mcp-platform';
 import type { HttpResponse } from '../http.js';
 import type { ArtifactFailure, ArtifactOutcome } from './failures.js';
+import { PRECONDITION_REQUIRED_MESSAGE } from '../profile/contracts.js';
 
-export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse>): HttpResponse {
+export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse>, complete = false): HttpResponse {
+  if (complete) {
+    const { auditId: _audit, redactionClass: _redaction, ...body } = projectArtifactMcpOutcome(outcome, '');
+    return { status: outcome.ok ? outcome.result.status : outcome.failure.httpStatus, body };
+  }
   if (outcome.ok) return outcome.result;
-  return { status: outcome.failure.httpStatus, body: { error: outcome.failure.publicCode,
-    ...(outcome.failure.details ? { details: outcome.failure.details } : {}) } };
+  const { failure } = outcome;
+  return { status: failure.httpStatus, body: { error: failure.publicCode,
+    ...(failure.publicCode === 'precondition_required' ? { message: PRECONDITION_REQUIRED_MESSAGE, retryable: false } : {}),
+    ...(failure.details ? { details: failure.details } : {}),
+    ...(failure.conflict !== undefined ? { conflict: failure.conflict } : {}),
+    ...(failure.release !== undefined ? { details: failure.release } : {}),
+    ...(failure.edit !== undefined ? { edit: failure.edit } : {}) } };
 }
 
 /** Feed this application result to mcp-platform's existing result codec. No second wire protocol. */
-export function projectArtifactMcpOutcome(outcome: ArtifactOutcome<HttpResponse>, auditId: string): AppToolResult {
-  if (outcome.ok) return { ok: true, output: outcome.result.body, auditId, redactionClass: 'low' };
-  const { publicCode, retriable } = outcome.failure;
+export function projectArtifactMcpOutcome(outcome: ArtifactOutcome<HttpResponse>, auditId: string,
+  resultEnvelopeVersion: 1 | 2 = 2): AppToolResult {
+  if (outcome.ok) return { ok: true, output: outcome.result.body, auditId, redactionClass: 'low',
+    ...(resultEnvelopeVersion === 2 ? { invocationId: outcome.invocationId,
+      commitState: outcome.commitState, replayed: outcome.replayed } : {}) };
+  const { publicCode, retriable, conflict, edit, release, invocationId, commitState } = outcome.failure;
+  const variant = 'variant' in outcome.failure ? outcome.failure.variant : undefined;
+  const details = conflict !== undefined ? { variant: 'pointer_conflict', ...conflict }
+    : edit !== undefined ? { ...edit } : release !== undefined ? { ...release }
+      : outcome.failure.details ?? (variant !== undefined ? { variant } : undefined);
   return {
-    ok: false, auditId, redactionClass: 'low',
-    error: { code: publicCode, message: publicCode, retriable,
-      ...(outcome.failure.details ? { details: outcome.failure.details } : {}) },
+    ok: false, auditId, redactionClass: 'low', ...(resultEnvelopeVersion === 2 ? { invocationId, commitState } : {}),
+    error: { code: publicCode, message: publicCode === 'precondition_required' ? PRECONDITION_REQUIRED_MESSAGE : publicCode,
+      retriable, ...(details === undefined ? {} : { details }) },
   };
 }
 

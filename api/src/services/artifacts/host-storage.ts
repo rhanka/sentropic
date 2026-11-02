@@ -26,6 +26,12 @@ export const artifactMigrationAssets = Object.freeze([
   }),
   Object.freeze({ id: ACTIVATION_SQL_ASSET, sha256: ACTIVATION_SQL_ASSET_SHA256,
     read: () => readFileSync(require.resolve(ACTIVATION_SQL_ASSET), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0004_terminal_controls.sql',
+    sha256: '209d0a13fe83fab97d0407bc84a17d6b220dcc2ecdf3cef5d6b80a9885ec3555',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0004_terminal_controls.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0005_metadata.sql',
+    sha256: '6acd727e2c8b13a13731e190623cc0dab640fa2ed7493f0ccaa37da5b3d93e25',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0005_metadata.sql'), 'utf8') }),
 ]);
 
 /** Called only by the API migration runner, after the control stream. */

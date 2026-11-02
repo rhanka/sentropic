@@ -1,115 +1,99 @@
-# Feature: ACT-L04 — native ast-grep SAST, full Trivy IaC adaptation and independent expected inventories (daily cyber activation, amendment r6)
+# Feature: artifact parity part 1 integrated on main (R2)
 
 ## Objective
-Implement lot ACT-L04 of r6 §7.2 (W2): qualify native Rust ast-grep with frozen local rules under `.security/ast-grep/**`, complete the Trivy IaC multi-document adaptation with expected document identities, and extend `inventory.mjs` with independent expected inventories and completeness proofs — observable acceptance L4-A–E (r4 Lot 4). No other lot is started.
+Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, revert, strict CAS, metadata, edits and D3 transport. IMMO alone activates part 1 after its two qualified switchovers. Publish artifacts 0.2.6 and retain the required mcp-platform 0.4.1 codec extension. Stop after pull_request CI, without merging.
 
 ## Scope / Guardrails
-- Scope limited to `.security/ast-grep/**`, the new `scripts/security/daily/{sast,iac}.mjs` + `sast-contract.test.mjs` + `iac-contract.test.mjs` + fixtures, the evolved `scripts/security/daily/{inventory,scan,trivy,acceptance-disposition}.mjs` and their tests, `api/Dockerfile` (SECDAILY-EX6 pin reference only), `Makefile` (BR04-EX1 SCOPE only) and `BRANCH.md`.
-- Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f) and r4 (sha256 a4cc7449ad3b204dd8cef5bf57015c4b7ddaeaf29e031d3811dded6b6ef7d80d). No design decision outside r6/r4; anything else is reported, not decided.
-- Make-only workflow, Docker under the flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-cyber-L04` always LAST, `make down ENV=test-cyber-L04` after. Never `ENV=dev`, never `make clean-all`.
-- Zero Python anywhere (Node/TS and native binaries only). Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
-- ast-grep pin: official GitHub release 0.51.0 asset `app-x86_64-unknown-linux-gnu.zip`, sha256 a7eead5552d3a8daad70f5d50d935da44bd0c138e946b5b0a96b1d38169fa639, native glibc ELF binaries `sg`/`ast-grep`; no musl asset exists, so execution runs on the glibc pinned Node lane while the alpine toolbox carries the pinned bytes for Trivy embedded-binary inventory. No runtime rule downloads; rules are frozen local files only.
-- SAST execution stays fenced on L02 scanner admission; this lot delivers the qualified contract, rules, fixtures and completeness proofs, not live scanner execution.
-- Branch development happens in worktree `tmp/worktrees/cyber-act-L04` on branch `feat/cyber-act-L04`.
+- Scope is the semantic union with p0b, the D3 platform codec, host migration/APP-P1 pins and generated Memory L5 inventory, within the allowed paths below.
+- Reuse the existing commit/release/current-pointer model; no redesign.
+- Make-only workflow, Docker under the single flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-artifacts-parity` always LAST, `make down ENV=test-artifacts-parity` after; never `ENV=dev`; never `make clean-all`.
+- Tests first: retain the p0b and D3 suites; add `parity-r2-profile.test.ts` for independent switches, retained receipts, strict refusals and version/revert lineage.
+- Commits: `make commit MSG="..."` only, authored changes <=150 lines each, selective `git add`; retain whole generated data under BRAP-EX1 and push the locally qualified final head.
 - All new text in English.
+- API boot slot: API_PORT=9686 UI_PORT=5886 MAILDEV_UI_PORT=1786; ENV=test-artifacts-parity.
+- Retain the BRLOCK-EX1 policy reference verbatim in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, run by required CI job `validate-publishable-manifests`): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.security/ast-grep/**`
-  - `scripts/security/daily/sast.mjs`
-  - `scripts/security/daily/sast-contract.test.mjs`
-  - `scripts/security/daily/iac.mjs`
-  - `scripts/security/daily/iac-contract.test.mjs`
-  - `scripts/security/daily/fixtures/**`
-  - `scripts/security/daily/inventory.mjs`
-  - `scripts/security/daily/inventory.test.mjs`
-  - `scripts/security/daily/scan.mjs`
-  - `scripts/security/daily/scan.test.mjs`
-  - `scripts/security/daily/trivy.mjs`
-  - `scripts/security/daily/trivy.test.mjs`
-  - `scripts/security/daily/acceptance-disposition.mjs`
-  - `api/Dockerfile` (BR04-EX2 granted subtree under the forbidden `api/**`; see Conditional Paths and Feedback Loop)
+  - `packages/artifacts/**`
+  - `packages/mcp-platform/src/runtime.ts`, `packages/mcp-platform/src/transport/result-codec.ts` (D3 outcome codec only)
+  - `packages/mcp-platform/src/tool-configuration.ts` (installed platform version constant only, aligned with the D3 codec release)
+  - `packages/mcp-platform/tests/tool-configuration.test.ts` (golden digests containing the installed platform version)
+  - `packages/mcp-platform/tests/artifact-result-codec.test.ts`, `packages/mcp-platform/package.json`, `packages/mcp-platform/CHANGELOG.md` (D3 codec tests and release metadata)
+  - `packages/mcp-platform/etc/mcp-platform.api.md`, `packages/mcp-platform/etc/mcp-platform-memory.api.md` (generated D3 public result fields and declaration line references)
+  - `api/src/services/artifacts/composition.ts` (host store wiring only)
+  - `api/src/services/artifacts/host-storage.ts` (journal p0b 0004 and part 1 0005 assets)
+  - `api/src/services/mcp/cluster-registry.ts` (APP-P1 pin realignment for artifacts 0.2.6, following PR 878)
+  - `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts`, `api/tests/api/artifacts-host-publication.test.ts`, `api/tests/api/artifacts-host-migrations.test.ts` (digest/version/journal-count pins only)
   - `BRANCH.md`
+  - `tools/memory-mcp-l5/artifacts/**` (generated consumed-contract inventory and retained archives only)
+  - `packages/mcp-broker/package.json` (align the private P1 consumer floor with platform 0.4.1)
+  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` (explicit 17-tool inventory)
+  - `packages/cluster-mesh/tests/packaging/**` (candidate dependency closure and selected fixture refresh)
+  - `packages/cluster-mesh/tests/storage/installed-siblings.mjs`, `packages/cluster-mesh/tests/storage/postgres.mk` (verified platform candidate for isolated installed consumers)
+  - `api/src/services/artifacts/reader-activation.ts` (publication-independent reader authority)
+  - `api/tests/api/artifacts-host-activation-store.test.ts`, `api/tests/api/artifacts-reader-activation.test.ts` (historical migration and concurrent activation fixtures)
+  - `.github/workflows/ci.yml` (BRAP-EX2: publish platform before its artifacts consumer)
+  - `scripts/ci/publishable-ci-wiring.test.mjs`, `scripts/ci/ci-expected-results.test.mjs` (artifacts publisher dependency gate and exact publication DAG)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `.tmp/**`
-  - `.track/**`
-  - `api/**`
-  - `packages/**`
-  - `apps/**`
-  - `ui/**`
-  - `tools/**`
-  - `docs/**`
-  - `scripts/ci/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/artifacts/l0-freeze/**` (frozen L0 contract vectors)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR04-EX1: only the `test-security-daily` SCOPE list gains `scripts/security/daily/sast-contract.test.mjs` and `scripts/security/daily/iac-contract.test.mjs` so the L4-A/L4-B/L4-C cases run in the required suite that CI already executes)
-  - `api/Dockerfile` (BR04-EX2: SECDAILY-EX6 permits only local rules and pin references in the exact approved toolbox path — add the pinned ast-grep release fetch with sha256 verification to `ci-tool-base` and COPY the pinned binary into `ci-tools`; the frozen rules stay in the repo checkout, not in the image; no other Docker instruction changes)
+  - `api/drizzle/*.sql` (max 1 file) — not needed; the artifacts schema migration lives in `packages/artifacts/migrations/`
+  - `.github/workflows/**`
 - **Exception process**:
-  - BR04-EX1 declared here before touching `Makefile`: reason = r6 §7.3/§6.4 require every destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = two additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
-  - BR04-EX2 declared here before touching `api/Dockerfile`: reason = r6/r4 Lot 4 and SECDAILY-EX6 require the native ast-grep pin reference in the approved toolbox image so its reviewed digest binds the binary; impact = one verified pin fetch RUN in `ci-tool-base` plus one COPY line in `ci-tools`, no other instruction; rollback = revert those lines.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- BR04-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
-- BR04-EX2: `acknowledge` — `api/Dockerfile` SECDAILY-EX6 pin reference for ast-grep (see Conditional Paths).
-- `BRLOCK-EX1` acknowledgement: review_by=2026-11-30T00:00:00Z (CI lockfile lane policy, owner CI maintainers).
-- No open blockers: r6/r4 supply every design decision for this lot; anything not covered is reported in the final report, not decided here.
+- BRAP-EX1: owner step 3 requires a regenerated immutable L5 inventory. Retain the exact prior manifest/sidecar in history; generate the new manifest, packed closure and whole lock snapshot using make. Generated lock snapshots are retained as complete data artifacts; authored code commits remain below 150 lines.
+- BRAP-EX2: owner CI repair option (b) retains platform 0.4.1 because the shared MCP codec must preserve typed D3 errors and commit outcomes. Order artifacts publication after platform; refresh the selected fixture with the existing make target and supply candidate archives to frozen consumers. Impact is bounded to packaging/CI; rollback reverts these changes together, never loosens the codec requirement.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
-- This lot's own suites are synthetic and network-free; no AI flaky lane applies to them.
-- Observed in CI (run 41379815044, head `aa170c0ab`), job `test-e2e (group-a, 00 02 06 10)`:
-  - command: `make test-e2e` (CI job `test-e2e`, group-a specs `00 02 06 10`, ENV=e2e lane)
-  - failing file: `e2e/tests/00-ai-generation.spec.ts:102` — "Génération IA › devrait générer une organisation via IA (enrichissement) et l'enregistrer"
-  - failure signature: `TimeoutError: page.waitForResponse: Timeout 60000ms exceeded` waiting for `POST /api/v1/organizations/[^/]+/enrich`, with console error `Failed to create and enrich organization: Error: Impossible de créer l'organisation brouillon` — provider/model nondeterminism on the AI enrich route.
-  - The file is on the AI flaky allowlist (`rules/testing.md`); the lot diff touches only `scripts/security/daily/**`, `.security/ast-grep/**`, `api/Dockerfile` (pin) and `BRANCH.md`, so this is unrelated to the lot and non-blocking. User sign-off still required before any merge (this lot does not merge).
+- Acceptance rule: only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts. None expected here (pure unit tests, no AI calls).
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L04`; one final CI on the review-ready head)
-- Rationale: single self-contained lot with one test suite; no sub-workstreams needing independent CI.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: no UI/API behavior change; no UAT applies. Local validation is `make test-security-daily ENV=test-cyber-L04` under the Docker flock.
+- [x] **Mono-branch + cherry-pick** (single branch `feat/artifacts-parity-p0`, one final test cycle)
+- [ ] **Multi-branch**
+- Rationale: one package, one concern; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read r6/r4 binding documents and COMMON-RULES packet (CI budget, machine load, crash safety, secrets).
-  - [x] Create/confirm isolated worktree `tmp/worktrees/cyber-act-L04` on `feat/cyber-act-L04` from `origin/main` and run `harness check branch`.
-  - [x] Capture Makefile targets needed: `test-security-daily`, `security-daily-scan`, `down`, `commit`, `scope-check`.
-  - [x] Confirm command style: `make ... <vars> ENV=test-cyber-L04` with `ENV` last; Docker under the packet flock.
-  - [x] Confirm scope boundaries and declare BR04-EX1/BR04-EX2 above.
-  - [x] Validate ast-grep 0.51.0 pin (sha256 a7eead55...69fa639) and rule syntax against fixtures with the pinned native binary.
-- [x] **Lot 1 — Frozen ast-grep rules and manifest (L4-A/L4-B inputs)**
-  - [x] `.security/ast-grep/sgconfig.yml` (local ruleDirs only, languageGlobs covering all inventoried source extensions).
-  - [x] `.security/ast-grep/rules/*.yml` (11 baseline rules, each with positive/negative fixtures).
-  - [x] `.security/ast-grep/rules-manifest.json` (per-rule sha256, severity mapping, toolbox pin, zero-Python statement, validation receipt).
-  - [x] `scripts/security/daily/fixtures/sast/**` positive/negative fixtures.
-- [x] **Lot 2 — SAST contract module and tests (L4-A/L4-B)**
-  - [x] `scripts/security/daily/sast.mjs` (loadSastContract, planSastTasks, validateSastReport, runner contract).
-  - [x] `scripts/security/daily/sast-contract.test.mjs` (rule/root coverage, hashes, runtime-download block, zero-Python toolbox proof).
-  - [x] Wire SAST tasks into `scan.mjs` / `inventory.mjs` (contract qualified, execution still fenced on L02).
-- [x] **Lot 3 — IaC adaptation and tests (L4-C)**
-  - [x] `scripts/security/daily/iac.mjs` (expected document identities, planIacScan, validateIacReport).
-  - [x] `scripts/security/daily/fixtures/iac/**` (multi-doc compose, k8s, Makefile with positive controls).
-  - [x] `scripts/security/daily/iac-contract.test.mjs` (positive control per surface, drop-one-doc, zero-config, malformed).
-  - [x] Rewire `trivy.mjs` `requireIacQualification` to the qualified contract.
-- [x] **Lot 4 — Independent expected inventories and completeness (L4-D/L4-E)**
-  - [x] Extend `inventory.mjs` (expected lock components, embedded binaries, tool catalog, consumers; validateCompleteness; exact blockers).
-  - [x] Evolve `inventory.test.mjs` (two agreeing outputs both omitting an item still fail; N/A needs positive proof).
-- [x] **Lot 5 — Wiring and toolbox pin**
-  - [x] `acceptance-disposition.mjs` L4-A..E rows (owner ACT-L04, suite test-security-daily).
-  - [x] `Makefile` SCOPE += 2 test files (BR04-EX1); evolve `scan.test.mjs`/`trivy.test.mjs` assertions.
-  - [x] `api/Dockerfile` ast-grep pin (BR04-EX2).
-  - [ ] `make scope-check` + `harness check scope` clean.
-- [ ] **Lot 6 — Validation, commits, PR, CI, report**
-  - [ ] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-L04`, then `make down ENV=test-cyber-L04`.
-  - [ ] Atomic commits via `make commit MSG=` (≤150 lines each), push branch after each lot (crash safety).
-  - [ ] Draft PR with BRANCH.md body; ONE CI run on the final head; wait for completion.
-  - [ ] Report to `.tmp/rv/cyber-act-L04.md` (PR, head, CI result, each acceptance item L4-A–E); stop; do not merge.
+- [ ] **Fix CI integrate — run 41388209369**
+  - [x] Update and verify the exact 17-name Cluster Mesh artifacts inventory (21 surface tests pass).
+  - [x] Align the selected fixture, frozen candidate installs and package publication ordering (129 lazy tests, 16 installed stateful tests, clean install qualification and 33 CI wiring tests pass).
+  - [x] Repair the W1.a upgrade fixture and reader activation causes; retain rejection and concurrency assertions (102 targeted API tests pass).
+  - [x] Run targeted make checks under the single Docker lock; API unit 102/102 and endpoints 86/86 pass with unchanged timeout and security assertions.
+  - [x] Complete installed storage-consumer setup and exact publication-DAG checks; installed qualification, PostgreSQL 17 to 18 upgrade, 35 metrics tests and 28 expected-results tests pass.
+  - [ ] Make down, commit, push and observe pull_request CI; the lane report records the final head and result.
+  - [ ] Append evidence under Fix CI integrate in the lane report; stop without merging.
+- [ ] **Integrate on main — owner-priority part 1**
+  - [x] Verify branch mechanically, read the full lane report and binding R2 design, rebase with semantic union.
+  - [x] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
+  - [x] Renumber part 1 metadata migration to 0005; journal both migrations without gaps.
+  - [x] Qualify strict v2 and compatible p0b projections; align artifacts 0.2.6, consumer ranges and APP-P1 pins.
+  - [x] Add R2 switchover regression tests before implementation; retain both source/control and editing suites with exact-byte assertions.
+  - [x] Implement independent trusted profile/result descriptors, exact typed precondition refusals and replay before strict admission.
+  - [x] Add retained-receipt switchover and strict v2 history/revert lineage acceptance tests.
+  - [x] Record new release authors and lineage without inventing historical data; expose bounded v2 history and targetReleaseId revert.
+  - [x] Initialize ensure metadata in the coordinator transaction, preserve resolved bindings and restrict explicit p0b schemas to their compatible inputs.
+  - [x] Preserve strict delete refusals outside the operational finalizer codec and replay historical terminal receipts before new-command validation.
+  - [x] Preserve the compatible ensure receipt shape; emit the full ensure summary only in result version 2.
+  - [x] Regenerate Memory L5 inventory using make, with no manual digest edits; retain the previous manifest and complete source lock snapshot.
+  - [x] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
+  - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.
+- [x] **Retained implementation — part 1 and D3**
+  - [x] Preserve the original versions/revert, conflict, edits and metadata tests, adapting source assertions to p0b's verified byte payload.
+  - [x] Preserve transactional CAS, reauthorization, atomic metadata/quota/receipt writes, lost-COMMIT recovery and complete typed D3 HTTP/MCP outcomes.
+  - [x] Preserve p0b get_source, set_access, delete, masking, management confirmation and summary fields.
+  - [x] Supersede the failed D3 0.2.5 candidate and stale L5 inventory; retain that CI evidence in the lane report.
+
+## Verification
+- [x] Artifacts typecheck/build/lint and 505 unit tests; 225 integration/e2e tests across 14 files.
+- [x] MCP Platform typecheck/build/lint and 350 tests; strict extraction of both public API reports.
+- [x] Memory L5 lot 1 gate against the regenerated manifest, using the repository make targets.
+- [x] Packed Radar/consumer probes; API boot, 65 tests across five host/transport files, and health status/readiness both successful.
+- [x] `make down` and empty `make ps`; temporary qualification helpers stay outside the committed scope.
+- [x] Mechanical branch check and scope check of the complete PR diff; no deleted tests or branch commit CI-skip markers.
+- [ ] Release the Docker reservation, resume its paused waiters, push with a lease, mark PR ready and wait for one pull_request CI on the final head.
+- [ ] IMMO activation remains a separate owner-controlled gate after both qualified switchovers; this lane does not merge.

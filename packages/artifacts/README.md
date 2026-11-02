@@ -1,5 +1,12 @@
 # @sentropic/artifacts — generic artifact contracts (L-5a)
 
+Publication profiles can set `requireExpectedCurrentReleaseId: true` to require an
+explicit UUID or `null` on publish/revert. Strict profiles reject writers without
+CAS. Omission remains supported in generic profiles. Replay the same caller key
+after an unknown commit outcome; changing files, edits, metadata or the precondition
+requires a new key. The `artifacts-outcome/v2` MCP envelope requires
+`@sentropic/mcp-platform >=0.4.1` and preserves commit state and typed error details.
+
 ## Shared PostgreSQL activation (UP-T, 0.2.3)
 
 W1.c/W3.a and Radar S1/A6 use the same imports:
@@ -314,7 +321,8 @@ The installed package includes SQL resources exported under
 ```js
 import { readFile } from 'node:fs/promises';
 
-const migrations = ['0001_artifacts.sql', '0002_lifecycle.sql'];
+const migrations = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql',
+  '0004_terminal_controls.sql', '0005_metadata.sql'];
 for (const name of migrations) {
   const sql = await readFile(new URL(import.meta.resolve(
     `@sentropic/artifacts/migrations/${name}`,
@@ -324,8 +332,10 @@ for (const name of migrations) {
 ```
 
 Apply `0001_artifacts.sql` first to create the domain schema, then
-`0002_lifecycle.sql` to add lifecycle, sharing, sources and GC support, before
-using the Postgres store. The host owns migration credentials, serialization,
+`0002_lifecycle.sql` to add lifecycle, sharing, sources and GC support, then
+`0003_coordinator.sql`, `0004_terminal_controls.sql`, and `0005_metadata.sql`
+(artifact display metadata and nullable release lineage),
+before using the Postgres store. The host owns migration credentials, serialization,
 transactions and the migration journal; execute each version through that
 runner rather than running this read loop at application startup.
 

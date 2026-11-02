@@ -49,13 +49,22 @@ export function matchesSchema(value: unknown, schema: ArtifactSchema): boolean {
 }
 
 export function normalizeArguments(profile: EffectiveArtifactProfile, name: string, input: unknown,
-  schema: ArtifactSchema, envelopeKey?: string): Readonly<Record<string, JsonValue>> {
+  schema: ArtifactSchema, envelopeKey?: string,
+  options?: { deferPrecondition: true }): Readonly<Record<string, JsonValue>> {
   const args = copyJson(input);
+  if (profile.requireExpectedCurrentReleaseId && ['artifacts_publish', 'artifacts_revert', 'artifacts_delete'].includes(name) &&
+    isRecord(args) && !Object.hasOwn(args, 'expectedCurrentReleaseId')) {
+    if (!options?.deferPrecondition) throw new ArtifactProfileInputError(false, true, {
+      profileRevisionId: profile.profileRevisionId ?? profile.version, resultEnvelopeVersion: profile.resultEnvelopeVersion ?? 1,
+      requiredField: 'expectedCurrentReleaseId', readTools: ['artifacts_get', 'artifacts_list'],
+    });
+    schema = { ...schema, required: (schema.required as string[]).filter(key => key !== 'expectedCurrentReleaseId') };
+  }
   requireInput(isRecord(args) && matchesSchema(args, schema));
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);
   const normalized = { ...copyJson(defaults) as Record<string, JsonValue>, ...args } as Record<string, JsonValue>;
-  if (['ensure', 'publish', 'commit_upload', 'set_access', 'delete'].includes(operation)) {
+  if (['ensure', 'publish', 'commit_upload', 'set_access', 'delete', 'revert'].includes(operation)) {
     const key = args.idempotencyKey;
     requireInput(typeof key === 'string' && key.trim().length > 0 && key.length <= limits.idempotencyKeyMaxUnits);
     requireInput(envelopeKey === undefined || envelopeKey === key);
@@ -66,18 +75,26 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
     requireInput(new Set(paths).size === paths.length && paths.every((path) =>
       Buffer.byteLength(path, 'utf8') <= profile.rules.pathMaxBytes));
   }
+  if (Object.hasOwn(args, 'releaseId')) requireInput(isArtifactId(args.releaseId));
+  if (Object.hasOwn(args, 'expectedCurrentReleaseId')) requireInput(args.expectedCurrentReleaseId === null || isArtifactId(args.expectedCurrentReleaseId));
   if (operation === 'publish') {
-    const paths = new Set<string>();
-    let total = 0;
-    normalized.files = (args.files as Record<string, JsonValue>[]).map((file) => {
-      const path = file.path as string;
-      requireInput(!paths.has(path) && Buffer.byteLength(path, 'utf8') <= profile.rules.pathMaxBytes);
-      paths.add(path);
-      const bytes = Object.hasOwn(file, 'text') ? Array.from(Buffer.from(file.text as string, 'utf8')) : file.bytes as number[];
-      total += bytes.length;
-      requireInput(bytes.length <= limits.maxDecodedFileBytes && total <= limits.maxDecodedTotalBytes);
-      return { path, mimeType: file.mimeType, bytes };
-    });
+    const hasFiles = Object.hasOwn(args, 'files');
+    const hasEdits = Object.hasOwn(args, 'edits');
+    // Exactly one content source: a full file set, or small edits on the current release.
+    requireInput(hasFiles !== hasEdits);
+    if (hasFiles) {
+      const paths = new Set<string>();
+      let total = 0;
+      normalized.files = (args.files as Record<string, JsonValue>[]).map((file) => {
+        const path = file.path as string;
+        requireInput(!paths.has(path) && Buffer.byteLength(path, 'utf8') <= profile.rules.pathMaxBytes);
+        paths.add(path);
+        const bytes = Object.hasOwn(file, 'text') ? Array.from(Buffer.from(file.text as string, 'utf8')) : file.bytes as number[];
+        total += bytes.length;
+        requireInput(bytes.length <= limits.maxDecodedFileBytes && total <= limits.maxDecodedTotalBytes);
+        return { path, mimeType: file.mimeType, bytes };
+      });
+    }
   }
   return freezeDeep(normalized);
 }
