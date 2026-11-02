@@ -83,6 +83,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Map account/profile, credential, single-use proof and login source fields to the r6 import records without invented history.
   - [x] Map invitations, signature-verified email continuations and social links; refuse prohibited provider secrets.
   - [x] Map tenant/workspace directories, independent memberships and OAuth tenant bindings through their frozen records.
+  - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
