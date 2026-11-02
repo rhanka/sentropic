@@ -27,7 +27,7 @@ describe('CM service-client tenant binding', () => {
   afterEach(cleanup);
 
   const readClient = () => runCmIdentityWrite(transaction => createOauthStateStoreAdapter({
-    database: bindCmAppDatabase(transaction), transactionBound: true,
+    transaction,
   }).findServiceClient!(clientId));
 
   it('never infers a fixed tenant from app protocol metadata', async () => {
