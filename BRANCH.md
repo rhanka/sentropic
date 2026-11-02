@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: descriptors match the eleven normative domains, record/port order and factory lists.
 - [x] Review r1: migrate low-level encrypted custody fixtures and narrow imported discriminated records.
 - [x] Review r1: acknowledgment tests use canonical claims and assert delivered timestamp preservation.
 - [x] Review r1: migrate acceptance fixtures to explicit deletion bindings and exact detail codes.
