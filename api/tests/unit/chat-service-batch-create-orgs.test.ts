@@ -13,6 +13,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { createTestUser } from '../utils/auth-helper';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 
 // Mock OpenAI streaming — must be declared before importing chatService.
@@ -219,6 +220,33 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     expect(capturedTools).not.toContain('batch_create_organizations');
   });
 
+  it.each(['before-selection', 'during-model-response'] as const)(
+    'refuses batch creation after a role downgrade %s', async timing => {
+      await db.update(workspaces).set({ type: 'opportunity' }).where(eq(workspaces.id, workspaceId));
+      const message = await createAdmittedChatMessage({ userId, workspaceId, content: 'Create Acme',
+        primaryContextType: 'folder', primaryContextId: folderId, model: 'gpt-4.1-nano' });
+      const downgrade = () => putCmWorkspaceMember(workspaceId, userId, 'viewer');
+      if (timing === 'before-selection') await downgrade();
+      const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+      let selected: string[] = [];
+      mock.mockImplementationOnce(async function* (opts: any) {
+        selected = toolNames(opts.tools);
+        if (timing === 'during-model-response') await downgrade();
+        yield { type: 'tool_call_start', data: { tool_call_id: 'revoked-batch',
+          name: 'batch_create_organizations', args: JSON.stringify({ description: 'Acme' }) } };
+        yield { type: 'done', data: {} };
+      }).mockImplementation(() => stream([{ type: 'done', data: {} }]));
+      await chatService.runAssistantGeneration({ userId, ...message });
+      if (timing === 'before-selection') expect(selected).not.toContain('batch_create_organizations');
+      else expect(selected).toContain('batch_create_organizations');
+      expect(await db.select().from(organizations).where(eq(organizations.workspaceId, workspaceId))).toEqual([]);
+      expect(await db.select().from(jobQueue).where(eq(jobQueue.workspaceId, workspaceId))).toEqual([]);
+      const events = await db.select().from(chatStreamEvents)
+        .where(eq(chatStreamEvents.streamId, message.assistantMessageId));
+      expect(events.some(event => event.eventType === 'tool_call_result'
+        && JSON.stringify(event.data).includes('catalog_access_denied'))).toBe(true);
+    });
+
   it('should handle batch_create_organizations tool call and produce a result event', async () => {
     await db.update(workspaces).set({ type: 'opportunity' }).where(eq(workspaces.id, workspaceId));
 
@@ -233,7 +261,6 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
             name: 'batch_create_organizations',
             args: JSON.stringify({
               description: 'Create 3 tech companies: Acme Corp (AI), Beta Inc (Cloud), Gamma Ltd (IoT)',
-              workspaceId,
             }),
           },
         },
@@ -289,7 +316,6 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
             tool_call_id: 'tool_batch_orgs_nodesc',
             name: 'batch_create_organizations',
             args: JSON.stringify({
-              workspaceId,
               // description deliberately omitted
             }),
           },

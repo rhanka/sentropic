@@ -22,7 +22,7 @@ const baseToolNames = (): string[] => {
   const names = compositeCatalogRegistry.list().flatMap(entry =>
     entry.kind === 'skill' ? entry.skill.tools.map(tool => tool.name)
       : entry.kind === 'tool' ? [entry.metadata.name] : []);
-  return [...new Set(['search_skills', 'search_catalog', ...names])];
+  return [...new Set(['search_skills', 'search_catalog', 'batch_create_organizations', ...names])];
 };
 
 const resolve = createCatalogContextResolver(async input => {
@@ -34,7 +34,8 @@ const resolve = createCatalogContextResolver(async input => {
   const producer = createFreshDecisionProducer({ accounts: tx.stores.accounts, sessions: tx.stores.sessions,
     tenants: tx.stores.tenants, memberships: tx.stores.memberships, workspaces: tx.stores.workspaces,
     workspaceMembers: tx.stores.workspaceMembers, conversations: tx.conversations,
-    catalog: { toolsForDecision: () => [...toolNames] } });
+    catalog: { toolsForDecision: decision => toolNames.filter(name =>
+      name !== 'batch_create_organizations' || ['editor', 'admin'].includes(decision.workspaceRole)) } });
   const now = new Date().toISOString();
   let conversationSessionId: string | undefined;
   if (input.kind === 'turn') {
