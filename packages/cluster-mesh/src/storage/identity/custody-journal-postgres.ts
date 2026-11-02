@@ -16,6 +16,7 @@ import type {
 } from '../../identity-contracts/custody.js';
 import type { OAuthConsentRecord, RevocationStepKind, UserAccount, WorkspaceRecord } from '../../identity-contracts/types.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
+import { IdentityEmailCreateCollision } from './custody-shared.js';
 import type { PgSession, SqlValue } from '../postgres/protocol.js';
 import { identityTable, type IdentityTableName } from './schema.js';
 
@@ -220,7 +221,10 @@ export class PostgresCustodyJournal {
         values: [record.userId, record.email, record.accountStatus, record.globalRole, record.createdAt, record.updatedAt],
       });
     } catch (error) {
-      if (String((error as { code?: unknown }).code ?? '') === '23505') throw new IdentityCustodyErrorV1('identity_record_conflict');
+      if (String((error as { code?: unknown }).code ?? '') === '23505') {
+        if ((error as { constraint?: unknown }).constraint === 'identity_user_accounts_email_key') throw new IdentityEmailCreateCollision();
+        throw new IdentityCustodyErrorV1('identity_record_conflict');
+      }
       throw error;
     }
   }
