@@ -6,7 +6,7 @@
 import type { IdentityStores } from './ports.js';
 import type { ConversationAuthorityStore } from '../identity/conversation.js';
 import type { IdentityLedgerStore } from '../identity/ledger.js';
-import type { IdentitySubjectLifecyclePortV1, PersonOrphanCleanupPortV1, IdentityDeletionJournalPortV2, IdentityRevocationOutboxPortV1, IdentityExternalRevocationDraftV1 } from './custody-operations.js';
+import type { IdentitySubjectLifecyclePortV1, PersonOrphanCleanupPortV1, IdentityDeletionJournalPortV2, IdentityRevocationOutboxPortV1, IdentityExternalRevocationDraftV1, IdentityCleanupReceiptV1, AtomicRevocationDetailV2, PersonDeletionAuthorizationPortV1, PersonDeletionPlanePortV2 } from './custody-operations.js';
 
 export type IdentityIsoTimeV1 = string;
 export type IdentitySha256HexV1 = string;
@@ -463,8 +463,9 @@ export interface BusinessDeletionReceiptV1 {
 /** Business participant bound to the exact active host transaction. */
 export interface BusinessDeletionPortV1<H> {
   readonly handlerId: BusinessDeletionHandlerIdV1;
-  deleteRows(plan: BusinessDeletionPlanV1, tx: H): Promise<BusinessDeletionReceiptV1>;
-  assertNoOrphans(plan: BusinessDeletionPlanV1, tx: H): Promise<void>;
+  prepare(command: PersonDeletionCommandV2, tx: IdentityTransactionV1<H>): Promise<BusinessDeletionPlanV1>;
+  deleteRows(plan: BusinessDeletionPlanV1, tx: IdentityTransactionV1<H>): Promise<BusinessDeletionReceiptV1>;
+  assertNoOrphans(plan: BusinessDeletionPlanV1, tx: IdentityTransactionV1<H>): Promise<void>;
 }
 
 export type AtomicRevocationStepOutcomeV2 = 'applied' | 'rolled_back' | 'queued' | 'not_applicable';
@@ -472,7 +473,7 @@ export type AtomicRevocationStepOutcomeV2 = 'applied' | 'rolled_back' | 'queued'
 export interface AtomicRevocationStepReceiptV2 {
   readonly step: import('./types.js').RevocationStepKind;
   readonly outcome: AtomicRevocationStepOutcomeV2;
-  readonly detail: string;
+  readonly detailCode: AtomicRevocationDetailV2;
 }
 
 export interface PersonDeletionCommandV2 {
@@ -493,7 +494,7 @@ export interface PersonDeletionReceiptV2 {
   readonly complete: boolean;
   readonly steps: readonly AtomicRevocationStepReceiptV2[];
   readonly business: BusinessDeletionReceiptV1 | null;
-  readonly cleanup: Readonly<Record<string, number>>;
+  readonly cleanup: IdentityCleanupReceiptV1 | null;
   readonly at: string;
 }
 
@@ -525,10 +526,15 @@ export interface AtomicPersonDeletionV2 {
 export interface AtomicPersonDeletionInput<H> {
   readonly unitOfWork: IdentityUnitOfWorkV1<H>;
   readonly business: BusinessDeletionPortV1<H>;
-  readonly clock?: import('./types.js').IdentityClock;
-  readonly deletionOptions?: IdentityRunOptionsV1;
-  readonly diagnosticOptions?: IdentityRunOptionsV1;
-  readonly readOptions?: IdentityRunOptionsV1;
+  readonly clock: import('./types.js').IdentityClock;
+  readonly authorization: PersonDeletionAuthorizationPortV1<H>;
+  readonly planes: readonly PersonDeletionPlanePortV2<H>[];
+  readonly transactionOptions: {
+    readonly reservation: IdentityRunOptionsV1;
+    readonly deletion: IdentityRunOptionsV1;
+    readonly diagnostic: IdentityRunOptionsV1;
+    readonly read: IdentityRunOptionsV1;
+  };
 }
 
 export interface IdentityExternalRevocationV1 extends IdentityExternalRevocationDraftV1 {
