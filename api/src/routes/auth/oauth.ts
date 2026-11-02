@@ -19,10 +19,7 @@ import { createServiceTenantAdapter } from '../../services/auth/service-tenant-a
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { countCmUsersWithRole } from '../../services/identity/cm-users';
-import {
-  isCmApprovedMember,
-  listCmApprovedTenantIds,
-} from '../../services/identity/cm-tenancy';
+import { createCmOAuthTenantPort } from '../../services/identity/cm-oauth-tenancy';
 
 /**
  * HS256 key for the session and verification tokens this host signs and verifies.
@@ -102,8 +99,9 @@ export const resolveOAuthServiceResource = (request?: Request): string =>
 
 const rootDb = db;
 export const createSentropicOAuthHostPorts = (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts): AuthHonoPorts =>
-  createSentropicOAuthPorts(bindCmAppDatabase(tx), boundPorts);
-const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?: () => AuthHonoPorts): AuthHonoPorts => {
+  createSentropicOAuthPorts(bindCmAppDatabase(tx), boundPorts, tx);
+const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?: () => AuthHonoPorts,
+  transaction?: CmIdentityTransaction): AuthHonoPorts => {
   const db = withAppDatabaseMethods(source);
   return ({
   oauthRefresh: createOAuthRefreshAdapter({
@@ -190,17 +188,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
   // Lot A4: always strict — validates the `tenant` selector against the client's authorized
   // set (fixed cm_service_clients binding ∪ enrollments).
   serviceTenant: createServiceTenantAdapter(),
-  // BR-39e: tenancy spine. The tenant claim (`tid`) is derived from an `approved` membership
-  // and re-validated at token time; both reads are tenant-scoped to the calling user.
-  tenant: {
-    // Lot A4: memberships live in cm_identity.cm_tenant_memberships.
-    async listApprovedTenantIds(userId: string) {
-      return listCmApprovedTenantIds(userId);
-    },
-    async isApprovedMember(userId: string, tenantId: string) {
-      return isCmApprovedMember(userId, tenantId);
-    },
-  },
+  tenant: createCmOAuthTenantPort(transaction),
   random: {
     bytes: (length) => new Uint8Array(randomBytes(length)),
     numericCode: (length) =>
