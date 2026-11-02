@@ -22,7 +22,10 @@ describe('P0 control contracts', () => {
     for (const changes of [{ grant: 'source' }, { action: 'set-public' }, { idempotencyKey: ' ' }]) {
       expect(() => profile.validate('artifacts_set_access', { ...input, ...changes })).toThrow();
     }
-    expect(() => profile.validate('artifacts_delete', { artifactId, idempotencyKey: 'k' })).toThrow();
+    const strict = compileArtifactsProfile({ ...profile.profile, requireExpectedCurrentReleaseId: true });
+    expect(() => strict.validate('artifacts_delete', { artifactId, idempotencyKey: 'k' })).toThrow();
+    expect(profile.validate('artifacts_delete', { artifactId, idempotencyKey: 'k' }))
+      .not.toHaveProperty('expectedCurrentReleaseId');
     expect(() => profile.validate('artifacts_get_source', { artifactId, paths: ['a', 'a'] })).toThrow();
   });
   it('should exclude confirmation proof from the command identity', () => {
