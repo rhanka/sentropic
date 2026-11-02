@@ -13,7 +13,8 @@ import { readA4IdentitySource } from '../../src/services/identity/cm-import-sour
 import { createCmTokenCustodian } from '../../src/services/identity/cm-token-custodian';
 
 /** Synthetic isolated-database evidence, never a deployment/rehearsal receipt. */
-export async function createCmCutoverTestConfiguration(client: PoolClient) {
+export async function createCmCutoverTestConfiguration(client: PoolClient,
+  verifier = { rpId: 'localhost', origins: ['http://localhost:5840'] }) {
   if (process.env.NODE_ENV !== 'test') throw new Error('Isolated test environment required');
   const directory = await mkdtemp(join(tmpdir(), 'a4-import-fixture-'));
   const sessionKey = randomBytes(32), ticketKey = randomBytes(32);
@@ -30,7 +31,6 @@ export async function createCmCutoverTestConfiguration(client: PoolClient) {
     const sourceSnapshotPath = join(directory, 'source.json'), remoteSnapshotPath = join(directory, 'remote.json');
     await writeFile(sourceSnapshotPath, snapshotBytes, { mode: 0o600 });
     await writeFile(remoteSnapshotPath, remoteBytes, { mode: 0o600 });
-    const verifier = { rpId: 'localhost', origins: ['http://localhost:5840'] };
     const identityAsset = identityCustodySchemaAssetV1('postgres');
     const mappingSha256 = a4MappingAssetSha256(verifier);
     const expected = { mappingSha256, identityAssetSha256: identityAsset.assetSha256,
@@ -46,7 +46,7 @@ export async function createCmCutoverTestConfiguration(client: PoolClient) {
       rollbackCheckpointRef: 'fixture:source', rollbackLimitsRef: 'fixture:transaction-rollback',
       sourceMetadataDispositionRef: 'fixture:source', rehearsalReceiptRef: null,
     }), { mode: 0o600 });
-    return { config: { checkpoint: await loadCmCutoverCheckpoint(path, expected),
+    return { checkpointPath: path, config: { checkpoint: await loadCmCutoverCheckpoint(path, expected),
       remoteSnapshot: await loadA4RemoteSnapshot(remoteSnapshotPath), verifier, identityAsset, tokens, mappingSha256,
       sourceKeyState: env.SECRET_ENCRYPTION_KEY ? 'configured-v1' : 'legacy-literal-v1', dispose() { tokens.dispose(); } }, dispose };
   } catch (error) { await dispose(); throw error; }
