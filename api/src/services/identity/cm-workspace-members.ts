@@ -3,7 +3,9 @@ import { createWorkspaceDirectory, IdentityConflictError, IdentityCustodyErrorV1
 import { CmIdentityForbiddenError } from './cm-deletion-authorization';
 import { runCmIdentityRead, runCmIdentityWrite, type CmIdentityTransaction } from './cm-transaction';
 
-export class CmWorkspaceMembershipPolicyError extends Error {}
+export class CmWorkspaceMembershipPolicyError extends Error {
+  constructor(message: string, readonly responseKey: 'message' | 'error' = 'message') { super(message); }
+}
 const directory = (tx: CmIdentityTransaction) => createWorkspaceDirectory({
   workspaces: tx.stores.workspaces, members: tx.stores.workspaceMembers, audit: tx.stores.audit,
 });
@@ -42,8 +44,9 @@ export const changeCmWorkspaceMember = (command: { actorId: string; workspaceId:
     const target = action.kind === 'add'
       ? await tx.stores.accounts.findAccountByEmail(action.email.trim().toLowerCase())
       : await tx.stores.accounts.findAccount(action.userId);
-    if (!target) throw new IdentityNotFoundError('user');
-    for (const id of [...new Set([actorId, target.userId])].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)))) {
+    if (!target && action.kind !== 'remove') throw new IdentityNotFoundError('user');
+    const targetUserId = target?.userId ?? (action.kind === 'remove' ? action.userId : '');
+    for (const id of [...new Set(target ? [actorId, target.userId] : [actorId])].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)))) {
       await tx.lockSubject(id);
     }
     await tx.lockWorkspace(workspaceId);
@@ -51,13 +54,15 @@ export const changeCmWorkspaceMember = (command: { actorId: string; workspaceId:
     const { rows } = await tx.hostTransaction.query<{ type: string }>(
       'SELECT type FROM public.workspaces WHERE id = $1', [workspaceId]);
     if (!rows[0]) throw new IdentityNotFoundError('workspace', workspaceId);
-    if (rows[0].type === 'neutral') throw new CmWorkspaceMembershipPolicyError('Neutral workspaces do not support memberships');
-    if (actorId === target.userId && action.kind !== 'add') {
-      throw new CmWorkspaceMembershipPolicyError('Cannot change your own membership');
+    if (actorId === targetUserId && action.kind !== 'add') {
+      throw new CmWorkspaceMembershipPolicyError(action.kind === 'remove' ? 'Cannot remove yourself' : 'Cannot change your own role');
     }
+    if (rows[0].type === 'neutral') throw new CmWorkspaceMembershipPolicyError('Neutral workspaces do not support memberships', 'error');
     const domain = directory(tx);
     const members = await domain.listWorkspaceMembers(workspaceId);
-    const existing = members.find(member => member.userId === target.userId);
+    const existing = members.find(member => member.userId === targetUserId);
+    if (action.kind === 'remove' && !existing) return { userId: targetUserId, changed: false };
+    if (!target) throw new IdentityCustodyErrorV1('identity_material_missing');
     if (existing?.role === 'admin' && (action.kind === 'remove' || action.role !== 'admin')
       && members.filter(member => member.role === 'admin').length === 1) throw new IdentityConflictError('last_admin');
     const input = { workspaceId, userId: target.userId, actorId };
@@ -65,5 +70,5 @@ export const changeCmWorkspaceMember = (command: { actorId: string; workspaceId:
     else if (action.kind === 'set_role') await domain.setWorkspaceRole({ ...input, role: action.role });
     else await domain.addWorkspaceMember({ ...input, role: action.role });
     await tx.advanceSubjectRevision(target.userId, new Date().toISOString(), false);
-    return { userId: target.userId };
+    return { userId: target.userId, changed: true };
   });
