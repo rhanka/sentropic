@@ -111,6 +111,7 @@ const app = createHttpArtifactApp({ mapHostError, profile, coordinator: {
     } };
     return coordinator.finalizePrepared(request);
   }, replayPrepared: request => coordinator.replayPrepared(request),
+  findReplayPrepared: request => coordinator.findReplayPrepared(request),
 }, derivation: createRadarKeyDerivation({ storageScopeId: input.scope, actorIds: ['alice'] }),
 legacyRecords: { async get() { return undefined; } },
 ensureHost: {
