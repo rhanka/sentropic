@@ -25,11 +25,13 @@ export function createArtifactCredentialReader(options: {
       `SELECT t.scope, c.allowed_scopes AS allowed, g.scopes AS consent
        FROM oauth_tokens t JOIN oauth_clients c ON c.client_id = t.client_id
        JOIN oauth_consents g ON g.client_id = t.client_id AND g.user_id = t.user_id AND g.tenant_id = t.tenant_id
+       JOIN cm_identity.cm_oauth_consents cg ON cg.client_id = t.client_id
+         AND cg.user_id = t.user_id AND cg.tenant_id = t.tenant_id
        WHERE t.jti = $1 AND t.user_id = $2 AND t.client_id = $3 AND t.tenant_id = $4
          AND t.token_type = 'access_token' AND t.audience = $5
          AND t.dpop_jkt IS NOT DISTINCT FROM $6::text
          AND (NOT c.dpop_bound_access_tokens OR t.dpop_jkt IS NOT NULL)
-         AND t.expires_at > clock_timestamp() FOR SHARE OF t, c, g`,
+         AND cg.revoked_at IS NULL AND t.expires_at > clock_timestamp() FOR SHARE OF t, c, g, cg`,
       [identity.credentialId, identity.subject, identity.clientId, identity.tenantId, options.resource, options.jkt]);
     const row = result.rows[0];
     if (!row) return denied;
@@ -67,10 +69,15 @@ export function createCurrentArtifactIdentity(resource: string): CurrentArtifact
       if (identity.clientId !== 'sentropic-turn' || typeof parts[1] !== 'string' || !parts[1] ||
         typeof parts[2] !== 'string' || !parts[2] || !Array.isArray(parts[3]) || parts[3].length) return denied;
       const params = [parts[1], identity.subject, parts[2]];
-      const query = `SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2 AND workspace_id = $3`;
-      const locked = await client.query(`${query} FOR SHARE`, params);
+      const query = `SELECT c.id FROM public.chat_sessions c
+        JOIN cm_identity.cm_identity_conversation_sessions s
+          ON s.conversation_session_id = c.cm_conversation_session_id
+        WHERE c.id = $1 AND c.user_id = $2 AND c.workspace_id = $3
+          AND s.user_id = c.user_id AND s.workspace_id = c.workspace_id
+          AND s.status = 'active' AND s.revoked_at IS NULL AND s.expires_at::timestamptz > clock_timestamp()`;
+      const locked = await client.query(`${query} FOR SHARE OF c, s`, params);
       if (locked.rowCount !== 1) return denied;
-      // A fresh statement observes a deletion or workspace change committed during a lock wait.
+      // Recheck after lock waits, including CM expiry; a business chat never grants authority alone.
       const active = await client.query(query, params);
       return { readable: active.rowCount === 1, writable: active.rowCount === 1 };
     }
