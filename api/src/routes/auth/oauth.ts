@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import {
   createOAuthHmacStateCodec,
@@ -6,7 +6,6 @@ import {
   type AuthHonoPorts,
   type AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
-import { jwtVerify, SignJWT } from 'jose';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
@@ -55,8 +54,6 @@ import {
  */
 export const resolveSessionTokenSecret = (): string =>
   env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
-
-const JWT_SECRET = new TextEncoder().encode(resolveSessionTokenSecret());
 
 const unsupportedOAuthPort = async (): Promise<never> => {
   throw new Error('This AuthHono port is not used by the Sentropic OAuth host routes.');
@@ -268,44 +265,8 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
     revokeAllForUser: unsupportedOAuthPort, touch: unsupportedOAuthPort, updateTokens: unsupportedOAuthPort,
   },
   tokens: {
-    hashSecret: (secret) => createHash('sha256').update(secret).digest('hex'),
-    async signSessionToken(claims, expiresAt) {
-      return new SignJWT({ ...claims })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setJti(randomUUID())
-        .setIssuedAt()
-        .setExpirationTime(expiresAt)
-        .sign(JWT_SECRET);
-    },
-    async signVerificationToken({ email, expiresAt }) {
-      return new SignJWT({ email })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setJti(randomUUID())
-        .setIssuedAt()
-        .setExpirationTime(expiresAt)
-        .sign(JWT_SECRET);
-    },
-    async verifySessionToken(token) {
-      try {
-        const { payload } = await jwtVerify(token, JWT_SECRET);
-        if (
-          typeof payload.userId !== 'string' ||
-          typeof payload.sessionId !== 'string' ||
-          typeof payload.role !== 'string'
-        ) {
-          return null;
-        }
-        return {
-          displayName: typeof payload.displayName === 'string' ? payload.displayName : null,
-          email: typeof payload.email === 'string' ? payload.email : null,
-          role: payload.role,
-          sessionId: payload.sessionId,
-          userId: payload.userId,
-        };
-      } catch {
-        return null;
-      }
-    },
+    hashSecret: unsupportedOAuthPort, signSessionToken: unsupportedOAuthPort,
+    signVerificationToken: unsupportedOAuthPort, verifySessionToken: unsupportedOAuthPort,
   },
   users: {
     // Lot A4: accounts live in cm_identity.identity_user_accounts (+ profiles);
