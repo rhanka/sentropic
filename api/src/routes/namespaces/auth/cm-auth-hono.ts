@@ -50,4 +50,3 @@ accountRouter.delete('/', async (c) => {
   const { userId } = c.get('user');
   return runCmAccountDeletionHttp(c, operationId => deleteOwnCmAccount(userId, operationId));
 });
-
