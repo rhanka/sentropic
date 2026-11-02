@@ -22,7 +22,8 @@ export async function provisionCmAuthWorkspace(userId: string, tx: CmIdentityTra
   const workspaceId = isAdmin ? ADMIN_WORKSPACE_ID : randomUUID();
   await tx.lockWorkspace(workspaceId);
   await drizzle(tx.hostTransaction).insert(workspaces).values({
-    id: workspaceId, name: isAdmin ? 'Admin Workspace' : 'My Workspace', type: 'neutral',
+    id: workspaceId, ownerUserId: isAdmin ? null : userId,
+    name: isAdmin ? 'Admin Workspace' : 'My Workspace', type: 'neutral',
   }).onConflictDoNothing();
   const directory = createWorkspaceDirectory({ workspaces: tx.stores.workspaces,
     members: tx.stores.workspaceMembers, audit: tx.stores.audit });

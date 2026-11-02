@@ -11,8 +11,8 @@ import {
 
 // Lot A4: workspace membership and the workspace->tenant edge live in the CM
 // stores (cm_identity.cm_workspace_members / cm_workspaces). `public.workspaces`
-// keeps the business row only; the legacy `workspace_memberships` table and
-// `workspaces.owner_user_id` are dropped by control migration 0014.
+// keeps business rows and the destruction-policy owner reference; the legacy
+// `workspace_memberships` table is dropped by control migration 0014.
 
 export const ADMIN_WORKSPACE_NAME = 'Admin Workspace';
 
@@ -130,6 +130,7 @@ export async function ensureNeutralWorkspace(userId: string): Promise<string> {
   const now = new Date();
   await db.insert(workspaces).values({
     id,
+    ownerUserId: userId,
     name: 'My Workspace',
     type: 'neutral',
     createdAt: now,
