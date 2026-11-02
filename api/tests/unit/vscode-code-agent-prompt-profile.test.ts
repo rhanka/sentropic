@@ -1,5 +1,6 @@
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 vi.mock('../../src/services/llm-runtime', () => {
   return {
@@ -13,15 +14,14 @@ import {
   chatMessages,
   chatSessions,
   chatStreamEvents,
-  users,
-  workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
 import { callLLMStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 import type { VsCodeCodeAgentRuntimePayload } from '../../src/services/chat-service';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 
 type StreamEvent = { type: string; data: unknown };
 
@@ -40,17 +40,9 @@ describe('VSCode code-agent prompt profile', () => {
 
   beforeEach(async () => {
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `vscode-code-agent-${userId}@example.com`,
-      displayName: 'VSCode Code Agent',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    const actor = await createTestUser({ email: `vscode-code-agent-${userId}@example.com`, displayName: 'VSCode Code Agent', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
     sessionId = createId();
     await db.insert(chatSessions).values({
@@ -75,21 +67,15 @@ describe('VSCode code-agent prompt profile', () => {
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages).where(eq(chatMessages.sessionId, sessionId));
     await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
-    await db
-      .delete(workspaceMemberships)
-      .where(
-        and(
-          eq(workspaceMemberships.workspaceId, workspaceId),
-          eq(workspaceMemberships.userId, userId),
-        ),
-      );
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
     vi.clearAllMocks();
   });
 
   const runWithPayload = async (payload: VsCodeCodeAgentRuntimePayload) => {
-    const created = await chatService.createUserMessageWithAssistantPlaceholder({
+    const created = await createAdmittedChatMessage({
       userId,
       workspaceId,
       sessionId,
@@ -171,7 +157,7 @@ describe('VSCode code-agent prompt profile', () => {
       );
 
     try {
-      const created = await chatService.createUserMessageWithAssistantPlaceholder({
+      const created = await createAdmittedChatMessage({
         userId,
         workspaceId,
         sessionId,
