@@ -1,10 +1,29 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { Hono } from 'hono';
 import { app } from '../../../src/app';
+import { cmCredentialHandlers } from '../../../src/routes/namespaces/auth/cm-credentials';
 import { cleanupAuthData, createTestUser, createMockCredential, authenticatedRequest } from '../../utils/auth-helper';
+import { revokeAllSessions } from '../../../src/services/session-manager';
+import { findCmCredentialById } from '../../../src/services/identity/cm-proofs';
 
 describe('Credentials Management API Routes', () => {
   afterEach(async () => {
     await cleanupAuthData();
+  });
+
+  it.each(['PUT', 'DELETE'])('refuses %s with a revoked session without changing the credential', async method => {
+    const user = await createTestUser({ withSession: true });
+    const credentialId = await createMockCredential(user.id, 'Preserved device');
+    const before = await findCmCredentialById(credentialId);
+    await revokeAllSessions(user.id);
+    // Exercise the inner completion admission, including revocation after outer middleware ran.
+    const handler = method === 'PUT' ? cmCredentialHandlers.renameCredential! : cmCredentialHandlers.revokeCredential!;
+    const router = new Hono().on(method, '/api/v1/auth/credentials/:id', handler);
+    const response = await authenticatedRequest(router, method, `/api/v1/auth/credentials/${credentialId}`,
+      user.sessionToken!, method === 'PUT' ? { deviceName: 'Must not change' } : undefined);
+    expect(response.status).toBe(401);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(await findCmCredentialById(credentialId)).toEqual(before);
   });
 
   describe('GET /api/v1/auth/credentials', () => {
