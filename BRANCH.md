@@ -15,6 +15,8 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `packages/artifacts/**`
+  - `packages/mcp-platform/src/runtime.ts`, `packages/mcp-platform/src/transport/result-codec.ts` (D3 outcome codec only)
+  - `packages/mcp-platform/tests/transport/result-codec.test.ts`, `packages/mcp-platform/package.json`, `packages/mcp-platform/CHANGELOG.md` (D3 codec tests and release metadata)
   - `api/src/services/artifacts/composition.ts` (host store wiring only)
   - `api/src/services/artifacts/host-storage.ts` (artifacts-host migration journal: add the 0004_metadata asset)
   - `api/src/services/mcp/cluster-registry.ts` (APP-P1 pin realignment for artifacts 0.2.5, per the 0.2.4 precedent)
@@ -44,6 +46,12 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
 - Rationale: one package, one concern; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
+- [ ] **Delta D3 — Binding R1 concurrency and transport contract only**
+  - [ ] Tests first: `packages/artifacts/tests/parity-d3.test.ts`; strict null preconditions, concurrent CAS, replay before edits, command identity, complete MCP errors.
+  - [ ] Require explicit expectedCurrentReleaseId in strict profiles; forbid bypass writers and defaults.
+  - [ ] Move pointer comparison and metadata into the coordinator transaction; replay before preparation.
+  - [ ] Preserve typed conflict/edit/release details, commitState and replayed through MCP codec.
+  - [ ] Targeted tests, package gates, atomic commits with pushes, one final CI; append report and stop without merging.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
   - [x] Worktree `tmp/worktrees/artifacts-parity-p0` on `feat/artifacts-parity-p0` from origin/main; `harness check branch` PASS.
