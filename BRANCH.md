@@ -32,6 +32,7 @@
   - [x] Declare BRADM-EXn with reason, impact and rollback before a conditional change.
 
 ## Feedback Loop
+- [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
 - [x] Rebased from the initial `e1c0ef97d` base to resolve the sole BRANCH.md conflict; the code patch and scanner material context remain byte-identical, retaining both passing code reviews under r6 section 1.3.
 - [x] Mistral F1: constrain executed no-op test blocks to literal echo statements; reject commands, expressions, redirection and substitutions before execution.
 - [x] Mistral F2: restore parsed checkout-ref assertions for all three jobs; F4: add workflow/control mutation negatives.
