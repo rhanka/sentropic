@@ -6,6 +6,7 @@
 
 import { getCmIdentity } from './cm-identity';
 import { runCmIdentityRead } from './cm-transaction';
+import { TenantBoundaryError } from '@sentropic/cluster-mesh';
 
 export interface CmTenantRecord {
   readonly tenantId: string;
@@ -263,10 +264,10 @@ export const listCmWorkspaceMembershipsForUser = (userId: string): Promise<CmWor
 export const resolveCmTenantAuthoritatively = async (input: {
   workspaceId: string;
   userId: string;
-}) => {
+}) => runCmIdentityRead(async () => {
   const { resolver } = getCmIdentity();
   return resolver.resolveAuthoritatively(input);
-};
+});
 
 export type CmResolveTenantResult =
   | { tenantId: string }
@@ -280,8 +281,9 @@ export const resolveCmTenant = async (input: {
   try {
     const resolved = await resolveCmTenantAuthoritatively(input);
     return { tenantId: resolved.tid };
-  } catch {
-    return { error: 'unknown' };
+  } catch (error) {
+    if (error instanceof TenantBoundaryError) return { error: 'unknown' };
+    throw error;
   }
 };
 
@@ -306,21 +308,22 @@ export const reconcileCmTenantId = async (input: {
   workspaceId: string;
   userId?: string;
   path: string;
-}): Promise<string> => {
+}): Promise<string> => runCmIdentityRead(async () => {
   try {
     if (input.userId) {
       const resolved = await resolveCmTenantAuthoritatively({ workspaceId: input.workspaceId, userId: input.userId });
       return resolved.tid;
     }
     const workspace = await findCmWorkspace(input.workspaceId);
-    if (!workspace) throw new Error('unknown');
+    if (!workspace) throw new TenantBoundaryError();
     const tenant = await findCmTenant(workspace.tenantId);
-    if (!tenant || tenant.status !== 'active') throw new Error('unknown');
+    if (!tenant || tenant.status !== 'active') throw new TenantBoundaryError();
     return tenant.slug;
   } catch (error) {
-    throw new CmTenantResolutionError('unknown', input.path, input.workspaceId);
+    if (error instanceof TenantBoundaryError) throw new CmTenantResolutionError('unknown', input.path, input.workspaceId);
+    throw error;
   }
-};
+});
 
 /** `tid` claim issuance from an approved membership (replaces the OAuth tid legs). */
 export const issueCmTid = async (input: { userId: string; tenantId: string }, now = new Date()) => {
