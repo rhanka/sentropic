@@ -7,10 +7,13 @@
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import type {
   ConnectorRevocationCaptureV1,
+  ConnectorRevocationCustodyPortV1,
+  IdentityTransactionV1,
   ConnectorRevocationCustodyReferenceV1,
   IdentityExternalRevocationV1,
   IdentityRevocationClaimV1,
 } from '../identity-contracts/custody.js';
+import { sameRevocationTarget } from '../storage/identity/custody-delivery-record.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 import type { CustodyOpHost } from '../storage/identity/custody-host.js';
 import type { SqliteConnection } from '../storage/sqlite/connection.js';
@@ -202,7 +205,7 @@ export const createNodeConnectorCustody = (input: {
 }): {
   readonly keyRef: string;
   dispose(): void;
-  capture(captureInput: {
+  captureCapability(captureInput: {
     readonly deliveryId: string;
     readonly connectorAccountId: string;
     readonly provider: string;
@@ -249,7 +252,7 @@ export const createNodeConnectorCustody = (input: {
         key = null;
       }
     },
-    capture: async (captureInput, raw, source) => {
+    captureCapability: async (captureInput, raw, source) => {
       if (source === null) return { kind: 'no_capability' };
       const custodyRef = `cc-${createHash('sha256').update(captureInput.deliveryId, 'utf8').digest('hex').slice(0, 32)}`;
       const existing = await findByDelivery(captureInput.deliveryId, raw);
@@ -287,7 +290,7 @@ export const createNodeConnectorCustody = (input: {
       if (record.targetKind !== 'connector_grant') throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
       const row = await findByDelivery(record.deliveryId, raw);
       if (!row) throw new IdentityCustodyErrorV1('identity_revocation_custody_missing');
-      if (row.connectorAccountId !== record.targetRef) throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
+      if (row.connectorAccountId !== record.targetRef || row.custodyRef !== record.custodyRef) throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
       openConnectorCapabilityV1({ key: activeKey(), keyRef: row.keyRef, custodyRef: row.custodyRef, deliveryId: row.deliveryId, connectorAccountId: row.connectorAccountId, provider: row.provider, nonce: row.nonce, ciphertext: row.ciphertext, authTag: row.authTag });
     },
     eraseAcknowledged: async (record, raw) => {
@@ -296,7 +299,7 @@ export const createNodeConnectorCustody = (input: {
       }
       const row = await findByDelivery(record.deliveryId, raw);
       if (!row) return;
-      if (row.connectorAccountId !== record.targetRef) throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
+      if (row.connectorAccountId !== record.targetRef || row.custodyRef !== record.custodyRef) throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
       const table = custodyTableOf(raw);
       if (raw.profile === 'postgres') {
         await pgExec(raw, `DELETE FROM ${table} WHERE "custody_ref" = $1`, [row.custodyRef]);
@@ -313,29 +316,50 @@ export type NodeConnectorCustody = ReturnType<typeof createNodeConnectorCustody>
  * Acknowledges one claimed delivery and erases its connector custody row in
  * the same transaction. Non-connector deliveries skip custody.
  */
-export const acknowledgeIdentityRevocationV1 = async (input: {
-  readonly host: CustodyOpHost;
+export const acknowledgeIdentityRevocationV1 = async <H>(input: {
+  readonly tx: IdentityTransactionV1<H>;
   readonly claim: IdentityRevocationClaimV1;
   readonly at: string;
-  readonly connectorCustody: NodeConnectorCustody | null;
+  readonly connectorCustody: ConnectorRevocationCustodyPortV1<H> | null;
 }): Promise<void> => {
-  const journal = input.host.journal;
-  const delivery = await journal.findDelivery(input.claim.deliveryId);
-  if (!delivery) throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
+  const { tx, claim } = input;
+  if (tx.mode !== 'write') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  const delivery = await tx.revocationOutbox.find(claim.record.deliveryId);
+  if (!delivery || !sameRevocationTarget(delivery, claim.record)) throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
   if (delivery.state === 'delivered') return;
-  const schema = input.host.profile === 'postgres' ? (input.host as unknown as { readonly schema: string }).schema : '';
-  const raw: ConnectorCustodyRaw = input.host.profile === 'postgres'
-    ? { profile: 'postgres', schema, session: input.host.raw as PgSession, connection: null }
-    : { profile: 'sqlite', schema: '', session: null, connection: input.host.raw as SqliteConnection };
+  if (!claim.workerId || !Number.isSafeInteger(claim.claimVersion) || claim.claimVersion <= 0
+    || delivery.claimOwner !== claim.workerId || delivery.claimVersion !== claim.claimVersion
+    || !delivery.leaseUntil || delivery.leaseUntil <= input.at) throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
   if (delivery.targetKind === 'connector_grant') {
     if (!input.connectorCustody) throw new IdentityCustodyErrorV1('identity_revocation_custody_missing');
-    await input.connectorCustody.assertCaptured(delivery, raw);
+    await input.connectorCustody.assertCaptured(delivery, tx);
   }
-  await journal.acknowledgeDelivery(input.claim.deliveryId, input.claim.claimOwner, input.claim.claimVersion, input.at);
-  const acknowledged = await journal.findDelivery(input.claim.deliveryId);
+  await tx.revocationOutbox.acknowledge({ deliveryId: delivery.deliveryId, workerId: claim.workerId, claimVersion: claim.claimVersion, at: input.at });
+  const acknowledged = await tx.revocationOutbox.find(delivery.deliveryId);
   if (!acknowledged || acknowledged.state !== 'delivered') throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
-  if (acknowledged.targetKind === 'connector_grant') {
-    await input.connectorCustody!.eraseAcknowledged(acknowledged, raw);
-  }
+  if (acknowledged.targetKind === 'connector_grant') await input.connectorCustody!.eraseAcknowledged(acknowledged, tx);
 };
+
+const connectorRaw = (tx: IdentityTransactionV1<CustodyOpHost>): ConnectorCustodyRaw => tx.profile === 'postgres'
+  ? { profile: 'postgres', schema: tx.hostTransaction.schema ?? '', session: tx.hostTransaction.raw as PgSession, connection: null }
+  : { profile: 'sqlite', schema: '', session: null, connection: tx.hostTransaction.raw as SqliteConnection };
+
+/** Root-bound source reader must lock and read on this exact host transaction. */
+export const createConnectorRevocationCustodyPortV1 = (input: {
+  readonly custody: NodeConnectorCustody;
+  readonly readSource: (connectorAccountId: string, tx: IdentityTransactionV1<CustodyOpHost>) => Promise<{
+    readonly userId: string; readonly workspaceId: string | null; readonly provider: string;
+    readonly capability: ConnectorCapabilityV1 | null;
+  } | null>;
+}): ConnectorRevocationCustodyPortV1<CustodyOpHost> => ({
+  capture: async (capture, tx) => {
+    if (tx.mode !== 'write') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+    const source = await input.readSource(capture.connectorAccountId, tx);
+    if (!source) throw new IdentityCustodyErrorV1('identity_revocation_custody_missing');
+    if (!capture.subjectId || source.userId !== capture.subjectId) throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
+    return input.custody.captureCapability({ ...capture, provider: source.provider }, connectorRaw(tx), source.capability);
+  },
+  assertCaptured: (record, tx) => input.custody.assertCaptured(record, connectorRaw(tx)),
+  eraseAcknowledged: (record, tx) => input.custody.eraseAcknowledged(record, connectorRaw(tx)),
+});
 
