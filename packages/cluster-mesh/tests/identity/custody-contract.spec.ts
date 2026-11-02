@@ -11,6 +11,7 @@ import {
 import { IdentityCustodyErrorV1, scrubIdentityErrorForLog } from '../../src/identity-contracts/custody-errors.js';
 import { IDENTITY_CONTRACT_VERSION, IDENTITY_DOMAIN_DESCRIPTORS, identityDomainDescriptor } from '../../src/identity-contracts/descriptors.js';
 import * as clusterMesh from '../../src/index.js';
+import * as identityAuthHono from '../../src/identity/auth-hono.js';
 
 describe('A2.0b custody contract surface', () => {
   it('pins the custody and atomic deletion contract versions', () => {
@@ -52,7 +53,9 @@ describe('A2.0b custody contract surface', () => {
   });
 
   it('exposes every descriptor port and factory at runtime', async () => {
-    const runtime = clusterMesh as unknown as Record<string, unknown>;
+    // The peer-dependent auth factories ship on the ./identity/auth-hono subpath;
+    // every other descriptor factory stays on the root entry.
+    const runtime = { ...clusterMesh, ...identityAuthHono } as unknown as Record<string, unknown>;
     const portMethods: Record<string, readonly string[]> = {
       WebAuthnCredentialStoreV1: ['insert', 'compareAndSwapCounter'],
       SingleUseProofStoreV1: ['insert', 'consume', 'findLatestEmailCode'],
