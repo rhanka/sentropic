@@ -95,6 +95,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete copied tenancy/enforcement DDL; bootstrap the merged CM schemas through their shipped statement exports.
   - [x] Delete the raw identity copy SQL and guessed lifecycle/expiry/revision mappings; the typed importer is the only migration writer.
   - [x] Delete the SQL count-only checkpoint; keep the protected-source D11 checkpoint and real import receipt from the bound runner.
+  - [x] Rebind actual business foreign keys to CM while preserving delete/update/deferral actions; refuse unrepresentable references and record the inventory.
   - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
   - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
