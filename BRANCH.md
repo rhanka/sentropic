@@ -56,10 +56,11 @@ Make `EncryptedFileKeyring` reads side-effect free (no `mkdir`/`chmod` on the re
   - [x] write path on a non-existent directory still creates dir 0700 / `.key` 0600 / record 0600
   - [x] write path sets modes only when they differ (chmod spy)
   - [x] Scoped run `make test-llm-mesh SCOPE=tests/node/encrypted-file-keyring.test.ts` shows the new tests failing on the unfixed code (5 failed / 4 passed before the fix)
-- [ ] **Lot 2 — Fix** (`packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`)
-  - [ ] read path (`create=false`): stat dir + `.key`, read only when modes are 0700/0600, typed refusal otherwise, missing dir/key keeps the existing not-found behaviour, zero mkdir/chmod
-  - [ ] write path (`create=true`): still creates; `chmod` only when the mode differs
-  - [ ] export `KeyringInsecurePermissionsError` from `src/node/index.ts`
+- [x] **Lot 2 — Fix** (`packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`)
+  - [x] read path (`create=false`): stat dir + `.key`, read only when modes are 0700/0600, typed refusal otherwise, missing dir/key keeps the existing not-found behaviour, zero mkdir/chmod
+  - [x] write path (`create=true`): still creates; `chmod` only when the mode differs
+  - [x] export `KeyringInsecurePermissionsError` from `src/node/index.ts`
+  - [x] ambient `node:fs/promises` shim in `src/global.d.ts` gains `stat`/`Stats` (package compiles with `types: []`)
 - [ ] **Lot 3 — Gates**
   - [ ] `make test-llm-mesh SCOPE=tests/node/encrypted-file-keyring.test.ts ENV=test-keyring-ro` green
   - [ ] `make test-llm-mesh ENV=test-keyring-ro` full suite green

@@ -46,7 +46,10 @@ export {
   markExternalSeatAuthority,
   readExternalSeatAuthority,
 } from '../service/external-seat-authority.js';
-export { EncryptedFileKeyring } from './keyring/encrypted-file-keyring.js';
+export {
+  EncryptedFileKeyring,
+  KeyringInsecurePermissionsError,
+} from './keyring/encrypted-file-keyring.js';
 export { EnvKeyring } from './keyring/env-keyring.js';
 export { InMemoryKeyring } from './keyring/in-memory-keyring.js';
 export { LinuxSecretstoreKeyring } from './keyring/linux-secretstore-keyring.js';
