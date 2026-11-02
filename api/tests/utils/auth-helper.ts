@@ -1,7 +1,7 @@
 import { db } from '../../src/db/client';
 import { workspaces, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
 import { createSession } from '../../src/services/session-manager';
-import { verifyEmailCode } from '../../src/services/email-verification';
+import { withAppCmAuth } from '../../src/services/identity/cm-auth-runtime';
 import { createCmUser } from '../../src/services/identity/cm-users';
 import { createCmCredential, createCmEmailCode, sha256Hex } from '../../src/services/identity/cm-proofs';
 import { enrolCmWorkspace, putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
@@ -394,11 +394,11 @@ export async function generateTestVerificationToken(email: string): Promise<stri
   });
 
   // Now verify the code to get the token
-  const result = await verifyEmailCode({ email, code: testCode });
-
-  if (!result.valid || !result.verificationToken) {
+  const outcome = await withAppCmAuth(runner => runner.complete('email_code', binding =>
+    binding.emailVerification.verifyEmailCode({ email, code: testCode })));
+  if (!outcome.committed || !outcome.value.valid) {
     throw new Error('Failed to generate verification token for test');
   }
 
-  return result.verificationToken;
+  return outcome.value.verificationToken;
 }
