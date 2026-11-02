@@ -52,6 +52,14 @@ describe('CM HTTP publication boundary', () => {
     expect(harness.events).toEqual([]);
   });
 
+  it('bounds registration presentation parsing before any JSON decoder is called', async () => {
+    const decode = vi.fn();
+    const app = new Hono().post('/test', c => runCmAuthHttp(c, null, () => new Hono(), decode));
+    expect((await app.request('/test', { method: 'POST', body: 'x'.repeat(65_537) })).status).toBe(413);
+    expect(decode).not.toHaveBeenCalled();
+    expect(harness.events).toEqual([]);
+  });
+
   it('publishes no provisional cookie when commit acknowledgement is lost', async () => {
     harness.run.mockImplementation(async work => {
       await work({}, { hostTransaction: {} });
