@@ -40,12 +40,8 @@ vi.mock('../../../src/routes/auth/oauth', () => ({
   resolveOAuthUiBaseUrl: () => 'https://ui.test',
 }));
 
-vi.mock('../../../src/services/workspace-service', () => ({
-  ensureWorkspaceForUser: vi.fn(async () => undefined),
-}));
-
-vi.mock('@sentropic/auth-hono', () => ({
-  createAuthSessionService: () => ({ createSession: vi.fn() }),
+vi.mock('../../../src/services/identity/cm-federation-completion', () => ({
+  createCmFederationCompletion: () => vi.fn(),
 }));
 
 // The authenticated manual-link start requires a resolvable session; stub it so a `session` cookie
