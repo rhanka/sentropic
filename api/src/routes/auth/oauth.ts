@@ -2,9 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 
 import {
   createOAuthHmacStateCodec,
-  type AuthHonoAccountStatus,
   type AuthHonoPorts,
-  type AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -20,19 +18,7 @@ import { createOAuthRefreshAdapter } from '../../services/auth/oauth-refresh-ada
 import { createServiceTenantAdapter } from '../../services/auth/service-tenant-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
-import {
-  countCmRecentEmailCodes,
-  findCmMagicLinkByTokenHash,
-} from '../../services/identity/cm-proofs';
-import {
-  countCmUsers,
-  countCmUsersWithRole,
-  createCmUser,
-  findCmUserByEmail,
-  findCmUserById,
-  updateCmUser,
-  type CmUserRecord,
-} from '../../services/identity/cm-users';
+import { countCmUsersWithRole } from '../../services/identity/cm-users';
 import {
   isCmApprovedMember,
   listCmApprovedTenantIds,
@@ -214,10 +200,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
   // federation router consumes the port through the same host ports bag.
   federation: createFederationAdapter({ database: db }),
   emailVerification: {
-    async countRecent(email, since) {
-      // Lot A4: email codes live in cm_identity.identity_single_use_proofs.
-      return countCmRecentEmailCodes(email, since);
-    },
+    countRecent: unsupportedOAuthPort,
     createCode: unsupportedOAuthPort,
     findLatestValidCode: unsupportedOAuthPort,
     markUsedWithVerificationToken: unsupportedOAuthPort,
@@ -226,12 +209,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
   jwks: createJwksAdapter({ database: db }),
   magicLinks: {
     create: unsupportedOAuthPort,
-    async findValidByTokenHash(tokenHash, now) {
-      // Lot A4: magic links live in cm_identity.identity_single_use_proofs (kind 'magic_link').
-      const row = await findCmMagicLinkByTokenHash(tokenHash);
-      if (!row || row.used || row.expiresAt <= now) return null;
-      return row;
-    },
+    findValidByTokenHash: unsupportedOAuthPort,
     markUsed: unsupportedOAuthPort,
   },
   oauthStateStore: createOauthStateStoreAdapter({ database: db, transactionBound: Boolean(boundPorts) }),
@@ -269,57 +247,11 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
     signVerificationToken: unsupportedOAuthPort, verifySessionToken: unsupportedOAuthPort,
   },
   users: {
-    // Lot A4: accounts live in cm_identity.identity_user_accounts (+ profiles);
-    // public.users is dropped by 0014.
-    async count() {
-      return countCmUsers();
-    },
-    async create(input) {
-      const user = await createCmUser({
-        email: input.email,
-        displayName: input.displayName ?? null,
-        role: input.role,
-        emailVerified: input.emailVerified ?? false,
-        accountStatus: input.accountStatus ?? 'active',
-        approvalDueAt: input.approvalDueAt ?? null,
-      });
-      return toAuthHonoUserRecord(user);
-    },
-    async findByEmail(email) {
-      const row = await findCmUserByEmail(email);
-      return row ? toAuthHonoUserRecord(row) : null;
-    },
-    async findById(userId) {
-      const row = await findCmUserById(userId);
-      return row ? toAuthHonoUserRecord(row) : null;
-    },
-    async update(userId, input) {
-      const row = await updateCmUser(userId, {
-        email: input.email,
-        displayName: input.displayName,
-        role: input.role,
-        emailVerified: input.emailVerified,
-        accountStatus: input.accountStatus,
-        approvalDueAt: input.approvalDueAt,
-        updatedAt: input.updatedAt ?? new Date(),
-      });
-      return row ? toAuthHonoUserRecord(row) : null;
-    },
+    count: unsupportedOAuthPort, create: unsupportedOAuthPort,
+    findByEmail: unsupportedOAuthPort, findById: unsupportedOAuthPort, update: unsupportedOAuthPort,
   },
   });
 };
-
-const toAuthHonoUserRecord = (row: CmUserRecord): AuthHonoUserRecord => ({
-  accountStatus: row.accountStatus as AuthHonoAccountStatus,
-  approvalDueAt: row.approvalDueAt,
-  createdAt: row.createdAt,
-  displayName: row.displayName,
-  email: row.email,
-  emailVerified: row.emailVerified,
-  id: row.id,
-  role: row.role,
-  updatedAt: row.updatedAt,
-});
 
 /**
  * OAuth state sealing secret. `OAUTH_SIGNING_KEK` takes precedence over `JWT_SECRET` so that
