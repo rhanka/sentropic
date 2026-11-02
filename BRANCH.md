@@ -50,6 +50,7 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
+- [x] Docker resume: the nine ordinary AI files passed (32 tests, 23.94s), but the isolation receipt rejected 12 OpenAI Responses evaluator requests. Added the selected `/v1/responses` evaluator HTTP/SSE contract and a reproducing regression; unsupported models, input, tools and nonstreaming requests still fail. Application requalification remains pending.
 - [x] Resume protocol review 2: reproduced and fixed split Unicode surrogate pairs in SSE chunks and schema selection from assistant replies. Regressions pass for each well-formed streamed chunk and instruction/user-only schemas, retaining OpenAI developer instructions; all 23 protocol tests pass.
 - [x] Resume review dispatch 3–4: daily execution now runs every manifest browser shard with clean state and per-shard spans/status, then a clean VSCode journey. CLI regression preserves a failed middle shard and all ten API files. Delete old expected/actual browser receipts before each Playwright process so setup failures cannot expose stale membership evidence.
 - [x] Resume review dispatch 2: reproduced a false schedule alarm while the next daily run is queued/running. Health now checks the newest completed scheduled result; stale, failed, cancelled and missing completed results still fail, including a failure newer than the prior success.

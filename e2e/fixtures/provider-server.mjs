@@ -71,6 +71,33 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
           : [{ title: 'Cloud-native platforms', url: 'https://example.com/reference', content: 'Kubernetes, containers and infrastructure-as-code.' }],
         failed_results: [], response_time: 0.001 }));
       }
+      if (req.url === '/v1/responses') {
+        const input = body.input;
+        const text = Array.isArray(input) && input.length === 1 && input[0].role === 'user'
+          ? typeof input[0].content === 'string' ? input[0].content
+            : Array.isArray(input[0].content) && input[0].content.every(part => part.type === 'input_text' && typeof part.text === 'string')
+              ? input[0].content.map(part => part.text).join('\n') : ''
+          : '';
+        if (body.model !== 'gpt-5.4-nano' || body.stream !== true || body.tools?.length
+          || !text.startsWith('Tu es un classificateur.') || !text.includes('EXACTEMENT UN SEUL TOKEN')) {
+          throw new Error('Unexpected Responses evaluator request');
+        }
+        receipt.calls++;
+        receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
+        receipt.requests.push({ protocol: 'responses', model: body.model, stream: true, roles: ['user'] });
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+        let sequence_number = 0;
+        const event = (type, fields) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, sequence_number: sequence_number++, ...fields })}\n\n`);
+        const response = { id: 'ci-response', object: 'response', created_at: 1, model: body.model,
+          status: 'completed', output: [{ id: 'ci-message', type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: 'medium', annotations: [] }] }],
+          usage: { input_tokens: 20, output_tokens: 10, total_tokens: 30 } };
+        event('response.created', { response: { ...response, status: 'in_progress', output: [], usage: null } });
+        event('response.output_text.delta', { item_id: 'ci-message', output_index: 0, content_index: 0, delta: 'medium' });
+        event('response.output_text.done', { item_id: 'ci-message', output_index: 0, content_index: 0, text: 'medium' });
+        event('response.completed', { response });
+        return res.end();
+      }
       if (req.url !== '/v1/chat/completions') throw new Error('Unexpected provider endpoint');
       if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) throw new Error('Expected model and messages');
       if (!['mistral-small-2603', 'mistral-medium-3.5', 'gpt-5.4-nano'].includes(body.model)) throw new Error('Unexpected model route');
