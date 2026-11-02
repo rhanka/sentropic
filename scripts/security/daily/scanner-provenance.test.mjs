@@ -3,10 +3,14 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { digest, policy, validateScanner } from './toolchain-contract.mjs';
 import { materialFixture } from '../scanner/contract-fixture.mjs';
-import { validateMaterialContract } from '../scanner/material-contract.mjs';
+import { validateMaterialContract, validateMaterialInventory } from '../scanner/material-contract.mjs';
 import '../scanner/material-acquisition.test.mjs';
 import '../scanner/retained-materials.test.mjs';
 import '../scanner/offline-dependencies.test.mjs';
+
+// Mandatory native offline replay, collected only when the retained material directory
+// is supplied; the gate itself never skips.
+if (process.env.SCANNER_MATERIALS) await import('../scanner/native-replay.test.mjs');
 
 const SENTROPIC_REPOSITORY = 'ghcr.io/rhanka/sentropic-trivy';
 const SENTROPIC_IDENTITY =
@@ -90,10 +94,61 @@ test('should refuse upstream signatures on downstream bytes and any profile over
   }
 });
 
-test('should refuse the current unresolved material recipe before build eligibility', async () => {
-  const recipeBytes = await readFile(new URL('../scanner/recipe.json', import.meta.url));
-  const manifest = JSON.parse(await readFile(new URL('../scanner/material-manifest.json', import.meta.url)));
-  assert.throws(() => validateMaterialContract({ recipeBytes, manifest, files: {} }), /scanner-contract/);
+const loadRealContract = async () => ({
+  recipeBytes: await readFile(new URL('../scanner/recipe.json', import.meta.url)),
+  manifest: JSON.parse(await readFile(new URL('../scanner/material-manifest.json', import.meta.url))),
+});
+
+test('should validate the resolved real recipe inventory against the policy pins, contract-only', async () => {
+  const real = await loadRealContract();
+  const recipe = validateMaterialInventory(real);
+  assert.equal(recipe.sourceCommit, policy.revision);
+  assert.equal(recipe.upstream.version, policy.version);
+  assert.equal(recipe.upstream.commit, policy.revision);
+  assert.ok(recipe.go.modules.length > 1);
+  assert.deepEqual(recipe.patches.map(p => p.cve),
+    ['CVE-2026-111497', 'CVE-2026-92392', 'CVE-2026-116587']);
+  assert.throws(() => validateMaterialContract({ ...real, files: {} }), /scanner-contract/);
+});
+
+test('should refuse every mutation of the resolved recipe and material pins', async () => {
+  const real = await loadRealContract();
+  const recipe = JSON.parse(real.recipeBytes.toString('utf8'));
+  const rehash = r => ({ recipeBytes: Buffer.from(JSON.stringify(r)),
+    manifest: { ...real.manifest, recipeDigest: digest(Buffer.from(JSON.stringify(r))) } });
+  for (const mutate of [
+    r => { r.sourceCommit = 'pinned at build time'; },
+    r => { r.sourceCommit = 'z'.repeat(40); },
+    r => { r.patchRevision = 0; },
+    r => { r.patches.reverse(); },
+    r => { r.patches[0].version = 'latest'; },
+    r => { r.go.version = 'pinned-by-upstream-go-dot-mod'; },
+    r => { r.go.modules.pop(); },
+    r => { r.base.index = 'alpine@sha256:pending'; },
+    r => { r.base.repository = 'alpine'; },
+    r => { r.upstream.archive = '../escape'; },
+    r => { r.origins = ['https://evil.example']; },
+    r => { r.extra = 'unknown'; },
+    r => { delete r.actions; },
+  ]) {
+    const r = structuredClone(recipe); mutate(r);
+    assert.throws(() => validateMaterialInventory(rehash(r)), /scanner-contract/);
+  }
+  for (const mutate of [
+    m => { m.recipeDigest = 'sha256:pending-live-build'; },
+    m => { m.materials[0].digest = `sha256:${'g'.repeat(64)}`; },
+    m => { m.materials[0].kind = 'unknown-kind'; },
+    m => { m.materials[0].size = 0; },
+    m => { m.materials[0].url = 'http://insecure.example/source.tar.gz'; },
+    m => { m.materials[0].extra = 'unknown'; },
+    m => { m.materials.pop(); },
+    m => { m.materials.push(structuredClone(m.materials[0])); },
+    m => { m.materials.reverse(); },
+  ]) {
+    const m = structuredClone(real.manifest); mutate(m);
+    assert.throws(() => validateMaterialInventory({ recipeBytes: real.recipeBytes, manifest: m }),
+      /scanner-contract/);
+  }
 });
 
 test('should validate a complete synthetic material tuple without granting admission', () => {
