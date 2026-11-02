@@ -51,6 +51,8 @@ export function matchesSchema(value: unknown, schema: ArtifactSchema): boolean {
 export function normalizeArguments(profile: EffectiveArtifactProfile, name: string, input: unknown,
   schema: ArtifactSchema, envelopeKey?: string): Readonly<Record<string, JsonValue>> {
   const args = copyJson(input);
+  if (profile.requireExpectedCurrentReleaseId && (name === 'artifacts_publish' || name === 'artifacts_revert') &&
+    isRecord(args) && !Object.hasOwn(args, 'expectedCurrentReleaseId')) throw new ArtifactProfileInputError(false, true);
   requireInput(isRecord(args) && matchesSchema(args, schema));
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);
@@ -62,7 +64,7 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   } else requireInput(envelopeKey === undefined);
   if (Object.hasOwn(args, 'artifactId')) requireInput(isArtifactId(args.artifactId));
   if (Object.hasOwn(args, 'releaseId')) requireInput(isArtifactId(args.releaseId));
-  if (Object.hasOwn(args, 'expectedCurrentReleaseId')) requireInput(isArtifactId(args.expectedCurrentReleaseId));
+  if (Object.hasOwn(args, 'expectedCurrentReleaseId')) requireInput(args.expectedCurrentReleaseId === null || isArtifactId(args.expectedCurrentReleaseId));
   if (operation === 'publish') {
     const hasFiles = Object.hasOwn(args, 'files');
     const hasEdits = Object.hasOwn(args, 'edits');

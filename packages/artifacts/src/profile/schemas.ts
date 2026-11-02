@@ -70,17 +70,17 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
       return obj({ artifactId: id, idempotencyKey: key,
         files: { type: 'array', items: file, minItems: limits.publishFilesMin, maxItems: limits.publishFilesMax,
           description: 'Full file set; required unless edits is supplied.' },
-        edits: { type: 'array', items: edit, maxItems: limits.publishFilesMax,
+        edits: { type: 'array', items: edit, minItems: 1, maxItems: 100,
           description: 'Small old/new edits applied to the current release text files; required unless files is supplied.' },
-        expectedCurrentReleaseId: { ...id, description: 'Optimistic concurrency: refuse with a typed conflict when the current release differs.' },
+        expectedCurrentReleaseId: { ...id, type: ['string', 'null'], description: 'Compare the current release atomically; null requires an unpublished artifact.' },
         profile: { ...primitiveRecord, default: config.defaults.profile },
-        ...metadata }, ['artifactId', 'idempotencyKey']);
+        ...metadata }, ['artifactId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
     }
     case 'list': return obj({ limit: { ...integer(limits.listLimitMin, limits.listLimitMax), default: config.defaults.limit },
       offset: { ...integer(0), default: config.defaults.offset } });
     case 'get': case 'get_source': case 'list_versions': case 'fork': case 'renew': case 'delete': case 'restore': return idOnly;
-    case 'revert': return obj({ artifactId: id, releaseId: id, expectedCurrentReleaseId: id, idempotencyKey: key },
-      ['artifactId', 'releaseId', 'idempotencyKey']);
+    case 'revert': return obj({ artifactId: id, releaseId: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] }, idempotencyKey: key },
+      ['artifactId', 'releaseId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
     case 'get_template': return obj({ templateId: str }, ['templateId']);
     case 'get_api_guide': return obj({ version: str });
     case 'create_upload': return obj({ artifactId: id, mimeType: str, maxSize: integer(1) }, ['artifactId', 'mimeType']);

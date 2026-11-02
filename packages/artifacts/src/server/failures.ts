@@ -6,7 +6,7 @@ export type ArtifactErrorKind =
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
   | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed'
-  | 'edit_mismatch';
+  | 'edit_mismatch' | 'precondition_required' | 'release_unavailable';
 
 /** Optimistic-concurrency payload: the caller re-reads and merges against this. */
 export interface ArtifactConflictDetails {
@@ -45,7 +45,7 @@ export interface ArtifactOperationalFailure extends ArtifactFailureFields {
 
 export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
   readonly kind: 'ordinary';
-  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed' | 'edit_mismatch';
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required' | 'release_unavailable';
   readonly retriable: false;
 }
 
@@ -113,6 +113,7 @@ const TIMEOUT_NAMES = new Set(['TimeoutError', 'RequestTimeout', 'RequestTimeout
 const DOMAIN_STATUS = {
   invalid_request: 400, anonymous: 401, access_denied: 403,
   not_found: 404, gone: 410, unprocessable: 422, verification_failed: 422, edit_mismatch: 422,
+  precondition_required: 428, release_unavailable: 410,
 } as const;
 
 function field(value: unknown, name: string): unknown {

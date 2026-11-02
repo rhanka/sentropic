@@ -23,10 +23,16 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   const profile: EffectiveArtifactProfile = { ...snapshot,
     rules: snapshot.rules === undefined ? copyJson(RADAR_ARTIFACTS_PROFILE.rules) as unknown as
       EffectiveArtifactProfile['rules'] : snapshot.rules };
-  const allowed = ['version', 'selectedCapabilities', 'operations', 'contractRevisions', 'rules'];
+  const allowed = ['version', 'selectedCapabilities', 'operations', 'contractRevisions', 'rules', 'requireExpectedCurrentReleaseId'];
   if (Object.keys(profile).some((key) => !allowed.includes(key)) || profile.version !== PROFILE_CONTRACT_VERSION ||
     !Array.isArray(profile.selectedCapabilities) || !Array.isArray(profile.operations)) throw new Error('invalid artifacts profile');
   const requested = profile.selectedCapabilities;
+  if (profile.requireExpectedCurrentReleaseId !== undefined && typeof profile.requireExpectedCurrentReleaseId !== 'boolean') {
+    throw new Error('invalid publication precondition policy');
+  }
+  if (profile.requireExpectedCurrentReleaseId && requested.some(name => [
+    'artifacts_promote', 'artifacts_restore', 'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_fork',
+  ].includes(name))) throw new Error('strict profile contains a writer without CAS');
   if (new Set(requested).size !== requested.length ||
     requested.some((name) => !(ARTIFACT_CAPABILITY_NAMES as readonly string[]).includes(name))) {
     throw new Error('unknown or duplicate artifacts capability');
@@ -74,6 +80,9 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       throw new Error('profile/derivation key length mismatch');
     }
     const defaults = op.defaults;
+    if (profile.requireExpectedCurrentReleaseId && Object.hasOwn(defaults, 'expectedCurrentReleaseId')) {
+      throw new Error('publication preconditions cannot be defaulted');
+    }
     const schema = schemas[name]!;
     const props = schema.properties as Record<string, ArtifactSchema>;
     for (const [key, value] of Object.entries(defaults)) {
