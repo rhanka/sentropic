@@ -9,6 +9,7 @@ import type { PoolClient } from 'pg';
 import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
   type CmIdentityTransaction } from './cm-transaction';
 import type { createCmTokenCustodian } from './cm-token-custodian';
+import { createCmAuthEntityPlan, withCmAuthEntityPlan } from './cm-auth-entity-plan';
 
 export interface CmAuthBindingConfig {
   readonly hostPortsForTransaction: (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts) => AuthHonoPorts;
@@ -27,14 +28,16 @@ export interface CmRegistrationPresentation { readonly email: string; readonly v
 
 /** r6 §4.7: configuration is pinned before entry; handles and buffers stay in an attempt. */
 export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
-  const attempt = <T>(tx: CmIdentityTransaction, work: Work<T>, registration: RegistrationContext) =>
-    withCmIdentityTransaction(tx, async () => {
+  const attempt = <T>(tx: CmIdentityTransaction, work: Work<T>, registration: RegistrationContext,
+    entityPlan: ReturnType<typeof createCmAuthEntityPlan>) =>
+    withCmAuthEntityPlan(entityPlan, () => withCmIdentityTransaction(tx, async () => {
       const trustedRegistration = typeof registration === 'function' ? await registration(tx) : registration;
       let currentBinding: IdentityAuthHonoTransactionBindingV1 | undefined;
-      const hostPorts = config.hostPortsForTransaction(tx, () => {
+      const host = config.hostPortsForTransaction(tx, () => {
         if (!currentBinding) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
         return currentBinding.ports;
       });
+      const hostPorts = { ...host, random: { ...host.random, uuid: entityPlan.attemptUuid() } };
       const binding = createIdentityAuthHonoTransactionBindingV1({
         tx, hostPorts, digest: config.tokens.digest,
         loginTokens: config.tokens.loginTokens, ticketTokens: config.tokens.ticketTokens,
@@ -50,7 +53,7 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
         await binding.flushAudit();
         return { value, mail: binding.deferredMail.map(intent => ({ ...intent })) };
       } finally { currentBinding = undefined; }
-    });
+    }));
   const publish = async <T>(result: { value: T; mail: IdentityDeferredMailV1[] }): Promise<T> => {
     try {
       for (const intent of result.mail) await config.sendDeferredMail(intent);
@@ -60,16 +63,18 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
   return {
     async complete<T>(flow: IdentityAuthCompletionFlowV1, work: Work<T>, trustedRegistration: RegistrationContext = null)
       : Promise<IdentityAuthCompletionOutcomeV1<T>> {
+      const entityPlan = createCmAuthEntityPlan();
       const outcome = await runIdentityAuthCompletionV1({ flow, unitOfWork: cmIdentityUnitOfWork,
-        options: cmRequestWriteOptions, operation: tx => attempt(tx, work, trustedRegistration) });
+        options: cmRequestWriteOptions, operation: tx => attempt(tx, work, trustedRegistration, entityPlan) });
       if (!outcome.committed) return outcome;
       return { committed: true, value: await publish(outcome.value) };
     },
     // Both WebAuthn options calls and the unchanged OAuth/middleware consumers use
     // the bare UOW, with fresh ports and audit drain on every callback execution.
     async request<T>(work: Work<T>, trustedRegistration: RegistrationContext = null): Promise<T> {
+      const entityPlan = createCmAuthEntityPlan();
       const result = await cmIdentityUnitOfWork.run(cmRequestWriteOptions,
-        tx => attempt(tx, work, trustedRegistration));
+        tx => attempt(tx, work, trustedRegistration, entityPlan));
       return publish(result);
     },
     async registrationContext(presentation: CmRegistrationPresentation, tx: CmIdentityTransaction): Promise<Registration> {
