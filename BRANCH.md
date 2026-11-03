@@ -11,6 +11,7 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 - In every `make` command, `ENV=<env>` is passed as the last argument.
 - All new text in English. No `[skip ci]` anywhere.
 - Open PRs #890 (0.2.7), #893 (single-label host), #891 (sqlite U1, 0.3.0) must NOT change existing tool definitions; their diffs are audited and reported in `.tmp/rv/mcp-stable-tool-defs.md`. This branch bumps `@sentropic/artifacts` to 0.2.8 to leave 0.2.7 to #890/#893 and 0.3.0 to #891.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
