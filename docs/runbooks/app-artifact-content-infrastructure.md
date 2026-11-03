@@ -22,25 +22,33 @@ the real entrypoint refuses enabled startup with incomplete credentials.
 
 ## Tenant DNS and TLS receipts
 
-| Environment | Namespace | Stable wildcard | Pinned wildcard |
-| --- | --- | --- | --- |
-| Production | `sentropic` | `*.sentropic.sent-tech.ca` | `*.pinned.sentropic.sent-tech.ca` |
-| Preprod | `sentropic-preprod` | `*.preprod.sentropic.sent-tech.ca` | `*.pinned.preprod.sentropic.sent-tech.ca` |
+| Environment | Namespace | Wildcard |
+| --- | --- | --- |
+| Production | `sentropic` | `*.sentropic.sent-tech.ca` |
+| Preprod | `sentropic-preprod` | `*.preprod.sentropic.sent-tech.ca` |
 
-Ingress-shim requests both SANs in each namespace's `artifact-content-tls` secret
-through `letsencrypt-prod`, with private-key rotation `Always`. The first preprod
+One wildcard per base: a wildcard certificate covers exactly one label, and the only
+routed host shape is the single UUID label `<id>.<base>`. Ingress-shim requests that
+one SAN in each namespace's `artifact-content-tls` secret through `letsencrypt-prod`,
+with private-key rotation `Always`. The first preprod
 apply starts DNS-01/Cloudflare issuance automatically through cert-manager's own
 identity; the CI deployer needs no Certificate writes. The tenant supplies issuance
-receipts and gates traffic through DNS records. A stable wildcard does not cover the pinned
-depth. Supply DNS records to the platform Traefik load balancer and measure
-propagation separately. No address or issuance completion is assumed here.
+receipts and gates traffic through DNS records. Supply DNS records to the platform
+Traefik load balancer and measure propagation separately. No address or issuance
+completion is assumed here.
 The dedicated Ingress uses only `websecure`, preserves Host and has priority `1`
 so existing exact app/IdP/preprod routes retain precedence over the wildcard.
-Unknown labels are denied by the content host; no forwarded identity is trusted.
-The prod stable wildcard also matches the preprod app host. Exact preprod routing
+The content host resolves the UUID label server-side: an artifact id serves its
+current release, a release id serves that frozen release. Unknown ids get one
+uniform 404: same body, headers and timing class whether no such artifact or no
+such release exists, so no kind is disclosed. Any other host shape never routes:
+non-UUID labels, extra labels, foreign bases, and the removed pinned form.
+No forwarded identity is trusted.
+The prod wildcard also matches the preprod app host. Exact preprod routing
 takes precedence while its Ingress exists; during a preprod rebuild/delete, requests
-can reach the prod content workload. Its UUID-only parser denies `preprod`, `pinned`
-and `auth` labels before private access, as the offline parser regression verifies.
+can reach the prod content workload. Its UUID-only parser accepts exactly one UUID
+label and denies `preprod`, `auth` and every other label before private access, as the
+offline parser regression verifies.
 The prod wildcard certificate also covers that preprod hostname; it is not a
 separate certificate boundary between these hosts.
 
