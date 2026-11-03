@@ -267,6 +267,18 @@ export class SqliteCustodyJournal {
       [consentId],
     );
 
+  listConsentsForUserCore = async (userId: string): Promise<readonly OAuthConsentRecord[]> => {
+    const rows = this.connection.prepare(`SELECT * FROM "cm_oauth_consents" WHERE "user_id" = ? ORDER BY "granted_at", "consent_id"`).all(userId) as readonly Record<string, unknown>[];
+    return rows.map((row) => ({
+      consentId: String(row['consent_id']),
+      tenantId: String(row['tenant_id']),
+      userId: String(row['user_id']),
+      clientId: String(row['client_id']),
+      grantedAt: String(row['granted_at']),
+      ...(row['revoked_at'] === null || row['revoked_at'] === undefined ? {} : { revokedAt: String(row['revoked_at']) }),
+    }));
+  };
+
   // -- Subject cleanup (CM-owned, both handlers) ------------------------------
 
   listMembershipsForUser = async (userId: string): Promise<readonly { readonly userId: string; readonly tenantId: string; readonly status: string; readonly tenantRole: string; readonly decidedBy?: string; readonly decidedAt?: string; readonly updatedAt: string }[]> => {
