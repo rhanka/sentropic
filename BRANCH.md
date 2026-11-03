@@ -4,7 +4,7 @@
 Land the sentropic side of rc2-native-plan.md §2 items L-1..L-7: a PACKED `SessionRelayEndpointConnectorPortV1` and branded `SessionRelayLaneClientV1` in `@sentropic/cluster-mesh` (types + fail-closed skeleton first, then the engine), the composition contract (host composition vs mesh-internal), fake A / fake L→A behind the public API in tests only, runs of the CHAIN-ESTABLISH-2 / CHAIN-FRAME-TRANSLATION / CHAIN-BIND vectors, capsule pins for Node/TLS/HTTP-2, and stream/close/abort conformance vectors. DEP-FED stays a source-gap: every live route stays DISABLED and fail-closed; no local fill. No h2a wire code.
 
 ## Scope / Guardrails
-- Scope limited to `packages/cluster-mesh` (new `src/sessions/relay-*` modules, `src/index.ts` export wiring, `package.json` exports + version bump, `tests/remote-session/**`) plus the mandatory lockfile/fixture sync of the version bump (BRrc2relay1-EX1).
+- Scope limited to `packages/cluster-mesh` (new `src/sessions/relay-*` modules, `src/index.ts` export wiring, `package.json` exports + version bump, `tests/remote-session/**`) plus the mandatory lockfile/fixture sync of the version bump (BR00-EX1).
 - Make-only workflow, no direct Docker commands; the single Docker lock `.tmp/packets/DOCKER-LOCK.md` is taken PER COMMAND via `flock <lock> make ...`; never held across reasoning.
 - Branch development happens in isolated worktree `tmp/worktrees/rc2-relay1-prep` (branch `feat/rc2-relay1-prep` from `origin/main` 812d1f053); `harness check branch` PASS C1 at init.
 - Automated tests run on `ENV=test-rc2-relay1` only, always LAST (`API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112`, verified free); never `ENV=dev`; `make down ... ENV=test-rc2-relay1` after every test stack; reuse the pinned `node:24-bookworm-slim` image, no image build; never `make clean-all`; never `[skip ci]`.
@@ -27,6 +27,7 @@ Land the sentropic side of rc2-native-plan.md §2 items L-1..L-7: a PACKED `Sess
   - `packages/cluster-mesh/src/index.ts` (export wiring only, if needed)
   - `packages/cluster-mesh/package.json` (exports subpath + version bump)
   - `packages/cluster-mesh/tests/remote-session/**` (new relay specs + test-only fakes)
+  - `api/package-lock.json` (version-string sync of the cluster-mesh bump only, under BR00-EX1; explicit allowed wins over the `api/**` forbidden glob)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -36,13 +37,13 @@ Land the sentropic side of rc2-native-plan.md §2 items L-1..L-7: a PACKED `Sess
   - `.github/workflows/**`
   - `.track/**`, `.tmp/**`, `.env`, root `package.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `package-lock.json`, `api/package-lock.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` — only under BRrc2relay1-EX1
+  - `package-lock.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` — only under BR00-EX1
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [x] `acknowledge`: BRrc2relay1-EX1 — reason: rules/workflow.md Package Publication mandates a version bump + lockfile sync for any `packages/cluster-mesh/src/**` change (same sync as 45e961c8e: root + api lockfiles and the selected packaging fixture); impact: version-string-only diffs; rollback: revert the bump commit.
+- [x] `acknowledge`: BR00-EX1 — reason: rules/workflow.md Package Publication mandates a version bump + lockfile sync for any `packages/cluster-mesh/src/**` change (same sync as 45e961c8e: root + api lockfiles and the selected packaging fixture); impact: version-string-only diffs; rollback: revert the bump commit.
 - [x] `acknowledge`: r3 pins recomputed in this lane before first commit (MANIFEST self 6245d3ae…, JSON 88823475… match the conductor pins); the four port-vector digests match the r3 manifest `ports[].methods[].vectorSha256` entries.
 - [x] `acknowledge`: `harness check branch --current-branch feat/rc2-relay1-prep --expected-branch feat/rc2-relay1-prep` → PASS C1 (sentropic), run in the worktree against the freshly built `packages/harness/dist/bin/harness.js`.
 - [x] `acknowledge`: plan/contract unsettled points — none found; L-1..L-7 and contract §8/annex B/runtimeComposition settle every point this branch implements. DEP-FED live-route disablement is the expected state, not a blocker.
@@ -65,7 +66,7 @@ Land the sentropic side of rc2-native-plan.md §2 items L-1..L-7: a PACKED `Sess
   - [x] Environment mapping: `ENV=test-rc2-relay1` always LAST; ports `API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112` (free on host).
 - [ ] **Lot 1 — Packed port types + fail-closed skeleton (L-1 first half)**
   - [ ] Tests first (red): `tests/remote-session/relay-ports.spec.ts` — port vector shapes (positive ACCEPT_SHAPE / negative REJECT_SCHEMA), fail-closed connect without mesh wiring → `{status:'refused', error:{code:'relay_grant_unavailable'}}` and no client, brand check (clientRef string cannot instantiate `SessionRelayLaneClientV1`), TypeError-only for invalid JS API use, typed refusals never throw.
-  - [ ] Green: `src/sessions/relay-types.ts` (packed types + brand + route matrix), `src/sessions/relay.ts` (public entry + `createSessionRelayEndpointConnectorPort`), `src/sessions/relay-wiring.ts` (internal mesh-wiring seam, NOT in exports map), skeleton connector/lane client, `package.json` export `./sessions/relay` + version bump 0.26.0-dev.7 with BRrc2relay1-EX1 lockfile/fixture sync.
+  - [ ] Green: `src/sessions/relay-types.ts` (packed types + brand + route matrix), `src/sessions/relay.ts` (public entry + `createSessionRelayEndpointConnectorPort`), `src/sessions/relay-wiring.ts` (internal mesh-wiring seam, NOT in exports map), skeleton connector/lane client, `package.json` export `./sessions/relay` + version bump 0.26.0-dev.7 with BR00-EX1 lockfile/fixture sync.
   - [ ] Lot gate (all under `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, one command at a time, ENV LAST):
     - [ ] `make typecheck-cluster-mesh API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1`
     - [ ] `make test-cluster-mesh SCOPE=tests/remote-session/relay-ports.spec.ts API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1`
