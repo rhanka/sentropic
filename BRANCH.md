@@ -61,10 +61,10 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 - [x] **Lot 1 — Static artifacts tool definitions**
   - [x] Add frozen static tool definitions (description, inputSchema, outputSchema, idempotency, gates) for all 17 `artifacts_*` tools in `packages/artifacts/src/mcp-core.ts` (`ARTIFACTS_TOOL_DEFINITIONS`).
   - [x] `createArtifactsManifest` builds tool entries from the static definitions only; profile stays in `audit.artifactsProfileDigest` (server metadata) and in typed result details.
-  - [ ] Update `packages/artifacts/tests/mcp.test.ts` and `parity-r2-profile.test.ts` expectations (description no longer contains the revision; inputSchema is the static definition).
-  - [ ] Lot gate:
-    - [ ] `make typecheck` for artifacts/mcp-platform lanes.
-    - [ ] `make test-artifacts SCOPE=tests/mcp.test.ts tests/parity-r2-profile.test.ts ENV=test-mcp-stable`.
+  - [x] Update `packages/artifacts/tests/mcp.test.ts` and `parity-r2-profile.test.ts` expectations (description no longer contains the revision; inputSchema is the static definition).
+  - [x] Lot gate:
+    - [x] `make build-artifacts` / `make build-mcp-platform` (tsc typecheck) green on `ENV=test-mcp-stable`.
+    - [x] `make test-artifacts ENV=test-mcp-stable` green (506 tests, incl. mcp.test.ts + parity-r2-profile.test.ts).
 
 - [ ] **Lot 2 — Snapshot tests of the tools/list catalogue**
   - [ ] `packages/artifacts/tests/tools-list-snapshot.test.ts` + checked-in snapshot JSON: full catalogue (names, descriptions, inputSchema, outputSchema, annotations, _meta) for the APP-P1 profile and for an r2 profile; asserts byte-identical definitions across profiles and equality with the snapshot file; header comment explains the claude.ai permission rule.

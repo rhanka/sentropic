@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
-import { createArtifactsAdapter, createArtifactsManifest } from '../src/mcp-core.js';
+import { ARTIFACTS_TOOL_DEFINITIONS, createArtifactsAdapter, createArtifactsManifest } from '../src/mcp-core.js';
 import { encodeToolResult } from '../../mcp-platform/src/transport/result-codec.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
 
@@ -86,8 +86,12 @@ describe('R2 explicit profile and result switchovers', () => {
       idempotencyKey: 'edit', edits: [{ path: 'index.html', oldStr: 'one', newStr: 'two' }] })).toThrow();
     expect(() => compileArtifactsProfile({ ...profile(true, 2), resultEnvelopeVersion: 3 as 2 })).toThrow();
     const manifest = createArtifactsManifest({ profile: compileArtifactsProfile(profile(true, 2)) });
-    expect(manifest.tools.find(tool => tool.name === 'artifacts_publish')?.description)
-      .toContain('immo-artifacts.v2');
+    const publish = manifest.tools.find(tool => tool.name === 'artifacts_publish');
+    // Tool definitions are byte-stable: the profile revision never leaks into them.
+    expect(publish?.description).toBe(ARTIFACTS_TOOL_DEFINITIONS.artifacts_publish.description);
+    expect(publish?.description).not.toContain('immo-artifacts.v2');
+    expect(publish?.inputSchema).toEqual(ARTIFACTS_TOOL_DEFINITIONS.artifacts_publish.inputSchema);
+    expect(manifest.audit.artifactsProfileDigest).toBe(compileArtifactsProfile(profile(true, 2)).profileDigest);
   });
 
   it('should keep compatible results at the root and select the v2 envelope independently', async () => {
