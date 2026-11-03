@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: '70c2374584d072dc2df90a03f2af43c67afb1f995267b0b7eea863adb49b5824' },
+      'sentropic.artifacts': { manifestDigest: '96226d32f64ca7ac06749d5083084b6f572eac23d27256cae8d37e7f7579933d' },
     } };
 }
 
@@ -40,7 +40,7 @@ describe('app MCP registry compilation', () => {
       .toBe('94212e75c52e23f3f254496d98fca7c052568f7c03526ff3def3db020cd24168');
     const { manifest } = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
     expect(computeManifestDigest({ ...manifest, version: '0.2.5' }))
-      .toBe('b95ba5ed2c145d7b5ff0c167e4d072292f285fd50480bfb853754cba02191e12');
+      .toBe('da14b7bda89fc0f92552e2f6ceefbf3f1f68d118a643e5724f7d441f684386e8');
     expect(computeManifestDigest({ ...manifest, version: '0.2.6' }))
       .toBe('c69c8ce188907fa3db602caa290e07ebcaffa9e63010aa47b73e1599b36149ed');
     expect(computeManifestDigest({ ...manifest, version: '0.2.7' }))
