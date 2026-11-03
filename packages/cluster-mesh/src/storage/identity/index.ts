@@ -19,3 +19,4 @@ export * from './custody-host.js';
 export * from './custody-import.js';
 export * from './atomic-deletion.js';
 export * from './workspace-deletion.js';
+export * from './replica-sync.js';
