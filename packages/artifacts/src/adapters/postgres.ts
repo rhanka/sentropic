@@ -336,13 +336,14 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         owner_id: string;
         storage_scope_id: string;
         is_public: boolean;
+        access_mode: string;
         lifecycle_state: ArtifactState;
         binding_name: string;
         created_at: Date;
         updated_at: string | null;
         metadata: ArtifactMetadata | null;
       }>(
-        `SELECT owner_id, storage_scope_id, is_public, lifecycle_state, binding_name, created_at,
+        `SELECT owner_id, storage_scope_id, is_public, access_mode, lifecycle_state, binding_name, created_at,
           to_jsonb(a)->>'updated_at' AS updated_at, to_jsonb(a)->'metadata' AS metadata
          FROM artifacts.artifacts a WHERE id = $1`,
         [artifactId],
@@ -354,12 +355,15 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
          WHERE artifact_id = $1 ORDER BY principal_id`,
         [artifactId],
       );
+      // G1: access_mode is authoritative; is_public is its legacy projection.
+      const accessMode = (row.access_mode ?? (row.is_public ? 'platform' : 'restricted')) as ArtifactAcl['accessMode'];
       return {
         bindingName: row.binding_name, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at,
         ...(row.metadata ?? {}),
         ownerId: row.owner_id,
         storageScopeId: row.storage_scope_id,
-        isPublic: row.is_public,
+        isPublic: accessMode !== 'restricted',
+        accessMode,
         withdrawn: row.lifecycle_state === 'withdrawn',
         grants: grants.rows.map((grant) => ({
           principalId: grant.principal_id,
@@ -369,13 +373,15 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
       };
     },
     async putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void> {
+      // G1: write access_mode; is_public stays as its projection (never forced false).
+      const accessMode = acl.accessMode ?? (acl.isPublic ? 'platform' : 'restricted');
       await pool.query(
-        `UPDATE artifacts.artifacts SET is_public = $2, metadata = $4,
+        `UPDATE artifacts.artifacts SET access_mode = $2, is_public = ($2 <> 'restricted'), metadata = $4,
          lifecycle_state = CASE WHEN $3 THEN 'withdrawn'
            WHEN lifecycle_state = 'withdrawn' THEN 'active'
            ELSE lifecycle_state END
          WHERE id = $1`,
-        [artifactId, acl.isPublic, acl.withdrawn, JSON.stringify(acl.metadata ?? {})],
+        [artifactId, accessMode, acl.withdrawn, JSON.stringify(acl.metadata ?? {})],
       );
       await pool.query(`DELETE FROM artifacts.artifact_access WHERE artifact_id = $1`, [
         artifactId,
