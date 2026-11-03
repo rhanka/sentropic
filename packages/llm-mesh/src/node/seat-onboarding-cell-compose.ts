@@ -4,10 +4,25 @@
 // writer, and resolve receipt paths. Internal module: not exported from the
 // package entry points.
 
+import { lstat, readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
-import type { SeatCellConfigDirs } from './seat-onboarding-types.js';
-import { fail, isRecord, withinRoot } from './seat-stage-write.js';
+import type { SeatCli } from '../enrollment/seat-bundle.js';
+import type { SeatOnboardingV1 } from '../enrollment/seat-onboarding.js';
+import { renderCodexSeatConfig } from '../enrollment/seat-onboarding-projections.js';
+import type {
+  PlannedWrite,
+  SeatCellConfigDirs,
+  SeatCodexMcpServer,
+} from './seat-onboarding-types.js';
+import {
+  decodeBase64,
+  fail,
+  isRecord,
+  sha256Hex,
+  utf8,
+  withinRoot,
+} from './seat-stage-write.js';
 
 /** Map a seat-storage auth name to its cell destination (§3.2). */
 export function authCellDest(name: string, cellHome: string, configDirs: SeatCellConfigDirs): string {
@@ -69,4 +84,63 @@ export function composeClaudeJson(
     composed[key] = value;
   }
   return `${JSON.stringify(composed, null, 2)}\n`;
+}
+
+/**
+ * Plan the onboarding writes for one cell: the canonical agy bytes, the
+ * composed claude `.claude.json`, the synthesized muse trust file, or the
+ * rendered codex `config.toml` — exactly one file per CLI, digest-checked.
+ */
+export async function planOnboardingWrites(input: {
+  cli: SeatCli;
+  onboarding: SeatOnboardingV1;
+  seatDir: string;
+  cellHome: string;
+  workspaceDir: string;
+  configDirs: SeatCellConfigDirs;
+  claudeMcpConfig?: Record<string, unknown>;
+  codexMcpServers?: readonly SeatCodexMcpServer[];
+}): Promise<PlannedWrite[]> {
+  const { cli, onboarding, seatDir, cellHome, workspaceDir, configDirs } = input;
+  const file = onboarding.files[0];
+  const bytes = decodeBase64(file.contentBase64);
+  if (sha256Hex(bytes) !== file.sha256 || bytes.length !== file.byteLength) {
+    fail('onboarding-shape-unverified', 'onboarding file digest mismatch');
+  }
+  if (cli === 'agy') {
+    return [{ path: join(cellHome, '.gemini/antigravity-cli/jetski_state.pbtxt'), bytes, cls: 'onboarding' }];
+  }
+  if (cli === 'claude') {
+    const authPath = join(seatDir, '.claude.json');
+    const authSt = await lstat(authPath).catch(() => null);
+    if (!authSt || !authSt.isFile() || authSt.isSymbolicLink()) {
+      fail('onboarding-shape-unverified', 'claude auth .claude.json missing in seatDir');
+    }
+    const composed = composeClaudeJson(
+      new Uint8Array(await readFile(authPath)),
+      bytes,
+      workspaceDir,
+      onboarding.cellSynthesis,
+      input.claudeMcpConfig,
+    );
+    return [{ path: join(configDirs.claudeConfigDir, '.claude.json'), bytes: utf8(composed), cls: 'composed' }];
+  }
+  if (cli === 'muse') {
+    if (!onboarding.cellSynthesis.includes('muse-workspace-trust')) return [];
+    let proj: Record<string, unknown>;
+    try {
+      proj = JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      fail('onboarding-shape-unverified', 'muse trust content is not JSON');
+    }
+    if (!isRecord(proj)) fail('onboarding-shape-unverified', 'muse trust must be an object');
+    const content = `${JSON.stringify({ schema_version: proj['schema_version'], projects: { [workspaceDir]: { decision: 'trusted' } } }, null, 2)}\n`;
+    return [{ path: join(configDirs.xdgConfigHome, 'muse/trust.json'), bytes: utf8(content), cls: 'synthesized' }];
+  }
+  // codex
+  const toml = renderCodexSeatConfig(new TextDecoder().decode(bytes), workspaceDir, {
+    projectTrust: onboarding.cellSynthesis.includes('codex-project-trust'),
+    mcpServers: input.codexMcpServers,
+  });
+  return [{ path: join(configDirs.codexHome, 'config.toml'), bytes: utf8(toml), cls: 'synthesized' }];
 }
