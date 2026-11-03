@@ -173,6 +173,14 @@ up only after the consuming pods restart — both `api` and `auth-idp` mount
 `sentropic-api` via `envFrom.secretRef`; run `make k8s-deploy ... ENV=<env>`
 (which rolls all three deployments) after updating the bundle.
 
+Not in this bundle: `email-code-hmac` is **workflow-owned** — k8s pre-creates
+it as an empty shell (no data keys) in each tier namespace and
+`.github/workflows/email-code-hmac-secret.yml` is its single value writer
+(server-side apply, field manager `email-code-hmac-secret`, writer service
+account `sentropic-ci-email-code-hmac`). Never seal it, never add it to
+`k8s-bundle-secret`, never commit a manifest carrying its data. See
+`docs/runbooks/email-code-hmac-cred-cycle.md` and `docs/secrets.md`.
+
 ## GitHub deploy secret (operator side, once)
 
 The CI `deploy-k8s` job needs the GitHub Actions secret `KUBECONFIG_B64`.
