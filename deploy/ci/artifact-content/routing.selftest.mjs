@@ -24,6 +24,7 @@ export function checkReservedHosts(objects) {
     assert.equal(parseContentHost(`${label}.${domain}`, domain), undefined, `deny reserved ${label} label`);
   }
   const id = '11111111-1111-4111-8111-111111111111';
-  assert.deepEqual(parseContentHost(`${id}.${domain}`, domain), { kind: 'stable', artifactId: id });
-  assert.deepEqual(parseContentHost(`${id}.pinned.${domain}`, domain), { kind: 'pinned', releaseId: id });
+  assert.deepEqual(parseContentHost(`${id}.${domain}`, domain), { kind: 'id', id });
+  assert.equal(parseContentHost(`${id}.pinned.${domain}`, domain), undefined, 'deny removed pinned form');
+  assert.equal(parseContentHost(`${id}.${id}.${domain}`, domain), undefined, 'deny two labels');
 }
