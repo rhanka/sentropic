@@ -9,6 +9,7 @@ Upgrade the Alpine package libexpat from vulnerable 2.9.0-r0 to the patched 2.10
 - `ENV=test-libexpat` always last argument; never `ENV=dev`; never `make clean-all`.
 - Build only the e2e and ui images (disk is tight); api and api-tool images are unchanged and already pass their scans.
 - All new text in English. No `[skip ci]` anywhere.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
