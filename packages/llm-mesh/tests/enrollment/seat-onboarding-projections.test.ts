@@ -172,3 +172,75 @@ describe('captureSeatOnboarding for claude, muse and codex (L4)', () => {
     expect(res.ok).toBe(false);
   });
 });
+
+describe('stage 2 Q2 limited trust write', () => {
+  async function stageAndCell(cli: SeatCli, content: string, cellSynthesis: string[]) {
+    const root = await mkRoot();
+    const seatDir = join(root, 'seat');
+    const stage = await materialiseSeatEnvelopes({
+      seats: [{ envelope: synthEnvelope(cli, synthBlock(cli, content, cellSynthesis)), seatDir }],
+      ownerScope: 'owner-synth-01',
+      expectedNativeCliVersions: { [cli]: '1.4.12' },
+    });
+    if (!stage.ok) throw new Error(`stage failed: ${stage.code}`);
+    const cellHome = join(root, 'cell');
+    const workspaceDir = join(root, 'ws');
+    await mkdir(workspaceDir, { recursive: true });
+    const input = {
+      seatDir, cellHome, workspaceDir,
+      configDirs: { claudeConfigDir: join(cellHome, '.claude'), codexHome: join(cellHome, '.codex'), xdgConfigHome: join(cellHome, '.config') },
+      expectedNativeCliVersion: '1.4.12',
+      ownerScope: 'owner-synth-01',
+    };
+    return { root, input };
+  }
+
+  it('refuses the trust write when the workspace is not the empty bench-created directory', async () => {
+    const { input } = await stageAndCell('claude', JSON.stringify({ hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.0' }), ['claude-workspace-trust']);
+    await writeFile(join(input.workspaceDir, 'pre-existing.txt'), 'x');
+    const res = await materialiseCellHome(input);
+    expect(res.ok).toBe(false);
+    await expect(lstat(input.cellHome)).rejects.toThrow();
+  });
+
+  it('writes exactly the cell workspace trust entry for claude and no foreign path', async () => {
+    const { input } = await stageAndCell('claude', JSON.stringify({ hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.0' }), ['claude-workspace-trust']);
+    const res = await materialiseCellHome(input);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const composed = JSON.parse(await readFile(join(input.configDirs.claudeConfigDir, '.claude.json'), 'utf8'));
+    expect(Object.keys(composed.projects)).toEqual([input.workspaceDir]);
+    expect(composed.projects[input.workspaceDir]).toEqual({ hasTrustDialogAccepted: true });
+  });
+
+  it('writes no trust entry for claude, muse or codex when cellSynthesis is empty', async () => {
+    for (const [cli, content] of [
+      ['claude', JSON.stringify({ hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.0' })],
+      ['muse', JSON.stringify({ schema_version: 1 })],
+      ['codex', JSON.stringify({ approvalPolicy: 'on-request', mcpServerNames: ['h2a'] })],
+    ] as const) {
+      const { input } = await stageAndCell(cli, content, []);
+      const res = await materialiseCellHome(input);
+      expect(res.ok).toBe(true);
+      if (!res.ok) continue;
+      if (cli === 'claude') {
+        const composed = JSON.parse(await readFile(join(input.configDirs.claudeConfigDir, '.claude.json'), 'utf8'));
+        expect(composed.projects).toBeUndefined();
+      } else if (cli === 'muse') {
+        await expect(lstat(join(input.configDirs.xdgConfigHome, 'muse', 'trust.json'))).rejects.toThrow();
+      } else {
+        const toml = await readFile(join(input.configDirs.codexHome, 'config.toml'), 'utf8');
+        expect(toml).not.toContain('[projects.');
+      }
+    }
+  });
+
+  it('muse materialisation contains exactly one project, the cell workspace', async () => {
+    const { input } = await stageAndCell('muse', JSON.stringify({ schema_version: 1 }), ['muse-workspace-trust']);
+    const res = await materialiseCellHome(input);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const trust = JSON.parse(await readFile(join(input.configDirs.xdgConfigHome, 'muse', 'trust.json'), 'utf8'));
+    expect(Object.keys(trust.projects)).toEqual([input.workspaceDir]);
+  });
+});
