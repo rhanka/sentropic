@@ -52,6 +52,7 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts` (range literals — SEATONB-EX3)
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts` (range literal — SEATONB-EX3)
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (range literal — SEATONB-EX3)
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts` (expected-message regex range — SEATONB-EX3)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (selected tuple pin rebind — SEATONB-EX3)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` — SEATONB-EX3)
   - `package-lock.json`
