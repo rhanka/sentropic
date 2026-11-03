@@ -21,6 +21,9 @@ function makeWorld() {
   const handler = createContentHandler({
     acls: world.acls, lifecycle: world.lifecycle, publication: world.publication, blobs: world.blobs,
     grants: createHmacGrantSigner({ secret: 'e2e-grant-secret' }), tickets, baseDomain: BASE,
+    // G1/Q2: grants require fresh account approval at every read; the journey
+    // actors are approved accounts of the scope.
+    isApprovedAccount: () => true,
   });
   return { ...world, handler, tickets };
 }
