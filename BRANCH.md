@@ -26,6 +26,10 @@ Build lot G3 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (s
   - `packages/cluster-mesh/src/identity/auth-hono.ts`
   - `packages/cluster-mesh/tests/identity/service-tenancy.spec.ts`
   - `packages/cluster-mesh/package.json`
+  - `package-lock.json` (BR-G3-EX1)
+  - `api/package-lock.json` (BR-G3-EX1)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-G3-EX1)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-G3-EX1)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -45,6 +49,7 @@ Build lot G3 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (s
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
+- BR-G3-EX1: mechanical release-train lock sync for the `0.26.0-dev.7` bump — the CI `changes` job (train lock-sync, BRDP-EX10) requires the root lock, the api lock and the frozen `selected` packaging fixture to carry the bumped version. Refreshed through make targets only (`make lock-root`, `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`), the exact file set 45e961c8e synced for dev.6. Impact: version-string lines only, no dependency re-resolution. Rollback: revert the sync commit.
 - G1-delayed fallback (design §10.4): the both-profile binding mint/refuse/rollback-audit cases of §7.5 need G1's durable `findServiceClientBinding`; they land on rebase after G1 merges ("the stack absorbs G1 on rebase"). Until then the binding wiring is proven fail-closed (`identity_contract_unavailable`) on both profiles, and the full decision table runs at domain level over doubles.
 
 ## AI Flaky tests
