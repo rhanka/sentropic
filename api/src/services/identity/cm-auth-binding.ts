@@ -1,10 +1,9 @@
 import type { AuthHonoPorts, AuthHonoRelyingPartyConfig, OAuthContinuationCodec } from '@sentropic/auth-hono';
 import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1,
-  IdentityCustodyErrorV1,
   type IdentityAuthAccountPolicyV1, type IdentityAuthBusinessHooksV1,
   type IdentityAuthCompletionFlowV1, type IdentityAuthCompletionOutcomeV1,
-  type IdentityAuthHonoTransactionBindingV1, type IdentityDeferredMailV1,
-  type IdentityEmailCodeKeyRingV1 } from '@sentropic/cluster-mesh';
+  type IdentityAuthHonoTransactionBindingV1, type IdentityDeferredMailV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
+import { IdentityCustodyErrorV1, type IdentityEmailCodeKeyRingV1 } from '@sentropic/cluster-mesh';
 import type { PoolClient } from 'pg';
 import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
   type CmIdentityTransaction } from './cm-transaction';
