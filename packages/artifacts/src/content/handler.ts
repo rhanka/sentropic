@@ -16,6 +16,7 @@
 import { errorBody } from '../http.js';
 import type { AclStore } from '../server/access.js';
 import type { LifecycleService } from '../server/lifecycle.js';
+import { combineSharingPolicy, resolveSharingPolicy, type SharingPolicyPort } from '../server/ports.js';
 import type { PublicationBlobStore, PublicationService } from '../server/publication.js';
 import { CONTENT_GRANT_TTL_SECONDS, type GrantSigner, type TicketService } from './grants.js';
 import { contentHeaders, grantCookie, parseGrantCookie } from './headers.js';
@@ -47,6 +48,10 @@ export interface ContentHandlerDeps {
   tickets: TicketService;
   baseDomain: string;
   isApprovedAccount?: (principalId: string) => boolean;
+  /** G1 lock 2 (runtime): sharing policy per scope, fail-closed when absent. */
+  sharingPolicy?: SharingPolicyPort;
+  /** G1 lock 1 (deployment capability), absent ⇒ closed. */
+  allowPublicSharing?: boolean;
   assetCacheSeconds?: number;
 }
 
@@ -72,7 +77,11 @@ export function createContentHandler(deps: ContentHandlerDeps) {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (acl === undefined) return false;
     const state = await deps.lifecycle.stateOf(artifactId);
-    return deps.lifecycle.canRead({ artifactId, state }, acl, subjectId, 'read', isApproved);
+    // G1 double lock, fail-closed: public mode serves anonymous reads only
+    // when the profile capability AND the live runtime policy both allow it.
+    const policy = acl.storageScopeId === undefined ? undefined : combineSharingPolicy(deps.allowPublicSharing,
+      await resolveSharingPolicy(deps.sharingPolicy, acl.storageScopeId));
+    return deps.lifecycle.canRead({ artifactId, state }, acl, subjectId, 'read', isApproved, policy);
   }
 
   async function serveFile(

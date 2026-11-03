@@ -6,8 +6,9 @@
  * digests outside the current manifest never oracle (404); stored bytes
  * are checked against the manifest size before serving.
  */
-import type { AclStore } from './access.js';
+import type { AclStore, SharingPolicyContext } from './access.js';
 import type { LifecycleService } from './lifecycle.js';
+import { combineSharingPolicy, resolveSharingPolicy, type SharingPolicyPort } from './ports.js';
 import type { PublicationBlobStore, PublicationService } from './publication.js';
 
 export interface ContentDeps {
@@ -15,6 +16,10 @@ export interface ContentDeps {
   lifecycle: LifecycleService;
   publication: PublicationService;
   blobs: PublicationBlobStore;
+  /** G1 lock 2 (runtime): sharing policy per scope, fail-closed when absent. */
+  sharingPolicy?: SharingPolicyPort;
+  /** G1 lock 1 (deployment capability), absent ⇒ closed. */
+  allowPublicSharing?: boolean;
 }
 
 export interface ServeFileInput {
@@ -22,6 +27,7 @@ export interface ServeFileInput {
   digest: string;
   actorId: string;
   isApproved?: (principalId: string) => boolean;
+  policy?: SharingPolicyContext;
 }
 
 export interface ServedFile {
@@ -57,6 +63,8 @@ export function createContentRuntime(deps: ContentDeps) {
         input.actorId,
         'read',
         isApproved,
+        input.policy ?? combineSharingPolicy(deps.allowPublicSharing,
+          await resolveSharingPolicy(deps.sharingPolicy, acl.storageScopeId)),
       );
       if (!readable) {
         throw new Error(`access denied: ${input.actorId} cannot read ${input.artifactId}`);
