@@ -41,7 +41,7 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [ ] BR-G2-EX1: synchronize only the `packages/cluster-mesh` workspace version line in the root lockfile after the dev bump (`make lock-root`). Reason: CI gate "train package versions match the root lockfile". Impact: version metadata only. Rollback: revert `package-lock.json` together with the version bump.
+- [x] BR-G2-EX1: synchronize only the `packages/cluster-mesh` workspace version line in the root lockfile after the dev bump (`make lock-root`). Reason: CI gate "train package versions match the root lockfile". Impact: version metadata only. Rollback: revert `package-lock.json` together with the version bump.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch** — single CM lot, one PR.
@@ -53,13 +53,13 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
   - [x] Worktree `tmp/worktrees/a4-gap-G2` on `feat/cm-a4-gaps-g2-boundary` from `origin/main`; this `BRANCH.md` written.
   - [x] Confirm command style: `make ... ENV=test-a4-G2` last; `flock` per Docker command.
 - [ ] **Lot 1 — Tests first: `tests/boundary-resolution.spec.ts` per design §5.4**
-  - [ ] Port resolves the exact record for `member` and `admin` roles; every miss returns `null`.
-  - [ ] Domain throws `TenantBoundaryError` on every miss; frozen-path equivalence field-by-field; store errors propagate; domain userId re-check; empty tenantId/tid refusal.
-  - [ ] One shared scenario over in-memory doubles, SQLite and PostgreSQL stores; descriptor row assertions.
+  - [x] Port resolves the exact record for `member` and `admin` roles; every miss returns `null`.
+  - [x] Domain throws `TenantBoundaryError` on every miss; frozen-path equivalence field-by-field; store errors propagate; domain userId re-check; empty tenantId/tid refusal.
+  - [x] One shared scenario over in-memory doubles, SQLite and PostgreSQL stores; descriptor row assertions.
 - [ ] **Lot 2 — Implementation**
-  - [ ] `src/identity-contracts/boundary-resolution.ts` (port + domain factories).
+  - [x] `src/identity-contracts/boundary-resolution.ts` (port + domain factories).
   - [ ] `src/identity-contracts/composition-descriptors.ts` (1.2.0 bundle, `boundary_resolution` row).
-  - [ ] `src/identity-contracts/index.ts` additive export lines.
+  - [x] `src/identity-contracts/index.ts` additive export lines.
 - [ ] **Lot 3 — Gates**
   - [ ] `flock <lock> make typecheck-cluster-mesh build-cluster-mesh pack-cluster-mesh ENV=test-a4-G2`
   - [ ] `flock <lock> make test-cluster-mesh SCOPE=tests/boundary-resolution.spec.ts ENV=test-a4-G2` (SQLite + doubles)
