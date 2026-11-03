@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.33.0
+
+- Seat onboarding (design r3, lots L1–L5): the `SeatOnboardingV1` contract
+  and fail-closed validators, the agy canonicalizer and node-side capture,
+  two-stage materialization (`materialiseSeatEnvelopes`,
+  `materialiseCellHome`) with launch-gate derivation and `eraseSeatHome`,
+  the claude/muse/codex projections with the Q2-limited trust write, and the
+  L5 stored seat record: `importSeatBundle` accepts an optional `onboarding`
+  block (validated and bound before any registration), persists a versioned
+  seat record per seat account, backfills it on idempotent reimport, and
+  deletes it on removal; the facade gains `exportSeatBundle`, which returns
+  the stored bundle and block verbatim and refuses with typed
+  `seat-export-unavailable:<reason>` (`not-a-seat`, `record-missing`,
+  `lineage-mismatch`, `owner-mismatch`, `record-invalid`).
+
 ## 0.32.4
 
 - `EncryptedFileKeyring` reads are now side-effect free: `getSecret` (the
