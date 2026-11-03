@@ -26,10 +26,12 @@ import { defineParameters } from '../src/parameters.js';
 import {
   ARTIFACTS_TOOL_NAMES,
   ARTIFACTS_PROVIDER_ID,
+  ARTIFACTS_TOOL_DEFINITIONS,
   createArtifactsAdapter,
   createArtifactsManifest,
   createArtifactsRegistryDefinition,
   createArtifactsToolExecutor,
+  type ArtifactsToolName,
 } from '../src/mcp.js';
 import type { StpConnectorContext } from '@sentropic/mcp-platform';
 import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
@@ -57,11 +59,15 @@ it('should publish accented UTF-8 text through MCP and reject ambiguous or binar
 
 describe('L6 compiled MCP profile', () => {
   const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
-  it('should expose exactly the selected closed schemas and required write keys', () => {
+  it('should expose exactly the selected static definitions and required write keys', () => {
     const manifest = createArtifactsManifest({ profile, invocationScope: 'immo:read' });
     expect(manifest.tools.map((tool) => tool.name)).toEqual(profile.selectedCapabilities);
     expect(manifest.tools.every((tool) => tool.requiredScopes.includes('immo:read'))).toBe(true);
-    for (const tool of manifest.tools) expect(tool.inputSchema).toEqual(profile.schemas[tool.name]);
+    for (const tool of manifest.tools) {
+      expect(tool.description).toBe(ARTIFACTS_TOOL_DEFINITIONS[tool.name as ArtifactsToolName].description);
+      expect(tool.inputSchema).toEqual(ARTIFACTS_TOOL_DEFINITIONS[tool.name as ArtifactsToolName].inputSchema);
+      expect(tool.outputSchema).toEqual(ARTIFACTS_TOOL_DEFINITIONS[tool.name as ArtifactsToolName].outputSchema);
+    }
     expect(manifest.tools.find((tool) => tool.name === 'artifacts_publish')?.idempotency)
       .toEqual({ required: true, scope: 'principal' });
   });
