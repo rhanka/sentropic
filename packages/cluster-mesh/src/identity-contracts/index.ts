@@ -15,6 +15,8 @@ export * from './workspaces.js';
 export * from './resolution.js';
 export * from './boundary-resolution.js';
 export * from './enforcement.js';
+export * from './service-tenancy.js';
+export * from './composition-descriptors.js';
 export * from './doubles.js';
 export * from './oauth-reads.js';
 export * from './composition-descriptors.js';
