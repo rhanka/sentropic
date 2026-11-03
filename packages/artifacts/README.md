@@ -439,9 +439,13 @@ empty defaults. Existing profile selections remain explicit.
 
 `POST /get_source` accepts `artifactId`, optional `releaseId`, and optional unique
 `paths` (1–32 entries). Bind `publication.getRelease` and `sources.getSource` on
-the HTTP app. It returns the canonical manifest, verified author file bytes,
-and separate nullable `sourceRef`; readers need the distinct source permission.
-The snapshot is limited to 32 files and 262144 decoded bytes. Hosts must qualify
+the HTTP app. It returns the canonical manifest, verified author files, and a
+separate nullable `sourceRef`; readers need the distinct source permission.
+Size and digest are verified on the raw bytes, then each file is encoded for the
+wire: text mime types as `text` with `encoding: "utf8"`, all other files as
+`base64` with `encoding: "base64"` — never an integer array. The result carries
+a `guideRef` (`{tool, version}`) instead of the guide body. The snapshot is
+limited to 32 files and 262144 decoded bytes. Hosts must qualify
 a 2 MiB serialized MCP result budget before selecting this capability.
 
 `POST /set_access` grants or revokes a named principal's read access, requires a
