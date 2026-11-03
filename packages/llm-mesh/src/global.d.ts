@@ -44,16 +44,23 @@ declare module 'node:crypto' {
 declare module 'node:fs/promises' {
   export interface Stats {
     mode: number;
+    size: number;
+    isFile(): boolean;
+    isDirectory(): boolean;
+    isSymbolicLink(): boolean;
   }
   export function chmod(path: string, mode: number): Promise<void>;
+  export function lstat(path: string): Promise<Stats>;
   export function link(existingPath: string, newPath: string): Promise<void>;
   export function mkdir(
     path: string,
     options: { recursive: true; mode?: number },
   ): Promise<string | undefined>;
+  export function readdir(path: string): Promise<string[]>;
   export function readFile(path: string): Promise<Buffer>;
   export function readFile(path: string, encoding: 'utf8'): Promise<string>;
   export function rename(oldPath: string, newPath: string): Promise<void>;
+  export function rm(path: string, options: { recursive?: boolean; force?: boolean }): Promise<void>;
   export function stat(path: string): Promise<Stats>;
   export function unlink(path: string): Promise<void>;
   export function writeFile(
@@ -68,7 +75,12 @@ declare module 'node:os' {
 }
 
 declare module 'node:path' {
+  export function dirname(path: string): string;
+  export function isAbsolute(path: string): boolean;
   export function join(...paths: string[]): string;
+  export function relative(from: string, to: string): string;
+  export function resolve(...paths: string[]): string;
+  export const sep: string;
 }
 
 declare module 'http' {
@@ -96,7 +108,7 @@ declare interface Buffer extends Uint8Array {
 }
 
 declare const Buffer: {
-  from(data: string, encoding?: string): Buffer;
+  from(data: string | Uint8Array, encoding?: string): Buffer;
   concat(list: readonly Uint8Array[]): Buffer;
 };
 
