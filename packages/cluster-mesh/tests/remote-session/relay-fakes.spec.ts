@@ -19,18 +19,29 @@ const connectParameters = {
   },
 } as const;
 
+const NOW = 1_793_520_000_000;
+
+function fakeLease() {
+  return {
+    sessionRef: connectParameters.sessionRef,
+    targetDigest: null,
+    expiresAt: NOW + 60_000,
+    applyTo() { /* mesh-internal sink: no-op in the fake */ },
+  };
+}
+
 function hostComposition(): SessionRelayHostCompositionV1 {
   return {
     processBindingRef: { id: 'process-1', revision: 1, digest: '0'.repeat(64) },
-    sourceCredentials: { resolve: () => Promise.resolve({ lease: true }) },
-    now: () => 1_793_520_000_000,
+    sourceCredentials: { resolve: () => Promise.resolve(fakeLease()) },
+    now: () => NOW,
   };
 }
 
 const fullAuthorities = {
   grantResolver: { resolve: () => true },
   admissions: new Set(['fixture-B-admission', 'fixture-A-admission']),
-  sourceCredentials: { resolve: () => Promise.resolve({ lease: true }) },
+  sourceCredentials: { resolve: () => Promise.resolve(fakeLease()) },
 };
 
 function registerFakes(authorities = fullAuthorities): void {
@@ -84,7 +95,7 @@ describe('RC2 relay-1 L-3: fake A + fake L→A behind the public API', () => {
     }
   });
 
-  it('source routes without a credential lease get a typed endpointRefusal', async () => {
+  it('source routes without a credential lease refuse with the typed lane error relay_auth_required (never a synthesized endpointRefusal)', async () => {
     registerFakes({ ...fullAuthorities, sourceCredentials: { resolve: () => Promise.resolve(null) } });
     try {
       const port = createSessionRelayEndpointConnectorPort(hostComposition());
@@ -92,7 +103,8 @@ describe('RC2 relay-1 L-3: fake A + fake L→A behind the public API', () => {
       expect(result.status).toBe('connected');
       if (result.status !== 'connected') return;
       const response = await result.client.request({ routeId: 'source-renew', pathParameters: { bindingId: 'b', sourceSessionId: 's' }, body: {} });
-      expect(response).toMatchObject({ routeId: 'source-renew', endpointRefusal: { code: 'source_auth_required' } });
+      expect(response).toMatchObject({ routeId: 'source-renew', error: { code: 'relay_auth_required' } });
+      expect('endpointRefusal' in response).toBe(false);
     } finally {
       clearSessionRelayMeshWiring();
     }
