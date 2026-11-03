@@ -5,7 +5,6 @@
 import { IdentityNotFoundError, WorkspaceAlreadyEnrolledError } from '../identity-contracts/errors.js';
 import { IdentityConflictError } from '../identity-contracts/errors.js';
 import type {
-  OAuthTenantStore,
   TenantMembershipStore,
   TenantRegistryStore,
   WorkspaceDirectoryStore,
@@ -378,6 +377,6 @@ export function createPostgresIdentityStores(
         const row = result.rows[0];
         return row ? mapServiceClient(row) : null;
       },
-    } satisfies OAuthTenantStore,
+    } satisfies OAuthTenantStoreV1,
   };
 }
