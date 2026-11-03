@@ -156,3 +156,113 @@ const structuralIssues = (batch: IdentityReplicaSyncBatchV1): MutableIssue[] => 
   return issues;
 };
 
+// -- Locking (§9.1: operation key, then subject keys bytewise, then email keys) --
+
+const lockKey = async (host: CustodyOpHost, kind: string, id: string): Promise<void> => {
+  if (!id) throw new IdentityCustodyErrorV1('identity_sync_invalid');
+  if (host.profile === 'postgres') {
+    await boundIdentitySql(host).query('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [JSON.stringify([kind, id])]);
+  }
+};
+
+const lockBatch = async (host: CustodyOpHost, batch: IdentityReplicaSyncBatchV1): Promise<void> => {
+  await lockKey(host, 'operation', batch.syncId);
+  const subjects = new Set<string>();
+  const emails = new Set<string>();
+  for (const row of batch.rows) {
+    subjects.add(row.record.userId);
+    if (row.entity === 'account') emails.add(row.record.email);
+  }
+  for (const userId of [...subjects].sort(bytewise)) await lockKey(host, 'subject', userId);
+  for (const email of [...emails].sort(bytewise)) await lockKey(host, 'email', email);
+};
+
+const fenceRetired = async (host: CustodyOpHost, userId: string): Promise<boolean> => {
+  const sql = boundIdentitySql(host);
+  const [fence] = await sql.query(`SELECT retired_at FROM ${sql.table('identity_subject_fences')} WHERE user_id = ?`, [userId]);
+  return fence?.retired_at != null;
+};
+
+// -- Read-only conflict detection (validate + pre-write gate) ------------------
+
+type AnyTx = IdentityTransactionV1<unknown>;
+
+const CREDENTIAL_MATERIAL_FIELDS = [
+  'userId', 'credentialId', 'publicKeyCose', 'rpId', 'uv', 'transports', 'deviceType', 'backedUp', 'createdAt',
+] as const;
+
+const detectRow = async (
+  host: CustodyOpHost,
+  tx: AnyTx,
+  row: IdentityReplicaSyncRowV1,
+  rowIndex: number,
+  batchUserIds: ReadonlySet<string>,
+  issues: MutableIssue[],
+): Promise<void> => {
+  switch (row.entity) {
+    case 'account': {
+      const { record } = row;
+      const existing = await host.journal.findAccountCore(record.userId);
+      if (!existing) {
+        if (await fenceRetired(host, record.userId)) {
+          addIssue(issues, 'account', 'identity_sync_conflict', rowIndex, [record.userId]);
+          return;
+        }
+        const holder = await tx.stores.accounts.findAccountByEmail(record.email);
+        if (holder && holder.userId !== record.userId) {
+          addIssue(issues, 'account', 'identity_sync_conflict', rowIndex, [record.userId, holder.userId]);
+        }
+        return;
+      }
+      if (existing.createdAt !== record.createdAt) {
+        addIssue(issues, 'account', 'identity_sync_conflict', rowIndex, [record.userId]);
+        return;
+      }
+      if (existing.email !== record.email) {
+        const holder = await tx.stores.accounts.findAccountByEmail(record.email);
+        if (holder && holder.userId !== record.userId) {
+          addIssue(issues, 'account', 'identity_sync_conflict', rowIndex, [record.userId, holder.userId]);
+        }
+      }
+      return;
+    }
+    case 'credential': {
+      const { record } = row;
+      const byProof = await tx.custody.credentials.findById(record.proofId);
+      const byCredentialId = await tx.custody.credentials.findByCredentialId(record.credentialId);
+      if (byProof && byCredentialId && byProof.proofId === byCredentialId.proofId) {
+        for (const field of CREDENTIAL_MATERIAL_FIELDS) {
+          if (stableStringify(byProof[field]) !== stableStringify(record[field])) {
+            addIssue(issues, 'credential', 'identity_sync_conflict', rowIndex, [record.userId]);
+            return;
+          }
+        }
+        return;
+      }
+      if (byProof || byCredentialId) {
+        addIssue(issues, 'credential', 'identity_sync_conflict', rowIndex, [record.userId]);
+        return;
+      }
+      if (!batchUserIds.has(record.userId) && !(await host.journal.findAccountCore(record.userId))) {
+        addIssue(issues, 'credential', 'identity_sync_conflict', rowIndex, [record.userId]);
+      }
+      return;
+    }
+    case 'oauth_consent': {
+      const { record } = row;
+      const existing = await host.journal.findConsentCore(record.consentId);
+      if (!existing) {
+        if (!(await host.journal.findTenantCore(record.tenantId))) {
+          addIssue(issues, 'oauth_consent', 'identity_sync_conflict', rowIndex, [record.userId]);
+        }
+        return;
+      }
+      if (existing.tenantId !== record.tenantId || existing.userId !== record.userId
+        || existing.clientId !== record.clientId || existing.grantedAt !== record.grantedAt) {
+        addIssue(issues, 'oauth_consent', 'identity_sync_conflict', rowIndex, [record.userId]);
+      }
+      return;
+    }
+  }
+};
+
