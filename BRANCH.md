@@ -5,14 +5,14 @@ Add the P4 OAuth tenant read surface to `@sentropic/cluster-mesh` per design `.t
 
 ## Scope / Guardrails
 - Scope limited to the lot G1 path list below (design §10.2), branched from `origin/main` (A2.0b merged as 812d1f053, cluster-mesh 0.26.0-dev.6) per the stacking rules.
-- Make-only workflow, one Docker build at a time under the flock in `.tmp/packets/DOCKER-LOCK.md`, taken per command; `ENV=test-a4-G1` always last; `make down ENV=test-a4-G1` after every test stack.
+- Make-only workflow, one Docker build at a time under the flock in `.tmp/packets/DOCKER-LOCK.md`, taken per command; `ENV=test-a4-stack-g1` always last; `make down-volumes ENV=test-a4-stack-g1` after every test stack.
 - Tests first: `packages/cluster-mesh/tests/identity/oauth-reads.spec.ts` written before the implementation, SQLite always + PostgreSQL under `CM_PG_URL` (a20b harness, zero skips on the qualified lane).
 - Branch development in isolated worktree `tmp/worktrees/a4-gap-G1`, branch `feat/cm-a4-gaps-g1-oauth-reads`.
 - Commits via `make commit MSG="..."` only, atomic, <=150 lines, `make scope-check` before every commit, selective `git add` of named files only.
 - All new text in English. No secrets. No `[skip ci]`.
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 - Design pins: a4-cm-gaps-r2 sha256 283cab237a4a2630c9a545e312399469af307adcca0b95feec7cdbf016e2058b; owner answers 2026-10-30 (Q-K=A, Q-WS1=delete conversations, Q-IDP1=case-by-case deletion) — none alters lot G1.
-- Version: bump cluster-mesh to `0.26.0-dev.7` (next after main `0.26.0-dev.6`; published npm version is 0.25.0), with lockfile and packaging-fixture sync under BR-G1-EX1.
+- Version: after the rebase onto `origin/main` 353f08a8b, bump cluster-mesh to `0.26.0-dev.9` (dev.8 is taken by #895 seats, which merges first; published npm version is 0.25.0), with lockfile and packaging-fixture sync under BR-G1-EX1 and the memory-l5 P1 manifest regen under BR-G1-EX2.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -40,12 +40,13 @@ Add the P4 OAuth tenant read surface to `@sentropic/cluster-mesh` per design `.t
   - `packages/cluster-mesh/src/**` outside the allowed list above
   - `packages/cluster-mesh/tests/**` outside `tests/identity/oauth-reads.spec.ts`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
+  - `tools/memory-mcp-l5/artifacts/**` (BR-G1-EX2 only: P1 manifest + lock-snapshots regen through make)
 - **Exception process**:
-  - `BR-G1-EX1` (declared here, in `## Feedback Loop`): version-bump lockfile sync. The `enforce-package-bump` CI job and the packaging lock-integrity suites require the workspace version bump to be mirrored in the root `package-lock.json`, `api/package-lock.json` and the `tests/packaging/fixtures/selected` consumer fixture (tgz filename). Reason: keep lock metadata consistent with `packages/cluster-mesh/package.json` 0.26.0-dev.7. Impact: mechanical version-string edits only, same file set as the merged A2.0b bump 45e961c8e. Rollback: revert the bump commit.
+  - `BR-G1-EX1` (declared here, in `## Feedback Loop`): version-bump lockfile sync. The `enforce-package-bump` CI job and the packaging lock-integrity suites require the workspace version bump to be mirrored in the root `package-lock.json`, `api/package-lock.json` and the `tests/packaging/fixtures/selected` consumer fixture (tgz filename). Reason: keep lock metadata consistent with `packages/cluster-mesh/package.json` 0.26.0-dev.9. Impact: mechanical version-string edits only, same file set as the merged A2.0b bump 45e961c8e. Rollback: revert the bump commit.
 
 ## Feedback Loop
-- `BR-G1-EX1`: lockfile + packaging-fixture sync for the 0.26.0-dev.7 bump (see exception above); mirrors merged precedent 45e961c8e.
+- `BR-G1-EX1`: lockfile + packaging-fixture sync for the 0.26.0-dev.9 bump (see exception above); mirrors merged precedent 45e961c8e.
+  - `BR-G1-EX2` (declared here, in `## Feedback Loop`): memory-l5 P1 manifest regen. Every rebase that touches the root lock must regenerate `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (+ `.sha256` + new `lock-snapshots/<sha>.package-lock.json` + `<sha>.json` + `<sha>.json.sha256`) through `make memory-l5-pack STAGE=pre-candidate`, as #893 did (615043ead, 5b27adc8a under BR01-EX5). Reason: the P1 manifest pins the sha256 of the committed root `package-lock.json`; pack.mjs refuses to run when the working-tree lock differs from HEAD. Impact: manifest metadata + one new lock-snapshot file set only. Rollback: revert the regen commit.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single CM lot on its own branch; no sub-workstreams)
@@ -55,11 +56,11 @@ Add the P4 OAuth tenant read surface to `@sentropic/cluster-mesh` per design `.t
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, design a4-cm-gaps-r2 §3/§6/§10.0/§10.2, owner answers 2026-10-30.
   - [x] Worktree `tmp/worktrees/a4-gap-G1` on `feat/cm-a4-gaps-g1-oauth-reads` from `origin/main` 88078a995; `harness check branch` PASS.
-  - [x] Environment mapping: tests on `ENV=test-a4-G1` only, never root dev; PostgreSQL qualification container `cm-storage-test-a4-G1` via `postgres.mk`.
-  - [x] Command style: `flock .tmp/packets/DOCKER-LOCK.md make ... ENV=test-a4-G1` (ENV last); `make down ENV=test-a4-G1` after.
+  - [x] Environment mapping: tests on `ENV=test-a4-stack-g1` only, never root dev; PostgreSQL qualification container `cm-storage-test-a4-G1` via `postgres.mk`.
+  - [x] Command style: `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make ... ENV=test-a4-stack-g1` (ENV last, one lock per make command); `make down-volumes ENV=test-a4-stack-g1` after.
 - [ ] **Lot 1 — Tests first: `tests/identity/oauth-reads.spec.ts`**
   - [x] Spec written per design §6.4: grant/find/revoke/re-grant semantics inside one write attempt + rollback absence; `findServiceClientBinding` multi-tenant/rebind; accessor refusals (`identity_contract_unavailable` on a store without the methods, `identity_transaction_unbound` on expired/foreign handles); doubles coverage in the same file.
-  - [ ] Lot gate (SQLite): `flock <lock> make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-a4-G1` then `make down ENV=test-a4-G1`.
+  - [ ] Lot gate (SQLite): `flock <lock> make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-a4-stack-g1` then `make down-volumes ENV=test-a4-stack-g1`.
 - [ ] **Lot 2 — Contract: `oauth-reads.ts` + descriptor + index export**
   - [ ] `src/identity-contracts/oauth-reads.ts` (read interfaces, `OAuthTenantStoreV1`, `IdentityStoresOauthV1`, `oauthTenantStoreV1`, `oauthTenantStoreV1FromStores`).
   - [ ] `src/identity-contracts/composition-descriptors.ts` created with `IDENTITY_COMPOSITION_CONTRACT_VERSION = '1.2.0'` and the `oauth_tenant_reads` row.
@@ -71,7 +72,7 @@ Add the P4 OAuth tenant read surface to `@sentropic/cluster-mesh` per design `.t
   - [ ] `make typecheck-cluster-mesh`, `make build-cluster-mesh`, `make lint-cluster-mesh` under the per-command flock.
   - [ ] New spec on SQLite, then PostgreSQL leg: `cluster-mesh-pg-up` + scoped `cluster-mesh-workspace CM_ACTION=test` with `CM_PG_URL` on the `cm-storage-test-a4-G1` network, then `cluster-mesh-pg-down`.
   - [ ] Frozen suites unmodified and green: `tests/identity-membership.spec.ts`, `tests/identity-a22-scenarios.ts` (via `identity-a22-sqlite.spec.ts` / `identity-a22-postgres.spec.ts`), plus packaging specs.
-  - [ ] `make down ENV=test-a4-G1` after every stack; no image removal.
+  - [ ] `make down-volumes ENV=test-a4-stack-g1` after every stack; no image removal.
 - [ ] **Lot 5 — Version bump, push, PR**
-  - [ ] Bump to 0.26.0-dev.7 with BR-G1-EX1 lockfile/fixture sync; `npm view @sentropic/cluster-mesh version` = 0.25.0 < 0.26.0-dev.7.
+  - [x] Rebased onto `origin/main` 353f08a8b (sole conflict: BRANCH.md, resolved to this file + the BRLOCK-EX1 review_by line); bumped to 0.26.0-dev.9 with BR-G1-EX1 lockfile/fixture sync; `npm view @sentropic/cluster-mesh version` = 0.25.0 < 0.26.0-dev.9 (post-rebase gate).
   - [ ] Push branch (crash safety), open READY PR with this BRANCH.md as body, run one CI, record result in `.tmp/rv/a4-gap-G1.md`. Do not merge.
