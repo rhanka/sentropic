@@ -46,8 +46,8 @@ Lot G0 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (sha256 
 ## Feedback Loop
 - [x] G0-REBASE — `feat/app-cm-a4` rebased onto `origin/main` replaying only the A4 range from `905ca4ead` (266 commits, `git rebase --onto origin/main 905ca4ead feat/app-cm-a4`); conflicts resolved: BRANCH.md kept as A4's own, `_journal.json` union (main idx14 `0014_session_content_policy_store` kept, A4 entry appended idx15), root `package-lock.json` cluster-mesh version kept at 0.26.0-dev.6; pushed `--force-with-lease` to 33975baa0. Rollback: `git reset --hard d3d7b09bc` on the old remote state.
 - [x] G0-MANIFEST — §2.3.2 verified on the rebased tree: merged `packages/cluster-mesh/package.json` is the union (main exports incl. `./identity/auth-hono` + A4 `./ui/*` block, `files` incl. `ui`, union peers/meta/sideEffects, version 0.26.0-dev.6). No edit needed.
-- [ ] G0-IMPORT-SPLIT — §2.2: split the 9 auth-hono names to the subpath in the 7 affected api files; root-import audit spec green.
-- [ ] G0-HANDLER-ID — §2.3.1: `handlerId` on both `deletePerson` commands in `cm-account-deletion.ts`.
+- [x] G0-IMPORT-SPLIT — §2.2: split the 9 auth-hono names to the subpath in the 7 affected api files; root-import audit spec green.
+- [x] G0-HANDLER-ID — §2.3.1: `handlerId` on both `deletePerson` commands in `cm-account-deletion.ts`.
 - [ ] G0-MIGRATION-SLOT — post-rebase gate: renumber the cutover control migration 0014 → 0015 (main owns 0014); journal, SQL id strings, `cm-cutover-config.ts`, tests, comment.
 - [ ] G0-VERSION-GATE — post-rebase gate: bump `packages/cluster-mesh/package.json` 0.26.0-dev.6 → 0.26.0-dev.7 (> npm published 0.25.0) + root lockfile entry.
 - [ ] G0-TEST-GATE — API typecheck + API build clean, root-import audit zero, cluster-mesh packaging spec green on the merged manifest.
