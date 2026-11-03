@@ -8,10 +8,12 @@ import { describe, expect, it } from 'vitest';
 import {
   TenantBoundaryError,
   applySqliteIdentitySchema,
+  createBoundaryDomain,
   createIdentityBoundaryDomainV1,
   createInMemoryIdentityStores,
   createSqliteIdentityStores,
   createTenantBoundaryPortV1,
+  deriveWorkspaceReference,
   type MembershipLookup,
   type TenantMembershipRecord,
   type TenantMembershipStore,
@@ -118,11 +120,78 @@ async function resolutionMisses(stores: BoundaryStores): Promise<void> {
   }
 }
 
+async function domainBehavior(stores: BoundaryStores): Promise<void> {
+  await seedApprovedWorkspace(stores);
+  const port = createTenantBoundaryPortV1(stores);
+  const domain = createIdentityBoundaryDomainV1({ homeNodeId: HOME, boundary: port });
+  const lookup = { workspaceId: 'ws-1', userId: 'user-1' };
+  await expect(domain.resolve(lookup)).resolves.toEqual({
+    tid: 'acme',
+    workspace: await deriveWorkspaceReference('ws-1'),
+    userId: 'user-1',
+    homeNodeId: HOME,
+  });
+  await expect(domain.workspaceReference('ws-1')).resolves.toBe(await deriveWorkspaceReference('ws-1'));
+}
+
+async function frozenEquivalence(stores: BoundaryStores): Promise<void> {
+  await seedApprovedWorkspace(stores);
+  const port = createTenantBoundaryPortV1(stores);
+  // The frozen port carries the slug in its tenantId field (the de facto app
+  // seam behavior); the new domain must match it field-by-field.
+  const frozen = createBoundaryDomain({
+    homeNodeId: HOME,
+    memberships: {
+      async resolveApproved(lookup) {
+        const resolution = await port.resolveApproved(lookup);
+        return resolution
+          ? { tenantId: resolution.tid, userId: resolution.userId, status: 'approved' as const }
+          : null;
+      },
+    },
+  });
+  const domain = createIdentityBoundaryDomainV1({ homeNodeId: HOME, boundary: port });
+  const hit = { workspaceId: 'ws-1', userId: 'user-1' };
+  await expect(domain.resolve(hit)).resolves.toEqual(await frozen.resolve(hit));
+  const miss = { workspaceId: 'ws-1', userId: 'user-absent' };
+  const frozenRefusal = await frozen.resolve(miss).catch((error: unknown) => error);
+  const domainRefusal = await domain.resolve(miss).catch((error: unknown) => error);
+  expect(frozenRefusal).toBeInstanceOf(TenantBoundaryError);
+  expect(domainRefusal).toBeInstanceOf(TenantBoundaryError);
+  expect((domainRefusal as TenantBoundaryError).code).toBe((frozenRefusal as TenantBoundaryError).code);
+}
+
 describe('boundary resolution over in-memory doubles', () => {
   it('resolves the exact boundary record for both tenant roles', async () => {
     await resolutionSuccess(createInMemoryIdentityStores());
   });
   it('returns null at the port and throws TenantBoundaryError at the domain for every miss', async () => {
     await resolutionMisses(createInMemoryIdentityStores());
+  });
+  it('resolves the frozen TenantResidenceContext shape with tid = slug', async () => {
+    await domainBehavior(createInMemoryIdentityStores());
+  });
+  it('matches the frozen createBoundaryDomain field-by-field, including the refusal', async () => {
+    await frozenEquivalence(createInMemoryIdentityStores());
+  });
+});
+
+describe('boundary resolution over SQLite stores', () => {
+  const setup = (): BoundaryStores => {
+    const db = new DatabaseSync(':memory:');
+    applySqliteIdentitySchema(db);
+    return createSqliteIdentityStores(db);
+  };
+  it('resolves the exact boundary record for both tenant roles', async () => {
+    await resolutionSuccess(setup());
+  });
+  it('returns null at the port and throws TenantBoundaryError at the domain for every miss', async () => {
+    await resolutionMisses(setup());
+  });
+  it('resolves the frozen TenantResidenceContext shape with tid = slug', async () => {
+    await domainBehavior(setup());
+  });
+  it('matches the frozen createBoundaryDomain field-by-field, including the refusal', async () => {
+    await frozenEquivalence(setup());
   });
 });
