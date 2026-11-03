@@ -344,4 +344,122 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
     await expect(sync.syncBatch(unknownTenant)).rejects.toMatchObject({ code: 'identity_sync_conflict' });
   });
 
+  it('retired fence on a source id conflicts; source-side deletion does not propagate', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    await seedAccount(source.uow, { record: account('u-1', 'one@example.test') });
+    await seedAccount(source.uow, { record: account('u-gone', 'gone@example.test') });
+    await seedAccount(replica.uow, { record: account('u-gone', 'gone@example.test') });
+    await replica.uow.run(WRITE, async (tx) => {
+      await tx.hostTransaction.journal.retireFence('u-1', LATER);
+    });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-fence', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/f' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    const validation = await sync.validate(batch);
+    expect(validation.valid).toBe(false);
+    expect(validation.issues.some((issue) => issue.code === 'identity_sync_conflict')).toBe(true);
+    await expect(sync.syncBatch(batch)).rejects.toMatchObject({ code: 'identity_sync_conflict' });
+
+    // u-gone is absent from a second batch: the replica keeps its local row.
+    const partial = makeBatch([accountRow(account('u-1', 'one@example.test'), profile('u-1'))]);
+    await expect(sync.syncBatch(partial)).rejects.toMatchObject({ code: 'identity_sync_conflict' });
+    const state = await readState(replica.uow, ['u-gone']);
+    expect(state.accounts.map((row) => row.userId)).toEqual(['u-gone']);
+  });
+
+  it('digest tampering is rejected as invalid before any write; missing profile aborts export', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    await seedAccount(source.uow, { record: account('u-1', 'one@example.test') });
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-tamper', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/t' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+
+    const tamperedRows = makeBatch([
+      accountRow(account('u-1', 'evil@example.test'), profile('u-1')),
+    ], { syncId: batch.syncId, sourceSnapshotRef: batch.sourceSnapshotRef, exportedAt: batch.exportedAt });
+    const withStaleManifest = { ...tamperedRows, rows: batch.rows, manifestDigest: tamperedRows.manifestDigest };
+    await expect(sync.syncBatch(withStaleManifest)).rejects.toMatchObject({ code: 'identity_sync_invalid' });
+    const withStaleSnapshot = { ...batch, exportedAt: LATER };
+    await expect(sync.syncBatch(withStaleSnapshot)).rejects.toMatchObject({ code: 'identity_sync_invalid' });
+
+    const state = await readState(replica.uow, ['u-1']);
+    expect(state.accounts).toEqual([]);
+
+    // A source account without a profile aborts the export.
+    await source.uow.run(WRITE, async (tx) => {
+      await tx.hostTransaction.journal.insertAccountCore(account('u-noprofile', 'np@example.test'));
+      await tx.hostTransaction.journal.ensureLiveFence('u-noprofile', NOW);
+    });
+    await expect(exporter.exportBatch({ syncId: 'sync-np', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/np' }))
+      .rejects.toMatchObject({ code: 'identity_material_missing' });
+  });
+
+  it('runs under a foreign host transaction (opaque sentinel) per §3.5', async () => {
+    const env = profileName === 'postgres' ? await openPostgresEnv() : openSqliteEnv();
+    const sentinel = { opaque: 'host-transaction' } as unknown;
+    let foreignUow: Uow;
+    if (profileName === 'postgres') {
+      const { createPostgresIdentityHostV1, createPostgresIdentityUnitOfWorkV1 } = await import('../../src/index.js');
+      const base = createPostgresIdentityHostV1({ driver: env.raw, schema: env.schema });
+      const foreignHost = {
+        runSerializable: (options: never, operation: (binding: never) => Promise<unknown>) =>
+          base.runSerializable(options as never, (binding) => operation({ ...binding, hostTransaction: sentinel } as never)),
+      };
+      foreignUow = createPostgresIdentityUnitOfWorkV1({ schema: env.schema, host: foreignHost }) as unknown as Uow;
+    } else {
+      const { createSqliteIdentityHostV1, createSqliteIdentityUnitOfWorkV1 } = await import('../../src/index.js');
+      const base = createSqliteIdentityHostV1({ connection: env.connection, applySchema: false });
+      const foreignHost = {
+        runExclusiveTransaction: (options: never, operation: (binding: never) => Promise<unknown>) =>
+          base.runExclusiveTransaction(options as never, (binding) => operation({ ...binding, hostTransaction: sentinel } as never)),
+      };
+      foreignUow = createSqliteIdentityUnitOfWorkV1({ host: foreignHost }) as unknown as Uow;
+    }
+
+    const batch = makeBatch([accountRow(account('u-1', 'one@example.test'), profile('u-1'))]);
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: foreignUow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    const receipt = await sync.syncBatch(batch);
+    expect(receipt.counts.account.inserted).toBe(1);
+    const state = await readState(asOpHost(env.unitOfWork), ['u-1']);
+    expect(state.accounts).toEqual([account('u-1', 'one@example.test')]);
+  });
 });
+
+if (pgEnabled) {
+  describe('G5 cross-profile export -> sync', () => {
+    it('sqlite export syncs into postgres and postgres export syncs into sqlite', async () => {
+      const sqliteEnv = openSqliteEnv();
+      const pgEnv = await openPostgresEnv();
+      const sqliteUow = asOpHost(sqliteEnv.unitOfWork);
+      const pgUow = asOpHost(pgEnv.unitOfWork);
+      const cred = credential('cred-x', 'u-1');
+      await seedAccount(sqliteUow, {
+        record: account('u-1', 'one@example.test'), tenantId: 't-1', credentials: [cred], consents: [consent('consent-x', 'u-1', 't-1')],
+      });
+      await seedAccount(pgUow, { record: account('u-2', 'two@example.test') });
+
+      const sqliteExporter = createIdentityReplicaExporterV1({ unitOfWork: sqliteUow, clock: () => NOW, exportOptions: READ });
+      const pgExporter = createIdentityReplicaExporterV1({ unitOfWork: pgUow, clock: () => NOW, exportOptions: READ });
+      const sqliteBatch = await sqliteExporter.exportBatch({ syncId: 'x-sqlite', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/x1' });
+      const pgBatch = await pgExporter.exportBatch({ syncId: 'x-pg', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/x2' });
+
+      const pgSync = createIdentityReplicaSyncV1({ unitOfWork: pgUow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+      const sqliteSync = createIdentityReplicaSyncV1({ unitOfWork: sqliteUow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+      const intoPg = await pgSync.syncBatch(sqliteBatch);
+      expect(intoPg.counts.account.inserted).toBe(1);
+      expect(intoPg.counts.credential.inserted).toBe(1);
+      expect(intoPg.counts.oauth_consent.inserted).toBe(1);
+      const intoSqlite = await sqliteSync.syncBatch(pgBatch);
+      expect(intoSqlite.counts.account.inserted).toBe(1);
+
+      const pgState = await readState(pgUow, ['u-1']);
+      expect(pgState.accounts).toEqual([account('u-1', 'one@example.test')]);
+      expect(pgState.credentials['u-1']).toEqual([{ ...cred, revision: 0 }]);
+      const sqliteState = await readState(sqliteUow, ['u-2']);
+      expect(sqliteState.accounts).toEqual([account('u-2', 'two@example.test')]);
+    });
+  });
+}
