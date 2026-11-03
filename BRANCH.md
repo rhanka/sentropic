@@ -16,6 +16,7 @@ malformed form and add a regression test.
 - Tests run on `ENV=test-email-code-hmac` only, never `ENV=dev`; lane ends with `make down-volumes ENV=test-email-code-hmac`.
 - In every `make` command, `ENV=<env>` is passed as the last argument.
 - All new text in English. No secret value is ever printed, logged or committed.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
