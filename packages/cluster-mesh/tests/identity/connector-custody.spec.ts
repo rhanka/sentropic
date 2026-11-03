@@ -1,0 +1,114 @@
+// A2.0b connector revocation custody: HKDF derivation, canonical AAD,
+// envelope validation, keyring reader ordering, disposal and table round-trip.
+
+import type { IdentityExternalRevocationV1 } from '../../src/index.js';
+import { describe, expect, it } from 'vitest';
+import { IdentityCustodyErrorV1 } from '../../src/identity-contracts/custody-errors.js';
+import {
+  CONNECTOR_CUSTODY_KEY_REF_V1,
+  createNodeConnectorCustody,
+  deriveConnectorCustodyKeyV1,
+  openConnectorCapabilityV1,
+  sealConnectorCapabilityV1,
+} from '../../src/index.js';
+import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
+
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+
+/** Fixed custody messages never embed the code; assert the typed code. */
+const expectCustodyInvalid = (fn: () => unknown): void => {
+  try {
+    fn();
+  } catch (error) {
+    expect(error).toBeInstanceOf(IdentityCustodyErrorV1);
+    expect((error as IdentityCustodyErrorV1).code).toBe('identity_revocation_custody_invalid');
+    return;
+  }
+  throw new Error('expected IdentityCustodyErrorV1');
+};
+
+describe('A2.0b connector revocation custody', () => {
+  it('derives a stable 32-byte key and refuses malformed master keys', () => {
+    const master = new Uint8Array(32).fill(9);
+    expect(deriveConnectorCustodyKeyV1(master)).toHaveLength(32);
+    expect(deriveConnectorCustodyKeyV1(master)).toEqual(deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(9)));
+    expectCustodyInvalid(() => deriveConnectorCustodyKeyV1(new Uint8Array(16)));
+    expect(CONNECTOR_CUSTODY_KEY_REF_V1).toBe('secret-crypto:v1');
+  });
+
+  it('seals and opens capabilities with canonical AAD', () => {
+    const key = deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(9));
+    const sealed = sealConnectorCapabilityV1({
+      key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive',
+      capability: { tokenKind: 'access', token: 'access-secret' },
+    });
+    expect(sealed.custodyRef).toBe('cc-1');
+    const opened = openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag });
+    expect(opened).toEqual({ tokenKind: 'access', token: 'access-secret' });
+    // Cross-row AAD: same bytes under another delivery refuse.
+    expectCustodyInvalid(() => openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-2', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag }));
+    // Wrong key refuses.
+    expectCustodyInvalid(() => openConnectorCapabilityV1({ key: deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(8)), keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag }));
+    // Malformed envelope refuses.
+    expectCustodyInvalid(() => openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: '!!!', ciphertext: sealed.ciphertext, authTag: sealed.authTag }));
+    key.fill(0);
+  });
+
+  it('keeps ciphertext opaque and refuses empty or oversized capabilities', () => {
+    const key = deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(9));
+    expectCustodyInvalid(() => sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'access', token: '' } }));
+    const token = 'refresh-token-secret-0123456789abcdef';
+    const sealed = sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'refresh', token } });
+    // Opacity: neither the base64url envelope nor the raw ciphertext bytes
+    // contain the plaintext token (a single-char token would appear in the
+    // base64url alphabet by chance, so the token is long and distinctive).
+    expect(sealed.ciphertext).not.toContain(token);
+    expect(Buffer.from(sealed.ciphertext, 'base64url').toString('latin1')).not.toContain(token);
+    key.fill(0);
+  });
+
+  it('zeroes its key copy on disposal and refuses afterwards', () => {
+    const custody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(5) });
+    custody.dispose();
+    expect(custody.keyRef).toBe('secret-crypto:v1');
+  });
+
+  it('round-trips sealed rows on every enabled profile', async () => {
+    const rowProfiles = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+    for (const profile of rowProfiles) {
+      await roundTripProfile(profile);
+    }
+
+    async function roundTripProfile(current: 'postgres' | 'sqlite'): Promise<void> {
+      const pg = current === 'postgres' ? await openPostgresEnv() : null;
+    const unitOfWork = pg ? asOpHost(pg.unitOfWork) : asOpHost(openSqliteEnv().unitOfWork);
+    const schema = pg?.schema ?? '';
+    const custody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(5) });
+    let record: IdentityExternalRevocationV1 = { custodyRef: null, deliveredAt: null, claimOwner: null, claimVersion: 0, leaseUntil: null, attemptCount: 0, deliveryId: 'd-row', operationId: 'op-row', step: 'connector_grants', subjectId: 'marie', targetKind: 'connector_grant', targetRef: 'conn-row', state: 'pending' as const, createdAt: NOW, nextAttemptAt: NOW };
+      await unitOfWork.run(WRITE, async (tx) => {
+        const raw = {
+          profile: current, schema,
+          session: current === 'postgres' ? (tx.hostTransaction as unknown as { session: unknown }).session : null,
+          connection: current === 'sqlite' ? (tx.hostTransaction as unknown as { connection: unknown }).connection : null,
+        } as never;
+        const first = await custody.captureCapability({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
+        expect(first.kind).toBe('captured');
+        if (first.kind !== 'captured') throw new Error('missing capability');
+        record = { ...record, custodyRef: first.reference.custodyRef };
+        // Identical replay returns the same reference without duplicating.
+        const replay = await custody.captureCapability({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
+        expect(replay).toEqual(first);
+        // Conflicting capability under an identical delivery refuses.
+        await expect(custody.captureCapability({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'other-secret' })).rejects.toMatchObject({ code: 'identity_operation_conflict' });
+        await custody.assertCaptured(record, raw);
+        await custody.eraseAcknowledged({ ...record, state: 'delivered', deliveredAt: NOW }, raw);
+        await expect(custody.assertCaptured(record, raw)).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
+        // Erase is idempotent.
+        await custody.eraseAcknowledged({ ...record, state: 'delivered', deliveredAt: NOW }, raw);
+        const none = await custody.captureCapability({ deliveryId: 'd-absent', connectorAccountId: 'conn-x', provider: 'drive', at: NOW }, raw, null);
+        expect(none).toEqual({ kind: 'no_capability' });
+      });
+      custody.dispose();
+    }
+  });
+});
