@@ -144,15 +144,48 @@ describe('G1 sharing management', () => {
     expect((await world.acls.getArtifactAcl(artifactId))?.grants).toEqual([]);
   });
 
-  it('refuses management by non-owner non-admin and masks unknown artifacts', async () => {
+  it('masks non-reader non-admin management and unknown artifacts as not_found', async () => {
     const { setAccess } = await worldWith({ actorIsAdmin: (id) => id === 'admin-1' });
+    // §2.3 order (2): bob is neither a reader nor an approved admin of the
+    // scope — the artifact's existence must not leak (404, not 403)
     expect((await setAccess({ action: 'grant', principalId: 'carol', grant: 'read', idempotencyKey: 'x1' }, 'bob')).status)
-      .toBe(403);
+      .toBe(404);
     const missing = await worldWith();
     const res = await missing.world.app.handle({ method: 'POST', path: '/set_access',
       body: { artifactId: '00000000-0000-4000-8000-000000000099', action: 'grant', principalId: 'bob',
         grant: 'read', idempotencyKey: 'x2' }, actorId: 'alice' }, missing.world.invocation());
     expect(res.status).toBe(404);
+  });
+
+  it('closes the 403/404 existence oracle on set_access for every non-approved-admin actor (§2.3 order (2))', async () => {
+    // admin predicate wired but scoped to ANOTHER storageScopeId: admin-1 is
+    // admin there, not here — existence stays masked in this scope
+    const otherScope = await worldWith({ actorIsAdmin: (id, scope) => id === 'admin-1' && scope === 'scope-other' });
+    expect((await otherScope.setAccess({ action: 'revoke', principalId: 'bob', idempotencyKey: 'o1' }, 'admin-1')).status)
+      .toBe(404);
+    // non-reader non-admin in scope while the predicate is wired: 404
+    const wired = await worldWith({ actorIsAdmin: (id) => id === 'admin-1' });
+    const existing = await wired.setAccess({ action: 'grant', principalId: 'carol', grant: 'read', idempotencyKey: 'n1' }, 'bob');
+    expect(existing.status).toBe(404);
+    const unknown = await wired.world.app.handle({ method: 'POST', path: '/set_access',
+      body: { artifactId: '00000000-0000-4000-8000-000000000099', action: 'grant', principalId: 'carol',
+        grant: 'read', idempotencyKey: 'n2' }, actorId: 'bob' }, wired.world.invocation('bob'));
+    expect(unknown.status).toBe(404);
+    expect(unknown.body).toEqual(existing.body);
+    // unapproved admin of the SAME scope: still masked (approved admin required)
+    const unapproved = await worldWith({ actorIsAdmin: (id) => id === 'admin-1' });
+    unapproved.world.setAccountApproved('admin-1', false);
+    expect((await unapproved.setAccess({ action: 'revoke', principalId: 'bob', idempotencyKey: 'u1' }, 'admin-1')).status)
+      .toBe(404);
+    // approved admin of the SAME scope: visible — the management right is then
+    // decided inside the transaction (revoke of an absent grant = 200 no-op,
+    // nominative grant = 403 access_denied, never 404)
+    const sameScope = await worldWith({ actorIsAdmin: (id, scope) => id === 'admin-1' && scope === 'scope-g1' });
+    const revoke = await sameScope.setAccess({ action: 'revoke', principalId: 'bob', idempotencyKey: 's1' }, 'admin-1');
+    expect(revoke.status).toBe(200);
+    expect(revoke.body).toMatchObject({ changed: false });
+    expect((await sameScope.setAccess({ action: 'grant', principalId: 'carol', grant: 'read', idempotencyKey: 's2' }, 'admin-1')).status)
+      .toBe(403);
   });
 
   it('treats revoke of an absent grant as a no-op success', async () => {

@@ -150,11 +150,15 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   }
 
   /**
-   * G1 management visibility for `set_access`: readers pass as before; when the
-   * host wires an admin predicate, the artifact's existence in scope is visible
-   * to the management surface and the management right itself (owner, or
-   * admin-reduce-only) is decided inside the transaction by `canManageAccess`
-   * (403 otherwise). The exception never makes the admin a content reader.
+   * G1 management visibility for `set_access` (converged-r2 §2.3 order (2)):
+   * readers pass as before; any other actor gets `not_found` unless it is an
+   * APPROVED platform admin of the SAME storageScopeId. The predicate is
+   * evaluated per call — never inferred from merely being wired — so a
+   * non-reader non-admin cannot distinguish an existing artifact (403) from a
+   * missing one (404): the existence oracle is closed. The management right
+   * itself (owner, or admin-reduce-only) is decided inside the transaction by
+   * `canManageAccess` (403 otherwise). The exception never makes the admin a
+   * content reader.
    */
   async function visibleForManagement(artifactId: string, invocation: ArtifactInvocationContext): Promise<ArtifactAcl> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
@@ -165,7 +169,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount, policy)) {
       return acl;
     }
-    if (deps.actorIsAdmin !== undefined) return acl;
+    if (await deps.actorIsAdmin?.(invocation.actorId, invocation.storageScopeId) === true &&
+      deps.isApprovedAccount?.(invocation.actorId) === true) return acl;
     throw new ArtifactOperationError('not_found');
   }
 
