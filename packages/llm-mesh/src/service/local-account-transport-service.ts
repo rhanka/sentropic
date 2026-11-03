@@ -903,6 +903,7 @@ export class LocalAccountTransportService {
           accountId: id, ownerScopeRef, removedAt: this.nextRemovalTimestamp() })).catch(() => {});
         await this.keyring.deleteSecret(`sentropic-llm-mesh:${id}:public`).catch(() => {});
         await this.keyring.deleteSecret(`sentropic-llm-mesh:${id}:envelope`).catch(() => {});
+        await this.keyring.deleteSecret(this.seatRecordKey(id)).catch(() => {});
         this.coordinator.removeAccount(id);
         this.accountsMap.delete(id);
         this.credentialVersions.delete(id);
@@ -989,6 +990,7 @@ export class LocalAccountTransportService {
     this.accountRemovalBarrierRefs.delete(accountId);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
+    await this.keyring.deleteSecret(this.seatRecordKey(accountId));
     return { accountId, removed: true };
   }
 
@@ -1596,6 +1598,7 @@ export class LocalAccountTransportService {
     if (!current || current.removalBarrierRef === attemptedBarrierRef) {
       await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
       await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
+      await this.keyring.deleteSecret(this.seatRecordKey(accountId));
     }
   }
 
