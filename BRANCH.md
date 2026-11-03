@@ -66,10 +66,10 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
     - [x] `make build-artifacts` / `make build-mcp-platform` (tsc typecheck) green on `ENV=test-mcp-stable`.
     - [x] `make test-artifacts ENV=test-mcp-stable` green (506 tests, incl. mcp.test.ts + parity-r2-profile.test.ts).
 
-- [ ] **Lot 2 — Snapshot tests of the tools/list catalogue**
-  - [ ] `packages/artifacts/tests/tools-list-snapshot.test.ts` + checked-in snapshot JSON: full catalogue (names, descriptions, inputSchema, outputSchema, annotations, _meta) for the APP-P1 profile and for an r2 profile; asserts byte-identical definitions across profiles and equality with the snapshot file; header comment explains the claude.ai permission rule.
-  - [ ] `packages/mcp-platform/tests/tools-list-snapshot.test.ts` + snapshot JSON: a composed registry (register + select + configure + compile) served through the real SDK bridge (`registerMcpWireTools` + `registerBridgeTools`), snapshotting the full `tools/list` result.
-  - [ ] Lot gate: `make test-artifacts ENV=test-mcp-stable`, `make test-mcp-platform ENV=test-mcp-stable`.
+- [x] **Lot 2 — Snapshot tests of the tools/list catalogue**
+  - [x] `packages/artifacts/tests/tools-list-snapshot.test.ts` + checked-in snapshot JSON: full catalogue (names, descriptions, inputSchema, outputSchema, annotations, _meta) for the APP-P1 profile and for an r2 profile, served over the real SDK bridge; asserts byte-identical definitions across profiles and equality with the snapshot file; header comment explains the claude.ai permission rule.
+  - [ ] `packages/mcp-platform/tests/tools-list-snapshot.test.ts` + snapshot JSON: a composed registry (register + select + configure + compile) served through the real SDK bridge (`registerMcpWireTools`), snapshotting the full `tools/list` result.
+  - [x] Lot gate: `make test-artifacts ENV=test-mcp-stable` green (506 tests incl. the snapshot test).
 
 - [ ] **Lot 3 — Docs**
   - [ ] `packages/mcp-platform/README.md`: document the byte-stable tool-definition rule (what may/may not appear in a definition; where dynamic values go).
