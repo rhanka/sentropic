@@ -185,4 +185,66 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
     expect(after.credentials['u-1']).toEqual(state.credentials['u-1']);
   });
 
+  it('converges email, role, status and profile with the source updatedAt', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    await seedAccount(source.uow, { record: account('u-1', 'new@example.test', { globalRole: 'admin_org', accountStatus: 'disabled', updatedAt: LATER }) });
+    await seedAccount(replica.uow, { record: account('u-1', 'old@example.test') });
+    await replica.uow.run(WRITE, async (tx) => {
+      await tx.custody.profiles.put(profile('u-1', { displayName: 'Stale' }));
+    });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-conv', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/conv' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    const receipt = await sync.syncBatch(batch);
+    expect(receipt.counts.account).toEqual({ inserted: 0, updated: 1, unchanged: 0, revokedApplied: 0, revokedKept: 0 });
+
+    const state = await readState(replica.uow, ['u-1']);
+    expect(state.accounts).toEqual([account('u-1', 'new@example.test', { globalRole: 'admin_org', accountStatus: 'disabled', updatedAt: LATER })]);
+    expect(state.profiles['u-1']).toEqual(profile('u-1'));
+  });
+
+  it('createdAt mismatch rolls back the whole batch', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    await seedAccount(source.uow, { record: account('u-1', 'one@example.test') });
+    await seedAccount(source.uow, { record: account('u-2', 'two@example.test') });
+    await seedAccount(replica.uow, { record: account('u-1', 'one@example.test', { createdAt: '2026-10-01T00:00:00.000Z' }) });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-created', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/c' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    await expect(sync.syncBatch(batch)).rejects.toMatchObject({ code: 'identity_sync_conflict' });
+
+    const state = await readState(replica.uow, ['u-1', 'u-2']);
+    expect(state.accounts.map((row) => row.userId)).toEqual(['u-1']);
+    expect(state.accounts[0].createdAt).toBe('2026-10-01T00:00:00.000Z');
+  });
+
+  it('email collision under a different local id conflicts, rolls back and leaks no email in issues', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    await seedAccount(source.uow, { record: account('u-src', 'shared@example.test') });
+    await seedAccount(source.uow, { record: account('u-other', 'other@example.test') });
+    await seedAccount(replica.uow, { record: account('u-local', 'shared@example.test') });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-collide', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/x' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+
+    const validation = await sync.validate(batch);
+    expect(validation.valid).toBe(false);
+    const issue = validation.issues.find((entry) => entry.code === 'identity_sync_conflict');
+    expect(issue).toBeDefined();
+    expect(issue?.references.flatMap((reference) => reference.safeIdentity ?? [])).toEqual(expect.arrayContaining(['u-src', 'u-local']));
+    const serialized = JSON.stringify(validation);
+    expect(serialized).not.toContain('shared@example.test');
+    expect(serialized).not.toContain('other@example.test');
+
+    await expect(sync.syncBatch(batch)).rejects.toMatchObject({ code: 'identity_sync_conflict' });
+    const state = await readState(replica.uow, ['u-local', 'u-other']);
+    expect(state.accounts.map((row) => row.userId)).toEqual(['u-local']);
+  });
+
 });
