@@ -222,3 +222,80 @@ describe('L5 stored seat record and export', () => {
     ).rejects.toMatchObject({ code: 'seat-export-unavailable:owner-mismatch' });
   });
 
+  it('refuses export when the stored record no longer matches the held marker lineage', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const bundle = synthBundle('claude');
+    const imported = await service.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: blockFor('claude') });
+    // Tamper: record claims an older generation than the held marker.
+    const stale = nextBundle(bundle, 0, 'op-tampered');
+    await keyring.setSecret(seatRecordKey(imported.accountId), JSON.stringify({
+      version: 1, bundle: stale, onboarding: null, storedAt: '2026-11-02T00:00:00.000Z',
+    }));
+    await expect(
+      service.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:lineage-mismatch' });
+  });
+
+  it('applies the refresh-material scan to the stored record on export', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const bundle = synthBundle('claude');
+    const imported = await service.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: blockFor('claude') });
+    const smuggled = {
+      ...bundle,
+      meshUse: { kind: 'access', accessRef: bundle.meshUse.accessRef, refreshToken: 'smuggled-refresh' },
+    };
+    await keyring.setSecret(seatRecordKey(imported.accountId), JSON.stringify({
+      version: 1, bundle: smuggled, onboarding: null, storedAt: '2026-11-02T00:00:00.000Z',
+    }));
+    await expect(
+      service.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:record-invalid' });
+  });
+
+  it('refuses export when the stored block is invalid', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const bundle = synthBundle('claude');
+    const imported = await service.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: blockFor('claude') });
+    const broken = { ...blockFor('claude'), schemaVersion: 2 };
+    await keyring.setSecret(seatRecordKey(imported.accountId), JSON.stringify({
+      version: 1, bundle, onboarding: broken, storedAt: '2026-11-02T00:00:00.000Z',
+    }));
+    await expect(
+      service.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:record-invalid' });
+  });
+
+  it('deletes the seat record on account removal', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const bundle = synthBundle('claude');
+    const imported = await service.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: blockFor('claude') });
+    expect(await keyring.getSecret(seatRecordKey(imported.accountId))).toBeTruthy();
+    await service.removeAccount(imported.accountId, OWNER);
+    expect(await keyring.getSecret(seatRecordKey(imported.accountId))).toBeNull();
+    await expect(
+      service.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:not-a-seat' });
+  });
+
+  it('exposes import-with-block and export through the facade', async () => {
+    const keyring = new InMemoryKeyring();
+    const facade = createLlmMeshFacade({
+      mode: 'portal',
+      keyring,
+      configResolver: { async resolveConfig() { return {}; } },
+    });
+    const bundle = synthBundle('muse');
+    const block = blockFor('muse');
+    const imported = await facade.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: block });
+    const exported = await facade.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER });
+    expect(exported.bundle).toEqual(bundle);
+    expect(exported.onboarding).toEqual(block);
+    await expect(
+      facade.exportSeatBundle({ accountId: imported.accountId, ownerScope: 'owner-other-01' }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:owner-mismatch' });
+  });
+});
