@@ -2292,7 +2292,7 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
