@@ -1,6 +1,6 @@
 import type { Context, Hono } from 'hono';
 import type { IdentityAuthCompletionFlowV1, IdentityAuthHonoTransactionBindingV1,
-  IdentityAuthRefusalV1 } from '@sentropic/cluster-mesh';
+  IdentityAuthRefusalV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { withAppCmAuth } from '../../../services/identity/cm-auth-runtime';
 import type { CmIdentityTransaction } from '../../../services/identity/cm-transaction';
 import type { CmRegistrationPresentation } from '../../../services/identity/cm-auth-binding';
