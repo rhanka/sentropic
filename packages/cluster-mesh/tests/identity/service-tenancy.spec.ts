@@ -98,3 +98,103 @@ describe('P3 service-principal tid issuer over doubles', () => {
     const oauth = new FixtureServiceBindingReads();
     oauth.bind({ clientId: 'svc', tenantId: 't-acme', boundAt: NOW });
     const issuer = makeIssuer({ tenants, oauth });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .toEqual({ issued: false, reason: 'no_authorized_tenant' });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: 'acme' }))
+      .toEqual({ issued: false, reason: 'no_authorized_tenant' });
+  });
+
+  it('contributes nothing when the fixed binding points at a missing tenant', async () => {
+    const issuer = makeIssuer({ tenants: new InMemoryTenantRegistryStore(), oauth: (() => {
+      const oauth = new FixtureServiceBindingReads();
+      oauth.bind({ clientId: 'svc', tenantId: 't-ghost', boundAt: NOW });
+      return oauth;
+    })() });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .toEqual({ issued: false, reason: 'no_authorized_tenant' });
+  });
+
+  it('binds a single active enrollment tenant with the connector_enrollment source', async () => {
+    const tenants = new InMemoryTenantRegistryStore();
+    await seedTenants(tenants, [{ tenantId: 't-beta', slug: 'beta', status: 'active' }]);
+    const issuer = makeIssuer({
+      tenants,
+      oauth: new FixtureServiceBindingReads(),
+      enrollments: enrollmentsOf({ svc: ['t-beta'] }),
+    });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .toEqual({ issued: true, claim: { tid: 'beta', tenantId: 't-beta', clientId: 'svc', source: 'connector_enrollment', issuedAt: NOW } });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: 'beta' }))
+      .toEqual({ issued: true, claim: { tid: 'beta', tenantId: 't-beta', clientId: 'svc', source: 'connector_enrollment', issuedAt: NOW } });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: 'acme' }))
+      .toEqual({ issued: false, reason: 'tenant_not_authorized' });
+  });
+
+  it.each(['suspended', 'offboarded'] as const)('contributes nothing for a %s enrollment tenant', async (status) => {
+    const tenants = new InMemoryTenantRegistryStore();
+    await seedTenants(tenants, [{ tenantId: 't-beta', slug: 'beta', status }]);
+    const issuer = makeIssuer({
+      tenants,
+      oauth: new FixtureServiceBindingReads(),
+      enrollments: enrollmentsOf({ svc: ['t-beta', 't-ghost'] }),
+    });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .toEqual({ issued: false, reason: 'no_authorized_tenant' });
+  });
+
+  it('requires a selector for a multi-tenant set and rejects foreign selectors', async () => {
+    const tenants = new InMemoryTenantRegistryStore();
+    await seedTenants(tenants, [
+      { tenantId: 't-acme', slug: 'acme', status: 'active' },
+      { tenantId: 't-beta', slug: 'beta', status: 'active' },
+    ]);
+    const oauth = new FixtureServiceBindingReads();
+    oauth.bind({ clientId: 'svc', tenantId: 't-acme', boundAt: NOW });
+    const issuer = makeIssuer({
+      tenants,
+      oauth,
+      enrollments: enrollmentsOf({ svc: ['t-beta'] }),
+    });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .toEqual({ issued: false, reason: 'tenant_selector_required' });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: 'beta' }))
+      .toEqual({ issued: true, claim: { tid: 'beta', tenantId: 't-beta', clientId: 'svc', source: 'connector_enrollment', issuedAt: NOW } });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: 'zzz' }))
+      .toEqual({ issued: false, reason: 'tenant_not_authorized' });
+  });
+
+  it('lets the fixed service_client source win over a duplicate enrollment tenant', async () => {
+    const tenants = new InMemoryTenantRegistryStore();
+    await seedTenants(tenants, [
+      { tenantId: 't-acme', slug: 'acme', status: 'active' },
+      { tenantId: 't-beta', slug: 'beta', status: 'active' },
+    ]);
+    const oauth = new FixtureServiceBindingReads();
+    oauth.bind({ clientId: 'svc', tenantId: 't-acme', boundAt: NOW });
+    const issuer = makeIssuer({
+      tenants,
+      oauth,
+      enrollments: enrollmentsOf({ svc: ['t-acme', 't-acme', 't-beta'] }),
+    });
+    // Duplicate enrollment of the fixed tenant collapses to one entry (fixed wins).
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: 'acme' }))
+      .toEqual({ issued: true, claim: { tid: 'acme', tenantId: 't-acme', clientId: 'svc', source: 'service_client', issuedAt: NOW } });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .toEqual({ issued: false, reason: 'tenant_selector_required' });
+  });
+
+  it('treats an absent enrollments port as no enrolled tenants', async () => {
+    const tenants = new InMemoryTenantRegistryStore();
+    await seedTenants(tenants, [{ tenantId: 't-acme', slug: 'acme', status: 'active' }]);
+    const issuer = makeIssuer({ tenants, oauth: new FixtureServiceBindingReads() });
+    expect(await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .toEqual({ issued: false, reason: 'no_authorized_tenant' });
+  });
+
+  it('throws identity_material_invalid on an empty clientId', async () => {
+    const issuer = makeIssuer({ tenants: new InMemoryTenantRegistryStore(), oauth: new FixtureServiceBindingReads() });
+    await expect(issuer.issueServiceTid({ clientId: '', requestedTenant: null }))
+      .rejects.toBeInstanceOf(IdentityCustodyErrorV1);
+    await expect(issuer.issueServiceTid({ clientId: '', requestedTenant: null }))
+      .rejects.toMatchObject({ code: 'identity_material_invalid' });
+  });
