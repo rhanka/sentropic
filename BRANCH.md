@@ -50,7 +50,12 @@ Lot G0 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (sha256 
 - [x] G0-HANDLER-ID — §2.3.1: `handlerId` on both `deletePerson` commands in `cm-account-deletion.ts`.
 - [x] G0-MIGRATION-SLOT — post-rebase gate: renumber the cutover control migration 0014 → 0015 (main owns 0014); journal, SQL id strings, `cm-cutover-config.ts`, tests, comment.
 - [x] G0-VERSION-GATE — post-rebase gate: bump `packages/cluster-mesh/package.json` 0.26.0-dev.6 → 0.26.0-dev.7 (> npm published 0.25.0) + root lockfile entry.
-- [ ] G0-TEST-GATE — API typecheck + API build clean, root-import audit zero, cluster-mesh packaging spec green on the merged manifest.
+- [x] G0-TEST-GATE — results on `ENV=test-a4-g0` (flock per command, `make down` after):
+  - Scoped api specs `tests/unit/identity/cm-root-import-audit.test.ts` + `tests/unit/identity/cm-account-deletion-command.test.ts`: 2 files / 5 tests green (`make test-api-unit` via dev-compose one-off `run --rm --no-deps`, since `up-api-test` cannot boot on the A4 lane: the pending 0015 cutover migration requires the privileged `CM_IDENTITY_CUTOVER_CHECKPOINT_FILE` — A4 item 7, not a G0 gate). Root-import audit = zero misses post-split.
+  - `make build-api ENV=test-a4-g0`: production image `sentropic-api:534483` built, canonical artifact sha256:6ba633872909d446956e71b49d47680dec24b48cebf1b11bbce3cb3dc5eeab1a — proves §2.3.3 esbuild subpath resolution of `@sentropic/cluster-mesh/identity/auth-hono`.
+  - `tests/packaging/identity-auth-types.spec.ts` against the locally packed candidate `sentropic-cluster-mesh-0.26.0-dev.7.tgz` (sha256 cd7302053716e9d42b7928601aafb91ee53115e72871cca8717dd6c959a4d6c9): 5/5 green (4 tsc consumer cases + bare-import-without-peer), run in a disposable container with `CLUSTER_MESH_PACKAGING_DIR` set (scratch harness `.tmp/g0-packaging.mk`, repo fixture untouched).
+  - `make typecheck-api ENV=test-a4-g0`: runs over the rebased tree; 16 errors remain, ALL pre-existing at the rebased base 33975baa0 (verified: G0's diff touches none of the error sites; the 3 error files importing G0-touched files fail on unchanged signatures — @types/node UUID inference on `operationId = randomUUID()`, etc.). Per §4.1.5, in G0-touched files the only residual is `cm-account-deletion.ts:10-11` (4 errors, `IdentityUnitOfWorkV1<PoolClient>` vs `<CustodyOpHost>` variance) = named stack dependency **P1a / lot G0C** (§2.4: app call sites stay untouched, they typecheck as written after the CM widening). No silent casts. Other 12 errors are in untouched files (cm-cutover-import, cm-host-scope, cm-transaction CompatDb `$client`, cm-deletion-business, cm-import-*, cm-magic-link, cm-auth-hono, admin-identity) — main-side contract/@types drift recorded for the conductor (G6 app-consumption), outside G0's §2.2/§2.3 scope.
+  - Named stack dependency: full `test-lazy-package` cannot run on this branch because the committed `selected` fixture pins `file:../sentropic-cluster-mesh-0.26.0-dev.6.tgz`, 0.26.0-dev.6 is unpublished, and the version gate bumped the candidate to 0.26.0-dev.7 — pin refresh belongs to the release train (`refresh-lazy-package-lock`; `packages/cluster-mesh/tests/**` is forbidden for G0).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -76,20 +81,20 @@ Lot G0 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (sha256 
   - [x] Worktree `tmp/worktrees/a4-gap-G0`, branch `feat/app-cm-a4-g0`; `.env` copied; harness C1 PASS.
   - [x] BRANCH.md from `plan/BRANCH_TEMPLATE.md`.
   - [x] ENV mapping: `ENV=test-a4-g0`; ports API_PORT=9650 UI_PORT=5850 MAILDEV_UI_PORT=1750.
-- [ ] **Lot 1 — Tests first**
-  - [ ] `api/tests/unit/identity/cm-root-import-audit.test.ts`: root-import audit (named imports from exact `@sentropic/cluster-mesh` across api/src, api/tests, ui/src, ui/tests, e2e/tests vs root barrel reachability) — red before the split.
-  - [ ] `api/tests/unit/identity/cm-account-deletion-command.test.ts`: both `deletePerson` commands carry `handlerId` — red before the fix.
-  - [ ] Run both scoped specs on `ENV=test-a4-g0`, confirm red for the right reason.
-- [ ] **Lot 2 — §2.2 import split + §2.3.1 handlerId + vitest subpath alias**
-  - [ ] Split the 9 names to `@sentropic/cluster-mesh/identity/auth-hono` in the 7 affected api files.
-  - [ ] Add `handlerId` to both `deletePerson` calls in `api/src/services/identity/cm-account-deletion.ts`.
-  - [ ] Add `'@sentropic/cluster-mesh/identity/auth-hono'` alias in `api/vitest.config.ts`.
-  - [ ] Audit spec + handlerId spec green; `make typecheck-api` clean.
-- [ ] **Lot 3 — Migration-slot gate (0014 → 0015)**
-  - [ ] Rename `api/drizzle/control/0014_app_cm_identity_cutover.sql` → `0015_app_cm_identity_cutover.sql`; update journal tag at idx 15; update SQL `migration_id` strings; update `cm-cutover-config.ts`, `cm-identity.ts` comment, `cm-cutover-migration.test.ts`, `artifacts-host-migrations.test.ts` tag filter.
-  - [ ] Journal/renumber consistency covered by existing migration specs.
-- [ ] **Lot 4 — Package-version gate + final gates**
-  - [ ] Bump `packages/cluster-mesh/package.json` to 0.26.0-dev.7 + root `package-lock.json` entry.
-  - [ ] `make typecheck-api ENV=test-a4-g0`, api build clean (§2.3.3 subpath resolves), `make test-cluster-mesh SCOPE=tests/packaging/identity-auth-types.spec.ts ENV=test-a4-g0`, scoped api specs green.
+- [x] **Lot 1 — Tests first**
+  - [x] `api/tests/unit/identity/cm-root-import-audit.test.ts`: root-import audit (named imports from exact `@sentropic/cluster-mesh` across api/src, api/tests, ui/src, ui/tests, e2e/tests vs root barrel reachability) — red before the split (9 names / 7 files), green after.
+  - [x] `api/tests/unit/identity/cm-account-deletion-command.test.ts`: both `deletePerson` commands carry `handlerId` — red before the fix, green after.
+  - [x] Both scoped specs run on `ENV=test-a4-g0`: 5/5 green.
+- [x] **Lot 2 — §2.2 import split + §2.3.1 handlerId + vitest subpath alias**
+  - [x] Split the 9 names to `@sentropic/cluster-mesh/identity/auth-hono` in the 7 affected api files.
+  - [x] Added `handlerId` to both `deletePerson` calls in `api/src/services/identity/cm-account-deletion.ts`.
+  - [x] Added `'@sentropic/cluster-mesh/identity/auth-hono'` alias in `api/vitest.config.ts`.
+  - [x] Audit spec + handlerId spec green; `make typecheck-api` run over the rebased tree (residuals recorded in G0-TEST-GATE above per §4.1.5).
+- [x] **Lot 3 — Migration-slot gate (0014 → 0015)**
+  - [x] Renamed `api/drizzle/control/0014_app_cm_identity_cutover.sql` → `0015_app_cm_identity_cutover.sql`; journal tag at idx 15; SQL `migration_id` strings; `cm-cutover-config.ts`, `cm-identity.ts` comment, `cm-cutover-migration.test.ts`, `artifacts-host-migrations.test.ts` tag filter.
+  - [x] Renumber consistency covered by the existing migration specs (typechecked; runtime campaign is A4 item 7).
+- [x] **Lot 4 — Package-version gate + final gates**
+  - [x] Bumped `packages/cluster-mesh/package.json` to 0.26.0-dev.7 + root `package-lock.json` entry.
+  - [x] Final gates: see G0-TEST-GATE in Feedback Loop (specs green, build-api green, packaging spec green on packed candidate, typecheck residuals recorded).
   - [ ] `make down ENV=test-a4-g0`.
   - [ ] Push branch, open READY PR, one CI run; report (do not merge).
