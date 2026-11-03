@@ -68,8 +68,8 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 
 - [x] **Lot 2 — Snapshot tests of the tools/list catalogue**
   - [x] `packages/artifacts/tests/tools-list-snapshot.test.ts` + checked-in snapshot JSON: full catalogue (names, descriptions, inputSchema, outputSchema, annotations, _meta) for the APP-P1 profile and for an r2 profile, served over the real SDK bridge; asserts byte-identical definitions across profiles and equality with the snapshot file; header comment explains the claude.ai permission rule.
-  - [ ] `packages/mcp-platform/tests/tools-list-snapshot.test.ts` + snapshot JSON: a composed registry (register + select + configure + compile) served through the real SDK bridge (`registerMcpWireTools`), snapshotting the full `tools/list` result.
-  - [x] Lot gate: `make test-artifacts ENV=test-mcp-stable` green (506 tests incl. the snapshot test).
+  - [x] `packages/mcp-platform/tests/tools-list-snapshot.test.ts` + snapshot JSON: a composed registry (register + select + configure + compile) served through the real SDK bridge (`registerMcpWireTools` over an in-memory link), snapshotting the full `tools/list` result; also asserts the catalogue is byte-identical across recompiles with different configuration values.
+  - [x] Lot gate: `make test-artifacts ENV=test-mcp-stable` green (506 tests), `make test-mcp-platform ENV=test-mcp-stable` green (352 tests incl. the snapshot test).
 
 - [ ] **Lot 3 — Docs**
   - [ ] `packages/mcp-platform/README.md`: document the byte-stable tool-definition rule (what may/may not appear in a definition; where dynamic values go).
