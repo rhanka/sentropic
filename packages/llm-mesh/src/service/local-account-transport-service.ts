@@ -681,7 +681,94 @@ export class LocalAccountTransportService {
       },
       account,
     );
+    // L5: persist the versioned seat record with the validated values
+    // verbatim; a forward transition overwrites the N values with N+1.
+    await this.writeSeatRecord(accountId, bundle, onboarding);
     return { accountId, seatRef, generation: incoming.generation, idempotent: false };
+  }
+
+  /**
+   * L5 facade export beside importSeatBundle. Trusted in-process use only.
+   * Refuses with a typed `seat-export-unavailable:<reason>` unless the
+   * account carries the external seat marker and a seat record whose
+   * lineage equals the current marker tuple. On success the stored bundle
+   * and block are re-validated (consumer authority, refresh-material scan,
+   * block binding) and returned verbatim from the record — no synthesized
+   * field, no refresh material, no native files, ever.
+   */
+  async exportSeatBundle(input: {
+    accountId: string;
+    ownerScope: string;
+  }): Promise<SeatExport> {
+    const owner = this.requireOwnerScope(input.ownerScope);
+    await this.restorePersistedAccounts();
+    const held = this.accountsMap.get(input.accountId);
+    const marker = held
+      ? readExternalSeatAuthority(held.metadata as Record<string, unknown> | undefined)
+      : null;
+    if (!held || !marker || marker.seatRef === 'unknown') {
+      throw new SeatExportUnavailableError(
+        'not-a-seat',
+        `account '${input.accountId}' carries no external seat marker`,
+      );
+    }
+    if (marker.ownerScope !== owner) {
+      throw new SeatExportUnavailableError(
+        'owner-mismatch',
+        'the held seat is owned by another owner scope',
+      );
+    }
+    const record = await this.readSeatRecord(input.accountId);
+    if (!record) {
+      throw new SeatExportUnavailableError(
+        'record-missing',
+        'no stored seat record; re-present the same bundle to backfill',
+      );
+    }
+    const revalidated = validateSeatBundle(record.bundle, { ownerScope: owner, trustedAuthority: 'consumer' });
+    if (!revalidated.ok) {
+      throw new SeatExportUnavailableError(
+        'record-invalid',
+        `stored bundle refused: ${revalidated.code}; ${revalidated.detail}`,
+      );
+    }
+    const stored = revalidated.bundle;
+    if (stored.credentialClass !== 'access-only' && stored.credentialClass !== 'static-key') {
+      throw new SeatExportUnavailableError('record-invalid', 'stored bundle must be access-only or static-key');
+    }
+    if (stored.lifecycle.refreshAuthority !== 'none') {
+      throw new SeatExportUnavailableError('record-invalid', 'stored bundle must not carry refresh authority');
+    }
+    if ((stored.meshUse.kind !== 'access' && stored.meshUse.kind !== 'static-key') || !stored.meshUse.accessRef) {
+      throw new SeatExportUnavailableError('record-invalid', 'stored bundle carries no usable access reference');
+    }
+    if (!stored.lifecycle.providerExpiry) {
+      throw new SeatExportUnavailableError('record-invalid', 'stored bundle requires providerExpiry');
+    }
+    const lineageMatches = stored.identity.seatRef === marker.seatRef
+      && stored.lifecycle.epoch === marker.epoch
+      && stored.lifecycle.generation === marker.generation
+      && stored.lifecycle.operationId === marker.operationId;
+    if (!lineageMatches) {
+      throw new SeatExportUnavailableError(
+        'lineage-mismatch',
+        'stored record lineage does not equal the held marker tuple',
+      );
+    }
+    if (record.onboarding !== null) {
+      const blockResult = validateSeatOnboarding(record.onboarding);
+      if (!blockResult.ok) {
+        throw new SeatExportUnavailableError(
+          'record-invalid',
+          `stored block refused: ${blockResult.code}; ${blockResult.detail}`,
+        );
+      }
+      const bindingError = this.onboardingBindingError(blockResult.block, stored);
+      if (bindingError) {
+        throw new SeatExportUnavailableError('record-invalid', `stored block misbound: ${bindingError}`);
+      }
+    }
+    return { bundle: record.bundle, onboarding: record.onboarding };
   }
 
   /** §3.4 binding of an onboarding block against its bundle; null when bound. */
