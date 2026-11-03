@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { runMigrations } from '../../src/db/run-migrations';
+import { installArtifactPackageAssets } from '../../src/services/artifacts/host-storage';
 import { createArtifactReaderActivation } from '../../src/services/artifacts/reader-activation';
 import { createArtifactHttpRouter } from '../../src/routes/namespaces/artifacts';
 import { ARTIFACT_SESSION_CLIENT } from '../../src/services/artifacts/credentials';
@@ -140,7 +141,14 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   vi.restoreAllMocks();
-  await pool.query(`TRUNCATE artifact_host.activation_namespaces, artifacts.storage_scopes,
+  // G1 (0006) makes artifacts.artifact_access_events append-only, so the legacy
+  // cross-schema TRUNCATE CASCADE can no longer reset the artifacts schema:
+  // drop both package schemas and reinstall the pinned assets instead.
+  await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
+  await pool.query('DROP SCHEMA IF EXISTS artifact_host CASCADE');
+  await pool.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id IS NOT NULL');
+  await installArtifactPackageAssets(pool);
+  await pool.query(`TRUNCATE artifact_host.activation_namespaces,
     control.artifact_host_kv, users, tenants CASCADE;
     INSERT INTO users(id, role, account_status) VALUES ('reader','editor','active'), ('other','editor','active');
     INSERT INTO tenants(id, name) VALUES ('tenant','Tenant');
