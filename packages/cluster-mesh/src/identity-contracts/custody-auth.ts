@@ -6,6 +6,7 @@ import type {
   AuthHonoVerifyAuthenticationResult, AuthHonoVerifyMagicLinkResult, AuthHonoVerifyEmailCodeResult,
 } from '@sentropic/auth-hono';
 import type { IdentityTransactionV1, IdentityDigestPortV1, IdentityLoginTokenPortV1, IdentityEmailTicketTokenPortV1, IdentityEmailCodeKeyRingV1 } from './custody.js';
+import type { ServiceTenantEnrollmentSourceV1 } from './service-tenancy.js';
 
 export type IdentityDeferredMailV1 =
   | { readonly kind: 'code'; readonly email: string; readonly code: string; readonly expiresAt: string }
@@ -51,4 +52,11 @@ export interface IdentityAuthBindingInput<H> {
   readonly social: { readonly autoLinkProviders: readonly string[] };
   readonly business: IdentityAuthBusinessHooksV1<H>;
   readonly trustedRegistration: { readonly email: string; readonly clientId: string | null } | null;
+  /**
+   * P3 (lot G3): CM-owned service-principal tenancy. When present, the binding
+   * builds `ports.serviceTenant` itself from the issuer over `tx.stores`;
+   * setting it together with `hostPorts.serviceTenant` is refused at
+   * construction. When absent, the host port passes through unchanged.
+   */
+  readonly serviceTenancy?: { readonly enrollments?: ServiceTenantEnrollmentSourceV1 };
 }
