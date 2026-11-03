@@ -78,7 +78,7 @@ A multi-file `artifacts_publish` returns 503 `provider_unavailable` on slow S3 h
   - [ ] Error codes unchanged: sentinel provider errors classify to the identical projection (503 provider_unavailable / capability_unavailable, retriable) through `classifyArtifactFailure`; digest-mismatch read-back error unchanged; deadline expiry classifies the same.
   - [ ] Lot gate: `make test-artifacts SCOPE=tests/publication-concurrency.test.ts ENV=test-art-conc-rb`, then full `make test-artifacts ENV=test-art-conc-rb` green.
 
-- [ ] **Lot 3 — Version bump 0.2.12, CHANGELOG, locks, APP-P1 pin, L5 manifest**
+- [x] **Lot 3 — Version bump 0.2.12, CHANGELOG, locks, APP-P1 pin, L5 manifest**
   - [ ] `packages/artifacts/package.json` 0.2.9 → 0.2.12; `ARTIFACTS_PROVIDER_VERSION` = '0.2.12' in `src/mcp-core.ts`; CHANGELOG `## 0.2.12` entry above `## 0.2.9`.
   - [ ] `make lock-root ENV=test-art-conc-rb`; api lock one-line `"../packages/artifacts"` version-string bump (pattern ddbe7b65e).
   - [ ] Recompute APP-P1 manifest digest through the make test lane (temp test in `packages/artifacts/tests/`, since deleted); refresh `APP_P1_MANIFEST_DIGEST` in `api/src/services/mcp/cluster-registry.ts` + digests/version assertion in `api/tests/api/app-mcp-registry.test.ts` and `app-mcp-installed.test.ts`. Pin semantics unchanged; tools/list snapshot untouched (definitions byte-identical).
