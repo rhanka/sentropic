@@ -123,3 +123,144 @@ interface PlaneFixture {
   readonly rows: readonly ConnectorFixtureRow[];
 }
 
+const createPlane = (state: FixtureState, custody: ConnectorRevocationCustodyPortV1<CustodyOpHost>, fixture: PlaneFixture): WorkspaceDeletionPlanePortV1<CustodyOpHost> => ({
+  placement: 'present',
+  listConnectorOwners: async (command, tx) => {
+    if (!fixture.sql) return [...new Set(fixture.rows.filter((row) => row.workspaceId === command.workspaceId).map((row) => row.userId))].sort();
+    const host = tx.hostTransaction;
+    return (await execSql(host, `SELECT DISTINCT user_id FROM ${q(host, 'ws_connector_rows')} WHERE workspace_id = ? ORDER BY user_id`, [command.workspaceId])).rows.map((row) => String(row['user_id']));
+  },
+  apply: async (command, tx) => {
+    state.reachedApply = true;
+    if (state.failAt === 'apply') throw new Error('injected-plane-apply');
+    const rows: readonly ConnectorFixtureRow[] = fixture.sql
+      ? (await execSql(tx.hostTransaction, `SELECT connector_account_id, user_id, workspace_id, provider, capability FROM ${q(tx.hostTransaction, 'ws_connector_rows')} WHERE workspace_id = ? ORDER BY connector_account_id`, [command.workspaceId])).rows
+        .map((row) => ({ connectorAccountId: String(row['connector_account_id']), userId: String(row['user_id']), workspaceId: String(row['workspace_id']), provider: String(row['provider']), capability: row['capability'] === null ? null : String(row['capability']) }))
+      : fixture.rows.filter((row) => row.workspaceId === command.workspaceId);
+    const drafts: IdentityExternalRevocationDraftV1[] = [];
+    for (const row of rows) {
+      const deliveryId = identityDeliveryId(command.operationId, 'connector_grants', 'connector_grant', row.connectorAccountId);
+      const capture = await custody.capture({ deliveryId, connectorAccountId: row.connectorAccountId, subjectId: row.userId, workspaceIdsToDelete: [command.workspaceId], at: NOW }, tx);
+      drafts.push({ step: 'connector_grants', subjectId: row.userId, targetKind: 'connector_grant', targetRef: row.connectorAccountId, custodyRef: capture.kind === 'captured' ? capture.reference.custodyRef : null });
+    }
+    return drafts;
+  },
+  assertDeliveryInScope: async (command, draft, tx) => {
+    if (!fixture.sql) return;
+    const host = tx.hostTransaction;
+    const { rows } = await execSql(host, `SELECT connector_account_id FROM ${q(host, 'ws_connector_rows')} WHERE connector_account_id = ? AND workspace_id = ?`, [draft.targetRef, command.workspaceId]);
+    if (rows.length !== 1) throw new IdentityCustodyErrorV1('identity_cascade_participant_missing');
+  },
+  assertAbsent: async (command, tx) => {
+    if (!fixture.sql) return;
+    const host = tx.hostTransaction;
+    const { rows } = await execSql(host, `SELECT COUNT(*) AS c FROM ${q(host, 'ws_connector_rows')} WHERE workspace_id = ?`, [command.workspaceId]);
+    if (Number(rows[0]?.['c'] ?? 0) > 0) throw new IdentityCustodyErrorV1('identity_cascade_participant_missing');
+  },
+});
+
+const createAbsentPlane = (sql: boolean): WorkspaceDeletionPlanePortV1<CustodyOpHost> => ({
+  placement: 'absent',
+  listConnectorOwners: async () => { throw new Error('absent plane discovery'); },
+  apply: async () => { throw new Error('absent plane applied'); },
+  assertDeliveryInScope: async () => { throw new Error('absent plane scope'); },
+  assertAbsent: async (command, tx) => {
+    if (!sql) return;
+    const host = tx.hostTransaction;
+    const { rows } = await execSql(host, `SELECT COUNT(*) AS c FROM ${q(host, 'ws_connector_rows')} WHERE workspace_id = ?`, [command.workspaceId]);
+    if (Number(rows[0]?.['c'] ?? 0) > 0) throw new IdentityCustodyErrorV1('identity_cascade_participant_missing');
+  },
+});
+
+const createRealCustody = (): ConnectorRevocationCustodyPortV1<CustodyOpHost> =>
+  createConnectorRevocationCustodyPortV1({
+    custody: createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(7) }),
+    readSource: async (connectorAccountId, tx) => {
+      const host = tx.hostTransaction;
+      const { rows } = await execSql(host, `SELECT user_id, workspace_id, provider, capability FROM ${q(host, 'ws_connector_rows')} WHERE connector_account_id = ?`, [connectorAccountId]);
+      if (rows.length === 0) return null;
+      const row = rows[0];
+      return {
+        userId: String(row['user_id']),
+        workspaceId: row['workspace_id'] === null ? null : String(row['workspace_id']),
+        provider: String(row['provider']),
+        capability: row['capability'] === null ? null : (JSON.parse(String(row['capability'])) as ConnectorCapabilityV1),
+      };
+    },
+  });
+
+/** Host-generic custody double for the foreign-host rule test. */
+const createMemoryCustody = (): { readonly port: ConnectorRevocationCustodyPortV1<CustodyOpHost>; readonly captured: Map<string, string> } => {
+  const captured = new Map<string, string>();
+  return {
+    captured,
+    port: {
+      capture: async (input) => {
+        captured.set(input.deliveryId, input.subjectId);
+        return { kind: 'captured', reference: { custodyRef: `mem-${input.deliveryId}`, deliveryId: input.deliveryId, connectorAccountId: input.connectorAccountId, provider: 'mem', createdAt: input.at } };
+      },
+      assertCaptured: async (record) => {
+        if (captured.get(record.deliveryId) !== record.subjectId) throw new IdentityCustodyErrorV1('identity_revocation_custody_missing');
+      },
+      eraseAcknowledged: async (record) => { captured.delete(record.deliveryId); },
+    },
+  };
+};
+
+const buildOperation = (env: ProfileEnv, state: FixtureState, custody: ConnectorRevocationCustodyPortV1<CustodyOpHost>, sql: boolean): AtomicWorkspaceDeletionV1 =>
+  createAtomicWorkspaceDeletionV1({
+    unitOfWork: env.unitOfWork,
+    business: createBusiness(state, sql),
+    authorization: createAuthorization(state),
+    connectorPlane: createPlane(state, custody, { sql, rows: [] }),
+    connectorCustody: custody,
+    clock: () => NOW,
+    transactionOptions: { deletion: DELETE_OPTS },
+  });
+
+interface ProfileEnv {
+  readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
+  readonly concurrent: boolean;
+}
+
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+const seedStandard = async (env: ProfileEnv, opts: { readonly c2Capability?: string | null } = {}): Promise<void> => {
+  await env.unitOfWork.run(WRITE, async (tx) => {
+    const host = tx.hostTransaction;
+    await host.journal.insertTenantCore({ tenantId: 'org', slug: 'org', status: 'active', createdAt: NOW });
+    for (const userId of ['marie', 'jean', 'boss', 'solo']) await seedAccount(host, userId);
+    await host.journal.insertWorkspaceCore({ workspaceId: 'ws', tenantId: 'org', repoIdentity: null, aliases: [], enrolledAt: NOW });
+    await host.journal.insertWorkspaceCore({ workspaceId: 'ws2', tenantId: 'org', repoIdentity: null, aliases: [], enrolledAt: NOW });
+    await host.journal.insertWorkspaceMemberCore({ workspaceId: 'ws', userId: 'marie', role: 'admin' });
+    await host.journal.insertWorkspaceMemberCore({ workspaceId: 'ws', userId: 'jean', role: 'viewer' });
+    await host.journal.insertWorkspaceMemberCore({ workspaceId: 'ws', userId: 'boss', role: 'editor' });
+    await host.journal.insertWorkspaceMemberCore({ workspaceId: 'ws2', userId: 'marie', role: 'viewer' });
+    await createFixtureTables(host);
+    await execSql(host, `INSERT INTO ${q(host, 'ws_biz_rows')} (owner_id, workspace_id) VALUES (?, ?), (?, ?), (?, ?)`, ['marie', 'ws', 'boss', 'ws', 'marie', 'ws2']);
+    await execSql(host, `INSERT INTO ${q(host, 'ws_connector_rows')} (connector_account_id, user_id, workspace_id, provider, capability) VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      ['c1', 'boss', 'ws', 'drive', JSON.stringify({ tokenKind: 'access', token: 'tok-c1' }),
+        'c2', 'marie', 'ws', 'slack', opts.c2Capability === undefined ? JSON.stringify({ tokenKind: 'refresh', token: 'tok-c2' }) : opts.c2Capability,
+        'c3', 'boss', 'ws2', 'drive', JSON.stringify({ tokenKind: 'access', token: 'tok-c3' })]);
+    await seedSession(tx, 's1', 'marie', 'ws');
+    await seedSession(tx, 's2', 'jean', 'ws');
+    await seedSession(tx, 's3', 'marie', 'ws2');
+    await seedInvitation(tx, 'inv-pending', 'ws', 'pending');
+    await seedInvitation(tx, 'inv-consumed', 'ws', 'consumed');
+    await seedInvitation(tx, 'inv-revoked', 'ws', 'revoked');
+    await seedInvitation(tx, 'inv-other', 'ws2', 'pending');
+  });
+};
+
+const expectNoMutation = async (env: ProfileEnv, operationId: string): Promise<void> => {
+  await env.unitOfWork.run(READ, async (tx) => {
+    const host = tx.hostTransaction;
+    expect(await host.journal.findWorkspaceCore('ws')).not.toBeNull();
+    expect((await execSql(host, `SELECT * FROM ${q(host, 'cm_workspace_members')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(3);
+    expect((await execSql(host, `SELECT * FROM ${q(host, 'cm_identity_conversation_sessions')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(2);
+    expect((await execSql(host, `SELECT * FROM ${q(host, 'ws_biz_rows')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(2);
+    expect((await execSql(host, `SELECT * FROM ${q(host, 'ws_connector_rows')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(2);
+    expect(await tx.revocationOutbox.listPending(operationId)).toHaveLength(0);
+    expect((await execSql(host, `SELECT * FROM ${q(host, 'cm_identity_audit_events')} WHERE kind = ?`, ['workspace_deletion'])).rows).toHaveLength(0);
+  });
+};
