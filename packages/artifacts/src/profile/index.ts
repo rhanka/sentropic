@@ -67,9 +67,11 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   }
   const rules = profile.rules;
   const ruleKeys = ['lengthUnit', 'textEncoding', 'callerKeyNormalization', 'rejectLoneSurrogates',
-    'provenance', 'keyDerivationAlgorithm', 'pathMaxBytes', 'forbiddenPathPattern', 'reservedFirstSegments', 'mimeTypes'];
+    'provenance', 'keyDerivationAlgorithm', 'pathMaxBytes', 'forbiddenPathPattern', 'reservedFirstSegments', 'mimeTypes',
+    'allowPublicSharing'];
   if (!rules || rules.lengthUnit !== 'utf16' || rules.textEncoding !== 'utf8' || rules.callerKeyNormalization !== 'none' ||
     Object.keys(rules).some((key) => !ruleKeys.includes(key)) ||
+    (rules.allowPublicSharing !== undefined && typeof rules.allowPublicSharing !== 'boolean') ||
     rules.rejectLoneSurrogates !== true || rules.provenance !== 'inline-original' ||
     typeof rules.keyDerivationAlgorithm !== 'string' || !rules.keyDerivationAlgorithm ||
     !Number.isSafeInteger(rules.pathMaxBytes) || rules.pathMaxBytes < 1 || rules.pathMaxBytes > 1024 ||

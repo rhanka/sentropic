@@ -9,11 +9,12 @@ import type { ArtifactHostFailureMapper } from '../../src/server/failures.js';
 import type { CommitBarrierObserver } from '../../src/testing.js';
 import type { ArtifactInvocationContext, CommitExecutor, FinalizeConnection,
   FinalizeTxClient, StoredCommitReceipt } from '../../src/server/commit/types.js';
-import { createMemoryAclStore } from '../../src/server/access.js';
+import { accessModeOf, applyModeTransition, createMemoryAclStore,
+  PLATFORM_PRINCIPAL, PUBLIC_PRINCIPAL, type AccessEvent } from '../../src/server/access.js';
 import { createMemoryRefcountStore } from '../../src/server/gc.js';
 import { createLifecycleService, createMemoryLifecycleStore } from '../../src/server/lifecycle.js';
 import { createMemoryIntentStore } from '../../src/server/object-intents.js';
-import { createMemoryKv } from '../../src/server/ports.js';
+import { createMemoryKv, type SharingPolicyPort } from '../../src/server/ports.js';
 import { createMemorySourceStore } from '../../src/server/sources.js';
 import type { DeleteConfirmationContext } from '../../src/server/management.js';
 import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
@@ -21,7 +22,8 @@ import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
 
 export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], scope = 'scope-l6',
   options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver;
-    parity?: boolean; profile?: ArtifactProviderProfile } = {}) {
+    parity?: boolean; profile?: ArtifactProviderProfile; sharingPolicy?: SharingPolicyPort;
+    actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean> } = {}) {
   const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
     operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
@@ -55,6 +57,8 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   let approved = true;
   let guardCalls = 0;
   const quotaReservations: number[] = [];
+  const accountStates = new Map<string, boolean>(actors.map((a) => [a, true]));
+  const accessEvents: AccessEvent[] = [];
   const executor: CommitExecutor = {
     async ensureCoordinationRow() {},
     async beginFinalization() {
@@ -103,7 +107,10 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     publicationUrls: (artifactId, releaseId) => ({ stableUrl: `https://${artifactId}.artifacts.test/`,
       versionUrl: `https://${releaseId}.artifacts.test/` }),
     derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: actors }),
-    legacyRecords, acls, lifecycle, sources, isApprovedAccount: (id) => actors.includes(id),
+    legacyRecords, acls, lifecycle, sources,
+    isApprovedAccount: (id) => accountStates.get(id) === true,
+    sharingPolicy: options.sharingPolicy,
+    actorIsAdmin: options.actorIsAdmin,
     management: {
       confirmation: {
         async request(context) {
@@ -129,11 +136,21 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
           },
           async setAccess(id, principalId, action, updatedAt) {
             const acl = (await acls.getArtifactAcl(id))!;
+            const mode = accessModeOf(acl);
+            if (principalId === PLATFORM_PRINCIPAL || principalId === PUBLIC_PRINCIPAL) {
+              const transition = applyModeTransition(mode, action, principalId);
+              writes.get(client)!.push(() => acls.putArtifactAcl(id, {
+                ...acl, accessMode: transition.mode, isPublic: transition.mode !== 'restricted', updatedAt,
+              }));
+              return { grants: acl.grants, updatedAt, accessMode: transition.mode, changed: transition.changed };
+            }
+            const exists = acl.grants.some((g) => g.principalId === principalId);
             const grants = action === 'revoke' ? acl.grants.filter((g) => g.principalId !== principalId)
-              : acl.grants.some((g) => g.principalId === principalId) ? acl.grants : [...acl.grants, { principalId, grant: 'read' as const }];
-            writes.get(client)!.push(() => acls.putArtifactAcl(id, { ...acl, isPublic: false, grants, updatedAt }));
-            return { grants, updatedAt };
+              : exists ? acl.grants : [...acl.grants, { principalId, grant: 'read' as const }];
+            writes.get(client)!.push(() => acls.putArtifactAcl(id, { ...acl, grants, updatedAt }));
+            return { grants, updatedAt, accessMode: mode, changed: action === 'revoke' ? exists : !exists };
           },
+          async recordEvent(event) { writes.get(client)!.push(async () => { accessEvents.push(event); }); },
           async delete(id) { writes.get(client)!.push(() => lifecycleStore.markTerminal(id)); },
         };
       },
@@ -190,9 +207,11 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
   return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, legacyRecords, quotaReservations,
+    accessEvents,
     withProfile: (input: ArtifactProviderProfile) => createHttpArtifactApp({ ...appDeps, profile: compileArtifactsProfile(input) }),
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
+    setAccountApproved: (id: string, value: boolean) => { accountStates.set(id, value); },
     executor, suspend: () => { approved = false; },
     deny: () => { allowed = false; }, allow: () => { allowed = true; }, guardCalls: () => guardCalls };
 }
