@@ -16,12 +16,15 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.6';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.7';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
 export const ARTIFACTS_TOOL_SPECS = ARTIFACTS_TOOL_NAMES.map((name) => ({ name,
-  description: `Artifacts ${name.slice('artifacts_'.length).replaceAll('_', ' ')}.`,
+  description: name === 'artifacts_get_source'
+    ? 'Artifacts get source: verified files of the current or a selected release as `text` (encoding "utf8") '
+      + 'or `base64` (encoding "base64"), never an integer array, plus a guideRef instead of the guide body.'
+    : `Artifacts ${name.slice('artifacts_'.length).replaceAll('_', ' ')}.`,
   mutability: (['artifacts_list', 'artifacts_get', 'artifacts_get_template', 'artifacts_get_api_guide',
     'artifacts_get_source', 'artifacts_list_versions'].includes(name) ? 'read-only' : name === 'artifacts_publish' ? 'append' : 'state-transition') as CapabilityTool['mutability'],
 }));

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { parseManifest } from '../codecs.js';
 import { ArtifactOperationError } from './failures.js';
+import { TEXT_MIME_RE } from './mime.js';
+import { API_GUIDE_REF } from './templates.js';
 import type { SourceRef } from './sources.js';
 import type { PublicationService } from './publication.js';
 
@@ -12,6 +14,8 @@ export interface SourceReadPorts {
   getSource(artifactId: string): Promise<SourceRef | undefined>;
   getBlob(key: string): Promise<Uint8Array | undefined>;
   urls?: (artifactId: string, releaseId: string) => { stableUrl: string; pinnedUrl: string };
+  /** Guide reference returned instead of embedding the guide body. */
+  guideRef?: { tool: string; version: string };
   maxFiles: number;
   maxTotalBytes: number;
 }
@@ -63,10 +67,21 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
       createHash('sha256').update(bytes).digest('hex') !== file.digest.slice(7)) {
       throw new ArtifactOperationError('verification_failed');
     }
-    files.push({ ...file, bytes: Array.from(bytes) });
+    // Verified raw bytes are encoded for the wire: text mime types as UTF-8
+    // text, everything else (including non-UTF-8 "text") as base64. Never an
+    // integer array, which blows the tool-result budget on small pages.
+    let text: string | undefined;
+    if (TEXT_MIME_RE.test(file.mimeType)) {
+      try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+      catch { /* Not valid UTF-8: fall back to base64. */ }
+    }
+    files.push({ ...file, ...(text !== undefined
+      ? { text, encoding: 'utf8' as const }
+      : { base64: Buffer.from(bytes).toString('base64'), encoding: 'base64' as const }) });
   }
   const sourceRef = await ports.getSource(input.artifactId) ?? null;
   await ports.authorize();
   return { artifactId: input.artifactId, releaseId: release.releaseId, digest: manifest.digest,
-    manifest: release.manifest, files, sourceRef, ...ports.urls?.(input.artifactId, release.releaseId) };
+    manifest: release.manifest, files, sourceRef, guideRef: ports.guideRef ?? API_GUIDE_REF,
+    ...ports.urls?.(input.artifactId, release.releaseId) };
 }
