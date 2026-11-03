@@ -24,6 +24,7 @@ Build lot G4 of the A4 cluster-mesh binding design r2 (`.tmp/cm-identity-agents/
   - `packages/cluster-mesh/src/storage/identity/index.ts`
   - `packages/cluster-mesh/tests/identity/workspace-deletion.spec.ts`
   - `packages/cluster-mesh/package.json`
+  - `package-lock.json` (root lockfile version parity for the `packages/cluster-mesh/package.json` bump; refreshed via `make lock-root`, enforced by the CI `changes` job)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -47,7 +48,7 @@ Build lot G4 of the A4 cluster-mesh binding design r2 (`.tmp/cm-identity-agents/
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- None open.
+- BR-G4-EX1 (scope addition, not a conditional-path exception): root `package-lock.json` added to Allowed Paths. Reason: the CI `changes` job requires `packages/cluster-mesh/package.json` and the root lockfile to carry the same version ("refresh the root lockfile through Make"); the 0.26.0-dev.7 bump is incomplete without it. Impact: one-line lockfile diff (`packages/cluster-mesh` version field only), refreshed via `flock .tmp/packets/DOCKER-LOCK.md make lock-root ENV=test-a4-G4`. Rollback: revert the lockfile line together with the package.json bump.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single CM lot on its own branch; one PR; one CI run per final head)
