@@ -13,5 +13,7 @@ export * from './access.js';
 export * from './tenancy.js';
 export * from './workspaces.js';
 export * from './resolution.js';
+export * from './boundary-resolution.js';
+export * from './composition-descriptors.js';
 export * from './enforcement.js';
 export * from './doubles.js';
