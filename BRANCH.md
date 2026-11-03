@@ -21,6 +21,7 @@ Build lot G5 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (s
 - Automated test campaigns on dedicated environment `ENV=test-a4-G5` (last argument), never root dev; `make down ENV=test-a4-G5` after each stack.
 - All new text in English. No secrets. No `[skip ci]`. No human-effort/time estimates.
 - Owner answers binding (owner-answers-20261030.md): Q-K=A, Q-WS1=delete with workspace, Q-IDP1=case-by-case deletion, no transfer tool — none change the G5 CM contract (G5 builds in simulation mode per §12).
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -36,6 +37,8 @@ Build lot G5 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (s
   - `packages/cluster-mesh/tests/identity/replica-sync.spec.ts` (new)
   - `packages/cluster-mesh/package.json` (version bump)
   - `package-lock.json` (root lockfile version parity for the `packages/cluster-mesh/package.json` bump; refreshed via `make lock-root`, enforced by the CI `changes` job)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (packaging-fixture pin sync for the version bump; see BR-G5-EX2)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (same fixture sync)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -54,7 +57,8 @@ Build lot G5 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (s
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- BR-G5-EX1 (scope addition, not a conditional-path exception): root `package-lock.json` added to Allowed Paths. Reason: the CI `changes` job requires `packages/cluster-mesh/package.json` and the root lockfile to carry the same version ("refresh the root lockfile through Make"); the 0.26.0-dev.7 bump is incomplete without it. Impact: one-line lockfile diff (`packages/cluster-mesh` workspace version field only), refreshed via `flock .tmp/packets/DOCKER-LOCK.md make lock-root ENV=test-a4-G5`. Rollback: revert the lockfile line together with the package.json bump. The packaging fixture (`tests/packaging/fixtures/selected`) and `api/package-lock.json` intentionally keep the last release tuple per the pack-only dev-bump rule (see `prepare-artifacts.spec.ts`); parallel lots (G4) did the same.
+- BR-G5-EX1 (scope addition, not a conditional-path exception): root `package-lock.json` added to Allowed Paths. Reason: the CI `changes` job requires `packages/cluster-mesh/package.json` and the root lockfile to carry the same version ("refresh the root lockfile through Make"); the 0.26.0-dev.7 bump is incomplete without it. Impact: one-line lockfile diff (`packages/cluster-mesh` workspace version field only), refreshed via `flock .tmp/packets/DOCKER-LOCK.md make lock-root ENV=test-a4-G5`. Rollback: revert the lockfile line together with the package.json bump.
+- BR-G5-EX2 (scope addition): `packages/cluster-mesh/tests/packaging/fixtures/selected/package.{json,lock.json}` added to Allowed Paths. Reason: the version bump to 0.26.0-dev.7 makes the fixture pin stale; `tests/packaging/prepare-artifacts.spec.ts` (run by the `validate-cluster-mesh` CI lanes) requires the selected fixture to pin the exact candidate tarball, and the lazy packaging lane runs `npm ci` against that lock. Impact: four-line fixture diff (dev.6 → dev.7), same shape as G4's BR-G4-EX2 and main's 5f438ea30. Rollback: revert the fixture lines together with the package.json bump. `api/package-lock.json` is intentionally untouched (G4 precedent; no CI gate reads it). Also retained the BRLOCK-EX1 `review_by` line in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
 - G1 (P4 `oauthTenantStoreV1` finders) is not on origin/main; this lot deliberately does not land a copy of the finder (design §10.4 stack-absorption rule). Consent reads go through the custody journal primitives; the stack absorbs G1 on rebase.
 - Q-IDP1 disposition (case-by-case preprod-only account deletion) is an ops/G7 concern; G5 builds and tests in simulation mode per design §12.
 
