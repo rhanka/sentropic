@@ -247,4 +247,101 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
     expect(state.accounts.map((row) => row.userId)).toEqual(['u-local']);
   });
 
+  it('keeps local counter/lastUsedAt and never copies a source-advanced counter', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    const cred = credential('cred-1', 'u-1', { counter: 3 });
+    await seedAccount(source.uow, { record: account('u-1', 'one@example.test'), credentials: [{ ...cred, counter: 30 }] });
+    await seedAccount(replica.uow, { record: account('u-1', 'one@example.test'), credentials: [cred] });
+    await replica.uow.run(WRITE, async (tx) => {
+      await tx.custody.credentials.compareAndSwapCounter({
+        proofId: 'cred-1', userId: 'u-1', expectedCounter: 3, expectedRevision: 0, newCounter: 20, at: LATER,
+      });
+    });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-counter', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/ct' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    const receipt = await sync.syncBatch(batch);
+    expect(receipt.counts.credential.unchanged).toBe(1);
+
+    const state = await readState(replica.uow, ['u-1']);
+    expect(state.credentials['u-1'][0].counter).toBe(20);
+    expect(state.credentials['u-1'][0].lastUsedAt).toBe(LATER);
+  });
+
+  it('credential owner or COSE drift conflicts; source-revoked applies; local-revoked is kept; rename converges', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    const cred = credential('cred-1', 'u-1');
+    await seedAccount(source.uow, {
+      record: account('u-1', 'one@example.test'),
+      credentials: [
+        { ...cred, revokedAt: LATER },
+        credential('cred-2', 'u-1', { deviceName: 'renamed' }),
+      ],
+    });
+    await seedAccount(replica.uow, {
+      record: account('u-1', 'one@example.test'),
+      credentials: [cred, credential('cred-2', 'u-1', { deviceName: 'old', revision: 4 })],
+    });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-cred', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/cr' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    const receipt = await sync.syncBatch(batch);
+    expect(receipt.counts.credential).toEqual({ inserted: 0, updated: 1, unchanged: 0, revokedApplied: 1, revokedKept: 0 });
+
+    const state = await readState(replica.uow, ['u-1']);
+    const byId = new Map(state.credentials['u-1'].map((row) => [row.proofId, row]));
+    expect(byId.get('cred-1')?.revokedAt).toBe(LATER);
+    expect(byId.get('cred-1')?.counter).toBe(7);
+    expect(byId.get('cred-2')?.deviceName).toBe('renamed');
+    expect(byId.get('cred-2')?.revision).toBe(5);
+
+    // COSE drift on an existing row is a conflict with full rollback.
+    const drifted = makeBatch([
+      accountRow(account('u-1', 'one@example.test'), profile('u-1')),
+      credentialRow({ ...cred, publicKeyCose: syntheticCoseKey('other') }),
+    ]);
+    await expect(sync.syncBatch(drifted)).rejects.toMatchObject({ code: 'identity_sync_conflict' });
+    const after = await readState(replica.uow, ['u-1']);
+    expect(after.credentials['u-1'].find((row) => row.proofId === 'cred-1')?.publicKeyCose).toBe(cred.publicKeyCose);
+
+    // A live source row never resurrects a locally revoked credential.
+    const liveSource = makeBatch([
+      accountRow(account('u-1', 'one@example.test'), profile('u-1')),
+      credentialRow(cred),
+    ]);
+    const receipt2 = await sync.syncBatch(liveSource);
+    expect(receipt2.counts.credential.revokedKept).toBe(1);
+    const kept = await readState(replica.uow, ['u-1']);
+    expect(kept.credentials['u-1'].find((row) => row.proofId === 'cred-1')?.revokedAt).toBe(LATER);
+  });
+
+  it('consent rules: revoked local is never resurrected, unknown tenant conflicts', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    const live = consent('consent-1', 'u-1', 't-1');
+    await seedAccount(source.uow, { record: account('u-1', 'one@example.test'), tenantId: 't-1', consents: [live] });
+    await seedAccount(replica.uow, {
+      record: account('u-1', 'one@example.test'), tenantId: 't-1',
+      consents: [consent('consent-1', 'u-1', 't-1', { revokedAt: LATER })],
+    });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-consent', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/cs' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    const receipt = await sync.syncBatch(batch);
+    expect(receipt.counts.oauth_consent).toEqual({ inserted: 0, updated: 0, unchanged: 0, revokedApplied: 0, revokedKept: 1 });
+    const state = await readState(replica.uow, ['u-1']);
+    expect(state.consents['u-1'][0].revokedAt).toBe(LATER);
+
+    const unknownTenant = makeBatch([
+      accountRow(account('u-1', 'one@example.test'), profile('u-1')),
+      consentRow(consent('consent-9', 'u-1', 't-unknown')),
+    ]);
+    await expect(sync.syncBatch(unknownTenant)).rejects.toMatchObject({ code: 'identity_sync_conflict' });
+  });
+
 });
