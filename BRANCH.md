@@ -76,10 +76,10 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
   - [x] Artifacts API guide (`GUIDE_V1` in `packages/artifacts/src/server/templates.ts`, served by `artifacts_get_api_guide`): same rule; active profile revision/envelope reported in results and audit metadata only.
   - [x] `packages/artifacts/README.md` pointer on the `src/mcp-core.ts` bullet.
 
-- [ ] **Lot 4 — Version bump, CHANGELOG, pins**
-  - [ ] Bump `packages/artifacts/package.json` 0.2.6 -> 0.2.8 (> published 0.2.6; leaves 0.2.7 to #890/#893, 0.3.0 to #891); CHANGELOG entry.
-  - [ ] Recompute APP-P1 manifest digest through the make test lane; refresh `APP_P1_MANIFEST_DIGEST` in `api/src/services/mcp/cluster-registry.ts`, the compatibility receipts + version-witness digest in `api/tests/api/app-mcp-registry.test.ts`, and the receipts in `api/tests/api/app-mcp-installed.test.ts`. Pin semantics unchanged (digest still covers definitions + version + audit).
-  - [ ] Lot gate: scoped api registry tests green (`app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`, `app-artifacts-transport.test.ts`) on `ENV=test-mcp-stable`.
+- [x] **Lot 4 — Version bump, CHANGELOG, pins**
+  - [x] Bump `packages/artifacts/package.json` 0.2.6 -> 0.2.8 (> published 0.2.6; leaves 0.2.7 to #890/#893, 0.3.0 to #891); CHANGELOG entry under `## 0.2.8`; `ARTIFACTS_PROVIDER_VERSION` = '0.2.8'.
+  - [x] Recompute APP-P1 manifest digest through the make test lane; refreshed `APP_P1_MANIFEST_DIGEST` = `70c2374584d072dc2df90a03f2af43c67afb1f995267b0b7eea863adb49b5824` in `api/src/services/mcp/cluster-registry.ts`, the compatibility receipts + version-witness digest (`b95ba5ed...`) in `api/tests/api/app-mcp-registry.test.ts`, and the receipts + version assertion in `api/tests/api/app-mcp-installed.test.ts`. Pin semantics unchanged (digest still covers definitions + version + audit); `APP_P1_PROFILE_DIGEST` unchanged.
+  - [x] Lot gate: scoped api tests green on `ENV=test-mcp-stable` — `app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`, `app-artifacts-transport.test.ts` (32 tests).
 
 - [ ] **Lot N — Final validation**
   - [ ] `make build-artifacts build-mcp-platform ENV=test-mcp-stable` (typecheck/build).
