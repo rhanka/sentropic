@@ -47,7 +47,8 @@ export function preflight(tier) {
     ['watch', 'deployments', ROLLOUT_DEPLOYMENT],
   ];
   for (const [verb, resource, name] of rights) {
-    const r = kube(['auth', 'can-i', verb, resource, name, '-n', namespace], { allowFailure: true });
+    // kubectl auth can-i takes exactly two positional arguments: <verb> <resource>/<name>
+    const r = kube(['auth', 'can-i', verb, `${resource}/${name}`, '-n', namespace], { allowFailure: true });
     if (r.status !== 0 || r.stdout.trim() !== 'yes') throw new Error('email_code_hmac_writer_forbidden');
   }
   console.log(JSON.stringify({ preflight: 'ok', namespace, secret: SECRET_NAME, deployment: ROLLOUT_DEPLOYMENT }));
