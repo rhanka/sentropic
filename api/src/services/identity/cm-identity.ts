@@ -2,7 +2,7 @@
 // app's own PostgreSQL. One schema (`cm_identity`) hosts every CM identity
 // table (A2.1 core + A2.0b custody bundle in `identity_*`, A2.2 tenancy and
 // A2.3 enforcement in `cm_*`). The DDL itself lands through the single control
-// migration `api/drizzle/control/0014_app_cm_identity_cutover.sql`; this module
+// migration `api/drizzle/control/0015_app_cm_identity_cutover.sql`; this module
 // only binds the frozen factories to the app pool. No dual writer: after the
 // cutover every app identity read/write goes through this module.
 
