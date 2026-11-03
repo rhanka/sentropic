@@ -31,13 +31,19 @@ const expectCustodyCode = (fn: () => unknown, code: string): void => {
 
 const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
 
+// Each test opens a fresh durable env; the schema DDL batch runs over the
+// owner process's synchronous IPC, which can take seconds on a loaded host.
+// The 30s test timeout covers env setup only — the UOW deadlineMs below still
+// bounds each transaction itself.
+const TEST_TIMEOUT = 30000;
+
 describe.each(PROFILES.map((profile) => ({ profile })))('G1 oauth tenant reads on $profile', ({ profile }) => {
   const openUow = async () => {
     const pg = profile === 'postgres' ? await openPostgresEnv() : null;
     return asOpHost((pg ?? openSqliteEnv()).unitOfWork);
   };
 
-  it('reads grants inside the attempt and nothing after rollback', async () => {
+  it('reads grants inside the attempt and nothing after rollback', { timeout: TEST_TIMEOUT }, async () => {
     const uow = await openUow();
     const c1 = consent('c1', 'u1', 'client-1', 't1', NOW);
     await uow.run(WRITE, async (tx) => {
@@ -60,7 +66,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('G1 oauth tenant reads o
     });
   });
 
-  it('keeps revoked rows readable, hides them from the grant finder, newest live wins bytewise', async () => {
+  it('keeps revoked rows readable, hides them from the grant finder, newest live wins bytewise', { timeout: TEST_TIMEOUT }, async () => {
     const uow = await openUow();
     await uow.run(WRITE, async (tx) => {
       const oauth = oauthTenantStoreV1(tx);
@@ -80,7 +86,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('G1 oauth tenant reads o
     });
   });
 
-  it('finds service client bindings by client and reflects rebind in-attempt', async () => {
+  it('finds service client bindings by client and reflects rebind in-attempt', { timeout: TEST_TIMEOUT }, async () => {
     const uow = await openUow();
     await uow.run(WRITE, async (tx) => {
       const oauth = oauthTenantStoreV1(tx);
@@ -95,7 +101,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('G1 oauth tenant reads o
     });
   });
 
-  it('refuses expired, foreign and contract-less handles before any query', async () => {
+  it('refuses expired, foreign and contract-less handles before any query', { timeout: TEST_TIMEOUT }, async () => {
     const uow = await openUow();
     let captured: IdentityTransactionV1<CustodyOpHost> | null = null;
     await uow.run(READ, async (tx) => {
