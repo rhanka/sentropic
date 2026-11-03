@@ -72,7 +72,8 @@ describe('R2 explicit profile and result switchovers', () => {
     const page = output(await call('artifacts_list_versions', { artifactId, limit: 1, cursor: history.nextCursor }));
     expect(page.versions[0].releaseId).toBe(all.versions[1].releaseId);
     const source = output(await call('artifacts_get_source', { artifactId }));
-    expect(source.files[0].bytes).toEqual([...Buffer.from('one')]);
+    expect(source.files[0]).toMatchObject({ path: 'index.html', text: 'one', encoding: 'utf8' });
+    expect(source.files[0]).not.toHaveProperty('bytes');
     expect((await w.acls.getArtifactAcl(artifactId))?.grants).toEqual([{ principalId: 'bob', grant: 'read' }]);
   });
 
