@@ -61,6 +61,7 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 - [x] **Lot 1 — Static artifacts tool definitions**
   - [x] Add frozen static tool definitions (description, inputSchema, outputSchema, idempotency, gates) for all 17 `artifacts_*` tools in `packages/artifacts/src/mcp-core.ts` (`ARTIFACTS_TOOL_DEFINITIONS`).
   - [x] `createArtifactsManifest` builds tool entries from the static definitions only; profile stays in `audit.artifactsProfileDigest` (server metadata) and in typed result details.
+  - [x] Static `oneOf` constraints kept in the static input schemas (file text/bytes exclusivity, publish files/edits exclusivity, set_access grant/revoke rules): `oneOf` is a compile-time constraint, not a per-deployment value; required by `probe-artifacts-packed-consumer` (`packed-consumer.mjs` asserts `fileSchema.oneOf.length === 2`).
   - [x] Update `packages/artifacts/tests/mcp.test.ts` and `parity-r2-profile.test.ts` expectations (description no longer contains the revision; inputSchema is the static definition).
   - [x] Lot gate:
     - [x] `make build-artifacts` / `make build-mcp-platform` (tsc typecheck) green on `ENV=test-mcp-stable`.
@@ -78,7 +79,7 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 
 - [x] **Lot 4 — Version bump, CHANGELOG, pins**
   - [x] Bump `packages/artifacts/package.json` 0.2.6 -> 0.2.8 (> published 0.2.6; leaves 0.2.7 to #890/#893, 0.3.0 to #891); CHANGELOG entry under `## 0.2.8`; `ARTIFACTS_PROVIDER_VERSION` = '0.2.8'.
-  - [x] Recompute APP-P1 manifest digest through the make test lane; refreshed `APP_P1_MANIFEST_DIGEST` = `70c2374584d072dc2df90a03f2af43c67afb1f995267b0b7eea863adb49b5824` in `api/src/services/mcp/cluster-registry.ts`, the compatibility receipts + version-witness digest (`b95ba5ed...`) in `api/tests/api/app-mcp-registry.test.ts`, and the receipts + version assertion in `api/tests/api/app-mcp-installed.test.ts`. Pin semantics unchanged (digest still covers definitions + version + audit); `APP_P1_PROFILE_DIGEST` unchanged.
+  - [x] Recompute APP-P1 manifest digest through the make test lane; refreshed `APP_P1_MANIFEST_DIGEST` = `96226d32f64ca7ac06749d5083084b6f572eac23d27256cae8d37e7f7579933d` in `api/src/services/mcp/cluster-registry.ts`, the compatibility receipts + version-witness digest (`da14b7bd...`, manifest with `version: '0.2.5'`) in `api/tests/api/app-mcp-registry.test.ts`, and the receipts + version assertion in `api/tests/api/app-mcp-installed.test.ts`. Pin semantics unchanged (digest still covers definitions + version + audit); `APP_P1_PROFILE_DIGEST` unchanged.
   - [x] Lot gate: scoped api tests green on `ENV=test-mcp-stable` — `app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`, `app-artifacts-transport.test.ts` (32 tests).
 
 - [ ] **Lot N — Final validation**
