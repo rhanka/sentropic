@@ -15,8 +15,8 @@ import type {
   IdentityReplicaSyncReceiptV1,
   IdentityReplicaSyncRowV1,
   IdentityReplicaSyncValidationV1,
-  IdentityTransactionV1,
 } from '../../identity-contracts/replica-sync.js';
+import type { IdentityTransactionV1 } from '../../identity-contracts/custody.js';
 import { canonicalBindingEmailV1 } from '../../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
 import { identityTransactionHost, requireIdentityRunOptions } from './custody-transaction-guards.js';
@@ -27,10 +27,12 @@ type Entity = IdentityReplicaSyncRowV1['entity'];
 
 const ALL_ENTITIES: readonly Entity[] = ['account', 'credential', 'oauth_consent'];
 
-const zeroCounts = (): Record<Entity, IdentityReplicaSyncCountsV1> =>
+type MutableCounts = { -readonly [K in keyof IdentityReplicaSyncCountsV1]: number };
+
+const zeroCounts = (): Record<Entity, MutableCounts> =>
   Object.fromEntries(ALL_ENTITIES.map((entity) => [entity, {
     inserted: 0, updated: 0, unchanged: 0, revokedApplied: 0, revokedKept: 0,
-  }])) as Record<Entity, IdentityReplicaSyncCountsV1>;
+  }])) as Record<Entity, MutableCounts>;
 
 const stableStringify = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
@@ -323,7 +325,7 @@ const applyCredential = async (tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1,
   }
   if (existing.revokedAt && !record.revokedAt) return 'revokedKept';
   if (existing.revokedAt && record.revokedAt) return 'unchanged';
-  if (existing.deviceName !== record.deviceName) {
+  if (record.deviceName !== null && existing.deviceName !== record.deviceName) {
     await tx.custody.credentials.rename(record.proofId, record.userId, record.deviceName);
     return 'updated';
   }
