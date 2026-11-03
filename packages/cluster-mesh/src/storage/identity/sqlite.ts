@@ -20,13 +20,15 @@ import { openSqliteEngine, type SqliteEngine } from '../sqlite/engine.js';
 import { decodeDeviceCode, decodeInvitation, decodeProof, decodeSession, decodeUserAccount } from './records.js';
 import { identitySchemaStatements, identityTable, type IdentityTableName } from './schema.js';
 import type { IdentityAccountStores } from './stores.js';
+import { applyAtomicSqliteDdl } from './sqlite-schema.js';
 
 /** Idempotent identity DDL on an existing SQLite connection. */
 export const applySqliteIdentityCoreSchema = (connection: SqliteConnection): void => {
-  for (const ddl of identitySchemaStatements('sqlite', '')) connection.exec(ddl);
+  applyAtomicSqliteDdl(connection, identitySchemaStatements('sqlite', ''));
 };
 
 export interface SqliteIdentityStoresOptions {
+  readonly transactionBound?: boolean;
   readonly connection: SqliteConnection;
 }
 
@@ -34,9 +36,7 @@ export interface SqliteIdentityStoresOptions {
 type SqliteValue = string | number | null;
 
 class SqliteSlice {
-  constructor(protected readonly connection: SqliteConnection) {
-    applySqliteIdentityCoreSchema(connection);
-  }
+  constructor(protected readonly connection: SqliteConnection) {}
 
   protected readonly table = (name: IdentityTableName): string => identityTable('sqlite', null, name);
 
@@ -302,6 +302,7 @@ class SqliteIdentityAudit extends SqliteSlice implements IdentityAuditPort {
 /** Durable A2.1 stores over an existing SQLite connection (local profile). */
 export const createSqliteIdentityCoreStores = (options: SqliteIdentityStoresOptions): IdentityAccountStores => {
   const { connection } = options;
+  if (!options.transactionBound) applySqliteIdentityCoreSchema(connection);
   return {
     accounts: new SqliteUserAccountStore(connection),
     proofs: new SqliteIdentityProofStore(connection),

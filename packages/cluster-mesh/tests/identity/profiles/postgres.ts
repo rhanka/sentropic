@@ -28,8 +28,8 @@ const sharedDriver = (): InjectedPgDriver => {
 };
 
 export const createInMemoryIdentityStores = (): IdentityStores => {
+  if (!process.env.CM_PG_URL) throw new Error('PostgreSQL identity qualification requires CM_PG_URL');
   const base = createInMemoryStores();
-  if (!process.env.CM_PG_URL) return base;
   const pg = sharedDriver();
   const schema = `identity_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   const durable = createPostgresIdentityCoreStores({ driver: pg, schema });

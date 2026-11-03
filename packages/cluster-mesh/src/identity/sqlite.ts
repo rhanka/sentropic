@@ -7,6 +7,7 @@
 // and the PostgreSQL profile, so chain tamper detection is one behavior.
 
 import type { SqliteConnection } from '../storage/sqlite/connection.js';
+import { applyAtomicSqliteDdl } from '../storage/identity/sqlite-schema.js';
 import { ConversationSessionError, type ConversationAuthorityStore, type ConversationSessionRecord } from './conversation.js';
 import {
   escalationEntryDigest,
@@ -52,7 +53,7 @@ export const IDENTITY_SQLITE_SCHEMA: readonly string[] = [
 ];
 
 export function applyIdentitySqliteSchema(db: SqliteConnection): void {
-  for (const statement of IDENTITY_SQLITE_SCHEMA) db.exec(statement);
+  applyAtomicSqliteDdl(db, IDENTITY_SQLITE_SCHEMA);
 }
 
 const rowToConversationSession = (row: Record<string, unknown>): ConversationSessionRecord => ({
@@ -94,16 +95,18 @@ const withTransaction = <T>(db: SqliteConnection, operation: () => T): T => {
 
 export function createIdentityEnforcementSqliteStores(input: {
   readonly db: SqliteConnection;
+  readonly transactionBound?: boolean;
 }): {
   readonly conversations: ConversationAuthorityStore;
   readonly ledger: IdentityLedgerStore;
 } {
   const db = input.db;
-  applyIdentitySqliteSchema(db);
+  if (!input.transactionBound) applyIdentitySqliteSchema(db);
+  const run = <T>(operation: () => T): T => input.transactionBound ? operation() : withTransaction(db, operation);
 
   const conversations: ConversationAuthorityStore = {
     async saveSession(record) {
-      withTransaction(db, () =>
+      run(() =>
         db
           .prepare(
             `INSERT INTO cm_identity_conversation_sessions
@@ -129,7 +132,7 @@ export function createIdentityEnforcementSqliteStores(input: {
       );
     },
     async findSession(conversationSessionId) {
-      const row = withTransaction(db, () =>
+      const row = run(() =>
         db
           .prepare('SELECT * FROM cm_identity_conversation_sessions WHERE conversation_session_id = ?')
           .get(conversationSessionId),
@@ -137,7 +140,7 @@ export function createIdentityEnforcementSqliteStores(input: {
       return row ? rowToConversationSession(row) : null;
     },
     async revokeSession(conversationSessionId, at) {
-      const row = withTransaction(db, () => {
+      const row = run(() => {
         const existing = db
           .prepare('SELECT * FROM cm_identity_conversation_sessions WHERE conversation_session_id = ?')
           .get(conversationSessionId) as Record<string, unknown> | undefined;
@@ -155,7 +158,7 @@ export function createIdentityEnforcementSqliteStores(input: {
       return rowToConversationSession(row);
     },
     async listSessionsForUser(userId) {
-      const rows = withTransaction(db, () =>
+      const rows = run(() =>
         db
           .prepare('SELECT * FROM cm_identity_conversation_sessions WHERE user_id = ? ORDER BY opened_at, conversation_session_id')
           .all(userId),
@@ -166,7 +169,7 @@ export function createIdentityEnforcementSqliteStores(input: {
 
   const ledger: IdentityLedgerStore = {
     async append(event) {
-      withTransaction(db, () =>
+      run(() =>
         db
           .prepare(
             `INSERT INTO cm_identity_audit_events (at, kind, actor_id, subject_id, detail)
@@ -176,13 +179,13 @@ export function createIdentityEnforcementSqliteStores(input: {
       );
     },
     async listAuditEvents() {
-      const rows = withTransaction(db, () =>
+      const rows = run(() =>
         db.prepare('SELECT * FROM cm_identity_audit_events ORDER BY ordinal').all(),
       ) as Record<string, unknown>[];
       return rows.map(rowToAuditEvent);
     },
     async appendEscalationEntry(draft) {
-      return withTransaction(db, () => {
+      return run(() => {
         const tail = db
           .prepare(
             `SELECT entry_hash FROM cm_identity_escalation_entries
@@ -212,7 +215,7 @@ export function createIdentityEnforcementSqliteStores(input: {
       });
     },
     async listEscalationChain(escalationId) {
-      const rows = withTransaction(db, () =>
+      const rows = run(() =>
         db
           .prepare('SELECT * FROM cm_identity_escalation_entries WHERE escalation_id = ? ORDER BY ordinal')
           .all(escalationId),
@@ -235,13 +238,13 @@ export function createIdentityEnforcementSqliteStores(input: {
         clauses.push('target_ref = ?');
       }
       const where = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '';
-      const rows = withTransaction(db, () =>
+      const rows = run(() =>
         db.prepare(`SELECT * FROM cm_identity_escalation_entries${where} ORDER BY ordinal`).all(...values),
       ) as Record<string, unknown>[];
       return rows.map(rowToEscalationEntry);
     },
     async verifyEscalationChains(): Promise<readonly EscalationChainVerification[]> {
-      const rows = withTransaction(db, () =>
+      const rows = run(() =>
         db
           .prepare('SELECT * FROM cm_identity_escalation_entries ORDER BY escalation_id, ordinal')
           .all(),
