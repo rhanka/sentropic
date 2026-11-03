@@ -5,7 +5,6 @@
 import { IdentityNotFoundError, WorkspaceAlreadyEnrolledError } from '../identity-contracts/errors.js';
 import { IdentityConflictError } from '../identity-contracts/errors.js';
 import type {
-  OAuthTenantStore,
   TenantMembershipStore,
   TenantRegistryStore,
   WorkspaceDirectoryStore,
@@ -391,6 +390,6 @@ export function createSqliteIdentityStores(db: SqliteStoreDb): SqliteIdentitySto
         const row = rowOf(db.prepare('SELECT * FROM cm_service_clients WHERE client_id = ?').get(clientId));
         return row ? mapServiceClient(row) : null;
       },
-    } satisfies OAuthTenantStore,
+    } satisfies OAuthTenantStoreV1,
   };
 }
