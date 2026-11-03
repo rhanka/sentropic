@@ -1,22 +1,7 @@
 # Changelog
 
-## 0.2.7
+## 0.2.8
 
-- Fix the `artifacts_get_source` wire payload that broke page editing in claude.ai:
-  files are no longer returned as a JSON integer array (`bytes: Array.from(bytes)`).
-  Text mime types (the canonical `TEXT_MIME_PATTERN`) come back as `text` with
-  `encoding: "utf8"`; every other file — including non-UTF-8 "text" — as `base64`
-  with `encoding: "base64"`. Size and digest verification still run on the raw
-  bytes before encoding. An 816-byte page now serializes to a few KiB instead of
-  blowing the tool-result budget.
-- `get_source` (and the conflict `currentSource`) no longer embeds any authoring
-  guide; the result carries only a `guideRef` (`{tool: "artifacts_get_api_guide",
-  version}`) naming the tool and version to fetch it from.
-- Per-call budgets are unchanged: at most 32 files and 262144 decoded bytes; the
-  2 MiB serialized MCP result budget still holds for the full snapshot.
-- Tool schema (`artifacts_get_source` description, v2 result schema source files),
-  the API guide text and the README source section describe the text/base64
-  encoding and the guide reference.
 - Content hosts use a single UUID label: `https://<id>.<base>/` resolves server-side,
   either an artifact id (serves its current release) or a release id (serves that
   frozen version). `parseContentHost` now returns `{ kind: 'id', id }` for exactly one
@@ -35,6 +20,24 @@
   rename: no consumer outside `packages/artifacts` references `pinnedUrl`/`stableUrl`
   (verified by grep over ui/contracts/e2e/api/cluster-mesh), and every in-package
   consumer is updated atomically in this release.
+
+## 0.2.7
+
+- Fix the `artifacts_get_source` wire payload that broke page editing in claude.ai:
+  files are no longer returned as a JSON integer array (`bytes: Array.from(bytes)`).
+  Text mime types (the canonical `TEXT_MIME_PATTERN`) come back as `text` with
+  `encoding: "utf8"`; every other file — including non-UTF-8 "text" — as `base64`
+  with `encoding: "base64"`. Size and digest verification still run on the raw
+  bytes before encoding. An 816-byte page now serializes to a few KiB instead of
+  blowing the tool-result budget.
+- `get_source` (and the conflict `currentSource`) no longer embeds any authoring
+  guide; the result carries only a `guideRef` (`{tool: "artifacts_get_api_guide",
+  version}`) naming the tool and version to fetch it from.
+- Per-call budgets are unchanged: at most 32 files and 262144 decoded bytes; the
+  2 MiB serialized MCP result budget still holds for the full snapshot.
+- Tool schema (`artifacts_get_source` description, v2 result schema source files),
+  the API guide text and the README source section describe the text/base64
+  encoding and the guide reference.
 
 ## 0.2.6
 
