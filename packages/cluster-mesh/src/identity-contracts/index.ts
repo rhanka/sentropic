@@ -7,6 +7,8 @@ export * from './custody.js';
 export * from './custody-operations.js';
 export * from './custody-errors.js';
 export * from './custody-descriptors.js';
+export * from './composition-descriptors.js';
+export * from './workspace-deletion.js';
 export * from './ports.js';
 export * from './accounts.js';
 export * from './access.js';
