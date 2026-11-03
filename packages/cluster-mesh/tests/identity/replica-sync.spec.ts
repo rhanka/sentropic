@@ -137,3 +137,52 @@ const readState = async (uow: Uow, userIds: readonly string[]): Promise<ReplicaS
   });
 
 const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync on $profileName', ({ profileName }) => {
+  const openEnv = async (): Promise<{ uow: Uow }> => {
+    const env = profileName === 'postgres' ? await openPostgresEnv() : openSqliteEnv();
+    return { uow: asOpHost(env.unitOfWork) };
+  };
+
+  it('export -> sync round trip lands byte-identical rows and exact counts; replay is a no-op', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    const cred = credential('cred-1', 'u-1');
+    const con = consent('consent-1', 'u-1', 't-1');
+    await seedAccount(source.uow, {
+      record: account('u-1', 'one@example.test'), tenantId: 't-1', credentials: [cred], consents: [con],
+    });
+    await seedAccount(source.uow, { record: account('u-2', 'two@example.test', { globalRole: 'editor', updatedAt: LATER }) });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-rt', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/rt' });
+    expect(batch.rows.map((row) => row.entity)).toEqual(['account', 'account', 'credential', 'oauth_consent']);
+
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => LATER, syncOptions: SYNC, validationOptions: READ });
+    const receipt = await sync.syncBatch(batch);
+    expect(receipt.counts.account).toEqual({ inserted: 2, updated: 0, unchanged: 0, revokedApplied: 0, revokedKept: 0 });
+    expect(receipt.counts.credential).toEqual({ inserted: 1, updated: 0, unchanged: 0, revokedApplied: 0, revokedKept: 0 });
+    expect(receipt.counts.oauth_consent).toEqual({ inserted: 1, updated: 0, unchanged: 0, revokedApplied: 0, revokedKept: 0 });
+    expect(receipt.identitiesPreserved).toBe(true);
+    expect(receipt.ownersPreserved).toBe(true);
+    expect(receipt.countersPreserved).toBe(true);
+
+    const state = await readState(replica.uow, ['u-1', 'u-2']);
+    expect(state.accounts).toEqual([
+      account('u-1', 'one@example.test'),
+      account('u-2', 'two@example.test', { globalRole: 'editor', updatedAt: LATER }),
+    ]);
+    expect(state.profiles['u-1']).toEqual(profile('u-1'));
+    expect(state.credentials['u-1']).toEqual([{ ...cred, revision: 0 }]);
+    expect(state.consents['u-1']).toEqual([con]);
+
+    const replay = await sync.syncBatch(batch);
+    expect(replay.counts.account).toEqual({ inserted: 0, updated: 0, unchanged: 2, revokedApplied: 0, revokedKept: 0 });
+    expect(replay.counts.credential).toEqual({ inserted: 0, updated: 0, unchanged: 1, revokedApplied: 0, revokedKept: 0 });
+    expect(replay.counts.oauth_consent).toEqual({ inserted: 0, updated: 0, unchanged: 1, revokedApplied: 0, revokedKept: 0 });
+    const after = await readState(replica.uow, ['u-1', 'u-2']);
+    expect(after.accounts).toEqual(state.accounts);
+    expect(after.credentials['u-1']).toEqual(state.credentials['u-1']);
+  });
+
+});
