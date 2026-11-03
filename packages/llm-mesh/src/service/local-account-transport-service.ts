@@ -35,6 +35,10 @@ import {
   type SeatBundleV1,
   type SeatCli,
 } from '../enrollment/seat-bundle.js';
+import {
+  validateSeatOnboarding,
+  type SeatOnboardingV1,
+} from '../enrollment/seat-onboarding.js';
 import type { ProviderId } from '../providers.js';
 import type {
   AccountDirectoryPort, EligibleAccountDescriptor, PlannedRouteTarget,
@@ -62,6 +66,37 @@ interface AccountOwnerClaim {
   v: 1;
   accountId: string;
   ownerScopeRef: string;
+}
+
+export type SeatExportUnavailableReason =
+  | 'not-a-seat'
+  | 'record-missing'
+  | 'lineage-mismatch'
+  | 'owner-mismatch'
+  | 'record-invalid';
+
+/** Typed refusal for exportSeatBundle; the code is `seat-export-unavailable:<reason>`. */
+export class SeatExportUnavailableError extends Error {
+  readonly code: string;
+
+  constructor(reason: SeatExportUnavailableReason, detail: string) {
+    super(`seat-export-unavailable:${reason}; ${detail}`);
+    this.name = 'SeatExportUnavailableError';
+    this.code = `seat-export-unavailable:${reason}`;
+  }
+}
+
+/** Versioned seat record persisted beside the envelope/public pair (design §6 item 1). */
+export interface StoredSeatRecord {
+  version: 1;
+  bundle: SeatBundleV1;
+  onboarding: SeatOnboardingV1 | null;
+  storedAt: string;
+}
+
+export interface SeatExport {
+  bundle: SeatBundleV1;
+  onboarding: SeatOnboardingV1 | null;
 }
 
 interface ClaudeEnrollmentSession {
@@ -524,6 +559,7 @@ export class LocalAccountTransportService {
   async importSeatBundle(input: {
     bundle: unknown;
     ownerScope: string;
+    onboarding?: unknown;
   }): Promise<{ accountId: string; seatRef: string; generation: number; idempotent: boolean }> {
     const owner = this.requireOwnerScope(input.ownerScope);
     await this.restorePersistedAccounts();
@@ -544,6 +580,21 @@ export class LocalAccountTransportService {
     }
     if (!bundle.lifecycle.providerExpiry) {
       throw new Error('Seat bundle requires providerExpiry; unknown expiry is not infinite validity');
+    }
+    // L5: an optional onboarding block is validated and bound against the
+    // bundle before any registration; a refusal rejects the whole import
+    // with no account persisted.
+    let onboarding: SeatOnboardingV1 | null = null;
+    if (input.onboarding !== undefined) {
+      const blockResult = validateSeatOnboarding(input.onboarding);
+      if (!blockResult.ok) {
+        throw new Error(`Seat onboarding refused: ${blockResult.code}; ${blockResult.detail}`);
+      }
+      const bindingError = this.onboardingBindingError(blockResult.block, bundle);
+      if (bindingError) {
+        throw new Error(`Seat onboarding refused: onboarding-lineage-mismatch; ${bindingError}`);
+      }
+      onboarding = blockResult.block;
     }
     const pair: Record<SeatCli, readonly [string, string]> = {
       agy: ['gemini', 'cloud-code'],
@@ -576,6 +627,9 @@ export class LocalAccountTransportService {
         incoming,
       );
       if (transition === 'idempotent') {
+        // L5: an idempotent reimport of the same tuple backfills a missing
+        // seat record (pre-L5 imports gain export by re-presenting the bundle).
+        await this.backfillSeatRecordIfMissing(accountId, bundle, onboarding);
         return { accountId, seatRef, generation: incoming.generation, idempotent: true };
       }
       // A forward transition falls through to registration below, which
@@ -628,6 +682,77 @@ export class LocalAccountTransportService {
       account,
     );
     return { accountId, seatRef, generation: incoming.generation, idempotent: false };
+  }
+
+  /** §3.4 binding of an onboarding block against its bundle; null when bound. */
+  private onboardingBindingError(block: SeatOnboardingV1, bundle: SeatBundleV1): string | null {
+    if (block.cli !== bundle.identity.cli) return 'block cli does not match the bundle';
+    if (block.seatRef !== bundle.identity.seatRef) return 'block seatRef does not match the bundle';
+    if (block.accountBinding !== bundle.provenance.accountBinding) {
+      return 'block accountBinding does not match the bundle';
+    }
+    if (block.consent.ownerScope !== bundle.identity.ownerScope) {
+      return 'block consent ownerScope does not match the bundle';
+    }
+    const lifecycle = bundle.lifecycle;
+    if (
+      block.lineage.epoch !== lifecycle.epoch
+      || block.lineage.generation !== lifecycle.generation
+      || block.lineage.operationId !== lifecycle.operationId
+    ) {
+      return 'block lineage does not match the bundle lifecycle';
+    }
+    if (block.nativeCliVersion !== bundle.identity.nativeCliVersion) {
+      return 'bundle nativeCliVersion must equal the block version';
+    }
+    return null;
+  }
+
+  private seatRecordKey(accountId: string): string {
+    return `sentropic-llm-mesh:${accountId}:seat-record`;
+  }
+
+  private async writeSeatRecord(
+    accountId: string,
+    bundle: SeatBundleV1,
+    onboarding: SeatOnboardingV1 | null,
+  ): Promise<void> {
+    const record: StoredSeatRecord = {
+      version: 1,
+      bundle,
+      onboarding,
+      storedAt: new Date().toISOString(),
+    };
+    await this.keyring.setSecret(this.seatRecordKey(accountId), JSON.stringify(record));
+  }
+
+  private async readSeatRecord(accountId: string): Promise<StoredSeatRecord | null> {
+    const raw = await this.keyring.getSecret(this.seatRecordKey(accountId));
+    if (!raw) return null;
+    try {
+      const record = JSON.parse(raw) as Partial<StoredSeatRecord>;
+      if (record.version !== 1 || !record.bundle || typeof record.storedAt !== 'string') return null;
+      if (record.onboarding !== null && record.onboarding !== undefined && typeof record.onboarding !== 'object') {
+        return null;
+      }
+      return {
+        version: 1,
+        bundle: record.bundle,
+        onboarding: record.onboarding ?? null,
+        storedAt: record.storedAt,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async backfillSeatRecordIfMissing(
+    accountId: string,
+    bundle: SeatBundleV1,
+    onboarding: SeatOnboardingV1 | null,
+  ): Promise<void> {
+    if (await this.readSeatRecord(accountId)) return;
+    await this.writeSeatRecord(accountId, bundle, onboarding);
   }
 
   private async hasClaudeGrant(credential: PreparedCredential, ownerScopeRef: string): Promise<boolean> {
