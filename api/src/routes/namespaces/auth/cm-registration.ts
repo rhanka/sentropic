@@ -1,5 +1,6 @@
 import { createAuthWebAuthnRegistrationRouteHandlers, type AuthHonoRouteHandlers } from '@sentropic/auth-hono';
-import { IdentityCustodyErrorV1, type IdentityAuthHonoTransactionBindingV1 } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import type { IdentityAuthHonoTransactionBindingV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { Hono, type Context } from 'hono';
 import type { CmIdentityTransaction } from '../../../services/identity/cm-transaction';
 import { provisionCmAuthWorkspace } from '../../../services/identity/cm-auth-workspace';

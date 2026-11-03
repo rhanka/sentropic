@@ -1,5 +1,5 @@
 import { createAuthWebAuthnAuthenticationRouteHandlers, type AuthHonoRouteHandlers } from '@sentropic/auth-hono';
-import type { IdentityAuthHonoTransactionBindingV1 } from '@sentropic/cluster-mesh';
+import type { IdentityAuthHonoTransactionBindingV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { Hono } from 'hono';
 import { runCmAuthHttp } from './cm-http';
 
