@@ -243,3 +243,25 @@ AppToolResult codec. Explicit SDK McpError failures keep standard JSON-RPC codes
 with fixed public messages and no exception data; ordinary exceptions become
 safe tool errors. Existing `registerBridgeTools` retains explicit AppToolResult
 semantics through the same registration kernel. See `etc/mcp-wire.api.md`.
+
+## Stable tool definitions (permission identity)
+
+MCP hosts such as claude.ai reset a tool's "Always allow" permission whenever its
+definition bytes change (name, description, inputSchema, outputSchema,
+annotations, _meta) between sessions. Rule for every tool this package composes
+or serves:
+
+- Tool definitions are frozen constants. Never place a version, profile id,
+  revision, digest, date, configuration value or any other per-deployment value
+  inside a description, schema, annotation or `_meta`.
+- The dynamic contract (provider version, manifest digest, profile revision,
+  capabilities, configured values) belongs in results, guides/resources, or
+  server metadata such as `serverInfo` and manifest audit — never in a
+  per-tool definition.
+- The manifest digest keeps covering tool definitions, so a pin over the
+  digest also pins the definitions; do not weaken that guard.
+- `tests/tools-list-snapshot.test.ts` snapshots the full tools/list catalogue
+  of a composed registry served over the real SDK bridge and fails on any
+  definition change. To update deliberately: delete
+  `tests/snapshots/tools-list-catalogue.json`, re-run the test once (it
+  rewrites the file and fails), then commit the snapshot with the change.
