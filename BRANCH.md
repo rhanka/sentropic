@@ -108,12 +108,12 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
   - [x] Write `packages/llm-mesh/tests/service/seat-onboarding-import-export.test.ts` first (16 L5T cases, synthetic fixtures).
   - [x] `importSeatBundle` additive `onboarding` member (validate + bind before registration; refusal rejects whole import), seat-record persistence `sentropic-llm-mesh:<accountId>:seat-record` (`{version:1, bundle, onboarding|null, storedAt}`), forward overwrite, idempotent backfill, removal cleanup (three existing deleteSecret sets); `exportSeatBundle({accountId, ownerScope})` on facade + service with typed `seat-export-unavailable:<reason>` refusals (`not-a-seat`, `record-missing`, `lineage-mismatch`, `owner-mismatch`, `record-invalid`; never refresh material or native files).
   - [x] Version bump 0.33.0: `packages/llm-mesh/package.json`, `make lock-root` (llm-mesh entry + two widened ranges only), CHANGELOG, `tests/decision-public-surface.test.ts`, peer-cap widening per SEATONB-EX2.
-  - [ ] Lot gate: scoped + full tests, typecheck, lint, build, scope-check, down (`ENV=test-seat-onboarding` last).
+  - [x] Lot gate: scoped + full tests, typecheck, lint, build, scope-check, down (`ENV=test-seat-onboarding` last). Full suite at final head: 100 files / 1760 tests pass; typecheck 0 errors; lint clean; build ok; scope-check PASS C2.
   - [x] L5T acceptance: import with valid block persists record, export returns bundle+block verbatim through the record (incl. lineage + `reboundFrom` after forward re-import with rebound block); invalid/misbound block registers no account; import without block succeeds, exports `onboarding: null`; pre-L5 fixture account (marker, no record) refuses `seat-export-unavailable:record-missing` then exports after idempotent backfill; directly enrolled account refuses `not-a-seat`; export refuses foreign ownerScope, never returns refresh material or native files; removal deletes seat record; keyring `getSecret` succeeds on read-only-mounted fixture and a pure read leaves mode+ctime unchanged (from #887); pre-existing importSeatBundle tests green.
 
-- [ ] **Lot 6 — Release & PR**
-  - [ ] Post-rebase gate: `packages/llm-mesh/package.json` version > `npm view @sentropic/llm-mesh version`.
-  - [ ] Final: `make test-llm-mesh`, `make typecheck-llm-mesh`, `make build-llm-mesh`, `make lint-llm-mesh ENV=test-seat-onboarding`; `make down ENV=test-seat-onboarding`.
-  - [ ] `make scope-check ENV=test-seat-onboarding` before each commit.
-  - [ ] Push `feat/seat-onboarding` after each commit; open ONE READY PR (BRANCH.md as body) at the final head; one CI run; monitor via `gh`.
+- [x] **Lot 6 — Release & PR**
+  - [x] Post-rebase gate: `packages/llm-mesh/package.json` version 0.33.0 > `npm view @sentropic/llm-mesh version` (0.32.4).
+  - [x] Final: `make test-llm-mesh`, `make typecheck-llm-mesh`, `make build-llm-mesh`, `make lint-llm-mesh ENV=test-seat-onboarding`; `make down ENV=test-seat-onboarding`.
+  - [x] `make scope-check ENV=test-seat-onboarding` before each commit (PASS C2 each time).
+  - [x] Push `feat/seat-onboarding` after each commit; open ONE READY PR (BRANCH.md as body) at the final head; one CI run; monitor via `gh`.
   - [ ] Report to `.tmp/rv/seat-onboarding.md` (PR, head, CI, per-lot acceptance). Do NOT merge.
