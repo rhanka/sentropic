@@ -1,64 +1,51 @@
-# Feature: RC2.receiver — frozen source routes and source/browser/relay middleware separation
+# Feature: A4 gap lot G3 — P3 F13 service-principal tenancy (cluster-mesh)
 
 ## Objective
-Implement lot RC2.receiver of the approved remote-control plan v1.6 r2 (plan SHA-256 6168b73b…, lot row line 646): the exact frozen source routes under `/api/v1/auth/session/content` and `/api/v1/auth/session/remote`, plus the machine relay mount at `/mesh/v1/session-relay` and the inner virtual mount `/mesh/v1/remote-sessions/:sessionId`, with strict source/browser/relay middleware separation on the real RC1 approvedTarget and endpoint authority, per RC2.contract **r3** (pinned from the first commit): MANIFEST.sha256 `6245d3ae51f601195926bc36600d1097cef30694f3feb01f79f1a7ec9fa17715`, manifest JSON sha256 `88823475eca151d908450e4abadcac7b2b60d4b5ea16bae0f590d419fa394565` (replaces r2 `133e23f5…`; r3 delta in CHANGES-r3.md: N1 tool_call_delta args→delta, N2 policy-confirm bodyless plus the zero-entity-bytes rule on the 14 bodyless/query routes, N3/N4 labels only), all under `/home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/`. Every source-gap stays fail-closed; no source-gap field is filled locally; the h2a native side is faked in tests only. A re-pin is required when a later contract revision lands.
+Build lot G3 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (sha256 `283cab237a4a2630c9a545e312399469af307adcca0b95feec7cdbf016e2058b`, last design round): piece P3 (design §7, lot row §10.4) — the CM-owned service-principal `tid` issuer (`createServicePrincipalTidIssuerV1`) with the app's exact S2S OBO selector policy, its `1.2.0` composition descriptor row, the optional `serviceTenancy` field on `IdentityAuthBindingInput`, and the auth-hono binding wiring that builds `ports.serviceTenant` itself. No schema work, no frozen-contract edits, no new error codes.
 
 ## Scope / Guardrails
-- Scope limited to the API receiver surface: new `api/src/routes/session-content/**`, mounts in `api/src/app.ts`, tests in `api/tests/api/session-content-receiver.test.ts`.
-- Reuses merged RC2.store #874 (a861fbd3e) and RC2.registry #873 (5e8a08b96) exports only; does not duplicate or modify them (no `packages/**` changes, no package version bump needed).
-- Make-only workflow, no direct Docker commands; single Docker lock `.tmp/packets/DOCKER-LOCK.md` taken PER COMMAND via `flock`.
-- Root workspace reserved for user dev/UAT (`ENV=dev`) and untouched; all work in worktree `tmp/worktrees/rc2-receiver`.
-- Automated tests run on `ENV=test-rc2-receiver` only, `ENV` always LAST, `make down ENV=test-rc2-receiver` after.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English. No secrets read, printed, logged or committed. No `[skip ci]`. Commits via `make commit MSG="..."` only, ≤150 lines, selective staging.
-- Branch: `feat/rc2-receiver` from `origin/main` (d1f45c625; prerequisites RC2.store #874 a861fbd3e and RC2.registry #873 5e8a08b96 are ancestors), worktree `tmp/worktrees/rc2-receiver`. Ports: `API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093`, `ENV=test-rc2-receiver`.
-- Contract pins (binding, r3, under `/home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/`): MANIFEST.sha256 `6245d3ae51f601195926bc36600d1097cef30694f3feb01f79f1a7ec9fa17715`; remote-session-contract-manifest.v1.json `88823475eca151d908450e4abadcac7b2b60d4b5ea16bae0f590d419fa394565`; CHANGES-r3.md `04cbf4ad38cdac9417c6c17148736852036bc5636e3f8acc47c5190727448456`; plan v1.6 draft `6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18`. Re-verify `sha256sum -c MANIFEST.sha256` before each push.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- r3 consumer scope for this lot (CHANGES-r3.md "Consumer re-pin"): all 38 route http entries — in particular the 14 bodyless/query routes (action-stream, browser-detail, browser-events, browser-list, browser-listing-delete, drive-binding-fetch, grant-fetch, history-admission, history-auth, listing-grant-fetch, policy-confirm, policy-fetch, relay-upgrade, source-control) with their vectors/route-*.json hashes; policy-confirm maxRequestBytes 65536→0 with the annex-D family mapping (invalid_request / view_refused / relay_protocol_refused). N1 chat dialect files are store/RC3.chat scope, not this lot.
-- h2a ACK conditions: every source-gap stays fail-closed; no source-gap field is filled locally; a re-pin is required when a later contract revision lands.
-- Acceptance (plan lot row 646 + vectors 789–790 + closures W04/W06 979–981): before-body owner/source/scope/key rejection; atomic ACK and gaps; wrong-lane refusal; upgrade isolation (machine mount rejects cookies/Origin, wrong audience/protocol, stale/foreign/replayed tunnel before upgrade or body allocation; browser mount rejects source-only credentials); relay mount at `/mesh/v1/session-relay`. Cases RECEIVER / CHAIN-MOUNT / CHAIN-LANE in `api/tests/api/session-content-receiver.test.ts`.
+- Scope limited to the G3 path list of design §10.4: `packages/cluster-mesh/src/identity-contracts/service-tenancy.ts` (new), `composition-descriptors.ts` (new, G3 creates the file — no other lot landed first), `custody-auth.ts` (one optional input field), `identity-contracts/index.ts` (additive export lines), `src/identity/auth-service-tenant.ts` (new binding wiring), `src/identity/auth-binding.ts` (wire-in), `src/identity/auth-hono.ts` (subpath export line), `tests/identity/service-tenancy.spec.ts` (new), `packages/cluster-mesh/package.json` (version bump).
+- G1 (lot `feat/cm-a4-gaps-g1-oauth-reads`) is delayed: its branch is still at `origin/main` head, so `OAuthTenantStoreV1` / `oauth-reads.ts` / the durable `findServiceClientBinding` do not exist yet. Per design §10.4 fallback, G3's domain half is built and tested against doubles with a LOCAL fixture in the spec file; G3 does NOT land its own copy of the finder (no edits to `identity-stores/tenancy-*.ts` or `identity-contracts/doubles.ts` — those are G1 paths). The binding wiring capability-checks `tx.stores.oauth` for `findServiceClientBinding` and fails closed with `identity_contract_unavailable` on pre-G1 stores; the stack absorbs G1 on rebase (the check becomes `oauthTenantStoreV1(tx)`).
+- Frozen-surface discipline (design §3.2): no edit to any frozen 1.0 type/port/error; `TidIssuer`, `OAuthTenantStore`, `IdentityStores`, `IdentityTransactionV1` untouched; no new error codes; `custody-errors.ts` untouched.
+- Make-only workflow, no direct docker/npm on host; single Docker lock `.tmp/packets/DOCKER-LOCK.md` taken PER COMMAND via `flock`.
+- Root workspace untouched; all work in worktree `tmp/worktrees/a4-gap-G3`.
+- Automated tests run on `ENV=test-a4-G3` only, `ENV` always LAST; `make down ENV=test-a4-G3` after (plus `cluster-mesh-pg-down` for the isolated Postgres).
+- All new text in English. No secrets read, printed, logged or committed. No `[skip ci]`. Commits via `make commit MSG="..."` only, ≤150 lines, selective staging. `make scope-check` before every commit; push after each commit batch (crash safety).
+- Branch: `feat/cm-a4-gaps-g3-service-tenancy` from `origin/main` (`88078a995`; A2.0b merged as PR #882 `812d1f053`, cluster-mesh `0.26.0-dev.6`; G1 head is currently the same commit, so this branch IS the G1 head per §10.0/§10.4). Worktree `tmp/worktrees/a4-gap-G3`. `harness check branch` PASS at creation.
+- Design pins: a4-cm-gaps-r2.md sha256 `283cab23…` (normative §3, §6.1, §7, §10.0, §10.4); owner answers 2026-10-30/11-02 (`.tmp/cm-identity-agents/owner-answers-20261030.md`) — Q-K/Q-WS1/Q-IDP1 do not touch P3.
+- Selector policy is byte-for-byte the current app policy (`origin/feat/app-cm-a4` `api/src/services/auth/service-tenant-adapter.ts`): authorized set = fixed `cm_service_clients` binding (active tenant only) UNION active enrollment tenant ids, compared by `tid` slug; 0 → `no_authorized_tenant`, 1 → omitted binds / mismatch `tenant_not_authorized`, >1 → selector mandatory (`tenant_selector_required`) and must be in-set; refusals returned not thrown; empty `clientId` throws `identity_material_invalid`; the three `invalid_target` description strings preserved verbatim; audit `s2s_obo_mint` with outcomes `minted` / `rejected_invalid_target`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/routes/session-content/**`
-  - `api/src/app.ts`
-  - `api/tests/api/session-content-receiver.test.ts`
-  - `BRANCH.md`
-  - `packages/cluster-mesh/src/identity-contracts/**`
-  - `packages/cluster-mesh/src/storage/identity/**`
-  - `packages/cluster-mesh/src/identity-stores/**`
-  - `packages/cluster-mesh/src/identity/**`
-  - `packages/cluster-mesh/tests/identity/**`
-  - `packages/cluster-mesh/tests/identity-*.spec.ts`
+  - `packages/cluster-mesh/src/identity-contracts/service-tenancy.ts`
+  - `packages/cluster-mesh/src/identity-contracts/composition-descriptors.ts`
+  - `packages/cluster-mesh/src/identity-contracts/custody-auth.ts`
+  - `packages/cluster-mesh/src/identity-contracts/index.ts`
+  - `packages/cluster-mesh/src/identity/auth-service-tenant.ts`
+  - `packages/cluster-mesh/src/identity/auth-binding.ts`
+  - `packages/cluster-mesh/src/identity/auth-hono.ts`
+  - `packages/cluster-mesh/tests/identity/service-tenancy.spec.ts`
   - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/CHANGELOG.md`
-  - `package-lock.json` (BR-A20B-EX3)
-  - `api/package-lock.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/identity-auth-types.spec.ts` (BR-A20B-EX4)
-  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
-  - `packages/cluster-mesh/tests/storage/cold-workspace.sh` (BR-A20B-EX2)
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/**` (RC2.store/RC2.registry reused as-is; no package edits, no version bump)
-  - `api/drizzle/*.sql`
-  - `.github/workflows/**`
-  - `ui/**`, `e2e/**`, `apps/**`, `spec/**`
-  - `api/src/services/**`, `api/src/db/**`, `api/src/middleware/**` (existing services reused read-only)
+  - `packages/cluster-mesh/src/identity-stores/**` (G1 paths — no finder copy)
+  - `packages/cluster-mesh/src/identity-contracts/doubles.ts` (G1 path)
+  - `packages/cluster-mesh/src/identity-contracts/custody-errors.ts` (no new codes)
+  - `packages/cluster-mesh/src/identity-contracts/{ports,types,custody,tenancy,resolution,descriptors,custody-descriptors}.ts` (frozen / other lots)
+  - `packages/cluster-mesh/tests/**` except `tests/identity/service-tenancy.spec.ts`
+  - `api/**`, `ui/**`, `e2e/**`, `apps/**`, other `packages/**`, `.github/workflows/**`, `spec/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
+  - none needed
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- (none open)
+- G1-delayed fallback (design §10.4): the both-profile binding mint/refuse/rollback-audit cases of §7.5 need G1's durable `findServiceClientBinding`; they land on rebase after G1 merges ("the stack absorbs G1 on rebase"). Until then the binding wiring is proven fail-closed (`identity_contract_unavailable`) on both profiles, and the full decision table runs at domain level over doubles.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -69,43 +56,34 @@ Implement lot RC2.receiver of the approved remote-control plan v1.6 r2 (plan SHA
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single lot RC2.receiver, one branch, one scoped test file; no sub-workstreams.
+- [x] **Mono-branch + cherry-pick** (single lot G3, one branch, one scoped spec file; no sub-workstreams)
+- [ ] **Multi-branch**
+- Rationale: one CM lot on one stacked branch; G1 absorption happens by rebase, not by parallel branch.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this lot; API-only acceptance via `api/tests/api/session-content-receiver.test.ts` (RECEIVER / CHAIN-MOUNT / CHAIN-LANE).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/rc2-receiver`.
-  - Push branch before UAT.
-  - No user UAT required (no UI surface); API witnesses only.
+- No UI surface; package-level acceptance only. No user UAT required.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, plan v1.6 r2 (lot row 646, vectors 789–790, closures 979–981), RC2.contract r2 (MANIFEST 133e23f5…).
-  - [x] Create/confirm isolated worktree `tmp/worktrees/rc2-receiver` on `feat/rc2-receiver` from `origin/main` (5e8a08b96); `harness check branch` PASS.
-  - [x] Capture Make targets: `up-api-test`, `test-api-endpoints SCOPE=…`, `typecheck-api`, `lint-api`, `down`.
-  - [x] Environment mapping: `ENV=test-rc2-receiver`, `API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093`.
-  - [x] Command style: `flock .tmp/packets/DOCKER-LOCK.md make … ENV=test-rc2-receiver` with `ENV` last.
-  - [x] Scope boundaries declared above; no exceptions needed.
-- [ ] **Lot 1 — Tests first: RECEIVER / CHAIN-MOUNT / CHAIN-LANE**
-  - [x] Extend `api/tests/api/session-content-receiver.test.ts` with `describe` blocks RECEIVER, CHAIN-MOUNT, CHAIN-LANE (existing STORE block untouched).
-  - [ ] RECEIVER: before-body owner/source/scope/key rejection on frozen source routes; atomic ACK commit + gap reporting; idempotent replay; conflict refusal.
-  - [ ] CHAIN-LANE: content-only grant refused on actions/results lanes before handler/body; mismatched lane on inner mount refused; stage subset enforcement.
-  - [ ] CHAIN-MOUNT: relay mount at `/mesh/v1/session-relay` rejects cookies/Origin, wrong audience, wrong subprotocol, stale/foreign/replayed tunnel before 101 or body allocation; browser mount rejects source-only credentials; inner mount refuses without bound socket.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api … ENV=test-rc2-receiver`
-    - [ ] `make lint-api … ENV=test-rc2-receiver`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts … ENV=test-rc2-receiver`
-    - [ ] `make down ENV=test-rc2-receiver`
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, design a4-cm-gaps-r2.md §0/§3/§6/§7/§10.0/§10.4/§12, owner answers.
+  - [x] Worktree `tmp/worktrees/a4-gap-G3` on `feat/cm-a4-gaps-g3-service-tenancy` from `origin/main` (`88078a995`); `harness check branch` PASS.
+  - [x] Gates captured: `make typecheck-cluster-mesh`, `make build-cluster-mesh`, `make test-cluster-mesh SCOPE=…`, `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-identity-test` (both profiles), `make down`.
+  - [x] Environment: `ENV=test-a4-G3` always LAST; commands under `flock .tmp/packets/DOCKER-LOCK.md`.
+- [ ] **Lot 1 — Tests first: `tests/identity/service-tenancy.spec.ts`**
+  - [ ] Domain decision table over local doubles (0/1/N × selector omitted/matching/foreign; fixed-only, enrollment-only, union overlap fixed-wins; suspended/offboarded/missing tenant in either leg; empty clientId throws; store errors propagate).
+  - [ ] Domain audit: exactly one `s2s_obo_mint` event per call on both outcomes, fixed `outcome=` detail token, no requested value in the event.
+  - [ ] Binding integration both profiles (a20b harness): `serviceTenancy` + `hostPorts.serviceTenant` → construction throws `identity_material_invalid`; absent `serviceTenancy` → host port passes through; `serviceTenancy` on pre-G1 stores → construction fails closed `identity_contract_unavailable`.
+  - [ ] Lot gate: `make test-cluster-mesh SCOPE=tests/identity/service-tenancy.spec.ts ENV=test-a4-G3` (red until implementation lands).
 - [ ] **Lot 2 — Implementation**
-  - [ ] `api/src/routes/session-content/**`: frozen route table, source/browser/relay middleware, routers, fail-closed product ports (real RC1 approvedTarget port type; capsule header pin and H2-I/DEP-FED slots null → fail-closed).
-  - [ ] Mounts in `api/src/app.ts`: `/api/v1/auth/session/content`, `/api/v1/auth/session/remote`, `/mesh/v1/session-relay`, `/mesh/v1/remote-sessions`.
-  - [ ] Re-run Lot 1 gates green; `make scope-check` before each commit.
+  - [ ] `src/identity-contracts/service-tenancy.ts`: contract + `createServicePrincipalTidIssuerV1` (selector algorithm, audit port for standalone compositions).
+  - [ ] `src/identity-contracts/composition-descriptors.ts`: bundle `1.2.0`, row `service_principal_tenancy`.
+  - [ ] `src/identity-contracts/custody-auth.ts`: optional `serviceTenancy` field on `IdentityAuthBindingInput<H>`.
+  - [ ] `src/identity/auth-service-tenant.ts` + `auth-binding.ts` + `auth-hono.ts`: binding wiring (conflict throw, capability check, port construction, `s2s_obo_mint` through the binding audit buffer).
+  - [ ] `src/identity-contracts/index.ts`: additive export lines.
+  - [ ] `packages/cluster-mesh/package.json`: version `0.26.0-dev.7` (> published `0.25.0`, > main `0.26.0-dev.6`).
+  - [ ] Lot gates green: typecheck, build, spec on SQLite, same spec under the PostgreSQL vitest config, frozen `auth-completion.spec.ts` unmodified green.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & lint API.
-  - [ ] Scoped receiver suite green on `ENV=test-rc2-receiver`; `make down ENV=test-rc2-receiver`.
-  - [ ] Atomic commits ≤150 lines via `make commit`; push `feat/rc2-receiver` (crash safety: push after each commit batch).
-  - [ ] Open READY (non-draft) PR with BRANCH.md text as body; run ONE CI on the final head; record result.
-  - [ ] Report to `.tmp/rv/rc2-receiver.md` (PR, head, CI, each acceptance item). Do not merge.
+  - [ ] `make scope-check` before each commit; atomic `make commit` ≤150 lines; push `feat/cm-a4-gaps-g3-service-tenancy` after each commit batch.
+  - [ ] Both-profile identity campaign green (`cluster-mesh-identity-test`), then `cluster-mesh-pg-down` + `make down ENV=test-a4-G3`.
+  - [ ] Open READY (non-draft) PR with this BRANCH.md text as body; run ONE CI on the final head; record result (expected possible red on security-container from the unrelated libexpat CVE — report, do not fix).
+  - [ ] Report to `.tmp/rv/a4-gap-G3.md` (PR, head, CI, each acceptance item, G1-delayed fallback note). Do not merge.
