@@ -8,7 +8,7 @@ const releaseA = '22222222-2222-4222-8222-222222222222';
 const releaseB = '33333333-3333-4333-8333-333333333333';
 const baseDomain = 'content.example.test';
 const stable = `https://${artifactId}.${baseDomain}`;
-const pinned = `https://${releaseA}.pinned.${baseDomain}`;
+const release = `https://${releaseA}.${baseDomain}`;
 const bytes = new TextEncoder().encode('<h1>Private</h1>');
 const manifest = JSON.stringify({ artifactId, files: [
   { path: 'index.html', digest: 'a'.repeat(64), size: bytes.length, mimeType: 'text/html' },
@@ -32,8 +32,8 @@ beforeEach(() => {
     acls: { getArtifactAcl: vi.fn(async () => ({ ownerId: 'reader', isPublic: false, withdrawn: false,
       storageScopeId: 'scope', grants: [] })) },
     lifecycle: { stateOf: vi.fn(async () => 'active' as const), canRead: () => allowed },
-    publication: { getCurrent: vi.fn(async () => ({ releaseId: currentRelease, manifest })),
-      getRelease: vi.fn(async (id: string) => [releaseA, releaseB].includes(id) ? { releaseId: id, manifest } : undefined) },
+    publication: { getCurrent: vi.fn(async (id: string) => id === artifactId ? { releaseId: currentRelease, manifest } : undefined),
+      getRelease: vi.fn(async (id: string) => [releaseA, releaseB].includes(id) ? { releaseId: id, artifactId, manifest } : undefined) },
     blobs: { getBlob: vi.fn(async () => bytes) },
     activate: vi.fn(async () => ({ subjectId: 'reader', artifactId, releaseId: releaseA, channel: 'stable' as const,
       ticketId: 'ticket', expiresAt: now + 60000 })),
@@ -42,8 +42,8 @@ beforeEach(() => {
 });
 
 describe('app private content host', () => {
-  it('should serve approved stable and pinned hosts through private blob ports', async () => {
-    for (const origin of [stable, pinned]) {
+  it('should serve approved artifact and release hosts through private blob ports', async () => {
+    for (const origin of [stable, release]) {
       const response = await request(origin, '/', { headers: { cookie: cookie() } });
       expect(response.status).toBe(200);
       expect(await response.text()).toBe('<h1>Private</h1>');
@@ -52,7 +52,8 @@ describe('app private content host', () => {
   });
 
   it.each(['https://unknown.example.test', `https://${artifactId}.foreign.test`,
-    `https://${artifactId}.extra.${baseDomain}`, `http://${artifactId}.${baseDomain}`, `${stable}:444`])(
+    `https://${artifactId}.extra.${baseDomain}`, `https://${releaseA}.pinned.${baseDomain}`,
+    `http://${artifactId}.${baseDomain}`, `${stable}:444`])(
     'should deny unapproved host %s before private storage', async origin => {
       expect((await request(origin, '/', { headers: { cookie: cookie() } })).status).toBe(404);
       expect(options.blobs.getBlob).not.toHaveBeenCalled();
@@ -72,11 +73,11 @@ describe('app private content host', () => {
     expect(response.headers.get('access-control-allow-origin')).toBeNull();
   });
 
-  it('should require fresh stable consent after publish while pinned A still reads', async () => {
+  it('should require fresh stable consent after publish while the release id still reads', async () => {
     currentRelease = releaseB;
     expect((await request(stable, '/', { headers: { cookie: cookie() } })).status).toBe(401);
     expect((await request(stable, '/', { headers: { cookie: cookie(releaseB) } })).status).toBe(200);
-    expect((await request(pinned, '/', { headers: { cookie: cookie() } })).status).toBe(200);
+    expect((await request(release, '/', { headers: { cookie: cookie() } })).status).toBe(200);
   });
 
   it('should deny absent grants, forged identity headers, raw blobs and ticket shortcuts', async () => {
@@ -115,7 +116,7 @@ describe('app private content host', () => {
     const response = await request(stable, '/', { headers: { cookie: cookie() } });
     expect(response.status).toBe(401);
     expect(await response.text()).not.toContain('Private');
-    expect((await request(pinned, '/', { headers: { cookie: cookie() } })).status).toBe(200);
+    expect((await request(release, '/', { headers: { cookie: cookie() } })).status).toBe(200);
   });
 
   it('should return no body for denied HEAD requests', async () => {

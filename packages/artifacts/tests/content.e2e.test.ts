@@ -1,5 +1,5 @@
 /** Content serving journey through the selected guarded control app. */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { HttpRequest } from '../src/http.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
 import { grantAccess } from '../src/server/access.js';
@@ -117,22 +117,22 @@ describe('content serving e2e', () => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
     const stable = `${v1.id}.${BASE}`;
-    const pinned = `${v1.releaseId}.pinned.${BASE}`;
+    const release = `${v1.releaseId}.${BASE}`;
     const issued = await world.tickets.issue({
       subjectId: FARID, artifactId: v1.id, releaseId: v1.releaseId, channel,
     });
     const request = { method: 'GET', path: '/', actorId: FARID, ticket: issued.ticketId };
-    const refused = await get(world, { ...request, host: channel === 'stable' ? pinned : stable });
+    const refused = await get(world, { ...request, host: channel === 'stable' ? release : stable });
     expect(refused.status).toBe(401);
     expect(refused.headers['set-cookie']).toBeUndefined();
-    const correct = { ...request, host: channel === 'stable' ? stable : pinned };
+    const correct = { ...request, host: channel === 'stable' ? stable : release };
     const activated = await get(world, correct);
     expect(activated.status).toBe(200);
     expect(activated.headers['set-cookie']).toContain('__Host-artifacts_grant=');
     expect((await get(world, correct)).status).toBe(401);
   });
 
-  it('should refuse another pinned release without consuming the r1 ticket', async () => {
+  it('should refuse another release id without consuming the r1 ticket', async () => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
     const issued = await world.tickets.issue({
@@ -140,15 +140,73 @@ describe('content serving e2e', () => {
     });
     const v2 = await publish(world, V2, 'p-2');
     const request = { method: 'GET', path: '/', actorId: FARID, ticket: issued.ticketId };
-    const refused = await get(world, { ...request, host: `${v2.releaseId}.pinned.${BASE}` });
+    const refused = await get(world, { ...request, host: `${v2.releaseId}.${BASE}` });
     expect(refused.status).toBe(401);
     expect(refused.headers['set-cookie']).toBeUndefined();
-    const host = `${v1.releaseId}.pinned.${BASE}`;
+    const host = `${v1.releaseId}.${BASE}`;
     const activated = await get(world, { ...request, host });
     expect(activated.status).toBe(200);
     const served = await get(world, { method: 'GET', path: '/', host, cookie: activated.headers['set-cookie'] });
     expect(served.status).toBe(200);
     expect(text(served.bytes)).toBe(V1);
+  });
+
+  it('should give one uniform 404 for an unknown id, whatever kind it would be', async () => {
+    const world = makeWorld();
+    const getCurrent = vi.spyOn(world.publication, 'getCurrent');
+    const getRelease = vi.spyOn(world.publication, 'getRelease');
+    const missingArtifact = '44444444-4444-4444-8444-444444444444';
+    const missingRelease = '55555555-5555-4555-8555-555555555555';
+    const responses = await Promise.all([missingArtifact, missingRelease].map(id =>
+      get(world, { method: 'GET', host: `${id}.${BASE}`, path: '/' })));
+    for (const response of responses) {
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: 'not_found' });
+      expect(response.headers['cache-control']).toBe('no-store');
+    }
+    expect(responses[0]).toEqual(responses[1]);
+    // Same timing class: both lookups always run, revealing neither kind.
+    expect(getCurrent).toHaveBeenCalledWith(missingArtifact);
+    expect(getRelease).toHaveBeenCalledWith(missingArtifact);
+    expect(getCurrent).toHaveBeenCalledWith(missingRelease);
+    expect(getRelease).toHaveBeenCalledWith(missingRelease);
+  });
+
+  it('should not route the removed pinned form, two labels or a foreign base', async () => {
+    const world = makeWorld();
+    const v1 = await publish(world, V1, 'p-1');
+    const cookie = await activate(world, `${v1.id}.${BASE}`, FARID, v1.id, v1.releaseId, 'stable');
+    for (const host of [
+      `${v1.releaseId}.pinned.${BASE}`,
+      `${v1.id}.${v1.releaseId}.${BASE}`,
+      `${v1.id}.foreign.test`,
+    ]) {
+      const response = await get(world, { method: 'GET', host, path: '/', cookie });
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: 'not_found' });
+    }
+  });
+
+  it('should serve the current release on the artifact id and the frozen release on the release id', async () => {
+    const world = makeWorld();
+    const v1 = await publish(world, V1, 'p-1');
+    const acl = await world.acls.getArtifactAcl(v1.id);
+    await world.acls.putArtifactAcl(v1.id, grantAccess(acl!, FARID, { principalId: STEVE, grant: 'read' }));
+    const stable = `${v1.id}.${BASE}`;
+    const releaseV1 = `${v1.releaseId}.${BASE}`;
+    const stableCookie = await activate(world, stable, STEVE, v1.id, v1.releaseId, 'stable');
+    expect(text((await get(world, { method: 'GET', host: stable, path: '/', cookie: stableCookie })).bytes)).toBe(V1);
+    const v2 = await publish(world, V2, 'p-2');
+    expect(v2.id).toBe(v1.id);
+    // The artifact id now serves the current release; the old grant needs fresh consent.
+    expect((await get(world, { method: 'GET', host: stable, path: '/', cookie: stableCookie })).status).toBe(401);
+    const freshCookie = await activate(world, stable, STEVE, v1.id, v2.releaseId, 'stable');
+    expect(text((await get(world, { method: 'GET', host: stable, path: '/', cookie: freshCookie })).bytes)).toBe(V2);
+    // The release id keeps serving its frozen version.
+    const releaseCookie = await activate(world, releaseV1, STEVE, v1.id, v1.releaseId, 'pinned');
+    const frozen = await get(world, { method: 'GET', host: releaseV1, path: '/', cookie: releaseCookie });
+    expect(frozen.status).toBe(200);
+    expect(text(frozen.bytes)).toBe(V1);
   });
 
   it('should refuse an r1 activation ticket when the stable origin now serves r2', async () => {
@@ -165,13 +223,13 @@ describe('content serving e2e', () => {
     expect(response.headers['set-cookie']).toBeUndefined();
   });
 
-  it('activates, serves raw bytes, pins releases and cuts off on withdrawal', async () => {
+  it('activates, serves raw bytes, freezes releases and cuts off on withdrawal', async () => {
     const world = makeWorld();
     const v1 = await publish(world, V1, 'p-1');
     const acl = await world.acls.getArtifactAcl(v1.id);
     await world.acls.putArtifactAcl(v1.id, grantAccess(acl!, FARID, { principalId: STEVE, grant: 'read' }));
     const stable = `${v1.id}.${BASE}`;
-    const pinnedV1 = `${v1.releaseId}.pinned.${BASE}`;
+    const releaseV1 = `${v1.releaseId}.${BASE}`;
     const anonymous = await get(world, { method: 'GET', host: stable, path: '/' });
     expect(anonymous.status).toBe(401);
     const bogusHost = await get(world, { method: 'GET', host: `www.${BASE}`, path: '/' });
@@ -186,21 +244,22 @@ describe('content serving e2e', () => {
     expect(worker.status).toBe(404);
     const stolen = await get(world, { method: 'GET', host: stable, path: '/', cookie, actorId: 'mallory' });
     expect(stolen.status).toBe(401);
-    // Republish: the stable origin demands fresh version consent.
+    // Republish: the artifact id demands fresh version consent.
     const v2 = await publish(world, V2, 'p-2');
     expect(v2.id).toBe(v1.id);
     const staleGrant = await get(world, { method: 'GET', host: stable, path: '/', cookie });
     expect(staleGrant.status).toBe(401);
-    // The pinned v1 origin still serves v1 after its own activation.
-    const pinnedCookie = await activate(world, pinnedV1, STEVE, v1.id, v1.releaseId, 'pinned');
-    const pinnedServed = await get(world, { method: 'GET', host: pinnedV1, path: '/', cookie: pinnedCookie });
-    expect(text(pinnedServed.bytes)).toBe(V1);
+    // The release id still serves its frozen v1 after its own activation.
+    const releaseCookie = await activate(world, releaseV1, STEVE, v1.id, v1.releaseId, 'pinned');
+    const frozen = await get(world, { method: 'GET', host: releaseV1, path: '/', cookie: releaseCookie });
+    expect(frozen.status).toBe(200);
+    expect(text(frozen.bytes)).toBe(V1);
     // Withdrawal cuts readers off at the next request despite a live grant.
     await world.lifecycle.withdraw(v1.id, FARID);
-    const cut = await get(world, { method: 'GET', host: pinnedV1, path: '/', cookie: pinnedCookie });
+    const cut = await get(world, { method: 'GET', host: releaseV1, path: '/', cookie: releaseCookie });
     expect(cut.status).toBe(404);
     await world.lifecycle.restore(v1.id, FARID);
-    const back = await get(world, { method: 'GET', host: pinnedV1, path: '/', cookie: pinnedCookie });
+    const back = await get(world, { method: 'GET', host: releaseV1, path: '/', cookie: releaseCookie });
     expect(back.status).toBe(200);
     expect(text(back.bytes)).toBe(V1);
   });

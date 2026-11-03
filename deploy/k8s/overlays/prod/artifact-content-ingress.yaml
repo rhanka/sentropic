@@ -13,20 +13,9 @@ spec:
   tls:
     - hosts:
         - "*.sentropic.sent-tech.ca"
-        - "*.pinned.sentropic.sent-tech.ca"
       secretName: artifact-content-tls
   rules:
     - host: "*.sentropic.sent-tech.ca"
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: artifact-content
-                port:
-                  name: http
-    - host: "*.pinned.sentropic.sent-tech.ca"
       http:
         paths:
           - path: /

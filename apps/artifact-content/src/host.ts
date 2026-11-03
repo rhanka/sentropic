@@ -15,7 +15,7 @@ export interface ContentHostOptions {
   lifecycle: Pick<ContentHandlerDeps['lifecycle'], 'stateOf' | 'canRead'>;
   publication: {
     getCurrent(id: string): Promise<{ releaseId: string; manifest: string } | undefined>;
-    getRelease(id: string): Promise<{ releaseId: string; manifest: string } | undefined>;
+    getRelease(id: string): Promise<{ releaseId: string; artifactId: string; manifest: string } | undefined>;
   };
   blobs: Pick<ContentHandlerDeps['blobs'], 'getBlob'>;
 }
@@ -89,8 +89,8 @@ export function createContentHost(options: ContentHostOptions) {
       try {
         // W3.a resolves the current app session and commits the package flow+ticket consume.
         const consumed = await options.activate({ ...input, nonce, targetOrigin: url.origin });
-        if (!consumed || consumed.ticketId !== input.ticketId || consumed.channel !== origin.kind ||
-          (origin.kind === 'stable' ? consumed.artifactId !== origin.artifactId : consumed.releaseId !== origin.releaseId)) return fail(403);
+        if (!consumed || consumed.ticketId !== input.ticketId ||
+          (consumed.channel === 'stable' ? consumed.artifactId : consumed.releaseId) !== origin.id) return fail(403);
         const token = options.grants.issue(consumed);
         return json(204, null, { 'set-cookie': grantCookie(token, CONTENT_GRANT_TTL_SECONDS) });
       } catch { return fail(403); }
@@ -105,7 +105,9 @@ export function createContentHost(options: ContentHostOptions) {
     const result = await handler.handle({ method: request.method, host: url.host,
       path: url.pathname, cookie: request.headers.get('cookie') ?? undefined });
     if (result.status === 200) {
-      if (origin.kind === 'stable' && (await options.publication.getCurrent(origin.artifactId))?.releaseId !== claims.releaseId) return fail(401);
+      // An artifact id follows the current release (fresh consent on republish); a release id is frozen.
+      const current = await options.publication.getCurrent(origin.id);
+      if (current !== undefined && current.releaseId !== claims.releaseId) return fail(401);
       try { options.grants.verify(token); } catch { return fail(401); }
       if (!options.enabled() || !await options.current(claims)) return fail(404);
     }

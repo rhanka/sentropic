@@ -310,17 +310,17 @@ describe('trusted app reader activation', () => {
     expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(0);
   });
 
-  it('should fence stable A after B becomes current while allowing pinned A', async () => {
+  it('should fence stable A after B becomes current while allowing the frozen release A', async () => {
     const stable = await reader().issue(session, target);
-    const pinnedTarget = { ...target, channel: 'pinned' as const,
-      targetOrigin: `https://${releaseId}.pinned.${config.baseDomain}` };
-    const pinned = await reader().issue(session, pinnedTarget);
+    const releaseTarget = { ...target, channel: 'pinned' as const,
+      targetOrigin: `https://${releaseId}.${config.baseDomain}` };
+    const release = await reader().issue(session, releaseTarget);
     const b = randomUUID();
     await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest) VALUES ($1,$2,'b','{}')`, [b, artifactId]);
     await pool.query('UPDATE artifacts.artifact_current SET release_id=$1', [b]);
     await pool.query(`UPDATE artifacts.releases SET state='retired' WHERE id=$1`, [releaseId]);
     expect(await reader().consume(session, input(stable))).toBeUndefined();
-    expect(await reader().consume(session, { ...input(pinned), targetOrigin: pinnedTarget.targetOrigin })).toEqual(pinned.ticket);
+    expect(await reader().consume(session, { ...input(release), targetOrigin: releaseTarget.targetOrigin })).toEqual(release.ticket);
   });
 
   it('should refuse an earlier stable flow after the pointer moves away and returns to A', async () => {

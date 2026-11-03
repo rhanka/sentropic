@@ -9,7 +9,7 @@ export async function artifactVersions(input: {
   artifactId: string; storageScopeId: string; currentReleaseId: string | null;
   releases: ReleaseRecord[]; limit?: number; cursor?: string;
   state(releaseId: string): Promise<string>;
-  urls?: (artifactId: string, releaseId: string) => { pinnedUrl: string };
+  urls?: (artifactId: string, releaseId: string) => { versionUrl: string };
 }) {
   const releases = [...input.releases].sort((a, b) => order(b, a));
   let snapshot: Position | undefined = releases[0];
@@ -34,7 +34,7 @@ export async function artifactVersions(input: {
       authorPrincipalId: release.authorPrincipalId ?? null, parentReleaseId: release.parentReleaseId ?? null,
       revertedFromReleaseId: release.revertedFromReleaseId ?? null, digest: release.manifestDigest,
       isCurrent: release.releaseId === input.currentReleaseId,
-      pinnedUrl: state === 'purged' ? null : input.urls?.(input.artifactId, release.releaseId).pinnedUrl ?? null };
+      versionUrl: state === 'purged' ? null : input.urls?.(input.artifactId, release.releaseId).versionUrl ?? null };
   }));
   const last = page.at(-1);
   const position = (value: Position) => ({ createdAt: value.createdAt, releaseId: value.releaseId });

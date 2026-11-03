@@ -113,7 +113,7 @@ describe('durable app content composition', () => {
     expect((await read()).status).toBe(401);
   });
 
-  it('should reject the stable A grant after republication while activating and serving pinned A', async () => {
+  it('should reject the stable A grant after republication while activating and serving the frozen release A', async () => {
     async function activateAt(targetOrigin: string, channel: 'stable' | 'pinned') {
       const host = runtime();
       const started = await host.fetch(new Request(`${targetOrigin}/_reader/nonce`));
@@ -137,11 +137,11 @@ describe('durable app content composition', () => {
       await pool.query('UPDATE artifacts.artifact_current SET release_id=$1 WHERE artifact_id=$2', [next, artifactId]);
       await pool.query(`UPDATE artifacts.releases SET state='retired' WHERE id=$1`, [releaseId]);
       expect((await stableRead()).status).toBe(401);
-      const pinnedOrigin = `https://${releaseId}.pinned.${config.baseDomain}`;
-      const pinnedCookie = await activateAt(pinnedOrigin, 'pinned');
-      const pinned = await runtime().fetch(new Request(pinnedOrigin, { headers: { cookie: pinnedCookie } }));
-      expect(pinned.status).toBe(200);
-      expect(await pinned.text()).toBe('<h1>Private runtime</h1>');
+      const releaseOrigin = `https://${releaseId}.${config.baseDomain}`;
+      const releaseCookie = await activateAt(releaseOrigin, 'pinned');
+      const frozen = await runtime().fetch(new Request(releaseOrigin, { headers: { cookie: releaseCookie } }));
+      expect(frozen.status).toBe(200);
+      expect(await frozen.text()).toBe('<h1>Private runtime</h1>');
     } finally {
       await pool.query('UPDATE artifacts.artifact_current SET release_id=$1 WHERE artifact_id=$2', [releaseId, artifactId]);
       await pool.query(`UPDATE artifacts.releases SET state='ready' WHERE id=$1`, [releaseId]);

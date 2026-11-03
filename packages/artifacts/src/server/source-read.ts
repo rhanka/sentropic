@@ -13,7 +13,7 @@ export interface SourceReadPorts {
   getRelease: PublicationService['getRelease'];
   getSource(artifactId: string): Promise<SourceRef | undefined>;
   getBlob(key: string): Promise<Uint8Array | undefined>;
-  urls?: (artifactId: string, releaseId: string) => { stableUrl: string; pinnedUrl: string };
+  urls?: (artifactId: string, releaseId: string) => { stableUrl: string; versionUrl: string };
   /** Guide reference returned instead of embedding the guide body. */
   guideRef?: { tool: string; version: string };
   maxFiles: number;
