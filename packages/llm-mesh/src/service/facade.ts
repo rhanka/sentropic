@@ -10,6 +10,8 @@ import type {
   EnrollmentSession,
   StartEnrollmentInput,
 } from '../enrollment/contracts.js';
+import type { SeatBundleV1 } from '../enrollment/seat-bundle.js';
+import type { SeatOnboardingV1 } from '../enrollment/seat-onboarding.js';
 import { ClaudeCodeEnrollmentProvider } from '../enrollment/claude-code.js';
 import { CloudCodeEnrollmentProvider } from '../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../enrollment/codex.js';
@@ -136,11 +138,20 @@ export interface LlmMeshFacade {
     maxAttempts?: number,
   ): Promise<EnrollmentCompletion>;
   // L1 trusted seat-bundle entry: canonical registration of a custodian
-  // consumer projection as an externally marked account.
+  // consumer projection as an externally marked account. The optional
+  // onboarding block (L5) is validated and bound before any registration.
   importSeatBundle(input: {
     bundle: unknown;
     ownerScope: string;
+    onboarding?: unknown;
   }): Promise<{ accountId: string; seatRef: string; generation: number; idempotent: boolean }>;
+  // L5 trusted seat export beside importSeatBundle: verbatim bundle + block
+  // from the stored seat record; typed `seat-export-unavailable:<reason>`
+  // refusals. Never returns refresh material or native files.
+  exportSeatBundle(input: {
+    accountId: string;
+    ownerScope: string;
+  }): Promise<{ bundle: SeatBundleV1; onboarding: SeatOnboardingV1 | null }>;
   cancel(enrollmentId: string): Promise<void>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
@@ -216,6 +227,9 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async importSeatBundle(input) {
       return service.importSeatBundle(input);
+    },
+    async exportSeatBundle(input) {
+      return service.exportSeatBundle(input);
     },
     async cancel(enrollmentId) {
       return service.cancel(enrollmentId);
