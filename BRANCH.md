@@ -43,6 +43,7 @@ Owner decision (relayed by immo): the `<id>.pinned.<base>` host form disappears.
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX3)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX3)
   - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR01-EX3)
+  - `tools/memory-mcp-l5/artifacts/**` (BR01-EX5)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
