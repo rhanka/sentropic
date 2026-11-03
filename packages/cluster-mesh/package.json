@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.26.0-dev.6",
+  "version": "0.26.0-dev.7",
   "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
@@ -27,6 +27,10 @@
     "./live-storage/registration": {
       "types": "./dist/live-storage/registration.d.ts",
       "import": "./dist/live-storage/registration.js"
+    },
+    "./sessions/relay": {
+      "types": "./dist/sessions/relay.d.ts",
+      "import": "./dist/sessions/relay.js"
     },
     "./storage": {
       "types": "./dist/storage/index.d.ts",
