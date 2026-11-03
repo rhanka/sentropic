@@ -1,18 +1,19 @@
-# Feature: Tenant bootstrap of the email-code HMAC secret (Q-K=A custody r2)
+# Feature: RC2 relay-1 preparation (packed connector + lane-client ports)
 
 ## Objective
-- [x] Build the tenant-side sections of binding method `.tmp/cm-identity-agents/qk-secret-custody-r2.md` (sha256 1dcfb24d…, r2 2026-11-02, approved by Argon GO and k8s technical ACK with conditions C1–C5): (1) the reviewed `make` generation target + `gh secret set` stdin deposit, (2) `.github/workflows/email-code-hmac-secret.yml`, (3) the keyed-fingerprint / test-vector rotation and restore checks, (4) `docs/secrets.md` section + runbook + `deploy/k8s/README.md` pointer. No real key is generated and no workflow is run against preprod/prod; the conductor triggers generation after review.
+Land the sentropic side of rc2-native-plan.md §2 items L-1..L-7: a PACKED `SessionRelayEndpointConnectorPortV1` and branded `SessionRelayLaneClientV1` in `@sentropic/cluster-mesh` (types + fail-closed skeleton first, then the engine), the composition contract (host composition vs mesh-internal), fake A / fake L→A behind the public API in tests only, runs of the CHAIN-ESTABLISH-2 / CHAIN-FRAME-TRANSLATION / CHAIN-BIND vectors, capsule pins for Node/TLS/HTTP-2, and stream/close/abort conformance vectors. DEP-FED stays a source-gap: every live route stays DISABLED and fail-closed; no local fill. No h2a wire code.
 
 ## Scope / Guardrails
-- [x] Owner decision Q-K = A (2026-11-02), carried to k8s; owner GO given directly to k8s on 2026-11-02. Binding method: qk-secret-custody-r2.md sha256 1dcfb24d…; k8s platform acts DONE (poc-k8s 1bb6b4e: writer SA/Role per tier, empty Secret shell `email-code-hmac` in `sentropic-preprod` and `sentropic`, VAP `email-code-hmac-single-writer`, K7 proven, registry entry preprod-cred-governance.md#email-code-hmac-writer). Writer kubeconfig already deposited as GitHub environment secret `KUBE_CONFIG_DATA_EMAIL_CODE_HMAC` in `sentropic-idp-run` (preprod) and `sentropic-idp-prod` (prod); `.env` source names `K8S_EMAIL_CODE_HMAC_WRITER_{PREPROD,PROD}_KUBECONFIG_B64` + `_TOKEN_EXPIRES`; token expires 2027-02-01T00:12:16Z.
-- [x] Secrets are read by NAME only; no value is ever printed, logged, echoed or committed. Names only in all artifacts.
-- [x] No Python. Node `.mjs` under `deploy/ci/email-code-hmac/` only. English everywhere.
-- [x] Worktree `tmp/worktrees/qk-bootstrap`; branch `feat/qk-email-code-hmac-bootstrap` from origin/main `5b1d1dcd2`; `harness check branch` PASS C1.
-- [x] Make-only, Docker-first; single Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command (`flock <lock> make ...`); reuse pinned `node:24-bookworm-slim` image already present locally; no new image build; `ENV=test-*` last, never `ENV=dev`; `make down ENV=<test-env>` after test lanes.
-- [x] Tests: `make test-email-code-hmac-selftest ENV=test-email-code-hmac` (offline, no cluster, no gh) with dry-run and no-print assertions (K2/K3). One CI run on the final PR head only; never `[skip ci]`; PR stays READY (not merged).
-- [x] Commits: `make commit MSG="..."` only, selective staging, ≤150 lines per commit; `make scope-check` before every commit; push after every commit (crash-safety rule).
-
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`).
+- Scope limited to `packages/cluster-mesh` (new `src/sessions/relay-*` modules, `src/index.ts` export wiring, `package.json` exports + version bump, `tests/remote-session/**`) plus the mandatory lockfile/fixture sync of the version bump (BRrc2relay1-EX1).
+- Make-only workflow, no direct Docker commands; the single Docker lock `.tmp/packets/DOCKER-LOCK.md` is taken PER COMMAND via `flock <lock> make ...`; never held across reasoning.
+- Branch development happens in isolated worktree `tmp/worktrees/rc2-relay1-prep` (branch `feat/rc2-relay1-prep` from `origin/main` 812d1f053); `harness check branch` PASS C1 at init.
+- Automated tests run on `ENV=test-rc2-relay1` only, always LAST (`API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112`, verified free); never `ENV=dev`; `make down ... ENV=test-rc2-relay1` after every test stack; reuse the pinned `node:24-bookworm-slim` image, no image build; never `make clean-all`; never `[skip ci]`.
+- All new text in English. Commits via `make commit MSG="..."` only, ≤150 lines each, specific `git add` only; push often (crash safety). One CI run per final head; PR stays READY (not merged).
+- Contract pins (binding, RC2.contract r3, all under /home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/): MANIFEST.sha256 self sha256 `6245d3ae51f601195926bc36600d1097cef30694f3feb01f79f1a7ec9fa17715`; manifest JSON `remote-session-contract-manifest.v1.json` sha256 `88823475eca151d908450e4abadcac7b2b60d4b5ea16bae0f590d419fa394565`; RC2-CONTRACT.md `4a7fc1615148f64f0af168a3d01fb7881d479f6d464b532c9bd78cc0d2d08b89`; CHANGES-r3.md `04cbf4ad38cdac9417c6c17148736852036bc5636e3f8acc47c5190727448456`; changes-r3.json `fa2007c2e742c381c031bfc8b608557defa0650409d88451ed58f797b9d78843`; RC2-R2-SEMANTICS.md `6786e52e78d1e6afc9f06755e610a609e3ca77c5d1fb249feeb2f977b84f8331`. Verified before use (`sha256sum` recomputed in this lane). Lineage only: r2 MANIFEST `133e23f5…`, r1 MANIFEST `dfb25899…`; neither ACK transfers to r3. `CONTRACT PARTIAL` stays.
+- Pinned vector digests used by the relay specs (r3, recomputed here): port-SessionRelayEndpointConnectorPortV1-connect `971a01f435f1def25c1059fcc56f325036edfdbe4eff5a2563228db319427feb`; port-SessionRelayLaneClientV1-request `bf4a60508ccbc869dfddedf89c30211e01316ba54ebbf1bd168a6212e13c0fbd`; port-SessionRelayLaneClientV1-stream `02f56eaee4107ae3aa7609ad985531d276e9c4468ceb9f0168e815a813da2fba`; port-SessionRelayLaneClientV1-close `0c2dd98198a54e31683377645578c7f101d5d0cefdfdba324bd2c5df68c5751f`.
+- Source-gaps stay fail-closed (typed refusal, never invented bytes): DEP-FED/SG-FED (H2-I, F1/F2, F15, SessionTransitGrantV1) → all live routes incl. direct B→A disabled, `relay_grant_unavailable`; DEP-AUTH-A/A2.0b; DEP-AUTH-B/M0; SG-R15; SG-NATIVE (RC0ImportedRecord reject-all slot); DEP-RESIDENCE/RCP.
+- No cross-repo source imports; tests pin vector SHA-256 digests instead of reading the h2a repo at test time. Fakes live in `tests/` only and refuse missing authorities (no always-allow double).
+- Package bump rule: `packages/cluster-mesh/package.json` 0.26.0-dev.6 → 0.26.0-dev.7 (> published `npm view @sentropic/cluster-mesh version` = 0.25.0), with lockfile + packaging-fixture sync.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -21,54 +22,66 @@
   - `docs/runbooks/email-code-hmac-cred-cycle.md` (new runbook + living registry)
   - `deploy/k8s/README.md` (one pointer entry in the secret-bundle section)
   - `BRANCH.md`
-  - `docs/runbooks/app-artifact-content-infrastructure.md` (BR01-EX4, docs-only review-r1 fix)
+  - `packages/cluster-mesh/src/sessions/relay-*.ts` (new modules only; existing sessions files untouched)
+  - `packages/cluster-mesh/src/sessions/relay.ts` (packed public entry)
+  - `packages/cluster-mesh/src/index.ts` (export wiring only, if needed)
+  - `packages/cluster-mesh/package.json` (exports subpath + version bump)
+  - `packages/cluster-mesh/tests/remote-session/**` (new relay specs + test-only fakes)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/**`, `apps/**`, `packages/**`, `ui/**`, `e2e/**` (app-side wiring of §3.3 belongs to the A2.0b/A4 implementation lots, not this custody bootstrap)
-  - `deploy/ci/idp-identity-sync/**`, `deploy/k8s/base/**`, `deploy/k8s/overlays/**` (k8s platform acts are DONE out-of-band; no manifest changes here)
-  - `.github/workflows/ci.yml` (no CI rewiring; the new workflow carries its own selftest gate job)
+  - `api/**`, `ui/**`, `e2e/**`, `apps/**`
+  - `packages/*/src/**` except `packages/cluster-mesh/src/**`
+  - `.github/workflows/**`
+  - `.track/**`, `.tmp/**`, `.env`, root `package.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` — see BR900-EX1
-  - `.github/workflows/**` — see BR900-EX2
+  - `package-lock.json`, `api/package-lock.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` — only under BRrc2relay1-EX1
 - **Exception process**:
-  - BR900-EX1 and BR900-EX2 declared below in `## Feedback Loop` before touching those paths, with reason, impact and rollback.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [x] **BR900-EX1 — `Makefile` (forbidden by default)**: add the reviewed `email-code-hmac-*` targets and `test-email-code-hmac-selftest` next to the existing secret/selftest targets. Reason: method r2 §2.1 mandates that generation and rotation bookkeeping run only through reviewed `make` targets; the tenant bootstrap cannot exist without them. Authority: owner GO Q-K=A given to k8s on 2026-11-02 over binding method qk-secret-custody-r2.md (sha256 1dcfb24d…), §2.1/§7. Impact: additive targets only, no existing target modified; `test-idp-sync-selftest` and all other gates unchanged (its Makefile-content assertions still pass). Rollback: drop the added target block; no other file depends on it.
-- [x] **BR900-EX2 — `.github/workflows/**` (conditional by default)**: add one new file `.github/workflows/email-code-hmac-secret.yml`. Reason: method r2 §3.2 pins this exact workflow file as the single writer of Secret `email-code-hmac` values. Authority: same owner GO (Q-K=A via k8s, 2026-11-02). Impact: new file only, `workflow_dispatch` only, `permissions: contents: read`; no existing workflow edited; it never creates/lists Secrets and never prints values. Rollback: delete the file; the pre-created empty shell and VAP remain valid (k8s acts are independent).
-- [x] k8s-noted readers recorded in runbook §1.3/§5.3 as measured facts (C3): `sentropic-admin` (kubernetes-admin) and the kube-system controllers hold admin/cluster rights; `ci-deployer` both tiers, `sentropic-preprod` `edit` binding in preprod — residual read risk, out of scope for narrowing, recorded by name only.
-- [x] Writer kubeconfig renewal documented: renew before 2027-02-01T00:12:16Z (token expiry), same mint → `.env` (`K8S_EMAIL_CODE_HMAC_WRITER_{PREPROD,PROD}_KUBECONFIG_B64`) → GitHub deposit (`KUBE_CONFIG_DATA_EMAIL_CODE_HMAC`) path; pointer to k8s governance entry preprod-cred-governance.md#email-code-hmac-writer.
+- [x] `acknowledge`: BRrc2relay1-EX1 — reason: rules/workflow.md Package Publication mandates a version bump + lockfile sync for any `packages/cluster-mesh/src/**` change (same sync as 45e961c8e: root + api lockfiles and the selected packaging fixture); impact: version-string-only diffs; rollback: revert the bump commit.
+- [x] `acknowledge`: r3 pins recomputed in this lane before first commit (MANIFEST self 6245d3ae…, JSON 88823475… match the conductor pins); the four port-vector digests match the r3 manifest `ports[].methods[].vectorSha256` entries.
+- [x] `acknowledge`: `harness check branch --current-branch feat/rc2-relay1-prep --expected-branch feat/rc2-relay1-prep` → PASS C1 (sentropic), run in the worktree against the freshly built `packages/harness/dist/bin/harness.js`.
+- [x] `acknowledge`: plan/contract unsettled points — none found; L-1..L-7 and contract §8/annex B/runtimeComposition settle every point this branch implements. DEP-FED live-route disablement is the expected state, not a blocker.
 
 ## AI Flaky tests
-- [x] Deterministic offline selftests only; no AI flaky exception.
+- [x] No AI-dependent tests in scope; all relay specs are deterministic local fixtures/fakes.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: single bootstrap lane, one READY PR against main; no merge (conductor triggers the real generation after review).
-- Rationale: one cohesive custody tool + workflow + docs; no orthogonal sub-workstreams.
+- [x] **Mono-branch + cherry-pick**
+- Rationale: one preparation lot set on a single branch; no sub-workstreams; one final scoped test cycle and one CI run on the final head.
 
 ## UAT Management (in orchestration context)
-- [x] No UI surface; the offline selftest target plus one PR CI run are the applicable gates.
+- **Mono-branch**: no UAT — package-only change, no UI/API behavior change; test-campaign gates only.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, method r2 end to end.
-  - [x] Worktree `tmp/worktrees/qk-bootstrap` on `feat/qk-email-code-hmac-bootstrap` from origin/main; `harness check branch` PASS C1.
-  - [x] BRANCH.md from `plan/BRANCH_TEMPLATE.md` with BR900-EX1/EX2 declared.
-- [x] **Lot 1 — Custody tool + make targets (method §2, §0.2)**
-  - [x] `deploy/ci/email-code-hmac/custody.mjs`: CSPRNG `randomBytes(32)` → 64-hex; private-descriptor atomic `.env` write (O_EXCL 0600 temp, fsync, rename, dir fsync; mode 0600 + unrelated lines preserved byte-for-byte); slot preconditions; cross-tier fingerprint refusal; keyRef `email-code-hmac:v1:<tier>:<fp16>`; keyed fingerprint over fixed label; test vector over synthetic input; buffer zeroed in `finally`; subcommands generate / rotate-begin / rotate-promote / rotate-retire / fingerprint / verify-vector; `--dry-run` (no write, no deposit); `deposit` via `gh secret set`/`gh variable set` reading stdin, value never in argv/env/print.
-  - [x] Makefile targets: `email-code-hmac-generate|rotate-begin|rotate-promote|rotate-retire|fingerprint|verify-vector` (ENV=preprod|prod|test-* last; test env file `.env.$(ENV)`, git-ignored via `.env.*`), wired to `node deploy/ci/email-code-hmac/custody.mjs` inside the pinned node image (Docker-first), plus `test-email-code-hmac-selftest ENV=test-email-code-hmac`.
-  - [x] Selftest K2: scratch env file generation (64-hex, right slot, mode 0600, unrelated lines preserved, refuses overwrite, refuses tracked/wrong-mode file), dry-run writes nothing, and captured stdout/stderr never contain the value (no-print assertion, compared privately).
-- [x] **Lot 2 — Workflow + materialize logic (method §3.2)**
-  - [x] `deploy/ci/email-code-hmac/materialize.mjs`: pure `validateRing`, `buildManifest` (data keys exactly §1.2, no empty strings), `keyedFingerprint`, `testVector`, `summaryLine` (names + refs + fingerprints only).
-  - [x] `.github/workflows/email-code-hmac-secret.yml`: `workflow_dispatch` with `tier` choice input; `permissions: contents: read`; per-tier concurrency `cancel-in-progress: false`; gate job `selftest` (`make test-email-code-hmac-selftest ENV=test-email-code-hmac`); `materialize-preprod` (environment `sentropic-idp-run`) and `materialize-prod` (environment `sentropic-idp-prod`), `if` main + tier match; kubeconfig from `secrets.KUBE_CONFIG_DATA_EMAIL_CODE_HMAC` bound only via step `env:`, base64-decoded by a Node step into a runner-private 0600 exclusive-create file, removed by `always()` cleanup; preflight by name only (`get secret email-code-hmac -o name`, `can-i patch` on that Secret name and Deployment `api`; fixed refusal codes `email_code_hmac_shell_missing` / `email_code_hmac_writer_forbidden` / `email_code_hmac_credential_invalid` / `email_code_hmac_ref_mismatch`, no `create` attempted); `kubectl apply --server-side --field-manager=email-code-hmac-secret` onto the existing shell; assert `secret/email-code-hmac serverside-applied`; one JSON log line + `$GITHUB_STEP_SUMMARY` with Secret name, namespace, status, refs, keyed fingerprints only; `rollout restart deployment/api` + bounded `rollout status`; no `list` of Secrets, no value printing, no `${{` in run commands.
-  - [x] Selftest K3 (in the same selftest target): stub `kubectl` on PATH executing the workflow's materialize step source — invalid format / previous-without-active / ref-fp16 mismatch refused pre-apply; manifest keys exactly §1.2; logged fingerprint equals the §0.2 keyed fingerprint and differs from any bare-SHA256 prefix; failing apply never echoes the value; temp manifest removed; apply args exactly `--server-side --field-manager=email-code-hmac-secret`.
-- [x] **Lot 3 — Documentation (method §7)**
-  - [x] `docs/secrets.md`: four inventory rows (ACTIVE/PREVIOUS per tier naming, 90-day three-phase cycle pointer, source chain `.env` → GitHub environment → workflow-applied Secret `email-code-hmac`), "Email-code HMAC key (Q-K=A)" section (purpose, names table, fail-closed summary, non-goals: not a SealedSecret, no terminal-printed `openssl rand`, no JWT/literal fallback — stated next to the existing dev/test fallback paragraph), writer-credential names by pointer to the k8s governance entry.
-  - [x] `docs/runbooks/email-code-hmac-cred-cycle.md`: reconciliation table both tiers, writer kubeconfig names + renewal before 2027-02-01, living registry schema (one row per (tier, ref): fingerprint, test vector, dates, run ids, retirement proof), procedures (bootstrap, three-phase rotation, emergency, §4.4 retirement query, §5.2 restore verification, §5.3 loss matrix + break-glass), §7.2 pointer to k8s `preprod-cred-governance.md#email-code-hmac-writer`, §1.3/§5.3 k8s-noted readers (`sentropic-admin` / kubernetes-admin, kube-system controllers, ci-deployer, preprod edit binding) recorded as residual read (C3).
-  - [x] `deploy/k8s/README.md`: one pointer entry in the secret-bundle section marking `email-code-hmac` as workflow-owned (not operator-sealed, never added to the SealedSecret bundle).
-- [x] **Lot 4 — Validate, commit, PR, one CI**
-  - [x] `flock .tmp/packets/DOCKER-LOCK.md make test-email-code-hmac-selftest ENV=test-email-code-hmac` green locally.
-  - [x] `make scope-check` before each commit; atomic `make commit` per lot (≤150 lines); push after each commit.
-  - [x] READY PR (body = BRANCH.md text, test plan included); exactly one CI run on the final head; report to `.tmp/rv/qk-bootstrap.md`; do not merge.
+  - [x] Read rules/MASTER.md, rules/workflow.md, .tmp/packets/COMMON-RULES.md, plan/BRANCH_TEMPLATE.md, plan-remote-ctl-v1.6-draft.md (relay-1 rows), rc2-native-plan.md §2 L-1..L-7, RC2.contract r3 §2/§4–§8 + manifest ports/routes/runtimeComposition + vectors.
+  - [x] Worktree `tmp/worktrees/rc2-relay1-prep`, branch `feat/rc2-relay1-prep` from `origin/main` 812d1f053; `.env` copied from root; `harness check branch` PASS C1.
+  - [x] Verify r3 pins (sha256 recomputed) and write this `BRANCH.md`; first commit pins r3.
+  - [x] Environment mapping: `ENV=test-rc2-relay1` always LAST; ports `API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112` (free on host).
+- [ ] **Lot 1 — Packed port types + fail-closed skeleton (L-1 first half)**
+  - [ ] Tests first (red): `tests/remote-session/relay-ports.spec.ts` — port vector shapes (positive ACCEPT_SHAPE / negative REJECT_SCHEMA), fail-closed connect without mesh wiring → `{status:'refused', error:{code:'relay_grant_unavailable'}}` and no client, brand check (clientRef string cannot instantiate `SessionRelayLaneClientV1`), TypeError-only for invalid JS API use, typed refusals never throw.
+  - [ ] Green: `src/sessions/relay-types.ts` (packed types + brand + route matrix), `src/sessions/relay.ts` (public entry + `createSessionRelayEndpointConnectorPort`), `src/sessions/relay-wiring.ts` (internal mesh-wiring seam, NOT in exports map), skeleton connector/lane client, `package.json` export `./sessions/relay` + version bump 0.26.0-dev.7 with BRrc2relay1-EX1 lockfile/fixture sync.
+  - [ ] Lot gate (all under `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, one command at a time, ENV LAST):
+    - [ ] `make typecheck-cluster-mesh API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1`
+    - [ ] `make test-cluster-mesh SCOPE=tests/remote-session/relay-ports.spec.ts API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1`
+    - [ ] `make build-cluster-mesh ... ENV=test-rc2-relay1` + `make pack-cluster-mesh ... ENV=test-rc2-relay1` (packed export present in archive)
+    - [ ] `make down API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1`
+    - [ ] `make scope-check ENV=test-rc2-relay1` PASS C2; `make commit`; push.
+- [ ] **Lot 2 — Composition contract + chain engine + fakes (L-2, L-3, L-4)**
+  - [ ] Tests first (red): `tests/remote-session/relay-chain.spec.ts` (CHAIN-ESTABLISH-2 path/pairing cases, CHAIN-FRAME-TRANSLATION re-frame + credit cases from chain-wire-coordinates, CHAIN-BIND framing/exporter cases; vector SHA-256 pins) and `tests/remote-session/relay-fakes.spec.ts` (fake A + fake L→A behind the public API: prepare → upgrade/Open/Opened → Bind/Bound → lane request/stream; fakes refuse missing authorities).
+  - [ ] Green: `src/sessions/relay-composition.ts` (host-composition vs mesh-internal split, documented), `src/sessions/relay-chain.ts` (path check, CAS pairing, frame translation, credit, bind framing/JCS/exporter context), `src/sessions/relay-engine.ts` (connector engine driving the chain through the wiring seam), test-only fakes under `tests/remote-session/relay-fakes.ts`.
+  - [ ] Lot gate: typecheck + scoped `make test-cluster-mesh SCOPE=tests/remote-session/relay-chain.spec.ts ...` and `...relay-fakes.spec.ts ...` + `make down` + scope-check + commit + push.
+- [ ] **Lot 3 — Lane client engine + conformance vectors + capsule pins (L-5, L-6)**
+  - [ ] Tests first (red): `tests/remote-session/relay-conformance.spec.ts` (L-6: cold open on first next, single consumer, ≤8 events / 131072 bytes then relay_backpressure, one typed error then done, return() cancels only its request, abort → relay_unavailable, close idempotent + outcome-neutral) and `tests/remote-session/relay-capsule.spec.ts` (L-5: Node 22.22.1/24.18.0 pins + checks digests, ALPN `cluster-mesh.session-relay.inner.v1`, TLS 1.3 only / no 0-RTT / no resumption, enablePush:false, enableConnectProtocol:false, max 8 streams, header list ≤8192, exporter label).
+  - [ ] Green: `src/sessions/relay-lane-client.ts` (branded client: request/stream/close with runtimeComposition semantics), `src/sessions/relay-capsule.ts` (pinned option objects + version pins), engine lane transport behind fakes.
+  - [ ] Lot gate: typecheck + scoped tests + full `make test-cluster-mesh ENV=test-rc2-relay1` + `make down` + scope-check + commit + push.
+- [ ] **Lot 4 — Final validation, PR, CI, report**
+  - [ ] Full scoped run: `make test-cluster-mesh API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1` (whole package suite, no regression), `make typecheck-cluster-mesh`, `make build-cluster-mesh` + `make pack-cluster-mesh`, `make down ... ENV=test-rc2-relay1`.
+  - [ ] `make scope-check ENV=test-rc2-relay1` PASS C2; commit; push `feat/rc2-relay1-prep`.
+  - [ ] Open READY PR (BRANCH.md as body, English, test plan included); run ONE CI on the final head; do not merge.
+  - [ ] Report to `.tmp/rv/rc2-relay1-prep.md` (root checkout path /home/antoinefa/src/sentropic/.tmp/rv/rc2-relay1-prep.md).
