@@ -8,6 +8,7 @@ import { authEmailService } from './auth-email.js';
 import { authSessionService } from './auth-sessions.js';
 import { authFederationPort } from './auth-social.js';
 import { authBoundaryPorts } from './auth-boundary.js';
+import { authServiceTenantPort } from './auth-service-tenant.js';
 import { authHonoRuntime, authWebAuthnServices, type WebAuthnAttempt } from './auth-webauthn.js';
 import { finishAuthCompletion, guardAuthStep } from './auth-abort.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
@@ -27,6 +28,7 @@ export const createIdentityAuthHonoTransactionBindingV1 = <H>(supplied: Identity
   const proofs = authProofPorts(input, evidence, check, state);
   const credentials = authCredentialPort(input, check, state);
   const boundary = authBoundaryPorts(input, users, policy, check);
+  const serviceTenant = authServiceTenantPort(input, boundary.auditLog, check);
   const email = authEmailService(input, evidence, check, (address, code, expiresAt) => { deferredMail.push({ kind: 'code', email: address, code, expiresAt }); });
   const sessions = authSessionService(input, users, policy, check, boundary.tokenEvidence);
   const federation = authFederationPort(input, check);
@@ -37,6 +39,7 @@ export const createIdentityAuthHonoTransactionBindingV1 = <H>(supplied: Identity
       sendVerificationCode: async (mail) => { check(); deferredMail.push({ ...mail, kind: 'code', expiresAt: mail.expiresAt.toISOString() }); },
       sendMagicLink: async (mail) => { check(); deferredMail.push({ ...mail, kind: 'magic_link', expiresAt: mail.expiresAt.toISOString() }); },
     },
+    ...(serviceTenant ? { serviceTenant } : {}),
   };
   const webauthn = authWebAuthnServices(input, ports, state, proofs.verificationPolicy, email.consumeRegistration, check);
   const magicLink = authHonoRuntime().createAuthMagicLinkService({ ports, ...input.magicLink });
