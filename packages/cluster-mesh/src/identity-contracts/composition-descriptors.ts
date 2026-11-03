@@ -63,6 +63,18 @@ export const IDENTITY_COMPOSITION_DESCRIPTORS: readonly IdentityCompositionDescr
     factories: ['createServicePrincipalTidIssuerV1'],
     errorType: 'IdentityCustodyErrorV1',
   },
+  {
+    domain: 'atomic_workspace_deletion',
+    version: IDENTITY_COMPOSITION_CONTRACT_VERSION,
+    baseContractVersion: '1.0.0',
+    amendment: 'A4-composition-gaps',
+    status: 'contract-only',
+    profiles: ['postgres', 'sqlite'],
+    records: ['WorkspaceDeletionCommandV1', 'WorkspaceDeletionReceiptV1', 'WorkspaceBusinessDeletionReceiptV1'],
+    ports: ['AtomicWorkspaceDeletionV1', 'WorkspaceDeletionAuthorizationPortV1', 'WorkspaceBusinessDeletionPortV1', 'WorkspaceDeletionPlanePortV1'],
+    factories: ['createAtomicWorkspaceDeletionV1'],
+    errorType: 'IdentityCustodyErrorV1',
+  },
 ];
 
 export const identityCompositionDescriptorV1 = (
