@@ -50,13 +50,31 @@ process.stdin.on('end', () => {
 
 // A stub `kubectl` driven by KUBECTL_STUB_MODE: ok | created | no-shell |
 // forbidden. Records every argv (JSON lines) to KUBECTL_STUB_LOG and the applied
-// manifest to KUBECTL_STUB_MANIFEST.
+// manifest to KUBECTL_STUB_MANIFEST. Like real kubectl, it rejects any
+// `auth can-i` call that is not exactly `<verb> <resource>/<name>`.
 export const KUBECTL_STUB = `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.KUBECTL_STUB_LOG, JSON.stringify(args) + '\\n');
 const mode = process.env.KUBECTL_STUB_MODE || 'ok';
 const joined = args.join(' ');
+// Real kubectl accepts only "auth can-i <verb> <resource>" or
+// "auth can-i <verb> <resource>/<name>": exactly two positional arguments after
+// "can-i". Any other shape (e.g. the legacy "<verb> <resource> <name>") is
+// rejected client-side before any server call.
+const ci = args.indexOf('can-i');
+if (ci >= 0) {
+  const positional = [];
+  for (let i = ci + 1; i < args.length; i++) {
+    if (args[i] === '-n' || args[i] === '--namespace') { i++; continue; }
+    if (args[i].startsWith('-')) continue;
+    positional.push(args[i]);
+  }
+  if (positional.length !== 2 || !positional[1].includes('/')) {
+    console.error('error: you must specify two arguments: verb resource or verb resource/resourceName');
+    process.exit(1);
+  }
+}
 if (mode === 'no-shell' && joined.includes(' get secret ')) { console.error('Error from server (NotFound): secrets "email-code-hmac" not found'); process.exit(1); }
 if (mode === 'forbidden' && args.includes('auth')) { console.log('no'); process.exit(0); }
 if (args.includes('apply')) {
