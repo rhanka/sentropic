@@ -21,7 +21,8 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
   - `packages/cluster-mesh/tests/boundary-resolution.spec.ts`
   - `packages/cluster-mesh/package.json` (version bump)
   - `package-lock.json` (BR-G2-EX1: one-line workspace version sync via `make lock-root`)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` (BR-G2-EX2: 4-line dev-version pin sync, repo bump precedent 45e961c8e / 4ed0b4009)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-G2-EX2)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-G2-EX2)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
