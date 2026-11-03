@@ -266,3 +266,90 @@ const detectRow = async (
   }
 };
 
+// -- Apply (write path; runs only after detectRow reported no conflict) --------
+
+type Outcome = 'inserted' | 'updated' | 'unchanged' | 'revokedApplied' | 'revokedKept';
+
+const applyAccount = async (host: CustodyOpHost, tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1, { entity: 'account' }>): Promise<Outcome> => {
+  const { record, profile } = row;
+  const existing = await host.journal.findAccountCore(record.userId);
+  if (!existing) {
+    await host.journal.insertAccountCore(record);
+    await host.journal.ensureLiveFence(record.userId, record.createdAt);
+    await tx.custody.profiles.put(profile);
+    return 'inserted';
+  }
+  let changed = false;
+  let current = existing;
+  if (current.email !== record.email) {
+    current = await tx.custody.subjects.updateEmail(record.userId, record.email, record.updatedAt);
+    changed = true;
+  }
+  if (current.globalRole !== record.globalRole) {
+    current = await tx.stores.accounts.setGlobalRole(record.userId, record.globalRole, record.updatedAt);
+    changed = true;
+  }
+  if (current.accountStatus !== record.accountStatus) {
+    current = await tx.stores.accounts.setAccountStatus(record.userId, record.accountStatus, record.updatedAt);
+    changed = true;
+  }
+  if (current.updatedAt !== record.updatedAt) {
+    const sql = boundIdentitySql(host);
+    await sql.query(`UPDATE ${sql.table('identity_user_accounts')} SET updated_at = ? WHERE user_id = ?`, [record.updatedAt, record.userId]);
+    changed = true;
+  }
+  const localProfile = await tx.custody.profiles.find(record.userId);
+  if (!localProfile || stableStringify(localProfile) !== stableStringify(profile)) {
+    await tx.custody.profiles.put(profile);
+    changed = true;
+  }
+  return changed ? 'updated' : 'unchanged';
+};
+
+const applyCredential = async (tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1, { entity: 'credential' }>): Promise<Outcome> => {
+  const { record } = row;
+  const existing = await tx.custody.credentials.findById(record.proofId);
+  if (!existing) {
+    await tx.custody.credentials.insert({ ...record, revision: 0, lastUsedAt: null, revokedAt: null });
+    if (record.revokedAt) {
+      await tx.custody.credentials.revoke(record.proofId, record.userId, record.revokedAt);
+      return 'revokedApplied';
+    }
+    return 'inserted';
+  }
+  if (record.revokedAt && !existing.revokedAt) {
+    await tx.custody.credentials.revoke(record.proofId, record.userId, record.revokedAt);
+    return 'revokedApplied';
+  }
+  if (existing.revokedAt && !record.revokedAt) return 'revokedKept';
+  if (existing.revokedAt && record.revokedAt) return 'unchanged';
+  if (existing.deviceName !== record.deviceName) {
+    await tx.custody.credentials.rename(record.proofId, record.userId, record.deviceName);
+    return 'updated';
+  }
+  return 'unchanged';
+};
+
+const applyConsent = async (host: CustodyOpHost, tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1, { entity: 'oauth_consent' }>): Promise<Outcome> => {
+  const { record } = row;
+  const existing = await host.journal.findConsentCore(record.consentId);
+  if (!existing) {
+    await host.journal.insertConsentCore(record);
+    return 'inserted';
+  }
+  if (record.revokedAt && !existing.revokedAt) {
+    await tx.stores.oauth.revokeConsent(record.consentId, record.revokedAt);
+    return 'revokedApplied';
+  }
+  if (existing.revokedAt && !record.revokedAt) return 'revokedKept';
+  return 'unchanged';
+};
+
+const applyRow = async (host: CustodyOpHost, tx: AnyTx, row: IdentityReplicaSyncRowV1): Promise<Outcome> => {
+  switch (row.entity) {
+    case 'account': return applyAccount(host, tx, row);
+    case 'credential': return applyCredential(tx, row);
+    case 'oauth_consent': return applyConsent(host, tx, row);
+  }
+};
+
