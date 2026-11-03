@@ -16,6 +16,7 @@
 import { errorBody } from '../http.js';
 import type { AclStore } from '../server/access.js';
 import type { LifecycleService } from '../server/lifecycle.js';
+import { combineSharingPolicy, resolveSharingPolicy, type SharingPolicyPort } from '../server/ports.js';
 import type { PublicationBlobStore, PublicationService } from '../server/publication.js';
 import { CONTENT_GRANT_TTL_SECONDS, type GrantSigner, type TicketService } from './grants.js';
 import { contentHeaders, grantCookie, parseGrantCookie } from './headers.js';
@@ -46,7 +47,11 @@ export interface ContentHandlerDeps {
   grants: GrantSigner;
   tickets: TicketService;
   baseDomain: string;
-  isApprovedAccount?: (principalId: string) => boolean;
+  isApprovedAccount?: (principalId: string) => boolean | Promise<boolean>;
+  /** G1 lock 2 (runtime): sharing policy per scope, fail-closed when absent. */
+  sharingPolicy?: SharingPolicyPort;
+  /** G1 lock 1 (deployment capability), absent ⇒ closed. */
+  allowPublicSharing?: boolean;
   assetCacheSeconds?: number;
 }
 
@@ -66,13 +71,17 @@ function fail(status: number): ContentResponse {
 
 /** Create the content handler over injected host ports (no server). */
 export function createContentHandler(deps: ContentHandlerDeps) {
-  const isApproved = deps.isApprovedAccount ?? (() => false);
-
   async function canReadNow(artifactId: string, subjectId: string): Promise<boolean> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (acl === undefined) return false;
     const state = await deps.lifecycle.stateOf(artifactId);
-    return deps.lifecycle.canRead({ artifactId, state }, acl, subjectId, 'read', isApproved);
+    // G1 double lock, fail-closed: public mode serves anonymous reads only
+    // when the profile capability AND the live runtime policy both allow it.
+    const policy = acl.storageScopeId === undefined ? undefined : combineSharingPolicy(deps.allowPublicSharing,
+      await resolveSharingPolicy(deps.sharingPolicy, acl.storageScopeId));
+    // G1 owner Q2: fresh account approval at every read; the host predicate may be async (live DB check).
+    const approved = (await deps.isApprovedAccount?.(subjectId)) ?? false;
+    return deps.lifecycle.canRead({ artifactId, state }, acl, subjectId, 'read', () => approved, policy);
   }
 
   async function serveFile(
