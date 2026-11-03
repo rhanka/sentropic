@@ -1,5 +1,5 @@
 import { createAuthCredentialRouteHandlers, resolveOAuthSession, type AuthHonoAuthUiMethod, type AuthHonoRouteHandlers } from '@sentropic/auth-hono';
-import type { IdentityAuthCompletionFlowV1 } from '@sentropic/cluster-mesh';
+import type { IdentityAuthCompletionFlowV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { Hono, type Context } from 'hono';
 import { runCmAuthHttp } from './cm-http';
 

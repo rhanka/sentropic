@@ -27,6 +27,7 @@ export default defineConfig({
       '@sentropic/chat-core': pkgSrc('chat-core'),
       '@sentropic/chat-server': pkgSrc('chat-server'),
       '@sentropic/cluster-mesh/compose/gateway': pkgSrc('cluster-mesh', 'compose/gateway.ts'),
+      '@sentropic/cluster-mesh/identity/auth-hono': pkgSrc('cluster-mesh', 'identity/auth-hono.ts'),
       '@sentropic/cluster-mesh/compose/llm-mesh': pkgSrc('cluster-mesh', 'compose/llm-mesh.ts'),
       '@sentropic/cluster-mesh/loaders/llm-mesh/transport/jev': pkgSrc('cluster-mesh', 'loaders/llm-mesh/transport/jev.ts'),
       '@sentropic/cluster-mesh/loaders/mcp': pkgSrc('cluster-mesh', 'loaders/mcp/index.ts'),

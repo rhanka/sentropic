@@ -2,7 +2,7 @@ import { decodeJwt } from 'jose';
 import { z } from 'zod';
 import { db } from '../../db/client';
 import { oauthDpopProofs } from '../../db/schema';
-import type { IdentityAuthHonoTransactionBindingV1 } from '@sentropic/cluster-mesh';
+import type { IdentityAuthHonoTransactionBindingV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { withAppCmAuth } from '../identity/cm-auth-runtime';
 import { RemoteAuthorityError, remoteCounter, remoteRawHash, remoteEvidenceRequestSchema, type RemoteEvidenceRequest } from './remote-contract';
 import type { RemoteLogin } from './remote-evidence';

@@ -1,4 +1,4 @@
-import type { IdentityDeferredMailV1 } from '@sentropic/cluster-mesh';
+import type { IdentityDeferredMailV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { sendTransactionalEmail } from '../scw-tem-client';
 
 /** Called only after the CM runner acknowledges commit; transport errors contain no proof material. */
