@@ -33,8 +33,9 @@ function approvedOrigin(baseDomain: string, target: Omit<ArtifactReaderTarget, '
     const url = new URL(target.targetOrigin);
     if (url.protocol !== 'https:' || url.origin !== target.targetOrigin || url.port) return false;
     const parsed = parseContentHost(url.host, baseDomain);
-    return parsed?.kind === target.channel && (parsed.kind === 'stable'
-      ? parsed.artifactId === target.artifactId : parsed.releaseId === target.releaseId);
+    // One single-label origin: a stable target binds the artifact id, a pinned target the release id.
+    return parsed?.kind === 'id' && (target.channel === 'stable'
+      ? parsed.id === target.artifactId : parsed.id === target.releaseId);
   } catch { return false; }
 }
 async function namespaceFor(client: Pool | PoolClient, session: ArtifactReaderSession, lock = false) {
@@ -160,7 +161,10 @@ export function createArtifactReaderActivation(options: {
       const origin = parseContentHost(url.host, baseDomain);
       if (!origin) return undefined;
       const artifacts = createPostgresArtifactStore(pool);
-      const artifactId = origin.kind === 'stable' ? origin.artifactId : (await artifacts.getRelease(origin.releaseId))?.artifactId;
+      // Same server-side resolution as the content handler: artifact id first, then release id.
+      const artifactId = (await artifacts.getCurrentReleaseId(origin.id)) !== undefined
+        ? origin.id
+        : (await artifacts.getRelease(origin.id))?.artifactId;
       if (!artifactId) return undefined;
       const namespace = (await artifacts.getArtifactAcl(artifactId))?.storageScopeId;
       if (!namespace) return undefined;

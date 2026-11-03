@@ -22,7 +22,7 @@ function world() {
   const deps = { authorize: async () => { if (!allowed) throw new Error('source denied'); },
     getCurrent: async () => release, getRelease: async () => release,
     getSource: async () => ({ kind: 'recipe' as const, steps: ['never execute'] }),
-    getBlob: async () => bytes, urls: () => ({ stableUrl: 'https://a.test/a', pinnedUrl: 'https://a.test/r' }),
+    getBlob: async () => bytes, urls: () => ({ stableUrl: 'https://a.test/a', versionUrl: 'https://a.test/r' }),
     maxFiles: 32, maxTotalBytes: 262144 };
   return { deps, release, deny: () => { allowed = false; } };
 }

@@ -386,8 +386,10 @@ a registrable domain. Assets within the same artifact origin remain loadable.
 - `src/content/grants.ts` — 55s HMAC content grants (60s cutoff budget) and
   single-use activation tickets bound to subject, artifact, exact release
   and channel (`stable` or `pinned`); secrets and clocks are injected.
-- `src/content/routing.ts` — stable (`<artifactId>.<base>`) and pinned
-  (`<releaseId>.pinned.<base>`) single-UUID origins; safe path resolution.
+- `src/content/routing.ts` — one wildcard per base with a single UUID label
+  `<id>.<base>`, resolved server-side as an artifact (current release) or a
+  release (frozen version); the former `<id>.pinned.<base>` form no longer
+  routes; safe path resolution.
 - `src/content/headers.ts` — no-store/nosniff/frame-denial/CSP headers and
   the host-only `__Host-artifacts_grant` cookie.
 - `src/content/handler.ts` — transport-free content serving: per-version
@@ -403,12 +405,14 @@ a registrable domain. Assets within the same artifact origin remain loadable.
   definition wrapper (the optional peer is required here and by the root barrel).
 
 Ticket issuance and redemption both require `subjectId`, `artifactId`,
-`releaseId` and `channel`. The handler checks the release resolved from the
-requested origin and its channel before minting a grant. A stable ticket
-issued for r1 cannot activate r2 after republish, and a stable ticket cannot
-activate a pinned origin (or vice versa). Mismatches return 401 without a
-grant cookie and preserve the ticket for a matching request. Tickets expire
-at `expiresAt` (120 seconds by default) and can be redeemed only once.
+`releaseId` and `channel`. The handler resolves the single UUID label
+server-side — an artifact id serves its current release, a release id serves
+that frozen version — and checks the resolved release and its channel before
+minting a grant. A stable ticket issued for r1 cannot activate r2 after
+republish, and a stable ticket cannot activate a release id (or vice versa).
+Mismatches return 401 without a grant cookie and preserve the ticket for a
+matching request. Tickets expire at `expiresAt` (120 seconds by default) and
+can be redeemed only once.
 
 ## First publish (bootstrap)
 

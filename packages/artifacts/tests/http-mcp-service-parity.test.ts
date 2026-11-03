@@ -48,7 +48,8 @@ describe('L6 authorized HTTP/MCP parity', () => {
     if (!first.ok || !replay.ok) throw new Error('publish failed');
     expect(replay.result.body).toEqual(first.result.body);
     expect(first.result.body).toMatchObject({ artifactId,
-      stableUrl: `https://artifacts.test/a/${artifactId}`, pinnedUrl: expect.stringContaining('/r/'),
+      stableUrl: `https://${artifactId}.artifacts.test/`,
+      versionUrl: expect.stringMatching(/^https:\/\/[0-9a-f-]{36}\.artifacts\.test\/$/),
       digest: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
     expect(replay.result.body).not.toHaveProperty('replayed');

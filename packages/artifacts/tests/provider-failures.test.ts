@@ -333,7 +333,7 @@ describe('outcome correlation, commit state and privacy', () => {
 
   it('should pass successes through with their receipt and replay metadata intact', async () => {
     const { projectArtifactHttpOutcome, projectArtifactMcpOutcome } = await projections();
-    const result = { status: 201, body: { artifactId: 'a', releaseId: 'r', digest: 'd', stableUrl: '/a', pinnedUrl: '/r' } };
+    const result = { status: 201, body: { artifactId: 'a', releaseId: 'r', digest: 'd', stableUrl: '/a', versionUrl: '/r' } };
     const outcome = { ok: true as const, result, invocationId: 'inv-1', commitState: 'committed' as const, replayed: true };
     expect(projectArtifactHttpOutcome(outcome)).toBe(result);
     expect(projectArtifactMcpOutcome(outcome, 'audit-1')).toEqual({

@@ -78,7 +78,7 @@ describe('P0 source, control and summary transports', () => {
     await world.acls.putArtifactAcl(artifactId, { ...acl, title: 'My page', description: 'Details', icon: 'home', updatedAt: '2026-11-01T00:00:00Z' });
     const metadata = await call('artifacts_get', {});
     expect(metadata.body).toMatchObject({ bindingName: 'page', currentReleaseId: releaseId,
-      digest: expect.any(String), stableUrl: expect.any(String), pinnedUrl: expect.any(String),
+      digest: expect.any(String), stableUrl: expect.any(String), versionUrl: expect.any(String),
       updatedAt: '2026-11-01T00:00:00Z', title: 'My page', description: 'Details', icon: 'home' });
     const list = await world.http('/list', {});
     expect(list).toMatchObject({ ok: true, result: { body: { artifacts: [expect.objectContaining({
