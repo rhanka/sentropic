@@ -85,7 +85,9 @@ COPY --from=build /workspace/ui/build /
 COPY --from=static-assets /assets/ /
 
 FROM nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3 AS production
-RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
+# Security: pin libexpat 2.10.0-r0 — fixes HIGH CVE-2026-117610 / CVE-2026-118370
+# flagged by Trivy on 2.9.0-r0 (FixedVersion 2.10.0-r0 in Alpine v3.24).
+RUN apk update && apk upgrade && apk add --no-cache libexpat=2.10.0-r0 && rm -rf /var/cache/apk/*
 COPY --from=build /workspace/ui/build /usr/share/nginx/html
 COPY --from=static-assets /assets/ /usr/share/nginx/html/
 COPY ui/nginx/default.conf /etc/nginx/conf.d/default.conf
