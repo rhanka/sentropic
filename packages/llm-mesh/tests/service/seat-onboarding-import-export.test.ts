@@ -145,3 +145,80 @@ describe('L5 stored seat record and export', () => {
     expect(await keyring.getSecret(seatRecordKey(accountIdFor('muse')))).toBeNull();
   });
 
+  it('rejects a misbound block (foreign seatRef) with no account registered', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const bundle = synthBundle('claude');
+    const misbound = { ...blockFor('claude'), seatRef: 'seat-synth-claude-99' };
+    await expect(
+      service.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: misbound }),
+    ).rejects.toThrow(/onboarding/i);
+    expect(await service.listAccounts(OWNER)).toEqual([]);
+    expect(await keyring.getSecret(seatRecordKey(accountIdFor('claude')))).toBeNull();
+  });
+
+  it('imports without a block for mesh use and exports onboarding: null', async () => {
+    const service = serviceOn();
+    const bundle = synthBundle('agy');
+    const imported = await service.importSeatBundle({ bundle, ownerScope: OWNER });
+    expect(imported.idempotent).toBe(false);
+    const exported = await service.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER });
+    expect(exported.bundle).toEqual(bundle);
+    expect(exported.onboarding).toBeNull();
+  });
+
+  it('refuses export as record-missing for a pre-L5 marker-only account, then backfills on idempotent reimport', async () => {
+    const keyring = new InMemoryKeyring();
+    const service = serviceOn(keyring);
+    const bundle = synthBundle('claude');
+    const imported = await service.importSeatBundle({ bundle, ownerScope: OWNER });
+    // Simulate a pre-L5 import: marker persisted, seat record never written.
+    await keyring.deleteSecret(seatRecordKey(imported.accountId));
+
+    await expect(
+      service.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:record-missing' });
+
+    const block = blockFor('claude');
+    const replay = await service.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: block });
+    expect(replay.idempotent).toBe(true);
+    const exported = await service.exportSeatBundle({ accountId: imported.accountId, ownerScope: OWNER });
+    expect(exported.bundle).toEqual(bundle);
+    expect(exported.onboarding).toEqual(block);
+  });
+
+  it('refuses export as not-a-seat for a directly enrolled account', async () => {
+    const service = serviceOn();
+    service.registerAccount({
+      accountId: 'acct-direct-01',
+      ownerScopeRef: OWNER,
+      accountLabel: 'direct',
+      targetProviderId: 'anthropic',
+      transportProviderId: 'claude-code',
+      status: 'active',
+      accessToken: 'synthetic-access',
+    }, 'v1');
+    await expect(
+      service.exportSeatBundle({ accountId: 'acct-direct-01', ownerScope: OWNER }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:not-a-seat' });
+  });
+
+  it('refuses export as not-a-seat for an unknown account', async () => {
+    const service = serviceOn();
+    await expect(
+      service.exportSeatBundle({ accountId: 'seat-claude-never-imported', ownerScope: OWNER }),
+    ).rejects.toBeInstanceOf(SeatExportUnavailableError);
+    await expect(
+      service.exportSeatBundle({ accountId: 'seat-claude-never-imported', ownerScope: OWNER }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:not-a-seat' });
+  });
+
+  it('refuses a foreign ownerScope on export', async () => {
+    const service = serviceOn();
+    const bundle = synthBundle('claude');
+    const imported = await service.importSeatBundle({ bundle, ownerScope: OWNER, onboarding: blockFor('claude') });
+    await expect(
+      service.exportSeatBundle({ accountId: imported.accountId, ownerScope: 'owner-other-01' }),
+    ).rejects.toMatchObject({ code: 'seat-export-unavailable:owner-mismatch' });
+  });
+
