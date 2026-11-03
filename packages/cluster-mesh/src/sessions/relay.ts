@@ -66,6 +66,16 @@ export {
   validateLaneStreamParameters,
 } from './relay-validate.js';
 export { isSessionRelayLaneClient };
+// L-5 capsule runtime pins (packed for the h2a capsule lock + vector parity).
+export {
+  RELAY_CAPSULE_LIMITS,
+  RELAY_CAPSULE_NODE_PINS,
+  RELAY_INNER_H2_CLIENT_SETTINGS_PIN,
+  RELAY_INNER_TLS_CLIENT_PIN,
+  RELAY_INNER_TLS_SERVER_PIN,
+  capsuleRuntimePin,
+} from './relay-capsule.js';
+export type { CapsuleRuntimePin, RelayCapsuleNodePin } from './relay-capsule.js';
 
 function assertParameters(parameters: unknown): asserts parameters is Record<string, unknown> {
   if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters)) {
