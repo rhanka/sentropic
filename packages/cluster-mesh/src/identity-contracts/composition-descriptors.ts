@@ -51,6 +51,18 @@ export const IDENTITY_COMPOSITION_DESCRIPTORS: readonly IdentityCompositionDescr
     factories: ['createTenantBoundaryPortV1', 'createIdentityBoundaryDomainV1'],
     errorType: 'IdentityCustodyErrorV1',
   },
+  {
+    domain: 'service_principal_tenancy',
+    version: IDENTITY_COMPOSITION_CONTRACT_VERSION,
+    baseContractVersion: '1.0.0',
+    amendment: 'A4-composition-gaps',
+    status: 'contract-only',
+    profiles: ['postgres', 'sqlite'],
+    records: ['ServiceTidClaimV1'],
+    ports: ['ServiceTenantEnrollmentSourceV1', 'ServicePrincipalTidIssuerV1'],
+    factories: ['createServicePrincipalTidIssuerV1'],
+    errorType: 'IdentityCustodyErrorV1',
+  },
 ];
 
 export const identityCompositionDescriptorV1 = (
