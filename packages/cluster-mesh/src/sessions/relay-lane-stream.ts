@@ -33,7 +33,7 @@ export function createLaneStreamIterator(
   let overflow = false;
   let eof = false;
   let partialEof = false;
-  let queue: SessionRelayLaneResponseV1[] = [];
+  const queue: SessionRelayLaneResponseV1[] = [];
   let queuedBytes = 0;
   let interrupt: (() => void) | null = null;
   let tail: Promise<unknown> = Promise.resolve();
