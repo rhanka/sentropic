@@ -18,6 +18,8 @@ export interface ContentHostOptions {
     getRelease(id: string): Promise<{ releaseId: string; artifactId: string; manifest: string } | undefined>;
   };
   blobs: Pick<ContentHandlerDeps['blobs'], 'getBlob'>;
+  /** G1 owner Q2: live account approval re-checked on every content read (fail-closed when absent). */
+  isApprovedAccount?: (principalId: string) => boolean | Promise<boolean>;
 }
 const NONCE_COOKIE = '__Host-artifacts_nonce';
 function nonceCookie(header: string | null) {

@@ -10,7 +10,7 @@ const requiredRelations = [
   'control.artifact_host_kv', 'public.__drizzle_control_migrations',
   'artifact_host.activation_namespaces', 'artifact_host.activation_tickets', 'artifact_host.browser_flows',
   ...['storage_scopes', 'artifacts', 'releases', 'artifact_current', 'blobs', 'uploads',
-    'object_intents', 'idempotency_keys', 'artifact_access', 'artifact_sources',
+    'object_intents', 'idempotency_keys', 'artifact_access', 'artifact_access_events', 'artifact_sources',
     'blob_ref_holders', 'blob_pins', 'operation_keys', 'operation_receipts'].map((name) => `artifacts.${name}`),
 ];
 
@@ -32,6 +32,9 @@ export const artifactMigrationAssets = Object.freeze([
   Object.freeze({ id: '@sentropic/artifacts/migrations/0005_metadata.sql',
     sha256: '6acd727e2c8b13a13731e190623cc0dab640fa2ed7493f0ccaa37da5b3d93e25',
     read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0005_metadata.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0006_sharing.sql',
+    sha256: '038d94000a78d0bc8f47788c99763e7765f75feac6c2265963d2a8ee17a8bfba',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0006_sharing.sql'), 'utf8') }),
 ]);
 
 /** Called only by the API migration runner, after the control stream. */
