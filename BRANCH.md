@@ -81,8 +81,8 @@ Land the sentropic side of rc2-native-plan.md §2 items L-1..L-7: a PACKED `Sess
   - [x] Tests first (red): `tests/remote-session/relay-conformance.spec.ts` (L-6: cold open on first next, single consumer, ≤8 events / 131072 bytes then relay_backpressure, one typed error then done, return() cancels only its request, abort → relay_unavailable, close idempotent + outcome-neutral) and `tests/remote-session/relay-capsule.spec.ts` (L-5: Node 22.22.1/24.18.0 pins + checks digests, ALPN `cluster-mesh.session-relay.inner.v1`, TLS 1.3 only / no 0-RTT / no resumption, enablePush:false, enableConnectProtocol:false, max 8 streams, header list ≤8192, exporter label).
   - [x] Green: `src/sessions/relay-lane-client.ts` (branded client: request/stream/close with runtimeComposition semantics), `src/sessions/relay-capsule.ts` (pinned option objects + version pins), engine lane transport behind fakes.
   - [x] Lot gate: typecheck + scoped tests + full `make test-cluster-mesh ENV=test-rc2-relay1` + `make down` + scope-check + commit + push.
-- [ ] **Lot 4 — Final validation, PR, CI, report**
-  - [ ] Full scoped run: `make test-cluster-mesh API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1` (whole package suite, no regression), `make typecheck-cluster-mesh`, `make build-cluster-mesh` + `make pack-cluster-mesh`, `make down ... ENV=test-rc2-relay1`.
-  - [ ] `make scope-check ENV=test-rc2-relay1` PASS C2; commit; push `feat/rc2-relay1-prep`.
-  - [ ] Open READY PR (BRANCH.md as body, English, test plan included); run ONE CI on the final head; do not merge.
-  - [ ] Report to `.tmp/rv/rc2-relay1-prep.md` (root checkout path /home/antoinefa/src/sentropic/.tmp/rv/rc2-relay1-prep.md).
+- [x] **Lot 4 — Final validation, PR, CI, report**
+  - [x] Full scoped run: `make test-cluster-mesh API_PORT=8832 UI_PORT=5218 MAILDEV_UI_PORT=1112 ENV=test-rc2-relay1` (whole package suite, no regression), `make typecheck-cluster-mesh`, `make build-cluster-mesh` + `make pack-cluster-mesh`, `make down ... ENV=test-rc2-relay1`.
+  - [x] `make scope-check ENV=test-rc2-relay1` PASS C2; commit; push `feat/rc2-relay1-prep`.
+  - [x] Open READY PR (BRANCH.md as body, English, test plan included); run ONE CI on the final head; do not merge.
+  - [x] Report to `.tmp/rv/rc2-relay1-prep.md` (root checkout path /home/antoinefa/src/sentropic/.tmp/rv/rc2-relay1-prep.md).
