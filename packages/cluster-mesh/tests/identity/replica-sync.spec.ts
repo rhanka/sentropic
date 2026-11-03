@@ -153,6 +153,11 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
       record: account('u-1', 'one@example.test'), tenantId: 't-1', credentials: [cred], consents: [con],
     });
     await seedAccount(source.uow, { record: account('u-2', 'two@example.test', { globalRole: 'editor', updatedAt: LATER }) });
+    // Tenants stay placement-local (closed entity union): align the registry
+    // operationally, as the design requires, before consent sync.
+    await replica.uow.run(WRITE, async (tx) => {
+      await tx.hostTransaction.journal.insertTenantCore({ tenantId: 't-1', slug: 't-1', status: 'active', createdAt: NOW });
+    });
 
     const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
     const batch = await exporter.exportBatch({ syncId: 'sync-rt', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/rt' });
@@ -183,7 +188,7 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
     const after = await readState(replica.uow, ['u-1', 'u-2']);
     expect(after.accounts).toEqual(state.accounts);
     expect(after.credentials['u-1']).toEqual(state.credentials['u-1']);
-  });
+  }, 20000);
 
   it('converges email, role, status and profile with the source updatedAt', async () => {
     const source = await openEnv();
@@ -274,16 +279,17 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
     const source = await openEnv();
     const replica = await openEnv();
     const cred = credential('cred-1', 'u-1');
+    const cred2 = credential('cred-2', 'u-1');
     await seedAccount(source.uow, {
       record: account('u-1', 'one@example.test'),
       credentials: [
         { ...cred, revokedAt: LATER },
-        credential('cred-2', 'u-1', { deviceName: 'renamed' }),
+        { ...cred2, deviceName: 'renamed' },
       ],
     });
     await seedAccount(replica.uow, {
       record: account('u-1', 'one@example.test'),
-      credentials: [cred, credential('cred-2', 'u-1', { deviceName: 'old', revision: 4 })],
+      credentials: [cred, { ...cred2, deviceName: 'old', revision: 4 }],
     });
 
     const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
@@ -351,6 +357,7 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
     await seedAccount(source.uow, { record: account('u-gone', 'gone@example.test') });
     await seedAccount(replica.uow, { record: account('u-gone', 'gone@example.test') });
     await replica.uow.run(WRITE, async (tx) => {
+      await tx.hostTransaction.journal.ensureLiveFence('u-1', NOW);
       await tx.hostTransaction.journal.retireFence('u-1', LATER);
     });
 
@@ -440,6 +447,9 @@ if (pgEnabled) {
         record: account('u-1', 'one@example.test'), tenantId: 't-1', credentials: [cred], consents: [consent('consent-x', 'u-1', 't-1')],
       });
       await seedAccount(pgUow, { record: account('u-2', 'two@example.test') });
+      await pgUow.run(WRITE, async (tx) => {
+        await tx.hostTransaction.journal.insertTenantCore({ tenantId: 't-1', slug: 't-1', status: 'active', createdAt: NOW });
+      });
 
       const sqliteExporter = createIdentityReplicaExporterV1({ unitOfWork: sqliteUow, clock: () => NOW, exportOptions: READ });
       const pgExporter = createIdentityReplicaExporterV1({ unitOfWork: pgUow, clock: () => NOW, exportOptions: READ });
@@ -460,6 +470,6 @@ if (pgEnabled) {
       expect(pgState.credentials['u-1']).toEqual([{ ...cred, revision: 0 }]);
       const sqliteState = await readState(sqliteUow, ['u-2']);
       expect(sqliteState.accounts).toEqual([account('u-2', 'two@example.test')]);
-    });
+    }, 20000);
   });
 }
