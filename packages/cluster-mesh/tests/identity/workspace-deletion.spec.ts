@@ -405,3 +405,140 @@ describe.each(PROFILES.map((profile) => ({ profile })))('G4 atomic workspace del
     await expect(operation.deleteWorkspace({ operationId: '', workspaceId: 'ws', actorId: 'marie' })).rejects.toMatchObject({ code: 'identity_material_invalid' });
     await expect(operation.deleteWorkspace({ operationId: 'op-empty', workspaceId: '', actorId: 'marie' })).rejects.toMatchObject({ code: 'identity_material_invalid' });
   });
+
+  it('refuses invalid compositions at factory time', () => {
+    const dummyUow: IdentityUnitOfWorkV1<CustodyOpHost> = { profile: 'sqlite', run: async () => { throw new Error('unused'); } };
+    const state = freshState();
+    const memory = createMemoryCustody();
+    const base = {
+      unitOfWork: dummyUow,
+      business: createBusiness(state, false),
+      authorization: createAuthorization(state),
+      connectorPlane: createPlane(state, memory.port, { sql: false, rows: [] }),
+      connectorCustody: memory.port as ConnectorRevocationCustodyPortV1<CustodyOpHost> | null,
+      clock: () => NOW,
+      transactionOptions: { deletion: DELETE_OPTS },
+    };
+    const expectRefusal = (fn: () => unknown, code: string): void => {
+      try {
+        fn();
+      } catch (error) {
+        expect(error).toBeInstanceOf(IdentityCustodyErrorV1);
+        expect((error as IdentityCustodyErrorV1).code).toBe(code);
+        return;
+      }
+      throw new Error('expected a factory-time refusal');
+    };
+    expectRefusal(() => createAtomicWorkspaceDeletionV1({ ...base, connectorCustody: null }), 'identity_cascade_participant_missing');
+    expectRefusal(() => createAtomicWorkspaceDeletionV1({ ...base, business: { ...base.business, assertNoWorkspaceOrphans: undefined as never } }), 'identity_cascade_participant_missing');
+    expectRefusal(() => createAtomicWorkspaceDeletionV1({ ...base, connectorPlane: { ...base.connectorPlane, assertDeliveryInScope: undefined as never } }), 'identity_cascade_participant_missing');
+    expectRefusal(() => createAtomicWorkspaceDeletionV1({ ...base, transactionOptions: { deletion: { ...DELETE_OPTS, purpose: 'request' as const } } }), 'identity_material_invalid');
+    expectRefusal(() => createAtomicWorkspaceDeletionV1({ ...base, transactionOptions: { deletion: { ...DELETE_OPTS, deadlineMs: 0 } } }), 'identity_material_invalid');
+  });
+
+  it('rolls back when the absent plane finds connector rows in the workspace', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const operation = createAtomicWorkspaceDeletionV1({
+      unitOfWork: env.unitOfWork,
+      business: createBusiness(freshState(), true),
+      authorization: createAuthorization(freshState()),
+      connectorPlane: createAbsentPlane(true),
+      connectorCustody: null,
+      clock: () => NOW,
+      transactionOptions: { deletion: DELETE_OPTS },
+    });
+    await expect(operation.deleteWorkspace({ operationId: 'op-absent', workspaceId: 'ws', actorId: 'marie' })).rejects.toMatchObject({ code: 'identity_cascade_participant_missing' });
+    await expectNoMutation(env, 'op-absent');
+  });
+
+  it('commits once and refuses a second delete with identity_not_found', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const operation = buildOperation(env, freshState(), createRealCustody(), true);
+    const first = await operation.deleteWorkspace({ operationId: 'op-once', workspaceId: 'ws', actorId: 'marie' });
+    expect(first.contractVersion).toBe('1.2.0');
+    await expect(operation.deleteWorkspace({ operationId: 'op-once', workspaceId: 'ws', actorId: 'marie' })).rejects.toBeInstanceOf(IdentityNotFoundError);
+    await expect(operation.deleteWorkspace({ operationId: 'op-twice', workspaceId: 'ws', actorId: 'marie' })).rejects.toBeInstanceOf(IdentityNotFoundError);
+  });
+
+  it('serializes the double-delete race on the workspace lock', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const operation = buildOperation(env, freshState(), createRealCustody(), true);
+    if (env.concurrent) {
+      const results = await Promise.allSettled([
+        operation.deleteWorkspace({ operationId: 'op-race-1', workspaceId: 'ws', actorId: 'marie' }),
+        operation.deleteWorkspace({ operationId: 'op-race-2', workspaceId: 'ws', actorId: 'marie' }),
+      ]);
+      const outcomes = results.map((r) => r.status === 'fulfilled' ? 'committed' : (r.reason as { code?: string }).code ?? 'error').sort();
+      expect(outcomes).toEqual(['committed', 'identity_not_found']);
+    } else {
+      await operation.deleteWorkspace({ operationId: 'op-race-1', workspaceId: 'ws', actorId: 'marie' });
+      await expect(operation.deleteWorkspace({ operationId: 'op-race-2', workspaceId: 'ws', actorId: 'marie' })).rejects.toBeInstanceOf(IdentityNotFoundError);
+    }
+    await env.unitOfWork.run(READ, async (tx) => {
+      expect(await tx.hostTransaction.journal.findWorkspaceCore('ws')).toBeNull();
+      expect((await execSql(tx.hostTransaction, `SELECT * FROM ${q(tx.hostTransaction, 'cm_workspace_members')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(0);
+    });
+  });
+
+  it('serializes a member add racing the deletion', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const operation = buildOperation(env, freshState(), createRealCustody(), true);
+    const addLate = env.unitOfWork.run(WRITE, async (tx) => {
+      await tx.lockWorkspace('ws');
+      await tx.hostTransaction.journal.insertWorkspaceMemberCore({ workspaceId: 'ws', userId: 'late', role: 'viewer' });
+    });
+    if (env.concurrent) {
+      const [del, add] = await Promise.allSettled([operation.deleteWorkspace({ operationId: 'op-mem', workspaceId: 'ws', actorId: 'marie' }), addLate]);
+      expect(del.status).toBe('fulfilled');
+      if (add.status === 'rejected') expect((add.reason as { code?: string }).code).toBe('identity_not_found');
+    } else {
+      await addLate;
+      await operation.deleteWorkspace({ operationId: 'op-mem', workspaceId: 'ws', actorId: 'marie' });
+    }
+    await env.unitOfWork.run(READ, async (tx) => {
+      expect(await tx.hostTransaction.journal.findWorkspaceCore('ws')).toBeNull();
+      expect((await execSql(tx.hostTransaction, `SELECT * FROM ${q(tx.hostTransaction, 'cm_workspace_members')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(0);
+    });
+  });
+
+  it('runs under a foreign host transaction exposing no custody members', async () => {
+    const env = await openEnv();
+    await env.unitOfWork.run(WRITE, async (tx) => {
+      const host = tx.hostTransaction;
+      await host.journal.insertTenantCore({ tenantId: 'org', slug: 'org', status: 'active', createdAt: NOW });
+      await seedAccount(host, 'marie');
+      await seedAccount(host, 'boss');
+      await host.journal.insertWorkspaceCore({ workspaceId: 'ws', tenantId: 'org', repoIdentity: null, aliases: [], enrolledAt: NOW });
+      await host.journal.insertWorkspaceMemberCore({ workspaceId: 'ws', userId: 'marie', role: 'admin' });
+      await seedSession(tx, 's1', 'marie', 'ws');
+      await seedInvitation(tx, 'inv-pending', 'ws', 'pending');
+    });
+    const memory = createMemoryCustody();
+    const sentinel = {} as CustodyOpHost;
+    const foreignUow: IdentityUnitOfWorkV1<CustodyOpHost> = {
+      profile: env.unitOfWork.profile,
+      run: (options, operation) => env.unitOfWork.run(options, (tx) => operation(rebindIdentityTransactionHost(tx, sentinel))),
+    };
+    const operation = createAtomicWorkspaceDeletionV1({
+      unitOfWork: foreignUow,
+      business: createBusiness(freshState(), false),
+      authorization: createAuthorization(freshState()),
+      connectorPlane: createPlane(freshState(), memory.port, { sql: false, rows: [{ connectorAccountId: 'c9', userId: 'boss', workspaceId: 'ws', provider: 'mem', capability: 'x' }] }),
+      connectorCustody: memory.port,
+      clock: () => NOW,
+      transactionOptions: { deletion: DELETE_OPTS },
+    });
+    const receipt = await operation.deleteWorkspace({ operationId: 'op-foreign', workspaceId: 'ws', actorId: 'marie' });
+    expect(receipt.tenantId).toBe('org');
+    expect(receipt.deliveryIds).toEqual([identityDeliveryId('op-foreign', 'connector_grants', 'connector_grant', 'c9')]);
+    await env.unitOfWork.run(READ, async (tx) => {
+      expect(await tx.hostTransaction.journal.findWorkspaceCore('ws')).toBeNull();
+      expect((await tx.revocationOutbox.listPending('op-foreign'))).toHaveLength(1);
+      expect((await execSql(tx.hostTransaction, `SELECT * FROM ${q(tx.hostTransaction, 'cm_identity_conversation_sessions')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(0);
+    });
+  });
+});
