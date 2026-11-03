@@ -71,10 +71,10 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
   - [x] `packages/mcp-platform/tests/tools-list-snapshot.test.ts` + snapshot JSON: a composed registry (register + select + configure + compile) served through the real SDK bridge (`registerMcpWireTools` over an in-memory link), snapshotting the full `tools/list` result; also asserts the catalogue is byte-identical across recompiles with different configuration values.
   - [x] Lot gate: `make test-artifacts ENV=test-mcp-stable` green (506 tests), `make test-mcp-platform ENV=test-mcp-stable` green (352 tests incl. the snapshot test).
 
-- [ ] **Lot 3 — Docs**
-  - [ ] `packages/mcp-platform/README.md`: document the byte-stable tool-definition rule (what may/may not appear in a definition; where dynamic values go).
-  - [ ] Artifacts API guide (`GUIDE_V1` in `packages/artifacts/src/server/templates.ts`, served by `artifacts_get_api_guide`): same rule; active profile revision/envelope reported in results and server metadata only.
-  - [ ] `packages/artifacts/README.md` pointer if it documents the MCP surface.
+- [x] **Lot 3 — Docs**
+  - [x] `packages/mcp-platform/README.md`: "Stable tool definitions (permission identity)" section — what may/may not appear in a definition, where dynamic values go, snapshot-test update procedure.
+  - [x] Artifacts API guide (`GUIDE_V1` in `packages/artifacts/src/server/templates.ts`, served by `artifacts_get_api_guide`): same rule; active profile revision/envelope reported in results and audit metadata only.
+  - [x] `packages/artifacts/README.md` pointer on the `src/mcp-core.ts` bullet.
 
 - [ ] **Lot 4 — Version bump, CHANGELOG, pins**
   - [ ] Bump `packages/artifacts/package.json` 0.2.6 -> 0.2.8 (> published 0.2.6; leaves 0.2.7 to #890/#893, 0.3.0 to #891); CHANGELOG entry.
