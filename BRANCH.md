@@ -4,7 +4,7 @@
 Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lots L1–L5 in `@sentropic/llm-mesh`: the `SeatOnboardingV1` sibling block, its validators and launch gate, agy capture, two-stage materialization and erasure, claude/muse/codex projections with the Q2-limited trust write, and the stored seat record + facade export. Owner answers (`.tmp/seat-onboarding/owner-answers.md`): Q1 = one owner yes for ALL agy seats (global-consent variant, still version/shape-pinned and fail-closed); Q2 = trust write allowed for claude, muse and codex ONLY for the bench-created empty directory. L6 (cyber carriage) and L7 (h2a vendor/bench) are out of scope.
 
 ## Scope / Guardrails
-- Scope limited to `packages/llm-mesh` (src, tests, package.json, CHANGELOG.md) plus root `package-lock.json` (llm-mesh entry only) and `BRANCH.md`.
+- Scope limited to `packages/llm-mesh` (src, tests, package.json, CHANGELOG.md) plus root `package-lock.json` (llm-mesh-related entries only), `packages/llm-gateway/package.json` and `packages/cluster-mesh/package.json` (peer/dependency range widening only, see SEATONB-EX2), and `BRANCH.md`.
 - Make-only workflow; the single Docker lock `.tmp/packets/DOCKER-LOCK.md` is taken PER COMMAND via `flock`.
 - Branch development in isolated worktree `tmp/worktrees/seat-onboarding` (branch `feat/seat-onboarding` from `origin/main`).
 - `ENV=test-seat-onboarding` always LAST argument of every `make` command; never `ENV=dev`; `make down ENV=test-seat-onboarding` after test runs.
@@ -12,7 +12,7 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
 - Commits via `make commit MSG="..."` only, specific `git add` per commit, ≤150 lines per commit, push after each commit (crash safety). No `[skip ci]`.
 - All new text in English. Synthetic fixtures only — no real seat secrets are read, printed or copied.
 - Keyring read fix (`src/node/keyring/encrypted-file-keyring.ts` + its test) is owned by PR #887 (`fix/llm-mesh-keyring-readonly`, target 0.32.4): NOT duplicated here. At L5, if #887 is merged, rebase onto `origin/main`; otherwise rebase onto the #887 head so the fix arrives via its commits.
-- Version bump: `@sentropic/llm-mesh` 0.32.3 → 0.33.0 (next minor; > published 0.32.3 and > 0.32.4), with `make lock-root` (llm-mesh lock entry only), CHANGELOG entry, and `tests/decision-public-surface.test.ts` fixture update.
+- Version bump: `@sentropic/llm-mesh` 0.32.4 → 0.33.0 (next minor; > published 0.32.4), with `make lock-root` (llm-mesh lock entry + the two widened ranges only), CHANGELOG entry, and `tests/decision-public-surface.test.ts` fixture update. The 0.33.0 minor crosses the declared caps (`cluster-mesh` peer `<0.33.0`, `llm-gateway` dep top `^0.32.0`); both are widened in this branch per SEATONB-EX2, following precedent 41711507e.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -42,6 +42,8 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
   - `packages/llm-mesh/tests/decision-public-surface.test.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
+  - `packages/llm-gateway/package.json` (dependency range only — SEATONB-EX2)
+  - `packages/cluster-mesh/package.json` (peer range only — SEATONB-EX2)
   - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -59,6 +61,7 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
 
 ## Feedback Loop
 - [x] SEATONB-EX1: keyring read-only fix consumed from PR #887 via rebase, not duplicated. PR #887 MERGED into origin/main (0.32.4); branch rebased onto origin/main `5b1d1dcd2` (2026-11-02 continuation); keyring files never edited directly in this branch. L5T keyring cases run against #887's implementation.
+- [x] SEATONB-EX2: mesh minor 0.33.0 crosses the declared consumer caps — `packages/cluster-mesh/package.json` peerDependencies `"@sentropic/llm-mesh": "0.19.2 || >=0.22.0 <0.33.0"` and `packages/llm-gateway/package.json` dependencies top `^0.32.0`. Widened to `<0.34.0` and `|| ^0.33.0` respectively (package.json only, no src changes, so `enforce-package-bump` does not require their version bumps). Required by the repo's own release invariant `packages/llm-mesh/tests/node/mesh-release-invariants.test.ts` (R6-1: mesh version must sit inside the gateway declared range) and by `make lock-root` (ERESOLVE otherwise). Precedent: 41711507e ("fix: align gateway and cluster compatibility with mesh 0.32"). Impact: root `package-lock.json` gains exactly three changed lines (llm-mesh version + the two ranges); unrelated lock drift (mcp-platform/artifacts) produced by `make lock-root` was reverted to keep the diff in scope. Rollback: revert the two range lines and drop the 0.33.0 bump.
 - [ ] none so far
 
 ## Orchestration Mode (AI-selected)
@@ -100,13 +103,13 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
   - [ ] Lot gate: scoped + full tests, typecheck, lint, scope-check, down (`ENV=test-seat-onboarding` last).
   - [ ] L4T acceptance: oversize synthetic `.claude.json` captures to the two-field projection; stage 1 refuses non-minimized auth `.claude.json`; `oauthAccount` never in block or receipt; materialised `.claude.json` has exactly the cell-workspace trust entry and no foreign path; empty `cellSynthesis` → no trust entry for claude/muse/codex; muse materialisation has exactly one project (cell workspace); rendered codex config has only cell project + supplied MCP servers + policy value; unknown muse `schema_version` and malformed claude `lastOnboardingVersion` refuse.
 
-- [ ] **Lot 5 — Stored seat record, facade export, keyring read fix (L5) + L5T**
+- [x] **Lot 5 — Stored seat record, facade export, keyring read fix (L5) + L5T**
   - [x] Re-check PR #887 state; rebase onto `origin/main` if merged, else onto the #887 head (SEATONB-EX1); never edit the keyring files directly.
-  - [ ] Write `packages/llm-mesh/tests/service/seat-onboarding-import-export.test.ts` first.
-  - [ ] `importSeatBundle` additive `onboarding` member (validate + bind before registration; refusal rejects whole import), seat-record persistence `sentropic-llm-mesh:<accountId>:seat-record` (`{version:1, bundle, onboarding|null, storedAt}`), forward overwrite, idempotent backfill, removal cleanup; `exportSeatBundle({accountId, ownerScope})` on facade + service with typed `seat-export-unavailable:<reason>` refusals (`not-a-seat`, `record-missing`, lineage mismatch, foreign ownerScope; never refresh material or native files).
-  - [ ] Version bump 0.33.0: `packages/llm-mesh/package.json`, `make lock-root` (llm-mesh entry only), CHANGELOG, `tests/decision-public-surface.test.ts`.
+  - [x] Write `packages/llm-mesh/tests/service/seat-onboarding-import-export.test.ts` first (16 L5T cases, synthetic fixtures).
+  - [x] `importSeatBundle` additive `onboarding` member (validate + bind before registration; refusal rejects whole import), seat-record persistence `sentropic-llm-mesh:<accountId>:seat-record` (`{version:1, bundle, onboarding|null, storedAt}`), forward overwrite, idempotent backfill, removal cleanup (three existing deleteSecret sets); `exportSeatBundle({accountId, ownerScope})` on facade + service with typed `seat-export-unavailable:<reason>` refusals (`not-a-seat`, `record-missing`, `lineage-mismatch`, `owner-mismatch`, `record-invalid`; never refresh material or native files).
+  - [x] Version bump 0.33.0: `packages/llm-mesh/package.json`, `make lock-root` (llm-mesh entry + two widened ranges only), CHANGELOG, `tests/decision-public-surface.test.ts`, peer-cap widening per SEATONB-EX2.
   - [ ] Lot gate: scoped + full tests, typecheck, lint, build, scope-check, down (`ENV=test-seat-onboarding` last).
-  - [ ] L5T acceptance: import with valid block persists record, export returns bundle+block verbatim through the record (incl. lineage + `reboundFrom` after forward re-import with rebound block); invalid/misbound block registers no account; import without block succeeds, exports `onboarding: null`; pre-L5 fixture account (marker, no record) refuses `seat-export-unavailable:record-missing` then exports after idempotent backfill; directly enrolled account refuses `not-a-seat`; export refuses foreign ownerScope, never returns refresh material or native files; removal deletes seat record; keyring `getSecret` succeeds on read-only-mounted fixture and a pure read leaves mode+ctime unchanged (from #887); pre-existing importSeatBundle tests green.
+  - [x] L5T acceptance: import with valid block persists record, export returns bundle+block verbatim through the record (incl. lineage + `reboundFrom` after forward re-import with rebound block); invalid/misbound block registers no account; import without block succeeds, exports `onboarding: null`; pre-L5 fixture account (marker, no record) refuses `seat-export-unavailable:record-missing` then exports after idempotent backfill; directly enrolled account refuses `not-a-seat`; export refuses foreign ownerScope, never returns refresh material or native files; removal deletes seat record; keyring `getSecret` succeeds on read-only-mounted fixture and a pure read leaves mode+ctime unchanged (from #887); pre-existing importSeatBundle tests green.
 
 - [ ] **Lot 6 — Release & PR**
   - [ ] Post-rebase gate: `packages/llm-mesh/package.json` version > `npm view @sentropic/llm-mesh version`.
