@@ -21,6 +21,7 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
   - `packages/cluster-mesh/tests/boundary-resolution.spec.ts`
   - `packages/cluster-mesh/package.json` (version bump)
   - `package-lock.json` (BR-G2-EX1: one-line workspace version sync via `make lock-root`)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` (BR-G2-EX2: 4-line dev-version pin sync, repo bump precedent 45e961c8e / 4ed0b4009)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -32,7 +33,7 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
   - `deploy/**`
   - `.github/**`
   - `packages/cluster-mesh/src/**` except the three allowed `identity-contracts` files (frozen 1.0 and A2.0b bundles untouched)
-  - `packages/cluster-mesh/tests/**` except `tests/boundary-resolution.spec.ts` (frozen suites stay unmodified)
+  - `packages/cluster-mesh/tests/**` except `tests/boundary-resolution.spec.ts` and the two BR-G2-EX2 fixture files (frozen suites stay unmodified)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - none
 - **Exception process**:
@@ -41,7 +42,8 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [x] BR-G2-EX1: synchronize only the `packages/cluster-mesh` workspace version line in the root lockfile after the dev bump (`make lock-root`). Reason: CI gate "train package versions match the root lockfile". Impact: version metadata only. Rollback: revert `package-lock.json` together with the version bump.
+- [x] BR-G2-EX1: synchronize only the `packages/cluster-mesh` workspace version line in the root lockfile after the dev bump (`make lock-root`). Reason: CI gate "train package versions match the root lockfile". Impact: version metadata only. Rollback: revert `package-lock.json` together with the version bump. Note: `make lock-root` also rewrote the pre-existing `packages/mcp-platform` drift (workspace 0.4.1 vs lockfile 0.4.0 inherited from main); those two hunks were reverted to keep this diff inside the declared exception.
+- [x] BR-G2-EX2: sync the `0.26.0-dev.6` → `0.26.0-dev.7` pin in `tests/packaging/fixtures/selected/package.json` (1 line) and `package-lock.json` (3 lines). Reason: `validate-cluster-mesh (source installed major)` / `(lazy stateful install)` fail on `prepare-artifacts.spec.ts` "frozen fixture must pin a stable release tarball" when the workspace dev version diverges from the fixture pin; repo bump precedent 45e961c8e and 4ed0b4009 sync exactly these 4 lines. Impact: fixture metadata only, no test logic. Rollback: revert the two fixture files together with the version bump.
 - [x] PostgreSQL first run of the new spec showed 3 tests timing out at the 5000ms default under heavy shared-host load (sibling G-lot lanes holding the Docker lock); no assertion failed. Same head + same command rerun: 16/16 passed. Recorded as a proven transient; no timeout increase, no assertion change.
 
 ## Orchestration Mode (AI-selected)
