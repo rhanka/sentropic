@@ -4012,6 +4012,58 @@ gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_R
 	@test -n "$(GH_DEPLOY_RUN_ID)" || (echo "ERROR: GH_DEPLOY_RUN_ID is required, for example GH_DEPLOY_RUN_ID=26159456218" >&2; exit 1)
 	gh run watch "$(GH_DEPLOY_RUN_ID)" --repo "$(GH_REPO)" --interval 30 --exit-status
 
+# --- Email-code HMAC key custody (Q-K=A, method qk-secret-custody-r2, BR900-EX1) --
+# Generation and rotation bookkeeping run ONLY through these reviewed targets
+# (node deploy/ci/email-code-hmac/custody.mjs). The key value never prints, never
+# enters argv or a child environment: the .env write goes through a private
+# exclusive 0600 descriptor (fsync + atomic rename) and the GitHub deposit pipes
+# the value to `gh secret set` on stdin. ENV selects the tier and is always last:
+# preprod|prod write the central .env, test-*/e2e-* write the git-ignored .env.$(ENV).
+EMAIL_CODE_HMAC_TIER = $(if $(filter preprod prod,$(ENV)),$(ENV),$(if $(filter test-% e2e-%,$(ENV)),test,))
+EMAIL_CODE_HMAC_ENV_FILE ?= $(if $(filter test-% e2e-%,$(ENV)),.env.$(ENV),.env)
+EMAIL_CODE_HMAC_DRY_RUN_FLAG = $(if $(filter 1 true yes,$(EMAIL_CODE_HMAC_DRY_RUN)),--dry-run,)
+EMAIL_CODE_HMAC_DEPOSIT_FLAG = $(if $(filter preprod prod,$(ENV)),--deposit,)
+
+.PHONY: email-code-hmac-generate
+email-code-hmac-generate: ## Generate the email-code HMAC ACTIVE key into $(EMAIL_CODE_HMAC_ENV_FILE) and deposit the GH env secret (BR900-EX1; EMAIL_CODE_HMAC_DRY_RUN=1 for dry-run)
+	@case "$(ENV)" in preprod|prod|test-*|e2e-*) ;; *) echo "ERROR: ENV must be preprod, prod or test-*/e2e-* (never dev)"; exit 1 ;; esac
+	@test -n "$(EMAIL_CODE_HMAC_TIER)" || { echo "ERROR: cannot derive tier from ENV=$(ENV)"; exit 1; }
+	@node deploy/ci/email-code-hmac/custody.mjs generate "$(EMAIL_CODE_HMAC_TIER)" --envfile "$(EMAIL_CODE_HMAC_ENV_FILE)" --repo "$(GH_REPO)" $(EMAIL_CODE_HMAC_DRY_RUN_FLAG) $(EMAIL_CODE_HMAC_DEPOSIT_FLAG)
+
+.PHONY: email-code-hmac-rotate-begin
+email-code-hmac-rotate-begin: ## Install the next key as PREVIOUS reader (rotation phase P1, BR900-EX1)
+	@case "$(ENV)" in preprod|prod|test-*|e2e-*) ;; *) echo "ERROR: ENV must be preprod, prod or test-*/e2e-* (never dev)"; exit 1 ;; esac
+	@node deploy/ci/email-code-hmac/custody.mjs rotate-begin "$(EMAIL_CODE_HMAC_TIER)" --envfile "$(EMAIL_CODE_HMAC_ENV_FILE)" --repo "$(GH_REPO)" $(EMAIL_CODE_HMAC_DRY_RUN_FLAG) $(EMAIL_CODE_HMAC_DEPOSIT_FLAG)
+
+.PHONY: email-code-hmac-rotate-promote
+email-code-hmac-rotate-promote: ## Swap ACTIVE/PREVIOUS atomically (rotation phase P2, BR900-EX1)
+	@case "$(ENV)" in preprod|prod|test-*|e2e-*) ;; *) echo "ERROR: ENV must be preprod, prod or test-*/e2e-* (never dev)"; exit 1 ;; esac
+	@node deploy/ci/email-code-hmac/custody.mjs rotate-promote "$(EMAIL_CODE_HMAC_TIER)" --envfile "$(EMAIL_CODE_HMAC_ENV_FILE)" --repo "$(GH_REPO)" $(EMAIL_CODE_HMAC_DRY_RUN_FLAG) $(EMAIL_CODE_HMAC_DEPOSIT_FLAG)
+
+.PHONY: email-code-hmac-rotate-retire
+email-code-hmac-rotate-retire: ## Remove the PREVIOUS pair after the §4.4 zero-count proof (PROOF=<attestation file>, BR900-EX1)
+	@test -n "$(PROOF)" || { echo "ERROR: PROOF=<retirement proof attestation file> is required"; exit 1; }
+	@case "$(ENV)" in preprod|prod|test-*|e2e-*) ;; *) echo "ERROR: ENV must be preprod, prod or test-*/e2e-* (never dev)"; exit 1 ;; esac
+	@node deploy/ci/email-code-hmac/custody.mjs rotate-retire "$(EMAIL_CODE_HMAC_TIER)" --envfile "$(EMAIL_CODE_HMAC_ENV_FILE)" --repo "$(GH_REPO)" --proof "$(PROOF)" $(EMAIL_CODE_HMAC_DRY_RUN_FLAG) $(EMAIL_CODE_HMAC_DEPOSIT_FLAG)
+
+.PHONY: email-code-hmac-fingerprint
+email-code-hmac-fingerprint: ## Print refs and keyed fingerprints only (BR900-EX1)
+	@case "$(ENV)" in preprod|prod|test-*|e2e-*) ;; *) echo "ERROR: ENV must be preprod, prod or test-*/e2e-* (never dev)"; exit 1 ;; esac
+	@node deploy/ci/email-code-hmac/custody.mjs fingerprint "$(EMAIL_CODE_HMAC_TIER)" --envfile "$(EMAIL_CODE_HMAC_ENV_FILE)"
+
+.PHONY: email-code-hmac-verify-vector
+email-code-hmac-verify-vector: ## Recompute test vectors and compare with EXPECTS="ref=vector ..." (BR900-EX1)
+	@case "$(ENV)" in preprod|prod|test-*|e2e-*) ;; *) echo "ERROR: ENV must be preprod, prod or test-*/e2e-* (never dev)"; exit 1 ;; esac
+	@node deploy/ci/email-code-hmac/custody.mjs verify-vector "$(EMAIL_CODE_HMAC_TIER)" --envfile "$(EMAIL_CODE_HMAC_ENV_FILE)" $(foreach e,$(EXPECTS),--expect "$(e)")
+
+.PHONY: test-email-code-hmac-selftest
+test-email-code-hmac-selftest: ## Offline selftests (K2/K3) of the custody tool and workflow materialize logic, no cluster (BR900-EX1)
+	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
+	@docker run --rm --network none -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+		-v "$(CURDIR)/deploy:/workspace/deploy:ro" -v "$(CURDIR)/.github:/workspace/.github:ro" \
+		-v "$(CURDIR)/Makefile:/workspace/Makefile:ro" -w /workspace \
+		$(LLM_MESH_NODE_IMAGE) node deploy/ci/email-code-hmac/selftest.mjs
+
 # --- Secrets provisioning: cluster-only (mode 2) -----------------------------
 # Secrets are provisioned DIRECTLY into the live cluster from a gitignored env
 # file via `make k8s-bundle-secret K8S_ENV_FILE=.env.prod` (target above). No
