@@ -15,7 +15,7 @@ export type IdentityCompositionDomainV1 =
 
 export interface IdentityCompositionDescriptorV1 {
   readonly domain: IdentityCompositionDomainV1;
-  readonly version: '1.2.0';
+  readonly version: typeof IDENTITY_COMPOSITION_CONTRACT_VERSION;
   readonly baseContractVersion: '1.0.0';
   readonly amendment: 'A4-composition-gaps';
   readonly status: 'contract-only';
@@ -29,7 +29,7 @@ export interface IdentityCompositionDescriptorV1 {
 export const IDENTITY_COMPOSITION_DESCRIPTORS: readonly IdentityCompositionDescriptorV1[] = [
   {
     domain: 'oauth_tenant_reads',
-    version: '1.2.0',
+    version: IDENTITY_COMPOSITION_CONTRACT_VERSION,
     baseContractVersion: '1.0.0',
     amendment: 'A4-composition-gaps',
     status: 'contract-only',
@@ -39,4 +39,21 @@ export const IDENTITY_COMPOSITION_DESCRIPTORS: readonly IdentityCompositionDescr
     factories: ['oauthTenantStoreV1', 'oauthTenantStoreV1FromStores'],
     errorType: 'IdentityCustodyErrorV1',
   },
+  {
+    domain: 'boundary_resolution',
+    version: IDENTITY_COMPOSITION_CONTRACT_VERSION,
+    baseContractVersion: '1.0.0',
+    amendment: 'A4-composition-gaps',
+    status: 'contract-only',
+    profiles: ['postgres', 'sqlite'],
+    records: ['TenantBoundaryResolutionV1'],
+    ports: ['TenantBoundaryPortV1'],
+    factories: ['createTenantBoundaryPortV1', 'createIdentityBoundaryDomainV1'],
+    errorType: 'IdentityCustodyErrorV1',
+  },
 ];
+
+export const identityCompositionDescriptorV1 = (
+  domain: IdentityCompositionDomainV1,
+): IdentityCompositionDescriptorV1 | undefined =>
+  IDENTITY_COMPOSITION_DESCRIPTORS.find((entry) => entry.domain === domain);
