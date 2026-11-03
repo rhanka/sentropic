@@ -1,136 +1,92 @@
-# Feature: seat onboarding state in seat bundles (llm-mesh L1–L5)
+# Feature: Byte-stable MCP tool definitions (artifacts provider + mcp-platform composition)
 
 ## Objective
-Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lots L1–L5 in `@sentropic/llm-mesh`: the `SeatOnboardingV1` sibling block, its validators and launch gate, agy capture, two-stage materialization and erasure, claude/muse/codex projections with the Q2-limited trust write, and the stored seat record + facade export. Owner answers (`.tmp/seat-onboarding/owner-answers.md`): Q1 = one owner yes for ALL agy seats (global-consent variant, still version/shape-pinned and fail-closed); Q2 = trust write allowed for claude, muse and codex ONLY for the bench-created empty directory. L6 (cyber carriage) and L7 (h2a vendor/bench) are out of scope.
+MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema, annotations, _meta) become byte-stable across deployments, package versions and profile switches, because claude.ai resets per-tool "Always allow" permissions whenever a tool definition changes. Dynamic contract values (profile revision, provider version, capability selection, limits) move into tool results, the API guide, or server metadata that clients do not use for per-tool permission identity.
 
 ## Scope / Guardrails
-- Scope limited to `packages/llm-mesh` (src, tests, package.json, CHANGELOG.md) plus root `package-lock.json` (llm-mesh-related entries only), `packages/llm-gateway/package.json` and `packages/cluster-mesh/package.json` (peer/dependency range widening only, see SEATONB-EX2), and `BRANCH.md`.
-- Make-only workflow; the single Docker lock `.tmp/packets/DOCKER-LOCK.md` is taken PER COMMAND via `flock`.
-- Branch development in isolated worktree `tmp/worktrees/seat-onboarding` (branch `feat/seat-onboarding` from `origin/main`).
-- `ENV=test-seat-onboarding` always LAST argument of every `make` command; never `ENV=dev`; `make down ENV=test-seat-onboarding` after test runs.
-- Tests written first per lot, then `make` targets only; scoped `make test-llm-mesh SCOPE=...` during evolution, full `make test-llm-mesh` per lot gate.
-- Commits via `make commit MSG="..."` only, specific `git add` per commit, ≤150 lines per commit, push after each commit (crash safety). No `[skip ci]`.
-- All new text in English. Synthetic fixtures only — no real seat secrets are read, printed or copied.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- Keyring read fix (`src/node/keyring/encrypted-file-keyring.ts` + its test) is owned by PR #887 (`fix/llm-mesh-keyring-readonly`, target 0.32.4): NOT duplicated here. At L5, if #887 is merged, rebase onto `origin/main`; otherwise rebase onto the #887 head so the fix arrives via its commits.
-- Version bump: `@sentropic/llm-mesh` 0.32.4 → 0.33.0 (next minor; > published 0.32.4), with `make lock-root` (llm-mesh lock entry + the two widened ranges only), CHANGELOG entry, and `tests/decision-public-surface.test.ts` fixture update. The 0.33.0 minor crosses the declared caps (`cluster-mesh` peer `<0.33.0`, `llm-gateway` dep top `^0.32.0`); both are widened in this branch per SEATONB-EX2, following precedent 41711507e.
+- Scope limited to `packages/artifacts` (mcp-core.ts, profile/contracts.ts, tool specs, tests, README/CHANGELOG/package.json), `packages/mcp-platform` (tests + README only, no src change), and the APP-P1 pin sites in `api/src/services/mcp/cluster-registry.ts` + `api/tests/api/app-mcp-registry.test.ts` + `api/tests/api/app-mcp-installed.test.ts`.
+- The APP-P1 manifest pin semantics are kept: `computeManifestDigest` still covers the full tool definitions; the pin is refreshed once for the deliberate definition stabilization, never weakened.
+- Make-only workflow; tests on `ENV=test-mcp-stable` only; `make down ENV=test-mcp-stable` at the end.
+- Branch development happens in worktree `tmp/worktrees/mcp-stable-tool-defs` (branch `feat/mcp-stable-tool-definitions` from `origin/main`).
+- In every `make` command, `ENV=<env>` is passed as the last argument.
+- All new text in English. No `[skip ci]` anywhere.
+- Open PRs #890 (0.2.7), #893 (single-label host), #891 (sqlite U1, 0.3.0) must NOT change existing tool definitions; their diffs are audited and reported in `.tmp/rv/mcp-stable-tool-defs.md`. This branch bumps `@sentropic/artifacts` to 0.2.8 to leave 0.2.7 to #890/#893 and 0.3.0 to #891.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/enrollment/seat-onboarding.ts`
-  - `packages/llm-mesh/src/enrollment/seat-onboarding-projections.ts`
-  - `packages/llm-mesh/src/enrollment/index.ts`
-  - `packages/llm-mesh/src/node/index.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-capture.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-materialize.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-types.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-stage1.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-stage2.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-record.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-cell-compose.ts`
-  - `packages/llm-mesh/src/node/seat-onboarding-erase.ts`
-  - `packages/llm-mesh/src/node/seat-stage-write.ts`
-  - `packages/llm-mesh/src/global.d.ts`
-  - `packages/llm-mesh/src/service/facade.ts`
-  - `packages/llm-mesh/src/service/local-account-transport-service.ts`
-  - `packages/llm-mesh/tests/enrollment/seat-onboarding.test.ts`
-  - `packages/llm-mesh/tests/enrollment/seat-onboarding-projections.test.ts`
-  - `packages/llm-mesh/tests/enrollment/seat-onboarding-testkit.ts`
-  - `packages/llm-mesh/tests/node/seat-onboarding-capture.test.ts`
-  - `packages/llm-mesh/tests/node/seat-onboarding-materialize.test.ts`
-  - `packages/llm-mesh/tests/service/seat-onboarding-import-export.test.ts`
-  - `packages/llm-mesh/tests/service/facade.test.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/CHANGELOG.md`
-  - `packages/llm-gateway/package.json` (dependency range only — SEATONB-EX2)
-  - `packages/cluster-mesh/package.json` (peer range only — SEATONB-EX2; version bump to 0.26.0-dev.6 — SEATONB-EX3)
-  - `packages/cluster-mesh/src/modules/catalog.ts` (train range rebind — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/fixtures/train.ts` (train pin rebind — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (range literals — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts` (range literals — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/speech-peer.spec.ts` (range literals — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts` (range literals — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts` (range literal — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (range literal — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts` (expected-message regex range — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (selected tuple pin rebind — SEATONB-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` — SEATONB-EX3)
-  - `api/tests/unit/gateway-package-version.test.ts` (one-line version pin 0.22.3 → 0.22.4 only — SEATONB-EX4; allowed wins over the `api/**` forbidden glob per harness precedence)
-  - `package-lock.json`
+  - `packages/artifacts/src/**`
+  - `packages/artifacts/tests/**`
+  - `packages/artifacts/README.md`
+  - `packages/artifacts/CHANGELOG.md`
+  - `packages/artifacts/package.json`
+  - `packages/mcp-platform/tests/**`
+  - `packages/mcp-platform/README.md`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/mcp-platform/src/**` (audit found no dynamic values there; rule enforced by snapshot test + README)
+  - `packages/cluster-mesh/**`
+  - `api/src/**` except `api/src/services/mcp/cluster-registry.ts`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-  - `api/**`, `ui/**`, `e2e/**`, `apps/**`, `scripts/**`, `deploy/**`, `docs/**`
-  - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts` and `packages/llm-mesh/tests/node/encrypted-file-keyring.test.ts` (owned by PR #887 — see Conditional Paths)
-- **Conditional Paths (allowed only with explicit exception)**:
-  - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts` + `packages/llm-mesh/tests/node/encrypted-file-keyring.test.ts`: only via rebase onto the PR #887 branch (merged into main, or its head while open); never edited directly in this branch. Exception `SEATONB-EX1`: L5's keyring read fix ships through #887 per the packet; this branch only consumes it.
-  - `tools/memory-mcp-l5/artifacts/**` (SEATONB-EX5)
 - **Exception process**:
-  - Declare exception ID in `## Feedback Loop` before touching any conditional/forbidden path, with reason, impact, rollback.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] SEATONB-EX1: keyring read-only fix consumed from PR #887 via rebase, not duplicated. PR #887 MERGED into origin/main (0.32.4); branch rebased onto origin/main `5b1d1dcd2` (2026-11-02 continuation); keyring files never edited directly in this branch. L5T keyring cases run against #887's implementation.
-- [x] SEATONB-EX2: mesh minor 0.33.0 crosses the declared consumer caps — `packages/cluster-mesh/package.json` peerDependencies `"@sentropic/llm-mesh": "0.19.2 || >=0.22.0 <0.33.0"` and `packages/llm-gateway/package.json` dependencies top `^0.32.0`. Widened to `<0.34.0` and `|| ^0.33.0` respectively. Required by the repo's own release invariant `packages/llm-mesh/tests/node/mesh-release-invariants.test.ts` (R6-1: mesh version must sit inside the gateway declared range) and by `make lock-root` (ERESOLVE otherwise). Precedent: 41711507e ("fix: align gateway and cluster compatibility with mesh 0.32"). Additionally, the `package-candidates` manifest guard (`scripts/ci/publishable-manifests.mjs` bumpGate) requires a version bump on any PUBLISHED package whose dependency map changes: `@sentropic/llm-gateway` 0.22.3 (published) → **0.22.4** with the widened range; `@sentropic/cluster-mesh` 0.26.0-dev.5 is unpublished (registry latest 0.25.0), so its peer-range widening needs no bump. No src changes in either package. Impact: root `package-lock.json` diff is exactly 4 lines (llm-mesh version, llm-gateway version, the two ranges); unrelated lock drift (mcp-platform/artifacts) produced by `make lock-root` was reverted to keep the diff in scope. Rollback: revert the two range lines, the llm-gateway bump, and drop the 0.33.0 bump.
-- [x] SEATONB-EX3: the 0.33.0 minor crossing also breaks `@sentropic/cluster-mesh`'s own train rebind surface, which CI proved at run 41566007760 (validate-cluster-mesh lanes "source installed major" and "lazy stateful install" failed): the runtime catalog range (`src/modules/catalog.ts` `LLM_MESH_RANGE`/`LLM_MESH_SPEECH_RANGE` still `<0.33.0`) no longer equals the widened manifest peer range, the `tests/fixtures/train.ts` pins and the `tests/packaging/fixtures/selected/*` tuple still pin llm-mesh 0.32.4 / llm-gateway 0.22.3. Rebind all of them to 0.33.0 / 0.22.4 with the catalog ranges widened to `<0.34.0`, exactly mirroring precedent 41711507e (mesh 0.32 alignment: catalog.ts + train.ts + registry.spec.ts + topology-ranges.spec.ts) and 4ed0b4009 (cluster-mesh dev bump: package.json + root lock + selected fixture). Because `catalog.ts` is a `src/` change, `enforce-package-bump` requires a cluster-mesh version bump: **0.26.0-dev.5 → 0.26.0-dev.6** (unpublished prerelease line, registry latest 0.25.0, so no `package-candidates` bumpGate). The selected fixture lock is regenerated with `make ci-package-candidate` + `make pack-candidate-siblings` + `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` (sibling sha256 must match the CI-computed sibling archives). Impact: cluster-mesh catalog admits mesh 0.33.x at runtime; no behavior change for ≤0.32 consumers. Rollback: revert the rebind commits and the EX2 range widenings, drop the 0.33.0 bump (fall back to a 0.32.x patch bump).
-- [x] SEATONB-EX4: CI run 41571416951 proved two out-of-scope casualties of the version bumps, both fixed here. (a) `validate-publishable-manifests` failed because this branch's `BRANCH.md` (written from the template) lacked the BRLOCK-EX1 policy reference line that `scripts/ci/ci-lockfile-installs.test.mjs` requires (`plan.includes('review_by=' + policy['BRLOCK-EX1'].review_by)`); the line is restored verbatim from `origin/main:BRANCH.md` (review_by=2026-11-30T00:00:00Z, policy file untouched). (b) `test-api-unit-integration (unit)` failed on `api/tests/unit/gateway-package-version.test.ts` (`expected '0.22.4' to be '0.22.3'`): the release-evidence pin hardcodes the previously published llm-gateway version and must track this branch's 0.22.4 bump — one-line pin change 0.22.3 → 0.22.4, mirroring precedent e81698175 ("fix: gateway 0.22.2 pack integrity and api version pin"). The pin file sits under the forbidden `api/**` glob, so it is listed in Allowed Paths (allowed wins over forbidden in harness `classifyPath` precedence); no other `api/**` file is touched. Impact: none beyond the pin; the api package's runtime code is unchanged. Rollback: revert the pin line and drop the BRLOCK-EX1 line from BRANCH.md.
-- [x] SEATONB-EX5: conditional path `tools/memory-mcp-l5/artifacts/**` — after the rebase onto origin/main the root lock differs from the lock the committed P1 manifest was generated against, so CI `memory-l5-qualification` fails with « manifest P1 lock fingerprint mismatch: relevant dependency or build inputs changed; regenerate the P1 manifest ». Regenerated through the repo make target `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-seats-l5` (never hand-editing digests; precedent 615043ead / BR01-EX5 on PR #893): the previous manifest+sidecar are retained in `artifacts/history/`, one new immutable lock snapshot lands under `artifacts/lock-snapshots/`. Impact: the P1 manifest now binds the post-rebase root lock fingerprint; no runtime code change. Rollback: restore the retained history manifest/sidecar and delete the new lock snapshot.
-- [ ] none so far
+- (empty)
+
+## AI Flaky tests
+- Acceptance rule: no AI-flaky tests are involved; all tests here are deterministic.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single package, one PR with one commit series per lot)
-- [ ] **Multi-branch**
-- Rationale: one package, one design, sequential lots L1→L5 with tests per lot; no sub-workstreams. L6/L7 belong to other lanes.
+- [x] **Mono-branch + cherry-pick** (single branch, single final test cycle)
+- Rationale: one cohesive rule change across two packages plus pin sites; no parallel sub-workstreams.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: no UI surface change; package-level vitest lanes only (`make test-mcp-platform`, `make test-artifacts`, scoped api registry tests) on `ENV=test-mcp-stable`.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [x] Worktree `tmp/worktrees/seat-onboarding` created, branch `feat/seat-onboarding` from `origin/main` (bd7269816).
-  - [x] `.env` copied from root; `BRANCH.md` written from `plan/BRANCH_TEMPLATE.md`.
-  - [x] Read: `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, design r3, owner answers, llm-mesh sources (seat-bundle, cli-seat-import, agy-cli-import, facade, local-account-transport-service, keyring, marker), bench envelope shape (`scripts/xcli-seat-import.mjs`, `xcli-seat-provision.mjs`, `xcli-lab.mjs` LOGIN_ALLOWLIST).
-  - [x] PR #887 checked: OPEN at branch creation, head a7ff2bf99df592d3694d0ee269d79fdd1c78c4af, target 0.32.4; MERGED before the 02/11 continuation — branch rebased onto origin/main (see SEATONB-EX1).
-  - [x] Targets confirmed: `make test-llm-mesh [SCOPE=]`, `make typecheck-llm-mesh`, `make build-llm-mesh`, `make lint-llm-mesh`, `make lock-root`, `make scope-check`, `make commit MSG=`, `make down`, all with `ENV=test-seat-onboarding` last, under `flock .tmp/packets/DOCKER-LOCK.md` per command.
-  - [x] CI triggers on `push: main` + `pull_request` only → branch pushes are crash-safety copies; one PR opened at the end for one CI run.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Worktree `tmp/worktrees/mcp-stable-tool-defs` on `feat/mcp-stable-tool-definitions` from `origin/main`; `harness check branch` PASS.
+  - [x] Audit tools/list definitions: artifacts `description` embeds `profileRevisionId`/`resultEnvelopeVersion`; `inputSchema` is profile-derived; `outputSchema` switches on `resultEnvelopeVersion`; mcp-platform composed descriptors are static (memory tools frozen; bridge passes host descriptors through).
+  - [x] Audit PRs #890/#893/#891 against definition stability (report in `.tmp/rv/mcp-stable-tool-defs.md`).
+  - [x] Confirm command style: `make ... ENV=test-mcp-stable` with ENV last; Docker lock via `flock .tmp/packets/DOCKER-LOCK.md` per command.
 
-- [x] **Lot 1 — Contract and validators (L1) + L1T**
-  - [ ] Write `packages/llm-mesh/tests/enrollment/seat-onboarding.test.ts` first (synthetic fixtures; all L1T acceptance cases).
-  - [ ] Implement `packages/llm-mesh/src/enrollment/seat-onboarding.ts`: `SeatOnboardingV1`, `SeatEnvelopeV1`, `SeatOnboardingFile`, `SeatOnboardingDestKey`, `SeatOnboardingCode` (incl. `onboarding-incomplete`, `onboarding-binding-unverifiable`, launch-gate `onboarding-required`), `SEAT_ONBOARDING_MAX_BYTES`, `SEAT_ENVELOPE_AUTH_FILES`, `AGY_REQUIRED_COMPLETED_STEPS`, pbtxt-subset parser, per-format validators, `validateSeatOnboarding`, `validateSeatEnvelope` (returns `onboardingStatus`), `seatLaunchGate`, `rebindSeatOnboarding`.
-  - [ ] Export from `src/enrollment/index.ts` and `src/node/index.ts`.
-  - [ ] Lot gate: `flock <lock> make test-llm-mesh SCOPE=tests/enrollment/seat-onboarding.test.ts ENV=test-seat-onboarding` green; `make test-llm-mesh ENV=test-seat-onboarding` full green (seat-bundle + cli-seat-import tests unchanged); `make typecheck-llm-mesh ENV=test-seat-onboarding`; `make lint-llm-mesh ENV=test-seat-onboarding`; `make scope-check ENV=test-seat-onboarding`; `make down ENV=test-seat-onboarding`.
-  - [ ] L1T acceptance: valid block per format passes; unknown top-level/nested key refused; lineage mismatch refused; bundle `nativeCliVersion` absent with block present refused; block > 4 KiB refused; envelope > 48 KiB refused; digest/byteLength mismatch refused; partial agy step set → `onboarding-incomplete`; non-`custodian-stable-ref` basis refused; absent block validates for every CLI with `onboardingStatus: 'absent'` and `seatLaunchGate` closed (`onboarding-required`) for agy/claude/muse/codex, eligible for vibe; present block on vibe → `onboarding-shape-unverified`; `validateSeatEnvelope` never returns `onboarding-required`; rebind accepts same-epoch forward, refuses epoch/version/digest/account change; existing seat-bundle + cli-seat-import tests green.
+- [x] **Lot 1 — Static artifacts tool definitions**
+  - [x] Add frozen static tool definitions (description, inputSchema, outputSchema, idempotency, gates) for all 17 `artifacts_*` tools in `packages/artifacts/src/mcp-core.ts` (`ARTIFACTS_TOOL_DEFINITIONS`).
+  - [x] `createArtifactsManifest` builds tool entries from the static definitions only; profile stays in `audit.artifactsProfileDigest` (server metadata) and in typed result details.
+  - [ ] Update `packages/artifacts/tests/mcp.test.ts` and `parity-r2-profile.test.ts` expectations (description no longer contains the revision; inputSchema is the static definition).
+  - [ ] Lot gate:
+    - [ ] `make typecheck` for artifacts/mcp-platform lanes.
+    - [ ] `make test-artifacts SCOPE=tests/mcp.test.ts tests/parity-r2-profile.test.ts ENV=test-mcp-stable`.
 
-- [x] **Lot 2 — agy canonicalizer and capture (L2) + L2T**
-  - [ ] Write `packages/llm-mesh/tests/node/seat-onboarding-capture.test.ts` first (synthetic fixtures).
-  - [ ] `canonicaliseAgyJetski` (pure, in enrollment module) + node-side `captureSeatOnboarding` in `src/node/seat-onboarding-capture.ts` (explicit source HOME + selector, lstat regular file only, size cap before parse, custodian `capturedAt`, explicit stable account reference); export from `src/node/index.ts`.
-  - [ ] Lot gate: scoped + full `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make scope-check`, `make down` — all `ENV=test-seat-onboarding` last.
-  - [ ] L2T acceptance: measured-shape fixture (full step set + `installation_uuid` + `migrations`) captures to canonical steps-only bytes; 1-of-4 and 3-of-4 source sets → `onboarding-incomplete`; string/numeric scalar inside block → `onboarding-identifier-present`; unknown step enum → `onboarding-shape-unverified`; version without required-set entry refuses; missing/empty `post_onboarding` refused; duplicate block refused; symlink source refused; no default-home read (selector required).
+- [ ] **Lot 2 — Snapshot tests of the tools/list catalogue**
+  - [ ] `packages/artifacts/tests/tools-list-snapshot.test.ts` + checked-in snapshot JSON: full catalogue (names, descriptions, inputSchema, outputSchema, annotations, _meta) for the APP-P1 profile and for an r2 profile; asserts byte-identical definitions across profiles and equality with the snapshot file; header comment explains the claude.ai permission rule.
+  - [ ] `packages/mcp-platform/tests/tools-list-snapshot.test.ts` + snapshot JSON: a composed registry (register + select + configure + compile) served through the real SDK bridge (`registerMcpWireTools` + `registerBridgeTools`), snapshotting the full `tools/list` result.
+  - [ ] Lot gate: `make test-artifacts ENV=test-mcp-stable`, `make test-mcp-platform ENV=test-mcp-stable`.
 
-- [x] **Lot 3 — Two-stage materialization and erasure (L3) + L3T**
-  - [ ] Write `packages/llm-mesh/tests/node/seat-onboarding-materialize.test.ts` first.
-  - [ ] `src/node/seat-onboarding-materialize.ts`: `materialiseSeatEnvelopes` (stage 1, two-phase batch, seat record `.sentropic-seat/seat-record.v1.json` with derived `launchGate`), `materialiseCellHome` (stage 2, explicit `configDirs`, single writer per owned destination, launch-gate re-derivation + `onboarding-required` zero-write refusal), `eraseSeatHome`, `SeatStageReceipt`, `SeatCellReceipt`; exports from `src/node/index.ts`.
-  - [ ] Lot gate: scoped + full tests, typecheck, lint, scope-check, down (`ENV=test-seat-onboarding` last).
-  - [ ] L3T acceptance: synthetic envelope set stages with exact bytes/modes/names-only receipt; refused second seat leaves first unwritten (phase atomicity); present+absent gated pair stages both (absent seat record/receipt carry closed gate) while present-but-invalid pair writes nothing; stage 2 on absent-block gated seat refuses `onboarding-required` with zero files; vibe-absent succeeds auth-only; present block with empty `cellSynthesis` succeeds with no trust entry; edited stored `launchGate` refuses at stage 2; exact destination mapping incl. claude `.claude.json` inside `claudeConfigDir`; missing workspace / version mismatch / pre-existing target / symlinked parent refuse with zero writes; one staged seat seeds two role HOMEs without seat-dir mutation; codex render contains wrapper command verbatim and refuses out-of-intent server; claude composition refuses colliding MCP keys, never re-minimizes; erase leaves no surviving path at either stage; receipts carry no content bytes (canary absent).
+- [ ] **Lot 3 — Docs**
+  - [ ] `packages/mcp-platform/README.md`: document the byte-stable tool-definition rule (what may/may not appear in a definition; where dynamic values go).
+  - [ ] Artifacts API guide (`GUIDE_V1` in `packages/artifacts/src/server/templates.ts`, served by `artifacts_get_api_guide`): same rule; active profile revision/envelope reported in results and server metadata only.
+  - [ ] `packages/artifacts/README.md` pointer if it documents the MCP surface.
 
-- [x] **Lot 4 — claude, muse, codex projections (L4) + L4T**
-  - [ ] Write `packages/llm-mesh/tests/enrollment/seat-onboarding-projections.test.ts` first + extend materialize tests.
-  - [ ] `projectClaudeOnboarding`, `projectMuseTrust`, codex policy intent + `renderCodexSeatConfig` (pure, enrollment module); stage-2 composition and Q2-limited trust synthesis in the materialize module (`cellSynthesis` entries only, cell workspace only); version-pinned codex probe as fixture-backed test with `unverified` fallback to typed blocker.
-  - [ ] Lot gate: scoped + full tests, typecheck, lint, scope-check, down (`ENV=test-seat-onboarding` last).
-  - [ ] L4T acceptance: oversize synthetic `.claude.json` captures to the two-field projection; stage 1 refuses non-minimized auth `.claude.json`; `oauthAccount` never in block or receipt; materialised `.claude.json` has exactly the cell-workspace trust entry and no foreign path; empty `cellSynthesis` → no trust entry for claude/muse/codex; muse materialisation has exactly one project (cell workspace); rendered codex config has only cell project + supplied MCP servers + policy value; unknown muse `schema_version` and malformed claude `lastOnboardingVersion` refuse.
+- [ ] **Lot 4 — Version bump, CHANGELOG, pins**
+  - [ ] Bump `packages/artifacts/package.json` 0.2.6 -> 0.2.8 (> published 0.2.6; leaves 0.2.7 to #890/#893, 0.3.0 to #891); CHANGELOG entry.
+  - [ ] Recompute APP-P1 manifest digest through the make test lane; refresh `APP_P1_MANIFEST_DIGEST` in `api/src/services/mcp/cluster-registry.ts`, the compatibility receipts + version-witness digest in `api/tests/api/app-mcp-registry.test.ts`, and the receipts in `api/tests/api/app-mcp-installed.test.ts`. Pin semantics unchanged (digest still covers definitions + version + audit).
+  - [ ] Lot gate: scoped api registry tests green (`app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`, `app-artifacts-transport.test.ts`) on `ENV=test-mcp-stable`.
 
-- [x] **Lot 5 — Stored seat record, facade export, keyring read fix (L5) + L5T**
-  - [x] Re-check PR #887 state; rebase onto `origin/main` if merged, else onto the #887 head (SEATONB-EX1); never edit the keyring files directly.
-  - [x] Write `packages/llm-mesh/tests/service/seat-onboarding-import-export.test.ts` first (16 L5T cases, synthetic fixtures).
-  - [x] `importSeatBundle` additive `onboarding` member (validate + bind before registration; refusal rejects whole import), seat-record persistence `sentropic-llm-mesh:<accountId>:seat-record` (`{version:1, bundle, onboarding|null, storedAt}`), forward overwrite, idempotent backfill, removal cleanup (three existing deleteSecret sets); `exportSeatBundle({accountId, ownerScope})` on facade + service with typed `seat-export-unavailable:<reason>` refusals (`not-a-seat`, `record-missing`, `lineage-mismatch`, `owner-mismatch`, `record-invalid`; never refresh material or native files).
-  - [x] Version bump 0.33.0: `packages/llm-mesh/package.json`, `make lock-root` (llm-mesh entry + two widened ranges only), CHANGELOG, `tests/decision-public-surface.test.ts`, peer-cap widening per SEATONB-EX2.
-  - [x] Lot gate: scoped + full tests, typecheck, lint, build, scope-check, down (`ENV=test-seat-onboarding` last). Full suite at final head: 100 files / 1760 tests pass; typecheck 0 errors; lint clean; build ok; scope-check PASS C2.
-  - [x] L5T acceptance: import with valid block persists record, export returns bundle+block verbatim through the record (incl. lineage + `reboundFrom` after forward re-import with rebound block); invalid/misbound block registers no account; import without block succeeds, exports `onboarding: null`; pre-L5 fixture account (marker, no record) refuses `seat-export-unavailable:record-missing` then exports after idempotent backfill; directly enrolled account refuses `not-a-seat`; export refuses foreign ownerScope, never returns refresh material or native files; removal deletes seat record; keyring `getSecret` succeeds on read-only-mounted fixture and a pure read leaves mode+ctime unchanged (from #887); pre-existing importSeatBundle tests green.
-
-- [x] **Lot 6 — Release & PR**
-  - [x] Post-rebase gate: `packages/llm-mesh/package.json` version 0.33.0 > `npm view @sentropic/llm-mesh version` (0.32.4).
-  - [x] Final: `make test-llm-mesh`, `make typecheck-llm-mesh`, `make build-llm-mesh`, `make lint-llm-mesh ENV=test-seat-onboarding`; `make down ENV=test-seat-onboarding`.
-  - [x] `make scope-check ENV=test-seat-onboarding` before each commit (PASS C2 each time).
-  - [x] Push `feat/seat-onboarding` after each commit; open ONE READY PR (BRANCH.md as body) at the final head; one CI run; monitor via `gh`.
-  - [ ] Report to `.tmp/rv/seat-onboarding.md` (PR, head, CI, per-lot acceptance). Do NOT merge.
+- [ ] **Lot N — Final validation**
+  - [ ] `make build-artifacts build-mcp-platform ENV=test-mcp-stable` (typecheck/build).
+  - [ ] `make test-mcp-platform ENV=test-mcp-stable` and `make test-artifacts ENV=test-mcp-stable` green.
+  - [ ] `make scope-check` before every commit; `harness check scope` PASS.
+  - [ ] Bumped affected `packages/<pkg>/package.json` version for every package whose `src/**` changed (artifacts only).
+  - [ ] `make down ENV=test-mcp-stable` (and `down-volumes` only if merged — not merged here, so `make down`).
+  - [ ] Final gate step 1: open READY PR using `BRANCH.md` text as PR body.
+  - [ ] Final gate step 2: one CI run on the PR head; resolve blockers.
+  - [ ] Report written to `.tmp/rv/mcp-stable-tool-defs.md` (audit findings, changes, PR #890/#893/#891 definition impact). Do not merge.
