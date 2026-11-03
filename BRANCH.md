@@ -35,6 +35,7 @@ Build lot G5 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (s
   - `packages/cluster-mesh/src/storage/identity/index.ts` (additive export line)
   - `packages/cluster-mesh/tests/identity/replica-sync.spec.ts` (new)
   - `packages/cluster-mesh/package.json` (version bump)
+  - `package-lock.json` (root lockfile version parity for the `packages/cluster-mesh/package.json` bump; refreshed via `make lock-root`, enforced by the CI `changes` job)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -53,6 +54,7 @@ Build lot G5 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (s
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
+- BR-G5-EX1 (scope addition, not a conditional-path exception): root `package-lock.json` added to Allowed Paths. Reason: the CI `changes` job requires `packages/cluster-mesh/package.json` and the root lockfile to carry the same version ("refresh the root lockfile through Make"); the 0.26.0-dev.7 bump is incomplete without it. Impact: one-line lockfile diff (`packages/cluster-mesh` workspace version field only), refreshed via `flock .tmp/packets/DOCKER-LOCK.md make lock-root ENV=test-a4-G5`. Rollback: revert the lockfile line together with the package.json bump. The packaging fixture (`tests/packaging/fixtures/selected`) and `api/package-lock.json` intentionally keep the last release tuple per the pack-only dev-bump rule (see `prepare-artifacts.spec.ts`); parallel lots (G4) did the same.
 - G1 (P4 `oauthTenantStoreV1` finders) is not on origin/main; this lot deliberately does not land a copy of the finder (design §10.4 stack-absorption rule). Consent reads go through the custody journal primitives; the stack absorbs G1 on rebase.
 - Q-IDP1 disposition (case-by-case preprod-only account deletion) is an ops/G7 concern; G5 builds and tests in simulation mode per design §12.
 
