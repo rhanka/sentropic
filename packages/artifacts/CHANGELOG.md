@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.9
+
+- Make every `artifacts_*` MCP tool definition byte-stable across deployments,
+  package versions and profile switches: descriptions, input schemas, output
+  schemas, idempotency and gates are compile-time constants in
+  `ARTIFACTS_TOOL_DEFINITIONS` (`src/mcp-core.ts`). The active profile still
+  selects the exposed tool set and constrains every invocation server-side,
+  and stays visible in manifest audit metadata and typed result details — never
+  inside a tool definition. Hosts such as claude.ai key per-tool "Always allow"
+  permissions on definition bytes, so approvals now survive upgrades and profile
+  switches. The APP-P1 manifest pin still covers the definitions, so the pin
+  is stable too.
+- Add tools/list snapshot tests (`packages/artifacts/tests/tools-list-snapshot.test.ts`,
+  `packages/mcp-platform/tests/tools-list-snapshot.test.ts`) that fail on any
+  tool-definition change unless the checked-in snapshot is deliberately
+  regenerated.
+
 ## 0.2.8
 
 - Content hosts use a single UUID label: `https://<id>.<base>/` resolves server-side,
