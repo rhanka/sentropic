@@ -6,7 +6,7 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 ## Scope / Guardrails
 - Scope limited to `packages/artifacts` (mcp-core.ts, profile/contracts.ts, tool specs, tests, README/CHANGELOG/package.json), `packages/mcp-platform` (tests + README only, no src change), and the APP-P1 pin sites in `api/src/services/mcp/cluster-registry.ts` + `api/tests/api/app-mcp-registry.test.ts` + `api/tests/api/app-mcp-installed.test.ts`.
 - The APP-P1 manifest pin semantics are kept: `computeManifestDigest` still covers the full tool definitions; the pin is refreshed once for the deliberate definition stabilization, never weakened.
-- Make-only workflow; tests on `ENV=test-mcp-stable-rebase` only; `make down-volumes ENV=test-mcp-stable-rebase` at the end.
+- Make-only workflow; tests on `ENV=test-mcp-stable-l5` only; `make down-volumes ENV=test-mcp-stable-l5` at the end.
 - Branch development happens in worktree `tmp/worktrees/mcp-stable-tool-defs` (branch `feat/mcp-stable-tool-definitions` from `origin/main`).
 - In every `make` command, `ENV=<env>` is passed as the last argument.
 - All new text in English. No `[skip ci]` anywhere.
@@ -32,15 +32,20 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `packages/mcp-platform/src/**` (audit found no dynamic values there; rule enforced by snapshot test + README)
-  - `packages/cluster-mesh/**`
+  - every other packages/cluster-mesh path stays out of scope (classified unknown); only the three BR01-EX3 files are conditional below
   - `api/src/**` except `api/src/services/mcp/cluster-registry.ts`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+  - `tools/memory-mcp-l5/artifacts/**` (BR01-EX5)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR01-EX3)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- (empty)
+- BR01-EX5 (scope exception, `tools/memory-mcp-l5/artifacts/**`): after the rebase onto origin/main the root lock carries @sentropic/artifacts 0.2.9, so the committed P1 manifest no longer matches the live lock fingerprint and CI `memory-l5-qualification` failed on run 41630200841 with « manifest P1 lock fingerprint mismatch ». Regenerated through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (never hand-editing digests); the previous manifest+sidecar are retained in `artifacts/history/`, one new immutable lock snapshot is added, all verify guards unchanged. Rollback: restore the retained history manifest/sidecar and delete the new snapshot. Precedent: PR #893 commits 615043ead / 5b27adc8a.
+- BR01-EX3 (cluster-mesh packaging fixture re-pin): the `validate-cluster-mesh` lanes run `tests/packaging/prepare-artifacts.spec.ts`, which requires the `selected` fixture to pin the workspace candidate version exactly, and the lazy lane installs the same-PR sibling archives whose integrity the committed lock must carry. Run 41630200841 failed both: the fixture still pinned artifacts 0.2.8 (source lane: expected '0.2.8' to be '0.2.9') and the mcp-platform sibling pack bytes changed with this branch's README update (lazy lane: EINTEGRITY wanted sha512-jsDWIJ… got the repacked bytes). Re-pinned `fixtures/selected/package.json` + `package-lock.json` through `make pack-candidate-siblings` + `refresh-lazy-package-lock` with the verified sibling receipts, and updated the hardcoded archive integrity in `artifacts-tuple.spec.ts`. Guards unchanged: lock integrity assertions, the peer range >=0.2.0 <0.3.0 and the tuple coherence checks all stay. Rollback: revert the three files to the 0.2.8 pin. Precedent: 772d71153 / dafe6fffd.
 
 ## AI Flaky tests
 - Acceptance rule: no AI-flaky tests are involved; all tests here are deterministic.
@@ -50,7 +55,7 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 - Rationale: one cohesive rule change across two packages plus pin sites; no parallel sub-workstreams.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: no UI surface change; package-level vitest lanes only (`make test-mcp-platform`, `make test-artifacts`, scoped api registry tests) on `ENV=test-mcp-stable-rebase`.
+- **Mono-branch**: no UI surface change; package-level vitest lanes only (`make test-mcp-platform`, `make test-artifacts`, scoped api registry tests) on `ENV=test-mcp-stable-l5`.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
@@ -58,7 +63,7 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
   - [x] Worktree `tmp/worktrees/mcp-stable-tool-defs` on `feat/mcp-stable-tool-definitions` from `origin/main`; `harness check branch` PASS.
   - [x] Audit tools/list definitions: artifacts `description` embeds `profileRevisionId`/`resultEnvelopeVersion`; `inputSchema` is profile-derived; `outputSchema` switches on `resultEnvelopeVersion`; mcp-platform composed descriptors are static (memory tools frozen; bridge passes host descriptors through).
   - [x] Audit PRs #890/#893/#891 against definition stability (report in `.tmp/rv/mcp-stable-tool-defs.md`).
-  - [x] Confirm command style: `make ... ENV=test-mcp-stable-rebase` with ENV last; Docker lock via `flock .tmp/packets/DOCKER-LOCK.md` per command.
+  - [x] Confirm command style: `make ... ENV=test-mcp-stable-l5` with ENV last; Docker lock via `flock .tmp/packets/DOCKER-LOCK.md` per command.
 
 - [x] **Lot 1 — Static artifacts tool definitions**
   - [x] Add frozen static tool definitions (description, inputSchema, outputSchema, idempotency, gates) for all 17 `artifacts_*` tools in `packages/artifacts/src/mcp-core.ts` (`ARTIFACTS_TOOL_DEFINITIONS`).
@@ -66,13 +71,13 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
   - [x] Static `oneOf` constraints kept in the static input schemas (file text/bytes exclusivity, publish files/edits exclusivity, set_access grant/revoke rules): `oneOf` is a compile-time constraint, not a per-deployment value; required by `probe-artifacts-packed-consumer` (`packed-consumer.mjs` asserts `fileSchema.oneOf.length === 2`).
   - [x] Update `packages/artifacts/tests/mcp.test.ts` and `parity-r2-profile.test.ts` expectations (description no longer contains the revision; inputSchema is the static definition).
   - [x] Lot gate:
-    - [x] `make build-artifacts` / `make build-mcp-platform` (tsc typecheck) green on `ENV=test-mcp-stable-rebase`.
-    - [x] `make test-artifacts ENV=test-mcp-stable-rebase` green (506 tests, incl. mcp.test.ts + parity-r2-profile.test.ts).
+    - [x] `make build-artifacts` / `make build-mcp-platform` (tsc typecheck) green on `ENV=test-mcp-stable-l5`.
+    - [x] `make test-artifacts ENV=test-mcp-stable-l5` green (506 tests, incl. mcp.test.ts + parity-r2-profile.test.ts).
 
 - [x] **Lot 2 — Snapshot tests of the tools/list catalogue**
   - [x] `packages/artifacts/tests/tools-list-snapshot.test.ts` + checked-in snapshot JSON: full catalogue (names, descriptions, inputSchema, outputSchema, annotations, _meta) for the APP-P1 profile and for an r2 profile, served over the real SDK bridge; asserts byte-identical definitions across profiles and equality with the snapshot file; header comment explains the claude.ai permission rule.
   - [x] `packages/mcp-platform/tests/tools-list-snapshot.test.ts` + snapshot JSON: a composed registry (register + select + configure + compile) served through the real SDK bridge (`registerMcpWireTools` over an in-memory link), snapshotting the full `tools/list` result; also asserts the catalogue is byte-identical across recompiles with different configuration values.
-  - [x] Lot gate: `make test-artifacts ENV=test-mcp-stable-rebase` green (506 tests), `make test-mcp-platform ENV=test-mcp-stable-rebase` green (352 tests incl. the snapshot test).
+  - [x] Lot gate: `make test-artifacts ENV=test-mcp-stable-l5` green (506 tests), `make test-mcp-platform ENV=test-mcp-stable-l5` green (352 tests incl. the snapshot test).
 
 - [x] **Lot 3 — Docs**
   - [x] `packages/mcp-platform/README.md`: "Stable tool definitions (permission identity)" section — what may/may not appear in a definition, where dynamic values go, snapshot-test update procedure.
@@ -82,15 +87,15 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
 - [x] **Lot 4 — Version bump, CHANGELOG, pins**
   - [x] Bump `packages/artifacts/package.json` 0.2.8 -> 0.2.9 (> published 0.2.8; #901 takes 0.3.0, #891 takes 0.3.1); CHANGELOG entry under `## 0.2.9` above main's `## 0.2.8`; `ARTIFACTS_PROVIDER_VERSION` = '0.2.9'.
   - [x] Recompute APP-P1 manifest digest through the make test lane; refreshed `APP_P1_MANIFEST_DIGEST` = `96226d32f64ca7ac06749d5083084b6f572eac23d27256cae8d37e7f7579933d` in `api/src/services/mcp/cluster-registry.ts`, the compatibility receipts + version-witness digest (`da14b7bd...`, manifest with `version: '0.2.5'`) in `api/tests/api/app-mcp-registry.test.ts`, and the receipts + version assertion in `api/tests/api/app-mcp-installed.test.ts`. Pin semantics unchanged (digest still covers definitions + version + audit); `APP_P1_PROFILE_DIGEST` unchanged.
-  - [x] Lot gate: scoped api tests green on `ENV=test-mcp-stable-rebase` — `app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`, `app-artifacts-transport.test.ts` (32 tests).
+  - [x] Lot gate: scoped api tests green on `ENV=test-mcp-stable-l5` — `app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`, `app-artifacts-transport.test.ts` (32 tests).
 
 - [x] **Lot N — Final validation**
-  - [x] `make build-artifacts` / `make build-mcp-platform` (via test lanes, tsc typecheck) green on `ENV=test-mcp-stable-rebase`.
-  - [x] `make test-mcp-platform ENV=test-mcp-stable-rebase` (39 files / 352 tests) and `make test-artifacts ENV=test-mcp-stable-rebase` (48 files / 506 tests) green.
-  - [x] `make probe-artifacts-packed-consumer ENV=test-mcp-stable-rebase` green (`PACKED_MCP_CORE_OK` / `PACKED_CONSUMER_OK` / `PACKED_ADAPTERS_OK`; `fileSchema.oneOf.length === 2` assertion passes).
+  - [x] `make build-artifacts` / `make build-mcp-platform` (via test lanes, tsc typecheck) green on `ENV=test-mcp-stable-l5`.
+  - [x] `make test-mcp-platform ENV=test-mcp-stable-l5` (39 files / 352 tests) and `make test-artifacts ENV=test-mcp-stable-l5` (48 files / 506 tests) green.
+  - [x] `make probe-artifacts-packed-consumer ENV=test-mcp-stable-l5` green (`PACKED_MCP_CORE_OK` / `PACKED_CONSUMER_OK` / `PACKED_ADAPTERS_OK`; `fileSchema.oneOf.length === 2` assertion passes).
   - [x] `make scope-check` PASS before every commit; `harness check scope` PASS.
   - [x] Bumped affected `packages/<pkg>/package.json` version for every package whose `src/**` changed (artifacts only, 0.2.9).
-  - [x] `make down-volumes ENV=test-mcp-stable-rebase` after the api-test lane (exit 0).
+  - [x] `make down-volumes ENV=test-mcp-stable-l5` after the api-test lane (exit 0).
   - [ ] Final gate step 1: open READY PR using `BRANCH.md` text as PR body (PR #896 open).
   - [ ] Final gate step 2: one CI run on the PR head; resolve blockers.
   - [ ] Report written to `.tmp/rv/mcp-stable-tool-defs.md` (audit findings, changes, PR #890/#893/#891 definition impact). Do not merge.
@@ -100,5 +105,12 @@ MCP `tools/list` tool definitions (name, description, inputSchema, outputSchema,
   - [x] `@sentropic/artifacts` bumped to 0.2.9 (conductor allocation; 0.3.0 reserved for #901, 0.3.1 for #891); CHANGELOG `## 0.2.9` entry above main's `## 0.2.8`; post-rebase gate: 0.2.9 > published 0.2.8.
   - [x] tools/list snapshots regenerated deliberately (delete JSON + re-run snapshot test) and covering main's current definitions (incl. the #890 get_source description); artifacts snapshot diff is exactly the two #890 get_source description lines, mcp-platform snapshot byte-identical.
   - [x] Lockfiles refreshed via `make lock-root` (root lock: artifacts 0.2.8→0.2.9 + mcp-platform 0.4.0→0.4.1 sync) and the api lock via the one-line `"../packages/artifacts"` version-string bump (same pattern as origin/main ddbe7b65e; api is a root workspace so npm updates the root lock only); APP-P1 manifest pin recomputed through the make test lane (guard unchanged: digest still covers full definitions + version + audit).
-  - [x] Final validation LAST on `ENV=test-mcp-stable-rebase`: scoped api MCP registry tests (26/26), `make test-artifacts` (48 files / 509 tests), `make test-mcp-platform` (39 files / 352 tests), then `make down-volumes ENV=test-mcp-stable-rebase` (exit 0, containers/volumes/networks removed).
+  - [x] Final validation LAST on `ENV=test-mcp-stable-l5`: scoped api MCP registry tests (26/26), `make test-artifacts` (48 files / 509 tests), `make test-mcp-platform` (39 files / 352 tests), then `make down-volumes ENV=test-mcp-stable-l5` (exit 0, containers/volumes/networks removed).
   - [x] `make commit`, `git push --force-with-lease` (one CI), report to `.tmp/rv/mcp-stable-rebase.md`. Do not merge.
+
+- [x] **Lot F — CI fix on run 41630200841 (head 2cc75dfb8)**
+  - [x] Rebase onto origin/main (BRANCH.md sole conflict, union) — head 127a09488; post-rebase gate 0.2.9 > npm published 0.2.8.
+  - [x] BR01-EX5: regenerate the P1 manifest through `make memory-l5-pack` for the 0.2.9 root lock; previous manifest retained in `artifacts/history/` + new lock snapshot.
+  - [x] BR01-EX3: re-pin the cluster-mesh selected fixture to the artifacts 0.2.9 candidate via `make pack-candidate-siblings` + `refresh-lazy-package-lock`; tuple spec integrity updated.
+  - [x] Local validation on `ENV=test-mcp-stable-l5`: memory-l5 gate + cluster-mesh source/lazy lanes green; `make down-volumes ENV=test-mcp-stable-l5` (exit 0).
+  - [x] `make scope-check` PASS before every commit; commits via `make commit`; `git push --force-with-lease` (one CI run); report to `.tmp/rv/mcp-stable-l5-fix.md`. Do not merge.
