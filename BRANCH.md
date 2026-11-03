@@ -11,6 +11,7 @@ Implement sharing lot G1 of the binding convergence `.tmp/concertation-share/con
 - No `[skip ci]` in any commit; CI budget: one run on the final head.
 - All new text in English. No human-effort or time estimates.
 - Crash safety: push `feat/share-g1-access-model` to origin after every few commits.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -18,6 +19,16 @@ Implement sharing lot G1 of the binding convergence `.tmp/concertation-share/con
   - `packages/artifacts/tests/**`
   - `packages/artifacts/migrations/0006_sharing.sql`
   - `packages/artifacts/package.json` (version bump only)
+  - `packages/artifacts/CHANGELOG.md` (release entry)
+  - `package-lock.json` (BR01-EX2, artifacts version line only)
+  - `api/package-lock.json` (BR01-EX2, one-line `file:` sync)
+  - `api/src/services/mcp/cluster-registry.ts` (BR01-EX6, APP-P1 manifest pin)
+  - `api/tests/api/app-mcp-registry.test.ts` (BR01-EX6, pin vectors + refusal)
+  - `api/tests/api/app-mcp-installed.test.ts` (BR01-EX6, provider version + pin)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR01-EX3)
+  - `tools/memory-mcp-l5/artifacts/**` (BR01-EX5, P1 manifest regen)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -27,14 +38,17 @@ Implement sharing lot G1 of the binding convergence `.tmp/concertation-share/con
   - `api/**`, `ui/**`, `e2e/**`, `apps/**`, `deploy/**`
   - `packages/**` other than `packages/artifacts/**`
   - `src/**` (root app sources)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none declared; any need becomes a `BRxx-EXn` in `## Feedback Loop` first.
+- **Conditional Paths**: none beyond Allowed Paths above (all exception-bearing paths are declared in Allowed Paths, which takes precedence over Forbidden).
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- (empty — no blockers at branch start)
+- BR01-EX2 (lock pins): the 0.2.10 release bumps the workspace package version, so the root `package-lock.json` `packages/artifacts` entry is refreshed through `make lock-root` (only the artifacts version line is kept; unrelated pre-existing staleness on main is reverted so the diff carries only this branch's change) and the single `"../packages/artifacts"` version line in `api/package-lock.json` is synced 0.2.8→0.2.10 (npm `--package-lock-only` does not refresh `file:` link versions — same targeted one-line sync as #878 BRP0B-EX1 / #893 BR01-EX2). No dependency graph change; rollback with the version fix.
+- BR01-EX3 (cluster-mesh packaging fixture re-pin): the `validate-cluster-mesh` lanes run `tests/packaging/prepare-artifacts.spec.ts`, which requires the `selected` fixture to pin the workspace candidate version exactly (artifacts 0.2.10). Re-pinned `fixtures/selected/package.json` + `package-lock.json` through `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` and the hardcoded archive integrity in `artifacts-tuple.spec.ts` to the candidate tarball's sha512. Rollback: revert the three files to the 0.2.8 pin.
+- BR01-EX5 (scope exception, `tools/memory-mcp-l5/artifacts/**`): after the rebase + the 0.2.10 root-lock refresh, the root lock differs from the lock the committed P1 manifest was generated against, so CI `memory-l5-qualification` would fail with « manifest P1 lock fingerprint mismatch ». Regenerate via `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (never hand-editing digests); previous manifest+sidecar retained in `artifacts/history/`, one new immutable lock snapshot. Rollback: restore the retained history manifest/sidecar and delete the new snapshot.
+- BR01-EX6 (APP-P1 pin): the provider version 0.2.10 changes the APP-P1 manifest digest, so `api/src/services/mcp/cluster-registry.ts` `APP_P1_MANIFEST_DIGEST` and the two app-mcp test fixtures are re-pinned to the digest computed through make (the profile digest and the four selected tool specs are unchanged — MCP tool definitions stay byte-identical). Never weaken the pin guard; a superseded-receipt refusal vector is added. Rollback: restore the 0.2.8 digest.
+- Rebase on origin/main (353f08a8b): UNION resolution — every G1 change and the D1/D2 fixes kept; conflicts were `BRANCH.md` (kept this branch's content + the BRLOCK-EX1 line), `packages/artifacts/package.json` (0.3.0 → 0.2.10 per conductor allocation), `packages/artifacts/src/mcp-core.ts` (0.2.10 + main's get_source description) and `packages/artifacts/src/http.ts` (G1 policy wiring + main's mime/templates/base64/guideRef/versionUrl changes).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -88,7 +102,7 @@ Implement sharing lot G1 of the binding convergence `.tmp/concertation-share/con
   - [x] Lot gate: full `make test-artifacts ENV=test-share-g1` + `make test-artifacts-integration ENV=test-share-g1` green; `make down ENV=test-share-g1`; `make typecheck-artifacts`, `make lint-artifacts` green.
 - [ ] **Lot 3 — Commit, bump, push, PR, CI**
   - [x] Atomic commits via `make commit MSG="…"` (≤150 lines each, specific `git add` only, BRANCH.md checkboxes updated in the same commits); no AI trailers.
-  - [x] Bump `packages/artifacts/package.json` version (minor — new feature) strictly greater than `npm view @sentropic/artifacts version` (currently 0.2.6 published ⇒ bump to 0.3.0); `enforce-package-bump` CI gate.
+  - [x] Bump `packages/artifacts/package.json` version (minor — new feature) strictly greater than `npm view @sentropic/artifacts version` (0.2.8 published ⇒ bump to 0.2.10 per conductor allocation: #896=0.2.9 merges first, #901=0.2.10, #891=0.2.11; stays inside cluster-mesh's `>=0.2.0 <0.3.0` peer range); `enforce-package-bump` CI gate.
   - [x] `make scope-check` before every commit.
   - [ ] Push `feat/share-g1-access-model` to origin (crash safety) after the commit wave.
   - [ ] Open READY PR (title/body from this BRANCH.md, English, test plan included), wait for exactly one CI run on the final head; report results. Known unrelated risk: `security-container` may be red on the libexpat CVE — report, do not fix.

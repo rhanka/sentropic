@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.10
+
+- G1 sharing access model: artifacts carry an explicit `access_mode`
+  (`restricted` by default, `platform`, `public`) managed through
+  `artifacts_set_access` with sentinel transitions (`grant sentropic:platform`
+  degrades public→platform, `revoke sentropic:platform` on public is a no-op).
+  `restricted` mode allows at most one nominative `source` (collab) grant, and
+  widening the mode while a `source` grant is live is rejected. Migration
+  `0006_sharing.sql` is additive: `access_mode` column with CHECK, legacy
+  `is_public=true` backfilled to `platform` (zero artifacts become `public`),
+  an append-only `artifact_access_events` audit table (UPDATE/DELETE rejected by
+  trigger) and the Q1 schema guards (partial unique index, mode/grant triggers).
+- Sharing policy is double-locked: profile rule `allowPublicSharing` (absent ⇒
+  false, covered by `profileDigest`) AND a runtime `SharingPolicyPort` resolved
+  fail-closed inside the commit transaction; public anonymous reads require the
+  policy to allow them. Approval freshness is enforced on read paths (suspension
+  cuts the next read, reactivation resumes automatically).
+- D1: `set_access` visibility closes the existence oracle — a non-reader actor
+  gets `not_found` unless it is an approved platform admin of the same storage
+  scope; the management right itself (owner, or admin-reduce-only) is still
+  decided inside the transaction (403 otherwise).
+- D2: `0006_sharing.sql` deterministically dedupes legacy multi-`source` grants
+  before the unique index (oldest `created_at`, tie-break `principal_id` stays
+  `source`; later duplicates demote to `read`; no row deleted), and
+  `putArtifactAcl` demotes a stale `source` grant to `read` when rewriting a
+  non-restricted ACL.
+- MCP tool definitions stay byte-identical (new fields only, never edits).
+- 0.2.10 stays inside the existing cluster-mesh `>=0.2.0 <0.3.0` peer range
+  (conductor allocation: #896=0.2.9, #901=0.2.10, #891=0.2.11; merge order
+  896 > 901 > 891).
+
 ## 0.2.9
 
 - Make every `artifacts_*` MCP tool definition byte-stable across deployments,
