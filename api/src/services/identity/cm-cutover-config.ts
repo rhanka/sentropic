@@ -10,7 +10,7 @@ import { loadA4RemoteSnapshot } from './cm-import-remote-snapshot';
 import { createCmTokenCustodian } from './cm-token-custodian';
 
 export const A4_CONTROL_MIGRATION_TIMESTAMP = 1793577600000;
-export const A4_IDENTITY_MIGRATION_ID = '0014_app_cm_identity_cutover';
+export const A4_IDENTITY_MIGRATION_ID = '0015_app_cm_identity_cutover';
 
 /** Resolve immutable verifier/key configuration and checkpoint files before BEGIN. */
 export async function loadAppCmCutoverConfiguration() {
