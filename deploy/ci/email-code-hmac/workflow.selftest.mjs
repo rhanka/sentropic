@@ -101,7 +101,15 @@ export function workflowTests(check) {
       assert.equal(r.status, 0, r.stderr);
       const calls = readJsonLines(join(dir, 'kubectl.log'));
       assert.ok(calls.some(c => c.join(' ').includes('get secret email-code-hmac -o name')));
-      assert.ok(calls.filter(c => c.includes('auth')).length >= 6);
+      const canICalls = calls.filter(c => c.includes('can-i'));
+      assert.equal(canICalls.length, 6);
+      for (const c of canICalls) {
+        const rest = c.slice(c.indexOf('can-i') + 1);
+        const nIdx = rest.indexOf('-n');
+        const positional = (nIdx >= 0 ? rest.slice(0, nIdx) : rest).filter(a => !a.startsWith('-'));
+        assert.equal(positional.length, 2, `auth can-i must take exactly verb + resource/name: ${c.join(' ')}`);
+        assert.ok(positional[1].includes('/'), `auth can-i resource must be resource/name: ${c.join(' ')}`);
+      }
       for (const c of calls) {
         assert.ok(!c.includes('list'), 'workflow must never list Secrets');
         assert.ok(!c.includes('create'), 'workflow must never create');
@@ -145,6 +153,28 @@ export function workflowTests(check) {
       r = run(WORKFLOW, ['cleanup'], base);
       assert.equal(r.status, 0);
       assert.throws(() => statSync(join(runnerTemp, 'email-code-hmac')), { code: 'ENOENT' });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  check('regression (preprod run 41622762835): stub kubectl rejects malformed auth can-i argv like real kubectl', () => {
+    const dir = scratch('cani');
+    try {
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      const stub = writeStub(bin, 'kubectl', KUBECTL_STUB);
+      const base = { PATH: `${bin}:${process.env.PATH}`, KUBECTL_STUB_LOG: join(dir, 'kubectl.log'), KUBECTL_STUB_MODE: 'ok' };
+      // legacy three-argument form <verb> <resource> <name>: client-side error, exit 1
+      let r = run(stub, ['auth', 'can-i', 'get', 'secrets', 'email-code-hmac', '-n', 'sentropic-preprod'], base);
+      assert.equal(r.status, 1);
+      assert.ok(r.stderr.includes('you must specify two arguments: verb resource or verb resource/resourceName'), r.stderr);
+      // correct form <verb> <resource>/<name>: answered normally
+      r = run(stub, ['auth', 'can-i', 'get', 'secrets/email-code-hmac', '-n', 'sentropic-preprod'], base);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), 'yes');
+      // forbidden mode still answers "no" for the well-formed form
+      r = run(stub, ['auth', 'can-i', 'patch', 'deployments/api', '-n', 'sentropic-preprod'], { ...base, KUBECTL_STUB_MODE: 'forbidden' });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), 'no');
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
