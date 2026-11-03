@@ -7,11 +7,11 @@ import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import type { SeatValidationCode } from '../enrollment/seat-bundle.js';
-import type { SeatOnboardingCode } from '../enrollment/seat-onboarding.js';
+import { SeatOnboardingError, type SeatOnboardingCode } from '../enrollment/seat-onboarding.js';
 
 export const SEAT_RECORD_REL_PATH = join('.sentropic-seat', 'seat-record.v1.json');
 
-const DIR_MODE = 0o700;
+export const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
 
 export type StageCode = SeatOnboardingCode | SeatValidationCode;
@@ -25,12 +25,13 @@ class StageRefusal extends Error {
   }
 }
 
-export const fail = (code: StageCode, detail: string): never => {
+export function fail(code: StageCode, detail: string): never {
   throw new StageRefusal(code, detail);
-};
+}
 
 export const asResult = (error: unknown): { ok: false; code: StageCode; detail: string } => {
   if (error instanceof StageRefusal) return { ok: false, code: error.code, detail: error.message };
+  if (error instanceof SeatOnboardingError) return { ok: false, code: error.code, detail: error.message };
   throw error;
 };
 

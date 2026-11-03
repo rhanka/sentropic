@@ -18,7 +18,7 @@ import {
   type SeatValidationCode,
   type SeatValidationContext,
 } from './seat-bundle.js';
-import { AgyMappingError, translateAgySeatToApplication } from './agy-cli-import.js';
+import { AgyMappingError, translateAgySeatToApplication, type AgySeatProjectionInput } from './agy-cli-import.js';
 
 export const SEAT_ONBOARDING_SCHEMA_VERSION = 1 as const;
 
@@ -643,7 +643,7 @@ export function validateSeatEnvelope(
         ownerScope: bundle.identity.ownerScope,
         seatRef: bundle.identity.seatRef,
         accountBinding: bundle.provenance.accountBinding,
-        ...agy,
+        ...(agy as Omit<AgySeatProjectionInput, 'ownerScope' | 'seatRef' | 'accountBinding'>),
       });
     } catch (error) {
       if (error instanceof AgyMappingError) {
