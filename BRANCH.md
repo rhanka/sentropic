@@ -42,6 +42,7 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
 
 ## Feedback Loop
 - [x] BR-G2-EX1: synchronize only the `packages/cluster-mesh` workspace version line in the root lockfile after the dev bump (`make lock-root`). Reason: CI gate "train package versions match the root lockfile". Impact: version metadata only. Rollback: revert `package-lock.json` together with the version bump.
+- [x] PostgreSQL first run of the new spec showed 3 tests timing out at the 5000ms default under heavy shared-host load (sibling G-lot lanes holding the Docker lock); no assertion failed. Same head + same command rerun: 16/16 passed. Recorded as a proven transient; no timeout increase, no assertion change.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch** — single CM lot, one PR.
@@ -61,11 +62,12 @@ Build lot G2 of design a4-cm-gaps-r2 (P2, A4 item 3 / F12): a new CM boundary po
   - [ ] `src/identity-contracts/composition-descriptors.ts` (1.2.0 bundle, `boundary_resolution` row).
   - [x] `src/identity-contracts/index.ts` additive export lines.
 - [ ] **Lot 3 — Gates**
-  - [ ] `flock <lock> make typecheck-cluster-mesh build-cluster-mesh pack-cluster-mesh ENV=test-a4-G2`
-  - [ ] `flock <lock> make test-cluster-mesh SCOPE=tests/boundary-resolution.spec.ts ENV=test-a4-G2` (SQLite + doubles)
-  - [ ] Same spec with `CM_PG_URL` (PostgreSQL) via `cluster-mesh-pg-up` / `cluster-mesh-pg-down`
-  - [ ] Frozen suites unmodified and green: `tests/boundaries.spec.ts`, `tests/conformance/h2a-contract.spec.ts`, `tests/identity-resolution.spec.ts`
-  - [ ] `make scope-check` before each commit; commits <=150 lines via `make commit`; version bump 0.26.0-dev.7 + `make lock-root`; push often (crash safety)
+  - [x] `flock <lock> make typecheck-cluster-mesh build-cluster-mesh pack-cluster-mesh ENV=test-a4-G2` — all EXIT=0.
+  - [x] `flock <lock> make test-cluster-mesh SCOPE=tests/boundary-resolution.spec.ts ENV=test-a4-G2` — 12 passed, 4 skipped (PostgreSQL describe, no CM_PG_URL), no type errors.
+  - [x] Same spec with `CM_PG_URL` via `cluster-mesh-pg-up`/`cluster-mesh-pg-down` — first run 3x 5000ms timeouts under a loaded shared host (no assertion failure), rerun 16/16 passed; recorded as load-induced transient, no timeout or assertion change.
+  - [x] Frozen suites unmodified and green: `tests/boundaries.spec.ts` 6/6, `tests/conformance/h2a-contract.spec.ts` 10/10, `tests/identity-resolution.spec.ts` 10/10.
+  - [x] `make scope-check` PASS before each commit; commits <=150 lines via `make commit`; version bump 0.26.0-dev.7 + `make lock-root`; pushed after every few commits (crash safety).
+  - [x] Rebased onto `origin/main` 4fb18ef88 with `git rebase -X theirs` (merge-tree showed BRANCH.md as the sole conflict); 5 commits replayed, cluster-mesh sources untouched by the rebase; post-rebase gate: 0.26.0-dev.7 > published 0.25.0.
   - [ ] `make down ENV=test-a4-G2` at the end
 - [ ] **Lot 4 — PR & CI**
   - [ ] Push final head, open a READY PR (`gh pr create`, body from this `BRANCH.md`), run one CI, record head/result in `.tmp/rv/a4-gap-G2.md`. Do not merge.
