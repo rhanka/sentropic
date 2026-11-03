@@ -1,4 +1,6 @@
-import type { ArtifactAcl } from './access.js';
+import { audienceOf, canManageAccess, PUBLIC_PRINCIPAL,
+  type AccessEvent, type AccessMode, type ArtifactAcl, type GrantRecord, type ModeAction } from './access.js';
+import { combineSharingPolicy, resolveSharingPolicy, type SharingPolicyPort } from './ports.js';
 import type { ArtifactInvocationContext, ArtifactCommitCoordinator, FinalizeTxClient, FinalizeRequest } from './commit/types.js';
 import type { EffectiveArtifactCommand } from './command-identity.js';
 import { ArtifactOperationError, type ArtifactOutcome } from './failures.js';
@@ -9,10 +11,18 @@ export interface ManagementTarget {
   terminal: boolean;
   currentReleaseId: string | null;
 }
+export interface SetAccessOutput {
+  grants: GrantRecord[];
+  updatedAt: string | null;
+  accessMode: AccessMode;
+  changed: boolean;
+}
 export interface ManagementUnit {
   lock(artifactId: string): Promise<void>;
   read(artifactId: string): Promise<ManagementTarget | undefined>;
-  setAccess(artifactId: string, principalId: string, action: 'grant' | 'revoke', updatedAt: string): Promise<{ grants: unknown; updatedAt: string | null }>;
+  setAccess(artifactId: string, principalId: string, action: 'grant' | 'revoke', updatedAt: string): Promise<SetAccessOutput>;
+  /** Append-only audit event, written in the same transaction as the mutation. */
+  recordEvent(event: AccessEvent): Promise<void>;
   delete(artifactId: string, deletedAt: string): Promise<void>;
 }
 export interface DeleteConfirmationContext {
@@ -39,6 +49,10 @@ function refused(code: 'gone' | 'not_found' | 'access_denied'): ArtifactOperatio
     reason: 'denied', status: code === 'gone' ? 410 : code === 'not_found' ? 404 : 403,
     publicCode: code, retriable: false } });
 }
+function policyRefused(): ArtifactOperationError {
+  return new ArtifactOperationError('unauthorized_at_commit', { refusal: { allowed: false,
+    reason: 'denied', status: 403, publicCode: 'public_sharing_disabled', retriable: false } });
+}
 
 /** Targeted writes and proof consumption share the existing coordinator receipt transaction. */
 export async function manageArtifact(deps: {
@@ -48,20 +62,45 @@ export async function manageArtifact(deps: {
   isApprovedPrincipal(principalId: string): boolean | Promise<boolean>;
   confirmation?: ArtifactConfirmationPort;
   validateNewCommand?(): void;
+  /** G1: runtime lock 2 of the sharing double lock, resolved inside the commit transaction. */
+  sharingPolicy?: SharingPolicyPort;
+  /** G1: profile lock 1 (deployment capability), absent ⇒ closed. */
+  profileAllowPublicSharing?: boolean;
+  /** G1: server-resolved platform admin predicate (never a tool argument). */
+  actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean>;
 }, invocation: ArtifactInvocationContext, command: EffectiveArtifactCommand, proof?: string): Promise<ArtifactOutcome<unknown>> {
   const artifactId = command.payload.artifactId as string;
   const deleting = command.operation === 'delete';
+  const access = deleting ? undefined : { action: command.payload.action as ModeAction, principalId: command.payload.principalId as string };
   let unit: ManagementUnit;
+  let adminResolved: boolean | undefined;
+  const resolveAdmin = async (): Promise<boolean> => {
+    if (adminResolved === undefined) {
+      adminResolved = (await deps.actorIsAdmin?.(invocation.actorId, invocation.storageScopeId) === true) &&
+        (await deps.isApprovedPrincipal(invocation.actorId)) === true;
+    }
+    return adminResolved;
+  };
   const receipt: Record<string, unknown> = {};
   const context: DeleteConfirmationContext = { actorId: invocation.actorId, storageScopeId: invocation.storageScopeId,
     artifactId, expectedCurrentReleaseId: command.payload.expectedCurrentReleaseId as string | null,
     commandHash: command.identity.commandHash, internalKey: command.identity.internalKey };
-  const owned = async () => {
+  // §2.3 order: visibility happened in the transport; here the management right
+  // (owner, or server-resolved admin reduce-only) gates every mutation.
+  const manageable = async () => {
     const target = await unit.read(artifactId);
     if (!target || target.acl.storageScopeId !== invocation.storageScopeId) throw refused('not_found');
-    if (target.acl.ownerId !== invocation.actorId) throw refused('access_denied');
+    if (deleting) {
+      if (target.acl.ownerId !== invocation.actorId) throw refused('access_denied');
+      return target;
+    }
+    const actorIsAdmin = await resolveAdmin();
+    if (!canManageAccess({ acl: target.acl, actorId: invocation.actorId, action: access!.action,
+      principalId: access!.principalId, actorIsAdmin })) throw refused('access_denied');
     return target;
   };
+  const sharingPolicy = async () => combineSharingPolicy(deps.profileAllowPublicSharing,
+    await resolveSharingPolicy(deps.sharingPolicy, invocation.storageScopeId));
   const request: FinalizeRequest = {
     ...command.identity, scopeId: invocation.storageScopeId, actorId: invocation.actorId,
     invocationId: invocation.invocationId, operation: command.operation, artifactId,
@@ -69,10 +108,10 @@ export async function manageArtifact(deps: {
     locks: { 'artifact-lifecycle': [async (client) => {
       unit = deps.createUnit(client);
       await unit.lock(artifactId);
-      await owned();
+      await manageable();
     }] },
     provisional: async (client) => {
-      const target = await owned();
+      const target = await manageable();
       if (target.terminal || target.state === 'deleted' || target.state === 'purged') throw refused('gone');
       const now = new Date().toISOString();
       if (deleting) {
@@ -89,16 +128,29 @@ export async function manageArtifact(deps: {
         await unit.delete(artifactId, now);
         Object.assign(receipt, { artifactId, state: 'deleted', terminal: true, deletedAt: now, purgeState: 'pending' });
       } else {
-        const principalId = command.payload.principalId as string;
-        if (command.payload.action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw refused('access_denied');
-        const output = await unit.setAccess(artifactId, principalId, command.payload.action as 'grant' | 'revoke', now);
-        Object.assign(receipt, { artifactId, isPublic: false, ...output });
+        const { action, principalId } = access!;
+        const audience = audienceOf(principalId);
+        if (audience === 'user' && action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw refused('access_denied');
+        // Double lock (profile capability AND runtime port) resolved in the
+        // transaction; the revision rides the receipt/audit, never the commandHash.
+        const policy = await sharingPolicy();
+        if (action === 'grant' && principalId === PUBLIC_PRINCIPAL && !policy.allowPublicSharing) throw policyRefused();
+        const output = await unit.setAccess(artifactId, principalId, action, now);
+        await unit.recordEvent({ artifactId, actorId: invocation.actorId, action, audience,
+          principalId: audience === 'user' ? principalId : null, policyRevision: policy.policyRevision });
+        Object.assign(receipt, { artifactId, ...output, policyRevision: policy.policyRevision });
       }
     },
     guard: async (ctx, tx) => {
-      const target = await owned();
+      const target = await manageable();
       if (!deleting && (target.terminal || target.state === 'deleted' || target.state === 'purged')) throw refused('gone');
-      if (!deleting && command.payload.action === 'grant' && !await deps.isApprovedPrincipal(command.payload.principalId as string)) throw refused('access_denied');
+      if (!deleting) {
+        const { action, principalId } = access!;
+        const audience = audienceOf(principalId);
+        if (audience === 'user' && action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw refused('access_denied');
+        const policy = await sharingPolicy();
+        if (action === 'grant' && principalId === PUBLIC_PRINCIPAL && !policy.allowPublicSharing) throw policyRefused();
+      }
       return invocation.authorizeCommit(ctx, tx);
     },
     validateReplayReceipt: (stored) => (stored.receipt as Record<string, unknown>)?.artifactId === artifactId,
