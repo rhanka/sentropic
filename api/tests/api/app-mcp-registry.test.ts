@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createClusterMeshModules } from '@sentropic/cluster-mesh';
 import { computeManifestDigest } from '@sentropic/cluster-mesh/mcp/registry';
-import { createArtifactsRegistryDefinition, compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE,
-  type ArtifactsDefinitionOptions } from '@sentropic/artifacts/mcp';
+import { ARTIFACTS_TOOL_DEFINITIONS, createArtifactsRegistryDefinition, compileArtifactsProfile,
+  RADAR_ARTIFACTS_PROFILE, type ArtifactsDefinitionOptions } from '@sentropic/artifacts/mcp';
 import { compileAppMcpRegistry } from '../../src/services/mcp/cluster-registry';
 
 const names = ['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish'] as const;
@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: '556ef9fc383f499ff9911edfa661b9025680f97b2bcfa5613263450c329cf0fd' },
+      'sentropic.artifacts': { manifestDigest: '70c2374584d072dc2df90a03f2af43c67afb1f995267b0b7eea863adb49b5824' },
     } };
 }
 
@@ -40,7 +40,7 @@ describe('app MCP registry compilation', () => {
       .toBe('94212e75c52e23f3f254496d98fca7c052568f7c03526ff3def3db020cd24168');
     const { manifest } = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
     expect(computeManifestDigest({ ...manifest, version: '0.2.5' }))
-      .toBe('56bd986f5e43dcad5e69ced780115b5046b9382a830a4b57507c133324992452');
+      .toBe('b95ba5ed2c145d7b5ff0c167e4d072292f285fd50480bfb853754cba02191e12');
     expect(computeManifestDigest({ ...manifest, version: '0.2.6' }))
       .toBe('c69c8ce188907fa3db602caa290e07ebcaffa9e63010aa47b73e1599b36149ed');
     expect(computeManifestDigest({ ...manifest, version: '0.2.7' }))
@@ -54,7 +54,7 @@ describe('app MCP registry compilation', () => {
       const tool = result.registry.resolveTool(name)!;
       expect(tool.providerId).toBe('sentropic.artifacts');
       expect(tool.capabilityName).toBe(name);
-      expect(tool.inputSchema).toEqual(input.artifacts.profile.schemas[name]);
+      expect(tool.inputSchema).toEqual(ARTIFACTS_TOOL_DEFINITIONS[name].inputSchema);
       expect(tool.requiredScopes).toEqual(['mcp:tools:invoke']);
     }
     expect(result.registry.resolveTool('artifacts_promote')).toBeUndefined();
