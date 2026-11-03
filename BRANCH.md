@@ -4,7 +4,7 @@
 A multi-file `artifacts_publish` returns 503 `provider_unavailable` on slow S3 hosts (OVH BHS answers in 1.1–1.5 s per request) because `publishFinalized` does one `putBlob` per file in a sequential loop and `verifyStagedBlobs` does one `getBlob` per file, also sequential; 30 files take ~78 s against the host's 20 s blob budget. This branch makes both loops bounded-concurrent (default 6, configurable, never above 8) with a shared deadline, first-fatal cancellation and unchanged error projection, all-or-nothing semantics, cleanup/finalization and MCP tool definitions.
 
 ## Scope / Guardrails
-- Scope limited to `packages/artifacts` (`src/server/publication.ts`, `src/mcp-core.ts` version constant, tests, CHANGELOG/package.json), the mechanical lockfile sync (`package-lock.json`, `api/package-lock.json`), the APP-P1 pin sites (`api/src/services/mcp/cluster-registry.ts` + the two api registry tests), the L5 P1 manifest (`tools/memory-mcp-l5/artifacts/**`, BR-EX5) and the cluster-mesh selected packaging fixture re-pin (BR-EX3).
+- Scope limited to `packages/artifacts` (`src/server/publication.ts`, `src/mcp-core.ts` version constant, tests, CHANGELOG/package.json), the mechanical lockfile sync (`package-lock.json`, `api/package-lock.json`), the APP-P1 pin sites (`api/src/services/mcp/cluster-registry.ts` + the two api registry tests), the L5 P1 manifest (`tools/memory-mcp-l5/artifacts/**`, BR01-EX5) and the cluster-mesh selected packaging fixture re-pin (BR01-EX3).
 - MCP tool definitions stay byte-identical: no change to `ARTIFACTS_TOOL_DEFINITIONS` or the tools/list snapshot; only `ARTIFACTS_PROVIDER_VERSION` (manifest version field) moves to 0.2.12, so the APP-P1 manifest pin is refreshed, never weakened.
 - Make-only workflow; one Docker lock per make command (`flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make ...`), never nested; tests on `ENV=test-art-conc-rb` only, ENV always last; `make down-volumes ENV=test-art-conc-rb` at the end. No `[skip ci]` anywhere.
 - Branch development happens in worktree `tmp/worktrees/artifacts-publish-concurrency` (branch `fix/artifacts-publish-bounded-concurrency` from `origin/main`).
@@ -30,19 +30,19 @@ A multi-file `artifacts_publish` returns 503 `provider_unavailable` on slow S3 h
   - `.cursor/rules/**`
   - `packages/artifacts/src/**` except `server/publication.ts` and `mcp-core.ts` (tool definitions byte-identical; snapshot JSON untouched)
   - `api/src/**` except `api/src/services/mcp/cluster-registry.ts`
-  - every other packages/cluster-mesh path stays out of scope (classified unknown); only the three BR-EX3 files are conditional below
+  - every other packages/cluster-mesh path stays out of scope (classified unknown); only the three BR01-EX3 files are conditional below
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-  - `tools/memory-mcp-l5/artifacts/**` (BR-EX5)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-EX3)
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR-EX3)
+  - `tools/memory-mcp-l5/artifacts/**` (BR01-EX5)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR01-EX3)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- BR-EX5 (scope exception, `tools/memory-mcp-l5/artifacts/**`): the root lock carries @sentropic/artifacts 0.2.12 after `make lock-root`, so the committed P1 manifest no longer matches the live lock fingerprint; regenerate through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (never hand-editing digests), previous manifest+sidecar retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot. Precedent: e52102c4c (0.2.9).
-- BR-EX3 (cluster-mesh packaging fixture re-pin): `tests/packaging/prepare-artifacts.spec.ts` requires the `selected` fixture to pin the workspace candidate version exactly, and the lazy lane installs the same-PR sibling archives whose integrity the committed lock must carry. Re-pin `fixtures/selected/package.json` + `package-lock.json` through `make pack-candidate-siblings` + `refresh-lazy-package-lock` and update the hardcoded archive integrity in `artifacts-tuple.spec.ts`. Rollback: revert the three files to the 0.2.9 pin. Precedent: bfbdd78df.
+- BR01-EX5 (scope exception, `tools/memory-mcp-l5/artifacts/**`): the root lock carries @sentropic/artifacts 0.2.12 after `make lock-root`, so the committed P1 manifest no longer matches the live lock fingerprint; regenerate through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (never hand-editing digests), previous manifest+sidecar retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot. Precedent: e52102c4c (0.2.9).
+- BR01-EX3 (cluster-mesh packaging fixture re-pin): `tests/packaging/prepare-artifacts.spec.ts` requires the `selected` fixture to pin the workspace candidate version exactly, and the lazy lane installs the same-PR sibling archives whose integrity the committed lock must carry. Re-pin `fixtures/selected/package.json` + `package-lock.json` through `make pack-candidate-siblings` + `refresh-lazy-package-lock` and update the hardcoded archive integrity in `artifacts-tuple.spec.ts`. Rollback: revert the three files to the 0.2.9 pin. Precedent: bfbdd78df.
 - Rebase on origin/main (3c0897b06, post-#901 sharing G1 / artifacts 0.2.10): UNION resolution — every #901 sharing change and every #art-conc concurrency change kept. Conflicts: `BRANCH.md` (this branch's content kept, BRLOCK-EX1 review_by line retained, test env moved to `test-art-conc-rb`), `packages/artifacts/package.json` + both lockfiles (0.2.12 kept per conductor allocation, above #901's 0.2.10), `mcp-core.ts` (0.2.12 version constant + #901/#896 tool definitions untouched), `CHANGELOG.md` (0.2.12 entry above #901's 0.2.10 entry), APP-P1 pin sites (`cluster-registry.ts` + the two app-mcp tests re-pinned to the 0.2.12 digest recomputed through make against the union source, #901's 0.2.8/0.2.10 refusal vectors kept), cluster-mesh fixtures + `artifacts-tuple.spec.ts` (re-pinned to 0.2.12 via the packaging make flow), L5 P1 manifest + history + lock snapshot (regenerated through `make memory-l5-pack` against the post-rebase HEAD). MCP tool definitions byte-identical; tools/list snapshot unchanged. Locks regenerated via `make lock-root` (+ documented one-line `file:` sync in `api/package-lock.json`, pattern ddbe7b65e), never hand-merged.
 
 ## AI Flaky tests
@@ -82,8 +82,8 @@ A multi-file `artifacts_publish` returns 503 `provider_unavailable` on slow S3 h
   - [ ] `packages/artifacts/package.json` 0.2.9 → 0.2.12; `ARTIFACTS_PROVIDER_VERSION` = '0.2.12' in `src/mcp-core.ts`; CHANGELOG `## 0.2.12` entry above `## 0.2.9`.
   - [ ] `make lock-root ENV=test-art-conc-rb`; api lock one-line `"../packages/artifacts"` version-string bump (pattern ddbe7b65e).
   - [ ] Recompute APP-P1 manifest digest through the make test lane (temp test in `packages/artifacts/tests/`, since deleted); refresh `APP_P1_MANIFEST_DIGEST` in `api/src/services/mcp/cluster-registry.ts` + digests/version assertion in `api/tests/api/app-mcp-registry.test.ts` and `app-mcp-installed.test.ts`. Pin semantics unchanged; tools/list snapshot untouched (definitions byte-identical).
-  - [ ] BR-EX3: `make pack-candidate-siblings` + `refresh-lazy-package-lock`; re-pin `fixtures/selected/package.json` + `package-lock.json` + `artifacts-tuple.spec.ts` integrity to 0.2.12.
-  - [ ] BR-EX5: `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-art-conc-rb`.
+  - [ ] BR01-EX3: `make pack-candidate-siblings` + `refresh-lazy-package-lock`; re-pin `fixtures/selected/package.json` + `package-lock.json` + `artifacts-tuple.spec.ts` integrity to 0.2.12.
+  - [ ] BR01-EX5: `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-art-conc-rb`.
   - [ ] Lot gate: scoped api registry tests (`app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`) green on `ENV=test-art-conc-rb`.
 
 - [ ] **Lot N — Final validation**
