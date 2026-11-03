@@ -36,7 +36,7 @@ Add the P4 OAuth tenant read surface to `@sentropic/cluster-mesh` per design `.t
   - `plan/NN-BRANCH_*.md` (except this branch file)
   - `.github/workflows/**`
   - `api/**` (except `api/package-lock.json` under BR-G1-EX1)
-  - `ui/**`, `e2e/**`, `deploy/**`, `scripts/**`, `tools/**`
+  - `ui/**`, `e2e/**`, `deploy/**`, `scripts/**`, and every other tools path outside the BR-G1-EX2 conditional path above
   - `packages/cluster-mesh/src/**` outside the allowed list above
   - `packages/cluster-mesh/tests/**` outside `tests/identity/oauth-reads.spec.ts`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
@@ -60,7 +60,8 @@ Add the P4 OAuth tenant read surface to `@sentropic/cluster-mesh` per design `.t
   - [x] Command style: `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make ... ENV=test-a4-stack-g1` (ENV last, one lock per make command); `make down-volumes ENV=test-a4-stack-g1` after.
 - [ ] **Lot 1 — Tests first: `tests/identity/oauth-reads.spec.ts`**
   - [x] Spec written per design §6.4: grant/find/revoke/re-grant semantics inside one write attempt + rollback absence; `findServiceClientBinding` multi-tenant/rebind; accessor refusals (`identity_contract_unavailable` on a store without the methods, `identity_transaction_unbound` on expired/foreign handles); doubles coverage in the same file.
-  - [ ] Lot gate (SQLite): `flock <lock> make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-a4-stack-g1` then `make down-volumes ENV=test-a4-stack-g1`.
+  - [x] Post-rebase: memory-l5 P1 manifest regenerated via `make memory-l5-pack STAGE=pre-candidate` (BR-G1-EX2; previous manifest retained in `artifacts/history/bf0bac2f….json`, new lock snapshot `df43ebd0….package-lock.json`).
+- [ ] Lot gate (SQLite): `flock <lock> make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-a4-stack-g1` then `make down-volumes ENV=test-a4-stack-g1`.
 - [ ] **Lot 2 — Contract: `oauth-reads.ts` + descriptor + index export**
   - [ ] `src/identity-contracts/oauth-reads.ts` (read interfaces, `OAuthTenantStoreV1`, `IdentityStoresOauthV1`, `oauthTenantStoreV1`, `oauthTenantStoreV1FromStores`).
   - [ ] `src/identity-contracts/composition-descriptors.ts` created with `IDENTITY_COMPOSITION_CONTRACT_VERSION = '1.2.0'` and the `oauth_tenant_reads` row.
