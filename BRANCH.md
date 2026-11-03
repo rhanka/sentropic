@@ -61,7 +61,7 @@ Add the P4 OAuth tenant read surface to `@sentropic/cluster-mesh` per design `.t
 - [ ] **Lot 1 — Tests first: `tests/identity/oauth-reads.spec.ts`**
   - [x] Spec written per design §6.4: grant/find/revoke/re-grant semantics inside one write attempt + rollback absence; `findServiceClientBinding` multi-tenant/rebind; accessor refusals (`identity_contract_unavailable` on a store without the methods, `identity_transaction_unbound` on expired/foreign handles); doubles coverage in the same file.
   - [x] Post-rebase: memory-l5 P1 manifest regenerated via `make memory-l5-pack STAGE=pre-candidate` (BR-G1-EX2; previous manifest retained in `artifacts/history/bf0bac2f….json`, new lock snapshot `df43ebd0….package-lock.json`).
-- [ ] Lot gate (SQLite): `flock <lock> make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-a4-stack-g1` then `make down-volumes ENV=test-a4-stack-g1`.
+- [x] Lot gate (SQLite): `flock <lock> make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-a4-stack-g1` green 5/5 (2.89s), then `make down-volumes ENV=test-a4-stack-g1` exit 0.
 - [ ] **Lot 2 — Contract: `oauth-reads.ts` + descriptor + index export**
   - [ ] `src/identity-contracts/oauth-reads.ts` (read interfaces, `OAuthTenantStoreV1`, `IdentityStoresOauthV1`, `oauthTenantStoreV1`, `oauthTenantStoreV1FromStores`).
   - [ ] `src/identity-contracts/composition-descriptors.ts` created with `IDENTITY_COMPOSITION_CONTRACT_VERSION = '1.2.0'` and the `oauth_tenant_reads` row.
