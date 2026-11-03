@@ -75,6 +75,25 @@ export const IDENTITY_COMPOSITION_DESCRIPTORS: readonly IdentityCompositionDescr
     factories: ['createAtomicWorkspaceDeletionV1'],
     errorType: 'IdentityCustodyErrorV1',
   },
+  {
+    domain: 'identity_replica_sync',
+    version: IDENTITY_COMPOSITION_CONTRACT_VERSION,
+    baseContractVersion: '1.0.0',
+    amendment: 'A4-composition-gaps',
+    status: 'contract-only',
+    profiles: ['postgres', 'sqlite'],
+    records: [
+      'IdentityReplicaSyncRowV1',
+      'IdentityReplicaSyncBatchV1',
+      'IdentityReplicaSyncCountsV1',
+      'IdentityReplicaSyncReceiptV1',
+      'IdentityReplicaSyncIssueReferenceV1',
+      'IdentityReplicaSyncValidationV1',
+    ],
+    ports: ['IdentityReplicaSyncPortV1', 'IdentityReplicaExportPortV1'],
+    factories: ['createIdentityReplicaSyncV1', 'createIdentityReplicaExporterV1'],
+    errorType: 'IdentityCustodyErrorV1',
+  },
 ];
 
 export const identityCompositionDescriptorV1 = (
