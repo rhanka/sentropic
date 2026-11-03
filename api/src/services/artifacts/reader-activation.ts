@@ -75,8 +75,15 @@ async function currentPolicy(client: PoolClient, pool: Pool, namespace: string,
   const store = createPostgresArtifactStore(client as unknown as Pool);
   const acl = await store.getArtifactAcl(target.artifactId);
   const lifecycle = createLifecycleService(store);
+  // G1 owner Q2: fresh account approval at every read — suspension pauses, reactivation resumes.
+  const approval = await client.query<{ approved: boolean }>(
+    `SELECT (u.account_status = 'active' AND u.disabled_at IS NULL AND t.status = 'active'
+        AND tm.status = 'approved') AS approved
+     FROM users u JOIN tenant_memberships tm ON tm.user_id = u.id AND tm.tenant_id = $2
+     JOIN tenants t ON t.id = tm.tenant_id WHERE u.id = $1 FOR SHARE OF u, t, tm`,
+    [session.subjectId, session.tenantId]);
   if (!acl || !lifecycle.canRead({ artifactId: target.artifactId, state: await lifecycle.stateOf(target.artifactId) },
-    acl, session.subjectId, 'read')) return undefined;
+    acl, session.subjectId, 'read', () => approval.rows[0]?.approved === true)) return undefined;
   // Session expiry is evaluated last, after every object/pointer/ACL/membership wait.
   const authority = createArtifactAuthorization({ pool, workspaceId: session.workspaceId, storageScopeId: namespace,
     identity: { subject: session.subjectId, tenantId: session.tenantId, clientId: ARTIFACT_SESSION_CLIENT,

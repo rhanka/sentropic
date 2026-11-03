@@ -32,6 +32,17 @@ export function createContentRuntime(options: {
     if (!Array.isArray(value) || value.length !== 2 || value.some(part => typeof part !== 'string' || !part)) return undefined;
     return { tenantId: value[0] as string, workspaceId: value[1] as string };
   }
+  // G1 owner Q2: live account approval, re-checked on every content read (fail-closed).
+  async function isApprovedAccount(principalId: string) {
+    const { rows } = await pool.query<{ approved: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM users u
+         JOIN tenant_memberships tm ON tm.user_id = u.id
+         JOIN tenants t ON t.id = tm.tenant_id
+         WHERE u.id = $1 AND u.account_status = 'active' AND u.disabled_at IS NULL
+           AND t.status = 'active' AND tm.status = 'approved') AS approved`,
+      [principalId]);
+    return rows[0]?.approved === true;
+  }
   async function current(claims: ContentGrantClaims) {
     const acl = await store.getArtifactAcl(claims.artifactId);
     if (!acl?.storageScopeId || !claims.releaseId) return false;
@@ -44,10 +55,12 @@ export function createContentRuntime(options: {
       identity: { subject: claims.subjectId, tenantId: bound.tenantId, clientId: 'artifact-content-grant', credentialId: '' },
       // The host has verified this <=55s grant. Membership/account/tenant authority remains live.
       currentIdentity: async () => ({ readable: true, writable: false }) });
-    return (await authority.current()).readable && lifecycle.canRead({ artifactId: claims.artifactId,
-      state: await lifecycle.stateOf(claims.artifactId) }, acl, claims.subjectId, 'read');
+    const current = await authority.current();
+    // G1: read grants require the live approval the authority read just verified.
+    return current.readable && lifecycle.canRead({ artifactId: claims.artifactId,
+      state: await lifecycle.stateOf(claims.artifactId) }, acl, claims.subjectId, 'read', () => current.readable);
   }
-  return createContentHost({ ...options, current, acls: store, lifecycle,
+  return createContentHost({ ...options, current, isApprovedAccount, acls: store, lifecycle,
     grants: { issue: input => signer().issue(input), verify: token => signer().verify(token) },
     publication: { getRelease: id => store.getRelease(id), async getCurrent(id) {
       const releaseId = await store.getCurrentReleaseId(id);

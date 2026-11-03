@@ -10,7 +10,7 @@
  * with their owner first. Part 2 adds the service.
  */
 import { assertArtifactAccess } from './authorization.js';
-import { evaluateAccess, type AccessAction, type ArtifactAcl } from './access.js';
+import { evaluateAccess, type AccessAction, type ArtifactAcl, type SharingPolicyContext } from './access.js';
 import type { DeletionClaimStore } from './gc.js';
 import type { PublicationStateStore } from './publication.js';
 
@@ -128,6 +128,7 @@ export interface LifecycleService {
     actorId: string,
     action?: AccessAction,
     isApproved?: (principalId: string) => boolean,
+    policy?: SharingPolicyContext,
   ): boolean;
   withdraw(artifactId: string, actorId: string): Promise<void>;
   restore(artifactId: string, actorId: string): Promise<void>;
@@ -185,10 +186,11 @@ export function createLifecycleService(
       actorId: string,
       action: AccessAction = 'read',
       isApproved: (principalId: string) => boolean = () => false,
+      policy: SharingPolicyContext = {},
     ): boolean {
       if (artifact.state === 'deleted' || artifact.state === 'purged') return false;
       if (artifact.state === 'withdrawn') return actorId === acl.ownerId;
-      return evaluateAccess(acl, actorId, action, isApproved);
+      return evaluateAccess(acl, actorId, action, isApproved, policy);
     },
     async withdraw(artifactId: string, actorId: string): Promise<void> {
       await assertOwner(artifactId, actorId);

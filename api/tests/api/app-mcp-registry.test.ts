@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: '4f065e3f95f3dccd950b11d6547702ccf96e0f099fd7c741294044e6ead59e30' },
+      'sentropic.artifacts': { manifestDigest: '1ad86bab8d8f9cb29c5ea57569a7a7f93d0d43a650c3ac58dcbc5de1b9fde686' },
     } };
 }
 
@@ -45,6 +45,10 @@ describe('app MCP registry compilation', () => {
       .toBe('1c3de88bae05879c5122e1bfc06217103544f4312e3f0840fb64acc845492708');
     expect(computeManifestDigest({ ...manifest, version: '0.2.7' }))
       .toBe('bd0ea9593ad78a1b4e84cbf409cb150e21ba53df40b3ec91775a388e8605fbde');
+    expect(computeManifestDigest({ ...manifest, version: '0.2.8' }))
+      .toBe('96226d32f64ca7ac06749d5083084b6f572eac23d27256cae8d37e7f7579933d');
+    expect(computeManifestDigest({ ...manifest, version: '0.2.10' }))
+      .toBe('1ad86bab8d8f9cb29c5ea57569a7a7f93d0d43a650c3ac58dcbc5de1b9fde686');
     const result = await compileAppMcpRegistry(input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
@@ -61,6 +65,16 @@ describe('app MCP registry compilation', () => {
     expect(result.registry.resolveTool('artifacts-ensure')).toBeUndefined();
     expect(input.execute).not.toHaveBeenCalled();
     expect(input.createInvocation).not.toHaveBeenCalled();
+  });
+
+  it('should refuse the superseded artifacts 0.2.8 compatibility receipt', async () => {
+    const input = fixture();
+    input.compatibility['sentropic.artifacts'].manifestDigest =
+      '96226d32f64ca7ac06749d5083084b6f572eac23d27256cae8d37e7f7579933d';
+    const result = await compileAppMcpRegistry(input);
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty('registry');
+    expect(input.execute).not.toHaveBeenCalled();
   });
 
   it('should refuse the superseded artifacts 0.2.7 compatibility receipt', async () => {

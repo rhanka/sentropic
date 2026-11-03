@@ -60,15 +60,31 @@ describe('content runtime', () => {
       ...acl,
       grants: [{ principalId: 'reader-1', grant: 'read' }],
     });
+    // G1/Q2: a grant is honored only while the account stays approved.
+    const approved = (): boolean => true;
     await expect(
-      runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'reader-1' }),
+      runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'reader-1', isApproved: approved }),
     ).resolves.toMatchObject({ mimeType: 'text/html' });
     await expect(
-      runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'stranger' }),
+      runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'stranger', isApproved: approved }),
     ).rejects.toThrow(/access denied/);
+    // a suspended grantee is cut at the next read, and resumes automatically (Q2)
+    let readerApproved = true;
+    const approval = (): boolean => readerApproved;
+    await expect(
+      runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'reader-1', isApproved: approval }),
+    ).resolves.toMatchObject({ mimeType: 'text/html' });
+    readerApproved = false;
+    await expect(
+      runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'reader-1', isApproved: approval }),
+    ).rejects.toThrow(/access denied/);
+    readerApproved = true;
+    await expect(
+      runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'reader-1', isApproved: approval }),
+    ).resolves.toMatchObject({ mimeType: 'text/html' });
   });
 
-  it('opens public reads to approved accounts only', async () => {
+  it('opens platform reads (legacy isPublic) to approved accounts only', async () => {
     const { acls, runtime, digest } = await setup();
     const acl = await acls.getArtifactAcl('a-1');
     if (acl === undefined) throw new Error('test setup lost the acl');
@@ -80,6 +96,23 @@ describe('content runtime', () => {
     await expect(
       runtime.serveFile({ artifactId: 'a-1', digest, actorId: 'anon-1', isApproved: approved }),
     ).rejects.toThrow(/access denied/);
+  });
+
+  it('serves anonymous reads only in public mode while the policy allows it (double lock)', async () => {
+    const { acls, runtime, digest } = await setup();
+    const acl = await acls.getArtifactAcl('a-1');
+    if (acl === undefined) throw new Error('test setup lost the acl');
+    await acls.putArtifactAcl('a-1', { ...acl, isPublic: true, accessMode: 'public' });
+    const approved = (): boolean => true;
+    // policy closed (default): public mode serves nobody beyond owner/grants
+    await expect(
+      runtime.serveFile({ artifactId: 'a-1', digest, actorId: '', isApproved: approved }),
+    ).rejects.toThrow(/access denied/);
+    // both locks open: anonymous read is served
+    await expect(
+      runtime.serveFile({ artifactId: 'a-1', digest, actorId: '', isApproved: approved,
+        policy: { allowPublicSharing: true } }),
+    ).resolves.toMatchObject({ mimeType: 'text/html' });
   });
 
   it('suspends readers on withdrawal while the owner keeps access', async () => {

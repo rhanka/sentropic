@@ -32,6 +32,10 @@ const SQL_METADATA = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0005_metadata.sql'),
   'utf8',
 );
+const SQL_SHARING = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0006_sharing.sql'),
+  'utf8',
+);
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const store = createPostgresArtifactStore(pool);
@@ -44,6 +48,7 @@ beforeAll(async () => {
   await setup.query(SQL_COORDINATOR);
   await setup.query(SQL_TERMINAL);
   await setup.query(SQL_METADATA);
+  await setup.query(SQL_SHARING);
   await setup.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-1', 'org-1')`);
   await setup.end();
 });
@@ -183,7 +188,59 @@ describe('postgres artifact store', () => {
       ownerId: 'owner-acl',
       storageScopeId: 'scope-1',
       isPublic: true,
+      // G1: the legacy is_public flag reads back as the platform mode, never public
+      accessMode: 'platform',
       grants: [{ principalId: 'reader-1', grant: 'read' }],
+    });
+  });
+
+  it('round-trips access_mode and keeps is_public as its projection', async () => {
+    const ensured = await store.ensureArtifact({
+      storageScopeId: 'scope-1',
+      ownerId: 'owner-mode',
+      bindingName: 'modes',
+      profile: {},
+    });
+    await store.putArtifactAcl(ensured.artifactId, {
+      ownerId: 'owner-mode', isPublic: false, withdrawn: false, grants: [], accessMode: 'public',
+    });
+    const acl = await store.getArtifactAcl(ensured.artifactId);
+    expect(acl).toMatchObject({ accessMode: 'public', isPublic: true });
+    const { rows } = await pool.query<{ access_mode: string; is_public: boolean }>(
+      'SELECT access_mode, is_public FROM artifacts.artifacts WHERE id = $1', [ensured.artifactId],
+    );
+    expect(rows[0]).toEqual({ access_mode: 'public', is_public: true });
+    // back to restricted: both the mode and the projection move together
+    await store.putArtifactAcl(ensured.artifactId, { ...acl!, accessMode: 'restricted', isPublic: false });
+    const back = await store.getArtifactAcl(ensured.artifactId);
+    expect(back).toMatchObject({ accessMode: 'restricted', isPublic: false });
+  });
+
+  it('demotes a stale source grant to read when rewriting a non-restricted ACL (legacy platform artifact)', async () => {
+    const ensured = await store.ensureArtifact({
+      storageScopeId: 'scope-1',
+      ownerId: 'owner-legacy-src',
+      bindingName: 'legacy-src',
+      profile: {},
+    });
+    // ACL exactly as getArtifactAcl reads back a legacy artifact migrated by
+    // 0006 from is_public=true while carrying a source grant; the withdraw
+    // path writes it back unchanged. The source guard must not make such an
+    // artifact un-rewritable: the stale source grant is demoted to read and
+    // the grant row is kept, never dropped.
+    await store.putArtifactAcl(ensured.artifactId, {
+      ownerId: 'owner-legacy-src',
+      isPublic: true,
+      accessMode: 'platform',
+      withdrawn: true,
+      grants: [{ principalId: 'collab-legacy', grant: 'source' }, { principalId: 'reader-1', grant: 'read' }],
+    });
+    const acl = await store.getArtifactAcl(ensured.artifactId);
+    expect(acl).toMatchObject({
+      accessMode: 'platform',
+      isPublic: true,
+      withdrawn: true,
+      grants: [{ principalId: 'collab-legacy', grant: 'read' }, { principalId: 'reader-1', grant: 'read' }],
     });
   });
 

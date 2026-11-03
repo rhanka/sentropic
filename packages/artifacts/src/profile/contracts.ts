@@ -27,6 +27,8 @@ export interface ArtifactProfileRules {
   readonly forbiddenPathPattern: string;
   readonly reservedFirstSegments: readonly string[];
   readonly mimeTypes: readonly string[];
+  /** G1 lock 1 (deployment): allow the `public` sharing mode; absent ⇒ closed. */
+  readonly allowPublicSharing?: boolean;
 }
 export interface ArtifactProviderProfile {
   /** Trusted public contract revision; independent from the host policy revision. */

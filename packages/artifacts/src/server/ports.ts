@@ -51,6 +51,56 @@ export interface KeyMutex {
 }
 
 /**
+ * G1 sharing policy port (converged-r2 §2.2, lock 2 of the double lock).
+ * Resolved by the host per storage scope, inside the commit transaction and
+ * at each anonymous read; never derived from tool arguments. Absent, throwing
+ * or malformed answers fail closed.
+ */
+export interface SharingPolicyPort {
+  getSharingPolicy(scope: string): Promise<{ allowPublicSharing: boolean; policyRevision: string }>;
+}
+
+export interface SharingPolicy {
+  allowPublicSharing: boolean;
+  policyRevision: string;
+}
+
+/** Fail-closed policy used whenever no well-formed answer exists. */
+export const CLOSED_SHARING_POLICY: SharingPolicy = Object.freeze({ allowPublicSharing: false, policyRevision: 'none' });
+
+/** Resolve the runtime lock fail-closed: absent port, throw or malformed answer ⇒ closed. */
+export async function resolveSharingPolicy(
+  port: SharingPolicyPort | undefined,
+  scope: string,
+): Promise<SharingPolicy> {
+  if (port === undefined) return CLOSED_SHARING_POLICY;
+  try {
+    const policy = await port.getSharingPolicy(scope);
+    if (typeof policy?.allowPublicSharing !== 'boolean' ||
+      typeof policy?.policyRevision !== 'string' || policy.policyRevision.length === 0) {
+      return CLOSED_SHARING_POLICY;
+    }
+    return { allowPublicSharing: policy.allowPublicSharing, policyRevision: policy.policyRevision };
+  } catch {
+    return CLOSED_SHARING_POLICY;
+  }
+}
+
+/**
+ * Combine both locks of the double lock: the profile capability (lock 1,
+ * deployment) AND the runtime port (lock 2, revocable). The public mode is
+ * effective only when both allow it; the revision stays the runtime one so
+ * receipts and audit events carry it (never hashed into the command).
+ */
+export function combineSharingPolicy(
+  profileAllows: boolean | undefined,
+  runtime: SharingPolicy,
+): SharingPolicy {
+  return { allowPublicSharing: profileAllows === true && runtime.allowPublicSharing,
+    policyRevision: runtime.policyRevision };
+}
+
+/**
  * In-process per-key mutex: concurrent callers for one key serialize so
  * exactly one creator wins (single-process scope; multi-process fencing
  * belongs to the L-5b Postgres port).
