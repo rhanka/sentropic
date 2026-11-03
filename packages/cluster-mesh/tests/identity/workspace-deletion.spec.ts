@@ -264,3 +264,144 @@ const expectNoMutation = async (env: ProfileEnv, operationId: string): Promise<v
     expect((await execSql(host, `SELECT * FROM ${q(host, 'cm_identity_audit_events')} WHERE kind = ?`, ['workspace_deletion'])).rows).toHaveLength(0);
   });
 };
+
+describe.each(PROFILES.map((profile) => ({ profile })))('G4 atomic workspace deletion on $profile', { timeout: 30000 }, ({ profile }) => {
+  const openEnv = async (): Promise<ProfileEnv> => {
+    if (profile === 'postgres') return { unitOfWork: asOpHost((await openPostgresEnv()).unitOfWork), concurrent: true };
+    return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork), concurrent: false };
+  };
+
+  it('pins the 1.2.0 descriptor row and the new error code', () => {
+    expect(IDENTITY_COMPOSITION_DESCRIPTORS).toEqual([{
+      domain: 'atomic_workspace_deletion',
+      version: '1.2.0',
+      baseContractVersion: '1.0.0',
+      amendment: 'A4-composition-gaps',
+      status: 'contract-only',
+      profiles: ['postgres', 'sqlite'],
+      records: ['WorkspaceDeletionCommandV1', 'WorkspaceDeletionReceiptV1', 'WorkspaceBusinessDeletionReceiptV1'],
+      ports: ['AtomicWorkspaceDeletionV1', 'WorkspaceDeletionAuthorizationPortV1', 'WorkspaceBusinessDeletionPortV1', 'WorkspaceDeletionPlanePortV1'],
+      factories: ['createAtomicWorkspaceDeletionV1'],
+      errorType: 'IdentityCustodyErrorV1',
+    }]);
+    const error = new IdentityCustodyErrorV1('identity_workspace_admin_required');
+    expect(error.message).toBe('Workspace administration is required for this operation.');
+    expect(error.code).toBe('identity_workspace_admin_required');
+  });
+
+  it('deletes a workspace atomically with exact receipt and scoped deliveries', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const operation = buildOperation(env, freshState(), createRealCustody(), true);
+    const receipt = await operation.deleteWorkspace({ operationId: 'op-ws-1', workspaceId: 'ws', actorId: 'marie' });
+    const expectedDeliveries = ['c1', 'c2'].map((ref) => identityDeliveryId('op-ws-1', 'connector_grants', 'connector_grant', ref)).sort();
+    expect(receipt).toMatchObject({ contractVersion: '1.2.0', operationId: 'op-ws-1', workspaceId: 'ws', tenantId: 'org', actorId: 'marie', at: NOW });
+    expect([...receipt.deliveryIds].sort()).toEqual(expectedDeliveries);
+    expect(receipt.business).toEqual({ deletedByTable: { ws_biz_rows: 2 }, detachedByTable: {} });
+    expect(receipt.cleanup.deletedByTable).toEqual({ workspaceMembers: 3, conversationSessions: 2, workspaces: 1 });
+    expect(receipt.cleanup.detachedByTable).toEqual({ invitationDigests: 4 });
+    expect(receipt.cleanup.remainingLiveReferences).toBe(0);
+    await env.unitOfWork.run(READ, async (tx) => {
+      const host = tx.hostTransaction;
+      expect(await host.journal.findWorkspaceCore('ws')).toBeNull();
+      expect(await host.journal.findWorkspaceCore('ws2')).not.toBeNull();
+      expect(await host.journal.roleInWorkspace('ws', 'marie')).toBeNull();
+      expect(await host.journal.findAccountCore('boss')).not.toBeNull();
+      expect(await host.journal.findAccountCore('jean')).not.toBeNull();
+      expect((await execSql(host, `SELECT * FROM ${q(host, 'cm_identity_conversation_sessions')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(0);
+      expect((await execSql(host, `SELECT * FROM ${q(host, 'cm_identity_conversation_sessions')} WHERE workspace_id = ?`, ['ws2'])).rows).toHaveLength(1);
+      expect(await tx.custody.invitations.findById('inv-pending')).toMatchObject({ status: 'revoked', workspaceId: null });
+      expect(await tx.custody.invitations.findById('inv-consumed')).toMatchObject({ status: 'consumed', workspaceId: null });
+      expect(await tx.custody.invitations.findById('inv-revoked')).toMatchObject({ status: 'revoked', workspaceId: null });
+      expect(await tx.custody.invitations.findById('inv-other')).toMatchObject({ status: 'pending', workspaceId: 'ws2' });
+      expect((await execSql(host, `SELECT * FROM ${q(host, 'ws_biz_rows')} WHERE workspace_id = ?`, ['ws'])).rows).toHaveLength(0);
+      expect((await execSql(host, `SELECT * FROM ${q(host, 'ws_biz_rows')} WHERE workspace_id = ?`, ['ws2'])).rows).toHaveLength(1);
+      expect((await execSql(host, `SELECT * FROM ${q(host, 'ws_connector_rows')} WHERE workspace_id = ?`, ['ws2'])).rows).toHaveLength(1);
+      const pending = await tx.revocationOutbox.listPending('op-ws-1');
+      expect(pending.map((record) => record.targetRef).sort()).toEqual(['c1', 'c2']);
+      expect(pending.every((record) => record.subjectId === (record.targetRef === 'c1' ? 'boss' : 'marie')
+        && record.targetKind === 'connector_grant' && record.step === 'connector_grants' && !!record.custodyRef
+        && record.deliveryId === identityDeliveryId('op-ws-1', record.step, record.targetKind, record.targetRef))).toBe(true);
+      const audit = (await execSql(host, `SELECT * FROM ${q(host, 'cm_identity_audit_events')} WHERE kind = ?`, ['workspace_deletion'])).rows;
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({ actor_id: 'marie', subject_id: 'ws', detail: 'op-ws-1' });
+    });
+  });
+
+  it('rolls back every row when the business delete fails', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const state = freshState();
+    state.failAt = 'delete';
+    const operation = buildOperation(env, state, createRealCustody(), true);
+    await expect(operation.deleteWorkspace({ operationId: 'op-rb-delete', workspaceId: 'ws', actorId: 'marie' })).rejects.toThrow('injected-business-delete');
+    expect(state.reachedApply).toBe(true);
+    expect(state.reachedDelete).toBe(true);
+    await expectNoMutation(env, 'op-rb-delete');
+  });
+
+  it('rolls back when a connector capability is unreadable', async () => {
+    const env = await openEnv();
+    await seedStandard(env, { c2Capability: null });
+    const operation = buildOperation(env, freshState(), createRealCustody(), true);
+    await expect(operation.deleteWorkspace({ operationId: 'op-rb-cap', workspaceId: 'ws', actorId: 'marie' })).rejects.toMatchObject({ code: 'identity_revocation_custody_invalid' });
+    await expectNoMutation(env, 'op-rb-cap');
+  });
+
+  it('rolls back when the plane apply fails', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const state = freshState();
+    state.failAt = 'apply';
+    const operation = buildOperation(env, state, createRealCustody(), true);
+    await expect(operation.deleteWorkspace({ operationId: 'op-rb-apply', workspaceId: 'ws', actorId: 'marie' })).rejects.toThrow('injected-plane-apply');
+    await expectNoMutation(env, 'op-rb-apply');
+  });
+
+  it('rolls back at the orphan gate and keeps the workspace resolvable', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const state = freshState();
+    state.failAt = 'assert';
+    const operation = buildOperation(env, state, createRealCustody(), true);
+    await expect(operation.deleteWorkspace({ operationId: 'op-rb-orphan', workspaceId: 'ws', actorId: 'marie' })).rejects.toThrow('injected-business-assert');
+    expect(state.reachedAssert).toBe(true);
+    await expectNoMutation(env, 'op-rb-orphan');
+  });
+
+  it('refuses non-admin members, non-members, absent actors and absent workspaces', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const operation = buildOperation(env, freshState(), createRealCustody(), true);
+    await expect(operation.deleteWorkspace({ operationId: 'op-a1', workspaceId: 'ws', actorId: 'jean' })).rejects.toMatchObject({ code: 'identity_workspace_admin_required' });
+    await expect(operation.deleteWorkspace({ operationId: 'op-a2', workspaceId: 'ws', actorId: 'solo' })).rejects.toMatchObject({ code: 'identity_workspace_admin_required' });
+    await expect(operation.deleteWorkspace({ operationId: 'op-a3', workspaceId: 'ws', actorId: 'ghost' })).rejects.toBeInstanceOf(IdentityNotFoundError);
+    await expect(operation.deleteWorkspace({ operationId: 'op-a4', workspaceId: 'ghost', actorId: 'jean' })).rejects.toBeInstanceOf(IdentityNotFoundError);
+    await expectNoMutation(env, 'op-a1');
+  });
+
+  it('refuses a retired actor through the subject fence', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    await env.unitOfWork.run(WRITE, async (tx) => { await tx.advanceSubjectRevision('marie', NOW, true); });
+    const operation = buildOperation(env, freshState(), createRealCustody(), true);
+    await expect(operation.deleteWorkspace({ operationId: 'op-a5', workspaceId: 'ws', actorId: 'marie' })).rejects.toMatchObject({ code: 'identity_subject_retired' });
+    await expectNoMutation(env, 'op-a5');
+  });
+
+  it('rolls back with zero mutation when the host authorization refuses', async () => {
+    const env = await openEnv();
+    await seedStandard(env);
+    const state = freshState();
+    state.authorizationRefusal = true;
+    const operation = buildOperation(env, state, createRealCustody(), true);
+    await expect(operation.deleteWorkspace({ operationId: 'op-auth', workspaceId: 'ws', actorId: 'marie' })).rejects.toThrow('injected-authorization');
+    await expectNoMutation(env, 'op-auth');
+  });
+
+  it('refuses empty command ids before any transaction', async () => {
+    const env = await openEnv();
+    const operation = buildOperation(env, freshState(), createMemoryCustody().port, false);
+    await expect(operation.deleteWorkspace({ operationId: '', workspaceId: 'ws', actorId: 'marie' })).rejects.toMatchObject({ code: 'identity_material_invalid' });
+    await expect(operation.deleteWorkspace({ operationId: 'op-empty', workspaceId: '', actorId: 'marie' })).rejects.toMatchObject({ code: 'identity_material_invalid' });
+  });
