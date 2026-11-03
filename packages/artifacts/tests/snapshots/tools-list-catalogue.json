@@ -499,6 +499,28 @@
       },
       "inputSchema": {
         "additionalProperties": false,
+        "oneOf": [
+          {
+            "not": {
+              "required": [
+                "edits"
+              ]
+            },
+            "required": [
+              "files"
+            ]
+          },
+          {
+            "not": {
+              "required": [
+                "files"
+              ]
+            },
+            "required": [
+              "edits"
+            ]
+          }
+        ],
         "properties": {
           "artifactId": {
             "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -550,6 +572,28 @@
             "description": "Full file set; required unless edits is supplied.",
             "items": {
               "additionalProperties": false,
+              "oneOf": [
+                {
+                  "not": {
+                    "required": [
+                      "bytes"
+                    ]
+                  },
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "not": {
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  "required": [
+                    "bytes"
+                  ]
+                }
+              ],
               "properties": {
                 "bytes": {
                   "items": {
@@ -747,6 +791,34 @@
       },
       "inputSchema": {
         "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "grant"
+                ]
+              }
+            },
+            "required": [
+              "grant"
+            ]
+          },
+          {
+            "not": {
+              "required": [
+                "grant"
+              ]
+            },
+            "properties": {
+              "action": {
+                "enum": [
+                  "revoke"
+                ]
+              }
+            }
+          }
+        ],
         "properties": {
           "action": {
             "enum": [
@@ -849,6 +921,28 @@
         "description": "Artifacts publish.",
         "inputSchema": {
           "additionalProperties": false,
+          "oneOf": [
+            {
+              "not": {
+                "required": [
+                  "edits"
+                ]
+              },
+              "required": [
+                "files"
+              ]
+            },
+            {
+              "not": {
+                "required": [
+                  "files"
+                ]
+              },
+              "required": [
+                "edits"
+              ]
+            }
+          ],
           "properties": {
             "artifactId": {
               "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -900,6 +994,28 @@
               "description": "Full file set; required unless edits is supplied.",
               "items": {
                 "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "bytes"
+                      ]
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "text"
+                      ]
+                    },
+                    "required": [
+                      "bytes"
+                    ]
+                  }
+                ],
                 "properties": {
                   "bytes": {
                     "items": {
@@ -1076,6 +1192,28 @@
         "description": "Artifacts publish.",
         "inputSchema": {
           "additionalProperties": false,
+          "oneOf": [
+            {
+              "not": {
+                "required": [
+                  "edits"
+                ]
+              },
+              "required": [
+                "files"
+              ]
+            },
+            {
+              "not": {
+                "required": [
+                  "files"
+                ]
+              },
+              "required": [
+                "edits"
+              ]
+            }
+          ],
           "properties": {
             "artifactId": {
               "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -1127,6 +1265,28 @@
               "description": "Full file set; required unless edits is supplied.",
               "items": {
                 "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "bytes"
+                      ]
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "text"
+                      ]
+                    },
+                    "required": [
+                      "bytes"
+                    ]
+                  }
+                ],
                 "properties": {
                   "bytes": {
                     "items": {
@@ -1283,6 +1443,34 @@
         "description": "Artifacts set access.",
         "inputSchema": {
           "additionalProperties": false,
+          "oneOf": [
+            {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "grant"
+                  ]
+                }
+              },
+              "required": [
+                "grant"
+              ]
+            },
+            {
+              "not": {
+                "required": [
+                  "grant"
+                ]
+              },
+              "properties": {
+                "action": {
+                  "enum": [
+                    "revoke"
+                  ]
+                }
+              }
+            }
+          ],
           "properties": {
             "action": {
               "enum": [

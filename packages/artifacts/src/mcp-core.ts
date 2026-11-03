@@ -54,8 +54,10 @@ const metadata = {
 } as const;
 const path = { type: 'string', minLength: 1, description:
   'Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.' } as const;
-const file = obj({ path, mimeType: str, text: { type: 'string' },
-  bytes: { type: 'array', items: integer(0, 255) } }, ['path', 'mimeType']);
+const file = { ...obj({ path, mimeType: str, text: { type: 'string' },
+  bytes: { type: 'array', items: integer(0, 255) } }, ['path', 'mimeType']),
+  oneOf: [{ required: ['text'], not: { required: ['bytes'] } },
+    { required: ['bytes'], not: { required: ['text'] } }] };
 const edit = obj({ path, oldStr: str, newStr: { type: 'string' } }, ['path', 'oldStr', 'newStr']);
 const idOnly = obj({ artifactId: id }, ['artifactId']);
 
@@ -95,12 +97,14 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
   artifacts_get_api_guide: staticTool('artifacts_get_api_guide', obj({ version: str })),
   artifacts_ensure: staticTool('artifacts_ensure', obj({ bindingName: str, parameters: obj({}),
     idempotencyKey, ...metadata }, ['bindingName', 'idempotencyKey'])),
-  artifacts_publish: staticTool('artifacts_publish', obj({ artifactId: id, idempotencyKey,
+  artifacts_publish: staticTool('artifacts_publish', { ...obj({ artifactId: id, idempotencyKey,
     files: { type: 'array', items: file, minItems: 1,
       description: 'Full file set; required unless edits is supplied.' },
     edits: { type: 'array', items: edit, minItems: 1, maxItems: 100,
       description: 'Small old/new edits applied to the current release text files; required unless files is supplied.' },
-    expectedCurrentReleaseId, profile: primitiveRecord, ...metadata }, ['artifactId', 'idempotencyKey'])),
+    expectedCurrentReleaseId, profile: primitiveRecord, ...metadata }, ['artifactId', 'idempotencyKey']),
+    oneOf: [{ required: ['files'], not: { required: ['edits'] } },
+      { required: ['edits'], not: { required: ['files'] } }] }),
   artifacts_create_upload: staticTool('artifacts_create_upload', obj({ artifactId: id, mimeType: str,
     maxSize: integer(1) }, ['artifactId', 'mimeType'])),
   artifacts_commit_upload: staticTool('artifacts_commit_upload', obj({ artifactId: id, uploadId: str,
@@ -113,10 +117,13 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
     'Artifacts get source: verified files of the current or a selected release as `text` (encoding "utf8") '
       + 'or `base64` (encoding "base64"), never an integer array, plus a guideRef instead of the guide body.'),
   artifacts_fork: staticTool('artifacts_fork', idOnly),
-  artifacts_set_access: staticTool('artifacts_set_access', obj({ artifactId: id,
+  artifacts_set_access: staticTool('artifacts_set_access', { ...obj({ artifactId: id,
     action: { type: 'string', enum: ['grant', 'revoke'] }, principalId: { ...str, maxLength: 256 },
     grant: { type: 'string', enum: ['read'] }, idempotencyKey },
-    ['artifactId', 'action', 'principalId', 'idempotencyKey'])),
+    ['artifactId', 'action', 'principalId', 'idempotencyKey']), oneOf: [
+      { properties: { action: { enum: ['grant'] } }, required: ['grant'] },
+      { properties: { action: { enum: ['revoke'] } }, not: { required: ['grant'] } },
+    ] }),
   artifacts_promote: staticTool('artifacts_promote', obj({ artifactId: id, releaseId: id, expectedCurrent: id },
     ['artifactId', 'releaseId', 'expectedCurrent'])),
   artifacts_renew: staticTool('artifacts_renew', idOnly),
