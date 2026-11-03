@@ -1,62 +1,64 @@
-// TEST-ONLY fake lane client minted by an established fake chain (L-3). The
-// brand is not forgeable from outside; source-* routes without a credential
-// lease get a typed endpointRefusal.
+// TEST-ONLY fake lane transport + engine mint (L-3): the fake wiring hands the
+// REAL lane client engine (relay-lane-client) a scripted transport, so the
+// public API path exercises the actual L-6 iterator discipline. The brand is
+// not forgeable from outside. Missing authorities refuse with typed lane
+// errors — endpointRefusal is only ever a real endpoint record, never
+// synthesized (runtimeComposition.absent: missing provider/null lease →
+// relay_auth_required).
 import { relayError } from '../../src/sessions/registry-types.js';
-import { SESSION_RELAY_LANE_CLIENT_BRAND } from '../../src/sessions/relay-brand.js';
+import type { SessionRef } from '../../src/sessions/registry-types.js';
 import { relayRouteSpec } from '../../src/sessions/relay-routes.js';
-import type { SessionRelayLaneClientV1, SessionRelayLaneResponseV1 } from '../../src/sessions/relay-types.js';
+import { createLaneClientEngine } from '../../src/sessions/relay-lane-client.js';
+import type { LaneStreamSourceV1, SessionRelayLaneCallV1, SessionRelayLaneTransportV1 } from '../../src/sessions/relay-lane-client.js';
+import type { SessionRelayLaneClientV1 } from '../../src/sessions/relay-types.js';
 import type { FakeAuthorities } from './relay-fakes.js';
 
-function iterate(events: readonly SessionRelayLaneResponseV1[], closed: { value: boolean }): AsyncIterableIterator<SessionRelayLaneResponseV1> {
-  let i = 0;
+// Scripted fake L→A transport: answers from the route matrix; unknown routes
+// refuse with relay_lane_refused. Source-auth headers applied by the engine are
+// accepted here (mesh-internal sink) but never exposed to the caller.
+function createFakeLaneTransport(): SessionRelayLaneTransportV1 & { closed: () => boolean } {
+  let closed = false;
+  const answer = (call: SessionRelayLaneCallV1): unknown => {
+    const spec = relayRouteSpec(call.routeId);
+    if (!spec) return { routeId: call.routeId, error: relayError('relay_lane_refused') };
+    return { routeId: call.routeId, response: { status: spec.successStatus, body: null } };
+  };
   return {
-    [Symbol.asyncIterator]() { return this; },
-    next(): Promise<IteratorResult<SessionRelayLaneResponseV1>> {
-      if (closed.value || i >= events.length) return Promise.resolve({ done: true, value: undefined });
-      return Promise.resolve({ done: false, value: events[i++] });
+    async request(call) {
+      if (closed) throw relayError('relay_unavailable', true);
+      return answer(call);
     },
-    return(): Promise<IteratorResult<SessionRelayLaneResponseV1>> {
-      return Promise.resolve({ done: true, value: undefined });
+    openStream(call) {
+      const records: unknown[] = closed ? [] : [answer(call)];
+      let i = 0;
+      let cancelled = false;
+      const source: LaneStreamSourceV1 = {
+        next: () => {
+          if (cancelled || i >= records.length) return Promise.resolve({ done: true });
+          return Promise.resolve({ done: false, record: records[i++] });
+        },
+        cancel: () => {
+          cancelled = true;
+        },
+      };
+      return source;
     },
+    close() {
+      closed = true;
+    },
+    closed: () => closed,
   };
 }
 
-function emptyStream(routeId: string): AsyncIterableIterator<SessionRelayLaneResponseV1> {
-  return iterate([{ routeId, error: relayError('relay_lane_refused') }], { value: false });
+// Fake lane client minted only by an established fake chain, backed by the real
+// engine over the scripted transport.
+function createFakeLaneClient(authorities: FakeAuthorities, sessionRef: SessionRef): SessionRelayLaneClientV1 {
+  return createLaneClientEngine({
+    sessionRef,
+    sourceCredentials: (authorities.sourceCredentials as FakeAuthorities['sourceCredentials']) ?? null,
+    transport: createFakeLaneTransport(),
+    now: () => 1_793_520_000_000,
+  });
 }
-
-// Fake lane client minted only by an established fake chain (brand is not
-// forgeable from outside). Answers request/stream over the fake transit and
-// refuses routes whose authority is missing (source-* without a credential
-// lease → typed endpointRefusal).
-function createFakeLaneClient(authorities: FakeAuthorities, closed: { value: boolean }): SessionRelayLaneClientV1 {
-  const client: SessionRelayLaneClientV1 = {
-    [SESSION_RELAY_LANE_CLIENT_BRAND]: 'SessionRelayLaneClientV1',
-    async request(parameters) {
-      if (closed.value) return { routeId: parameters.routeId, error: relayError('relay_unavailable', true) };
-      const spec = relayRouteSpec(parameters.routeId);
-      if (!spec) return { routeId: parameters.routeId, error: relayError('relay_lane_refused') };
-      if (spec.lane === 'lifecycle' && parameters.routeId.startsWith('source-') && authorities.sourceCredentials) {
-        const lease = await authorities.sourceCredentials.resolve();
-        if (!lease) return { routeId: parameters.routeId, endpointRefusal: { code: 'source_auth_required' } };
-      }
-      return { routeId: parameters.routeId, response: { status: spec.successStatus, body: null } };
-    },
-    stream(parameters) {
-      const spec = relayRouteSpec(parameters.routeId);
-      if (!spec) return emptyStream(parameters.routeId);
-      const events: SessionRelayLaneResponseV1[] = [
-        { routeId: parameters.routeId, response: { status: spec.successStatus, body: null } },
-      ];
-      return iterate(events, closed);
-    },
-    async close() {
-      closed.value = true;
-      return { status: 'closed' };
-    },
-  };
-  return client;
-}
-
 
 export { createFakeLaneClient };

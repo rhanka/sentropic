@@ -53,7 +53,6 @@ export function createFakeRelayWiring(authorities: FakeAuthorities, endpointA: R
       if (!transitLA.holds(grantRef)) {
         return { status: 'refused', error: relayError('relay_scope_refused') };
       }
-      const closed = { value: false };
       const result = runEstablishment(fakeVectors(parameters));
       if (result.status !== 'established') return { status: 'refused', error: result.error };
       return {
@@ -63,7 +62,7 @@ export function createFakeRelayWiring(authorities: FakeAuthorities, endpointA: R
         stage: parameters.stage,
         lanes: parameters.laneSet,
         descriptorDigest: parameters.approvedRouteRef.digest,
-        client: createFakeLaneClient(authorities, closed),
+        client: createFakeLaneClient(authorities, parameters.sessionRef),
       };
     },
   };
