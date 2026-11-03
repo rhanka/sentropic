@@ -23,6 +23,23 @@
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
   - `BRANCH.md`
+  - `packages/cluster-mesh/src/identity-contracts/**`
+  - `packages/cluster-mesh/src/storage/identity/**`
+  - `packages/cluster-mesh/src/identity-stores/**`
+  - `packages/cluster-mesh/src/identity/**`
+  - `packages/cluster-mesh/tests/identity/**`
+  - `packages/cluster-mesh/tests/identity-*.spec.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `package-lock.json` (BR-A20B-EX3)
+  - `api/package-lock.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/identity-auth-types.spec.ts` (BR-A20B-EX4)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR-A20B-EX6)
+  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
+  - `packages/cluster-mesh/tests/storage/cold-workspace.sh` (BR-A20B-EX2)
+  - `tools/memory-mcp-l5/artifacts/**` (BR-A20B-EX5)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -47,6 +64,8 @@
 ## Feedback Loop
 - [x] Defect report (owner-urgent, via immo through the real claude.ai connector): `packages/artifacts/src/server/source-read.ts:66` returns `bytes: Array.from(bytes)`; get_source re-attaches the whole authoringGuide (~68 KB for an 816-byte page); the MCP tool-result budget is exceeded and page editing breaks in claude.ai.
 - [x] Fix contract (converged-r2 get_source): text mime types (existing `TEXT_MIME_PATTERN` in `http.ts`) return `text` + `encoding: "utf8"`; non-text files return `base64` + `encoding: "base64"`; never an integer array; size/digest verification stays on the raw bytes; per-call budgets stay 32 files / 256 KiB; get_source returns a guide reference (tool + version), never the guide body.
+- [x] **BR-A20B-EX5 — post-rebase P1 manifest regeneration under `tools/memory-mcp-l5/artifacts/**`**: the rebase onto main (A2.0b, cluster-mesh 0.26.0-dev.6) left the branch root lock differing from the lock the inherited P1 manifest was generated against, so CI `memory-l5-qualification` fails with « manifest P1 lock fingerprint mismatch ». Rationale: regenerate via the repo make target `memory-l5-pack STAGE=pre-candidate` (as #882 did), never hand-editing digests. Impact: previous manifest+sidecar retained unchanged in `artifacts/history/15c74134….json(.sha256)`, new manifest+sidecar, one new immutable lock snapshot `lock-snapshots/95e2ba44….package-lock.json`; archives and contract inventory unchanged. Rollback: restore the retained history manifest/sidecar and delete the new snapshot.
+- [x] **BR-A20B-EX6 — `artifacts-tuple.spec.ts` integrity literal mirrors the refreshed selected fixture**: `refresh-lazy-package-lock` regenerated `fixtures/selected/package-lock.json` for the artifacts 0.2.7 candidate (published-baseline registry URL + candidate-derived sha512), so the spec's pinned integrity literal takes the generated value (as #880/#878 did). Rationale: the test pins the exact archive the lock records. Impact: one literal in one spec. Rollback: revert the literal together with the fixture lock.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch** (single defect, single package plus its API pins; one final test cycle)
