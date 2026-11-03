@@ -387,10 +387,16 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         artifactId,
       ]);
       for (const grant of acl.grants) {
+        // Q1 schema invariant: a source grant exists only in restricted mode. A
+        // legacy platform/public artifact (migrated by 0006 from is_public=true)
+        // may still carry one; rewriting its ACL (e.g. withdraw) must not trip
+        // the source guard on re-insert, so the stale source grant is demoted
+        // to read — the grant row is kept, never dropped.
+        const permission = grant.grant === 'source' && accessMode !== 'restricted' ? 'read' : grant.grant;
         await pool.query(
           `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission)
            VALUES ($1, $2, $3)`,
-          [artifactId, grant.principalId, grant.grant],
+          [artifactId, grant.principalId, permission],
         );
       }
     },

@@ -12,6 +12,12 @@
 -- Owner Q1 is enforced at the schema level: the collab (`source`) right is
 -- nominative only — at most one source grant per artifact, only while the
 -- artifact is `restricted`, and no mode widening while a source grant exists.
+-- Legacy 0002 data may hold several `source` grants on one artifact (direct
+-- writes; MCP could only create `read`): they are deduped deterministically
+-- BEFORE the unique index exists — the oldest source grant per artifact
+-- (created_at, tie-break principal_id) stays `source`, every later duplicate
+-- is demoted to `read`. No grant row is ever deleted (every grantee keeps at
+-- least read access) and the outcome never depends on physical row order.
 
 ALTER TABLE artifacts.artifacts
   ADD COLUMN IF NOT EXISTS access_mode TEXT NOT NULL DEFAULT 'restricted'
@@ -43,6 +49,20 @@ DROP TRIGGER IF EXISTS artifact_access_events_append_only ON artifacts.artifact_
 CREATE TRIGGER artifact_access_events_append_only
   BEFORE UPDATE OR DELETE OR TRUNCATE ON artifacts.artifact_access_events
   FOR EACH STATEMENT EXECUTE FUNCTION artifacts.reject_access_event_mutation();
+
+-- Deterministic dedupe of legacy multi-source artifacts (see header): the
+-- oldest `source` grant per artifact stays `source`; later duplicates demote
+-- to `read`. No row is deleted; ties on created_at break on principal_id.
+UPDATE artifacts.artifact_access AS dup
+SET permission = 'read'
+WHERE dup.permission = 'source'
+  AND EXISTS (
+    SELECT 1
+    FROM artifacts.artifact_access AS keep
+    WHERE keep.artifact_id = dup.artifact_id
+      AND keep.permission = 'source'
+      AND (keep.created_at, keep.principal_id) < (dup.created_at, dup.principal_id)
+  );
 
 -- Owner Q1, schema level: at most one collab (source) grant per artifact.
 CREATE UNIQUE INDEX IF NOT EXISTS artifact_access_one_source

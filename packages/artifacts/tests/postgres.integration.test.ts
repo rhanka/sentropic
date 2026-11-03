@@ -216,6 +216,34 @@ describe('postgres artifact store', () => {
     expect(back).toMatchObject({ accessMode: 'restricted', isPublic: false });
   });
 
+  it('demotes a stale source grant to read when rewriting a non-restricted ACL (legacy platform artifact)', async () => {
+    const ensured = await store.ensureArtifact({
+      storageScopeId: 'scope-1',
+      ownerId: 'owner-legacy-src',
+      bindingName: 'legacy-src',
+      profile: {},
+    });
+    // ACL exactly as getArtifactAcl reads back a legacy artifact migrated by
+    // 0006 from is_public=true while carrying a source grant; the withdraw
+    // path writes it back unchanged. The source guard must not make such an
+    // artifact un-rewritable: the stale source grant is demoted to read and
+    // the grant row is kept, never dropped.
+    await store.putArtifactAcl(ensured.artifactId, {
+      ownerId: 'owner-legacy-src',
+      isPublic: true,
+      accessMode: 'platform',
+      withdrawn: true,
+      grants: [{ principalId: 'collab-legacy', grant: 'source' }, { principalId: 'reader-1', grant: 'read' }],
+    });
+    const acl = await store.getArtifactAcl(ensured.artifactId);
+    expect(acl).toMatchObject({
+      accessMode: 'platform',
+      isPublic: true,
+      withdrawn: true,
+      grants: [{ principalId: 'collab-legacy', grant: 'read' }, { principalId: 'reader-1', grant: 'read' }],
+    });
+  });
+
   it('stores and replaces sources', async () => {
     const ensured = await store.ensureArtifact({
       storageScopeId: 'scope-1',

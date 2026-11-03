@@ -243,6 +243,8 @@ describe('0002_lifecycle migration', () => {
 describe('0006_sharing migration (G1 three-mode ACL)', () => {
   const legacyPublic = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const legacyPrivate = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const legacyMulti = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const legacyTie = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
   it('applies 0006 after a legacy fixture: is_public=true maps to platform, never public, zero loss', async () => {
     // legacy state before 0006: one public artifact with grants, one private
@@ -258,6 +260,23 @@ describe('0006_sharing migration (G1 three-mode ACL)', () => {
     await client.query(
       `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission)
        VALUES ('${legacyPublic}', 'reader-legacy', 'read'), ('${legacyPublic}', 'collab-legacy', 'source')`,
+    );
+    // legacy 0002 data with SEVERAL source grants on one artifact (direct
+    // writes; MCP could only create read) — own scope so the mode assertions
+    // below stay scoped to scope-g1
+    await client.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-g1-dup', 'org-g1-dup')`);
+    await client.query(
+      `INSERT INTO artifacts.artifacts (id, storage_scope_id, owner_id, binding_name)
+       VALUES ('${legacyMulti}', 'scope-g1-dup', 'owner-g1', 'legacy-multi'),
+              ('${legacyTie}', 'scope-g1-dup', 'owner-g1', 'legacy-tie')`,
+    );
+    await client.query(
+      `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission, created_at) VALUES
+       ('${legacyMulti}', 'collab-new', 'source', '2026-06-01T00:00:00Z'),
+       ('${legacyMulti}', 'collab-old', 'source', '2026-01-01T00:00:00Z'),
+       ('${legacyMulti}', 'reader-1', 'read', '2026-02-01T00:00:00Z'),
+       ('${legacyTie}', 'zeta', 'source', '2026-03-01T00:00:00Z'),
+       ('${legacyTie}', 'alpha', 'source', '2026-03-01T00:00:00Z')`,
     );
     await client.query(migration('0006_sharing.sql'));
 
@@ -279,6 +298,30 @@ describe('0006_sharing migration (G1 three-mode ACL)', () => {
       { principal_id: 'collab-legacy', permission: 'source' },
       { principal_id: 'reader-legacy', permission: 'read' },
     ]);
+    // deterministic dedupe on legacy multi-source artifacts: the oldest source
+    // grant (created_at, tie-break principal_id) stays source, every later
+    // duplicate demotes to read — zero rows lost
+    const { rows: multi } = await client.query<{ principal_id: string; permission: string }>(
+      `SELECT principal_id, permission FROM artifacts.artifact_access WHERE artifact_id = '${legacyMulti}' ORDER BY principal_id`,
+    );
+    expect(multi).toEqual([
+      { principal_id: 'collab-new', permission: 'read' },
+      { principal_id: 'collab-old', permission: 'source' },
+      { principal_id: 'reader-1', permission: 'read' },
+    ]);
+    const { rows: tie } = await client.query<{ principal_id: string; permission: string }>(
+      `SELECT principal_id, permission FROM artifacts.artifact_access WHERE artifact_id = '${legacyTie}' ORDER BY principal_id`,
+    );
+    expect(tie).toEqual([
+      { principal_id: 'alpha', permission: 'source' },
+      { principal_id: 'zeta', permission: 'read' },
+    ]);
+    // re-applying 0006 is idempotent: the dedupe does not move again
+    await client.query(migration('0006_sharing.sql'));
+    const { rows: multiAgain } = await client.query<{ principal_id: string; permission: string }>(
+      `SELECT principal_id, permission FROM artifacts.artifact_access WHERE artifact_id = '${legacyMulti}' ORDER BY principal_id`,
+    );
+    expect(multiAgain).toEqual(multi);
   });
 
   it('closes access_mode to the three values and defaults new rows to restricted', async () => {
