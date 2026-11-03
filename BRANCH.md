@@ -11,7 +11,8 @@ Build lot G4 of the A4 cluster-mesh binding design r2 (`.tmp/cm-identity-agents/
 - Tests on `ENV=test-a4-G4` only, never `ENV=dev`; no `[skip ci]`; no secrets in code or logs.
 - All new text in English. Commits via `make commit MSG="..."` only, ≤150 lines each, `make scope-check` before every commit.
 - Design pins: a4-cm-gaps-r2.md §3.1–§3.5, §8 (P5), §10.0, §10.5. Owner answers 2026-10-30: Q-WS1 = conversations deleted with the workspace (app-side G6 disposition; CM step 8 deletes `cm_identity_conversation_sessions` rows of the workspace as designed). Q-K/Q-IDP1 do not touch G4.
-- Version: bump `packages/cluster-mesh/package.json` once, 0.26.0-dev.6 → 0.26.0-dev.7, after confirming it is greater than the npm-published version (Post-Rebase Gate, rules/workflow.md).
+- Version: bump `packages/cluster-mesh/package.json` once, 0.26.0-dev.6 → 0.26.0-dev.7, after confirming it is greater than the npm-published version (Post-Rebase Gate, rules/workflow.md), with root lockfile + packaging-fixture sync.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -23,6 +24,8 @@ Build lot G4 of the A4 cluster-mesh binding design r2 (`.tmp/cm-identity-agents/
   - `packages/cluster-mesh/src/storage/identity/workspace-deletion.ts`
   - `packages/cluster-mesh/src/storage/identity/index.ts`
   - `packages/cluster-mesh/tests/identity/workspace-deletion.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (packaging fixture pin sync for the version bump, enforced by `tests/packaging/prepare-artifacts.spec.ts`)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (same fixture sync)
   - `packages/cluster-mesh/package.json`
   - `package-lock.json` (root lockfile version parity for the `packages/cluster-mesh/package.json` bump; refreshed via `make lock-root`, enforced by the CI `changes` job)
 - **Forbidden Paths (must not change in this branch)**:
@@ -49,6 +52,7 @@ Build lot G4 of the A4 cluster-mesh binding design r2 (`.tmp/cm-identity-agents/
 
 ## Feedback Loop
 - BR-G4-EX1 (scope addition, not a conditional-path exception): root `package-lock.json` added to Allowed Paths. Reason: the CI `changes` job requires `packages/cluster-mesh/package.json` and the root lockfile to carry the same version ("refresh the root lockfile through Make"); the 0.26.0-dev.7 bump is incomplete without it. Impact: one-line lockfile diff (`packages/cluster-mesh` version field only), refreshed via `flock .tmp/packets/DOCKER-LOCK.md make lock-root ENV=test-a4-G4`. Rollback: revert the lockfile line together with the package.json bump.
+- BR-G4-EX2 (scope addition): `packages/cluster-mesh/tests/packaging/fixtures/selected/package.{json,lock.json}` added to Allowed Paths. Reason: the version bump to 0.26.0-dev.7 makes the fixture pin stale; `tests/packaging/prepare-artifacts.spec.ts` (run by the `validate-cluster-mesh` CI lanes) requires the selected fixture to pin the exact candidate tarball. Impact: three-line fixture diff (dev.6 → dev.7). Rollback: revert the fixture lines together with the package.json bump. Also retained the BRLOCK-EX1 `review_by` line in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single CM lot on its own branch; one PR; one CI run per final head)
