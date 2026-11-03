@@ -4,15 +4,15 @@
   "source": {
     "specSha256": "f90c927964b44fdf6ad712eee9b894762250239384643a3790931c142d3aeeca",
     "l0Commit": "60a8bfa828b5eabd360232ea5865391c23f99f48",
-    "br3Commit": "812d1f05317a89a4c1fc4cac88e9f60abe455a47",
-    "l5Head": "82b7abe525f08a91cc317764f03a584374716cf4",
+    "br3Commit": "7fc346c3d2bb0c8596012b02bae781c2ef901622",
+    "l5Head": "46c000544ef1da1f71b765b019e11d425af45639",
     "sdkRange": "^1.31.0",
-    "declaredLockSha256": "95e2ba447c33dddc4b100dcacc8f34c67919c8bda272143b4c77b987bcad02fa",
+    "declaredLockSha256": "fa151e1d0b0d7b483cb0209d8c6a276638df4688f55352fb169514853b726d2c",
     "lockFingerprintVersion": 4,
     "lockFingerprint": "2e050e2fdc588d95fed978b3c46d4e14e61156e02809ce73d72457d0238f74c2",
     "declaredLockSnapshot": {
-      "path": "tools/memory-mcp-l5/artifacts/lock-snapshots/95e2ba447c33dddc4b100dcacc8f34c67919c8bda272143b4c77b987bcad02fa.package-lock.json",
-      "sha256": "95e2ba447c33dddc4b100dcacc8f34c67919c8bda272143b4c77b987bcad02fa"
+      "path": "tools/memory-mcp-l5/artifacts/lock-snapshots/fa151e1d0b0d7b483cb0209d8c6a276638df4688f55352fb169514853b726d2c.package-lock.json",
+      "sha256": "fa151e1d0b0d7b483cb0209d8c6a276638df4688f55352fb169514853b726d2c"
     },
     "toolchainSnapshots": [
       {
@@ -32,7 +32,7 @@
       "version": "0.4.1",
       "sha256": "c1c59015f9f9f2645466b9eddae000faf80069bbcd4f556f494efa1a282f4877",
       "integrity": "sha512-cxmY8QcAQ2Ul39KehAioXVnGd+/6qvBP5Z+H55IT+GYZoCt9ej4oyW0Kd0xXmfYuplpr0AtxB8jm0VqH0kEvKQ==",
-      "sourceHead": "82b7abe525f08a91cc317764f03a584374716cf4",
+      "sourceHead": "46c000544ef1da1f71b765b019e11d425af45639",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-platform-0.4.1-c1c59015f9f9f2645466b9eddae000faf80069bbcd4f556f494efa1a282f4877.tgz"
     },
     {
@@ -41,7 +41,7 @@
       "version": "0.1.0",
       "sha256": "08aa63567cf1c1315e3d6ea6372aa72d7853d7488db450ed7e2a2ef6f27c3f2a",
       "integrity": "sha512-IVcGSY4JBt9bOnd/KG7mFNsbAsmlaEQ1hx2qK+zaWmOZuEPJoYv+PHHat2Fz/W4c13hdlv6uYbPOefssg43VRg==",
-      "sourceHead": "82b7abe525f08a91cc317764f03a584374716cf4",
+      "sourceHead": "46c000544ef1da1f71b765b019e11d425af45639",
       "archive": "tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-broker-0.1.0-08aa63567cf1c1315e3d6ea6372aa72d7853d7488db450ed7e2a2ef6f27c3f2a.tgz"
     }
   ],
