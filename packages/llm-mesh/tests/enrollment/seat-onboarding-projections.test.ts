@@ -111,3 +111,64 @@ describe('CODEX_TRUST_DIALOG_PROBE', () => {
     expect(CODEX_TRUST_DIALOG_PROBE.fallbackBlocker).toBe('codex-mcp-approval-unresolved');
   });
 });
+
+describe('captureSeatOnboarding for claude, muse and codex (L4)', () => {
+  const base = {
+    seatRef: 'seat-synth-claude-01',
+    ownerScope: 'owner-synth-01',
+    accountBinding: 'mesh-account-synth-01',
+    nativeCliVersion: '1.4.12',
+    os: 'linux' as const,
+    capturedAt: '2026-11-02T00:00:00Z',
+    lineage: { epoch: 1, generation: 1, operationId: 'op-synth-claude-01' },
+  };
+
+  it('captures an oversize claude source to the two-field projection without oauthAccount', async () => {
+    const root = await mkRoot();
+    await writeFile(join(root, '.claude.json'), oversizeClaudeJson());
+    const res = await captureSeatOnboarding({
+      ...base, cli: 'claude', sourceHome: root, selector: { sourceRelPath: '.claude.json' },
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const content = Buffer.from(res.block.files[0].contentBase64, 'base64').toString('utf8');
+    expect(JSON.parse(content)).toEqual({ hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.0' });
+    expect(JSON.stringify(res.block)).not.toContain('oauthAccount');
+    expect(res.block.cellSynthesis).toEqual([]);
+  });
+
+  it('captures a muse trust source to the schema_version-only projection', async () => {
+    const root = await mkRoot();
+    const dir = join(root, '.config', 'muse');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'trust.json'), JSON.stringify({ schema_version: 1, projects: { '/foreign/x': { decision: 'trusted' } } }));
+    const res = await captureSeatOnboarding({
+      ...base, cli: 'muse', seatRef: 'seat-synth-muse-01', lineage: { epoch: 1, generation: 1, operationId: 'op-synth-muse-01' },
+      sourceHome: root, selector: { sourceRelPath: '.config/muse/trust.json' },
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const content = Buffer.from(res.block.files[0].contentBase64, 'base64').toString('utf8');
+    expect(JSON.parse(content)).toEqual({ schema_version: 1 });
+  });
+
+  it('captures codex from the explicit intent without reading any file', async () => {
+    const res = await captureSeatOnboarding({
+      ...base, cli: 'codex', seatRef: 'seat-synth-codex-01', lineage: { epoch: 1, generation: 1, operationId: 'op-synth-codex-01' },
+      sourceHome: '/nonexistent-home', selector: undefined as never,
+      intent: { approvalPolicy: 'on-request', mcpServerNames: ['h2a'] },
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const content = Buffer.from(res.block.files[0].contentBase64, 'base64').toString('utf8');
+    expect(JSON.parse(content)).toEqual({ approvalPolicy: 'on-request', mcpServerNames: ['h2a'] });
+  });
+
+  it('refuses codex capture without the explicit intent', async () => {
+    const res = await captureSeatOnboarding({
+      ...base, cli: 'codex', seatRef: 'seat-synth-codex-01', lineage: { epoch: 1, generation: 1, operationId: 'op-synth-codex-01' },
+      sourceHome: '/nonexistent-home', selector: undefined as never,
+    });
+    expect(res.ok).toBe(false);
+  });
+});
