@@ -7,7 +7,8 @@ import { assertCompiledArtifactsProfile, ArtifactProfileInputError,
 import { createArtifactCommand, type ArtifactKeyDerivationBinding } from './server/command-identity.js';
 import { createGuardedEnsureService, type GuardedEnsureHost } from './server/service.js';
 import { assertArtifactReplayMigration } from './server/idempotency.js';
-import type { KvPort } from './server/ports.js';
+import { combineSharingPolicy, resolveSharingPolicy, type KvPort, type SharingPolicy,
+  type SharingPolicyPort } from './server/ports.js';
 import { createGuardedPublicationService, type GuardedPublicationDeps,
   type PublicationService } from './server/publication.js';
 import type { ArtifactAcl, ArtifactMetadata, AclStore } from './server/access.js';
@@ -64,6 +65,10 @@ export interface HttpAppDeps {
   acls: AclStore;
   lifecycle: Pick<LifecycleService, 'stateOf' | 'canRead' | 'getReleaseState'>;
   isApprovedAccount?: (principalId: string) => boolean;
+  /** G1 lock 2 (runtime, revocable): sharing policy per scope, resolved fail-closed. */
+  sharingPolicy?: SharingPolicyPort;
+  /** G1: server-resolved platform admin predicate (never a tool argument). */
+  actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean>;
   /** One trusted URL policy shared by HTTP and MCP receipts: the artifact page and the exact version page. */
   publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; versionUrl: string };
 }
@@ -120,6 +125,12 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       },
     } });
 
+  /** G1 double lock: profile capability (lock 1) AND runtime port (lock 2), fail-closed. */
+  async function sharingPolicyContext(storageScopeId: string): Promise<SharingPolicy> {
+    return combineSharingPolicy(profile.rules.allowPublicSharing,
+      await resolveSharingPolicy(deps.sharingPolicy, storageScopeId));
+  }
+
   async function visible(artifactId: string, invocation: ArtifactInvocationContext,
     action: 'read' | 'source' | true = 'read'): Promise<ArtifactAcl> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
@@ -130,10 +141,32 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       if (action === true) return acl;
       throw new ArtifactOperationError('gone');
     }
-    if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, action === true ? 'read' : action, deps.isApprovedAccount)) {
+    const policy = await sharingPolicyContext(invocation.storageScopeId);
+    if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, action === true ? 'read' : action,
+      deps.isApprovedAccount, policy)) {
       throw new ArtifactOperationError('not_found');
     }
     return acl;
+  }
+
+  /**
+   * G1 management visibility for `set_access`: readers pass as before; when the
+   * host wires an admin predicate, the artifact's existence in scope is visible
+   * to the management surface and the management right itself (owner, or
+   * admin-reduce-only) is decided inside the transaction by `canManageAccess`
+   * (403 otherwise). The exception never makes the admin a content reader.
+   */
+  async function visibleForManagement(artifactId: string, invocation: ArtifactInvocationContext): Promise<ArtifactAcl> {
+    const acl = await deps.acls.getArtifactAcl(artifactId);
+    if (!acl || acl.storageScopeId !== invocation.storageScopeId) throw new ArtifactOperationError('not_found');
+    const state = await deps.lifecycle.stateOf(artifactId);
+    if (acl.ownerId === invocation.actorId && (state === 'deleted' || state === 'purged')) return acl;
+    const policy = await sharingPolicyContext(invocation.storageScopeId);
+    if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount, policy)) {
+      return acl;
+    }
+    if (deps.actorIsAdmin !== undefined) return acl;
+    throw new ArtifactOperationError('not_found');
   }
 
   /** Display metadata fields present on validated args (ensure/publish). */
@@ -302,7 +335,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const acl = await visible(artifactId, invocation);
           const summary = artifactSummary({ artifactId, acl, actorId: invocation.actorId,
             state: await deps.lifecycle.stateOf(artifactId), current: await deps.publication.getCurrent(artifactId),
-            urls: deps.publicationUrls, approved: deps.isApprovedAccount });
+            urls: deps.publicationUrls, approved: deps.isApprovedAccount,
+            policy: await sharingPolicyContext(invocation.storageScopeId) });
           return { ...outcome, result: { status: 201, body: profile.resultEnvelopeVersion === 2
             ? { ...summary, ...outcome.result } : { ...outcome.result, ...acl.metadata } } };
         }
@@ -313,7 +347,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             authorize: async () => {
               const acl = await visible(artifactId, invocation);
               const state = await deps.lifecycle.stateOf(artifactId);
-              if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'source', deps.isApprovedAccount)) {
+              if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'source',
+                deps.isApprovedAccount, await sharingPolicyContext(invocation.storageScopeId))) {
                 throw new ArtifactOperationError('access_denied');
               }
             }, getCurrent: deps.publication.getCurrent, getRelease: deps.publication.getRelease!,
@@ -324,12 +359,20 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             commitState: 'not_committed', replayed: false };
         }
         if (capability === 'artifacts_set_access' || capability === 'artifacts_delete') {
-          const acl = await visible(normalized.artifactId as string, invocation, true);
-          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          const artifactId = normalized.artifactId as string;
+          const acl = capability === 'artifacts_set_access'
+            ? await visibleForManagement(artifactId, invocation)
+            : await visible(artifactId, invocation, true);
+          if (capability === 'artifacts_delete' && acl.ownerId !== invocation.actorId) {
+            throw new ArtifactOperationError('access_denied');
+          }
           const outcome = await manageArtifact({ coordinator: deps.coordinator,
             createUnit: deps.management?.createUnit ?? createPostgresManagementUnit,
             confirmation: deps.management?.confirmation, readPolicyRevision: () => deps.ensureHost.readPolicyRevision(),
             isApprovedPrincipal: deps.isApprovedAccount ?? (() => false),
+            sharingPolicy: deps.sharingPolicy,
+            profileAllowPublicSharing: profile.rules.allowPublicSharing,
+            actorIsAdmin: deps.actorIsAdmin,
             validateNewCommand: () => { profile.validate(capability, args, request.idempotencyKey); },
           }, invocation, command!, normalized.confirmationRef as string | undefined);
           return outcome.ok ? { ...outcome, result: { status: 200, body: outcome.result } } : outcome;
@@ -395,7 +438,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const current = await deps.publication.getCurrent(artifactId);
           return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
             result: { status: 200, body: { ...artifactSummary({ artifactId, acl, state, current,
-              actorId: invocation.actorId, urls: deps.publicationUrls, approved: deps.isApprovedAccount }),
+              actorId: invocation.actorId, urls: deps.publicationUrls, approved: deps.isApprovedAccount,
+              policy: await sharingPolicyContext(invocation.storageScopeId) }),
               ...(acl.metadata !== undefined ? { metadata: acl.metadata } : {}),
               ...(acl.ownerId === invocation.actorId ? { grants: acl.grants } : {}) } } };
         }
@@ -425,13 +469,15 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             result: { status: 200, body: { artifactId, total: releases.length, releases } } };
         }
         const visibleArtifacts: unknown[] = [];
+        const listPolicy = await sharingPolicyContext(invocation.storageScopeId);
         for (const artifactId of await deps.acls.listArtifactIds()) {
           const acl = await deps.acls.getArtifactAcl(artifactId);
           if (!acl || acl.storageScopeId !== invocation.storageScopeId) continue;
           const state = await deps.lifecycle.stateOf(artifactId);
-          if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount)) {
+          if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount, listPolicy)) {
             visibleArtifacts.push(artifactSummary({ artifactId, acl, state, actorId: invocation.actorId,
-              current: await deps.publication.getCurrent(artifactId), urls: deps.publicationUrls, approved: deps.isApprovedAccount }));
+              current: await deps.publication.getCurrent(artifactId), urls: deps.publicationUrls,
+              approved: deps.isApprovedAccount, policy: listPolicy }));
           }
         }
         const offset = normalized.offset as number;
