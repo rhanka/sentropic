@@ -43,7 +43,14 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
   - `packages/llm-gateway/package.json` (dependency range only — SEATONB-EX2)
-  - `packages/cluster-mesh/package.json` (peer range only — SEATONB-EX2)
+  - `packages/cluster-mesh/package.json` (peer range only — SEATONB-EX2; version bump to 0.26.0-dev.6 — SEATONB-EX3)
+  - `packages/cluster-mesh/src/modules/catalog.ts` (train range rebind — SEATONB-EX3)
+  - `packages/cluster-mesh/tests/fixtures/train.ts` (train pin rebind — SEATONB-EX3)
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (range literals — SEATONB-EX3)
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts` (range literals — SEATONB-EX3)
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts` (range literals — SEATONB-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (selected tuple pin rebind — SEATONB-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` — SEATONB-EX3)
   - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -62,6 +69,7 @@ Implement design r3 (`.tmp/seat-onboarding/design-r3.md`, sha256 92685945…) lo
 ## Feedback Loop
 - [x] SEATONB-EX1: keyring read-only fix consumed from PR #887 via rebase, not duplicated. PR #887 MERGED into origin/main (0.32.4); branch rebased onto origin/main `5b1d1dcd2` (2026-11-02 continuation); keyring files never edited directly in this branch. L5T keyring cases run against #887's implementation.
 - [x] SEATONB-EX2: mesh minor 0.33.0 crosses the declared consumer caps — `packages/cluster-mesh/package.json` peerDependencies `"@sentropic/llm-mesh": "0.19.2 || >=0.22.0 <0.33.0"` and `packages/llm-gateway/package.json` dependencies top `^0.32.0`. Widened to `<0.34.0` and `|| ^0.33.0` respectively. Required by the repo's own release invariant `packages/llm-mesh/tests/node/mesh-release-invariants.test.ts` (R6-1: mesh version must sit inside the gateway declared range) and by `make lock-root` (ERESOLVE otherwise). Precedent: 41711507e ("fix: align gateway and cluster compatibility with mesh 0.32"). Additionally, the `package-candidates` manifest guard (`scripts/ci/publishable-manifests.mjs` bumpGate) requires a version bump on any PUBLISHED package whose dependency map changes: `@sentropic/llm-gateway` 0.22.3 (published) → **0.22.4** with the widened range; `@sentropic/cluster-mesh` 0.26.0-dev.5 is unpublished (registry latest 0.25.0), so its peer-range widening needs no bump. No src changes in either package. Impact: root `package-lock.json` diff is exactly 4 lines (llm-mesh version, llm-gateway version, the two ranges); unrelated lock drift (mcp-platform/artifacts) produced by `make lock-root` was reverted to keep the diff in scope. Rollback: revert the two range lines, the llm-gateway bump, and drop the 0.33.0 bump.
+- [x] SEATONB-EX3: the 0.33.0 minor crossing also breaks `@sentropic/cluster-mesh`'s own train rebind surface, which CI proved at run 41566007760 (validate-cluster-mesh lanes "source installed major" and "lazy stateful install" failed): the runtime catalog range (`src/modules/catalog.ts` `LLM_MESH_RANGE`/`LLM_MESH_SPEECH_RANGE` still `<0.33.0`) no longer equals the widened manifest peer range, the `tests/fixtures/train.ts` pins and the `tests/packaging/fixtures/selected/*` tuple still pin llm-mesh 0.32.4 / llm-gateway 0.22.3. Rebind all of them to 0.33.0 / 0.22.4 with the catalog ranges widened to `<0.34.0`, exactly mirroring precedent 41711507e (mesh 0.32 alignment: catalog.ts + train.ts + registry.spec.ts + topology-ranges.spec.ts) and 4ed0b4009 (cluster-mesh dev bump: package.json + root lock + selected fixture). Because `catalog.ts` is a `src/` change, `enforce-package-bump` requires a cluster-mesh version bump: **0.26.0-dev.5 → 0.26.0-dev.6** (unpublished prerelease line, registry latest 0.25.0, so no `package-candidates` bumpGate). The selected fixture lock is regenerated with `make ci-package-candidate` + `make pack-candidate-siblings` + `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` (sibling sha256 must match the CI-computed sibling archives). Impact: cluster-mesh catalog admits mesh 0.33.x at runtime; no behavior change for ≤0.32 consumers. Rollback: revert the rebind commits and the EX2 range widenings, drop the 0.33.0 bump (fall back to a 0.32.x patch bump).
 - [ ] none so far
 
 ## Orchestration Mode (AI-selected)
