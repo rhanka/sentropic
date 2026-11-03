@@ -3,23 +3,31 @@
 // and PostgreSQL stores (a22 pattern); stub-level cases pin the null-vs-throw
 // split and the domain-level re-checks.
 
+import { randomBytes } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import {
+  IDENTITY_COMPOSITION_CONTRACT_VERSION,
+  IDENTITY_COMPOSITION_DESCRIPTORS,
   TenantBoundaryError,
+  applyPostgresIdentitySchema,
   applySqliteIdentitySchema,
   createBoundaryDomain,
   createIdentityBoundaryDomainV1,
   createInMemoryIdentityStores,
+  createPostgresIdentityStores,
   createSqliteIdentityStores,
   createTenantBoundaryPortV1,
   deriveWorkspaceReference,
+  identityCompositionDescriptorV1,
   type MembershipLookup,
   type TenantMembershipRecord,
   type TenantMembershipStore,
   type TenantRegistryStore,
   type WorkspaceDirectoryStore,
 } from '../src/index.js';
+import { pgEnabled } from './storage/pg-driver.js';
 
 const NOW = '2026-11-03T12:00:00.000Z';
 const LATER = '2026-11-03T13:00:00.000Z';
@@ -193,5 +201,147 @@ describe('boundary resolution over SQLite stores', () => {
   });
   it('matches the frozen createBoundaryDomain field-by-field, including the refusal', async () => {
     await frozenEquivalence(setup());
+  });
+});
+
+interface PgPool {
+  query(text: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount: number }>;
+  end(): Promise<void>;
+}
+
+describe.skipIf(!pgEnabled)('boundary resolution over PostgreSQL stores', () => {
+  const requireModule = createRequire(import.meta.url);
+  const setup = async (): Promise<{ stores: BoundaryStores; teardown(): Promise<void> }> => {
+    const pg = requireModule('pg') as { Pool: new (options: unknown) => PgPool };
+    const pool = new pg.Pool({ connectionString: process.env.CM_PG_URL, max: 4, connectionTimeoutMillis: 2000 });
+    const schema = `g2_${randomBytes(6).toString('hex')}`;
+    await pool.query(`CREATE SCHEMA "${schema}"`);
+    const client = { query: (text: string, values?: readonly unknown[]) => pool.query(text, values) };
+    await applyPostgresIdentitySchema(client, { schema });
+    return {
+      stores: createPostgresIdentityStores(client, { schema }),
+      teardown: async () => {
+        await pool.query(`DROP SCHEMA "${schema}" CASCADE`);
+        await pool.end();
+      },
+    };
+  };
+  it('resolves the exact boundary record for both tenant roles', async () => {
+    const fixture = await setup();
+    try {
+      await resolutionSuccess(fixture.stores);
+    } finally {
+      await fixture.teardown();
+    }
+  });
+  it('returns null at the port and throws TenantBoundaryError at the domain for every miss', async () => {
+    const fixture = await setup();
+    try {
+      await resolutionMisses(fixture.stores);
+    } finally {
+      await fixture.teardown();
+    }
+  });
+  it('resolves the frozen TenantResidenceContext shape with tid = slug', async () => {
+    const fixture = await setup();
+    try {
+      await domainBehavior(fixture.stores);
+    } finally {
+      await fixture.teardown();
+    }
+  });
+  it('matches the frozen createBoundaryDomain field-by-field, including the refusal', async () => {
+    const fixture = await setup();
+    try {
+      await frozenEquivalence(fixture.stores);
+    } finally {
+      await fixture.teardown();
+    }
+  });
+});
+
+describe('boundary port and domain edge semantics over stub stores', () => {
+  it('propagates store errors as thrown, never as null', async () => {
+    const stores = createInMemoryIdentityStores();
+    const boom = new Error('store boom');
+    const port = createTenantBoundaryPortV1({
+      workspaces: {
+        ...stores.workspaces,
+        findWorkspace: async () => {
+          throw boom;
+        },
+      },
+      tenants: stores.tenants,
+      memberships: stores.memberships,
+    });
+    const lookup = { workspaceId: 'ws-1', userId: 'user-1' };
+    await expect(port.resolveApproved(lookup)).rejects.toBe(boom);
+    const domain = createIdentityBoundaryDomainV1({ homeNodeId: HOME, boundary: port });
+    await expect(domain.resolve(lookup)).rejects.toBe(boom);
+  });
+
+  it('refuses a membership whose userId differs from the lookup, at port and domain', async () => {
+    const stores = createInMemoryIdentityStores();
+    await seedApprovedWorkspace(stores);
+    const foreign: TenantMembershipRecord = {
+      userId: 'user-other',
+      tenantId: 'tenant-1',
+      status: 'approved',
+      tenantRole: 'member',
+      updatedAt: NOW,
+    };
+    const port = createTenantBoundaryPortV1({
+      ...stores,
+      memberships: { ...stores.memberships, findApprovedMembership: async () => foreign },
+    });
+    const lookup = { workspaceId: 'ws-1', userId: 'user-1' };
+    await expect(port.resolveApproved(lookup)).resolves.toBeNull();
+    const domain = createIdentityBoundaryDomainV1({ homeNodeId: HOME, boundary: port });
+    await expect(domain.resolve(lookup)).rejects.toBeInstanceOf(TenantBoundaryError);
+    const lyingBoundary = {
+      resolveApproved: async () => ({ ...foreign, userId: 'user-other' }) as never,
+    };
+    const rechecking = createIdentityBoundaryDomainV1({ homeNodeId: HOME, boundary: lyingBoundary });
+    await expect(rechecking.resolve(lookup)).rejects.toBeInstanceOf(TenantBoundaryError);
+  });
+
+  it('refuses an empty tenantId or tid and maps a null port result to TenantBoundaryError', async () => {
+    const stores = createInMemoryIdentityStores();
+    await seedApprovedWorkspace(stores);
+    for (const tenant of [
+      { tenantId: '', slug: 'acme', status: 'active' as const, createdAt: NOW },
+      { tenantId: 'tenant-1', slug: '', status: 'active' as const, createdAt: NOW },
+    ]) {
+      const port = createTenantBoundaryPortV1({
+        ...stores,
+        tenants: { ...stores.tenants, findTenant: async () => tenant },
+      });
+      await expect(port.resolveApproved({ workspaceId: 'ws-1', userId: 'user-1' })).resolves.toBeNull();
+    }
+    const domain = createIdentityBoundaryDomainV1({
+      homeNodeId: HOME,
+      boundary: { resolveApproved: async () => null },
+    });
+    await expect(domain.resolve({ workspaceId: 'ws-1', userId: 'user-1' })).rejects.toMatchObject({
+      code: 'tenant_membership_required',
+    });
+  });
+
+  it('pins the 1.2.0 composition descriptor row for boundary_resolution', () => {
+    expect(IDENTITY_COMPOSITION_CONTRACT_VERSION).toBe('1.2.0');
+    const row = {
+      domain: 'boundary_resolution',
+      version: '1.2.0',
+      baseContractVersion: '1.0.0',
+      amendment: 'A4-composition-gaps',
+      status: 'contract-only',
+      profiles: ['postgres', 'sqlite'],
+      records: ['TenantBoundaryResolutionV1'],
+      ports: ['TenantBoundaryPortV1'],
+      factories: ['createTenantBoundaryPortV1', 'createIdentityBoundaryDomainV1'],
+      errorType: 'IdentityCustodyErrorV1',
+    } as const;
+    expect(IDENTITY_COMPOSITION_DESCRIPTORS).toContainEqual(row);
+    expect(identityCompositionDescriptorV1('boundary_resolution')).toEqual(row);
   });
 });
