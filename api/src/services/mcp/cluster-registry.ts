@@ -8,7 +8,7 @@ import { MCP_SCOPES } from '@sentropic/mcp-auth';
 // W0-close.d #702, published-tuple-2026-10-26.json profile.compiledDigest.
 const APP_P1_PROFILE_DIGEST = '94212e75c52e23f3f254496d98fca7c052568f7c03526ff3def3db020cd24168';
 // Qualified artifacts 0.2.10 APP-P1 manifest; byte-stable tool definitions, compatible root projection, four-tool host selection.
-export const APP_P1_MANIFEST_DIGEST = '1997f2907943ffa172975c07ade11cf03b7407732fecf5bfbdd4be8bf1b94ef3';
+export const APP_P1_MANIFEST_DIGEST = '1ad86bab8d8f9cb29c5ea57569a7a7f93d0d43a650c3ac58dcbc5de1b9fde686';
 
 export interface AppMcpRegistryOptions extends CompileRegistryInput {
   /** W1.b's profile and application; invocation binding is trusted host code. */
