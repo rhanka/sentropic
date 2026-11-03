@@ -14,6 +14,7 @@ import { relayError } from './registry-types.js';
 import { validateConnectParameters } from './relay-validate.js';
 import { currentSessionRelayMeshWiring } from './relay-wiring.js';
 import { isSessionRelayLaneClient } from './relay-skeleton.js';
+import { validateHostComposition } from './relay-composition.js';
 import type {
   SessionRelayConnectCallOptions,
   SessionRelayConnectParametersV1,
@@ -89,8 +90,12 @@ function assertOptions(options: unknown): asserts options is SessionRelayConnect
 export function createSessionRelayEndpointConnectorPort(
   composition: SessionRelayHostCompositionV1,
 ): SessionRelayEndpointConnectorPortV1 {
-  if (typeof composition !== 'object' || composition === null || Array.isArray(composition)) {
-    throw new TypeError('createSessionRelayEndpointConnectorPort: composition must be a single named object');
+  const compositionDefect = validateHostComposition(composition);
+  if (compositionDefect) {
+    // L-2: host composition supplies only processBindingRef / sourceCredentials /
+    // now; sockets, URLs, headers, keys, wire prefixes and grants are invalid JS
+    // API use here → TypeError, never a typed relay refusal.
+    throw new TypeError(`createSessionRelayEndpointConnectorPort: ${compositionDefect}`);
   }
   return {
     async connect(parameters, options) {
