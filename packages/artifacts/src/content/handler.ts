@@ -47,7 +47,7 @@ export interface ContentHandlerDeps {
   grants: GrantSigner;
   tickets: TicketService;
   baseDomain: string;
-  isApprovedAccount?: (principalId: string) => boolean;
+  isApprovedAccount?: (principalId: string) => boolean | Promise<boolean>;
   /** G1 lock 2 (runtime): sharing policy per scope, fail-closed when absent. */
   sharingPolicy?: SharingPolicyPort;
   /** G1 lock 1 (deployment capability), absent ⇒ closed. */
@@ -71,8 +71,6 @@ function fail(status: number): ContentResponse {
 
 /** Create the content handler over injected host ports (no server). */
 export function createContentHandler(deps: ContentHandlerDeps) {
-  const isApproved = deps.isApprovedAccount ?? (() => false);
-
   async function canReadNow(artifactId: string, subjectId: string): Promise<boolean> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (acl === undefined) return false;
@@ -81,7 +79,9 @@ export function createContentHandler(deps: ContentHandlerDeps) {
     // when the profile capability AND the live runtime policy both allow it.
     const policy = acl.storageScopeId === undefined ? undefined : combineSharingPolicy(deps.allowPublicSharing,
       await resolveSharingPolicy(deps.sharingPolicy, acl.storageScopeId));
-    return deps.lifecycle.canRead({ artifactId, state }, acl, subjectId, 'read', isApproved, policy);
+    // G1 owner Q2: fresh account approval at every read; the host predicate may be async (live DB check).
+    const approved = (await deps.isApprovedAccount?.(subjectId)) ?? false;
+    return deps.lifecycle.canRead({ artifactId, state }, acl, subjectId, 'read', () => approved, policy);
   }
 
   async function serveFile(
