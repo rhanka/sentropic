@@ -198,3 +198,99 @@ describe('P3 service-principal tid issuer over doubles', () => {
     await expect(issuer.issueServiceTid({ clientId: '', requestedTenant: null }))
       .rejects.toMatchObject({ code: 'identity_material_invalid' });
   });
+
+  it('propagates store errors instead of converting them to refusals', async () => {
+    const failing: ServiceTenantBindingSourceV1 = {
+      findServiceClientBinding: async () => { throw new Error('store-down'); },
+    };
+    const issuer = createServicePrincipalTidIssuerV1({
+      tenants: new InMemoryTenantRegistryStore(),
+      oauth: failing,
+      clock: () => NOW,
+    });
+    await expect(issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null }))
+      .rejects.toThrow('store-down');
+  });
+
+  it('emits exactly one s2s_obo_mint audit event per call on both outcomes, without the requested value', async () => {
+    const tenants = new InMemoryTenantRegistryStore();
+    await seedTenants(tenants, [{ tenantId: 't-acme', slug: 'acme', status: 'active' }]);
+    const oauth = new FixtureServiceBindingReads();
+    oauth.bind({ clientId: 'svc', tenantId: 't-acme', boundAt: NOW });
+    const audit = new InMemoryIdentityAudit();
+    const issuer = makeIssuer({ tenants, oauth, audit });
+
+    const minted = await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: null });
+    expect(minted.issued).toBe(true);
+    expect(audit.events).toHaveLength(1);
+    expect(audit.events[0]).toEqual({ at: NOW, kind: 's2s_obo_mint', actorId: 'svc', subjectId: 't-acme', detail: 'outcome=minted' });
+
+    const refused = await issuer.issueServiceTid({ clientId: 'svc', requestedTenant: 'zzz-secret-selector' });
+    expect(refused).toEqual({ issued: false, reason: 'tenant_not_authorized' });
+    expect(audit.events).toHaveLength(2);
+    expect(audit.events[1]).toEqual({ at: NOW, kind: 's2s_obo_mint', actorId: 'svc', detail: 'outcome=rejected_tenant_not_authorized' });
+    expect(JSON.stringify(audit.events[1])).not.toContain('zzz-secret-selector');
+
+    const empty = await issuer.issueServiceTid({ clientId: 'svc-unknown', requestedTenant: null });
+    expect(empty).toEqual({ issued: false, reason: 'no_authorized_tenant' });
+    expect(audit.events).toHaveLength(3);
+    expect(audit.events[2]).toEqual({ at: NOW, kind: 's2s_obo_mint', actorId: 'svc-unknown', detail: 'outcome=rejected_no_authorized_tenant' });
+  });
+});
+
+const WRITE = { mode: 'write', purpose: 'request', deadlineMs: 5000, maxAttempts: 1 } as const;
+const forbidden = new Proxy({}, { get: () => () => { throw new Error('legacy host identity method called'); } });
+const hostPorts = {
+  users: forbidden, credentials: forbidden, challenges: forbidden, sessions: forbidden, emailVerification: forbidden, magicLinks: forbidden,
+  tokens: forbidden, accountPolicy: forbidden, emailDelivery: forbidden, auditLog: forbidden,
+  clock: { now: () => new Date(NOW), addSeconds: (date: Date, seconds: number) => new Date(date.getTime() + seconds * 1000) },
+  random: { uuid: randomUUID, bytes: randomBytes, token: (size: number) => randomBytes(size).toString('base64url'), numericCode: () => '123456' },
+} as unknown as AuthHonoPorts;
+const shared = {
+  hostPorts, digest: createNodeIdentityDigestPort(),
+  ticketTokens: createHs256EmailTicketPort(new Uint8Array(32).fill(9)),
+  emailCodeKeys: { issuance: 'sha256' as const, activeKeyRef: null, previousKeyRefs: [] },
+  rp: { id: 'example.test', name: 'Example', expectedOrigins: ['https://example.test'] },
+  accountPolicy: { normalizeEmail: (email: string) => email.trim().toLowerCase(), deriveDisplayName: () => 'Person', roleForNewUser: () => 'editor', statusForNewUser: () => ({ accountStatus: 'active', approvalDueAt: null }) },
+  webAuthnPolicy: { registrationUserVerification: 'preferred' as const, authenticationUserVerification: 'required' as const },
+  magicLink: { baseUrl: 'https://example.test', tokenBytes: 32, ttlSeconds: 600 },
+  social: { autoLinkProviders: ['google'] },
+  business: { afterUserCreated: async () => undefined, provisionWorkspace: async () => undefined },
+  trustedRegistration: null,
+  loginTokens: { sign: async () => { throw new Error('not used'); }, verify: async () => { throw new Error('not used'); } },
+};
+
+describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('P3 binding integration on %s', (profile) => {
+  const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
+
+  it('throws identity_material_invalid when serviceTenancy and hostPorts.serviceTenant are both set', async () => {
+    const unitOfWork = await open();
+    const hostServiceTenant: AuthHonoServiceTenantPort = { resolveOboTenant: async () => ({ tid: null }) };
+    await expect(unitOfWork.run(WRITE, async (tx) => createIdentityAuthHonoTransactionBindingV1({
+      ...shared, tx,
+      hostPorts: { ...hostPorts, serviceTenant: hostServiceTenant },
+      serviceTenancy: {},
+    }))).rejects.toMatchObject({ code: 'identity_material_invalid' });
+  });
+
+  it('passes the host serviceTenant port through unchanged when serviceTenancy is absent', async () => {
+    const unitOfWork = await open();
+    const hostServiceTenant: AuthHonoServiceTenantPort = { resolveOboTenant: async () => ({ tid: 'host-tid' }) };
+    const outcome = await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({
+        ...shared, tx, hostPorts: { ...hostPorts, serviceTenant: hostServiceTenant },
+      });
+      expect(binding.ports.serviceTenant).toBe(hostServiceTenant);
+      return binding.ports.serviceTenant!.resolveOboTenant({ clientId: 'svc', fixedTenantId: 'ignored-by-host', requestedTenant: null });
+    });
+    expect(outcome).toEqual({ tid: 'host-tid' });
+  });
+
+  it('fails closed with identity_contract_unavailable on pre-G1 stores when serviceTenancy is set', async () => {
+    const unitOfWork = await open();
+    await expect(unitOfWork.run(WRITE, async (tx) => createIdentityAuthHonoTransactionBindingV1({
+      ...shared, tx,
+      serviceTenancy: { enrollments: { listEnrolledTenantIds: async () => [] } },
+    }))).rejects.toMatchObject({ code: 'identity_contract_unavailable' });
+  });
+});
