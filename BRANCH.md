@@ -1,81 +1,230 @@
-# Feature: Verifier and tool-content qualification (A04)
+# feat(identity): add durable verification custody and atomic deletion
 
 ## Objective
-- [x] Implement admission-plan-r1 section 5 row A04 (R3 tool-content qualification) under approved amendment r6 sections 3.3/3.4: independently inventory the selected Cosign verifier, the Sigstore TUF root bootstrap and the required acquisition/SBOM/uploader tools in `scripts/security/scanner/`, with exact-binary provenance, fresh independent self-SCA, dependency/zero-Python binding and candidate-bound tool admission before trusted signing/verification use. Contract-only; no live run, admission, promotion or workflow change.
+Add durable verification custody, material-preserving import and atomic person deletion to cluster-mesh. The R1 corrections enforce the approved counter/CAS rules, source continuation tokens, proof retention, SQL constraints, combined transaction surface, import accounting and transactional revocation delivery.
+
+## Validation evidence and acceptance boundary
+- [x] Run the final identity campaigns at f2cb89bab under the sole Docker flock with ENV=test-cm-a2-0b: PostgreSQL 261/261; SQLite 254/261 with seven 5000ms timeouts, 24 files each, zero skipped/todo cases. The SQLite local campaign is not green; CI must qualify both profiles.
+- [x] Reproduce the reviewed failures before fixes, including exact counter refusal codes, missing tombstone foreign key and unbound credential writes. No assertion weakening or timeout increase.
+- [x] Execute real P-256 registration and signed authentication through the shipped auth-hono factories and actual WebAuthn verifier; verify counter-regression rollback.
+- [x] Typecheck, lint and 48 packaging tests pass. All 46 real-auth completion cases, including explicit SQLite and PostgreSQL groups, pass in the final PostgreSQL campaign. No error assertion or timeout was weakened.
+- [x] Rebase onto origin/main 78c746f53 after merge-tree found only BRANCH.md conflicted. Identity source/tests stayed byte-identical across the rebase; preserve main's packaging changes.
+- [x] Bump the candidate and all lock/fixture pins to 0.26.0-dev.5, greater than published 0.25.0 and not yet published. Exact train lock-sync passes.
+- [x] Reconcile two independent reviews of the authentication binding: Mistral APPROVE, Argon CHANGES with accepted fixes and amendment-grounded contests. Earlier failed review legs remain recorded; no later-head approval is inferred.
+- [x] Stop owned test containers, run make down ENV=test-cm-a2-0b and verify cleanup. No image build/deletion; the PostgreSQL image was pulled for qualification.
+- [ ] Observe the owner-requested ready-PR CI and record its exact head/result in .tmp/rv/lot-A2.0b.md. Do not merge.
+- [ ] Full r6/A4 author-switch acceptance is separate from this requested findings 1–10 closeout. Original finding 11 (versioned schema admission) and the prior PostgreSQL reopen-fixture limitation remain outside this repair's acceptance claim.
 
 ## Scope / Guardrails
-- [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
-- [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`, section 5 row A04.
-- [x] Worktree: `tmp/worktrees/cyber-admission-a04`; branch: `feat/cyber-admission-a04`; base: origin/main `a2776b2e0` (A01 = PR #883, A02 = PR #884, A03 = PR #885 merged).
-- [x] Make-only Docker-first; single shared Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command (`flock <lock> make ...`); reuse the pinned Node image `node:24-bookworm-slim@sha256:0e0ff40c...`; no new image build.
-- [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge; `make down ENV=test-cyber-adm` after.
-- [x] Keep the downstream verifier adapter (A05), trust state (A06), artifact transport (A07), publisher workflow (A08), production admission, policy changes (`.security/**`) and Track writes out of scope; the conductor remains the sole Track writer.
-- [x] Tests first; selective staging; `make commit` under 150 changed lines; push after every commit; never suppress CI; never `[skip ci]`.
-- [x] Stop on an unresolved design decision. The uploader is native ORAS per r4 (incorporated by r6); its exact digest is an A08 reviewed-workflow input, never a floating download, so the inventory records it as an explicit pending pin and admission refuses while pending. No digest is invented.
+- Scope limited to packages/cluster-mesh identity custody, storage, import, deletion, tests, version manifest.
+- One migration max in api/drizzle/*.sql (not used; CM schema assets only).
+- Make-only workflow, no direct Docker commands.
+- Branch development in isolated worktree tmp/worktrees/cm-identity-a2-0b.
+- Automated test campaigns on dedicated environments (ENV=test-cm-a2-0b), never root dev.
+- In every make command, ENV=<env> passed as the last argument.
+- All new text in English.
+- Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a31bb836165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
+- Version: 0.26.0-dev.5 (next free version after main 0.26.0-dev.4; published stable 0.25.0).
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`
-  - `packages/llm-mesh/src/node/index.ts`
-  - `packages/llm-mesh/src/global.d.ts` (ambient `node:fs/promises` shim: add `stat`/`Stats`, the package compiles with `types: []`)
-  - `packages/llm-mesh/tests/node/encrypted-file-keyring.test.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/CHANGELOG.md`
-  - `package-lock.json`
-  - `packages/cluster-mesh/tests/fixtures/train.ts` (train pin rebind, required by the cluster-mesh validate lanes)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (selected tuple pin rebind)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`)
   - `BRANCH.md`
+  - `packages/cluster-mesh/src/identity-contracts/**`
+  - `packages/cluster-mesh/src/storage/identity/**`
+  - `packages/cluster-mesh/src/identity-stores/**`
+  - `packages/cluster-mesh/src/identity/**`
+  - `packages/cluster-mesh/tests/identity/**`
+  - `packages/cluster-mesh/tests/identity-*.spec.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `package-lock.json` (BR-A20B-EX3)
+  - `api/package-lock.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/identity-auth-types.spec.ts` (BR-A20B-EX4)
+  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
+  - `packages/cluster-mesh/tests/storage/cold-workspace.sh` (BR-A20B-EX2)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
-  - `.github/workflows/**`
-  - `scripts/ci/**`
-  - `docs/**` (dated evidence inputs are read and digest-bound, never edited)
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
+  - `.github/workflows/**`
+  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
-- [x] A01 merged as PR #883 (`e3fa8fab7`), A02 as PR #884 (`d1f45c625`), A03 as PR #885 (`a2776b2e0`); this branch is cut from origin/main `a2776b2e0`.
-- [x] Dated public evidence is input only: `docs/security/sec-s2b-qualify/verifier-candidate.json` (Cosign 3.1.4 candidate, 253 Go deps, go1.27.3, zero HIGH/CRITICAL self-SCA), `docs/security/sec5a-trust-custody.json` (TUF root bootstrap, refreshBy 2026-11-06T01:22:45Z), `docs/security/sec-s2b-qualify/self-scans.json` (old Cosign 3.0.2 vulnerable report: 2 CRITICAL, 60 HIGH). Their October DB snapshots are stale for admission; freshness is enforced by the contract, not assumed.
-- [x] Real scanner/tool outputs remain candidate data: admission receipts return `productionAdmitted: false` and never write a policy pin, receipt file or admission flag.
+- [x] diag-882: PR #882 CI AI-test failures (runs 41488448856, 41498150031) diagnosed as allowlisted provider/model nondeterminism, not a regression — same command passes on branch head 51a426760 (ENV=test-diag-882) and on origin/main 3e3c6a929 (ENV=test-diag-main); draft-org POST returns 201 on both; details in `## AI Flaky tests` and .tmp/rv/diag-882-ai.md.
+- [x] BR-A20B-EX4: add the packed identity auth-hono consumer regression only; CI 4229 exposed the optional peer in root declarations. Preserve all existing root-isolation assertions and the amendment's exact auth-hono types. Rollback removes this test and its dedicated export together.
+- [x] CI 4229 tests first: preserve typed authentication factories at a dedicated optional-peer entrypoint and verify peer-free import, alongside the existing root-only consumer failures.
+- [x] Fix CI 3 (run 41416194722): move the peer-dependent identity auth surface (custody-auth contracts, auth-binding, auth-completion) out of the root barrels into the new `./identity/auth-hono` subpath export; the root index and its emitted declarations no longer reference optional peers. Existing isolation/packaging assertions unchanged; `tests/packaging/identity-auth-types.spec.ts` kept from the prior lane. The `api/tests/ai/initiative-generation-async.test.ts` failure is on the AI-flaky allowlist (`api/tests/ai/**`, 180s live-provider timeout) and is noted, not changed.
+- [x] Fix review r1: all ten requested findings have tests and corrections; final local evidence is PostgreSQL 261/261 and SQLite 254/261 with seven fixed-bound timeouts under measured shared disk I/O pressure. Report failures explicitly and require the PR CI result.
+- [x] R1 Argon r3: reject incompatible normalizers at composition using trim/case/tag/Unicode probes, retaining byte-exact validation for every actual email input.
+- [x] R1 Argon r3: refuse mismatched ticket subjects and null email flags; admit pure read-mode binding while guarding mutations and preserving session activity.
+- [x] R1 Argon r3 tests first: reject a noncanonical host normalizer when constructing the binding, before any auth method runs.
+- [x] R1 final refusal regressions: both profiles reproduced ignored credential-refusal commits and required-UV 401; abort at the port boundary and map the actual verifier's UV refusal to 403.
+- [x] R1 Argon r3 tests first: mismatched ticket subjects, explicit null email flags and pure read-mode session binding with write refusal.
+- [x] Review r1 tests first: a signed assertion missing required UV must return user_verification_required/403 and roll back challenge, counter and audit writes.
+- [x] Review r1 tests first: ignored credential-management refusals must still abort and roll back earlier account and ledger writes.
+- [x] Review r1: map social revision CAS loss to whole-callback retry with exact identity_record_conflict exhaustion; narrow invalid registration tickets before their snapshot.
+- [x] R1 Argon D3: retry whole social callbacks after recognized email/touch races and abort unlink revision loss before a transaction can commit.
+- [x] R1 Argon D3: classify the email natural-key collision privately and sanitize exhausted whole-callback social retries without exposing the private signal.
+- [x] R1 Argon D5/D6: validate stored projection fields, preserve proven email verification, key token evidence by the complete tuple and keep administrative MFA reads unchanged.
+- [x] R1 Argon D1/D4: preserve one verified completion owner, bind snapshots by purpose/challenge and enforce deduplicated origins with the registration UV floor.
+- [x] R1 Argon D2: translate invalid presented tickets and invitation CAS failures at their own stage, preserving rollback and configuration errors.
+- [x] R1 review follow-up: reproduce social touch/email-create races and pin the amendment's owned unlink of revoked imported subjects.
+- [x] R1 review follow-up: test continuation rollback, registration UV/origin policy, read-mode validation and separate administrative/request MFA projections.
+- [x] R1: evaluate current root creation policy, deduplicate transaction-bound creation hooks and validate the completion flow before entry.
+- [x] R1: pin root-owned creation role/status/deadline evaluation and reject unknown completion flows before the callback.
+- [x] R1 rebase: merge-tree found only BRANCH.md conflicted with origin/main e1c0ef97d; rebase preserved identity source/tests byte-for-byte. Bump to free dev.5 through Make in Docker and synchronize all lock/fixture pins without unrelated changes.
+- [x] R1: scope built-in host executors to the same deadline, read mode and callback lifetime as their CM transaction.
+- [x] R1: extend lifetime and read-mode refusal checks to the host business executor, not only the combined CM ports.
+- [x] R1: export exact host-binding names, preserve generic business executors and retain active-transaction registration when binding a host facade.
+- [x] R1: test the amendment's generic host facade and directly bound factory surface without a second physical transaction.
+- [x] R1: exercise the R6 source-owner check with real transactional source, AEAD custody, outbox and rollback on both profiles.
+- [x] R1: keep assertion counter writes bound to verified state and project OAuth MFA only from matched signed token evidence.
+- [x] R1: verify real signed 5-to-0 assertion refusal and rollback of challenge, credential and audit state.
+- [x] R1: require actual verifier evidence for credential persistence and bind anonymous challenge consumption to its verified owner.
+- [x] R1: test actual WebAuthn ceremonies, anonymous owner binding, policy consistency and rejection of unverified writes.
+- [x] R1: add real P-256 registration and assertion wire fixtures for qualification through the shipped verifier.
+- [x] R1: resolve the import-only optional auth-hono peer lazily and serialize redacted audit detail using its frozen string shape.
+- [x] R1 follow-up G1: install the section 6.3 tombstone delivery foreign key with ON DELETE RESTRICT in both profiles.
+- [x] R1 follow-up G1: extend the foreign-key test to the nullable tombstone delivery reference required by section 6.3.
+- [x] R1: export the auth-hono transaction binding with CM data ports, real factories, deferred mail and completion services.
+- [x] R1: replace legacy token methods, retain verified token evidence locally, and drain synchronous sanitized audit exactly once.
+- [x] R1: construct actual WebAuthn factories and verifiers with the intersection of stored and current RP/origin/UV policy.
+- [x] R1: translate expected auth refusals through a private whole-transaction abort and verify the runner flow after rollback.
+- [x] Fix review r1 finding 6: compose core, tenancy, enforcement, custody and operation ports over one guarded executor and the A2.3 audit sink.
+- [x] Fix review r1 finding 6: add registration/email lifecycle and active/deadline/read-only SQL guards for combined transaction handles.
+- [x] Fix review r1 finding 6: bind journal, outbox, cleanup and subject/workspace/email locks to the active host SQL executor.
+- [x] Fix review r1 finding 6: bound core/enforcement variants bypass constructor DDL and nested transactions; standalone frozen behavior remains available to its existing callers.
+- [x] Fix review r1 finding 6: migrate remote-delivery.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate connector-custody.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate atomic-person-deletion.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-storage.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-security.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-import.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-concurrency.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate auth-binding.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate a20b-prerequisites.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate a20b-helpers.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 findings 1/8: tests preceded counter-regression and exact refusal-precedence fixes; both profiles pass.
+- [x] Fix review r1 findings 2–7/9/10: tests first and amendment-exact fixes; both durable profiles executed and per-finding report prepared. Final PR CI is tracked separately; do not merge.
+- [x] Fix review r1 findings 3/9: source HS256 claims and missing HMAC key code corrected after regression tests; both profiles pass.
+- [x] Fix review r1 finding 4: purge retains bound completed magic links and live ticket parents, deleting expired tickets first; both profiles pass.
+- [x] Fix review r1 finding 2: delivered replay preserves the original timestamp; pending custody is checked and the delivered row re-read before erasure; both profiles pass.
+- [x] Fix review r1 findings 5/10: mandatory RESTRICT/SET NULL foreign keys and native PostgreSQL booleans pass real-engine schema, parent and cleanup qualification.
+- [x] Fix review r1 finding 5 follow-through: fixtures create real parents; dependency-safe cleanup passes on both profiles.
+- [x] Fix review r1 finding 6: test-first eleven descriptors, combined run/options, rollback, read-only and handle-lifetime qualification pass.
+- [x] Fix review r1 findings 6/7: bind lifecycle, cleanup, journal, delivery and plane contracts; both-profile atomicity and delivery tests pass.
+- [x] Fix review r1 finding 6: combined public UOW, exact import inventory and required nullable custody dependency are implemented and qualified.
+- [x] BR-A20B-EX3 (owner-authorized Fix CI 1): synchronize only cluster-mesh dev.4 in root/API workspace locks and selected packaging fixture pins; preserve unrelated dependency selections and integrity records. Impact: version metadata only. Rollback: revert these four files together with the version bump.
+- [x] BR-A20B-EX1: repair PostgreSQL qualification readiness in `packages/cluster-mesh/tests/storage/postgres.mk`; the current Unix-socket probe can accept initdb's temporary server before `storage_test` exists. Impact: test startup only, unchanged retry budget. Rollback: revert the readiness hunk.
+- [x] BR-A20B-EX2: wire the existing identity profile configs into the package runner and PostgreSQL CI lane; otherwise frozen tests use the default in-memory factory. Impact: required identity qualification only, unchanged assertions and timeouts. Rollback: revert the runner/target additions.
+- [x] Resume baseline: `e2bba5cc9`; six final SQLite failures in `run-full11.log` are 5000ms expirations; PostgreSQL fails before Vitest. No timeout increases or assertion removals authorized.
+- [x] Correct the truncated amendment SHA-256 against the approved r6 file.
+- [x] Add SQLite schema atomicity regression tests before implementation.
+- [x] Require a successful TCP query against the actual PostgreSQL test database; preserve the 30-attempt startup budget and print startup diagnostics on failure.
+- [x] Replace autocommitted SQLite schema statements with one savepoint-protected batch and initialize the core bundle once per factory; both runtime profiles pass.
+- [x] Refuse missing PostgreSQL configuration in the dedicated profile instead of substituting the in-memory oracle.
+- [x] Replace inherited runRead/runWrite with the combined r6 UOW, transaction ports and real authentication completion binding.
+- [x] Verify schema regression red, implement transactional schema installation, and verify green.
+- [x] Run each final identity database campaign once under the shared Docker flock, then clean up; both receipts contain 185 passes and zero skips, owned containers removed, `make down` completed.
+- [x] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`; run 41389276220 failed deterministic train lock-sync.
+- [x] Fix CI 1: scoped `make lock-root` and API/selected fixture pins agree on dev.4; train lock-sync, 48 packaging/dev-gate tests, 16 lock-install/publish-decision tests and registry train integrity pass. Unrelated lock bytes are unchanged. All Docker work and `make down ENV=test-cm-a2-0b` completed under the shared lock using the existing Node image; no image build or deletion.
+- [ ] Fix CI 1: commit through Make, push once, wait for the authorized second PR CI, append its head/run/result to the report, and stop without merging.
 
 ## AI Flaky tests
-- [x] Deterministic contract tests; no AI flaky exception.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+- [x] diag-882 (PR #882 head 51a426760): CI runs 41488448856 and 41498150031 failed two allowlisted AI tests; verdict = provider/model nondeterminism, NOT a branch regression. Recorded per rules/testing.md « AI Flaky Allowlist »:
+  - Exact command: `flock .tmp/packets/DOCKER-LOCK.md make test-api-ai SCOPE=tests/ai/initiative-generation-async.test.ts API_PORT=13410 UI_PORT=9610 MAILDEV_UI_PORT=5510 ENV=test-diag-882` (branch) and the same with `API_PORT=13411 UI_PORT=9611 MAILDEV_UI_PORT=5511 ENV=test-diag-main` on origin/main 3e3c6a929; `make down ENV=<env>` after each.
+  - Failing files + failure signature: `api/tests/ai/initiative-generation-async.test.ts` « should complete full AI workflow: organization enrichment + initiative generation » → `Error: Test timed out in 180000ms` at tests/ai/initiative-generation-async.test.ts:248 (CI job 125461828929); `api/tests/ai/executive-summary-auto.test.ts` « should automatically trigger executive summary generation when all initiatives are completed » → `Error: Test timed out in 300000ms` (CI job 125461828823). Bare timeouts, no assertion failure; provider-side noise in the same logs (Tavily extract 400 « Max 20 URLs are allowed », job « terminated »).
+  - Local repro on the same commit and command: branch 51a426760 ENV=test-diag-882 → 2/2 passed (full workflow 137097ms of 180000ms), origin/main 3e3c6a929 ENV=test-diag-main → 2/2 passed (126294ms). `POST /api/v1/organizations/draft` returned 201 in 50ms (branch) and 30ms (main) in the API logs; zero error-level API log lines on both. Draft-org creation and the workspace/tenant authority path are intact on this branch (branch diff touches no `api/**`, `ui/**`, `e2e/**` source; only `packages/cluster-mesh` identity + lockfiles).
+  - E2E note: « Failed to create and enrich organization: Impossible de créer l'organisation brouillon » is thrown at ui/src/routes/organizations/new/+page.svelte:129 when the draft POST returns no id; CI run 41498150031 e2e groups all succeeded, so that sighting was transient as well.
+  - Report: .tmp/rv/diag-882-ai.md. User sign-off before merge still required.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: single A04 lane with one ready PR against main; no merge.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single additive contract lot with one test cycle; no parallel sub-branches.
 
 ## UAT Management (in orchestration context)
-- [x] No UI surface; the pinned Node test lane provides the applicable gate.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read rules, approved r6/plan (both digests verified), A01-A03 contracts and the dated tool evidence.
-  - [x] Create isolated worktree `tmp/worktrees/cyber-admission-a04` from origin/main `a2776b2e0`; harness branch check PASS C1.
-  - [x] Locate the existing pinned Node test lane (`make test-security-daily`) and the shared Docker lock; production admission stays off.
-- [x] **Lot 1 — Tests before implementation (RED)**
-  - [x] `tool-inventory.test.mjs` + `tool-admission.test.mjs` (collected by `scanner-provenance.test.mjs`): real `tool-inventory.json` validates and cross-binds to the policy verifierCandidate, the material-manifest acquisition/sbom tool pins and the trust-custody TUF role digests; evidence digests bind actual docs bytes. RED gate: 289 pass / 1 fail (missing module), log `.tmp/rv/cyber-admission-a04-red.log`.
-  - [x] Inventory mutation negatives: prose/non-hex pins, changed size/version, missing/extra role, origin outside the allowlists, verifier pin != policy, cacert/syft pin != manifest, uploader destination change, pending uploader blocks admission.
-  - [x] Self-SCA negatives: wrong-binary report, vulnerable tool (HIGH/CRITICAL), stale/future DB freshness, dropped severity class, self-scan (scanner == tool), scan predating DB download; real old Cosign 3.0.2 report refused.
-  - [x] Dependency-inventory negatives: omitted embedded module, extra module, version change, count mismatch; zero-Python negatives: python present, missing/mismatched evidence.
-  - [x] Candidate-bound admission: complete synthetic tuple produces `ToolAdmissionReceiptV1` with `productionAdmitted: false`; pending pin/missing/rejected review, expired root bootstrap and rehashed inputs refuse.
-- [x] **Lot 2 — Implementation**
-  - [x] `tool-inventory.json`: five roles (verifier Cosign 3.1.4, root-bootstrap Sigstore TUF, acquisition cacert.pem, sbom syft 1.55.0, uploader ORAS pending the A08 reviewed pin) with exact digests/sizes/origins and digest-bound evidence references.
-  - [x] `tool-qualification.mjs`: `validateToolInventory`, `validateToolSelfSca`, `validateToolDependencies`, `validateZeroPython`; `tool-admission.mjs`: `admitToolCandidate`, `validateAdmissionReceipt`.
-  - [x] `tool-fixture.mjs`: synthetic complete tuple for contract tests.
-  - [x] Wired `import '../scanner/tool-inventory.test.mjs'` and `import '../scanner/tool-admission.test.mjs'` into `scripts/security/daily/scanner-provenance.test.mjs`.
-- [x] **Lot 3 — Gates, ready PR and report**
-  - [x] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-adm`: GREEN, 333 tests / 333 pass / 0 fail, EXIT=0; log `.tmp/rv/cyber-admission-a04-green.log`.
-  - [x] `flock ... make down ENV=test-cyber-adm` after the gate (DOWN_EXIT=0, log `.tmp/rv/cyber-admission-a04-down.log`); no new image built; `make scope-check` PASS C2 (logs `.tmp/rv/cyber-admission-a04-scope-check.log`, `-final.log`); `harness check branch` PASS C1.
-  - [x] Atomic `make commit` under 150 lines each (7 commits `b44c43bdd`..`99aecb19b`); pushed after every commit; no `[skip ci]`.
-  - [x] Ready (non-draft) PR **#889** opened against main; origin/main merged back (`ee1d3d819`, BRANCH.md conflict resolved keeping the A04 lane copy) so the PR is mergeable; pull_request CI run **41494863686** on head `ee1d3d8194` = **success** (74 jobs, 0 failures).
-  - [x] Recorded exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a04.md` for conductor Track import.
-  - [x] Stop after A04; leave A05+ and all live admission/activation work fenced. Do not merge.
+- [x] Review r1: social binding retries whole callbacks on insert races and retains consumed magic-link factors.
+- [x] Review r1: bind signed-session eligibility/rotation and ordinary revocation enqueue to the current transaction.
+- [x] Review r1: bind tagged email-code issue/exchange and ticket registration consumption to one transaction.
+- [x] Review r1: real service proof ports preserve challenge policy, binding and one-use snapshots.
+- [x] Review r1: credential adapter keeps attempt-local snapshots and applies exact counter CAS under the subject lock.
+- [x] Review r1: bind user/profile projection and restricted authentication policy to the combined transaction.
+- [x] Review r1: authentication refusal rolls back before returning; bindings use active transaction lifetime checks.
+- [x] Review r1: declare the exact authentication completion and signed-login verifier surface.
+- [x] Review r1 tests first: real auth-hono options/magic-link binding, completion rollback and synchronous audit drain.
+- [x] Review r1: reuse the real parent seeder for proof/invitation consumption prerequisites.
+- [x] Review r1: resolve compiler and fixture failures without weakening exact error assertions or FK enforcement.
+- [x] Review r1: descriptors match the eleven normative domains, record/port order and factory lists.
+- [x] Review r1: migrate low-level encrypted custody fixtures and narrow imported discriminated records.
+- [x] Review r1: acknowledgment tests use canonical claims and assert delivered timestamp preservation.
+- [x] Review r1: migrate acceptance fixtures to explicit deletion bindings and exact detail codes.
+- [x] Review r1: connector capture rereads the exact source owner; acknowledgement validates immutable tuple on the combined transaction.
+- [x] Review r1: exact rollback receipts, canonical operation digest and FK-safe subject/workspace cleanup.
+- [x] Review r1: run all planes in order, enqueue before cleanup, assert custody/absence and persist pending receipts plus audit.
+- [x] Review r1: require explicit deletion composition and lock/re-authorize reservation and replay.
+- [x] Review r1: validate all plane bindings and enqueue deterministic deliveries only after the scope assertion.
+- [x] Review r1: exact deletion business, authorization, plane, option and receipt contracts.
+- [x] Review r1 tests first: complete plane composition, transactional enqueue, scope rollback and acknowledgement-derived completion.
+- [x] Review r1: import all normative entities in dependency order; verify captured deliveries before the receipt.
+- [x] Review r1: validate the complete legacy source inventory and deterministic delivery correspondence.
+- [x] Review r1: durable legacy connector tombstone reads and writes on both profiles.
+- [x] Review r1 tests first: exact legacy event partition, durable tombstones and same-transaction custody verification.
+- [x] Review r1: SQLite outbox retains custody, lease and receipt fields with immutable enqueue replay.
+- [x] Review r1: PostgreSQL outbox retains custody, lease and receipt fields with immutable enqueue replay.
+- [x] Review r1: SQLite run serializes readers and writers with expiring transaction handles.
+- [x] Review r1: PostgreSQL run composition with one retry budget and expiring handles.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read COMMON-RULES, MASTER.md, amendment r6, review r6 APPROVE, lot-A4, patch.
+  - [x] Create isolated worktree tmp/worktrees/cm-identity-a2-0b on feat/cm-identity-a2-0b from origin/main.
+  - [x] Pin sha256 values in BRANCH.md.
+  - [x] Set version 0.26.0-dev.4.
+- [ ] **Lot 1 — Custody contracts (additive, 1.0 frozen)**
+  - [ ] New V1 record/port/error/descriptor exports; IDENTITY_CUSTODY_CONTRACT_VERSION 1.1.0, IDENTITY_ATOMIC_DELETION_CONTRACT_VERSION 2.0.0.
+  - [ ] IdentityCustodyErrorV1 with exact code union; fixed messages; buffer-ownership rules.
+  - [ ] IDENTITY_A20B_DESCRIPTORS exact rows.
+  - [ ] Lot gate: make typecheck-cluster-mesh ENV=test-cm-a2-0b
+- [ ] **Lot 2 — Durable custody on both profiles**
+  - [ ] New tables: account_profiles, webauthn_credentials, single_use_proofs, email_tickets, invitation_digests, login_token_bindings, social_links, subject_fences, deletion ops/attempts, revocation outbox, import receipts, schema versions.
+  - [ ] Postgres + SQLite stores with CAS, uniqueness, expiry strictness.
+  - [ ] Lot gate: custody storage tests on both profiles.
+- [ ] **Lot 3 — Import contract (id-preserving, material-preserving)**
+  - [ ] createIdentityCustodyImporterV1: validate/importBatch/importBatchInTransaction, exclusive-writer fence, identical-receipt replay, whole-batch rollback.
+  - [ ] Field-preserving mapping incl. WebAuthn bytes/counter, unbound proofs, digest invitations, session hashes, social subjects.
+  - [ ] Lot gate: custody-import tests on both profiles.
+- [ ] **Lot 4 — Atomic person deletion (V2)**
+  - [ ] createAtomicPersonDeletionV2 with business participants, orphan assertions, rolled_back receipts, operation journal.
+  - [ ] P4/P5 probes green on both profiles; existing cascade suite unmodified.
+  - [ ] Lot gate: atomic-person-deletion tests on both profiles.
+- [ ] **Lot 5 — Security evidence**
+  - [ ] Secret at rest, SHA-256 exact preimages, zeroization of owned buffers, log redaction canaries.
+  - [ ] Lot gate: security tests on both profiles.
+- [ ] **Lot N — Final validation**
+  - [x] Typecheck & Lint
+  - [x] Retest cluster-mesh identity suites (both profiles, no skips)
+  - [x] Bumped packages/cluster-mesh/package.json and all lock/fixture pins to version 0.26.0-dev.5.
+  - [x] Final gate step 1: create a ready PR using BRANCH.md text as PR body after local qualification (owner continuation): https://github.com/rhanka/sentropic/pull/882.
+  - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
+  - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.

@@ -36,8 +36,9 @@ cluster-mesh-pg-up:
 	@docker container inspect "$(CM_PG_NAME)" >/dev/null 2>&1 || docker run -d --name "$(CM_PG_NAME)" --network "$(CM_PG_NAME)" \
 		--label sentropic.storage-test="$(ENV)" -e POSTGRES_PASSWORD=qualification-only -e POSTGRES_DB=storage_test "$(CM_PG_IMAGE)" >/dev/null
 	@if [ "$$(docker container inspect --format '{{.State.Running}}' "$(CM_PG_NAME)")" != true ]; then docker start "$(CM_PG_NAME)" >/dev/null; fi
-	@attempt=0; until docker exec "$(CM_PG_NAME)" pg_isready -U postgres -d storage_test >/dev/null; do \
-		attempt=$$((attempt+1)); [ "$$attempt" -lt 30 ] || exit 1; sleep 1; done
+	@attempt=0; until docker exec -e PGPASSWORD=qualification-only "$(CM_PG_NAME)" \
+		psql -h 127.0.0.1 -U postgres -d storage_test -Atqc 'SELECT 1' >/dev/null 2>&1; do \
+		attempt=$$((attempt+1)); [ "$$attempt" -lt 30 ] || { docker logs --tail 40 "$(CM_PG_NAME)" >&2; exit 1; }; sleep 1; done
 
 cluster-mesh-pg-down:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
@@ -50,6 +51,11 @@ cluster-mesh-pg-test: cluster-mesh-pg-up
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=test CM_DOCKER_NETWORK="--network $(CM_PG_NAME)" \
 		CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
 		SCOPE="$(if $(SCOPE),$(SCOPE),tests/storage/postgres-)" ENV=$(ENV)
+
+.PHONY: cluster-mesh-identity-test
+cluster-mesh-identity-test: cluster-mesh-pg-up
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=identity CM_DOCKER_NETWORK="--network $(CM_PG_NAME)" \
+		CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" ENV=$(ENV)
 
 .PHONY: cluster-mesh-pg-diagnostics
 cluster-mesh-pg-diagnostics:

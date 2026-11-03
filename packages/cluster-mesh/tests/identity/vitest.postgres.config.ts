@@ -9,7 +9,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['tests/identity-*.spec.ts'],
+    // A2.0b adds the custody campaign directory alongside the frozen suite.
+    include: ['tests/identity-*.spec.ts', 'tests/identity/*.spec.ts'],
     setupFiles: [fileURLToPath(new URL('./profiles/postgres.setup.ts', import.meta.url))],
     environment: 'node',
     alias: [
