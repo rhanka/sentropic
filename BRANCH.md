@@ -12,6 +12,8 @@
 - [x] Tests: `make test-email-code-hmac-selftest ENV=test-email-code-hmac` (offline, no cluster, no gh) with dry-run and no-print assertions (K2/K3). One CI run on the final PR head only; never `[skip ci]`; PR stays READY (not merged).
 - [x] Commits: `make commit MSG="..."` only, selective staging, ≤150 lines per commit; `make scope-check` before every commit; push after every commit (crash-safety rule).
 
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`).
+
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `deploy/ci/email-code-hmac/**` (new: `custody.mjs`, `materialize.mjs`, `custody.selftest.mjs`)
