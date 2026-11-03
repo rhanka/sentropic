@@ -1,111 +1,89 @@
-# Feature: RC2.receiver — frozen source routes and source/browser/relay middleware separation
+# feat(cm-a4-gaps-g5): P6 replica sync, CM half (identity_replica_sync contract bundle 1.2.0)
 
 ## Objective
-Implement lot RC2.receiver of the approved remote-control plan v1.6 r2 (plan SHA-256 6168b73b…, lot row line 646): the exact frozen source routes under `/api/v1/auth/session/content` and `/api/v1/auth/session/remote`, plus the machine relay mount at `/mesh/v1/session-relay` and the inner virtual mount `/mesh/v1/remote-sessions/:sessionId`, with strict source/browser/relay middleware separation on the real RC1 approvedTarget and endpoint authority, per RC2.contract **r3** (pinned from the first commit): MANIFEST.sha256 `6245d3ae51f601195926bc36600d1097cef30694f3feb01f79f1a7ec9fa17715`, manifest JSON sha256 `88823475eca151d908450e4abadcac7b2b60d4b5ea16bae0f590d419fa394565` (replaces r2 `133e23f5…`; r3 delta in CHANGES-r3.md: N1 tool_call_delta args→delta, N2 policy-confirm bodyless plus the zero-entity-bytes rule on the 14 bodyless/query routes, N3/N4 labels only), all under `/home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/`. Every source-gap stays fail-closed; no source-gap field is filled locally; the h2a native side is faked in tests only. A re-pin is required when a later contract revision lands.
+Build lot G5 of the binding design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` (sha256 283cab237a4a2630c9a545e312399469af307adcca0b95feec7cdbf016e2058b), §10.6 with §9.1/§9.3/§9.4/§9.5/§9.6: the CM replica-sync contract (`createIdentityReplicaSyncV1`, `createIdentityReplicaExporterV1`) over the A2.0b custody bundle, host-generic per §3.5, both profiles per §3.3, plus the `identity_replica_sync` composition-descriptor row and the two new error codes.
+
+## Validation evidence and acceptance boundary
+- [ ] Tests written first: `packages/cluster-mesh/tests/identity/replica-sync.spec.ts` covering every §9.5 CM bullet (round trip, replay no-op, convergence, email collision, credential rules, consent rules, retired fence, non-propagation, digest tampering, missing profile, foreign-host fixture per §3.5) on `describe.each(['sqlite','postgres'])` plus cross-profile export→sync.
+- [ ] `make typecheck-cluster-mesh` and `make build-cluster-mesh` clean with ENV=test-a4-G5.
+- [ ] New spec green on SQLite: `flock .tmp/packets/DOCKER-LOCK.md make test-cluster-mesh SCOPE=tests/identity/replica-sync.spec.ts ENV=test-a4-G5`, then `make down ENV=test-a4-G5`.
+- [ ] Same spec green under the PostgreSQL vitest config: `flock .tmp/packets/DOCKER-LOCK.md make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=tests/identity/replica-sync.spec.ts ENV=test-a4-G5`, then `make down ENV=test-a4-G5` and `cluster-mesh-pg-down`.
+- [ ] Frozen identity suites unmodified and green (full `cluster-mesh-identity-test` campaign if time allows; at minimum the scoped spec on both profiles plus typecheck).
+- [ ] `make scope-check` before every commit; commits via `make commit MSG="..."` only, each under 150 lines; branch pushed to origin after each few commits (crash safety).
+- [ ] Package bump per repo rule: `packages/cluster-mesh/package.json` 0.26.0-dev.6 → 0.26.0-dev.7 (> published 0.25.0).
+- [ ] READY PR opened from `feat/cm-a4-gaps-g5-replica-sync`, one CI run observed and recorded in `.tmp/rv/a4-gap-G5.md`. Do not merge.
 
 ## Scope / Guardrails
-- Scope limited to the API receiver surface: new `api/src/routes/session-content/**`, mounts in `api/src/app.ts`, tests in `api/tests/api/session-content-receiver.test.ts`.
-- Reuses merged RC2.store #874 (a861fbd3e) and RC2.registry #873 (5e8a08b96) exports only; does not duplicate or modify them (no `packages/**` changes, no package version bump needed).
-- Make-only workflow, no direct Docker commands; single Docker lock `.tmp/packets/DOCKER-LOCK.md` taken PER COMMAND via `flock`.
-- Root workspace reserved for user dev/UAT (`ENV=dev`) and untouched; all work in worktree `tmp/worktrees/rc2-receiver`.
-- Automated tests run on `ENV=test-rc2-receiver` only, `ENV` always LAST, `make down ENV=test-rc2-receiver` after.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English. No secrets read, printed, logged or committed. No `[skip ci]`. Commits via `make commit MSG="..."` only, ≤150 lines, selective staging.
-- Branch: `feat/rc2-receiver` from `origin/main` (d1f45c625; prerequisites RC2.store #874 a861fbd3e and RC2.registry #873 5e8a08b96 are ancestors), worktree `tmp/worktrees/rc2-receiver`. Ports: `API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093`, `ENV=test-rc2-receiver`.
-- Contract pins (binding, r3, under `/home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/`): MANIFEST.sha256 `6245d3ae51f601195926bc36600d1097cef30694f3feb01f79f1a7ec9fa17715`; remote-session-contract-manifest.v1.json `88823475eca151d908450e4abadcac7b2b60d4b5ea16bae0f590d419fa394565`; CHANGES-r3.md `04cbf4ad38cdac9417c6c17148736852036bc5636e3f8acc47c5190727448456`; plan v1.6 draft `6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18`. Re-verify `sha256sum -c MANIFEST.sha256` before each push.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- r3 consumer scope for this lot (CHANGES-r3.md "Consumer re-pin"): all 38 route http entries — in particular the 14 bodyless/query routes (action-stream, browser-detail, browser-events, browser-list, browser-listing-delete, drive-binding-fetch, grant-fetch, history-admission, history-auth, listing-grant-fetch, policy-confirm, policy-fetch, relay-upgrade, source-control) with their vectors/route-*.json hashes; policy-confirm maxRequestBytes 65536→0 with the annex-D family mapping (invalid_request / view_refused / relay_protocol_refused). N1 chat dialect files are store/RC3.chat scope, not this lot.
-- h2a ACK conditions: every source-gap stays fail-closed; no source-gap field is filled locally; a re-pin is required when a later contract revision lands.
-- Acceptance (plan lot row 646 + vectors 789–790 + closures W04/W06 979–981): before-body owner/source/scope/key rejection; atomic ACK and gaps; wrong-lane refusal; upgrade isolation (machine mount rejects cookies/Origin, wrong audience/protocol, stale/foreign/replayed tunnel before upgrade or body allocation; browser mount rejects source-only credentials); relay mount at `/mesh/v1/session-relay`. Cases RECEIVER / CHAIN-MOUNT / CHAIN-LANE in `api/tests/api/session-content-receiver.test.ts`.
+- Scope limited to `packages/cluster-mesh` identity contracts/storage/tests + package version, per design §10.6.
+- Base: `origin/main` (A2.0b merged at 812d1f053, cluster-mesh 0.26.0-dev.6). Design §10.0 stacking: CM lots branch from origin/main now that PR #882 has merged; G1 (P4 finders) has not landed, so consent reads use the journal `findConsentCore` primitive and the lot adds `listConsentsForUserCore` to both journals (§3.3 sanctions adding a missing primitive to both profiles in the same lot). No copy of G1's finder is landed.
+- Make-only workflow, one Docker build at a time under the flock in `.tmp/packets/DOCKER-LOCK.md` (taken PER COMMAND), no direct docker/npm on host.
+- Branch development in isolated worktree `tmp/worktrees/a4-gap-G5`.
+- Automated test campaigns on dedicated environment `ENV=test-a4-G5` (last argument), never root dev; `make down ENV=test-a4-G5` after each stack.
+- All new text in English. No secrets. No `[skip ci]`. No human-effort/time estimates.
+- Owner answers binding (owner-answers-20261030.md): Q-K=A, Q-WS1=delete with workspace, Q-IDP1=case-by-case deletion, no transfer tool — none change the G5 CM contract (G5 builds in simulation mode per §12).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/routes/session-content/**`
-  - `api/src/app.ts`
-  - `api/tests/api/session-content-receiver.test.ts`
   - `BRANCH.md`
-  - `packages/cluster-mesh/src/identity-contracts/**`
-  - `packages/cluster-mesh/src/storage/identity/**`
-  - `packages/cluster-mesh/src/identity-stores/**`
-  - `packages/cluster-mesh/src/identity/**`
-  - `packages/cluster-mesh/tests/identity/**`
-  - `packages/cluster-mesh/tests/identity-*.spec.ts`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/CHANGELOG.md`
-  - `package-lock.json` (BR-A20B-EX3)
-  - `api/package-lock.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/identity-auth-types.spec.ts` (BR-A20B-EX4)
-  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
-  - `packages/cluster-mesh/tests/storage/cold-workspace.sh` (BR-A20B-EX2)
+  - `packages/cluster-mesh/src/identity-contracts/replica-sync.ts` (new)
+  - `packages/cluster-mesh/src/identity-contracts/composition-descriptors.ts` (new, `identity_replica_sync` row only)
+  - `packages/cluster-mesh/src/identity-contracts/custody-errors.ts` (two codes: `identity_sync_conflict`, `identity_sync_invalid`)
+  - `packages/cluster-mesh/src/identity-contracts/index.ts` (additive export line)
+  - `packages/cluster-mesh/src/storage/identity/replica-sync.ts` (new)
+  - `packages/cluster-mesh/src/storage/identity/custody-journal-postgres.ts` (`listConsentsForUserCore` only)
+  - `packages/cluster-mesh/src/storage/identity/custody-journal-sqlite.ts` (`listConsentsForUserCore` only)
+  - `packages/cluster-mesh/src/storage/identity/index.ts` (additive export line)
+  - `packages/cluster-mesh/tests/identity/replica-sync.spec.ts` (new)
+  - `packages/cluster-mesh/package.json` (version bump)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/**` (RC2.store/RC2.registry reused as-is; no package edits, no version bump)
-  - `api/drizzle/*.sql`
-  - `.github/workflows/**`
-  - `ui/**`, `e2e/**`, `apps/**`, `spec/**`
-  - `api/src/services/**`, `api/src/db/**`, `api/src/middleware/**` (existing services reused read-only)
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `deploy/**`
+  - `.github/**`
+  - every other path outside Allowed Paths
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
+  - none
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- (none open)
+- G1 (P4 `oauthTenantStoreV1` finders) is not on origin/main; this lot deliberately does not land a copy of the finder (design §10.4 stack-absorption rule). Consent reads go through the custody journal primitives; the stack absorbs G1 on rebase.
+- Q-IDP1 disposition (case-by-case preprod-only account deletion) is an ops/G7 concern; G5 builds and tests in simulation mode per design §12.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`, with at least one success on the same commit and same command; never amend tests with additive timeouts. Record command + failing test file + signature here if any.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single lot RC2.receiver, one branch, one scoped test file; no sub-workstreams.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this lot; API-only acceptance via `api/tests/api/session-content-receiver.test.ts` (RECEIVER / CHAIN-MOUNT / CHAIN-LANE).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/rc2-receiver`.
-  - Push branch before UAT.
-  - No user UAT required (no UI surface); API witnesses only.
+- [x] **Mono-branch + cherry-pick** (single CM lot on one branch; one final test cycle)
+- Rationale: one bounded lot, no sub-workstreams.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, plan v1.6 r2 (lot row 646, vectors 789–790, closures 979–981), RC2.contract r2 (MANIFEST 133e23f5…).
-  - [x] Create/confirm isolated worktree `tmp/worktrees/rc2-receiver` on `feat/rc2-receiver` from `origin/main` (5e8a08b96); `harness check branch` PASS.
-  - [x] Capture Make targets: `up-api-test`, `test-api-endpoints SCOPE=…`, `typecheck-api`, `lint-api`, `down`.
-  - [x] Environment mapping: `ENV=test-rc2-receiver`, `API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093`.
-  - [x] Command style: `flock .tmp/packets/DOCKER-LOCK.md make … ENV=test-rc2-receiver` with `ENV` last.
-  - [x] Scope boundaries declared above; no exceptions needed.
-- [ ] **Lot 1 — Tests first: RECEIVER / CHAIN-MOUNT / CHAIN-LANE**
-  - [x] Extend `api/tests/api/session-content-receiver.test.ts` with `describe` blocks RECEIVER, CHAIN-MOUNT, CHAIN-LANE (existing STORE block untouched).
-  - [ ] RECEIVER: before-body owner/source/scope/key rejection on frozen source routes; atomic ACK commit + gap reporting; idempotent replay; conflict refusal.
-  - [ ] CHAIN-LANE: content-only grant refused on actions/results lanes before handler/body; mismatched lane on inner mount refused; stage subset enforcement.
-  - [ ] CHAIN-MOUNT: relay mount at `/mesh/v1/session-relay` rejects cookies/Origin, wrong audience, wrong subprotocol, stale/foreign/replayed tunnel before 101 or body allocation; browser mount rejects source-only credentials; inner mount refuses without bound socket.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api … ENV=test-rc2-receiver`
-    - [ ] `make lint-api … ENV=test-rc2-receiver`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts … ENV=test-rc2-receiver`
-    - [ ] `make down ENV=test-rc2-receiver`
-- [ ] **Lot 2 — Implementation**
-  - [ ] `api/src/routes/session-content/**`: frozen route table, source/browser/relay middleware, routers, fail-closed product ports (real RC1 approvedTarget port type; capsule header pin and H2-I/DEP-FED slots null → fail-closed).
-  - [ ] Mounts in `api/src/app.ts`: `/api/v1/auth/session/content`, `/api/v1/auth/session/remote`, `/mesh/v1/session-relay`, `/mesh/v1/remote-sessions`.
-  - [ ] Re-run Lot 1 gates green; `make scope-check` before each commit.
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & lint API.
-  - [ ] Scoped receiver suite green on `ENV=test-rc2-receiver`; `make down ENV=test-rc2-receiver`.
-  - [ ] Atomic commits ≤150 lines via `make commit`; push `feat/rc2-receiver` (crash safety: push after each commit batch).
-  - [ ] Open READY (non-draft) PR with BRANCH.md text as body; run ONE CI on the final head; record result.
-  - [ ] Report to `.tmp/rv/rc2-receiver.md` (PR, head, CI, each acceptance item). Do not merge.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, COMMON-RULES.md, design a4-cm-gaps-r2.md §3/§9/§10.0/§10.6, owner-answers-20261030.md.
+  - [x] Create isolated worktree `tmp/worktrees/a4-gap-G5` from `origin/main`, branch `feat/cm-a4-gaps-g5-replica-sync`, write this `BRANCH.md`.
+  - [x] Capture Makefile targets: `typecheck-cluster-mesh`, `build-cluster-mesh`, `test-cluster-mesh SCOPE=...`, `cluster-mesh-pg-test`/`cluster-mesh-identity-test` via `packages/cluster-mesh/tests/storage/postgres.mk`, `scope-check`, `commit`, `down`.
+  - [x] Environment mapping: `ENV=test-a4-G5` last argument; Docker flock `.tmp/packets/DOCKER-LOCK.md` per command.
+- [ ] **Lot 1 — Tests first**
+  - [ ] Write `tests/identity/replica-sync.spec.ts` (both profiles + cross-profile + foreign-host fixture).
+  - [ ] Lot gate: spec compiles (typecheck) and fails against missing implementation only for the right reason.
+- [ ] **Lot 2 — Contract**
+  - [ ] `src/identity-contracts/replica-sync.ts` (records, ports, factory signatures per §9.1).
+  - [ ] `composition-descriptors.ts` with `IDENTITY_COMPOSITION_CONTRACT_VERSION = '1.2.0'` and the `identity_replica_sync` row.
+  - [ ] `custody-errors.ts`: add `identity_sync_conflict`, `identity_sync_invalid` fixed messages.
+  - [ ] `index.ts` additive export.
+  - [ ] Lot gate: typecheck clean.
+- [ ] **Lot 3 — Storage implementation**
+  - [ ] `listConsentsForUserCore` on both journals.
+  - [ ] `src/storage/identity/replica-sync.ts`: validate/syncBatch/syncBatchInTransaction + exporter, host-generic via `identityTransactionHost(tx)`.
+  - [ ] `storage/identity/index.ts` additive export.
+  - [ ] Lot gate: new spec green on SQLite, then PostgreSQL config; typecheck + build clean.
+- [ ] **Lot 4 — Version bump, commits, push, PR, CI**
+  - [ ] Bump `packages/cluster-mesh/package.json` to 0.26.0-dev.7.
+  - [ ] Atomic `make commit` commits (<150 lines each), `make scope-check` before each, push to origin after each few commits.
+  - [ ] Open READY PR, observe one CI run, record result in `.tmp/rv/a4-gap-G5.md`. Do not merge.
