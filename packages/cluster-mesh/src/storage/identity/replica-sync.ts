@@ -353,3 +353,108 @@ const applyRow = async (host: CustodyOpHost, tx: AnyTx, row: IdentityReplicaSync
   }
 };
 
+// -- In-transaction sync --------------------------------------------------------
+
+const syncInTransaction = async <H>(
+  clock: () => string,
+  batch: IdentityReplicaSyncBatchV1,
+  tx: IdentityTransactionV1<H>,
+): Promise<IdentityReplicaSyncReceiptV1> => {
+  if (tx.mode !== 'write') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  const host = identityTransactionHost(tx);
+  if (!digestsValid(batch)) throw new IdentityCustodyErrorV1('identity_sync_invalid');
+  if (structuralIssues(batch).length > 0) throw new IdentityCustodyErrorV1('identity_sync_invalid');
+  await lockBatch(host, batch);
+  const batchUserIds = new Set(batch.rows.filter((row) => row.entity === 'account').map((row) => row.record.userId));
+  const counts = zeroCounts();
+  for (const [rowIndex, row] of canonicalSort(batch.rows).entries()) {
+    const issues: MutableIssue[] = [];
+    await detectRow(host, tx, row, rowIndex, batchUserIds, issues);
+    if (issues.length > 0) throw new IdentityCustodyErrorV1('identity_sync_conflict');
+    counts[row.entity][await applyRow(host, tx, row)] += 1;
+  }
+  return {
+    contractVersion: '1.2.0',
+    syncId: batch.syncId,
+    sourcePlacement: batch.sourcePlacement,
+    sourceSnapshotDigest: batch.sourceSnapshotDigest,
+    manifestDigest: batch.manifestDigest,
+    appliedAt: clock(),
+    counts,
+    identitiesPreserved: true,
+    ownersPreserved: true,
+    countersPreserved: true,
+  };
+};
+
+const validateBatch = async <H>(
+  batch: IdentityReplicaSyncBatchV1,
+  tx: IdentityTransactionV1<H>,
+): Promise<IdentityReplicaSyncValidationV1> => {
+  const host = identityTransactionHost(tx);
+  const issues: MutableIssue[] = [];
+  if (!digestsValid(batch)) {
+    addIssue(issues, 'account', 'identity_sync_invalid', -1);
+    return { valid: false, issues };
+  }
+  issues.push(...structuralIssues(batch));
+  if (issues.length > 0) return { valid: false, issues };
+  const batchUserIds = new Set(batch.rows.filter((row) => row.entity === 'account').map((row) => row.record.userId));
+  for (const [rowIndex, row] of canonicalSort(batch.rows).entries()) {
+    await detectRow(host, tx, row, rowIndex, batchUserIds, issues);
+  }
+  return { valid: issues.length === 0, issues };
+};
+
+// -- Factories (host-generic per §3.5: CM state only via identityTransactionHost) --
+
+export const createIdentityReplicaSyncV1 = <H>(input: IdentityReplicaSyncInputV1<H>): IdentityReplicaSyncPortV1<H> => {
+  requireIdentityRunOptions(input.syncOptions);
+  requireIdentityRunOptions(input.validationOptions);
+  if (input.syncOptions.mode !== 'write' || input.syncOptions.purpose !== 'import'
+    || input.validationOptions.mode !== 'read' || input.validationOptions.purpose !== 'import') {
+    throw new IdentityCustodyErrorV1('identity_contract_unavailable');
+  }
+  return {
+    validate: (batch) => input.unitOfWork.run(input.validationOptions, (tx) => validateBatch(batch, tx)),
+    syncBatch: (batch) => input.unitOfWork.run(input.syncOptions, (tx) => syncInTransaction(input.clock, batch, tx)),
+    syncBatchInTransaction: (batch, tx) => syncInTransaction(input.clock, batch, tx),
+  };
+};
+
+export const createIdentityReplicaExporterV1 = <H>(input: IdentityReplicaExportInputV1<H>): IdentityReplicaExportPortV1<H> => {
+  requireIdentityRunOptions(input.exportOptions);
+  if (input.exportOptions.mode !== 'read' || input.exportOptions.purpose !== 'import') {
+    throw new IdentityCustodyErrorV1('identity_contract_unavailable');
+  }
+  return {
+    exportBatch: async ({ syncId, sourcePlacement, sourceSnapshotRef }) =>
+      input.unitOfWork.run(input.exportOptions, async (tx) => {
+        const host = identityTransactionHost(tx);
+        const rows: IdentityReplicaSyncRowV1[] = [];
+        for (const account of await tx.stores.accounts.listAccounts()) {
+          const profile = await tx.custody.profiles.find(account.userId);
+          if (!profile) throw new IdentityCustodyErrorV1('identity_material_missing');
+          rows.push({ entity: 'account', record: account, profile });
+          for (const credential of await tx.custody.credentials.listForUser(account.userId)) {
+            rows.push({ entity: 'credential', record: credential });
+          }
+          for (const consent of await host.journal.listConsentsForUserCore(account.userId)) {
+            rows.push({ entity: 'oauth_consent', record: consent });
+          }
+        }
+        const sorted = canonicalSort(rows);
+        const exportedAt = input.clock();
+        return {
+          contractVersion: '1.2.0' as const,
+          syncId,
+          sourcePlacement,
+          sourceSnapshotRef,
+          exportedAt,
+          rows: sorted,
+          manifestDigest: manifestDigestOf(sorted),
+          sourceSnapshotDigest: snapshotDigestOf({ contractVersion: '1.2.0', syncId, sourcePlacement, sourceSnapshotRef, exportedAt, rows: sorted }),
+        };
+      }),
+  };
+};
