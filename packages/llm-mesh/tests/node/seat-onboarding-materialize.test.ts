@@ -417,7 +417,13 @@ describe('materialiseCellHome (stage 2)', () => {
 
   it('writes no trust entry for a present block with empty cellSynthesis', async () => {
     const root = await mkRoot();
-    const seatDir = await stageSeat(root, 'claude', block('claude', { cellSynthesis: [] }));
+    const seatDir = await stageSeat(root, 'claude', block('claude', { cellSynthesis: [] }), (env) => {
+      (env.files as Record<string, string>)['.claude.json'] = Buffer.from(JSON.stringify({
+        oauthAccount: 'synthetic-oauth-account',
+        hasCompletedOnboarding: true,
+        lastOnboardingVersion: '2.1.0',
+      })).toString('base64');
+    });
     const input = cellInput(seatDir, root);
     await mkWorkspace(input);
     const res = await materialiseCellHome(input);
@@ -478,7 +484,13 @@ describe('materialiseCellHome (stage 2)', () => {
 
   it('refuses a claudeMcpConfig colliding with a single-writer key', async () => {
     const root = await mkRoot();
-    const seatDir = await stageSeat(root, 'claude', block('claude'));
+    const seatDir = await stageSeat(root, 'claude', block('claude'), (env) => {
+      (env.files as Record<string, string>)['.claude.json'] = Buffer.from(JSON.stringify({
+        oauthAccount: 'synthetic-oauth-account',
+        hasCompletedOnboarding: true,
+        lastOnboardingVersion: '2.1.0',
+      })).toString('base64');
+    });
     const input = cellInput(seatDir, root, { claudeMcpConfig: { projects: { '/x': {} } } });
     await mkWorkspace(input);
     const res = await materialiseCellHome(input);
