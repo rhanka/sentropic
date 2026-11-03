@@ -7,7 +7,7 @@ import { encryptSecret } from '../../../src/services/secret-crypto';
 
 const publicFolder = new URL('../../../drizzle/', import.meta.url).pathname;
 const controlFolder = `${publicFolder}control`;
-const cutover = readFileSync(`${controlFolder}/0014_app_cm_identity_cutover.sql`, 'utf8');
+const cutover = readFileSync(`${controlFolder}/0015_app_cm_identity_cutover.sql`, 'utf8');
 const sourceUrl = process.env.DATABASE_URL!;
 let admin: Client;
 let database: PoolClient;

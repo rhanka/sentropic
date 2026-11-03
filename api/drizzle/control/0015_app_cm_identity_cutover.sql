@@ -9,7 +9,7 @@ BEGIN
   SELECT detail INTO checkpoint FROM control.app_cm_identity_cutover
     WHERE cutover_id = 'a4-identity-cutover' AND phase = 'pre-deletion-checkpoint';
   SELECT receipt_json::jsonb INTO imported FROM cm_identity.identity_import_receipts
-    WHERE migration_id = '0014_app_cm_identity_cutover';
+    WHERE migration_id = '0015_app_cm_identity_cutover';
   IF checkpoint IS NULL OR imported IS NULL
     OR checkpoint->>'sourceSnapshotDigest' IS DISTINCT FROM imported->>'sourceSnapshotDigest'
     OR current_setting('app.a4_import_manifest_digest', true) IS DISTINCT FROM imported->>'manifestDigest'

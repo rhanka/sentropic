@@ -97,7 +97,7 @@ describe('artifact host migrations', () => {
       const metadata = JSON.parse(readFileSync('drizzle/control/meta/_journal.json', 'utf8'));
       const frontierAt = Math.max(...metadata.entries.map((entry: { when: number }) => entry.when)) + 1;
       metadata.entries = metadata.entries.filter((entry: { tag: string }) =>
-        !['0012_app_artifact_host', '0014_app_cm_identity_cutover'].includes(entry.tag));
+        !['0012_app_artifact_host', '0015_app_cm_identity_cutover'].includes(entry.tag));
       for (const entry of metadata.entries) writeFileSync(join(folder, `${entry.tag}.sql`), readFileSync(`drizzle/control/${entry.tag}.sql`));
       metadata.entries.push({ idx: 12, version: '7', when: frontierAt, tag: '0019_frontier_witness', breakpoints: true });
       writeFileSync(join(folder, 'meta/_journal.json'), JSON.stringify(metadata));
