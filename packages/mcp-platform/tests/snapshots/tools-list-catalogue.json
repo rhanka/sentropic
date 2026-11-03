@@ -1,0 +1,2267 @@
+{
+  "toolsList": [
+    {
+      "description": "Search authorized current memory with citations and ranking receipts.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "capability_policy": {
+            "additionalProperties": false,
+            "properties": {
+              "minimum_channels": {
+                "enum": [
+                  "lexical",
+                  "lexical_and_semantic"
+                ]
+              },
+              "network": {
+                "enum": [
+                  "forbid",
+                  "allow"
+                ]
+              }
+            },
+            "required": [
+              "minimum_channels",
+              "network"
+            ],
+            "type": "object"
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_packet_bytes": {
+            "default": 65536,
+            "maximum": 1048576,
+            "minimum": 4096,
+            "type": "integer"
+          },
+          "page_cursor": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "purpose_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "purpose_ref"
+        ],
+        "type": "object"
+      },
+      "name": "engram_memory_search",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "additionalProperties": false,
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "next_page_cursor": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "rank_receipt": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "authorization_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "candidate_count": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "candidate_ids_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "issued_at": {
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+                            "type": "string"
+                          },
+                          "ordered_ids_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "profile": {
+                            "enum": [
+                              "offline_lexical_v1",
+                              "semantic_v1"
+                            ]
+                          },
+                          "profile_config_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "profile_version": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "projection_receipt_digests": {
+                            "items": {
+                              "pattern": "^sha256:[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "request_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "revalidation_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "scoring_formula_ref": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "snapshot_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "snapshot_id": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "system_as_of": {
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "type": "string"
+                          },
+                          "valid_as_of": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "request_digest",
+                          "authorization_receipt_digest",
+                          "profile",
+                          "profile_version",
+                          "profile_config_digest",
+                          "valid_as_of",
+                          "system_as_of",
+                          "snapshot_id",
+                          "snapshot_digest",
+                          "candidate_count",
+                          "candidate_ids_digest",
+                          "scoring_formula_ref",
+                          "ordered_ids_digest",
+                          "revalidation_receipt_digest",
+                          "projection_receipt_digests",
+                          "issued_at",
+                          "receipt_digest"
+                        ],
+                        "type": "object"
+                      },
+                      "records": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "rank": {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "record": {
+                              "$schema": "https://json-schema.org/draft/2020-12/schema",
+                              "additionalProperties": false,
+                              "properties": {
+                                "authorization_receipt_digest": {
+                                  "pattern": "^sha256:[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "citations": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "citation_id": {
+                                        "maxLength": 512,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      "content_digest": {
+                                        "pattern": "^sha256:[0-9a-f]{64}$",
+                                        "type": "string"
+                                      },
+                                      "locator": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                          "scheme": {
+                                            "minLength": 1,
+                                            "type": "string"
+                                          },
+                                          "value": {
+                                            "minLength": 1,
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "scheme",
+                                          "value"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      "observed_at": {
+                                        "type": "string"
+                                      },
+                                      "source_ref": {
+                                        "maxLength": 512,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "citation_id",
+                                      "source_ref",
+                                      "locator",
+                                      "content_digest"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "maxItems": 256,
+                                  "minItems": 1,
+                                  "type": "array"
+                                },
+                                "components": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "citation_ids": {
+                                        "items": {
+                                          "maxLength": 512,
+                                          "minLength": 1,
+                                          "type": "string"
+                                        },
+                                        "minItems": 1,
+                                        "type": "array"
+                                      },
+                                      "component_id": {
+                                        "maxLength": 512,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      "kind": {
+                                        "enum": [
+                                          "context",
+                                          "decision",
+                                          "evidence"
+                                        ]
+                                      },
+                                      "text": {
+                                        "maxLength": 65536,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "component_id",
+                                      "kind",
+                                      "text",
+                                      "citation_ids"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "maxItems": 64,
+                                  "minItems": 1,
+                                  "type": "array"
+                                },
+                                "derivation": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "source_record_ids": {
+                                      "items": {
+                                        "maxLength": 512,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      "maxItems": 64,
+                                      "minItems": 1,
+                                      "type": "array"
+                                    },
+                                    "transform_receipt_digest": {
+                                      "pattern": "^sha256:[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "transform_ref": {
+                                      "maxLength": 512,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "source_record_ids",
+                                    "transform_ref",
+                                    "transform_receipt_digest"
+                                  ],
+                                  "type": "object"
+                                },
+                                "payload_digest": {
+                                  "pattern": "^sha256:[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "primary_component_id": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "primary_event": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "at": {
+                                      "type": "integer"
+                                    },
+                                    "citation_id": {
+                                      "maxLength": 512,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "type_ref": {
+                                      "maxLength": 512,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "at",
+                                    "type_ref",
+                                    "citation_id"
+                                  ],
+                                  "type": "object"
+                                },
+                                "purpose_ref": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "reconciliation": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "family_refs": {
+                                      "items": {
+                                        "maxLength": 512,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "family_refs"
+                                  ],
+                                  "type": "object"
+                                },
+                                "record_digest": {
+                                  "pattern": "^sha256:[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "record_id": {
+                                  "pattern": "^mem_[a-z2-7]+$",
+                                  "type": "string"
+                                },
+                                "recorded_at": {
+                                  "type": "string"
+                                },
+                                "recorded_cursor": {
+                                  "pattern": "^(0|[1-9][0-9]*)$",
+                                  "type": "string"
+                                },
+                                "retention": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "derivative_rule": {
+                                      "enum": [
+                                        "retain",
+                                        "make-ineligible"
+                                      ]
+                                    },
+                                    "expires_at": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "derivative_rule"
+                                  ],
+                                  "type": "object"
+                                },
+                                "schema_version": {
+                                  "const": 2
+                                },
+                                "scope_ref": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "trust": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "class": {
+                                      "enum": [
+                                        "earned",
+                                        "asserted",
+                                        "signed"
+                                      ]
+                                    },
+                                    "evidence_digest": {
+                                      "pattern": "^sha256:[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "expires_at": {
+                                      "type": "string"
+                                    },
+                                    "issued_at": {
+                                      "type": "string"
+                                    },
+                                    "receipt_digest": {
+                                      "pattern": "^sha256:[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "revocation_epoch": {
+                                      "pattern": "^(0|[1-9][0-9]*)$",
+                                      "type": "string"
+                                    },
+                                    "verifier_id": {
+                                      "maxLength": 512,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "verifier_version": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "class",
+                                    "evidence_digest",
+                                    "verifier_id",
+                                    "verifier_version",
+                                    "issued_at",
+                                    "revocation_epoch",
+                                    "receipt_digest"
+                                  ],
+                                  "type": "object"
+                                },
+                                "valid_time": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "t": {
+                                      "type": "integer"
+                                    },
+                                    "t_end": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "t"
+                                  ],
+                                  "type": "object"
+                                }
+                              },
+                              "required": [
+                                "record_id"
+                              ],
+                              "type": "object"
+                            },
+                            "redacted_fields": {
+                              "items": {
+                                "pattern": "^(/([^/~]|~[01])*)*$",
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "redaction_receipt_digest": {
+                              "pattern": "^sha256:[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "score": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "record",
+                            "redacted_fields",
+                            "redaction_receipt_digest",
+                            "score",
+                            "rank"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 50,
+                        "type": "array"
+                      },
+                      "response_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "records",
+                      "rank_receipt",
+                      "response_digest"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "output",
+              "auditId",
+              "redactionClass"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "error": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_SCHEMA",
+                      "INVALID_DIGEST",
+                      "DIGEST_CONFLICT",
+                      "UNAUTHORIZED",
+                      "AUTHORIZATION_EXPIRED",
+                      "AUTHORIZATION_REVOKED",
+                      "POLICY_UNAVAILABLE",
+                      "POLICY_STALE",
+                      "ILLEGAL_TRANSITION",
+                      "NOT_FOUND",
+                      "ALREADY_TERMINAL",
+                      "DEADLINE_EXCEEDED",
+                      "CANCELLED",
+                      "CAPABILITY_UNAVAILABLE",
+                      "STORE_UNAVAILABLE",
+                      "FENCE_LOST",
+                      "CURSOR_GAP",
+                      "JOURNAL_CORRUPT",
+                      "BLOB_MISSING",
+                      "PROJECTION_STALE",
+                      "PROJECTION_OVERSIZED",
+                      "RANKING_UNAVAILABLE",
+                      "STALE_PAGE",
+                      "REGISTRY_VERSION_UNAVAILABLE",
+                      "BACKUP_INVALID",
+                      "RESTORE_REFUSED",
+                      "MIGRATION_LEDGER_INVALID",
+                      "RESULT_TOO_LARGE",
+                      "RATE_LIMITED",
+                      "MUTATION_OUTCOME_UNKNOWN",
+                      "gate_failed"
+                    ]
+                  },
+                  "message": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retriable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retriable"
+                ],
+                "type": "object"
+              },
+              "ok": {
+                "const": false
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "auditId",
+              "redactionClass",
+              "error"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Read one authorized currently eligible canonical memory record.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_packet_bytes": {
+            "default": 65536,
+            "maximum": 1048576,
+            "minimum": 4096,
+            "type": "integer"
+          },
+          "purpose_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "record_id": {
+            "maxLength": 512,
+            "minLength": 1,
+            "pattern": "^mem_[a-z2-7]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "purpose_ref"
+        ],
+        "type": "object"
+      },
+      "name": "engram_memory_get",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "additionalProperties": false,
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "packet_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "read_receipt": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "authorization_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "checked_at": {
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+                            "type": "string"
+                          },
+                          "receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "record_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "record_id": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "pattern": "^mem_[a-z2-7]+$",
+                            "type": "string"
+                          },
+                          "revalidation_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "system_as_of": {
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "type": "string"
+                          },
+                          "valid_as_of": {
+                            "type": "integer"
+                          },
+                          "validated_through_cursor": {
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "record_id",
+                          "record_digest",
+                          "valid_as_of",
+                          "system_as_of",
+                          "validated_through_cursor",
+                          "authorization_receipt_digest",
+                          "revalidation_receipt_digest",
+                          "checked_at",
+                          "receipt_digest"
+                        ],
+                        "type": "object"
+                      },
+                      "record": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "additionalProperties": false,
+                        "properties": {
+                          "authorization_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "citations": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "citation_id": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "content_digest": {
+                                  "pattern": "^sha256:[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "locator": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "scheme": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "scheme",
+                                    "value"
+                                  ],
+                                  "type": "object"
+                                },
+                                "observed_at": {
+                                  "type": "string"
+                                },
+                                "source_ref": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "citation_id",
+                                "source_ref",
+                                "locator",
+                                "content_digest"
+                              ],
+                              "type": "object"
+                            },
+                            "maxItems": 256,
+                            "minItems": 1,
+                            "type": "array"
+                          },
+                          "components": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "citation_ids": {
+                                  "items": {
+                                    "maxLength": 512,
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "minItems": 1,
+                                  "type": "array"
+                                },
+                                "component_id": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "enum": [
+                                    "context",
+                                    "decision",
+                                    "evidence"
+                                  ]
+                                },
+                                "text": {
+                                  "maxLength": 65536,
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "component_id",
+                                "kind",
+                                "text",
+                                "citation_ids"
+                              ],
+                              "type": "object"
+                            },
+                            "maxItems": 64,
+                            "minItems": 1,
+                            "type": "array"
+                          },
+                          "derivation": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "source_record_ids": {
+                                "items": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "maxItems": 64,
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "transform_receipt_digest": {
+                                "pattern": "^sha256:[0-9a-f]{64}$",
+                                "type": "string"
+                              },
+                              "transform_ref": {
+                                "maxLength": 512,
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "source_record_ids",
+                              "transform_ref",
+                              "transform_receipt_digest"
+                            ],
+                            "type": "object"
+                          },
+                          "payload_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "primary_component_id": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "primary_event": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "at": {
+                                "type": "integer"
+                              },
+                              "citation_id": {
+                                "maxLength": 512,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "type_ref": {
+                                "maxLength": 512,
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "at",
+                              "type_ref",
+                              "citation_id"
+                            ],
+                            "type": "object"
+                          },
+                          "purpose_ref": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "reconciliation": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "family_refs": {
+                                "items": {
+                                  "maxLength": 512,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "family_refs"
+                            ],
+                            "type": "object"
+                          },
+                          "record_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "record_id": {
+                            "pattern": "^mem_[a-z2-7]+$",
+                            "type": "string"
+                          },
+                          "recorded_at": {
+                            "type": "string"
+                          },
+                          "recorded_cursor": {
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "type": "string"
+                          },
+                          "retention": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "derivative_rule": {
+                                "enum": [
+                                  "retain",
+                                  "make-ineligible"
+                                ]
+                              },
+                              "expires_at": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "derivative_rule"
+                            ],
+                            "type": "object"
+                          },
+                          "schema_version": {
+                            "const": 2
+                          },
+                          "scope_ref": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "trust": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "class": {
+                                "enum": [
+                                  "earned",
+                                  "asserted",
+                                  "signed"
+                                ]
+                              },
+                              "evidence_digest": {
+                                "pattern": "^sha256:[0-9a-f]{64}$",
+                                "type": "string"
+                              },
+                              "expires_at": {
+                                "type": "string"
+                              },
+                              "issued_at": {
+                                "type": "string"
+                              },
+                              "receipt_digest": {
+                                "pattern": "^sha256:[0-9a-f]{64}$",
+                                "type": "string"
+                              },
+                              "revocation_epoch": {
+                                "pattern": "^(0|[1-9][0-9]*)$",
+                                "type": "string"
+                              },
+                              "verifier_id": {
+                                "maxLength": 512,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "verifier_version": {
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "class",
+                              "evidence_digest",
+                              "verifier_id",
+                              "verifier_version",
+                              "issued_at",
+                              "revocation_epoch",
+                              "receipt_digest"
+                            ],
+                            "type": "object"
+                          },
+                          "valid_time": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "t": {
+                                "type": "integer"
+                              },
+                              "t_end": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "t"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "record_id"
+                        ],
+                        "type": "object"
+                      },
+                      "redacted_fields": {
+                        "items": {
+                          "pattern": "^(/([^/~]|~[01])*)*$",
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "redaction_receipt_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "record",
+                      "redacted_fields",
+                      "redaction_receipt_digest",
+                      "read_receipt",
+                      "packet_digest"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "output",
+              "auditId",
+              "redactionClass"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "error": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_SCHEMA",
+                      "INVALID_DIGEST",
+                      "DIGEST_CONFLICT",
+                      "UNAUTHORIZED",
+                      "AUTHORIZATION_EXPIRED",
+                      "AUTHORIZATION_REVOKED",
+                      "POLICY_UNAVAILABLE",
+                      "POLICY_STALE",
+                      "ILLEGAL_TRANSITION",
+                      "NOT_FOUND",
+                      "ALREADY_TERMINAL",
+                      "DEADLINE_EXCEEDED",
+                      "CANCELLED",
+                      "CAPABILITY_UNAVAILABLE",
+                      "STORE_UNAVAILABLE",
+                      "FENCE_LOST",
+                      "CURSOR_GAP",
+                      "JOURNAL_CORRUPT",
+                      "BLOB_MISSING",
+                      "PROJECTION_STALE",
+                      "PROJECTION_OVERSIZED",
+                      "RANKING_UNAVAILABLE",
+                      "STALE_PAGE",
+                      "REGISTRY_VERSION_UNAVAILABLE",
+                      "BACKUP_INVALID",
+                      "RESTORE_REFUSED",
+                      "MIGRATION_LEDGER_INVALID",
+                      "RESULT_TOO_LARGE",
+                      "RATE_LIMITED",
+                      "MUTATION_OUTCOME_UNKNOWN",
+                      "gate_failed"
+                    ]
+                  },
+                  "message": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retriable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retriable"
+                ],
+                "type": "object"
+              },
+              "ok": {
+                "const": false
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "auditId",
+              "redactionClass",
+              "error"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Durably submit cited material as an encrypted pending candidate.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "attestation": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              "citation_ids": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 256,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "evidence_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "evidence_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "evidence_ref",
+              "evidence_digest",
+              "citation_ids"
+            ],
+            "type": "object"
+          },
+          "idempotency_key": {
+            "maxLength": 256,
+            "minLength": 4,
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "citations": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "citation_id": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "content_digest": {
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "locator": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "scheme": {
+                          "maxLength": 512,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "value": {
+                          "maxLength": 512,
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "scheme",
+                        "value"
+                      ],
+                      "type": "object"
+                    },
+                    "observed_at": {
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+                      "type": "string"
+                    },
+                    "source_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "citation_id",
+                    "source_ref",
+                    "locator",
+                    "content_digest"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 256,
+                "minItems": 1,
+                "type": "array"
+              },
+              "components": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "citation_ids": {
+                      "items": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 256,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "component_id": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "context",
+                        "decision",
+                        "evidence"
+                      ]
+                    },
+                    "text": {
+                      "maxLength": 65536,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "component_id",
+                    "kind",
+                    "text",
+                    "citation_ids"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "primary_component_id": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "primary_event": {
+                "additionalProperties": false,
+                "properties": {
+                  "at": {
+                    "type": "integer"
+                  },
+                  "citation_id": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "at",
+                  "type_ref",
+                  "citation_id"
+                ],
+                "type": "object"
+              },
+              "purpose_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "reconciliation": {
+                "additionalProperties": false,
+                "properties": {
+                  "family_refs": {
+                    "items": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 64,
+                    "minItems": 0,
+                    "type": "array",
+                    "uniqueItems": true
+                  }
+                },
+                "required": [
+                  "family_refs"
+                ],
+                "type": "object"
+              },
+              "retention": {
+                "additionalProperties": false,
+                "properties": {
+                  "derivative_rule": {
+                    "enum": [
+                      "retain",
+                      "make-ineligible"
+                    ]
+                  },
+                  "expires_at": {
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "derivative_rule"
+                ],
+                "type": "object"
+              },
+              "schema_version": {
+                "const": 2
+              },
+              "valid_time": {
+                "additionalProperties": false,
+                "properties": {
+                  "t": {
+                    "type": "integer"
+                  },
+                  "t_end": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "t"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "schema_version",
+              "purpose_ref",
+              "valid_time",
+              "components",
+              "primary_component_id",
+              "primary_event",
+              "citations"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "idempotency_key",
+          "payload",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "name": "engram_memory_capture",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "additionalProperties": false,
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "candidate_id": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "cursor": {
+                        "pattern": "^(0|[1-9][0-9]*)$",
+                        "type": "string"
+                      },
+                      "record_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "committed_pending",
+                          "duplicate_exact"
+                        ]
+                      },
+                      "transaction_receipt_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "candidate_id",
+                      "cursor",
+                      "transaction_receipt_digest"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "output",
+              "auditId",
+              "redactionClass"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "error": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_SCHEMA",
+                      "INVALID_DIGEST",
+                      "DIGEST_CONFLICT",
+                      "UNAUTHORIZED",
+                      "AUTHORIZATION_EXPIRED",
+                      "AUTHORIZATION_REVOKED",
+                      "POLICY_UNAVAILABLE",
+                      "POLICY_STALE",
+                      "ILLEGAL_TRANSITION",
+                      "NOT_FOUND",
+                      "ALREADY_TERMINAL",
+                      "DEADLINE_EXCEEDED",
+                      "CANCELLED",
+                      "CAPABILITY_UNAVAILABLE",
+                      "STORE_UNAVAILABLE",
+                      "FENCE_LOST",
+                      "CURSOR_GAP",
+                      "JOURNAL_CORRUPT",
+                      "BLOB_MISSING",
+                      "PROJECTION_STALE",
+                      "PROJECTION_OVERSIZED",
+                      "RANKING_UNAVAILABLE",
+                      "STALE_PAGE",
+                      "REGISTRY_VERSION_UNAVAILABLE",
+                      "BACKUP_INVALID",
+                      "RESTORE_REFUSED",
+                      "MIGRATION_LEDGER_INVALID",
+                      "RESULT_TOO_LARGE",
+                      "RATE_LIMITED",
+                      "MUTATION_OUTCOME_UNKNOWN",
+                      "gate_failed"
+                    ]
+                  },
+                  "message": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retriable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retriable"
+                ],
+                "type": "object"
+              },
+              "ok": {
+                "const": false
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "auditId",
+              "redactionClass",
+              "error"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Request the configured admission policy decision for a pending candidate.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 256,
+            "minLength": 4,
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "name": "engram_memory_request_admission",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "additionalProperties": false,
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "outcome": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "candidate_id": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "cursor": {
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "type": "string"
+                          },
+                          "decision_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "record_id": {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "pattern": "^mem_[a-z2-7]+$",
+                            "type": "string"
+                          },
+                          "status": {
+                            "enum": [
+                              "accepted",
+                              "rejected",
+                              "pending_adjudication",
+                              "duplicate_exact"
+                            ]
+                          },
+                          "transaction_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "candidate_id",
+                          "cursor",
+                          "decision_receipt_digest",
+                          "transaction_receipt_digest"
+                        ],
+                        "type": "object"
+                      },
+                      "replayed": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "outcome",
+                      "replayed"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "output",
+              "auditId",
+              "redactionClass"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "error": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_SCHEMA",
+                      "INVALID_DIGEST",
+                      "DIGEST_CONFLICT",
+                      "UNAUTHORIZED",
+                      "AUTHORIZATION_EXPIRED",
+                      "AUTHORIZATION_REVOKED",
+                      "POLICY_UNAVAILABLE",
+                      "POLICY_STALE",
+                      "ILLEGAL_TRANSITION",
+                      "NOT_FOUND",
+                      "ALREADY_TERMINAL",
+                      "DEADLINE_EXCEEDED",
+                      "CANCELLED",
+                      "CAPABILITY_UNAVAILABLE",
+                      "STORE_UNAVAILABLE",
+                      "FENCE_LOST",
+                      "CURSOR_GAP",
+                      "JOURNAL_CORRUPT",
+                      "BLOB_MISSING",
+                      "PROJECTION_STALE",
+                      "PROJECTION_OVERSIZED",
+                      "RANKING_UNAVAILABLE",
+                      "STALE_PAGE",
+                      "REGISTRY_VERSION_UNAVAILABLE",
+                      "BACKUP_INVALID",
+                      "RESTORE_REFUSED",
+                      "MIGRATION_LEDGER_INVALID",
+                      "RESULT_TOO_LARGE",
+                      "RATE_LIMITED",
+                      "MUTATION_OUTCOME_UNKNOWN",
+                      "gate_failed"
+                    ]
+                  },
+                  "message": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retriable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retriable"
+                ],
+                "type": "object"
+              },
+              "ok": {
+                "const": false
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "auditId",
+              "redactionClass",
+              "error"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Withdraw an authorized pending candidate with confirmed key-destruction status.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 256,
+            "minLength": 4,
+            "type": "string"
+          },
+          "reason_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "idempotency_key",
+          "reason_ref"
+        ],
+        "type": "object"
+      },
+      "name": "engram_memory_withdraw",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "additionalProperties": false,
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key_destruction": {
+                        "enum": [
+                          "pending",
+                          "complete"
+                        ]
+                      },
+                      "receipt": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "authorization_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "cursor": {
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "type": "string"
+                          },
+                          "event_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "event_id": {
+                            "maxLength": 256,
+                            "minLength": 4,
+                            "type": "string"
+                          },
+                          "from_state": {
+                            "const": "pending"
+                          },
+                          "operation": {
+                            "const": "withdraw"
+                          },
+                          "to_state": {
+                            "const": "withdrawn"
+                          },
+                          "transaction_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "event_id",
+                          "operation",
+                          "from_state",
+                          "to_state",
+                          "cursor",
+                          "event_digest",
+                          "authorization_receipt_digest",
+                          "transaction_receipt_digest"
+                        ],
+                        "type": "object"
+                      },
+                      "replayed": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "receipt",
+                      "replayed",
+                      "key_destruction"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "output",
+              "auditId",
+              "redactionClass"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "error": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_SCHEMA",
+                      "INVALID_DIGEST",
+                      "DIGEST_CONFLICT",
+                      "UNAUTHORIZED",
+                      "AUTHORIZATION_EXPIRED",
+                      "AUTHORIZATION_REVOKED",
+                      "POLICY_UNAVAILABLE",
+                      "POLICY_STALE",
+                      "ILLEGAL_TRANSITION",
+                      "NOT_FOUND",
+                      "ALREADY_TERMINAL",
+                      "DEADLINE_EXCEEDED",
+                      "CANCELLED",
+                      "CAPABILITY_UNAVAILABLE",
+                      "STORE_UNAVAILABLE",
+                      "FENCE_LOST",
+                      "CURSOR_GAP",
+                      "JOURNAL_CORRUPT",
+                      "BLOB_MISSING",
+                      "PROJECTION_STALE",
+                      "PROJECTION_OVERSIZED",
+                      "RANKING_UNAVAILABLE",
+                      "STALE_PAGE",
+                      "REGISTRY_VERSION_UNAVAILABLE",
+                      "BACKUP_INVALID",
+                      "RESTORE_REFUSED",
+                      "MIGRATION_LEDGER_INVALID",
+                      "RESULT_TOO_LARGE",
+                      "RATE_LIMITED",
+                      "MUTATION_OUTCOME_UNKNOWN",
+                      "gate_failed"
+                    ]
+                  },
+                  "message": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retriable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retriable"
+                ],
+                "type": "object"
+              },
+              "ok": {
+                "const": false
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "auditId",
+              "redactionClass",
+              "error"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Forget an authorized admitted memory with accurate cleanup status.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "maxLength": 256,
+            "minLength": 4,
+            "type": "string"
+          },
+          "reason_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "record_id": {
+            "maxLength": 512,
+            "minLength": 1,
+            "pattern": "^mem_[a-z2-7]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "idempotency_key",
+          "reason_ref"
+        ],
+        "type": "object"
+      },
+      "name": "engram_memory_forget",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "additionalProperties": false,
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "value": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "coverage_receipt_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "projection_invalidation": {
+                        "enum": [
+                          "pending",
+                          "complete"
+                        ]
+                      },
+                      "receipt": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "authorization_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "cursor": {
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "type": "string"
+                          },
+                          "event_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "event_id": {
+                            "maxLength": 256,
+                            "minLength": 4,
+                            "type": "string"
+                          },
+                          "from_state": {
+                            "enum": [
+                              "accepted_current",
+                              "accepted_disputed",
+                              "historical",
+                              "expired",
+                              "trust_invalid"
+                            ]
+                          },
+                          "operation": {
+                            "const": "tombstone"
+                          },
+                          "to_state": {
+                            "const": "tombstoned"
+                          },
+                          "transaction_receipt_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "event_id",
+                          "operation",
+                          "from_state",
+                          "to_state",
+                          "cursor",
+                          "event_digest",
+                          "authorization_receipt_digest",
+                          "transaction_receipt_digest"
+                        ],
+                        "type": "object"
+                      },
+                      "replayed": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "receipt",
+                      "replayed",
+                      "projection_invalidation"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "output",
+              "auditId",
+              "redactionClass"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "auditId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "error": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_SCHEMA",
+                      "INVALID_DIGEST",
+                      "DIGEST_CONFLICT",
+                      "UNAUTHORIZED",
+                      "AUTHORIZATION_EXPIRED",
+                      "AUTHORIZATION_REVOKED",
+                      "POLICY_UNAVAILABLE",
+                      "POLICY_STALE",
+                      "ILLEGAL_TRANSITION",
+                      "NOT_FOUND",
+                      "ALREADY_TERMINAL",
+                      "DEADLINE_EXCEEDED",
+                      "CANCELLED",
+                      "CAPABILITY_UNAVAILABLE",
+                      "STORE_UNAVAILABLE",
+                      "FENCE_LOST",
+                      "CURSOR_GAP",
+                      "JOURNAL_CORRUPT",
+                      "BLOB_MISSING",
+                      "PROJECTION_STALE",
+                      "PROJECTION_OVERSIZED",
+                      "RANKING_UNAVAILABLE",
+                      "STALE_PAGE",
+                      "REGISTRY_VERSION_UNAVAILABLE",
+                      "BACKUP_INVALID",
+                      "RESTORE_REFUSED",
+                      "MIGRATION_LEDGER_INVALID",
+                      "RESULT_TOO_LARGE",
+                      "RATE_LIMITED",
+                      "MUTATION_OUTCOME_UNKNOWN",
+                      "gate_failed"
+                    ]
+                  },
+                  "message": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retriable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retriable"
+                ],
+                "type": "object"
+              },
+              "ok": {
+                "const": false
+              },
+              "redactionClass": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "ok",
+              "auditId",
+              "redactionClass",
+              "error"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Synthetic read tool for the snapshot composition.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "probe_read",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Synthetic write tool for the snapshot composition.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotencyKey": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "name": "probe_write",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    }
+  ]
+}

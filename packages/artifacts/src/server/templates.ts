@@ -115,6 +115,12 @@ const GUIDE_V1 = [
   'right. Pages never receive credentials; reader data access goes through',
   'the host reader profile bound to the artifact and release.',
   '',
+  'Tool definitions are stable: names, descriptions and schemas never change',
+  'between versions or profiles, so host permissions (for example claude.ai',
+  '"Always allow") survive upgrades. The active profile revision and result',
+  'envelope version appear in results and audit metadata, not in the tool',
+  'definitions themselves.',
+  '',
 ].join('\n');
 
 /** Generic in-package catalog; hosts override with approved local assets. */

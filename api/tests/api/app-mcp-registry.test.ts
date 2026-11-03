@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createClusterMeshModules } from '@sentropic/cluster-mesh';
 import { computeManifestDigest } from '@sentropic/cluster-mesh/mcp/registry';
-import { createArtifactsRegistryDefinition, compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE,
-  type ArtifactsDefinitionOptions } from '@sentropic/artifacts/mcp';
+import { ARTIFACTS_TOOL_DEFINITIONS, createArtifactsRegistryDefinition, compileArtifactsProfile,
+  RADAR_ARTIFACTS_PROFILE, type ArtifactsDefinitionOptions } from '@sentropic/artifacts/mcp';
 import { compileAppMcpRegistry } from '../../src/services/mcp/cluster-registry';
 
 const names = ['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish'] as const;
@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: '556ef9fc383f499ff9911edfa661b9025680f97b2bcfa5613263450c329cf0fd' },
+      'sentropic.artifacts': { manifestDigest: '4f065e3f95f3dccd950b11d6547702ccf96e0f099fd7c741294044e6ead59e30' },
     } };
 }
 
@@ -40,11 +40,11 @@ describe('app MCP registry compilation', () => {
       .toBe('94212e75c52e23f3f254496d98fca7c052568f7c03526ff3def3db020cd24168');
     const { manifest } = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
     expect(computeManifestDigest({ ...manifest, version: '0.2.5' }))
-      .toBe('56bd986f5e43dcad5e69ced780115b5046b9382a830a4b57507c133324992452');
+      .toBe('da14b7bda89fc0f92552e2f6ceefbf3f1f68d118a643e5724f7d441f684386e8');
     expect(computeManifestDigest({ ...manifest, version: '0.2.6' }))
-      .toBe('c69c8ce188907fa3db602caa290e07ebcaffa9e63010aa47b73e1599b36149ed');
+      .toBe('1c3de88bae05879c5122e1bfc06217103544f4312e3f0840fb64acc845492708');
     expect(computeManifestDigest({ ...manifest, version: '0.2.7' }))
-      .toBe('1140dcb492f0d126b55ffc5dfb46accf43fc863145a42990a140e06c5bd02f20');
+      .toBe('bd0ea9593ad78a1b4e84cbf409cb150e21ba53df40b3ec91775a388e8605fbde');
     const result = await compileAppMcpRegistry(input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
@@ -54,7 +54,7 @@ describe('app MCP registry compilation', () => {
       const tool = result.registry.resolveTool(name)!;
       expect(tool.providerId).toBe('sentropic.artifacts');
       expect(tool.capabilityName).toBe(name);
-      expect(tool.inputSchema).toEqual(input.artifacts.profile.schemas[name]);
+      expect(tool.inputSchema).toEqual(ARTIFACTS_TOOL_DEFINITIONS[name].inputSchema);
       expect(tool.requiredScopes).toEqual(['mcp:tools:invoke']);
     }
     expect(result.registry.resolveTool('artifacts_promote')).toBeUndefined();

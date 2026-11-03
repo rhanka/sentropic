@@ -401,6 +401,14 @@ a registrable domain. Assets within the same artifact origin remain loadable.
 - `src/mcp-core.ts` — the platform-free `sentropic.artifacts` MCP provider: 15 exact
   `artifacts_*` tools with closed schemas, a host-bindable invocation
   scope, an executor over the same HTTP app and a platform adapter.
+  Tool definitions are byte-stable compile-time constants
+  (`ARTIFACTS_TOOL_DEFINITIONS`): no version, profile revision, digest or
+  limit ever appears in a description, schema, annotation or `_meta`, so host
+  per-tool permissions (claude.ai "Always allow") survive upgrades and profile
+  switches. The active profile selects the exposed tools and constrains
+  invocations server-side; it stays visible in manifest audit metadata and
+  typed result details. `tests/tools-list-snapshot.test.ts` pins the full
+  tools/list catalogue.
 - `src/mcp.ts` — the compatible `@sentropic/mcp-platform` kernel registry
   definition wrapper (the optional peer is required here and by the root barrel).
 

@@ -1,0 +1,1633 @@
+{
+  "definitions": {
+    "artifacts_commit_upload": {
+      "description": "Artifacts commit upload.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "digest": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "mimeType": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "path": {
+            "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "profile": {
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            },
+            "type": "object"
+          },
+          "size": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uploadId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "uploadId",
+          "path",
+          "mimeType",
+          "digest",
+          "size",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_create_upload": {
+      "description": "Artifacts create upload.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "maxSize": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mimeType": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "mimeType"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_delete": {
+      "description": "Artifacts delete.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": true,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "confirmationRef": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expectedCurrentReleaseId": {
+            "description": "Compare the current release atomically; null requires an unpublished artifact.",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_ensure": {
+      "description": "Artifacts ensure.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "bindingName": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "description": {
+            "description": "Short artifact description.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "icon": {
+            "description": "One short lowercase word.",
+            "pattern": "^[a-z][a-z0-9-]{0,31}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "title": {
+            "description": "Artifact display title.",
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "bindingName",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_fork": {
+      "description": "Artifacts fork.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_get": {
+      "description": "Artifacts get.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_get_api_guide": {
+      "description": "Artifacts get api guide.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_get_source": {
+      "description": "Artifacts get source: verified files of the current or a selected release as `text` (encoding \"utf8\") or `base64` (encoding \"base64\"), never an integer array, plus a guideRef instead of the guide body.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "releaseId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_get_template": {
+      "description": "Artifacts get template.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "templateId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_list": {
+      "description": "Artifacts list.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_list_versions": {
+      "description": "Artifacts list versions.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "cursor": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_promote": {
+      "description": "Artifacts promote.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "expectedCurrent": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "releaseId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "releaseId",
+          "expectedCurrent"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_publish": {
+      "description": "Artifacts publish.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "not": {
+              "required": [
+                "edits"
+              ]
+            },
+            "required": [
+              "files"
+            ]
+          },
+          {
+            "not": {
+              "required": [
+                "files"
+              ]
+            },
+            "required": [
+              "edits"
+            ]
+          }
+        ],
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "description": {
+            "description": "Short artifact description.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "edits": {
+            "description": "Small old/new edits applied to the current release text files; required unless files is supplied.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "newStr": {
+                  "type": "string"
+                },
+                "oldStr": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "oldStr",
+                "newStr"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "expectedCurrentReleaseId": {
+            "description": "Compare the current release atomically; null requires an unpublished artifact.",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "files": {
+            "description": "Full file set; required unless edits is supplied.",
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "not": {
+                    "required": [
+                      "bytes"
+                    ]
+                  },
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "not": {
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  "required": [
+                    "bytes"
+                  ]
+                }
+              ],
+              "properties": {
+                "bytes": {
+                  "items": {
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "mimeType": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "mimeType"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "icon": {
+            "description": "One short lowercase word.",
+            "pattern": "^[a-z][a-z0-9-]{0,31}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "profile": {
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            },
+            "type": "object"
+          },
+          "title": {
+            "description": "Artifact display title.",
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "append",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_renew": {
+      "description": "Artifacts renew.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_restore": {
+      "description": "Artifacts restore.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_revert": {
+      "description": "Artifacts revert.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "expectedCurrentReleaseId": {
+            "description": "Compare the current release atomically; null requires an unpublished artifact.",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "releaseId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "targetReleaseId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_set_access": {
+      "description": "Artifacts set access.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "grant"
+                ]
+              }
+            },
+            "required": [
+              "grant"
+            ]
+          },
+          {
+            "not": {
+              "required": [
+                "grant"
+              ]
+            },
+            "properties": {
+              "action": {
+                "enum": [
+                  "revoke"
+                ]
+              }
+            }
+          }
+        ],
+        "properties": {
+          "action": {
+            "enum": [
+              "grant",
+              "revoke"
+            ],
+            "type": "string"
+          },
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "grant": {
+            "enum": [
+              "read"
+            ],
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "principalId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "action",
+          "principalId",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    }
+  },
+  "toolsList": {
+    "app-p1-radar": [
+      {
+        "description": "Artifacts ensure.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "bindingName": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "description": {
+              "description": "Short artifact description.",
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "icon": {
+              "description": "One short lowercase word.",
+              "pattern": "^[a-z][a-z0-9-]{0,31}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotencyKey": {
+              "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "title": {
+              "description": "Artifact display title.",
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "bindingName",
+            "idempotencyKey"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_ensure",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts publish.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "not": {
+                "required": [
+                  "edits"
+                ]
+              },
+              "required": [
+                "files"
+              ]
+            },
+            {
+              "not": {
+                "required": [
+                  "files"
+                ]
+              },
+              "required": [
+                "edits"
+              ]
+            }
+          ],
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "description": {
+              "description": "Short artifact description.",
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "edits": {
+              "description": "Small old/new edits applied to the current release text files; required unless files is supplied.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "newStr": {
+                    "type": "string"
+                  },
+                  "oldStr": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "oldStr",
+                  "newStr"
+                ],
+                "type": "object"
+              },
+              "maxItems": 100,
+              "minItems": 1,
+              "type": "array"
+            },
+            "expectedCurrentReleaseId": {
+              "description": "Compare the current release atomically; null requires an unpublished artifact.",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "files": {
+              "description": "Full file set; required unless edits is supplied.",
+              "items": {
+                "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "bytes"
+                      ]
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "text"
+                      ]
+                    },
+                    "required": [
+                      "bytes"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "bytes": {
+                    "items": {
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "mimeType": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "mimeType"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "icon": {
+              "description": "One short lowercase word.",
+              "pattern": "^[a-z][a-z0-9-]{0,31}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotencyKey": {
+              "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "profile": {
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "type": "object"
+            },
+            "title": {
+              "description": "Artifact display title.",
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId",
+            "idempotencyKey"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_publish",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts list.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "offset": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "artifacts_list",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts get.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_get",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      }
+    ],
+    "r2-strict-v2": [
+      {
+        "description": "Artifacts ensure.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "bindingName": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "description": {
+              "description": "Short artifact description.",
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "icon": {
+              "description": "One short lowercase word.",
+              "pattern": "^[a-z][a-z0-9-]{0,31}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotencyKey": {
+              "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "title": {
+              "description": "Artifact display title.",
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "bindingName",
+            "idempotencyKey"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_ensure",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts publish.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "not": {
+                "required": [
+                  "edits"
+                ]
+              },
+              "required": [
+                "files"
+              ]
+            },
+            {
+              "not": {
+                "required": [
+                  "files"
+                ]
+              },
+              "required": [
+                "edits"
+              ]
+            }
+          ],
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "description": {
+              "description": "Short artifact description.",
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "edits": {
+              "description": "Small old/new edits applied to the current release text files; required unless files is supplied.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "newStr": {
+                    "type": "string"
+                  },
+                  "oldStr": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "oldStr",
+                  "newStr"
+                ],
+                "type": "object"
+              },
+              "maxItems": 100,
+              "minItems": 1,
+              "type": "array"
+            },
+            "expectedCurrentReleaseId": {
+              "description": "Compare the current release atomically; null requires an unpublished artifact.",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "files": {
+              "description": "Full file set; required unless edits is supplied.",
+              "items": {
+                "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "bytes"
+                      ]
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "text"
+                      ]
+                    },
+                    "required": [
+                      "bytes"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "bytes": {
+                    "items": {
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "mimeType": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "mimeType"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "icon": {
+              "description": "One short lowercase word.",
+              "pattern": "^[a-z][a-z0-9-]{0,31}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotencyKey": {
+              "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "profile": {
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "type": "object"
+            },
+            "title": {
+              "description": "Artifact display title.",
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId",
+            "idempotencyKey"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_publish",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts list.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "offset": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "artifacts_list",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts get.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_get",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts get source: verified files of the current or a selected release as `text` (encoding \"utf8\") or `base64` (encoding \"base64\"), never an integer array, plus a guideRef instead of the guide body.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "paths": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "minItems": 1,
+              "type": "array"
+            },
+            "releaseId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_get_source",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts set access.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "grant"
+                  ]
+                }
+              },
+              "required": [
+                "grant"
+              ]
+            },
+            {
+              "not": {
+                "required": [
+                  "grant"
+                ]
+              },
+              "properties": {
+                "action": {
+                  "enum": [
+                    "revoke"
+                  ]
+                }
+              }
+            }
+          ],
+          "properties": {
+            "action": {
+              "enum": [
+                "grant",
+                "revoke"
+              ],
+              "type": "string"
+            },
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "grant": {
+              "enum": [
+                "read"
+              ],
+              "type": "string"
+            },
+            "idempotencyKey": {
+              "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "principalId": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId",
+            "action",
+            "principalId",
+            "idempotencyKey"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_set_access",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts delete.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "confirmationRef": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            "expectedCurrentReleaseId": {
+              "description": "Compare the current release atomically; null requires an unpublished artifact.",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotencyKey": {
+              "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId",
+            "idempotencyKey"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_delete",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts list versions.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "cursor": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            "limit": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "artifactId"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_list_versions",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts revert.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "expectedCurrentReleaseId": {
+              "description": "Compare the current release atomically; null requires an unpublished artifact.",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "idempotencyKey": {
+              "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "releaseId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "targetReleaseId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId",
+            "idempotencyKey"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_revert",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      }
+    ]
+  }
+}
