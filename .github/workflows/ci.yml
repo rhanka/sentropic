@@ -314,6 +314,11 @@ jobs:
         run: make check-ci-version-filters
       - name: Assert every numbered E2E spec has a CI lane
         run: make check-e2e-inventory
+      # AI shards (test-api-ai) run only on `ai` (or `global`) changes, but
+      # ci-gate still requires them green when selected: a false negative skips
+      # the suite while moving AI behavior. Runs in `changes` (always executed).
+      - name: Assert AI change-filter covers AI service paths
+        run: ./scripts/check-ci-ai-filters.sh
       # Release train lock-sync (BRDP-EX10): a train package whose manifest version differs from its
       # root lockfile workspace entry fails `changes`, which blocks every publisher (barrier below).
       - name: Assert train package versions match the root lockfile
@@ -400,6 +405,35 @@ jobs:
               - 'packages/oauth-verify/**'
               - 'packages/skills/**'
               - 'packages/ubo-contracts/**'
+            # Owner request 2026-11-03: the AI test shards (api/tests/ai/**) are
+            # provider-latency-bound integration tests; they run only when
+            # AI-relevant paths change, so non-AI PRs are not blocked by them.
+            # ci-gate still requires every selected AI shard to be green.
+            ai:
+              - 'api/tests/ai/**'
+              - 'api/src/services/tools.ts'
+              - 'api/src/services/tool-service.ts'
+              - 'api/src/services/context-initiative.ts'
+              - 'api/src/services/executive-summary.ts'
+              - 'api/src/services/queue-manager.ts'
+              - 'api/src/services/chat-service.ts'
+              - 'api/src/services/chat/**'
+              - 'api/src/services/comments/**'
+              - 'api/src/services/context-*.ts'
+              - 'api/src/services/document-*.ts'
+              - 'api/src/services/business/initiatives.ts'
+              - 'api/src/services/business/organizations.ts'
+              - 'api/src/services/business/folders.ts'
+              - 'api/src/services/llm-runtime/**'
+              - 'api/src/services/llm-identity/**'
+              - 'api/src/services/llm-metering/**'
+              - 'api/src/services/llm-account-transports.ts'
+              - 'api/src/routes/namespaces/business/**'
+              - 'api/src/routes/namespaces/workflows-queue.ts'
+              - 'api/src/routes/namespaces/config-product-ai.ts'
+              - 'api/src/config/**'
+              - 'packages/llm-mesh/**'
+              - 'packages/llm-gateway/**'
             ui:
               - 'ui/**'
               - 'packages/chat-ui/**'
@@ -1510,7 +1544,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image, build-api-tool-image]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-    continue-on-error: ${{ matrix.suite == 'ai' }}
     env:
       API_TEST_CI: '1'
       API_TEST_SUT: ${{ (matrix.suite == 'smoke' || matrix.suite == 'limit') && '1' || '0' }}
@@ -1526,12 +1559,6 @@ jobs:
           - suite: smoke
           - suite: unit
           - suite: queue
-          - suite: ai
-            ai_specs: "chat-sync,executive-summary-auto,comment-assistant"
-          - suite: ai
-            ai_specs: "initiative-generation-async,executive-summary-sync"
-          - suite: ai
-            ai_specs: "chat-tools,company-enrichment-sync,documents-tool,initiative-generation-sync"
           - suite: security
           - suite: limit
           # BR70-CI1: the foundation data-spine test dirs (BR-52 artifact-store /
@@ -1596,12 +1623,72 @@ jobs:
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then
             make test-api-endpoints API_TEST_WORKERS=1 API_TEST_ARGS="--shard=${{ matrix.endpoints_shard }}/4" ENV=test-ci-api
-          elif [ "${{ matrix.suite }}" = "ai" ] && [ -n "${{ matrix.ai_specs }}" ]; then
-            SPECS=$(echo "${{ matrix.ai_specs }}" | tr ',' ' ' | xargs -I{} echo "tests/ai/{}.test.ts" | tr '\n' ' ')
-            make test-api-ai SCOPE="$SPECS" API_TEST_WORKERS=1 ENV=test-ci-api
           else
             make test-api-${{ matrix.suite }} ENV=test-ci-api
           fi
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          MUSE_API_KEY: ${{ secrets.MUSE_API_KEY }} # BR75-EX4
+      - name: Show API logs on failure
+        if: failure()
+        run: make logs-api-ci ENV=test-ci-api
+      - name: Tear down API test stack
+        if: always()
+        run: make down-api-ci ENV=test-ci-api
+
+  # Owner request 2026-11-03: AI shards run only when AI-relevant paths change
+  # (changes.ai), so non-AI PRs are not blocked by provider-latency-bound AI
+  # tests. Whenever the shards run, ci-gate still requires them green.
+  test-api-ai:
+    runs-on: ubuntu-latest
+    needs: [changes, build-api-image, build-api-tool-image]
+    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && (needs.changes.outputs.ai == 'true' || needs.changes.outputs.global == 'true')
+    continue-on-error: true
+    env:
+      API_TEST_CI: '1'
+      API_TEST_SUT: '0'
+      DISABLE_RATE_LIMIT: 'true'
+      API_PORT: '9491'
+      UI_PORT: '5691'
+      MAILDEV_UI_PORT: '1591'
+    strategy:
+      max-parallel: 3
+      fail-fast: false
+      matrix:
+        include:
+          - ai_specs: "chat-sync,executive-summary-auto,comment-assistant"
+          - ai_specs: "initiative-generation-async,executive-summary-sync"
+          - ai_specs: "chat-tools,company-enrichment-sync,documents-tool,initiative-generation-sync"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Download CI toolbox
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load CI toolbox
+        run: make load-api-tool ENV=test-ci-api
+      - name: Start API test stack
+        run: make up-api-test-ci ENV=test-ci-api
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          MUSE_API_KEY: ${{ secrets.MUSE_API_KEY }} # BR75-EX4
+      - name: Test API (ai)
+        run: |
+          SPECS=$(echo "${{ matrix.ai_specs }}" | tr ',' ' ' | xargs -I{} echo "tests/ai/{}.test.ts" | tr '\n' ' ')
+          make test-api-ai SCOPE="$SPECS" API_TEST_WORKERS=1 ENV=test-ci-api
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -3118,6 +3205,7 @@ jobs:
       - build-api-image
       - build-api-tool-image
       - test-api-unit-integration
+      - test-api-ai
       - build-ui
       - build-desktop
       - test-ui
@@ -3214,7 +3302,7 @@ jobs:
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
       validate-artifacts, validate-harness, build-api-image, build-api-tool-image,
-      test-api-unit-integration, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
+      test-api-unit-integration, test-api-ai, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-code-api, security-code-ui, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
       publish-llm-mesh, publish-llm-gateway, publish-chat-ui, publish-cited-source-viewer,

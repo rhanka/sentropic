@@ -26,9 +26,20 @@
  */
 import { createHash } from 'node:crypto';
 import { validateFileBytes } from './mime.js';
+import type { ArtifactsMetrics } from './metrics.js';
+import type { RefcountStore } from './gc.js';
+import type { PublicationBlobStore } from './publication.js';
 
 export const UPLOAD_URL_TTL_SECONDS = 600; // presigned URL: ≤ 10 minutes
 export const UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // staged file: 24 h
+/**
+ * Files parity LOT 2 §D — staged-file TTL (host option, ceiling 7 days),
+ * orphan staging-key grace, and the per-run orphan bound.
+ */
+export const STAGED_FILE_TTL_MS = 24 * 60 * 60 * 1000;
+export const STAGED_FILE_TTL_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+export const ORPHAN_STAGING_GRACE_MS = 60 * 60 * 1000;
+export const ORPHAN_SWEEP_MAX_KEYS = 500;
 
 export type UploadSessionState = 'open' | 'committed' | 'discarded' | 'expired';
 
@@ -42,6 +53,8 @@ export interface UploadSession {
   readonly state: UploadSessionState;
   readonly expiresAt: string;
   readonly createdAt: string;
+  /** Browser page that minted this session (agent-channel rows stay null). */
+  readonly pageSessionId?: string;
 }
 
 export interface StagedFileRecord {
@@ -52,6 +65,8 @@ export interface StagedFileRecord {
   readonly digest: string;
   readonly size: number;
   readonly createdAt: string;
+  /** Browser page the file was committed through (agent-channel rows stay null). */
+  readonly pageSessionId?: string;
 }
 
 /** Durable session ledger (Postgres in the host via migration 0007; memory double in tests). */
@@ -67,6 +82,22 @@ export interface UploadSessionStore {
   recordStagedFile(record: StagedFileRecord): Promise<void>;
   getStagedFile(uploadId: string): Promise<StagedFileRecord | undefined>;
   listStagedFiles(artifactId: string): Promise<StagedFileRecord[]>;
+  /** LOT 2 §D.2: reserved bytes of open sessions in one scope (quota check). */
+  sumOpenMaxSize(storageScopeId: string): Promise<number>;
+  /** LOT 2 §D.2: staged bytes in one scope (quota check). */
+  sumStagedBytesByScope(storageScopeId: string): Promise<number>;
+  /** LOT 2 §A.3: sessions minted through one browser page (file-count bound). */
+  listPageSessions(pageSessionId: string): Promise<UploadSession[]>;
+  /**
+   * LOT 2 §D.2: serialize the quota check and insert per scope (race-proof
+   * backstop). The PG store runs `action` on a transaction holding the scope
+   * advisory lock; the memory double runs it under a per-scope mutex. The
+   * service performs every quota read and the insert through `locked`.
+   */
+  withScopeLock<T>(storageScopeId: string, action: (locked: UploadSessionStore) => Promise<T>): Promise<T>;
+  /** LOT 2 §D.1: staged rows older than the TTL (sweeper pass 2 input). */
+  listExpiredStaged(now: Date, ttlMs: number): Promise<StagedFileRecord[]>;
+  deleteStagedFile(uploadId: string): Promise<void>;
 }
 
 /** Byte store under the staging prefix (S3 in the host; memory double in tests). */
@@ -75,6 +106,8 @@ export interface StagingStore {
   get(key: string): Promise<Uint8Array | undefined>;
   delete(key: string): Promise<void>;
   listKeys(prefix: string): Promise<string[]>;
+  /** LOT 2 §D.1 orphan pass: keys with last write time (optional; absent ⇒ pass skipped). */
+  listEntries?(prefix: string): Promise<{ key: string; lastModified: string }[]>;
 }
 
 /**
@@ -106,6 +139,11 @@ export function stagingKey(storageScopeId: string, uploadId: string): string {
   return `artifacts/${storageScopeId}/staging/${uploadId}`;
 }
 
+/** Staging prefix of one scope (LOT 2 §D.1 orphan pass enumerates it). */
+export function stagingPrefix(storageScopeId: string): string {
+  return `artifacts/${storageScopeId}/staging/`;
+}
+
 /**
  * Value of the `x-amz-checksum-sha256` header for a canonical `sha256:<hex>`
  * digest: S3 expects the base64 of the raw digest bytes (no `sha256:` prefix).
@@ -131,18 +169,18 @@ export function assertStagingPrefix(prefix: string): void {
 }
 
 /** In-memory StagingStore double for unit tests. */
-export function createMemoryStaging(): StagingStore {
-  const staged = new Map<string, Uint8Array>();
+export function createMemoryStaging(now: () => Date = () => new Date()): StagingStore {
+  const staged = new Map<string, { bytes: Uint8Array; lastModified: string }>();
   return {
     put(key: string, bytes: Uint8Array): Promise<void> {
       assertStagingKey(key);
-      staged.set(key, new Uint8Array(bytes));
+      staged.set(key, { bytes: new Uint8Array(bytes), lastModified: now().toISOString() });
       return Promise.resolve();
     },
     get(key: string): Promise<Uint8Array | undefined> {
       assertStagingKey(key);
-      const bytes = staged.get(key);
-      return Promise.resolve(bytes === undefined ? undefined : new Uint8Array(bytes));
+      const entry = staged.get(key);
+      return Promise.resolve(entry === undefined ? undefined : new Uint8Array(entry.bytes));
     },
     delete(key: string): Promise<void> {
       assertStagingKey(key);
@@ -153,6 +191,12 @@ export function createMemoryStaging(): StagingStore {
       assertStagingPrefix(prefix);
       return Promise.resolve([...staged.keys()].filter((key) => key.startsWith(prefix)).sort());
     },
+    listEntries(prefix: string): Promise<{ key: string; lastModified: string }[]> {
+      assertStagingPrefix(prefix);
+      return Promise.resolve([...staged.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, entry]) => ({ key, lastModified: entry.lastModified })).sort((a, b) => (a.key < b.key ? -1 : 1)));
+    },
   };
 }
 
@@ -160,7 +204,18 @@ export function createMemoryStaging(): StagingStore {
 export function createMemoryUploadSessionStore(now: () => Date = () => new Date()): UploadSessionStore {
   const sessions = new Map<string, UploadSession>();
   const stagedFiles = new Map<string, StagedFileRecord>();
-  return {
+  // LOT 2 §D.2: per-scope serialization of the quota check and insert.
+  const scopeTails = new Map<string, Promise<unknown>>();
+  const scopeLock = <T>(storageScopeId: string, action: (locked: UploadSessionStore) => Promise<T>): Promise<T> => {
+    const previous = scopeTails.get(storageScopeId) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    scopeTails.set(storageScopeId, previous.then(() => gate));
+    return previous.then(() => action(store)).finally(release);
+  };
+  const scopeOfStaged = (record: StagedFileRecord): string | undefined =>
+    sessions.get(record.uploadId)?.storageScopeId;
+  const store: UploadSessionStore = {
     create(session) {
       sessions.set(session.uploadId, session);
       return Promise.resolve();
@@ -201,7 +256,34 @@ export function createMemoryUploadSessionStore(now: () => Date = () => new Date(
     listStagedFiles(artifactId) {
       return Promise.resolve([...stagedFiles.values()].filter((record) => record.artifactId === artifactId));
     },
+    sumOpenMaxSize(storageScopeId) {
+      let total = 0;
+      for (const session of sessions.values()) {
+        if (session.storageScopeId === storageScopeId && session.state === 'open') total += session.maxSize;
+      }
+      return Promise.resolve(total);
+    },
+    sumStagedBytesByScope(storageScopeId) {
+      let total = 0;
+      for (const record of stagedFiles.values()) {
+        if (scopeOfStaged(record) === storageScopeId) total += record.size;
+      }
+      return Promise.resolve(total);
+    },
+    listPageSessions(pageSessionId) {
+      return Promise.resolve([...sessions.values()].filter((session) => session.pageSessionId === pageSessionId));
+    },
+    withScopeLock: scopeLock,
+    listExpiredStaged(at, ttlMs) {
+      return Promise.resolve([...stagedFiles.values()].filter((record) =>
+        new Date(record.createdAt).getTime() + ttlMs <= at.getTime()));
+    },
+    deleteStagedFile(uploadId) {
+      stagedFiles.delete(uploadId);
+      return Promise.resolve();
+    },
   };
+  return store;
 }
 
 /**
@@ -268,6 +350,20 @@ export interface CreateUploadInput {
   mimeType: string;
   /** Declared size; clamped to the host budget. Bound as the exact signed Content-Length. */
   maxSize?: number;
+  /** Browser page that mints this session (agent-channel rows stay null). */
+  pageSessionId?: string;
+  /** Page file bound enforced with the quota check; required when pageSessionId is set. */
+  pageFileLimit?: number;
+}
+
+/** Digest-addressed CAS blob key of one scope and canonical `sha256:<hex>` digest. */
+export function casBlobKey(storageScopeId: string, digest: string): string {
+  return `artifacts/${storageScopeId}/blobs/${digest.replace(':', '/')}`;
+}
+
+/** LOT 2 §D.1: true when a staged file is older than the staged-file TTL. */
+export function stagedFileExpired(record: Pick<StagedFileRecord, 'createdAt'>, nowMs: number, ttlMs: number): boolean {
+  return new Date(record.createdAt).getTime() + ttlMs <= nowMs;
 }
 
 export interface CreateUploadResult {
@@ -303,6 +399,13 @@ export interface UploadServiceOptions {
   /** Host ceiling for one upload (min of profile releaseFileBytesMax and the server maximum). */
   maxUploadBytes: number;
   maxSessionsPerPrincipal: number;
+  /** LOT 2 §D.2: per-scope staging aggregate (reserved open + staged bytes). Absent ⇒ no aggregate bound. */
+  stagingQuotaBytesPerScope?: number;
+  /** LOT 2 §D.1: staged-file TTL (host option, ceiling 7 days). Absent ⇒ 24 h. */
+  stagedFileTtlMs?: number;
+  /** Metric channel of sessions minted through this service (`agent` or `browser`). */
+  channel?: string;
+  metrics?: ArtifactsMetrics;
   now?: () => Date;
   ids?: () => string;
 }
@@ -334,24 +437,64 @@ export function createUploadService(deps: {
   if (!Number.isSafeInteger(options.maxSessionsPerPrincipal) || options.maxSessionsPerPrincipal < 1) {
     throw new Error('invalid upload session quota');
   }
+  if (options.stagingQuotaBytesPerScope !== undefined &&
+    (!Number.isSafeInteger(options.stagingQuotaBytesPerScope) || options.stagingQuotaBytesPerScope < 1)) {
+    throw new Error('invalid scope staging quota');
+  }
+  if (options.stagedFileTtlMs !== undefined &&
+    (!Number.isSafeInteger(options.stagedFileTtlMs) || options.stagedFileTtlMs < 1 ||
+      options.stagedFileTtlMs > STAGED_FILE_TTL_MAX_MS)) {
+    throw new Error('invalid staged file TTL');
+  }
+  const channel = options.channel ?? 'agent';
+  const emit = (event: { name: string; labels?: Record<string, string>; value?: number }): void => {
+    if (options.metrics !== undefined) options.metrics.emit({ ...event,
+      labels: { channel, ...(event.labels ?? {}) } });
+  };
   return {
     async create(input) {
       if (input.maxSize !== undefined && (!Number.isSafeInteger(input.maxSize) || input.maxSize < 1)) {
         throw new Error('invalid upload byte budget');
       }
-      const open = await deps.sessions.countOpen(input.storageScopeId, input.ownerId);
-      if (open >= options.maxSessionsPerPrincipal) {
-        throw new Error(`open upload session quota exceeded for principal (max ${options.maxSessionsPerPrincipal})`);
+      if (input.pageSessionId !== undefined && (input.pageFileLimit === undefined ||
+        !Number.isSafeInteger(input.pageFileLimit) || input.pageFileLimit < 1)) {
+        throw new Error('invalid page file bound');
       }
       const maxSize = Math.min(input.maxSize ?? options.maxUploadBytes, options.maxUploadBytes);
-      const uploadId = ids();
-      const createdAt = now().toISOString();
-      const expiresAt = new Date(now().getTime() + UPLOAD_SESSION_TTL_MS).toISOString();
-      const key = stagingKey(input.storageScopeId, uploadId);
-      await deps.sessions.create({
-        uploadId, artifactId: input.artifactId, storageScopeId: input.storageScopeId,
-        ownerId: input.ownerId, mimeType: input.mimeType, maxSize, state: 'open', expiresAt, createdAt,
-      });
+      // LOT 2 §D.2: the quota check and the insert run inside the scope lock,
+      // so parallel creates against one scope quota admit exactly the quota.
+      // Callers must not hold the scope lock across service calls (no nesting).
+      return deps.sessions.withScopeLock(input.storageScopeId, async (locked) => {
+        const open = await locked.countOpen(input.storageScopeId, input.ownerId);
+        if (open >= options.maxSessionsPerPrincipal) {
+          emit({ name: 'upload_quota_refusals', labels: { reason: 'open_session_quota' } });
+          throw new Error(`open upload session quota exceeded for principal (max ${options.maxSessionsPerPrincipal})`);
+        }
+        if (options.stagingQuotaBytesPerScope !== undefined) {
+          const reserved = await locked.sumOpenMaxSize(input.storageScopeId) +
+            await locked.sumStagedBytesByScope(input.storageScopeId);
+          if (reserved + maxSize > options.stagingQuotaBytesPerScope) {
+            emit({ name: 'upload_quota_refusals', labels: { reason: 'scope_staging_quota' } });
+            throw new Error(`scope staging quota exceeded (max ${options.stagingQuotaBytesPerScope} bytes)`);
+          }
+        }
+        if (input.pageSessionId !== undefined) {
+          const pageCount = (await locked.listPageSessions(input.pageSessionId)).length;
+          if (pageCount >= input.pageFileLimit!) {
+            emit({ name: 'upload_quota_refusals', labels: { reason: 'page_file_quota' } });
+            throw new Error(`open upload page file quota exceeded (max ${input.pageFileLimit})`);
+          }
+        }
+        const uploadId = ids();
+        const createdAt = now().toISOString();
+        const expiresAt = new Date(now().getTime() + UPLOAD_SESSION_TTL_MS).toISOString();
+        const key = stagingKey(input.storageScopeId, uploadId);
+        await locked.create({
+          uploadId, artifactId: input.artifactId, storageScopeId: input.storageScopeId,
+          ownerId: input.ownerId, mimeType: input.mimeType, maxSize, state: 'open', expiresAt, createdAt,
+          ...(input.pageSessionId === undefined ? {} : { pageSessionId: input.pageSessionId }),
+        });
+        emit({ name: 'upload_sessions_created' });
       // The signature binds content-type and the EXACT declared Content-Length
       // (a presigned PUT cannot carry a content-length range). The digest is
       // declared at commit, so the PUT must also carry x-amz-checksum-sha256,
@@ -359,11 +502,12 @@ export function createUploadService(deps: {
       const signed = await deps.signer.signPut({
         key, contentType: input.mimeType, contentLength: maxSize, expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
       });
-      return {
-        uploadId, uploadUrl: signed.url, method: signed.method, expiresAt: signed.expiresAt, maxSize,
-        requiredHeaders: signed.headers, checksumHeader: 'x-amz-checksum-sha256',
-        stagingKey: key,
-      };
+        return {
+          uploadId, uploadUrl: signed.url, method: signed.method, expiresAt: signed.expiresAt, maxSize,
+          requiredHeaders: signed.headers, checksumHeader: 'x-amz-checksum-sha256',
+          stagingKey: key,
+        };
+      });
     },
     sessionForCommit(input) {
       return deps.sessions.get(input.uploadId).then((session) => {
@@ -395,10 +539,80 @@ export function createUploadService(deps: {
       const staged: StagedFileRecord = {
         uploadId: session.uploadId, artifactId: session.artifactId, createdAt: now().toISOString(),
         path: record.path, mimeType: record.mimeType, digest: record.digest, size: record.size,
+        ...(session.pageSessionId === undefined ? {} : { pageSessionId: session.pageSessionId }),
       };
       await deps.sessions.recordStagedFile(staged);
       await deps.sessions.markCommitted(session.uploadId);
       return staged;
     },
   };
+}
+
+/**
+ * Files parity LOT 2 — shared commit core for both channels (agent MCP and
+ * browser page). Verification and pin logic live here once: the MCP handler
+ * and the page service both call it, so neither duplicates the other.
+ */
+export interface CommitStagedUploadDeps {
+  sessions: UploadSessionStore;
+  staging: StagingStore;
+  blobs: PublicationBlobStore;
+  refs: RefcountStore;
+  /** Per-artifact staged caps (`releaseFilesMax`/`releaseTotalBytesMax`). */
+  budget: { filesMax: number; totalBytesMax: number };
+  metrics?: ArtifactsMetrics;
+}
+
+export interface CommitStagedUploadInput extends CommitUploadInput {
+  pageSessionId?: string;
+}
+
+export async function commitStagedUpload(service: UploadService, deps: CommitStagedUploadDeps,
+  input: CommitStagedUploadInput, channel = 'agent'): Promise<StagedFileRecord> {
+  const emit = (event: { name: string; labels?: Record<string, string>; value?: number }): void => {
+    if (deps.metrics !== undefined) deps.metrics.emit({ ...event,
+      labels: { channel, ...(event.labels ?? {}) } });
+  };
+  const fail = (error: unknown): never => {
+    if (!(error instanceof Error) || !/budget exceeded/.test(error.message)) {
+      emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
+    }
+    throw error;
+  };
+  const session = await service.sessionForCommit(input).catch((error) => fail(error));
+  const key = stagingKey(input.storageScopeId, input.uploadId);
+  const bytes = await deps.staging.get(key) ??
+    fail(new Error(`staged object missing for ${input.uploadId}`));
+  try {
+    service.verifyStaged(session, bytes, { digest: input.digest, size: input.size, mimeType: input.mimeType });
+  } catch (error) { fail(error); }
+  // LOT 2 §D.2: per-artifact staged caps, checked at commit for both channels.
+  const existing = await deps.sessions.listStagedFiles(input.artifactId);
+  const stagedBytes = existing.reduce((total, record) => total + record.size, 0);
+  if (existing.length + 1 > deps.budget.filesMax || stagedBytes + input.size > deps.budget.totalBytesMax) {
+    emit({ name: 'upload_quota_refusals', labels: { reason: 'staged_budget' } });
+    throw new Error(`staged file budget exceeded for artifact (max ${deps.budget.filesMax} files, ` +
+      `${deps.budget.totalBytesMax} bytes total)`);
+  }
+  const casKey = casBlobKey(input.storageScopeId, input.digest);
+  await deps.blobs.putBlob(casKey, bytes);
+  const readBack = await deps.blobs.getBlob(casKey);
+  if (readBack === undefined || readBack.byteLength !== input.size ||
+    `sha256:${createHash('sha256').update(readBack).digest('hex')}` !== input.digest) {
+    fail(new Error(`CAS read-back mismatch for ${input.uploadId}`));
+  }
+  const pinReason = `upload:${input.uploadId}`;
+  await deps.refs.pin(input.digest, pinReason);
+  let staged: StagedFileRecord;
+  try {
+    staged = await service.completeCommit(session, { path: input.path, mimeType: input.mimeType,
+      digest: input.digest, size: input.size });
+  } catch (error) {
+    await deps.refs.unpin(input.digest, pinReason).catch(() => undefined);
+    throw error;
+  }
+  await deps.staging.delete(key);
+  emit({ name: 'upload_commits', labels: { result: 'ok' } });
+  emit({ name: 'upload_bytes_committed', value: input.size });
+  return staged;
 }

@@ -137,7 +137,8 @@ describe('upload sessions (files parity LOT 1)', () => {
     await staging.put(created.stagingKey, png(5));
     const sweeper = createUploadSweeper({ sessions, staging });
     // Not yet expired: nothing happens.
-    expect(await sweeper.sweep(new Date('2026-01-01T00:00:00Z'))).toEqual({ expired: [], deletedKeys: [], failures: [] });
+    expect(await sweeper.sweep(new Date('2026-01-01T00:00:00Z'))).toEqual({ expired: [], deletedKeys: [],
+      failures: [], stagedExpired: [], unpinned: [], orphanKeys: [], pagesExpired: [] });
     // Past the session TTL: expired + staging deleted.
     now = new Date(now.getTime() + UPLOAD_SESSION_TTL_MS + 1000);
     const report = await sweeper.sweep(now);

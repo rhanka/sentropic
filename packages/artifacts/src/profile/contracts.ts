@@ -11,6 +11,10 @@ export const ARTIFACT_CAPABILITY_NAMES = [
   'artifacts_lookup_people', 'artifacts_list_access',
   'artifacts_publish_bundle',
   'artifacts_revoke_reader_consent',
+  // Files parity LOT 2 — appended last; frozen at birth like every definition above.
+  'artifacts_create_upload_page',
+  'artifacts_list_assets',
+  'artifacts_publish_bundle_v2',
 ] as const;
 export type ArtifactCapabilityName = (typeof ARTIFACT_CAPABILITY_NAMES)[number];
 export type ArtifactSchema = Readonly<Record<string, unknown>>;

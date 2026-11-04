@@ -81,7 +81,8 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);
   const normalized = { ...copyJson(defaults) as Record<string, JsonValue>, ...args } as Record<string, JsonValue>;
-  if (['ensure', 'publish', 'commit_upload', 'publish_bundle', 'set_access', 'delete', 'revert'].includes(operation)) {
+  if (['ensure', 'publish', 'commit_upload', 'publish_bundle', 'publish_bundle_v2',
+    'set_access', 'delete', 'revert'].includes(operation)) {
     const key = args.idempotencyKey;
     requireInput(typeof key === 'string' && key.trim().length > 0 && key.length <= limits.idempotencyKeyMaxUnits);
     requireInput(envelopeKey === undefined || envelopeKey === key);
@@ -94,7 +95,8 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   }
   if (Object.hasOwn(args, 'releaseId')) requireInput(isArtifactId(args.releaseId));
   if (Object.hasOwn(args, 'expectedCurrentReleaseId')) requireInput(args.expectedCurrentReleaseId === null || isArtifactId(args.expectedCurrentReleaseId));
-  if (operation === 'publish' || operation === 'publish_bundle') {
+  const isBundle = operation === 'publish_bundle' || operation === 'publish_bundle_v2';
+  if (operation === 'publish' || isBundle) {
     const hasFiles = Object.hasOwn(args, 'files');
     if (operation === 'publish') {
       const hasEdits = Object.hasOwn(args, 'edits');
@@ -118,14 +120,14 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
         requireInput(bytes.length <= inlineFileBytesMax && total <= inlineTotalBytesMax);
         return { path, mimeType: file.mimeType, bytes };
       });
-      if (operation === 'publish_bundle' && Object.hasOwn(args, 'assets')) {
+      if (isBundle && Object.hasOwn(args, 'assets')) {
         // Duplicate path refused across the files/assets union.
         for (const asset of args.assets as Record<string, JsonValue>[]) {
           requireInput(!paths.has(asset.path as string));
         }
       }
     }
-    if (operation === 'publish_bundle' && Object.hasOwn(args, 'assets')) {
+    if (isBundle && Object.hasOwn(args, 'assets')) {
       const paths = new Set<string>();
       if (hasFiles) for (const file of args.files as Record<string, JsonValue>[]) paths.add(file.path as string);
       normalized.assets = (args.assets as Record<string, JsonValue>[]).map((asset) => {
@@ -135,6 +137,31 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
         if (Object.hasOwn(asset, 'uploadId')) {
           requireInput(isArtifactId(asset.uploadId as string));
           return { path, uploadId: asset.uploadId };
+        }
+        // LOT 2 v2 asset forms: copy from another artifact, or carry from a
+        // release of this artifact. The MIME type is taken from the source
+        // manifest at resolution time, never from the caller.
+        if (Object.hasOwn(asset, 'sourceArtifactId')) {
+          requireInput(isArtifactId(asset.sourceArtifactId as string));
+          if (Object.hasOwn(asset, 'sourcePath')) {
+            requireInput(typeof asset.sourcePath === 'string' &&
+              Buffer.byteLength(asset.sourcePath, 'utf8') <= profile.rules.pathMaxBytes);
+          }
+          if (Object.hasOwn(asset, 'sourceReleaseId')) {
+            requireInput(isArtifactId(asset.sourceReleaseId as string));
+          }
+          return { path, sourceArtifactId: asset.sourceArtifactId,
+            ...(Object.hasOwn(asset, 'sourcePath') ? { sourcePath: asset.sourcePath } : {}),
+            ...(Object.hasOwn(asset, 'sourceReleaseId') ? { sourceReleaseId: asset.sourceReleaseId } : {}) };
+        }
+        if (Object.hasOwn(asset, 'carryFromReleaseId')) {
+          requireInput(isArtifactId(asset.carryFromReleaseId as string));
+          if (Object.hasOwn(asset, 'sourcePath')) {
+            requireInput(typeof asset.sourcePath === 'string' &&
+              Buffer.byteLength(asset.sourcePath, 'utf8') <= profile.rules.pathMaxBytes);
+          }
+          return { path, carryFromReleaseId: asset.carryFromReleaseId,
+            ...(Object.hasOwn(asset, 'sourcePath') ? { sourcePath: asset.sourcePath } : {}) };
         }
         const digest = asset.digest as string;
         requireInput(/^sha256:[0-9a-f]{64}$/.test(digest) && Number.isSafeInteger(asset.size) && (asset.size as number) >= 1 &&

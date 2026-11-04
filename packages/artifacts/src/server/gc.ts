@@ -13,7 +13,10 @@
 import { createKeyMutex } from './ports.js';
 import type { CommitExecutor, FinalizeTxClient } from './commit/types.js';
 import { blobDigestOfKey, type PublicationBlobStore } from './publication.js';
-import { stagingKey, type StagingStore, type UploadSessionStore } from './uploads.js';
+import { ORPHAN_STAGING_GRACE_MS, ORPHAN_SWEEP_MAX_KEYS, STAGED_FILE_TTL_MAX_MS, STAGED_FILE_TTL_MS,
+  stagingKey, stagingPrefix, type StagingStore, type UploadSessionStore } from './uploads.js';
+import type { ArtifactsMetrics } from './metrics.js';
+import type { UploadPageStore } from './upload-page.js';
 
 export interface RefcountStore {
   addRef(digest: string, holder: string): Promise<void>;
@@ -312,20 +315,48 @@ export interface UploadSweepReport {
   expired: string[];
   deletedKeys: string[];
   failures: { uploadId: string; error: string }[];
+  /** LOT 2 §D.1: staged rows past the staged-file TTL (deleted + unpinned). */
+  stagedExpired: string[];
+  /** LOT 2 §D.1: digests whose consumed upload pin the sweeper released. */
+  unpinned: string[];
+  /** LOT 2 §D.1: orphan staging keys deleted past the grace (bounded per run). */
+  orphanKeys: string[];
+  /** LOT 2 §A.3: page rows past expires_at (flipped to expired, kept for audit). */
+  pagesExpired: string[];
 }
 
 export interface UploadSweeper {
-  sweep(now?: Date): Promise<UploadSweepReport>;
+  sweep(now?: Date, options?: { scopes?: string[] }): Promise<UploadSweepReport>;
 }
 
-/** Create the enforced staging sweeper over the injected session/staging ports. */
+/**
+ * Create the enforced staging sweeper over the injected session/staging
+ * ports. LOT 2 adds staged-file TTL, orphan staging keys, page expiry and
+ * sweep summaries; refs/pages/metrics are optional (absent ⇒ the pass that
+ * needs them is skipped, except summaries which simply have no sink).
+ */
 export function createUploadSweeper(deps: {
   sessions: UploadSessionStore;
-  staging: Pick<StagingStore, 'delete' | 'listKeys'>;
-}): UploadSweeper {
+  staging: Pick<StagingStore, 'delete' | 'listKeys'> & Pick<StagingStore, 'listEntries'>;
+  refs?: RefcountStore;
+  pages?: UploadPageStore;
+  metrics?: ArtifactsMetrics;
+}, options?: { now?: () => Date; stagedFileTtlMs?: number; orphanGraceMs?: number;
+  orphanKeyLimit?: number }): UploadSweeper {
+  const stagedFileTtlMs = options?.stagedFileTtlMs ?? STAGED_FILE_TTL_MS;
+  const orphanGraceMs = options?.orphanGraceMs ?? ORPHAN_STAGING_GRACE_MS;
+  const orphanKeyLimit = options?.orphanKeyLimit ?? ORPHAN_SWEEP_MAX_KEYS;
+  if (!Number.isSafeInteger(stagedFileTtlMs) || stagedFileTtlMs < 1 ||
+    stagedFileTtlMs > STAGED_FILE_TTL_MAX_MS) {
+    throw new Error('invalid staged file TTL');
+  }
+  const emitSummary = (name: string, value: number): void => {
+    if (deps.metrics !== undefined) deps.metrics.emit({ name, value });
+  };
   return {
-    async sweep(at = new Date()) {
-      const report: UploadSweepReport = { expired: [], deletedKeys: [], failures: [] };
+    async sweep(at = options?.now?.() ?? new Date(), sweepOptions?: { scopes?: string[] }) {
+      const report: UploadSweepReport = { expired: [], deletedKeys: [], failures: [],
+        stagedExpired: [], unpinned: [], orphanKeys: [], pagesExpired: [] };
       for (const session of await deps.sessions.listExpiredOpen(at)) {
         const key = stagingKey(session.storageScopeId, session.uploadId);
         try {
@@ -337,6 +368,59 @@ export function createUploadSweeper(deps: {
           report.failures.push({ uploadId: session.uploadId, error: String(error) });
         }
       }
+      // Pass 2: staged files past the TTL. Unpin first, then delete the row;
+      // an unpin failure keeps the row for the next run and is reported.
+      for (const record of await deps.sessions.listExpiredStaged(at, stagedFileTtlMs)) {
+        try {
+          if (deps.refs !== undefined) {
+            await deps.refs.unpin(record.digest, `upload:${record.uploadId}`);
+            report.unpinned.push(record.digest);
+          }
+          await deps.sessions.deleteStagedFile(record.uploadId);
+          report.stagedExpired.push(record.uploadId);
+        } catch (error) {
+          report.failures.push({ uploadId: record.uploadId, error: String(error) });
+        }
+      }
+      emitSummary('staged_files_expired', report.stagedExpired.length);
+      // Pass 3: orphan staging keys (no session row in open|committed) past
+      // the grace, bounded per run. Stores without listEntries skip the pass.
+      if (deps.staging.listEntries !== undefined && sweepOptions?.scopes !== undefined) {
+        let remaining = orphanKeyLimit;
+        for (const scope of sweepOptions.scopes) {
+          if (remaining <= 0) break;
+          const entries = await deps.staging.listEntries(stagingPrefix(scope));
+          for (const entry of entries) {
+            if (remaining <= 0) break;
+            const uploadId = entry.key.slice(entry.key.lastIndexOf('/') + 1);
+            const session = await deps.sessions.get(uploadId);
+            if (session !== undefined && (session.state === 'open' || session.state === 'committed')) {
+              continue;
+            }
+            if (new Date(entry.lastModified).getTime() + orphanGraceMs > at.getTime()) continue;
+            try {
+              await deps.staging.delete(entry.key);
+              report.orphanKeys.push(entry.key);
+              remaining -= 1;
+            } catch (error) {
+              report.failures.push({ uploadId, error: String(error) });
+            }
+          }
+        }
+      }
+      emitSummary('staging_orphans_deleted', report.orphanKeys.length);
+      // Pass 4: browser pages past expires_at (rows kept for audit).
+      if (deps.pages !== undefined) {
+        for (const row of await deps.pages.listExpiredPages(at)) {
+          try {
+            await deps.pages.markExpired(row.pageSessionId);
+            report.pagesExpired.push(row.pageSessionId);
+          } catch (error) {
+            report.failures.push({ uploadId: row.pageSessionId, error: String(error) });
+          }
+        }
+      }
+      emitSummary('upload_pages_expired', report.pagesExpired.length);
       return report;
     },
   };
