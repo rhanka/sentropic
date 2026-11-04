@@ -3,12 +3,28 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { PoolClient } from 'pg';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { SQL } from 'drizzle-orm';
-import { createPostgresIdentityUnitOfWorkV1, IdentityCustodyErrorV1,
-  type IdentityTransactionV1, type PostgresIdentityHostV1 } from '@sentropic/cluster-mesh';
-import { pool, type db } from '../../db/client';
-import { createCmScopedHostClient } from './cm-host-scope';
+import { createPostgresIdentityUnitOfWorkV1, IdentityCustodyErrorV1, PostgresCustodyHandle,
+  type CustodyOpHost, type IdentityTransactionV1, type PostgresIdentityBindingV1,
+  type PostgresIdentityHostV1 } from '@sentropic/cluster-mesh';
+import { pool, type CompatDbMethods } from '../../db/client';
+import { aliasCmHostScope, createCmScopedHostClient } from './cm-host-scope';
 
-export type CmIdentityTransaction = IdentityTransactionV1<PoolClient>;
+/** Request host: the pooled connection plus the custody stores/journal the CM V2 flows require. */
+export type AppCustodyHost = PoolClient & CustodyOpHost;
+export type CmIdentityTransaction = IdentityTransactionV1<AppCustodyHost>;
+
+/** Assemble the CM V2 host over the request's own connection (same transaction, no new capability). */
+export const createAppCustodyHost = (
+  scopedClient: PoolClient,
+  session: PostgresIdentityBindingV1<PoolClient>['session'],
+): AppCustodyHost => {
+  const handle = new PostgresCustodyHandle('cm_identity', session);
+  const hybrid = Object.create(scopedClient) as AppCustodyHost;
+  Object.assign(hybrid, { profile: handle.profile, stores: handle.stores,
+    journal: handle.journal, raw: handle.raw, schema: 'cm_identity' });
+  aliasCmHostScope(scopedClient, hybrid);
+  return hybrid;
+};
 export const cmRequestWriteOptions = {
   mode: 'write', purpose: 'request', deadlineMs: 10_000, maxAttempts: 3,
 } as const;
@@ -17,7 +33,7 @@ export const cmRequestReadOptions = {
 } as const;
 
 /** r6 §6.4: every CM slice and app participant borrows this one connection. */
-const host: PostgresIdentityHostV1<PoolClient> = {
+const host: PostgresIdentityHostV1<AppCustodyHost> = {
   async runSerializable(options, operation) {
     const client = await pool.connect();
     const scoped = createCmScopedHostClient(client);
@@ -27,12 +43,13 @@ const host: PostgresIdentityHostV1<PoolClient> = {
       await client.query(options.readOnly ? 'BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY'
         : 'BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
       await client.query("SELECT set_config('statement_timeout', $1, true)", [String(options.deadlineMs)]);
+      const session: PostgresIdentityBindingV1<AppCustodyHost>['session'] = { async execute(statement) {
+        const result = await scoped.client.query(statement.text, [...statement.values ?? []]);
+        return { rows: result.rows, rowCount: result.rowCount };
+      } };
       const result = await operation({
-        transactionId: randomUUID(), hostTransaction: scoped.client, readOnly: options.readOnly,
-        session: { async execute(statement) {
-          const result = await scoped.client.query(statement.text, [...statement.values ?? []]);
-          return { rows: result.rows, rowCount: result.rowCount };
-        } },
+        transactionId: randomUUID(), hostTransaction: createAppCustodyHost(scoped.client, session),
+        readOnly: options.readOnly, session,
       });
       scoped.seal();
       committing = true;
@@ -81,10 +98,10 @@ export const runCmIdentityRead = <T>(operation: (tx: CmIdentityTransaction) => P
 };
 
 /** Existing app adapters also use all/run/get; each method stays on this executor. */
-export const withAppDatabaseMethods = (database: NodePgDatabase): typeof db => Object.assign(database, {
+export const withAppDatabaseMethods = (database: NodePgDatabase): NodePgDatabase & CompatDbMethods => Object.assign(database, {
   all: async (query: SQL): Promise<unknown[]> => (await database.execute(query)).rows,
   run: async (query: SQL): Promise<unknown> => database.execute(query),
   get: async (query: SQL): Promise<unknown> => (await database.execute(query)).rows[0],
 });
-export const bindCmAppDatabase = (tx: CmIdentityTransaction): typeof db =>
+export const bindCmAppDatabase = (tx: CmIdentityTransaction): NodePgDatabase & CompatDbMethods =>
   withAppDatabaseMethods(drizzle(tx.hostTransaction));

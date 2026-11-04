@@ -1,7 +1,7 @@
 import { AccountTransitionError, AdminUserProtectedError, IdentityCustodyErrorV1, IdentityNotFoundError,
   SelfActionForbiddenError, type BusinessDeletionHandlerIdV1,
   type PersonDeletionAuthorizationPortV1 } from '@sentropic/cluster-mesh';
-import type { PoolClient } from 'pg';
+import type { AppCustodyHost } from './cm-transaction';
 
 export class CmIdentityForbiddenError extends Error {
   readonly code = 'identity_forbidden';
@@ -9,7 +9,7 @@ export class CmIdentityForbiddenError extends Error {
 }
 
 /** A fixed route selects this authorizer; no command can choose another handler. */
-export const cmAccountDeletionAuthorization = (handlerId: BusinessDeletionHandlerIdV1): PersonDeletionAuthorizationPortV1<PoolClient> => ({
+export const cmAccountDeletionAuthorization = (handlerId: BusinessDeletionHandlerIdV1): PersonDeletionAuthorizationPortV1<AppCustodyHost> => ({
   async assertAllowed(command, tx) {
     const target = await tx.stores.accounts.findAccount(command.userId);
     if (!target) throw new IdentityNotFoundError('user', command.userId);

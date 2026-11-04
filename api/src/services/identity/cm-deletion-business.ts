@@ -1,5 +1,5 @@
 import { IdentityCustodyErrorV1, type BusinessDeletionHandlerIdV1, type BusinessDeletionPortV1 } from '@sentropic/cluster-mesh';
-import type { PoolClient } from 'pg';
+import type { AppCustodyHost } from './cm-transaction';
 import { prepareCmBusinessDeletion } from './cm-deletion-plan';
 import { assertCmBusinessReferenceInventory, assertNoCmBusinessSubjectReferences,
   deleteCmBusinessSubjectReferences } from './cm-deletion-business-references';
@@ -12,7 +12,7 @@ const sum = (left: Readonly<Record<string, number>>, right: Readonly<Record<stri
 };
 
 /** The coordinator supplies the one host handle; no app identity cleanup is duplicated here. */
-export const createAppCmBusinessDeletion = (handlerId: BusinessDeletionHandlerIdV1): BusinessDeletionPortV1<PoolClient> => ({
+export const createAppCmBusinessDeletion = (handlerId: BusinessDeletionHandlerIdV1): BusinessDeletionPortV1<AppCustodyHost> => ({
   handlerId,
   async prepare(command, tx) {
     await assertCmBusinessReferenceInventory(tx);

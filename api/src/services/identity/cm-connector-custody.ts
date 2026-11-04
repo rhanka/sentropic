@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { IdentityCustodyErrorV1, type ConnectorRevocationCustodyPortV1 } from '@sentropic/cluster-mesh';
-import type { PoolClient } from 'pg';
-import type { CmIdentityTransaction } from './cm-transaction';
+import type { AppCustodyHost, CmIdentityTransaction } from './cm-transaction';
 import { readConnectorCapability, sealConnectorCapability, type ConnectorCustodyEnvelope } from './cm-connector-envelope';
 import { connectorCustodyAssertions, readConnectorEnvelope } from './cm-connector-custody-records';
 import { invalidConnectorCustody, readSourceConnectorCapability, requireConnectorProvider } from './cm-connector-custody-values';
 
-type Port = ConnectorRevocationCustodyPortV1<PoolClient>;
+type Port = ConnectorRevocationCustodyPortV1<AppCustodyHost>;
 type Capture = Parameters<Port['capture']>[0];
 export interface ConnectorSourceScope {
   readonly id: string; readonly userId: string; readonly workspaceId: string; readonly provider: string;
