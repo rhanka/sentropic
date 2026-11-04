@@ -37,7 +37,7 @@ sql -d preprod -c 'SELECT pg_reload_conf()'
 fixture='0000000000000000000000000000000000000000000000000000000000000000'
 for invalid in '' synthetic-workload-credential-dev-only synthetic-preprod-workload-credential-for-tests "${fixture}0" "${fixture%0}" "${fixture%0}g" "${fixture%0}A" "$fixture
 "; do
-  IMMO_MCP_WORKLOAD_CLIENT_SECRET="$invalid" reject 'invalid workload credential' workload_credential_invalid -d preprod -v dry_run=0 -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v expected_clients=4 -f "$import"
+  IMMO_MCP_WORKLOAD_CLIENT_SECRET="$invalid" reject 'invalid workload credential' workload_credential_invalid -d preprod -v dry_run=0 -v expected_accounts=8 -v expected_consents=1 -v expected_clients=4 -f "$import"
 done
 export IMMO_MCP_WORKLOAD_CLIENT_SECRET="$fixture"
 fixture_hash=$(printf '%s' "$fixture" | sha256sum); fixture_hash=${fixture_hash%% *}
