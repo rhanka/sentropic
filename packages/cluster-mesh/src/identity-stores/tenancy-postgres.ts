@@ -5,12 +5,12 @@
 import { IdentityNotFoundError, WorkspaceAlreadyEnrolledError } from '../identity-contracts/errors.js';
 import { IdentityConflictError } from '../identity-contracts/errors.js';
 import type {
-  OAuthTenantStore,
   TenantMembershipStore,
   TenantRegistryStore,
   WorkspaceDirectoryStore,
   WorkspaceMembershipStore,
 } from '../identity-contracts/ports.js';
+import type { OAuthTenantStoreV1 } from '../identity-contracts/oauth-reads.js';
 import type {
   OAuthConsentRecord,
   ServiceClientBinding,
@@ -88,12 +88,27 @@ const mapWorkspaceMember = (row: Record<string, unknown>): WorkspaceMembershipRe
   role: text(row['role']) as WorkspaceMembershipRecord['role'],
 });
 
+const mapConsent = (row: Record<string, unknown>): OAuthConsentRecord => ({
+  consentId: text(row['consent_id']),
+  tenantId: text(row['tenant_id']),
+  userId: text(row['user_id']),
+  clientId: text(row['client_id']),
+  grantedAt: text(row['granted_at']),
+  revokedAt: optionalText(row['revoked_at']),
+});
+
+const mapServiceClient = (row: Record<string, unknown>): ServiceClientBinding => ({
+  clientId: text(row['client_id']),
+  tenantId: text(row['tenant_id']),
+  boundAt: text(row['bound_at']),
+});
+
 export interface PostgresIdentityStores {
   readonly tenants: TenantRegistryStore;
   readonly memberships: TenantMembershipStore;
   readonly workspaces: WorkspaceDirectoryStore;
   readonly workspaceMembers: WorkspaceMembershipStore;
-  readonly oauth: OAuthTenantStore;
+  readonly oauth: OAuthTenantStoreV1;
 }
 
 /** Applies the A2.2 DDL on the given client (idempotent). */
@@ -336,6 +351,32 @@ export function createPostgresIdentityStores(
           }),
         );
       },
-    } satisfies OAuthTenantStore,
+      async findConsent(consentId) {
+        const result = await client.query(`SELECT * FROM ${consents} WHERE consent_id = $1`, [consentId]);
+        const row = result.rows[0];
+        return row ? mapConsent(row) : null;
+      },
+      async findConsentForGrant(input) {
+        const result = await client.query(
+          `SELECT * FROM ${consents} WHERE user_id = $1 AND client_id = $2 AND tenant_id = $3 AND revoked_at IS NULL
+           ORDER BY granted_at DESC, consent_id COLLATE "C" DESC LIMIT 1`,
+          [input.userId, input.clientId, input.tenantId],
+        );
+        const row = result.rows[0];
+        return row ? mapConsent(row) : null;
+      },
+      async listConsentsForUser(userId) {
+        const result = await client.query(
+          `SELECT * FROM ${consents} WHERE user_id = $1 ORDER BY granted_at ASC, consent_id COLLATE "C" ASC`,
+          [userId],
+        );
+        return result.rows.map(mapConsent);
+      },
+      async findServiceClientBinding(clientId) {
+        const result = await client.query(`SELECT * FROM ${serviceClients} WHERE client_id = $1`, [clientId]);
+        const row = result.rows[0];
+        return row ? mapServiceClient(row) : null;
+      },
+    } satisfies OAuthTenantStoreV1,
   };
 }
