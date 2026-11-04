@@ -13,17 +13,19 @@ import { G2_SCOPE, G2_ACCOUNTS, expectNoInternalLeak, g2Profile, g2WorldWith } f
 import { createTransportWorld } from './fixtures/transport-world.js';
 import { createMemoryDirectory } from './fixtures/memory-directory.js';
 
-const profileWithVersions = () => ({
+const profileWithVersions = (envelope: 1 | 2 = 1) => ({
   ...g2Profile(),
+  ...(envelope === 2 ? { profileRevisionId: 'immo-artifacts.r1b', resultEnvelopeVersion: 2 as const,
+    requireExpectedCurrentReleaseId: true as const } : {}),
   selectedCapabilities: [...g2Profile().selectedCapabilities, 'artifacts_list_versions'],
 });
 
-async function versionsWorld() {
+async function versionsWorld(envelope: 1 | 2 = 1) {
   const directory = createMemoryDirectory(G2_SCOPE, G2_ACCOUNTS);
   const world = createTransportWorld(
     G2_ACCOUNTS.map((account) => account.internalId),
     G2_SCOPE,
-    { profile: profileWithVersions() as unknown as Parameters<typeof createTransportWorld>[2]['profile'], directory },
+    { profile: profileWithVersions(envelope) as unknown as Parameters<typeof createTransportWorld>[2]['profile'], directory },
   );
   const ensured = await world.http('/ensure', { bindingName: 'page', idempotencyKey: 'ensure' });
   if (!ensured.ok) throw new Error('ensure failed');
@@ -37,6 +39,7 @@ async function versionsWorld() {
   const publish = (actor: string, key: string) => world.mcp.invoke({ tool: 'artifacts_publish',
     invocation: world.invocation(actor),
     args: { artifactId, idempotencyKey: key,
+      ...(envelope === 2 ? { expectedCurrentReleaseId: null } : {}),
       files: [{ path: 'index.html', mimeType: 'text/html', text: '<h1>hello</h1>' }] } });
   return {
     world, directory, artifactId,
@@ -120,6 +123,36 @@ describe('R1 — no raw internal id in any output', () => {
     const releases = (res.body as { releases: { author: unknown }[] }).releases;
     expect(releases).toHaveLength(1);
     expect(releases[0].author).toBe(UNKNOWN_USER_REF);
+    expectNoInternalLeak(res.body);
+  });
+
+  it('projects a known author to userRef in list_versions v2 without leaking the sub', async () => {
+    const v = await versionsWorld(2);
+    expect((await v.publish('idp-sub-alice', 'r1b-ver-1')).status).toBe(201);
+    expect((await v.setAccess({ action: 'grant', principalId: 'ref-farid', grant: 'read', idempotencyKey: 'r1b-ver-2' })).status)
+      .toBe(200);
+
+    const res = await v.versions('idp-sub-farid');
+    expect(res.status).toBe(200);
+    // Under the v2 envelope handle() wraps the payload as { ok, output, ... }.
+    const output = (res.body as { output: { versions: { authorPrincipalId: unknown }[] } }).output;
+    expect(output.versions).toHaveLength(1);
+    expect(output.versions[0].authorPrincipalId).toBe('ref-alice');
+    expectNoInternalLeak(res.body);
+  });
+
+  it('projects a deleted author to unknown in list_versions v2', async () => {
+    const v = await versionsWorld(2);
+    expect((await v.publish('idp-sub-alice', 'r1b-del-1')).status).toBe(201);
+    expect((await v.setAccess({ action: 'grant', principalId: 'ref-farid', grant: 'read', idempotencyKey: 'r1b-del-2' })).status)
+      .toBe(200);
+    v.directory.deletePrincipal('idp-sub-alice');
+
+    const res = await v.versions('idp-sub-farid');
+    expect(res.status).toBe(200);
+    const output = (res.body as { output: { versions: { authorPrincipalId: unknown }[] } }).output;
+    expect(output.versions).toHaveLength(1);
+    expect(output.versions[0].authorPrincipalId).toBe(UNKNOWN_USER_REF);
     expectNoInternalLeak(res.body);
   });
 });
