@@ -71,7 +71,9 @@ spec:
             - name: replica-sync
               image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
               workingDir: /work/in
-              command: ["node", "/app/dist/scripts/identity-replica-sync.js", "--relay-dir=/work/in"]
+              # The phase-2 shell consumes the runner stdout from this file; keep
+              # the redirect (dash-safe, no pipe) so a runner crash still surfaces.
+              command: ["sh", "-c", "node /app/dist/scripts/identity-replica-sync.js --relay-dir=/work/in > /work/cm-sync.log 2>&1; code=$?; cat /work/cm-sync.log; exit $code"]
               env:
                 - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
                 - { name: DATABASE_URL, value: "postgres://app:$(POSTGRES_PASSWORD)@postgres:5432/app" }
