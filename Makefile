@@ -779,6 +779,10 @@ check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every
 check-down-volumes: ## Assert make down-volumes refuses empty/dev/non-test ENV and dry-runs down --volumes --remove-orphans for test-*/e2e-* (BRDV-EX1)
 	@./scripts/check-down-volumes-guard.sh
 
+.PHONY: check-disk-hygiene
+check-disk-hygiene: ## Self-test disk-hygiene targets: dry-runs, keep-storage default/override, root-owned skip (DH01-EX1)
+	@./scripts/check-disk-hygiene.sh
+
 # BRCI-EX1 — publishable manifest guard (spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md).
 # Every npm pack/publish lane inspects the real archive; tools are pinned in ephemeral dirs.
 MANIFEST_GUARD_IMAGE ?= $(LLM_MESH_NODE_IMAGE)
@@ -2978,6 +2982,102 @@ ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 te
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down --volumes --remove-orphans
 endif
+
+# DH01-EX1 (conductor-requested 2026-11-04, disk incident: host at 98%, builder
+# cache +7.3G in 20 minutes): disk-hygiene targets. Additive only; no existing
+# recipe changed. `docker-builder-prune` caps the builder cache, `disk-hygiene`
+# stops a TEST env (volumes included) then prunes the builder cache, and the
+# worktree targets reclaim merged tmp/worktrees (safe defaults: DRY_RUN=1).
+DOCKER_BUILDER_KEEP ?= 5GB
+
+.PHONY: docker-builder-prune
+docker-builder-prune: ## Prune Docker builder cache, keeping DOCKER_BUILDER_KEEP (default 5GB)
+	docker builder prune -f --keep-storage "$(DOCKER_BUILDER_KEEP)"
+
+.PHONY: disk-hygiene
+disk-hygiene: down-volumes docker-builder-prune ## Stop TEST env volumes (ENV=test-*/e2e-* LAST) then prune builder cache
+
+.PHONY: worktrees-prune-merged
+worktrees-prune-merged: ## Remove merged tmp/worktrees (skips root-owned/dirty; DRY_RUN=1 default, DRY_RUN=0 removes)
+	@dry_run="$${DRY_RUN:-1}"; \
+	base="tmp/worktrees"; \
+	if [ ! -d "$$base" ]; then echo "No $$base directory; nothing to do."; exit 0; fi; \
+	git fetch origin main --quiet 2>/dev/null || true; \
+	registered="$$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"; \
+	removed=""; skipped=""; \
+	for wt in "$$base"/*/; do \
+	  [ -d "$$wt" ] || continue; \
+	  wt="$${wt%/}"; \
+	  if ! printf '%s\n' "$$registered" | grep -qx "$$PWD/$$wt"; then \
+	    skipped="$$skipped\n$$wt (skip: not a registered git worktree)"; \
+	    continue; \
+	  fi; \
+	  head="$$(git -C "$$wt" rev-parse HEAD)"; \
+	  if ! git merge-base --is-ancestor "$$head" origin/main 2>/dev/null; then \
+	    skipped="$$skipped\n$$wt (skip: HEAD not merged into origin/main)"; \
+	    continue; \
+	  fi; \
+	  if [ -n "$$(find "$$wt" -maxdepth 4 -user root -print -quit 2>/dev/null)" ]; then \
+	    skipped="$$skipped\n$$wt (skip: root-owned files present)"; \
+	    continue; \
+	  fi; \
+	  if [ -n "$$(git -C "$$wt" status --porcelain 2>/dev/null)" ]; then \
+	    skipped="$$skipped\n$$wt (skip: uncommitted changes)"; \
+	    continue; \
+	  fi; \
+	  if [ "$$dry_run" = "1" ]; then \
+	    removed="$$removed\n$$wt (would remove)"; \
+	  else \
+	    if git worktree remove "$$wt"; then \
+	      removed="$$removed\n$$wt (removed)"; \
+	    else \
+	      skipped="$$skipped\n$$wt (skip: git worktree remove failed)"; \
+	    fi; \
+	  fi; \
+	done; \
+	if [ "$$dry_run" != "1" ]; then git worktree prune; fi; \
+	printf 'Removed:%b\n' "$$removed"; \
+	printf 'Skipped:%b\n' "$$skipped"; \
+	if [ "$$dry_run" = "1" ]; then echo 'Dry run (DRY_RUN=1 default). Re-run with DRY_RUN=0 to remove.'; fi
+
+.PHONY: worktrees-purge-root-residue
+worktrees-purge-root-residue: ## Delete root-owned leftovers of merged/half-removed tmp/worktrees in a root container (DRY_RUN=1 default, DRY_RUN=0 deletes)
+	@dry_run="$${DRY_RUN:-1}"; \
+	base="tmp/worktrees"; \
+	if [ ! -d "$$base" ]; then echo "No $$base directory; nothing to do."; exit 0; fi; \
+	git fetch origin main --quiet 2>/dev/null || true; \
+	registered="$$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"; \
+	rm_list=""; reasons=""; skipped=""; \
+	for wt in "$$base"/*/; do \
+	  [ -d "$$wt" ] || continue; \
+	  wt="$${wt%/}"; \
+	  name="$${wt##*/}"; \
+	  case "$$name" in *[!A-Za-z0-9._-]*) skipped="$$skipped\n$$wt (skip: unsafe name)"; continue;; esac; \
+	  if [ "$$name" = "main-ro" ]; then skipped="$$skipped\n$$wt (skip: protected main-ro)"; continue; fi; \
+	  if printf '%s\n' "$$registered" | grep -qx "$$PWD/$$wt"; then \
+	    if ! git -C "$$wt" rev-parse HEAD >/dev/null 2>&1; then reason="half-removed (stale registration)"; \
+	    else \
+	      head="$$(git -C "$$wt" rev-parse HEAD)"; \
+	      if git merge-base --is-ancestor "$$head" origin/main 2>/dev/null; then reason="merged"; \
+	      else skipped="$$skipped\n$$wt (skip: active worktree, HEAD not merged into origin/main)"; continue; fi; \
+	    fi; \
+	  else \
+	    reason="half-removed (not registered)"; \
+	  fi; \
+	  if [ -z "$$(find "$$wt" -user root -print -quit 2>/dev/null)" ]; then \
+	    skipped="$$skipped\n$$wt (skip: no root-owned residue)"; \
+	    continue; \
+	  fi; \
+	  rm_list="$$rm_list $$wt"; \
+	  reasons="$$reasons\n$$wt (would delete: $$reason, root-owned residue present)"; \
+	done; \
+	if [ -z "$$rm_list" ]; then echo "No root-owned residue to purge under $$base."; printf 'Skipped:%b\n' "$$skipped"; exit 0; fi; \
+	printf 'Planned deletions:%b\n' "$$reasons"; \
+	printf 'Skipped:%b\n' "$$skipped"; \
+	if [ "$$dry_run" = "1" ]; then echo 'Dry run (DRY_RUN=1 default). Re-run with DRY_RUN=0 to delete.'; exit 0; fi; \
+	docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc "rm -rf$$rm_list"; \
+	git worktree prune; \
+	echo "Purged:$$rm_list"
 
 # -----------------------------------------------------------------------------
 # Standalone IdP (BR-39m Phase A0 — exception BR39m-EX1)
