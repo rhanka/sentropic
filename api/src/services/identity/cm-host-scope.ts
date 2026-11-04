@@ -100,6 +100,12 @@ export const assertCmHostHealthy = (client: PoolClient): void => {
   if (scope.failure !== undefined) throw scope.failure;
 };
 
+/** Share one transaction scope with a derived host handle (same connection, no new capability). */
+export const aliasCmHostScope = (client: PoolClient, alias: PoolClient): void => {
+  const scope = scopes.get(client);
+  if (scope) scopes.set(alias, scope);
+};
+
 /** Retained handlers may catch a port error; the callback must still roll back or restart. */
 export function createCmPortFailureFence(client: PoolClient) {
   const copies = new WeakMap<object, object>();

@@ -13,7 +13,8 @@ import { importLegacyRemoteIntents } from './cm-import-remote';
 import { reconcileA4RemoteSnapshot } from './cm-import-remote-snapshot';
 import { mapA4IdentitySource, readA4IdentitySource } from './cm-import-source';
 import { invalidA4Import } from './cm-import-values';
-import { cmIdentityUnitOfWork } from './cm-transaction';
+import { cmIdentityUnitOfWork, createAppCustodyHost, type AppCustodyHost } from './cm-transaction';
+import { createCmScopedHostClient } from './cm-host-scope';
 import { rebindA4BusinessReferences } from './cm-cutover-references';
 
 /** One caller-owned SERIALIZABLE transaction: schema, capture, typed import and D11 evidence. */
@@ -31,11 +32,13 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
     ...cmCutoverCheckpointReceipt(config.checkpoint), sourceInventory: source.inventory,
     historicalFields: a4CheckpointHistoricalFields, remoteInventory: remote.inventory, sourceKeyState: config.sourceKeyState,
   })]);
-  const binding: PostgresIdentityBindingV1<PoolClient> = { transactionId: randomUUID(), hostTransaction: client,
-    readOnly: false, session: { async execute(statement) {
-      const result = await client.query(statement.text, [...statement.values ?? []]);
-      return { rows: result.rows, rowCount: result.rowCount };
-    } } };
+  const scoped = createCmScopedHostClient(client).client;
+  const session: PostgresIdentityBindingV1<AppCustodyHost>['session'] = { async execute(statement) {
+    const result = await client.query(statement.text, [...statement.values ?? []]);
+    return { rows: result.rows, rowCount: result.rowCount };
+  } };
+  const binding: PostgresIdentityBindingV1<AppCustodyHost> = { transactionId: randomUUID(),
+    hostTransaction: createAppCustodyHost(scoped, session), readOnly: false, session };
   await client.query('CREATE SCHEMA IF NOT EXISTS cm_identity');
   // Use merged schema statements; the old A2.2 helper's transaction wrapper cannot nest here.
   const tenancy = identityA22PostgresDdl('cm_identity');
