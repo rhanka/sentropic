@@ -16,7 +16,7 @@ describe('physical app registry installation', () => {
       const meshArtifact = fileURLToPath(import.meta.resolve('@sentropic/artifacts/mcp',
         import.meta.resolve('@sentropic/cluster-mesh')));
       assert.equal(realpathSync(apiArtifact), realpathSync(meshArtifact));
-      assert.equal(ARTIFACTS_PROVIDER_VERSION, '0.2.14');
+      assert.equal(ARTIFACTS_PROVIDER_VERSION, '0.2.15');
       const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
       const result = await compileAppMcpRegistry({
         artifacts: { profile, app: { profileDigest: profile.profileDigest,
@@ -25,7 +25,7 @@ describe('physical app registry installation', () => {
           createInvocation: () => { throw new Error('Compilation must not bind'); } },
         selection: ['sentropic.artifacts'], configurations: { 'sentropic.artifacts': {} }, bindings: {},
         compatibility: { 'sentropic.artifacts': {
-          manifestDigest: '8e80ebf4648deb663d9924099345f6cf9413a03e8b5051a182db769693d3c618' } },
+          manifestDigest: 'bb75197ab5101938bebe8637f0abd5a03a5a1a848563b6a7e72249c84c1eddd1' } },
       });
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.deepEqual([...result.registry.tools.keys()],
@@ -51,7 +51,7 @@ describe('physical app registry installation', () => {
             createInvocation: () => { throw new Error('No binding'); } },
           selection: ['sentropic.artifacts'], configurations: { 'sentropic.artifacts': {} }, bindings: {},
           compatibility: { 'sentropic.artifacts': {
-            manifestDigest: '8e80ebf4648deb663d9924099345f6cf9413a03e8b5051a182db769693d3c618' } },
+            manifestDigest: 'bb75197ab5101938bebe8637f0abd5a03a5a1a848563b6a7e72249c84c1eddd1' } },
         });
         if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
         if (result.registry.tools.size !== 4) throw new Error('APP-P1 tool count');
