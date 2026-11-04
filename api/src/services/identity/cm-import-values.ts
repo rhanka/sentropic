@@ -29,3 +29,10 @@ export function sourceStringArray(value: unknown): readonly string[] | null {
   try { parsed = JSON.parse(sourceText(value)); } catch { return invalidA4Import(); }
   return Array.isArray(parsed) && parsed.every(item => typeof item === 'string') ? parsed : invalidA4Import();
 }
+/** Driver-parsed list (e.g. a json_agg column): every element must be text, never a raw literal. */
+export function sourceTextList(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === 'string')) {
+    return invalidA4Import();
+  }
+  return [...value];
+}
