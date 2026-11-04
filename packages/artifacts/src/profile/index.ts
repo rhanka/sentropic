@@ -125,6 +125,8 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       if (method === 'POST' && path === '/list') name = 'artifacts_list';
       if (method === 'POST' && path === '/get_source') name = 'artifacts_get_source';
       if (method === 'POST' && path === '/set_access') name = 'artifacts_set_access';
+      if (method === 'POST' && path === '/lookup_people') name = 'artifacts_lookup_people';
+      if (method === 'POST' && path === '/list_access') name = 'artifacts_list_access';
       if (method === 'POST' && path === '/delete') name = 'artifacts_delete';
       if (method === 'POST' && path === '/revert') name = 'artifacts_revert';
       if (method === 'POST' && path === '/list_versions') name = 'artifacts_list_versions';
