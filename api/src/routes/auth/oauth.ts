@@ -14,7 +14,6 @@ import { createFederationAdapter } from '../../services/auth/federation-adapter'
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
 import { createOAuthRefreshAdapter } from '../../services/auth/oauth-refresh-adapter';
-import { createServiceTenantAdapter } from '../../services/auth/service-tenant-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { countCmUsersWithRole } from '../../services/identity/cm-users';
@@ -181,10 +180,10 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
     markUsed: unsupportedOAuthPort,
   },
   oauthStateStore: createOauthStateStoreAdapter({ transaction }),
-  // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint.
-  // Lot A4: always strict — validates the `tenant` selector against the client's authorized
-  // set (fixed cm_service_clients binding ∪ enrollments).
-  serviceTenant: createServiceTenantAdapter(transaction, boundPorts ? () => boundPorts().auditLog : undefined),
+  // Cutover (P3): the S2S on-behalf-of (OBO) tenant selector is owned by the
+  // cluster mesh (binding `serviceTenancy`, CM issuer over tx.stores). No app
+  // selector survives here: the binding constructs ports.serviceTenant itself
+  // and refuses a hostPorts.serviceTenant entry outright.
   tenant: createCmOAuthTenantPort(transaction),
   random: {
     bytes: (length) => new Uint8Array(randomBytes(length)),
