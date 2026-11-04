@@ -364,6 +364,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     const { mimeType, bytes } = await readManifestFile(artifactId, carryFromReleaseId,
       asset.sourcePath as string | undefined);
     return { mimeType, bytes, origin: `carry:${carryFromReleaseId}` };
+  }
+
   /**
    * G1 management visibility for `set_access` (converged-r2 §2.3 order (2)):
    * readers pass as before; any other actor gets `not_found` unless it is an
