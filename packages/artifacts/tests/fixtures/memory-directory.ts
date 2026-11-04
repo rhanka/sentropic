@@ -25,6 +25,10 @@ export interface MemoryDirectoryAccount {
 
 export interface MemoryDirectory extends PrincipalDirectoryPort {
   setApproved(internalId: string, value: boolean): void;
+  /** R5 test double for a deleted account: the person is gone (describe
+   * returns undefined, search excludes it) but the userRef tombstone still
+   * resolves so the dormant grant can be revoked as cleanup. */
+  deletePrincipal(internalId: string): void;
   readonly accounts: readonly (MemoryDirectoryAccount & { approved: boolean; scopes: readonly string[] })[];
 }
 
@@ -36,6 +40,7 @@ export function createMemoryDirectory(scope: string, accounts: readonly MemoryDi
   const state = accounts.map((account) => ({
     ...account, approved: account.approved ?? true, scopes: account.scopes ?? [scope],
   }));
+  const tombstones = new Map<string, { internalId: string; scopes: readonly string[] }>();
   const person = (account: (typeof state)[number]): DirectoryPerson =>
     ({ userRef: account.userRef, displayName: account.displayName, email: account.email });
   return {
@@ -43,6 +48,12 @@ export function createMemoryDirectory(scope: string, accounts: readonly MemoryDi
     setApproved(internalId, value) {
       const account = state.find((entry) => entry.internalId === internalId);
       if (account) account.approved = value;
+    },
+    deletePrincipal(internalId) {
+      const index = state.findIndex((entry) => entry.internalId === internalId);
+      if (index === -1) return;
+      const [removed] = state.splice(index, 1);
+      tombstones.set(removed.userRef, { internalId: removed.internalId, scopes: removed.scopes });
     },
     async searchPeople(scopeId, query, limit) {
       const needle = fold(query);
@@ -54,7 +65,9 @@ export function createMemoryDirectory(scope: string, accounts: readonly MemoryDi
     },
     async resolvePrincipal(scopeId, userRef) {
       const account = state.find((entry) => entry.userRef === userRef && entry.scopes.includes(scopeId));
-      return account?.internalId;
+      if (account) return account.internalId;
+      const tombstone = tombstones.get(userRef);
+      return tombstone && tombstone.scopes.includes(scopeId) ? tombstone.internalId : undefined;
     },
     async describePrincipal(_scopeId, principalId) {
       const account = state.find((entry) => entry.internalId === principalId);

@@ -39,10 +39,12 @@ describe('G2 MCP sharing tools — error ordering', () => {
       expect(res.status, label).toBe(422);
       expect(res.body, label).toEqual({ error: 'person_not_shareable' });
     }
-    // revoke of an unresolvable userRef is the same merged error (no probing)
+    // R5: revoke converges (absent grant or dormant target: no-op or removal,
+    // never a refusal that freezes the grant), so revoking an unresolvable
+    // userRef is a no-op success; only grant keeps the merged 422 above.
     const revoke = await g2.setAccess({ action: 'revoke', principalId: 'ref-unknown', idempotencyKey: 'ns-revoke' });
-    expect(revoke.status).toBe(422);
-    expect(revoke.body).toEqual({ error: 'person_not_shareable' });
+    expect(revoke.status).toBe(200);
+    expect(revoke.body).toMatchObject({ changed: false, grants: [] });
   });
 
   it('replays the same key across a policyRevision change without a parasitic 409', async () => {
