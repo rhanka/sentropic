@@ -922,51 +922,12 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const replay = await publication.replayFinalized(input);
           if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
           profile.validate(capability, args, request.idempotencyKey);
-          // Resolve the files/assets union BEFORE any commit step: one missing or
-          // digest-mismatched asset fails the whole publish and commits nothing.
-          const files: { path: string; mimeType: string; bytes: Uint8Array }[] = [];
-          const origins: Record<string, string> = {};
-          for (const file of (normalized.files ?? []) as Record<string, JsonValue>[]) {
-            const bytes = Uint8Array.from(file.bytes as number[]);
-            validateFileBytes(file.mimeType as string, bytes);
-            files.push({ path: file.path as string, mimeType: file.mimeType as string, bytes });
-            origins[file.path as string] = 'inline';
-          }
-          for (const asset of (normalized.assets ?? []) as Record<string, JsonValue>[]) {
-            const path = asset.path as string;
-            if (Object.hasOwn(asset, 'uploadId')) {
-              const staged = await deps.uploads!.sessions.getStagedFile(asset.uploadId as string);
-              if (staged === undefined || staged.artifactId !== artifactId) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'unknown upload' } } });
-              }
-              const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, staged.digest));
-              if (bytes === undefined || bytes.length !== staged.size ||
-                `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== staged.digest) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'staged blob missing or digest mismatch' } } });
-              }
-              validateFileBytes(staged.mimeType, bytes);
-              files.push({ path, mimeType: staged.mimeType, bytes });
-              origins[path] = `upload:${staged.uploadId}`;
-            } else {
-              const digest = asset.digest as string;
-              const size = asset.size as number;
-              const mimeType = asset.mimeType as string;
-              const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, digest));
-              if (bytes === undefined) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'blob missing' } } });
-              }
-              if (bytes.length !== size || `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== digest) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'size/digest mismatch' } } });
-              }
-              validateFileBytes(mimeType, bytes);
-              files.push({ path, mimeType, bytes });
-              origins[path] = 'cas';
-            }
-          }
+          // Resolve the files/assets union BEFORE any commit step: one missing,
+          // expired or digest-mismatched asset fails the whole publish and commits nothing.
+          const { files, origins } = await resolveBundleAssets(invocation, artifactId, {
+            files: (normalized.files ?? []) as Record<string, JsonValue>[],
+            assets: (normalized.assets ?? []) as Record<string, JsonValue>[],
+          }, { allowExtendedForms: false, keepUnmodifiedPaths: false, expectedCurrentReleaseId: null });
           const outcome = await publication.publishFinalized({
             ...input, source: { kind: 'inline-original' },
             profile: normalized.profile as Record<string, JsonValue>, files,
