@@ -284,42 +284,55 @@ export function createSqliteArtifactStore(db: SqliteDatabase, writer: SqliteWrit
     },
     async getArtifactAcl(artifactId: string): Promise<ArtifactAcl | undefined> {
       const { rows } = runQuery<{
-        owner_id: string; storage_scope_id: string; is_public: number; lifecycle_state: ArtifactState;
+        owner_id: string; storage_scope_id: string; is_public: number; access_mode: string | null;
+        lifecycle_state: ArtifactState;
         binding_name: string; created_at: string; updated_at: string | null; metadata: string | null;
       }>(
-        db, `SELECT owner_id, storage_scope_id, is_public, lifecycle_state, binding_name, created_at, updated_at, metadata
+        db, `SELECT owner_id, storage_scope_id, is_public, access_mode, lifecycle_state, binding_name, created_at, updated_at, metadata
           FROM artifacts WHERE id = $1`, [artifactId],
       );
       const row = rows[0];
       if (row === undefined) return undefined;
-      const grants = runQuery<{ principal_id: string; permission: AccessGrant }>(
-        db, 'SELECT principal_id, permission FROM artifact_access WHERE artifact_id = $1 ORDER BY principal_id', [artifactId],
+      const grants = runQuery<{ principal_id: string; permission: AccessGrant; created_at: string }>(
+        db, 'SELECT principal_id, permission, created_at FROM artifact_access WHERE artifact_id = $1 ORDER BY principal_id', [artifactId],
       );
       const metadata = row.metadata === null ? {} : (JSON.parse(row.metadata) as ArtifactMetadata);
+      // G1: access_mode is authoritative; is_public is its legacy projection.
+      const accessMode = (row.access_mode ?? (row.is_public === 1 ? 'platform' : 'restricted')) as ArtifactAcl['accessMode'];
       return {
         bindingName: row.binding_name, createdAt: row.created_at, updatedAt: row.updated_at,
         ...metadata,
         ownerId: row.owner_id,
         storageScopeId: row.storage_scope_id,
-        isPublic: row.is_public === 1,
+        isPublic: accessMode !== 'restricted',
+        accessMode,
         withdrawn: row.lifecycle_state === 'withdrawn',
-        grants: grants.rows.map((grant) => ({ principalId: grant.principal_id, grant: grant.permission })),
+        grants: grants.rows.map((grant) => ({ principalId: grant.principal_id, grant: grant.permission,
+          createdAt: grant.created_at })),
         ...(Object.keys(metadata).length === 0 ? {} : { metadata }),
       };
     },
     async putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void> {
+      // G1: write access_mode; is_public stays as its projection (never forced false).
+      const accessMode = acl.accessMode ?? (acl.isPublic ? 'platform' : 'restricted');
       await writer.tx(() => {
         runQuery(
-          db, `UPDATE artifacts SET is_public = $2, metadata = $4,
+          db, `UPDATE artifacts SET access_mode = $2, is_public = ($2 <> 'restricted'), metadata = $4,
             lifecycle_state = CASE WHEN $3 <> 0 THEN 'withdrawn'
               WHEN lifecycle_state = 'withdrawn' THEN 'active'
               ELSE lifecycle_state END
             WHERE id = $1`,
-          [artifactId, acl.isPublic ? 1 : 0, acl.withdrawn ? 1 : 0, JSON.stringify(acl.metadata ?? {})],
+          [artifactId, accessMode, acl.withdrawn ? 1 : 0, JSON.stringify(acl.metadata ?? {})],
         );
         runQuery(db, 'DELETE FROM artifact_access WHERE artifact_id = $1', [artifactId]);
         for (const grant of acl.grants) {
-          runQuery(db, 'INSERT INTO artifact_access (artifact_id, principal_id, permission) VALUES ($1, $2, $3)', [artifactId, grant.principalId, grant.grant]);
+          // Q1 schema invariant: a source grant exists only in restricted mode. A
+          // legacy platform/public artifact may still carry one; rewriting its ACL
+          // must not trip the source guard on re-insert, so the stale source grant
+          // is demoted to read — the grant row is kept, never dropped.
+          const permission = grant.grant === 'source' && accessMode !== 'restricted' ? 'read' : grant.grant;
+          runQuery(db, 'INSERT INTO artifact_access (artifact_id, principal_id, permission, created_at) VALUES ($1, $2, $3, COALESCE($4, strftime(\'%Y-%m-%dT%H:%M:%fZ\', \'now\')))',
+            [artifactId, grant.principalId, permission, grant.createdAt ?? null]);
         }
       });
     },
