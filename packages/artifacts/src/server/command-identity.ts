@@ -82,7 +82,8 @@ export function createArtifactCommand(profile: CompiledArtifactsProfile, name: s
   if (derivation.algorithm !== profile.profile.rules.keyDerivationAlgorithm) throw new Error('profile/derivation mismatch');
   const normalized = profile.validate(name, args, envelopeKey, options);
   if (!['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
-    'artifacts_commit_upload', 'artifacts_publish_bundle'].includes(name)) throw new ArtifactProfileInputError(true);
+    'artifacts_commit_upload', 'artifacts_publish_bundle',
+    'artifacts_publish_bundle_v2'].includes(name)) throw new ArtifactProfileInputError(true);
   const operation = name.slice('artifacts_'.length) as ArtifactCommandOperation;
   const { idempotencyKey, confirmationRef: _proof, ...payload } = normalized;
   const scopeBinding = authority.storageScopeId;
