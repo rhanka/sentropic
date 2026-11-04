@@ -15,6 +15,7 @@
  */
 import { errorBody } from '../http.js';
 import type { AclStore } from '../server/access.js';
+import type { ArtifactsMetrics } from '../server/metrics.js';
 import type { LifecycleService } from '../server/lifecycle.js';
 import { combineSharingPolicy, resolveSharingPolicy, type SharingPolicyPort } from '../server/ports.js';
 import type { PublicationBlobStore, PublicationService } from '../server/publication.js';
@@ -30,6 +31,8 @@ export interface ContentRequest {
   actorId?: string;
   cookie?: string;
   ticket?: string;
+  /** Raw HTTP Range header, mapped by the host; absent ⇒ whole file. */
+  range?: string;
 }
 
 export interface ContentResponse {
@@ -47,6 +50,8 @@ export interface ContentHandlerDeps {
   grants: GrantSigner;
   tickets: TicketService;
   baseDomain: string;
+  /** LOT 2 §D.3: `content_range_requests {result}`; absent ⇒ no-op. */
+  metrics?: ArtifactsMetrics;
   isApprovedAccount?: (principalId: string) => boolean | Promise<boolean>;
   /** G1 lock 2 (runtime): sharing policy per scope, fail-closed when absent. */
   sharingPolicy?: SharingPolicyPort;
@@ -84,10 +89,47 @@ export function createContentHandler(deps: ContentHandlerDeps) {
     return deps.lifecycle.canRead({ artifactId, state }, acl, subjectId, 'read', () => approved, policy);
   }
 
+  /**
+   * Files parity LOT 2 §B.4: RFC 9110 §14 single-range subset. Only the
+   * `bytes=` unit with one satisfiable range is honored; malformed or
+   * multi-range headers fall back to the whole file (never an error).
+   */
+  function parseRange(header: string | undefined, size: number):
+    { start: number; end: number } | 'full' | 'unsatisfiable' | 'ignore' {
+    if (header === undefined) return 'full';
+    const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+    if (match?.[1] === undefined || match[2] === undefined) return 'ignore';
+    if (match[1] === '' && match[2] === '') return 'ignore';
+    if (match[1] === '') {
+      // Suffix range: the last N bytes; longer than the file ⇒ the file.
+      const suffix = Number(match[2]);
+      if (!Number.isSafeInteger(suffix) || suffix <= 0) return 'unsatisfiable';
+      if (suffix >= size) return size === 0 ? 'unsatisfiable' : { start: 0, end: size - 1 };
+      return { start: size - suffix, end: size - 1 };
+    }
+    const start = Number(match[1]);
+    if (!Number.isSafeInteger(start) || start >= size) return 'unsatisfiable';
+    if (match[2] === '') return { start, end: size - 1 };
+    const end = Number(match[2]);
+    if (!Number.isSafeInteger(end) || end < start) return 'ignore';
+    return { start, end: Math.min(end, size - 1) };
+  }
+
+  async function rangeSlice(key: string, start: number, end: number): Promise<Uint8Array | undefined> {
+    const ranged = await deps.blobs.getBlobRange?.(key, start, end);
+    if (ranged !== undefined) {
+      // A short store read is distrusted: serve the whole file instead.
+      return ranged.length === end - start + 1 ? ranged : undefined;
+    }
+    const bytes = await deps.blobs.getBlob(key);
+    return bytes === undefined ? undefined : bytes.slice(start, end + 1);
+  }
+
   async function serveFile(
     artifactId: string,
     manifest: string,
     filePath: string,
+    rangeHeader: string | undefined,
   ): Promise<ContentResponse> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (acl === undefined) return fail(404);
@@ -96,16 +138,44 @@ export function createContentHandler(deps: ContentHandlerDeps) {
     const file = (parsed.files ?? []).find((entry) => entry.path === filePath);
     if (file === undefined || typeof file.digest !== 'string') return fail(404);
     const hex = file.digest.startsWith('sha256:') ? file.digest.slice(7) : file.digest;
-    const bytes = await deps.blobs.getBlob(`artifacts/${acl.storageScopeId}/blobs/sha256/${hex}`);
+    const key = `artifacts/${acl.storageScopeId}/blobs/sha256/${hex}`;
+    const mimeType = typeof file.mimeType === 'string' ? file.mimeType : 'application/octet-stream';
+    const size = typeof file.size === 'number' ? file.size : undefined;
+    const emitRange = (result: string): void => {
+      if (deps.metrics !== undefined && rangeHeader !== undefined) {
+        deps.metrics.emit({ name: 'content_range_requests', labels: { result } });
+      }
+    };
+    if (rangeHeader !== undefined && size !== undefined) {
+      const range = parseRange(rangeHeader, size);
+      if (range === 'unsatisfiable') {
+        emitRange('416');
+        const response = fail(416);
+        return { ...response, headers: { ...response.headers, 'content-range': `bytes */${size}` } };
+      }
+      if (range !== 'full' && range !== 'ignore') {
+        const bytes = await rangeSlice(key, range.start, range.end);
+        if (bytes === undefined) return fail(404);
+        emitRange('206');
+        return {
+          status: 206,
+          headers: { ...contentHeaders({ mimeType, size: bytes.length,
+            assetCacheSeconds: deps.assetCacheSeconds }),
+            'content-range': `bytes ${range.start}-${range.end}/${size}`,
+            'accept-ranges': 'bytes' },
+          bytes,
+        };
+      }
+      if (range === 'ignore') emitRange('ignored');
+    }
+    const bytes = await deps.blobs.getBlob(key);
     if (bytes === undefined) return fail(404);
-    if (typeof file.size === 'number' && bytes.length !== file.size) return fail(422);
+    if (size !== undefined && bytes.length !== size) return fail(422);
     return {
       status: 200,
-      headers: contentHeaders({
-        mimeType: typeof file.mimeType === 'string' ? file.mimeType : 'application/octet-stream',
-        size: bytes.length,
-        assetCacheSeconds: deps.assetCacheSeconds,
-      }),
+      headers: { ...contentHeaders({ mimeType, size: bytes.length,
+        assetCacheSeconds: deps.assetCacheSeconds }),
+        'accept-ranges': 'bytes' },
       bytes,
     };
   }
@@ -170,7 +240,7 @@ export function createContentHandler(deps: ContentHandlerDeps) {
       if (!(await canReadNow(artifactId, claims.subjectId))) return fail(404);
       const filePath = resolveContentPath(request.path);
       if (filePath === undefined || isServiceWorkerPath(filePath)) return fail(404);
-      return serveFile(artifactId, release.manifest, filePath);
+      return serveFile(artifactId, release.manifest, filePath, request.range);
   }
   return {
     async handle(request: ContentRequest): Promise<ContentResponse> {

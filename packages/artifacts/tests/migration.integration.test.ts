@@ -451,3 +451,46 @@ describe('0007_uploads migration (files parity LOT 1)', () => {
     ).rejects.toThrow(/check constraint|23514/);
   });
 });
+
+describe('0009_upload_pages migration (files parity LOT 2)', () => {
+  it('creates upload_pages, binds sessions to pages, and re-applies cleanly', async () => {
+    await client.query(migration('0009_upload_pages.sql'));
+    const { rows: tables } = await client.query<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'artifacts' AND tablename = 'upload_pages'`,
+    );
+    expect(tables).toHaveLength(1);
+    const artifact = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await client.query(
+      `INSERT INTO artifacts.upload_pages (id, artifact_id, storage_scope_id, owner_id,
+        token_hash, state, max_files, expires_at)
+       VALUES ('99999999-9999-4999-8999-999999999999', '${artifact}', 'scope-g1', 'owner-g1',
+        'tokhash', 'open', 3, now() + interval '20 minutes')`,
+    );
+    await client.query(
+      `INSERT INTO artifacts.uploads (id, max_size, mime_type, state, artifact_id, storage_scope_id,
+        owner_id, expires_at, page_session_id)
+       VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 64, 'image/png', 'open',
+        '${artifact}', 'scope-g1', 'owner-g1', now() + interval '1 day',
+        '99999999-9999-4999-8999-999999999999')`,
+    );
+    // Unknown page: refused by the FK.
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.uploads (id, max_size, mime_type, state, page_session_id)
+         VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 64, 'image/png', 'open',
+           '00000000-0000-4000-8000-000000000000')`,
+      ),
+    ).rejects.toThrow(/foreign key|23503/);
+    // Bogus page state: refused by the CHECK.
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.upload_pages (id, artifact_id, storage_scope_id, owner_id,
+          token_hash, state, max_files, expires_at)
+         VALUES ('11111111-1111-4111-8111-111111111111', '${artifact}', 'scope-g1', 'owner-g1',
+          'tokhash', 'bogus', 3, now())`,
+      ),
+    ).rejects.toThrow(/check constraint|23514/);
+    // Re-applying 0009 is idempotent.
+    await client.query(migration('0009_upload_pages.sql'));
+  });
+});

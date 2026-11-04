@@ -113,10 +113,25 @@ async function waitFor<T>(
 ): Promise<T> {
   const deadline = Date.now() + options.timeoutMs;
   let lastValue: T | undefined;
+  let drain: Promise<void> | null = null;
+
+  // Kick the workspace drain without awaiting it. Awaiting here would block this
+  // poll iteration until every queued live LLM call for the workspace finishes,
+  // starving the deadline check below so the vitest wall clock fires with an
+  // opaque "Test timed out" instead of this wait's own descriptive timeout.
+  const kickDrain = (workspaceId: string): void => {
+    if (drain) return;
+    drain = queueManager
+      .processJobsForWorkspace(workspaceId)
+      .catch(() => {})
+      .finally(() => {
+        drain = null;
+      });
+  };
 
   while (true) {
     if (options.failureScope?.workspaceId) {
-      await queueManager.processJobsForWorkspace(options.failureScope.workspaceId);
+      kickDrain(options.failureScope.workspaceId);
     }
 
     if (options.failureScope) {

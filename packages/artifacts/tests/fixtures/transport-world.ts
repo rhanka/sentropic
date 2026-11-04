@@ -7,6 +7,7 @@ import { createRadarKeyDerivation } from '../../src/server/command-identity.js';
 import { createArtifactCommitCoordinator } from '../../src/server/commit/coordinator.js';
 import type { ArtifactHostFailureMapper } from '../../src/server/failures.js';
 import type { CommitBarrierObserver } from '../../src/testing.js';
+import type { ArtifactsMetrics } from '../../src/server/metrics.js';
 import type { ArtifactInvocationContext, CommitExecutor, FinalizeConnection,
   FinalizeTxClient, StoredCommitReceipt } from '../../src/server/commit/types.js';
 import { accessModeOf, applyModeTransition, createMemoryAclStore,
@@ -21,6 +22,7 @@ import type { DeleteConfirmationContext } from '../../src/server/management.js';
 import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
   type PublicationService } from '../../src/server/publication.js';
 import { createMemoryIdempotencyKv, createIdempotencyStore } from '../../src/server/idempotency.js';
+import { createMemoryUploadPageStore } from '../../src/server/upload-page.js';
 import { createMemoryStaging, createMemoryUploadSessionStore, createMemoryUploadSigner,
   type UploadSessionStore, type StagingStore } from '../../src/server/uploads.js';
 
@@ -31,7 +33,9 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     /** G2: host principal directory; flows into appDeps via the options spread. */
     directory?: PrincipalDirectoryPort;
     /** Lot 1a: reader consent store; flows into appDeps via the options spread. */
-    readerConsent?: ArtifactReaderStore } = {}) {
+    readerConsent?: ArtifactReaderStore;
+    /** LOT 2: upload/storage metering sink for the world app. */
+    metrics?: ArtifactsMetrics } = {}) {
   const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
     operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
@@ -54,6 +58,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const acls = createMemoryAclStore();
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
+  const refs = createMemoryRefcountStore();
   const legacyRecords = createMemoryKv();
   const intents = createMemoryIntentStore();
   // Files parity LOT 1: memory upload ports (session ledger, staging, signer, idempotency).
@@ -61,6 +66,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const uploadStaging: StagingStore = createMemoryStaging();
   const uploadSigner = createMemoryUploadSigner();
   const uploadIdempotency = createIdempotencyStore(createMemoryIdempotencyKv());
+  const uploadPages = createMemoryUploadPageStore();
   const lifecycleStore = createMemoryLifecycleStore();
   const lifecycle = createLifecycleService(lifecycleStore, () => '2026-01-01T00:00:00Z', state);
   const sources = createMemorySourceStore();
@@ -184,7 +190,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       },
     },
     publication: {
-      blobs, intents, refs: createMemoryRefcountStore(), getCurrent: publication.getCurrent,
+      blobs, intents, refs, getCurrent: publication.getCurrent,
       getRelease: publication.getRelease, listReleases: publication.listReleases,
       createUnitWriter: (client) => ({
         async lockCurrent(artifactId) {
@@ -213,15 +219,19 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       }),
     },
     uploads: { sessions: uploadSessions, staging: uploadStaging, signer: uploadSigner.signer,
-      idempotency: uploadIdempotency },
+      idempotency: uploadIdempotency,
+      ...(options.metrics === undefined ? {} : { metrics: options.metrics }) },
+    uploadPage: { pages: uploadPages, cookieSecret: 'transport-world-page-secret',
+      controlOrigin: 'https://control.test', pageBaseUrl: 'https://control.test',
+      s3Origins: ['https://s3.test'] },
   };
   const app = createHttpArtifactApp(appDeps);
   const mcp = createArtifactsToolExecutor({ ...options, app, profile });
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
-  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, legacyRecords, quotaReservations,
-    accessEvents, uploadSessions, uploadStaging, uploadSigner,
+  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, refs, legacyRecords, quotaReservations,
+    accessEvents, uploadSessions, uploadStaging, uploadSigner, uploadIdempotency, uploadPages,
     withProfile: (input: ArtifactProviderProfile) => createHttpArtifactApp({ ...appDeps, profile: compileArtifactsProfile(input) }),
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
