@@ -327,7 +327,8 @@ describe('files parity LOT 1 acceptance', () => {
 
     // Not yet stale: the sweeper does nothing.
     const sweeper = createUploadSweeper({ sessions: world.uploadSessions, staging: world.uploadStaging });
-    expect(await sweeper.sweep()).toEqual({ expired: [], deletedKeys: [], failures: [] });
+    expect(await sweeper.sweep()).toEqual({ expired: [], deletedKeys: [], failures: [],
+      orphanKeys: [], pagesExpired: [], stagedExpired: [], unpinned: [] });
 
     // Past expires_at: expired + staging object deleted.
     const report = await sweeper.sweep(new Date(Date.now() + 25 * 60 * 60 * 1000));
