@@ -17,10 +17,9 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 import { db } from '../../api/src/db/client';
-import { users } from '../../api/src/db/schema';
 import { createSession } from '../../api/src/services/session-manager';
 
 const IDP_BASE_URL = process.env.IDP_BASE_URL ?? 'http://localhost:8787';
@@ -29,7 +28,6 @@ const CLIENT_SECRET = 'design-system-secret-dev-only';
 const REDIRECT_URI = 'http://localhost:5399/auth/oauth/callback';
 const CODE_VERIFIER = 'idp-smoke-code-verifier-with-enough-entropy-0123456789';
 const TEST_EMAIL = 'idp-smoke@example.com';
-const TEST_NAME = 'IdP Smoke User';
 
 const fail = (msg: string): never => {
   console.error(`SSO-SMOKE FAIL: ${msg}`);
@@ -39,29 +37,22 @@ const fail = (msg: string): never => {
 const codeChallenge = createHash('sha256').update(CODE_VERIFIER).digest('base64url');
 
 const seedUserAndSession = async (): Promise<{ userId: string; sessionToken: string }> => {
-  const now = new Date();
+  const now = new Date().toISOString();
   const userId = `idp-smoke-${randomUUID()}`;
-  await db
-    .insert(users)
-    .values({
-      id: userId,
-      email: TEST_EMAIL,
-      displayName: TEST_NAME,
-      role: 'editor',
-      accountStatus: 'active',
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      set: { accountStatus: 'active', displayName: TEST_NAME, emailVerified: true, updatedAt: now },
-      target: users.email,
-    });
-
-  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.email, TEST_EMAIL)).limit(1);
+  await db.execute(sql`INSERT INTO cm_identity.identity_user_accounts
+    (user_id, email, account_status, global_role, created_at, updated_at)
+    VALUES (${userId}, ${TEST_EMAIL}, 'active', 'editor', ${now}, ${now})
+    ON CONFLICT (email) DO UPDATE SET account_status = 'active', updated_at = ${now}`);
+  const found = await db.execute(
+    sql`SELECT user_id FROM cm_identity.identity_user_accounts WHERE email = ${TEST_EMAIL} LIMIT 1`);
+  const row = found.rows[0];
   if (!row) fail('seeded user not found after upsert');
-  const session = await createSession(row!.id, 'editor', { name: 'idp-smoke' });
-  return { userId: row!.id, sessionToken: session.sessionToken };
+  await db.execute(sql`INSERT INTO cm_identity.identity_account_profiles
+    (user_id, email_verified, legacy_account_status) VALUES (${row!.user_id}, true, 'active')
+    ON CONFLICT (user_id) DO UPDATE SET email_verified = true, legacy_account_status = 'active'`);
+
+  const session = await createSession(row!.user_id, 'editor', { name: 'idp-smoke' });
+  return { userId: row!.user_id, sessionToken: session.sessionToken };
 };
 
 const main = async (): Promise<void> => {
