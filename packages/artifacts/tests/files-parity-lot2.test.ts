@@ -382,3 +382,90 @@ describe('files parity LOT 2 (b2): publish_bundle_v2', () => {
       .toEqual(['a.png', 'note.html']);
   });
 });
+
+describe('files parity LOT 2 (b3): get_source caps', () => {
+  async function commitFile(world: World, mcp: ReturnType<typeof scannedMcp>, artifactId: string,
+    path: string, mimeType: string, bytes: Uint8Array, key: string): Promise<string> {
+    const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType, maxSize: bytes.length });
+    const body = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
+    await world.uploadStaging.put(body.stagingKey, bytes);
+    const committed = await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: body.uploadId,
+      path, mimeType, digest: sha256(bytes), size: bytes.length, idempotencyKey: key });
+    expect(committed.status).toBe(201);
+    return body.uploadId;
+  }
+
+  it('returns omitted entries instead of failing on oversize manifests', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'source-caps');
+    const assets = [];
+    for (let i = 0; i < 60; i += 1) {
+      const bytes = new TextEncoder().encode(`<html><body>page ${i}</body></html>`);
+      // eslint-disable-next-line no-await-in-loop
+      const uploadId = await commitFile(world, mcp, artifactId, `p${i}.html`, 'text/html', bytes, `cap-${i}`);
+      assets.push({ path: `p${i}.html`, uploadId });
+    }
+    const bundle = await mcp.invoke('artifacts_publish_bundle', { artifactId, idempotencyKey: 'cap-bundle',
+      expectedCurrentReleaseId: null, assets });
+    expect(bundle.status).toBe(201);
+    const read = await mcp.invoke('artifacts_get_source', { artifactId });
+    expect(read.status).toBe(200);
+    const files = unwrap<{ files: { path: string; text?: string; omitted?: string }[] }>(read.body).files;
+    expect(files).toHaveLength(60);
+    expect(files.filter((file) => file.text !== undefined)).toHaveLength(32);
+    expect(files.slice(32).every((file) => file.omitted === 'over_total_budget')).toBe(true);
+  });
+
+  it('omits single files above the inline cap and keeps prior reads byte-identical', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'source-inline');
+    const big = pngBytes(5, 300 * 1024);
+    const small = new TextEncoder().encode('<html><body>small</body></html>');
+    await commitFile(world, mcp, artifactId, 'big.png', 'image/png', big, 'inline-big');
+    await commitFile(world, mcp, artifactId, 'small.html', 'text/html', small, 'inline-small');
+    const stagedNow = await world.uploadSessions.listStagedFiles(artifactId);
+    const stagedByPath = new Map(stagedNow.map((record) => [record.path, record.uploadId]));
+    const bundle = await mcp.invoke('artifacts_publish_bundle', { artifactId, idempotencyKey: 'inline-bundle',
+      expectedCurrentReleaseId: null,
+      assets: [{ path: 'small.html', uploadId: stagedByPath.get('small.html') },
+        { path: 'big.png', uploadId: stagedByPath.get('big.png') }] });
+    expect(bundle.status).toBe(201);
+    const read = await mcp.invoke('artifacts_get_source', { artifactId });
+    expect(read.status).toBe(200);
+    const files = unwrap<{ files: Record<string, unknown>[] }>(read.body).files;
+    const byPath = new Map(files.map((file) => [file.path, file]));
+    expect(byPath.get('big.png')).toMatchObject({ omitted: 'over_total_budget' });
+    expect(byPath.get('small.html')).toMatchObject({ text: '<html><body>small</body></html>', encoding: 'utf8' });
+    const single = await mcp.invoke('artifacts_get_source', { artifactId, paths: ['small.html'] });
+    expect(unwrap<{ files: Record<string, unknown>[] }>(single.body).files).toEqual([{
+      path: 'small.html', mimeType: 'text/html', size: small.length,
+      digest: sha256(small), text: '<html><body>small</body></html>', encoding: 'utf8' }]);
+  });
+
+  it('reads profile source caps instead of hard-coded ceilings', async () => {
+    const profile = lot2Profile();
+    const tight = {
+      ...profile,
+      operations: profile.operations.map((op) => op.operation === 'get_source'
+        ? { ...op, limits: { sourceFilesMax: 32, sourceInlineFileBytesMax: 4096, sourceTotalBytesMax: 262144 } }
+        : op),
+    };
+    const world = createTransportWorld(undefined, undefined, { profile: tight });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'source-tight');
+    const bytes = pngBytes(9, 5120);
+    await commitFile(world, mcp, artifactId, 'shot.png', 'image/png', bytes, 'tight-1');
+    const staged = await world.uploadSessions.listStagedFiles(artifactId);
+    const bundle = await mcp.invoke('artifacts_publish_bundle', { artifactId, idempotencyKey: 'tight-bundle',
+      expectedCurrentReleaseId: null,
+      assets: [{ path: 'shot.png', uploadId: staged[0]!.uploadId }] });
+    expect(bundle.status).toBe(201);
+    const read = await mcp.invoke('artifacts_get_source', { artifactId });
+    expect(read.status).toBe(200);
+    expect(unwrap<{ files: Record<string, unknown>[] }>(read.body).files).toEqual([{
+      path: 'shot.png', mimeType: 'image/png', size: bytes.length,
+      digest: sha256(bytes), omitted: 'too_large' }]);
+  });
+});
