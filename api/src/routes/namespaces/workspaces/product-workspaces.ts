@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { TenantNotActiveError } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1, IdentityNotFoundError, TenantNotActiveError } from '@sentropic/cluster-mesh';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { zValidator } from '../../../utils/zod-validator';
 import { db } from '../../../db/client';
@@ -10,6 +11,8 @@ import { createId } from '../../../utils/id';
 import { runCmIdentityWrite } from '../../../services/identity/cm-transaction';
 import { CmIdentityForbiddenError } from '../../../services/identity/cm-deletion-authorization';
 import { getUserWorkspaces, requireWorkspaceAdmin } from '../../../services/workspace-access';
+import { listCmWorkspaceMembers } from '../../../services/identity/cm-tenancy';
+import { deleteCmWorkspace } from '../../../services/identity/cm-workspace-deletion';
 import {
   notifyWorkspaceCreated, notifyWorkspaceEvent,
   provisionWorkspace, seedWorkspaceTypeResources,
@@ -196,8 +199,18 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   if (!ws) return c.json({ message: 'Not found' }, 404);
   if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
 
-  // Stack dependency: A2.2's WorkspaceRegistryStore exposes no deletion operation;
-  // r6 V2 is a person cascade and cannot authorize deleting another principal.
-  // Do not recreate CM cleanup with host SQL or commit partial business destruction.
-  return c.json({ error: 'identity_contract_unavailable', message: 'Workspace deletion unavailable.' }, 503);
+  // Recipients of the post-commit deletion notice, captured before deletion.
+  const members = await listCmWorkspaceMembers(workspaceId);
+  try {
+    await deleteCmWorkspace({ workspaceId, actorId: user.userId }, randomUUID());
+  } catch (error) {
+    if (error instanceof IdentityNotFoundError) return c.json({ message: 'Not found' }, 404);
+    if (error instanceof IdentityCustodyErrorV1 && error.code === 'identity_workspace_admin_required') {
+      return c.json({ error: 'Insufficient permissions' }, 403);
+    }
+    throw error;
+  }
+  await notifyWorkspaceEvent(workspaceId, { action: 'deleted' },
+    [...new Set(members.map(member => member.userId))]);
+  return c.body(null, 204);
 });
