@@ -51,6 +51,42 @@ export interface KeyMutex {
 }
 
 /**
+ * G2 principal directory port (converged-r2 §2.3). The host-trusted side of
+ * the model boundary: it knows internal principal ids and full emails; the
+ * package resolves opaque `userRef`s to internal principals and projects every
+ * model-visible output back to `userRef` + masked `emailHint`. Search and
+ * resolution are scope-filtered; approval is NOT part of resolution — every
+ * resolution/approval failure merges into the single `person_not_shareable`.
+ */
+export interface DirectoryPerson {
+  /** Opaque model-facing reference; the only principal form a model may see or send back. */
+  readonly userRef: string;
+  readonly displayName: string;
+  /** Full email, host-side only; never projected to a model payload. */
+  readonly email: string;
+}
+
+export interface PrincipalDirectoryPort {
+  /** Approved accounts of the scope matching the query (case/accent-insensitive on name and email). */
+  searchPeople(scope: string, query: string, limit: number): Promise<readonly DirectoryPerson[]>;
+  /** Resolve one opaque userRef to the internal principal id; undefined when unknown or out of scope. */
+  resolvePrincipal(scope: string, userRef: string): Promise<string | undefined>;
+  /** Inverse projection: internal principal id → directory person (userRef/displayName/email). */
+  describePrincipal(scope: string, principalId: string): Promise<DirectoryPerson | undefined>;
+}
+
+/**
+ * Mask an email for model payloads: first local-part character kept, rest of
+ * the local part masked, domain visible — lifts homonyms without disclosing
+ * the directory. The package masks, so no full email can reach the wire.
+ */
+export function maskEmailHint(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return '***';
+  return `${email.slice(0, 1)}***@${email.slice(at + 1)}`;
+}
+
+/**
  * G1 sharing policy port (converged-r2 §2.2, lock 2 of the double lock).
  * Resolved by the host per storage scope, inside the commit transaction and
  * at each anonymous read; never derived from tool arguments. Absent, throwing
