@@ -16,7 +16,11 @@ export interface SourceReadPorts {
   urls?: (artifactId: string, releaseId: string) => { stableUrl: string; versionUrl: string };
   /** Guide reference returned instead of embedding the guide body. */
   guideRef?: { tool: string; version: string };
+  /** Data-file slots per call (`sourceFilesMax`, server ceiling 32). */
   maxFiles: number;
+  /** Per-file raw-byte budget (`sourceInlineFileBytesMax`, server ceiling 1 MiB). */
+  maxInlineBytes: number;
+  /** Raw-byte budget for files with data (`sourceTotalBytesMax`, server ceiling 2 MiB). */
   maxTotalBytes: number;
 }
 export interface SourceReadInput { artifactId: string; releaseId?: string; paths?: readonly string[] }
@@ -38,19 +42,16 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
   if (ports.storageScopeId !== undefined && manifest.storageScopeId !== ports.storageScopeId) throw new ArtifactOperationError('verification_failed');
   if (release.manifestDigest !== manifest.digest) throw new ArtifactOperationError('verification_failed');
   if (release.state === 'purged') throw new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'purged' } });
-  if (!manifest.digest || !Array.isArray(manifest.files) || manifest.files.length > ports.maxFiles) {
+  if (!manifest.digest || !Array.isArray(manifest.files)) {
     throw new ArtifactOperationError('verification_failed');
   }
   const entries: ManifestFile[] = [];
   const paths = new Set<string>();
-  let total = 0;
   for (const value of manifest.files) {
     const file = value as ManifestFile;
     if (!file || typeof file.path !== 'string' || typeof file.mimeType !== 'string' ||
       !/^sha256:[0-9a-f]{64}$/.test(file.digest) || !Number.isSafeInteger(file.size) || file.size < 0 ||
       paths.has(file.path)) throw new ArtifactOperationError('verification_failed');
-    total += file.size;
-    if (total > ports.maxTotalBytes) throw new ArtifactOperationError('limit_exceeded');
     paths.add(file.path);
     entries.push(file);
   }
@@ -59,8 +60,24 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
     throw new ArtifactOperationError('invalid_request');
   }
   const selected = input.paths === undefined ? entries : entries.filter((file) => input.paths!.includes(file.path));
-  const files = [];
+  // LOT 2 §B.3: failure turns into data. Files are evaluated in manifest
+  // order against raw-byte budgets: above the per-file cap they are
+  // `too_large`; past the slot or total budget they are `over_total_budget`.
+  // Previously successful reads (within every budget) are byte-identical.
+  const files: ({ path: string; mimeType: string; size: number; digest: string } &
+    ({ text: string; encoding: 'utf8' } | { base64: string; encoding: 'base64' } |
+      { omitted: 'too_large' | 'over_total_budget' }))[] = [];
+  let dataFiles = 0;
+  let dataTotal = 0;
   for (const file of selected) {
+    if (file.size > ports.maxInlineBytes) {
+      files.push({ ...file, omitted: 'too_large' });
+      continue;
+    }
+    if (dataFiles >= ports.maxFiles || dataTotal + file.size > ports.maxTotalBytes) {
+      files.push({ ...file, omitted: 'over_total_budget' });
+      continue;
+    }
     const bytes = await ports.getBlob(`artifacts/${manifest.storageScopeId}/blobs/sha256/${file.digest.slice(7)}`);
     if (!bytes) throw new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'not_retained' } });
     if (bytes.length !== file.size ||
@@ -78,6 +95,8 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
     files.push({ ...file, ...(text !== undefined
       ? { text, encoding: 'utf8' as const }
       : { base64: Buffer.from(bytes).toString('base64'), encoding: 'base64' as const }) });
+    dataFiles += 1;
+    dataTotal += file.size;
   }
   const sourceRef = await ports.getSource(input.artifactId) ?? null;
   await ports.authorize();
