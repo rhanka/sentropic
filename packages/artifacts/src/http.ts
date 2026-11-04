@@ -389,7 +389,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         }
         if (capability === 'artifacts_revoke_reader_consent') {
           // Self-revocation only: the reader is the invocation principal
-          // (mcp-core.ts:229); no principalId argument exists, so the model
+          // (mcp-core.ts:225); no principalId argument exists, so the model
           // can never target another person. Error order: syntax (validated
           // above) → visibility (not_found, no existence oracle) → store
           // gate (capability_unavailable when no port is wired).
