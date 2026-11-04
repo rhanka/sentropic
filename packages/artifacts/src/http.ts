@@ -1,7 +1,7 @@
 /** Selected HTTP control surface over the authorized atomic services. */
 import { createHash } from 'node:crypto';
 import type { JsonValue } from './contracts.js';
-import { parseManifest } from './codecs.js';
+import { canonicalManifest, manifestDigest, parseManifest } from './codecs.js';
 import { assertCompiledArtifactsProfile, ArtifactProfileInputError,
   type CompiledArtifactsProfile } from './profile/index.js';
 import { createArtifactCommand, type ArtifactKeyDerivationBinding } from './server/command-identity.js';
@@ -515,18 +515,48 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           ? { base64: Buffer.from(file.bytes).toString('base64'), encoding: 'base64' as const }
           : { text: file.text, encoding: 'utf8' as const }) }));
     await visible(artifactId, invocation, 'source');
+    const projectedManifest = await projectManifestForOutput(release.manifest, invocation.storageScopeId);
     const failure = { ...outcome.failure, conflict: { ...conflict, currentSource: {
-      artifactId, releaseId: release.releaseId, digest: conflict.currentDigest, manifest: release.manifest,
+      artifactId, releaseId: release.releaseId, digest: parseManifest(projectedManifest).digest ?? conflict.currentDigest,
+      manifest: projectedManifest,
       files, sourceRef: null, guideRef: API_GUIDE_REF, ...deps.publicationUrls?.(artifactId, release.releaseId),
     } } };
     Object.defineProperty(failure, 'cause', { value: outcome.failure.cause, enumerable: false });
     return { ok: false, failure: Object.freeze(failure) };
   }
 
+  /**
+   * R1 output-boundary projection for the release manifest embedded in
+   * publish/revert/bundle receipts. Storage keeps the raw internal `ownerId`
+   * (the manifest bytes are content-addressed); only this model-visible copy
+   * carries the opaque `userRef` (or `UNKNOWN_USER_REF` when the directory
+   * has no entry). Without a directory port the stored bytes pass through
+   * unchanged (G1 legacy behaviour).
+   */
+  async function projectManifestForOutput(rawManifest: string, storageScopeId: string): Promise<string> {
+    if (!deps.directory) return rawManifest;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(rawManifest) as Record<string, unknown>;
+    } catch {
+      return rawManifest;
+    }
+    const rawOwner = parsed.ownerId;
+    if (typeof rawOwner !== 'string') return rawManifest;
+    const projected = (await deps.directory.describePrincipal(storageScopeId, rawOwner))?.userRef
+      ?? UNKNOWN_USER_REF;
+    if (projected === rawOwner) return rawManifest;
+    const { digest: _drop, ...body } = parsed;
+    void _drop;
+    const nextDigest = manifestDigest({ ...body, ownerId: projected } as unknown as Parameters<typeof manifestDigest>[0]);
+    return canonicalManifest({ ...body, ownerId: projected, digest: nextDigest } as unknown as Parameters<typeof canonicalManifest>[0]);
+  }
+
   /** Shared guarded-commit response for publish and revert (same commit path, same receipt shape). */
-  function commitOutcome(outcome: FinalizeResult,
+  async function commitOutcome(outcome: FinalizeResult,
     artifactId: string, meta: ArtifactMetadata | undefined,
-    setCommitState: (state: 'not_committed' | 'committed' | 'unknown') => void) {
+    setCommitState: (state: 'not_committed' | 'committed' | 'unknown') => void,
+    storageScopeId: string) {
     if (!outcome.ok) {
       const failure = { ...outcome.failure, kind: 'operational' as const };
       Object.defineProperty(failure, 'cause', { value: outcome.failure.cause, enumerable: false });
@@ -537,11 +567,12 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     if (typeof receipt.releaseId !== 'string' || typeof receipt.manifest !== 'string') {
       throw new Error('invalid publication receipt');
     }
+    const manifest = await projectManifestForOutput(receipt.manifest, storageScopeId);
     return { ...outcome, result: { status: 201, body: {
-      artifactId, releaseId: receipt.releaseId, manifest: receipt.manifest,
+      artifactId, releaseId: receipt.releaseId, manifest,
       previousReleaseId: receipt.previousReleaseId ?? null, updatedAt: receipt.updatedAt ?? null,
       ...(typeof receipt.revertedFromReleaseId === 'string' ? { revertedFromReleaseId: receipt.revertedFromReleaseId } : {}),
-      digest: parseManifest(receipt.manifest).digest,
+      digest: parseManifest(manifest).digest,
       ...deps.publicationUrls?.(artifactId, receipt.releaseId), ...(receipt.metadata as ArtifactMetadata ?? meta ?? {}),
     } } };
   }
@@ -633,7 +664,11 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             maxInlineBytes: sourceOp?.limits['sourceInlineFileBytesMax'] ?? SERVER_MAX_SOURCE_INLINE_BYTES,
             maxTotalBytes: sourceOp?.limits['sourceTotalBytesMax'] ?? SERVER_MAX_SOURCE_TOTAL_BYTES,
           }, normalized as unknown as Parameters<typeof readArtifactSource>[1]);
-          return { ok: true, result: { status: 200, body: result }, invocationId: invocation.invocationId,
+          const projectedSourceManifest = await projectManifestForOutput(result.manifest, invocation.storageScopeId);
+          const projectedSource = projectedSourceManifest === result.manifest ? result
+            : { ...result, manifest: projectedSourceManifest,
+              digest: parseManifest(projectedSourceManifest).digest ?? result.digest };
+          return { ok: true, result: { status: 200, body: projectedSource }, invocationId: invocation.invocationId,
             commitState: 'not_committed', replayed: false };
         }
         if (capability === 'artifacts_list_assets') {
@@ -768,7 +803,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             operation: capability === 'artifacts_revert' ? 'revert' as const : 'publish' as const,
             expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null | undefined };
           const replay = await publication.replayFinalized(input);
-          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
+          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; }, invocation.storageScopeId);
           profile.validate(capability, args, request.idempotencyKey);
           let files: { path: string; mimeType: string; bytes: Uint8Array }[];
           let source: { kind: 'inline-original' } | { kind: 'base-commit'; commit: string };
@@ -808,7 +843,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const outcome = await publication.publishFinalized({
             ...input, source, profile: releaseProfile, files,
           });
-          const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
+          const committed = await commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; }, invocation.storageScopeId);
           return await conflictSource(committed, normalized, invocation);
         }
         if (capability === 'artifacts_create_upload') {
@@ -934,7 +969,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             authorizeCommit: invocation.authorizeCommit, metadata: meta, operation: 'publish' as const,
             expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null };
           const replay = await publication.replayFinalized(input);
-          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
+          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; }, invocation.storageScopeId);
           profile.validate(capability, args, request.idempotencyKey);
           // Resolve the files/assets union BEFORE any commit step: one missing,
           // expired or digest-mismatched asset fails the whole publish and commits nothing.
@@ -946,7 +981,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             ...input, source: { kind: 'inline-original' },
             profile: normalized.profile as Record<string, JsonValue>, files,
           });
-          const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
+          const committed = await commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; }, invocation.storageScopeId);
           if (committed.ok) {
             const parsedBundleManifest = parseManifest((committed.result.body as { manifest: string }).manifest);
             const entries = (parsedBundleManifest.files as ManifestFileEntry[] | undefined) ?? [];
@@ -982,7 +1017,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             authorizeCommit: invocation.authorizeCommit, metadata: meta, operation: 'publish' as const,
             expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null };
           const replay = await publication.replayFinalized(input);
-          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
+          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; }, invocation.storageScopeId);
           profile.validate(capability, args, request.idempotencyKey);
           const resolved = await resolveBundleAssets(invocation, artifactId, {
             files: (normalized.files ?? []) as Record<string, JsonValue>[],
@@ -994,7 +1029,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             ...input, source: { kind: 'inline-original' },
             profile: normalized.profile as Record<string, JsonValue>, files: resolved.files,
           });
-          const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
+          const committed = await commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; }, invocation.storageScopeId);
           if (committed.ok) {
             const parsedBundleManifest = parseManifest((committed.result.body as { manifest: string }).manifest);
             const entries = (parsedBundleManifest.files as ManifestFileEntry[] | undefined) ?? [];
