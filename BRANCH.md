@@ -12,7 +12,7 @@ Implement sharing lot G2 of the binding convergence `.tmp/concertation-share/con
 - All new text in English. No human-effort or time estimates.
 - Crash safety: push `feat/share-g2-mcp-tools` to origin after every few commits.
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- Version allocation: main is 0.2.10 (#901), 0.2.11 is reserved for #891, 0.2.12 for #907 (open PR `fix/artifacts-publish-bounded-concurrency`); this lot takes the next free version **0.2.13**, inside cluster-mesh's `>=0.2.0 <0.3.0` peer range.
+- Version allocation: main is 0.2.12 (#907 merged after #901), 0.2.11 is reserved for #891; this lot takes the next free version **0.2.13**, inside cluster-mesh's `>=0.2.0 <0.3.0` peer range. Rebased onto origin/main 3dd7d8012 (#907); version-line conflicts resolved in favour of 0.2.13, CHANGELOG unioned (0.2.13 on top of 0.2.12).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -100,9 +100,11 @@ Implement sharing lot G2 of the binding convergence `.tmp/concertation-share/con
   - [x] `src/adapters/postgres-management.ts` + `src/adapters/postgres.ts`: grant `created_at` round-trip.
   - [x] `src/server/templates.ts`: authoring-guide lines for the two new tools (guide text only, never a tool definition).
   - [x] Lot gate: full `make test-artifacts ENV=test-share-g2` + `make test-artifacts-integration ENV=test-share-g2` green; `make typecheck-artifacts`, `make lint-artifacts` green; `make down-volumes ENV=test-share-g2`.
-- [ ] **Lot 3 — Refresh pins/locks/manifests through make, commit, push, PR, CI**
+- [x] **Lot 3 — Refresh pins/locks/manifests through make, commit, push, PR, CI**
   - [x] Bump `packages/artifacts/package.json` to 0.2.13 (> published 0.2.9); CHANGELOG entry.
   - [x] `make lock-root` (BR02-EX2) + api lock one-liner; BR02-EX3 cluster-mesh fixtures via packaging.mk (`refresh-lazy-package-lock` with the packed 0.2.13 sibling receipt, sha256 15802f3c…, fixture integrity sha512-kq81A5RP…); BR02-EX6 APP-P1 digests recomputed through make (profileDigest 9d216231…, manifestDigest 108f7c19…); BR02-EX5 L5 P1 manifest via `make memory-l5-pack`.
+  - [x] Rebase onto origin/main 3dd7d8012 (#907, 0.2.12): 11 commits replayed, version-line conflicts kept at 0.2.13, CHANGELOG unioned (0.2.13 over 0.2.12). Post-rebase refresh through make: 0.2.13 repacked + sibling receipts recollected (sha256 844fdaaa…), `refresh-lazy-package-lock` (fixture integrity sha512-+MzlH…), L5 P1 manifest regenerated (previous 75dfe0ca… retained in history/, new bb425aed…).
+  - [x] Post-rebase gates: `make scope-check` PASS C2; `make typecheck-artifacts`, `make lint-artifacts` PASS; `make test-artifacts` 556/556; `make test-artifacts-integration` green on rerun (one transient 1-failed/28-passed first run, identity not captured, two consecutive full-green reruns on the same commit); api pin tests (`app-mcp-registry`, `app-mcp-installed`, `artifacts-host-publication`) PASS — APP-P1 digests unchanged by the rebase.
   - [ ] Atomic commits via `make commit MSG="…"` (≤150 lines each, specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` before every commit; no AI trailers.
   - [ ] Push `feat/share-g2-mcp-tools` to origin after the commit wave (crash safety).
   - [ ] Open READY PR (title/body from this BRANCH.md, English, test plan included), wait for exactly one CI run on the final head; report results.
