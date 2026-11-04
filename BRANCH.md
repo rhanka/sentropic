@@ -91,9 +91,9 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
 - [x] **Lot 1 — Merge wagon D (`fix/mcp-terminal-jsonrpc-response` @ 4e47903bd)**
   - [x] `git merge --no-ff origin/fix/mcp-terminal-jsonrpc-response`; resolve conflicts as UNION (`BRANCH.md` keeps this train doc; only BRANCH.md conflicted).
   - [x] Lot gate: `git status --short` shows only wagon-D paths plus owned files.
-- [ ] **Lot 2 — Merge wagon B (`feat/share-g2-mcp-tools` @ ead444fab)**
-  - [ ] `git merge --no-ff origin/feat/share-g2-mcp-tools`; resolve conflicts as UNION (integration-owned files: take either side, regenerate in Lot 3).
-  - [ ] Lot gate: both wagon tips are ancestors of HEAD (`git merge-base --is-ancestor`).
+- [x] **Lot 2 — Merge wagon B (`feat/share-g2-mcp-tools` @ ead444fab)**
+  - [x] `git merge --no-ff origin/feat/share-g2-mcp-tools`; resolve conflicts as UNION (BRANCH.md + L5 manifest + sha: ours; locks auto-merged).
+  - [x] Lot gate: both wagon tips are ancestors of HEAD (`git merge-base --is-ancestor`).
 - [ ] **Lot 3 — Versions + regeneration ONCE through make**
   - [ ] Registry check through a repo make target (Docker-based `qualify-published-install` probes with a published-version positive control): artifacts 0.2.13 free, mcp-platform 0.4.2 free.
   - [ ] Keep `packages/artifacts/package.json` at 0.2.13 and `packages/mcp-platform/package.json` at 0.4.2; CHANGELOG entries list wagons D and B.
