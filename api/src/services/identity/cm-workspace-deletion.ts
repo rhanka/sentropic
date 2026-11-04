@@ -147,7 +147,7 @@ export function createCmWorkspaceDeletionConnectorPlane(
 export const deleteCmWorkspace = (
   command: { readonly workspaceId: string; readonly actorId: string },
   operationId = randomUUID(),
-): Promise<ReturnType<AtomicWorkspaceDeletionV1['deleteWorkspace']>> => {
+): ReturnType<AtomicWorkspaceDeletionV1['deleteWorkspace']> => {
   const attempts = new WeakMap<CmIdentityTransaction, WorkspaceAttempt>();
   const custody = createAppConnectorCustody(async (source, input, tx) => {
     const attempt = attempts.get(tx);
