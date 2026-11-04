@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 import { ARTIFACTS_TOOL_DEFINITIONS, ARTIFACTS_TOOL_NAMES } from '../src/mcp-core.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../src/profile/index.js';
 import { checksumHeaderValue, createMemoryStaging, createMemoryUploadSessionStore, createUploadService, stagingKey } from '../src/server/uploads.js';
-import { createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from '../src/server/upload-page.js';
+import { UPLOAD_PAGE_TTL_MS, createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from '../src/server/upload-page.js';
 import type { ArtifactsMetricEvent } from '../src/server/metrics.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
 
@@ -136,7 +136,7 @@ describe('files parity LOT 2 (a): browser upload page', () => {
   it('publishes PNG+PDF+WOFF2 through the page with zero file bytes in any MCP payload', async () => {
     const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
     const events: ArtifactsMetricEvent[] = [];
-    const now = new Date('2026-01-01T00:00:00Z');
+    const now = new Date();
     const page = makePage(world, events, () => now);
     const mcp = scannedMcp(world);
     const artifactId = await ensureArtifact(world, mcp, 'page-journey');
@@ -190,7 +190,7 @@ describe('files parity LOT 2 (a): browser upload page', () => {
   it('refuses token reuse, expired pages, foreign artifacts, spoofed types and CSRF gaps', async () => {
     const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
     const events: ArtifactsMetricEvent[] = [];
-    let now = new Date('2026-01-01T00:00:00Z');
+    let now = new Date();
     const page = makePage(world, events, () => now);
     const mcp = scannedMcp(world);
     const artifactId = await ensureArtifact(world, mcp, 'page-negatives');
@@ -216,7 +216,7 @@ describe('files parity LOT 2 (a): browser upload page', () => {
   it('refuses a renamed executable at page commit with no pin', async () => {
     const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
     const events: ArtifactsMetricEvent[] = [];
-    const now = new Date('2026-01-01T00:00:00Z');
+    const now = new Date();
     const page = makePage(world, events, () => now);
     const mcp = scannedMcp(world);
     const artifactId = await ensureArtifact(world, mcp, 'page-spoof');
@@ -619,7 +619,7 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
   it('emits metric events without identifier labels', async () => {
     const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
     const events: ArtifactsMetricEvent[] = [];
-    const now = new Date('2026-01-01T00:00:00Z');
+    const now = new Date();
     const page = makePage(world, events, () => now);
     const mcp = scannedMcp(world);
     const artifactId = await ensureArtifact(world, mcp, 'metrics-labels');
@@ -637,7 +637,7 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
   });
 
   it('deletes orphan staging keys past the grace and keeps fresh ones', async () => {
-    let now = new Date('2026-01-01T00:00:00Z');
+    let now = new Date();
     const staging = createMemoryStaging(() => now);
     const sessions = createMemoryUploadSessionStore(() => now);
     const oldKey = `artifacts/${SCOPE}/staging/${randomUUID()}`;
