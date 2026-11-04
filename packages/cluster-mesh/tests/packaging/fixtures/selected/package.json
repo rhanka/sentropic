@@ -12,7 +12,7 @@
     "@sentropic/llm-gateway": "0.22.4",
     "@sentropic/llm-mesh": "0.33.0",
     "@sentropic/mcp-auth": "0.2.1",
-    "@sentropic/artifacts": "0.2.12",
+    "@sentropic/artifacts": "0.2.13",
     "@sentropic/auth-hono": "0.18.0",
     "@sentropic/mcp-platform": "0.4.1",
     "hono": "4.10.7",
