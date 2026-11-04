@@ -228,6 +228,143 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   }
 
   /**
+   * Files parity LOT 2 — resolve the files/assets union to bytes BEFORE any
+   * commit step. One missing, expired, digest-mismatched or unauthorized asset
+   * fails the whole publish and commits nothing. v1 only produces inline,
+   * upload and cas forms; v2 additionally resolves copy/carry and the
+   * keep-unmodified carry of the expected current release.
+   */
+  async function resolveBundleAssets(invocation: ArtifactInvocationContext, artifactId: string,
+    entries: { files: Record<string, JsonValue>[]; assets: Record<string, JsonValue>[] },
+    options: { allowExtendedForms: boolean; keepUnmodifiedPaths: boolean;
+      expectedCurrentReleaseId: string | null }): Promise<{ files: { path: string; mimeType: string;
+        bytes: Uint8Array }[]; origins: Record<string, string>; uploadPins: { digest: string;
+          uploadId: string }[] }> {
+    const fail = (path: string, reason: string): never => {
+      throw new ArtifactOperationError('verification_failed',
+        { publicDetails: { asset: { path, reason } } });
+    };
+    const checkBytes = (path: string, mimeType: string, bytes: Uint8Array): void => {
+      if (!profile.rules.mimeTypes.includes(mimeType)) fail(path, 'MIME type not allowed by profile');
+      validateFileBytes(mimeType, bytes);
+    };
+    const readCas = async (path: string, digest: string, size: number): Promise<Uint8Array> => {
+      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, digest));
+      if (bytes === undefined) fail(path, 'blob missing');
+      if (bytes.length !== size ||
+        `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== digest) {
+        fail(path, 'size/digest mismatch');
+      }
+      return bytes;
+    };
+    const files: { path: string; mimeType: string; bytes: Uint8Array }[] = [];
+    const origins: Record<string, string> = {};
+    const uploadPins: { digest: string; uploadId: string }[] = [];
+    for (const file of entries.files) {
+      const bytes = Uint8Array.from(file.bytes as number[]);
+      checkBytes(file.path as string, file.mimeType as string, bytes);
+      files.push({ path: file.path as string, mimeType: file.mimeType as string, bytes });
+      origins[file.path as string] = 'inline';
+    }
+    for (const asset of entries.assets) {
+      const path = asset.path as string;
+      if (Object.hasOwn(asset, 'uploadId')) {
+        const staged = await deps.uploads!.sessions.getStagedFile(asset.uploadId as string);
+        if (staged === undefined || staged.artifactId !== artifactId) fail(path, 'unknown upload');
+        if (stagedFileExpired(staged, Date.now(), stagedFileTtlMs)) fail(path, 'staged file expired');
+        const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, staged.digest));
+        if (bytes === undefined || bytes.length !== staged.size ||
+          `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== staged.digest) {
+          fail(path, 'staged blob missing or digest mismatch');
+        }
+        checkBytes(path, staged.mimeType, bytes);
+        files.push({ path, mimeType: staged.mimeType, bytes });
+        origins[path] = `upload:${staged.uploadId}`;
+        uploadPins.push({ digest: staged.digest, uploadId: staged.uploadId });
+      } else if (Object.hasOwn(asset, 'sourceArtifactId') || Object.hasOwn(asset, 'carryFromReleaseId')) {
+        if (!options.allowExtendedForms) fail(path, 'extended asset form needs publish_bundle_v2');
+        const copy = await resolveCopiedAsset(invocation, artifactId, asset, fail);
+        // The copied/carried MIME comes from a manifest, not the caller: it
+        // must still be inside the target profile allowlist (v1 forms keep
+        // their LOT 1 magic-only check; only the staged TTL is new there).
+        if (!profile.rules.mimeTypes.includes(copy.mimeType)) fail(path, 'MIME type not allowed by profile');
+        checkBytes(path, copy.mimeType, copy.bytes);
+        files.push({ path, mimeType: copy.mimeType, bytes: copy.bytes });
+        origins[path] = copy.origin;
+      } else {
+        const digest = asset.digest as string;
+        const size = asset.size as number;
+        const mimeType = asset.mimeType as string;
+        const bytes = await readCas(path, digest, size);
+        checkBytes(path, mimeType, bytes);
+        files.push({ path, mimeType, bytes });
+        origins[path] = 'cas';
+      }
+    }
+    if (options.keepUnmodifiedPaths && options.expectedCurrentReleaseId !== null) {
+      const base = await deps.publication.getRelease!(options.expectedCurrentReleaseId);
+      if (base === undefined || base.artifactId !== artifactId) fail('(base release)', 'unknown release');
+      const manifest = parseManifest(base.manifest);
+      for (const file of (manifest.files as { path: string; mimeType: string;
+        size: number; digest: string }[] | undefined) ?? []) {
+        if (Object.hasOwn(origins, file.path)) continue;
+        const bytes = await readCas(file.path, file.digest, file.size);
+        checkBytes(file.path, file.mimeType, bytes);
+        files.push({ path: file.path, mimeType: file.mimeType, bytes });
+        origins[file.path] = `carry:${options.expectedCurrentReleaseId}`;
+      }
+    }
+    return { files, origins, uploadPins };
+  }
+
+  /** Copy/carry resolution for `artifacts_publish_bundle_v2` (same failure contract). */
+  async function resolveCopiedAsset(invocation: ArtifactInvocationContext, artifactId: string,
+    asset: Record<string, JsonValue>,
+    fail: (path: string, reason: string) => never): Promise<{ mimeType: string; bytes: Uint8Array;
+      origin: string }> {
+    const path = asset.path as string;
+    const readManifestFile = async (sourceArtifactId: string, sourceReleaseId: string | undefined,
+      sourcePath: string | undefined): Promise<{ mimeType: string; bytes: Uint8Array }> => {
+      const sourceAcl = await deps.acls.getArtifactAcl(sourceArtifactId);
+      if (sourceAcl === undefined) fail(path, 'unknown source artifact');
+      if (sourceAcl.storageScopeId !== invocation.storageScopeId) fail(path, 'cross-scope copy not supported');
+      const sourceState = await deps.lifecycle.stateOf(sourceArtifactId);
+      if (!deps.lifecycle.canRead({ artifactId: sourceArtifactId, state: sourceState }, sourceAcl,
+        invocation.actorId, 'source', deps.isApprovedAccount,
+        await sharingPolicyContext(invocation.storageScopeId))) {
+        throw new ArtifactOperationError('access_denied');
+      }
+      const release = sourceReleaseId === undefined ? await deps.publication.getCurrent(sourceArtifactId)
+        : deps.publication.getRelease === undefined ? undefined
+          : await deps.publication.getRelease(sourceReleaseId);
+      if (release === undefined || release.artifactId !== sourceArtifactId) fail(path, 'unknown source release');
+      const manifest = parseManifest(release.manifest);
+      const wanted = sourcePath ?? path;
+      const entry = ((manifest.files as { path: string; mimeType: string; size: number;
+        digest: string }[] | undefined) ?? []).find((file) => file.path === wanted);
+      if (entry === undefined) fail(path, 'source path missing');
+      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, entry.digest));
+      if (bytes === undefined || bytes.length !== entry.size ||
+        `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== entry.digest) {
+        fail(path, 'source blob missing or digest mismatch');
+      }
+      return { mimeType: entry.mimeType, bytes };
+    };
+    if (Object.hasOwn(asset, 'sourceArtifactId')) {
+      const sourceArtifactId = asset.sourceArtifactId as string;
+      const { mimeType, bytes } = await readManifestFile(sourceArtifactId,
+        asset.sourceReleaseId as string | undefined, asset.sourcePath as string | undefined);
+      const release = (asset.sourceReleaseId as string | undefined) ??
+        await deps.publication.getCurrent(sourceArtifactId).then((current) => current?.releaseId);
+      return { mimeType, bytes, origin: `copy:${sourceArtifactId}:${release ?? 'current'}` };
+    }
+    const carryFromReleaseId = asset.carryFromReleaseId as string;
+    const release = await deps.publication.getRelease!(carryFromReleaseId);
+    if (release === undefined || release.artifactId !== artifactId) fail(path, 'unknown release');
+    const { mimeType, bytes } = await readManifestFile(artifactId, carryFromReleaseId,
+      asset.sourcePath as string | undefined);
+    return { mimeType, bytes, origin: `carry:${carryFromReleaseId}` };
+  /**
    * G1 management visibility for `set_access` (converged-r2 §2.3 order (2)):
    * readers pass as before; any other actor gets `not_found` unless it is an
    * APPROVED platform admin of the SAME storageScopeId. The predicate is
