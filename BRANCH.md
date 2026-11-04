@@ -107,12 +107,14 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
   - [ ] APP-P1 pin recompute through make if the pin tests fail on the union (TN01-EX6).
   - [ ] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TN01-EX5).
   - [ ] Lot gate: `make scope-check` PASS C2 before any commit.
-- [ ] **Lot 4 — Final validation (all on `ENV=test-train-next`, LAST)**
-  - [ ] Typecheck & lint: `typecheck-artifacts` + `lint-artifacts` + `typecheck-api` scoped lanes.
-  - [ ] Scoped lanes: artifacts sqlite suites (conformance, export), cluster-mesh tuple/lazy-package specs, api pin tests (app-mcp-registry + app-mcp-installed), AI scoped lane (`initiative-generation-async` + `executive-summary-sync`).
-  - [ ] Pre-existing MCP tool definitions byte-identical (tools/list snapshot lane).
-  - [ ] `make down-volumes ENV=test-train-next` last (stack + volumes removed).
-- [ ] **Lot 5 — PR + wagon closure + report**
+- [x] **Lot 4 — Final validation (all on `ENV=test-train-next`, LAST)**
+  - [x] Typecheck & lint: `typecheck-artifacts` green (0 errors) + `lint-artifacts` green + `typecheck-api` green (no `error TS`).
+  - [x] Scoped lanes: sqlite-conformance 20/20, sqlite-export 2/2, adapter-conformance.integration 36/36 both backends (pg lane needed the full 0001–0008 migration chain, fixed in-train), `test-lazy-package` 135/135, `test-ci-expected-results` 28/0.
+  - [x] Api pin lanes: app-mcp-registry 25/25, app-mcp-installed 2/2, artifacts-host-publication 17/17 (APP-P1 0.2.14 digest `8e80ebf4…` confirmed by the running service).
+  - [x] AI scoped lane: `initiative-generation-async` + `executive-summary-sync` 4/4 green on the union (owner green-at-least-once satisfied; root-cause wait fix from wagon E holds).
+  - [x] Pre-existing MCP tool definitions byte-identical (tools/list snapshot 1/1).
+  - [x] `make down-volumes ENV=test-train-next` last (stack + volumes removed, no test-train-next containers left).
+- [ ] **Lot 5 — PR + wagon closure + report** (in progress)
   - [ ] Atomic commits via `make commit MSG="…"` (specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` PASS C2 before every commit; no AI trailers; no `[skip ci]`.
   - [ ] Push `release/train-next` to origin; open exactly one READY PR (body = this BRANCH.md); comment #908 and #891 as superseded by the train PR and close them; do NOT merge the train PR.
   - [ ] Report every step and every CI run id to `.tmp/rv/train-next.md` (root workspace).
