@@ -950,6 +950,56 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           }
           return committed;
         }
+        if (capability === 'artifacts_publish_bundle_v2') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          const publication = createGuardedPublicationService({ ...deps.publication, coordinator: deps.coordinator,
+            limits: { maxFiles: budget.filesMax, maxFileBytes: budget.fileBytesMax, maxTotalBytes: budget.totalBytesMax } });
+          const meta = metadataOf(normalized);
+          const input = { ownerId: acl.ownerId, storageScopeId: invocation.storageScopeId, artifactId,
+            identity: command!.identity, actorId: invocation.actorId, invocationId: invocation.invocationId,
+            attemptId: invocation.invocationId, policyRevision: await deps.ensureHost.readPolicyRevision(),
+            authorizeCommit: invocation.authorizeCommit, metadata: meta, operation: 'publish' as const,
+            expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null };
+          const replay = await publication.replayFinalized(input);
+          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
+          profile.validate(capability, args, request.idempotencyKey);
+          const resolved = await resolveBundleAssets(invocation, artifactId, {
+            files: (normalized.files ?? []) as Record<string, JsonValue>[],
+            assets: (normalized.assets ?? []) as Record<string, JsonValue>[],
+          }, { allowExtendedForms: true,
+            keepUnmodifiedPaths: normalized.keepUnmodifiedPaths === true,
+            expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null });
+          const outcome = await publication.publishFinalized({
+            ...input, source: { kind: 'inline-original' },
+            profile: normalized.profile as Record<string, JsonValue>, files: resolved.files,
+          });
+          const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
+          if (committed.ok) {
+            const parsedBundleManifest = parseManifest((committed.result.body as { manifest: string }).manifest);
+            const entries = (parsedBundleManifest.files as ManifestFileEntry[] | undefined) ?? [];
+            (committed.result.body as Record<string, unknown>).files = entries.map((entry) => ({
+              path: entry.path, mimeType: entry.mimeType, size: entry.size, digest: entry.digest,
+              origin: resolved.origins[entry.path] ?? 'inline',
+            }));
+            // LOT 2 §D.1: consumed upload pins leave with the bundle; the
+            // release ref keeps the blob alive. Best-effort: the sweeper is
+            // the backstop and reports what it unpins.
+            for (const pin of resolved.uploadPins) {
+              await deps.publication.refs.unpin(pin.digest, `upload:${pin.uploadId}`).catch(() => undefined);
+            }
+            if (deps.uploads?.metrics !== undefined) {
+              for (const file of resolved.files) {
+                const origin = resolved.origins[file.path] ?? 'inline';
+                const coarse = origin.startsWith('copy:') ? 'copy' : origin.startsWith('carry:') ? 'carry'
+                  : origin.startsWith('upload:') ? 'upload' : origin;
+                deps.uploads.metrics.emit({ name: 'bundle_assets', labels: { origin: coarse } });
+              }
+            }
+          }
+          return committed;
+        }
         if (capability === 'artifacts_get') {
           const artifactId = normalized.artifactId as string;
           const acl = await visible(artifactId, invocation);
