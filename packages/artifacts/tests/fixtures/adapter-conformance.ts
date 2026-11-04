@@ -472,10 +472,17 @@ export function runManagementConformance(backend: ConformanceBackend): void {
           expect(target).toMatchObject({ state: 'active', terminal: false, currentReleaseId: '99999999-9999-4999-8999-999999999999' });
           expect(target?.acl.ownerId).toBe('owner-mgmt');
           const granted = await unit.setAccess(id, 'reader-9', 'grant', '2026-02-02T00:00:00.000Z');
-          expect(granted.grants).toEqual([{ principalId: 'reader-9', grant: 'read' }]);
-          expect((await unit.read(id))?.acl.isPublic).toBe(false);
+          expect(granted.grants).toEqual([{ principalId: 'reader-9', grant: 'read', createdAt: expect.any(String) }]);
+          expect(granted.accessMode).toBe('platform');
+          expect(granted.changed).toBe(true);
+          expect((await unit.read(id))?.acl.isPublic).toBe(true);
           const revoked = await unit.setAccess(id, 'reader-9', 'revoke', '2026-02-03T00:00:00.000Z');
           expect(revoked.grants).toEqual([]);
+          expect(revoked.accessMode).toBe('platform');
+          expect(revoked.changed).toBe(true);
+          // The audit event rides the same finalization transaction on both backends.
+          await unit.recordEvent({ artifactId: id, actorId: 'owner-mgmt', action: 'revoke',
+            audience: 'user', principalId: 'reader-9', policyRevision: 'p1' });
           await unit.delete(id, '2026-02-04T00:00:00.000Z');
           const gone = await unit.read(id);
           expect(gone).toMatchObject({ state: 'deleted', terminal: true });
@@ -483,7 +490,9 @@ export function runManagementConformance(backend: ConformanceBackend): void {
         } finally { conn.release(); }
         expect(await h.store.isTerminal(id)).toBe(true);
         expect(await h.store.getArtifactState(id)).toBe('deleted');
-        expect((await h.store.getArtifactAcl(id))?.isPublic).toBe(false);
+        // Terminal delete keeps the wide mode (visibility is governed by the
+        // terminal state, not the ACL); isPublic still derives from access_mode.
+        expect((await h.store.getArtifactAcl(id))?.isPublic).toBe(true);
       } finally { await h.close(); }
     });
   });
