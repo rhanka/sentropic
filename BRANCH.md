@@ -99,7 +99,7 @@ Ship LOT 1 of the files-parity design (design-r1.md §B/§D, review files-design
   - [x] `packages/artifacts/package.json` 0.2.13, `mcp-core.ts` version, CHANGELOG entry.
   - [x] `make lock-root` + api lock mirror (version + presigner peer/devDeps); cluster-mesh fixture re-pinned to the local 0.2.13 pack (integrity `sha512-bhPrb…CQ==`, deterministic); `make memory-l5-pack STAGE=pre-candidate ...` → manifest `c6bfabb3…` with 0.2.12 `1c740385` retained in `history/`.
   - [x] APP-P1 pin recompute + re-pin `cluster-registry.ts` + two api tests; 0007 asset sha256 in `host-storage.ts`.
-  - [x] `make scope-check` PASS C2 (before/during/after the commit sequence); scoped api pins verified host-identical (stack blocked by another lane's maildev :1080 — CI replays `app-mcp-registry` + `app-mcp-installed`).
+  - [x] `make scope-check` PASS C2 (before/during/after the commit sequence); scoped api tests green in-lane (`app-mcp-registry` 25 tests + `app-mcp-installed` 2 tests, stack on `MAILDEV_UI_PORT=1180` — the other lane holds :1080).
 
 - [x] **Lot 6 — Verify, push, PR, report** (PR #910 READY, CI run 41777185872, no merge)
   - [x] `make test-artifacts ENV=test-files-lot1` full green (553/553); `make test-artifacts-integration ENV=test-files-lot1` (migration proof incl. 0007); `make down-volumes ENV=test-files-lot1`.
