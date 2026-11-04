@@ -7,11 +7,11 @@ import { assertCompiledArtifactsProfile, ArtifactProfileInputError,
 import { createArtifactCommand, type ArtifactKeyDerivationBinding } from './server/command-identity.js';
 import { createGuardedEnsureService, type GuardedEnsureHost } from './server/service.js';
 import { assertArtifactReplayMigration } from './server/idempotency.js';
-import { combineSharingPolicy, resolveSharingPolicy, type KvPort, type SharingPolicy,
-  type SharingPolicyPort } from './server/ports.js';
+import { combineSharingPolicy, maskEmailHint, resolveSharingPolicy, type KvPort, type PrincipalDirectoryPort,
+  type SharingPolicy, type SharingPolicyPort } from './server/ports.js';
 import { createGuardedPublicationService, type GuardedPublicationDeps,
   type PublicationService } from './server/publication.js';
-import type { ArtifactAcl, ArtifactMetadata, AclStore } from './server/access.js';
+import { accessModeOf, evaluateGrant, type ArtifactAcl, type ArtifactMetadata, type AclStore } from './server/access.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import { applyEdits, type EditableFile, type EditOperation } from './server/edits.js';
 import { CommitQuarantineError, type ArtifactInvocationContext,
@@ -69,6 +69,8 @@ export interface HttpAppDeps {
   sharingPolicy?: SharingPolicyPort;
   /** G1: server-resolved platform admin predicate (never a tool argument). */
   actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean>;
+  /** G2: host principal directory; required for userRef resolution and output projection. */
+  directory?: PrincipalDirectoryPort;
   /** One trusted URL policy shared by HTTP and MCP receipts: the artifact page and the exact version page. */
   publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; versionUrl: string };
 }
@@ -90,7 +92,8 @@ function object(value: unknown): Record<string, unknown> {
 export function assertArtifactsTransportProfile(value: unknown): asserts value is CompiledArtifactsProfile {
   assertCompiledArtifactsProfile(value);
   const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get',
-    'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert', 'artifacts_set_access', 'artifacts_delete'];
+    'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert', 'artifacts_set_access', 'artifacts_delete',
+    'artifacts_lookup_people', 'artifacts_list_access'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
@@ -181,6 +184,49 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     if (typeof normalized.description === 'string') meta.description = normalized.description;
     if (typeof normalized.icon === 'string' || normalized.icon === null) meta.icon = normalized.icon;
     return Object.keys(meta).length > 0 ? meta : undefined;
+  }
+
+  /**
+   * G2 projection (converged-r2 §2.3): no internal principal id (`sub`) ever
+   * reaches a model payload. When a directory port is wired, every summary
+   * `ownerId` and grant `principalId` keeps its field name but carries the
+   * opaque `userRef` (re-injectable into `set_access`). Without a port the
+   * legacy trusted form is kept (G1 behaviour).
+   */
+  async function projectUserRef(internalId: string, storageScopeId: string): Promise<string> {
+    if (!deps.directory) return internalId;
+    return (await deps.directory.describePrincipal(storageScopeId, internalId))?.userRef ?? internalId;
+  }
+  async function projectSummary<T extends { ownerId: string }>(summary: T, storageScopeId: string): Promise<T> {
+    if (!deps.directory) return summary;
+    return { ...summary, ownerId: await projectUserRef(summary.ownerId, storageScopeId) };
+  }
+  async function projectGrants(grants: ArtifactAcl['grants'], storageScopeId: string): Promise<ArtifactAcl['grants']> {
+    if (!deps.directory) return grants;
+    return Promise.all(grants.map(async (grant) => ({ ...grant,
+      principalId: await projectUserRef(grant.principalId, storageScopeId) })));
+  }
+
+  /**
+   * G2 visibility for `artifacts_list_access` (§2.3 order (2), same admin
+   * exception as `set_access`): the owner, a grant holder, a content reader
+   * or an APPROVED platform admin of the SAME storageScopeId pass; any other
+   * actor gets `not_found` so the artifact's existence never leaks. The
+   * exception never makes the admin a content reader.
+   */
+  async function visibleForAccessList(artifactId: string, invocation: ArtifactInvocationContext): Promise<ArtifactAcl> {
+    const acl = await deps.acls.getArtifactAcl(artifactId);
+    if (!acl || acl.storageScopeId !== invocation.storageScopeId) throw new ArtifactOperationError('not_found');
+    if (acl.ownerId === invocation.actorId) return acl;
+    if (acl.grants.some((grant) => grant.principalId === invocation.actorId)) return acl;
+    const state = await deps.lifecycle.stateOf(artifactId);
+    const policy = await sharingPolicyContext(invocation.storageScopeId);
+    if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount, policy)) {
+      return acl;
+    }
+    if (await deps.actorIsAdmin?.(invocation.actorId, invocation.storageScopeId) === true &&
+      deps.isApprovedAccount?.(invocation.actorId) === true) return acl;
+    throw new ArtifactOperationError('not_found');
   }
 
   function blobKey(storageScopeId: string, digest: string): string {
@@ -338,10 +384,10 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           if (!outcome.ok) return outcome;
           const artifactId = outcome.result.artifactId;
           const acl = await visible(artifactId, invocation);
-          const summary = artifactSummary({ artifactId, acl, actorId: invocation.actorId,
+          const summary = await projectSummary(artifactSummary({ artifactId, acl, actorId: invocation.actorId,
             state: await deps.lifecycle.stateOf(artifactId), current: await deps.publication.getCurrent(artifactId),
             urls: deps.publicationUrls, approved: deps.isApprovedAccount,
-            policy: await sharingPolicyContext(invocation.storageScopeId) });
+            policy: await sharingPolicyContext(invocation.storageScopeId) }), invocation.storageScopeId);
           return { ...outcome, result: { status: 201, body: profile.resultEnvelopeVersion === 2
             ? { ...summary, ...outcome.result } : { ...outcome.result, ...acl.metadata } } };
         }
@@ -378,6 +424,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             sharingPolicy: deps.sharingPolicy,
             profileAllowPublicSharing: profile.rules.allowPublicSharing,
             actorIsAdmin: deps.actorIsAdmin,
+            directory: deps.directory,
             validateNewCommand: () => { profile.validate(capability, args, request.idempotencyKey); },
           }, invocation, command!, normalized.confirmationRef as string | undefined);
           return outcome.ok ? { ...outcome, result: { status: 200, body: outcome.result } } : outcome;
@@ -442,11 +489,12 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const state = await deps.lifecycle.stateOf(artifactId);
           const current = await deps.publication.getCurrent(artifactId);
           return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
-            result: { status: 200, body: { ...artifactSummary({ artifactId, acl, state, current,
+            result: { status: 200, body: { ...await projectSummary(artifactSummary({ artifactId, acl, state, current,
               actorId: invocation.actorId, urls: deps.publicationUrls, approved: deps.isApprovedAccount,
-              policy: await sharingPolicyContext(invocation.storageScopeId) }),
+              policy: await sharingPolicyContext(invocation.storageScopeId) }), invocation.storageScopeId),
               ...(acl.metadata !== undefined ? { metadata: acl.metadata } : {}),
-              ...(acl.ownerId === invocation.actorId ? { grants: acl.grants } : {}) } } };
+              ...(acl.ownerId === invocation.actorId
+                ? { grants: await projectGrants(acl.grants, invocation.storageScopeId) } : {}) } } };
         }
         if (capability === 'artifacts_list_versions') {
           const artifactId = normalized.artifactId as string;
@@ -473,6 +521,43 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
             result: { status: 200, body: { artifactId, total: releases.length, releases } } };
         }
+        if (capability === 'artifacts_lookup_people') {
+          // G2 approved-caller guard: the tool has no artifactId, so no visible()
+          // carries this check — a pending/disabled account gets access_denied
+          // before any directory enumeration.
+          if (deps.isApprovedAccount?.(invocation.actorId) !== true) throw new ArtifactOperationError('access_denied');
+          if (!deps.directory) throw new ArtifactProfileInputError(true);
+          const matches = await deps.directory.searchPeople(invocation.storageScopeId,
+            normalized.query as string, normalized.limit as number);
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 200, body: { matches: matches.map((person) => ({ userRef: person.userRef,
+              displayName: person.displayName, emailHint: maskEmailHint(person.email) })) } } };
+        }
+        if (capability === 'artifacts_list_access') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visibleForAccessList(artifactId, invocation);
+          if (!deps.directory) throw new ArtifactProfileInputError(true);
+          const admin = await deps.actorIsAdmin?.(invocation.actorId, invocation.storageScopeId) === true &&
+            deps.isApprovedAccount?.(invocation.actorId) === true;
+          const canManage = acl.ownerId === invocation.actorId || admin;
+          // Owner and admin see the full list; a simple reader sees the mode and its own entry only.
+          const visibleGrants = canManage ? acl.grants
+            : acl.grants.filter((grant) => grant.principalId === invocation.actorId);
+          const grants = await Promise.all(visibleGrants.map(async (grant) => {
+            const person = await deps.directory!.describePrincipal(invocation.storageScopeId, grant.principalId);
+            const userRef = person?.userRef ?? grant.principalId;
+            const { effective, blockedBy } = evaluateGrant(acl, grant.principalId, deps.isApprovedAccount ?? (() => false));
+            return { userRef, displayName: person?.displayName ?? userRef,
+              ...(person === undefined ? {} : { emailHint: maskEmailHint(person.email) }),
+              grant: grant.grant, createdAt: grant.createdAt ?? null, effective,
+              ...(blockedBy === undefined ? {} : { blockedBy }) };
+          }));
+          const owner = await deps.directory.describePrincipal(invocation.storageScopeId, acl.ownerId);
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 200, body: { artifactId, accessMode: accessModeOf(acl),
+              owner: { userRef: owner?.userRef ?? acl.ownerId, displayName: owner?.displayName ?? acl.ownerId },
+              canManage, grants } } };
+        }
         const visibleArtifacts: unknown[] = [];
         const listPolicy = await sharingPolicyContext(invocation.storageScopeId);
         for (const artifactId of await deps.acls.listArtifactIds()) {
@@ -480,9 +565,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           if (!acl || acl.storageScopeId !== invocation.storageScopeId) continue;
           const state = await deps.lifecycle.stateOf(artifactId);
           if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount, listPolicy)) {
-            visibleArtifacts.push(artifactSummary({ artifactId, acl, state, actorId: invocation.actorId,
+            visibleArtifacts.push(await projectSummary(artifactSummary({ artifactId, acl, state, actorId: invocation.actorId,
               current: await deps.publication.getCurrent(artifactId), urls: deps.publicationUrls,
-              approved: deps.isApprovedAccount, policy: listPolicy }));
+              approved: deps.isApprovedAccount, policy: listPolicy }), invocation.storageScopeId));
           }
         }
         const offset = normalized.offset as number;

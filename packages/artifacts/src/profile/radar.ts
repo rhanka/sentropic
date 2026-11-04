@@ -15,6 +15,13 @@ export const RADAR_ARTIFACTS_PROFILE: EffectiveArtifactProfile = freezeDeep<Effe
     { operation: 'list_versions', limits: {}, defaults: {} },
     { operation: 'get_source', limits: {}, defaults: {} },
     { operation: 'revert', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
+    // G2 sharing operations shipped with the profile (the radar tool selection
+    // itself stays the frozen four-tool L0 vector; hosts opt in by selecting
+    // the corresponding capabilities).
+    { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
+    { operation: 'lookup_people', limits: { lookupQueryMinUnits: 2, lookupQueryMaxUnits: 120, lookupLimitMax: 10 },
+      defaults: { limit: 10 } },
+    { operation: 'list_access', limits: {}, defaults: {} },
   ],
   rules: { lengthUnit: 'utf16', textEncoding: 'utf8', callerKeyNormalization: 'none',
     rejectLoneSurrogates: true, provenance: 'inline-original', keyDerivationAlgorithm: 'radar-derive-idempotency-v1', pathMaxBytes: 1024,
