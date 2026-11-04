@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ClusterMeshRuntimeStore, LocalWorkstationDescriptor, PtyActuatorPort } from '@sentropic/cluster-mesh';
+import type {
+  ClusterMeshRuntimeStore, LocalWorkstationDescriptor, PtyActuatorPort,
+  TenantMembershipRecord, TenantMembershipStore, TenantRegistryStore, WorkspaceDirectoryStore,
+} from '@sentropic/cluster-mesh';
 
 import {
   createClusterMeshAppAdapter,
@@ -28,11 +31,40 @@ function dependencies(
     },
     pollDeviceCode() { return { status: 'authorization_pending' }; },
     approveDeviceCode() { return { ok: true }; },
-    async resolveTenant() { return { error: 'unknown' }; },
     createWorkstationId() { return 'device:stable-test'; },
     ...overrides,
   };
 }
+
+/** P2 boundary doubles: active registry tenant `tenant-1` with slug `tenant-acme`. */
+function boundaryStores(membership: TenantMembershipRecord | null): Pick<
+  ClusterMeshAppDependencies, 'tenancyStores'
+> {
+  return {
+    tenancyStores: {
+      workspaces: {
+        findWorkspace: async (workspaceId: string) => workspaceId === 'workspace-1'
+          ? { workspaceId: 'workspace-1', tenantId: 'tenant-1', repoIdentity: null,
+              aliases: [], enrolledAt: new Date().toISOString() }
+          : null,
+      } as unknown as WorkspaceDirectoryStore,
+      tenants: {
+        findTenant: async (tenantId: string) => tenantId === 'tenant-1'
+          ? { tenantId: 'tenant-1', slug: 'tenant-acme', status: 'active' as const,
+              createdAt: new Date().toISOString() }
+          : null,
+      } as unknown as TenantRegistryStore,
+      memberships: {
+        findApprovedMembership: async () => membership,
+      } as unknown as TenantMembershipStore,
+    },
+  };
+}
+
+const approvedMembership = (role: 'member' | 'admin' = 'admin'): TenantMembershipRecord => ({
+  userId: 'user-1', tenantId: 'tenant-1', status: 'approved', tenantRole: role,
+  decidedBy: 'user-0', decidedAt: new Date().toISOString(), updatedAt: 'revision-7',
+});
 
 describe('cluster mesh app adapter', () => {
   it('should reject shared-secret qualification in real production and allow the e2e production image', () => {
@@ -79,11 +111,9 @@ describe('cluster mesh app adapter', () => {
     const adapter = createClusterMeshAppAdapter(dependencies({
       pollDeviceCode,
       sessionAdmission: admission,
-      async resolveTenant() { return { tenantId: 'tenant-acme' }; },
     }));
     const secondAdapter = createClusterMeshAppAdapter(dependencies({
       sessionAdmission: admission,
-      async resolveTenant() { return { tenantId: 'tenant-acme' }; },
     }));
 
     expect(adapter.devices.pollDeviceCode('device-code')).toBe(approved);
@@ -107,22 +137,31 @@ describe('cluster mesh app adapter', () => {
     expect(pollDeviceCode).toHaveBeenCalledWith('device-code');
   });
 
-  it('should derive tid only through the authoritative tenant resolver', async () => {
-    const resolveTenant = vi.fn(async () => ({ tenantId: 'tenant-acme' }));
-    const adapter = createClusterMeshAppAdapter(dependencies({ resolveTenant }));
+  it('should derive tid from the CM boundary port, never the workspace id or registry id', async () => {
+    const adapter = createClusterMeshAppAdapter(dependencies(boundaryStores(approvedMembership())));
 
     const context = await adapter.boundaries.resolve({ workspaceId: 'workspace-1', userId: 'user-1' });
 
-    expect(resolveTenant).toHaveBeenCalledWith({ workspaceId: 'workspace-1', userId: 'user-1' });
     expect(context.tid).toBe('tenant-acme');
     expect(context.tid).not.toBe('workspace-1');
+    expect(context.tid).not.toBe('tenant-1');
+    expect(context.userId).toBe('user-1');
+    expect(context.homeNodeId).toBe('node:sentropic-local');
   });
 
-  it('should deny tenant context when the authoritative resolver cannot validate membership', async () => {
-    const adapter = createClusterMeshAppAdapter(dependencies());
+  it('should deny tenant context when the CM boundary port has no approved membership', async () => {
+    const adapter = createClusterMeshAppAdapter(dependencies(boundaryStores(null)));
 
     await expect(
       adapter.boundaries.resolve({ workspaceId: 'workspace-1', userId: 'user-1' }),
+    ).rejects.toMatchObject({ code: 'tenant_membership_required' });
+  });
+
+  it('should deny tenant context in an unknown workspace even with an approved membership', async () => {
+    const adapter = createClusterMeshAppAdapter(dependencies(boundaryStores(approvedMembership('member'))));
+
+    await expect(
+      adapter.boundaries.resolve({ workspaceId: 'workspace-unknown', userId: 'user-1' }),
     ).rejects.toMatchObject({ code: 'tenant_membership_required' });
   });
 
