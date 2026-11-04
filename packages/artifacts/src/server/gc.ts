@@ -13,6 +13,7 @@
 import { createKeyMutex } from './ports.js';
 import type { CommitExecutor, FinalizeTxClient } from './commit/types.js';
 import { blobDigestOfKey, type PublicationBlobStore } from './publication.js';
+import { stagingKey, type StagingStore, type UploadSessionStore } from './uploads.js';
 
 export interface RefcountStore {
   addRef(digest: string, holder: string): Promise<void>;
@@ -291,6 +292,49 @@ export function createGcService(refs: RefcountStore): GcService {
           });
         } catch (error) {
           report.failures.push({ key, error: String(error) });
+        }
+      }
+      return report;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Files parity LOT 1 — staging sweeper (review finding 2: gc.ts had no
+// staging sweeper; migration 0007 adds uploads.expires_at and this enforces
+// it). Sessions still open past expires_at are expired: their staging object
+// is deleted and the ledger row moves to 'expired'. Per-session failures are
+// reported without throwing, exactly like blob collection, so one bad key
+// never blocks the sweep. Hosts schedule sweep() alongside collect().
+// ---------------------------------------------------------------------------
+
+export interface UploadSweepReport {
+  expired: string[];
+  deletedKeys: string[];
+  failures: { uploadId: string; error: string }[];
+}
+
+export interface UploadSweeper {
+  sweep(now?: Date): Promise<UploadSweepReport>;
+}
+
+/** Create the enforced staging sweeper over the injected session/staging ports. */
+export function createUploadSweeper(deps: {
+  sessions: UploadSessionStore;
+  staging: Pick<StagingStore, 'delete' | 'listKeys'>;
+}): UploadSweeper {
+  return {
+    async sweep(at = new Date()) {
+      const report: UploadSweepReport = { expired: [], deletedKeys: [], failures: [] };
+      for (const session of await deps.sessions.listExpiredOpen(at)) {
+        const key = stagingKey(session.storageScopeId, session.uploadId);
+        try {
+          await deps.staging.delete(key);
+          await deps.sessions.markExpired(session.uploadId);
+          report.expired.push(session.uploadId);
+          report.deletedKeys.push(key);
+        } catch (error) {
+          report.failures.push({ uploadId: session.uploadId, error: String(error) });
         }
       }
       return report;
