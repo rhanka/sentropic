@@ -45,6 +45,10 @@
       "types": "./dist/adapters/postgres-commit.d.ts",
       "import": "./dist/adapters/postgres-commit.js"
     },
+    "./adapters/postgres-reader-consent": {
+      "types": "./dist/adapters/postgres-reader-consent.d.ts",
+      "import": "./dist/adapters/postgres-reader-consent.js"
+    },
     "./adapters/postgres-activation": {
       "types": "./dist/adapters/postgres-activation.d.ts",
       "import": "./dist/adapters/postgres-activation.js"
@@ -58,6 +62,14 @@
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
       "import": "./dist/server/ports.js"
+    },
+    "./server/consent": {
+      "types": "./dist/server/consent.d.ts",
+      "import": "./dist/server/consent.js"
+    },
+    "./server/reader-store": {
+      "types": "./dist/server/reader-store.d.ts",
+      "import": "./dist/server/reader-store.js"
     },
     "./server/service": {
       "types": "./dist/server/service.d.ts",
