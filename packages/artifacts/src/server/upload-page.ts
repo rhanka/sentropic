@@ -40,7 +40,7 @@ export interface UploadPageStore {
   markExpired(pageSessionId: string): Promise<void>;
 }
 
-export function createMemoryUploadPageStore(): UploadPageStore {
+export function createMemoryUploadPageStore(_now: () => Date = () => new Date()): UploadPageStore {
   throw new Error('not implemented');
 }
 
@@ -49,23 +49,24 @@ export interface UploadPageCookieSigner {
   verify(value: string): string;
 }
 
-export function createHmacUploadPageCookieSigner(): UploadPageCookieSigner {
+export function createHmacUploadPageCookieSigner(_options: { secret: string | Uint8Array;
+  clock?: () => number; ttlSeconds?: number }): UploadPageCookieSigner {
   throw new Error('not implemented');
 }
 
-export function buildUploadPageCookie(): string {
+export function buildUploadPageCookie(_value: string, _maxAgeSeconds: number): string {
   throw new Error('not implemented');
 }
 
-export function parseUploadPageCookie(): string | undefined {
+export function parseUploadPageCookie(_header: string | undefined): string | undefined {
   throw new Error('not implemented');
 }
 
-export function uploadPageCsp(): string {
+export function uploadPageCsp(_s3Origins: readonly string[]): string {
   throw new Error('not implemented');
 }
 
-export function renderUploadPage(): string {
+export function renderUploadPage(_options: { s3Origins: readonly string[] }): string {
   throw new Error('not implemented');
 }
 
@@ -142,6 +143,8 @@ export interface UploadPageService {
     artifactId: string }): Promise<StagedFileRecord[]>;
 }
 
-export function createUploadPageService(): UploadPageService {
+export function createUploadPageService(_deps: UploadPageServiceDeps,
+  _options?: { now?: () => Date; ids?: () => string; pageTtlMs?: number;
+    maxOpenPages?: number }): UploadPageService {
   throw new Error('not implemented');
 }
