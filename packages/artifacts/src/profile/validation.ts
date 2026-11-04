@@ -2,6 +2,23 @@ import { isArtifactId, type JsonValue } from '../contracts.js';
 import { ArtifactProfileInputError, type EffectiveArtifactProfile, type ArtifactSchema } from './contracts.js';
 import { copyJson, freezeDeep, isRecord } from './json.js';
 import { operationProfile } from './schemas.js';
+import { SERVER_MAX_FILE_BYTES, SERVER_MAX_FILES_PER_RELEASE, SERVER_MAX_TOTAL_BYTES } from '../server/publication-limits.js';
+
+/** Release budget of a bundle publication: the publish operation's release* keys
+ *  override its inline values; absent keys default to the inline values, and the
+ *  server maxima are hard ceilings either way (profile/index.ts enforces them).
+ *  Exported for the HTTP layer (create_upload/commit_upload/publish_bundle). */
+export function releaseBudget(profile: EffectiveArtifactProfile): { filesMax: number; fileBytesMax: number; totalBytesMax: number;
+  inlineFileBytesMax: number; inlineTotalBytesMax: number } {
+  const publishLimits = profile.operations.find((entry) => entry.operation === 'publish')?.limits;
+  return {
+    filesMax: publishLimits?.releaseFilesMax ?? publishLimits?.publishFilesMax ?? SERVER_MAX_FILES_PER_RELEASE,
+    fileBytesMax: publishLimits?.releaseFileBytesMax ?? publishLimits?.maxDecodedFileBytes ?? SERVER_MAX_FILE_BYTES,
+    totalBytesMax: publishLimits?.releaseTotalBytesMax ?? publishLimits?.maxDecodedTotalBytes ?? SERVER_MAX_TOTAL_BYTES,
+    inlineFileBytesMax: publishLimits?.maxDecodedFileBytes ?? SERVER_MAX_FILE_BYTES,
+    inlineTotalBytesMax: publishLimits?.maxDecodedTotalBytes ?? SERVER_MAX_TOTAL_BYTES,
+  };
+}
 
 function requireInput(condition: unknown): asserts condition {
   if (!condition) throw new ArtifactProfileInputError();
@@ -64,7 +81,7 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);
   const normalized = { ...copyJson(defaults) as Record<string, JsonValue>, ...args } as Record<string, JsonValue>;
-  if (['ensure', 'publish', 'commit_upload', 'set_access', 'delete', 'revert'].includes(operation)) {
+  if (['ensure', 'publish', 'commit_upload', 'publish_bundle', 'set_access', 'delete', 'revert'].includes(operation)) {
     const key = args.idempotencyKey;
     requireInput(typeof key === 'string' && key.trim().length > 0 && key.length <= limits.idempotencyKeyMaxUnits);
     requireInput(envelopeKey === undefined || envelopeKey === key);
@@ -77,24 +94,71 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   }
   if (Object.hasOwn(args, 'releaseId')) requireInput(isArtifactId(args.releaseId));
   if (Object.hasOwn(args, 'expectedCurrentReleaseId')) requireInput(args.expectedCurrentReleaseId === null || isArtifactId(args.expectedCurrentReleaseId));
-  if (operation === 'publish') {
+  if (operation === 'publish' || operation === 'publish_bundle') {
     const hasFiles = Object.hasOwn(args, 'files');
-    const hasEdits = Object.hasOwn(args, 'edits');
-    // Exactly one content source: a full file set, or small edits on the current release.
-    requireInput(hasFiles !== hasEdits);
+    if (operation === 'publish') {
+      const hasEdits = Object.hasOwn(args, 'edits');
+      // Exactly one content source: a full file set, or small edits on the current release.
+      requireInput(hasFiles !== hasEdits);
+    } else {
+      // A bundle needs at least one content source: inline files and/or assets.
+      requireInput(hasFiles || Object.hasOwn(args, 'assets'));
+    }
     if (hasFiles) {
       const paths = new Set<string>();
       let total = 0;
+      const inlineFileBytesMax = operation === 'publish' ? limits.maxDecodedFileBytes : releaseBudget(profile).inlineFileBytesMax;
+      const inlineTotalBytesMax = operation === 'publish' ? limits.maxDecodedTotalBytes : releaseBudget(profile).inlineTotalBytesMax;
       normalized.files = (args.files as Record<string, JsonValue>[]).map((file) => {
         const path = file.path as string;
         requireInput(!paths.has(path) && Buffer.byteLength(path, 'utf8') <= profile.rules.pathMaxBytes);
         paths.add(path);
         const bytes = Object.hasOwn(file, 'text') ? Array.from(Buffer.from(file.text as string, 'utf8')) : file.bytes as number[];
         total += bytes.length;
-        requireInput(bytes.length <= limits.maxDecodedFileBytes && total <= limits.maxDecodedTotalBytes);
+        requireInput(bytes.length <= inlineFileBytesMax && total <= inlineTotalBytesMax);
         return { path, mimeType: file.mimeType, bytes };
       });
+      if (operation === 'publish_bundle' && Object.hasOwn(args, 'assets')) {
+        // Duplicate path refused across the files/assets union.
+        for (const asset of args.assets as Record<string, JsonValue>[]) {
+          requireInput(!paths.has(asset.path as string));
+        }
+      }
     }
+    if (operation === 'publish_bundle' && Object.hasOwn(args, 'assets')) {
+      const paths = new Set<string>();
+      if (hasFiles) for (const file of args.files as Record<string, JsonValue>[]) paths.add(file.path as string);
+      normalized.assets = (args.assets as Record<string, JsonValue>[]).map((asset) => {
+        const path = asset.path as string;
+        requireInput(!paths.has(path) && Buffer.byteLength(path, 'utf8') <= profile.rules.pathMaxBytes);
+        paths.add(path);
+        if (Object.hasOwn(asset, 'uploadId')) {
+          requireInput(isArtifactId(asset.uploadId as string));
+          return { path, uploadId: asset.uploadId };
+        }
+        const digest = asset.digest as string;
+        requireInput(/^sha256:[0-9a-f]{64}$/.test(digest) && Number.isSafeInteger(asset.size) && (asset.size as number) >= 1 &&
+          profile.rules.mimeTypes.includes(asset.mimeType as string));
+        return { path, digest, size: asset.size, mimeType: asset.mimeType };
+      });
+    }
+  }
+  if (operation === 'create_upload') {
+    // MIME must be inside the profile allowlist (itself within the server ceiling).
+    requireInput(profile.rules.mimeTypes.includes(args.mimeType as string));
+    if (Object.hasOwn(args, 'maxSize')) {
+      requireInput(Number.isSafeInteger(args.maxSize) && (args.maxSize as number) >= 1 &&
+        (args.maxSize as number) <= releaseBudget(profile).fileBytesMax);
+    }
+  }
+  if (operation === 'commit_upload') {
+    const path = args.path as string;
+    requireInput(Buffer.byteLength(path, 'utf8') <= profile.rules.pathMaxBytes);
+    requireInput(profile.rules.mimeTypes.includes(args.mimeType as string));
+    requireInput(/^sha256:[0-9a-f]{64}$/.test(args.digest as string));
+    requireInput(Number.isSafeInteger(args.size) && (args.size as number) >= 1 &&
+      (args.size as number) <= releaseBudget(profile).fileBytesMax);
+    requireInput(isArtifactId(args.uploadId as string));
   }
   return freezeDeep(normalized);
 }
