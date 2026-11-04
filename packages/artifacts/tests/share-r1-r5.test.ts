@@ -17,7 +17,8 @@ const profileWithVersions = (envelope: 1 | 2 = 1) => ({
   ...g2Profile(),
   ...(envelope === 2 ? { profileRevisionId: 'immo-artifacts.r1b', resultEnvelopeVersion: 2 as const,
     requireExpectedCurrentReleaseId: true as const } : {}),
-  selectedCapabilities: [...g2Profile().selectedCapabilities, 'artifacts_list_versions'],
+  selectedCapabilities: [...g2Profile().selectedCapabilities,
+    'artifacts_list_versions', 'artifacts_revert', 'artifacts_get_source'],
 });
 
 async function versionsWorld(envelope: 1 | 2 = 1) {
@@ -200,5 +201,107 @@ describe('R5 — revoke stays allowed for dormant principals', () => {
     const after = await g2.listAccess('idp-sub-alice');
     expect(after.status).toBe(200);
     expect(after.body.grants).toEqual([]);
+  });
+});
+
+describe('R1c — no raw sub in any receipt or output manifest', () => {
+  const manifestOwnerOf = (body: unknown): unknown => {
+    const manifest = (body as { manifest?: unknown }).manifest;
+    if (typeof manifest !== 'string') return undefined;
+    try {
+      return (JSON.parse(manifest) as { ownerId?: unknown }).ownerId;
+    } catch {
+      return undefined;
+    }
+  };
+
+  it('projects the release manifest ownerId in publish, revert, get_source and conflict outputs', async () => {
+    const v = await versionsWorld();
+    const seen: unknown[] = [];
+
+    const first = await v.publish('idp-sub-alice', 'r1c-pub-1');
+    expect(first.status).toBe(201);
+    seen.push(first.body);
+    expect(manifestOwnerOf(first.body)).toBe('ref-alice');
+    expect((first.body as { digest: string }).digest)
+      .toBe((JSON.parse((first.body as { manifest: string }).manifest) as { digest: string }).digest);
+    expectNoInternalLeak(first.body);
+    const firstReleaseId = (first.body as { releaseId: string }).releaseId;
+    const storedFirst = await v.world.state.getRelease(firstReleaseId);
+    expect(JSON.parse(storedFirst!.manifest).ownerId).toBe('idp-sub-alice');
+
+    const second = await v.publish('idp-sub-alice', 'r1c-pub-2');
+    expect(second.status).toBe(201);
+    seen.push(second.body);
+    expect(manifestOwnerOf(second.body)).toBe('ref-alice');
+    expectNoInternalLeak(second.body);
+    const secondReleaseId = (second.body as { releaseId: string }).releaseId;
+
+    const reverted = await v.world.mcp.invoke({ tool: 'artifacts_revert',
+      invocation: v.world.invocation('idp-sub-alice'),
+      args: { artifactId: v.artifactId, releaseId: firstReleaseId,
+        expectedCurrentReleaseId: secondReleaseId, idempotencyKey: 'r1c-revert-1' } });
+    expect(reverted.status).toBe(201);
+    seen.push(reverted.body);
+    expect(manifestOwnerOf(reverted.body)).toBe('ref-alice');
+    expectNoInternalLeak(reverted.body);
+
+    const source = await v.world.mcp.invoke({ tool: 'artifacts_get_source',
+      invocation: v.world.invocation('idp-sub-alice'), args: { artifactId: v.artifactId } });
+    expect(source.status).toBe(200);
+    seen.push(source.body);
+    expect(manifestOwnerOf(source.body)).toBe('ref-alice');
+    expectNoInternalLeak(source.body);
+
+    const listed = await v.versions('idp-sub-alice');
+    expect(listed.status).toBe(200);
+    seen.push(listed.body);
+    expectNoInternalLeak(listed.body);
+
+    const got = await v.get('idp-sub-alice');
+    expect(got.status).toBe(200);
+    seen.push(got.body);
+    expectNoInternalLeak(got.body);
+
+    v.directory.deletePrincipal('idp-sub-alice');
+    const afterDelete = await v.world.mcp.invoke({ tool: 'artifacts_publish',
+      invocation: v.world.invocation('idp-sub-alice'),
+      args: { artifactId: v.artifactId, idempotencyKey: 'r1c-pub-3',
+        files: [{ path: 'index.html', mimeType: 'text/html', text: '<h1>after delete</h1>' }] } });
+    expect(afterDelete.status).toBe(201);
+    seen.push(afterDelete.body);
+    expect(manifestOwnerOf(afterDelete.body)).toBe(UNKNOWN_USER_REF);
+    expectNoInternalLeak(afterDelete.body);
+    const deletedReleaseId = (afterDelete.body as { releaseId: string }).releaseId;
+    expect(JSON.parse((await v.world.state.getRelease(deletedReleaseId))!.manifest).ownerId)
+      .toBe('idp-sub-alice');
+
+    const sourceAfterDelete = await v.world.mcp.invoke({ tool: 'artifacts_get_source',
+      invocation: v.world.invocation('idp-sub-alice'), args: { artifactId: v.artifactId } });
+    expect(sourceAfterDelete.status).toBe(200);
+    seen.push(sourceAfterDelete.body);
+    expect(manifestOwnerOf(sourceAfterDelete.body)).toBe(UNKNOWN_USER_REF);
+    expectNoInternalLeak(sourceAfterDelete.body);
+
+    for (const body of seen) expectNoInternalLeak(body);
+  });
+
+  it('projects the conflict currentSource manifest instead of leaking the sub', async () => {
+    const v = await versionsWorld();
+    const firstConf = await v.publish('idp-sub-alice', 'r1c-conf-1');
+    expect(firstConf.status).toBe(201);
+    const second = await v.publish('idp-sub-alice', 'r1c-conf-2');
+    expect(second.status).toBe(201);
+    const stale = await v.world.mcp.invoke({ tool: 'artifacts_publish',
+      invocation: v.world.invocation('idp-sub-alice'),
+      args: { artifactId: v.artifactId, idempotencyKey: 'r1c-conf-3',
+        expectedCurrentReleaseId: (firstConf.body as { releaseId: string }).releaseId,
+        edits: [{ path: 'index.html', oldStr: '<h1>hello</h1>', newStr: '<h1>stale</h1>' }] } });
+    expect(stale.status).toBe(409);
+    expectNoInternalLeak(stale.body);
+    const currentSource = (stale.body as { conflict: { currentSource: { manifest: string } } })
+      .conflict.currentSource;
+    expect(JSON.parse(currentSource.manifest).ownerId).toBe('ref-alice');
+    expectNoInternalLeak(currentSource);
   });
 });
