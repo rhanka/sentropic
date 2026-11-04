@@ -74,6 +74,7 @@ END $$;
 \i /sql/sync-clients.sql
 \i /sql/service-policy.sql
 \i /sql/sync-services.sql
+\i /sql/register-workload.sql
 
 -- 6. Explicit prod consents converge only for mapped clients and replica users.
 CREATE TEMP TABLE src_consents (LIKE oauth_consents INCLUDING DEFAULTS) ON COMMIT DROP;
