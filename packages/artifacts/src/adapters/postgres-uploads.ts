@@ -134,23 +134,45 @@ function using(pool: Pool, db: Db, inTx: boolean): UploadSessionStore {
         'SELECT * FROM artifacts.staged_files WHERE artifact_id = $1 ORDER BY path', [artifactId]);
       return rows.map(toStaged);
     },
-    async sumOpenMaxSize(_storageScopeId) {
-      throw new Error('not implemented');
+    async sumOpenMaxSize(storageScopeId) {
+      const { rows } = await db.query<{ total: string }>(
+        `SELECT COALESCE(SUM(max_size), 0) AS total FROM artifacts.uploads
+         WHERE storage_scope_id = $1 AND state = 'open'`,
+        [storageScopeId]);
+      return Number(rows[0]?.total ?? 0);
     },
-    async sumStagedBytesByScope(_storageScopeId) {
-      throw new Error('not implemented');
+    async sumStagedBytesByScope(storageScopeId) {
+      const { rows } = await db.query<{ total: string }>(
+        `SELECT COALESCE(SUM(s.size), 0) AS total FROM artifacts.staged_files s
+         JOIN artifacts.uploads u ON u.id = s.upload_id
+         WHERE u.storage_scope_id = $1`,
+        [storageScopeId]);
+      return Number(rows[0]?.total ?? 0);
     },
-    async listPageSessions(_pageSessionId) {
-      throw new Error('not implemented');
+    async listPageSessions(pageSessionId) {
+      const { rows } = await db.query<UploadRow>(
+        'SELECT * FROM artifacts.uploads WHERE page_session_id = $1 ORDER BY created_at, id',
+        [pageSessionId]);
+      return rows.map(toSession);
     },
-    withScopeLock(_storageScopeId, _action) {
-      throw new Error('not implemented');
+    withScopeLock(storageScopeId, action) {
+      // A tx-bound facade inherits the outer lock: never nest transactions.
+      if (inTx) return action(using(pool, db, true));
+      return tx(pool, async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+          [`artifacts-uploads:${storageScopeId}`]);
+        return action(using(pool, client, true));
+      });
     },
-    async listExpiredStaged(_at, _ttlMs) {
-      throw new Error('not implemented');
+    async listExpiredStaged(at, ttlMs) {
+      const cutoff = new Date(at.getTime() - ttlMs).toISOString();
+      const { rows } = await db.query<StagedRow>(
+        'SELECT * FROM artifacts.staged_files WHERE created_at <= $1 ORDER BY created_at',
+        [cutoff]);
+      return rows.map(toStaged);
     },
-    async deleteStagedFile(_uploadId) {
-      throw new Error('not implemented');
+    async deleteStagedFile(uploadId) {
+      await db.query('DELETE FROM artifacts.staged_files WHERE upload_id = $1', [uploadId]);
     },
   };
 }
