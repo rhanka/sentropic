@@ -1,11 +1,11 @@
-# Feature: Release train N+1 (integration lane, wagons E + F)
+# Feature: Release train N+1 (integration lane, wagons E + F + G)
 
 ## Objective
-Integrate the wagon branches into one release branch with `--no-ff` merges in order E then F, assign package versions once, regenerate the integration-owned files once through make, and open exactly one READY PR with one CI.
+Integrate the wagon branches into one release branch with `--no-ff` merges in order E then F then G, assign package versions once, regenerate the integration-owned files once through make, and open exactly one READY PR with one CI.
 
 ## Scope / Guardrails
-- Scope limited to the union of wagons E (`chore/ci-ai-tests-scoped` @ fe78bfcbf, AI test shards scoped to AI-relevant path changes + async-wait root-cause fix) and F (`feat/artifacts-sqlite-u1` @ 0d4acee17, h2a artifacts durable local SQLite adapter U1); both merged, departure called.
-- Merge order: E first, then F, each with `git merge --no-ff`; conflicts resolved as UNION.
+- Scope limited to the union of wagons E (`chore/ci-ai-tests-scoped` @ fe78bfcbf, AI test shards scoped to AI-relevant path changes + async-wait root-cause fix), F (`feat/artifacts-sqlite-u1` @ 0d4acee17, h2a artifacts durable local SQLite adapter U1) and G (`feat/artifacts-files-parity-lot2` @ 6546031d0, artifacts files-parity LOT 2: upload pages, staged assets, GC/quotas); all three merged, departure called.
+- Merge order: E first, then F, then G, each with `git merge --no-ff`; conflicts resolved as UNION.
 - The integration lane owns versions, CHANGELOG entries, locks, the APP-P1 pin, cluster-mesh fixtures and the L5 manifest: on conflict take either side, then REGENERATE once at the end through make.
 - Versions: `@sentropic/artifacts` 0.2.14 (stays in 0.2.x: cluster-mesh pins peer `>=0.2.0 <0.3.0`); no other package bumped unless touched.
 - Pre-existing MCP tool definitions stay byte-identical (tools/list snapshot must pass).
@@ -18,8 +18,9 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.github/workflows/ci.yml` (TN01-EX9, wagon E scoped AI shards)
+  - `.github/workflows/ci.yml` (TN01-EX9, wagon E scoped AI shards; TN01-EX11 ai-filter coverage fix + guard step)
   - `scripts/ci/ci-expected-results.test.mjs` (TN01-EX9, wagon E expected-results sync)
+  - `scripts/check-ci-ai-filters.sh` (TN01-EX11, ai-filter self-test: fails when an AI service path is uncovered)
   - `api/tests/ai/initiative-generation-async.test.ts` (TN01-EX9, wagon E root-cause wait fix)
   - `packages/artifacts/**` (wagon F sqlite adapter set + 0.2.14 version normalization)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (TN01-EX3)
@@ -54,7 +55,8 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
 - TN01-EX6 (APP-P1 pin): the shipped profile digest and manifest digest in `api/src/services/mcp/cluster-registry.ts` are recomputed through make after the union; pre-existing tool selection unchanged. Rollback: restore origin/main digests.
 - TN01-EX9 (wagon E CI scoping): `.github/workflows/ci.yml` AI-shard path filter, `ci-expected-results.test.mjs` sync and the `initiative-generation-async` deterministic-wait fix (BR02-EX3 on the wagon branch) are taken as the wagon union; the integration lane amends nothing there except conflict union. Rollback: revert those hunks to origin/main.
 - TN01-EX10 (union source repair): wagon F's stale base predates main's G2 sharing port and LOT1 presigner/export additions, so `--theirs` conflict resolution dropped main-side lines and the union root-cause fix restores them: `packages/artifacts/package.json` presigner peer+dev deps and the four missing subpath exports (`./adapters/s3-uploads`, `./adapters/postgres-reader-consent`, `./server/consent`, `./server/reader-store`), `packages/artifacts/src/mcp-core.ts` byte-stable block (version bumped to 0.2.14), `packages/artifacts/CHANGELOG.md` 0.2.13 section kept under the new 0.2.14 entry, `api/tests/api/app-mcp-registry.test.ts` restored to main (history chain + refusal coverage) pending the 0.2.14 digest recompute, `packages/cluster-mesh/src/modules/catalog.ts` range restored to `>=0.2.0 <0.3.0` (conditional path, one line). Rollback: re-checkout the wagon-F side of each file.
-- Wagon watch: OPEN until the single train CI is green, then wagons E and F are commented as superseded and closed.
+- Wagon watch: OPEN until the single train CI is green, then wagons E, F and G are commented as superseded and closed.
+- TN01-EX11 (ai-filter false-negative fix, review E1): the `ai` filter covered only `default-org-aware-prompts.ts` among prompt configs, so changes to sibling prompt files, comment/document backends and `packages/llm-gateway/**` skipped the AI shards. Fixed at the root: `api/src/config/**` replaces the single-file entry (directory glob), plus `api/src/services/comments/**`, `api/src/services/context-*.ts`, `api/src/services/document-*.ts` and `packages/llm-gateway/**`. New self-test `scripts/check-ci-ai-filters.sh` (wired into the `changes` job) fails when any listed AI service path is uncovered; verified green on the fixed filter and red on the pre-fix filter (11 uncovered paths). Rollback: revert the `ai` block and the guard step to origin/main.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -122,3 +124,11 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
   - [x] PR #914 `pull_request` events spawned no Actions run: `opened` + `synchronize` + `reopened` all produced zero check-runs and zero workflow runs (same quirk as wagon F's first push; `ci.yml` YAML valid, base=main correct, workflow active, global Actions flow healthy). Triggered the single CI with a normal content commit, then close/reopen — still nothing.
   - [x] Manual dispatch (wagon-F precedent): `gh workflow run CI --ref release/train-next` → run 41842605281 (`workflow_dispatch`, in progress). This is the one and only CI run on the final head; empty-commit budget (3, owner-authorized) untouched. Pull-request event delivery for #914 to be investigated owner-side.
   - [ ] Watch the single PR CI; fix real failures at the root; if only the AI shards fail, retrigger with an empty commit, up to 3 times (owner-authorized).
+- [ ] **Lot 7 — Train fix pass (rebase onto A4 main + reviews E1/F1 + wagon G)**
+  - [x] Rebase onto origin/main (a1d0a815a, A4 train): already contained; union keeps this train BRANCH.md with the BRLOCK-EX1 line; generated files re-taken then regenerated in the single pass below.
+  - [x] E1 root fix (TN01-EX11): `ai` filter covers `api/src/config/**`, `api/src/services/comments/**`, `context-*.ts`, `document-*.ts`, `packages/llm-gateway/**`; self-test `scripts/check-ci-ai-filters.sh` green on fixed filter, red on pre-fix filter (11 paths); wired into the `changes` job.
+  - [ ] Merge wagon G (`feat/artifacts-files-parity-lot2` @ 6546031d0) with `git merge --no-ff`; conflicts resolved as UNION (train BRANCH.md kept; version stays 0.2.14); no markers left.
+  - [ ] Versions ONCE: `@sentropic/artifacts` 0.2.14; `packages/cluster-mesh` restored to main's `0.26.0-dev.9` (train touches no cm src); no other package above main.
+  - [ ] Regen ONCE through make: root lock, api lock (F1: artifacts entry 0.2.14), APP-P1 pin, selected fixture (mesh dev.9 + artifacts 0.2.14 + tuple integrity), L5 P1 manifest; `scope-check` PASS C2.
+  - [ ] Scoped tests on `ENV=test-train-next` (LAST): E1 self-test, F1 lock-sync assert, G files-parity-lot2 + artifacts suites, pin lanes, tools/list snapshot byte-identical for pre-existing tools; `make down-volumes ENV=test-train-next` last.
+  - [ ] Atomic `make commit` commits (specific files only, ≤150 lines except machine-generated regens); push `--force-with-lease`; PR #914 body lists wagons E, F, G; single CI watched, real failures fixed at root.
