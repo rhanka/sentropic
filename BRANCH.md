@@ -19,6 +19,7 @@ Ship LOT 1 of the files-parity design (design-r1.md §B/§D, review files-design
   - `package-lock.json` and `api/package-lock.json` — mechanical lockfile sync of the 0.2.13 version bump only (version-string-only diffs, same pattern as ddbe7b65e); explicit allowed wins over the `api/**` forbidden glob
   - `Makefile` — locked-tools `@aws-sdk/s3-request-presigner` dep sync on the artifacts lanes only (`build-artifacts`, `typecheck-artifacts`, `test-artifacts-integration` lines); explicit allowed wins over the `Makefile` forbidden glob, version-string-only pattern
   - `scripts/ci/tool-locks.json` — two appended tool-lock entries for the presigner key sets above (generated through the lane Node image, same pinned versions); append-only, no existing entry touched
+  - `packages/cluster-mesh/tests/storage/cold-workspace.sh` — one-line presigner addition to the workspace tool install (same pinned version) plus its shallow tool-lock entry; without it every cluster-mesh/api lane typecheck of `packages/artifacts` fails, so `origin/main` would break at merge; explicit allowed wins over unknown
   - `api/src/services/mcp/cluster-registry.ts`
   - `api/src/services/artifacts/host-storage.ts` (0007 migration asset pin only)
   - `api/tests/api/app-mcp-registry.test.ts`
