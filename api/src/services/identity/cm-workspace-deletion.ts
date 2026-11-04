@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import {
+  createAtomicWorkspaceDeletionV1,
   IdentityCustodyErrorV1,
   IdentityNotFoundError,
+  type AtomicWorkspaceDeletionV1,
   type ConnectorRevocationCustodyPortV1,
   type IdentityExternalRevocationDraftV1,
   type WorkspaceBusinessDeletionPortV1,
@@ -10,10 +13,11 @@ import {
 } from '@sentropic/cluster-mesh';
 import type { PoolClient } from 'pg';
 
-import type { ConnectorSourceScope } from './cm-connector-custody';
+import { createAppConnectorCustody, type ConnectorSourceScope } from './cm-connector-custody';
 import { deleteCmBusinessWorkspaces } from './cm-deletion-workspaces';
+import { loadCmWorkspaceDeletionOptions } from './cm-deletion-options';
 import { identityDeliveryId } from './cm-delivery-record';
-import type { CmIdentityTransaction } from './cm-transaction';
+import { cmIdentityUnitOfWork, type CmIdentityTransaction } from './cm-transaction';
 
 /**
  * App business/plane ports for standalone workspace deletion
@@ -137,4 +141,31 @@ export function createCmWorkspaceDeletionConnectorPlane(
       if (remaining.rows.length) throw new IdentityCustodyErrorV1('identity_cascade_participant_missing');
     },
   };
+}
+
+/** Caller ids come from verified HTTP authority; the request cannot invent budgets. */
+export const deleteCmWorkspace = (
+  command: { readonly workspaceId: string; readonly actorId: string },
+  operationId = randomUUID(),
+): Promise<ReturnType<AtomicWorkspaceDeletionV1['deleteWorkspace']>> => {
+  const attempts = new WeakMap<CmIdentityTransaction, WorkspaceAttempt>();
+  const custody = createAppConnectorCustody(async (source, input, tx) => {
+    const attempt = attempts.get(tx);
+    const expected = attempt?.sources.get(source.id);
+    if (!attempt || !expected || source.userId !== expected.userId || source.provider !== expected.provider
+      || source.workspaceId !== expected.workspaceId || input.subjectId !== expected.userId
+      || input.deliveryId !== identityDeliveryId(attempt.command.operationId, STEP, 'connector_grant', source.id)
+      || input.workspaceIdsToDelete.length !== 1
+      || input.workspaceIdsToDelete[0] !== attempt.command.workspaceId) invalid();
+  });
+  const coordinator = createAtomicWorkspaceDeletionV1({
+    unitOfWork: cmIdentityUnitOfWork,
+    business: cmWorkspaceDeletionBusiness,
+    authorization: cmWorkspaceDeletionAuthorization,
+    connectorPlane: createCmWorkspaceDeletionConnectorPlane(custody, attempts),
+    connectorCustody: custody,
+    clock: () => new Date().toISOString(),
+    transactionOptions: { deletion: loadCmWorkspaceDeletionOptions().deletion },
+  });
+  return coordinator.deleteWorkspace({ operationId, ...command });
 };
