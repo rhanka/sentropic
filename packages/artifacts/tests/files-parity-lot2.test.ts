@@ -114,7 +114,7 @@ async function ensureArtifact(world: World, mcp: ReturnType<typeof scannedMcp>, 
 
 function makePage(world: World, events: ArtifactsMetricEvent[], now: () => Date) {
   return createUploadPageService({
-    pages: createMemoryUploadPageStore(),
+    pages: world.uploadPages,
     sessions: world.uploadSessions,
     staging: world.uploadStaging,
     signer: world.uploadSigner.signer,
