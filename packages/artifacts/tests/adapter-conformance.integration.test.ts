@@ -44,7 +44,7 @@ function s3Env(name: string): string {
   return value;
 }
 
-const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql']
+const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql', '0006_sharing.sql', '0007_uploads.sql', '0008_reader_consent.sql']
   .map((name) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', name), 'utf8'));
 
 const s3 = new S3Client({
