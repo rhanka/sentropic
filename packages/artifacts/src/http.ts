@@ -676,6 +676,29 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           return { ok: true, invocationId: invocation.invocationId, commitState: 'committed', replayed: false,
             result: { status: 201, body } };
         }
+        if (capability === 'artifacts_create_upload_page') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          let minted;
+          try {
+            minted = await pageService!.mint({ artifactId, storageScopeId: invocation.storageScopeId,
+              ownerId: acl.ownerId,
+              ...(normalized.maxFiles === undefined ? {} : { maxFiles: normalized.maxFiles as number }) });
+          } catch (cause) {
+            if (cause instanceof Error && /quota exceeded/.test(cause.message)) {
+              throw new ArtifactOperationError('limit_exceeded', { cause,
+                publicDetails: { upload: { reason: 'open_page_quota' } } });
+            }
+            if (cause instanceof Error && /invalid/.test(cause.message)) throw new ArtifactProfileInputError();
+            throw cause;
+          }
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 201, body: { pageSessionId: minted.pageSessionId,
+              uploadPageUrl: minted.uploadPageUrl, expiresAt: minted.expiresAt, maxFiles: minted.maxFiles,
+              maxFileBytes: minted.maxFileBytes, maxTotalBytes: minted.maxTotalBytes,
+              allowedMimeTypes: minted.allowedMimeTypes } } };
+        }
         if (capability === 'artifacts_publish_bundle') {
           const artifactId = normalized.artifactId as string;
           const acl = await visible(artifactId, invocation);
