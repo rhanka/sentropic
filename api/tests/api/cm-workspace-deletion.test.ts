@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import { app } from '../../src/app';
-import { db } from '../../src/db/client';
-import { workspaces } from '../../src/db/schema';
+import { db, pool } from '../../src/db/client';
+import { chatSessions, documentConnectorAccounts, workspaces } from '../../src/db/schema';
 import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
-import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
+import { cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
+import { createCmConnectorFixture, findConnectorFixture } from '../utils/cm-connector-fixture';
 
 /**
  * a4-cm-gaps-r2 §10.7 series 4 (P5), app side, part 1: the workspace DELETE
@@ -33,6 +34,7 @@ describe('CM workspace hard deletion (P5 route binding)', () => {
   let admin: TestUser;
   let member: TestUser;
   const createdWorkspaceIds: string[] = [];
+  const connectorIds: string[] = [];
 
   beforeEach(async () => {
     vi.stubEnv('CM_IDENTITY_DELETION_BUDGETS_JSON', JSON.stringify({
@@ -48,6 +50,10 @@ describe('CM workspace hard deletion (P5 route binding)', () => {
 
   afterEach(async () => {
     vi.unstubAllEnvs();
+    if (connectorIds.length) {
+      await db.delete(documentConnectorAccounts).where(inArray(documentConnectorAccounts.id, connectorIds));
+      connectorIds.length = 0;
+    }
     for (const id of createdWorkspaceIds) {
       await cmDeleteWorkspaceMembers(id);
       await db.delete(workspaces).where(eq(workspaces.id, id)).catch(() => undefined);
@@ -86,5 +92,77 @@ describe('CM workspace hard deletion (P5 route binding)', () => {
     expect(gone).toHaveLength(0);
     const again = await remove(wsId, admin.sessionToken);
     expect(again.status).toBe(404);
+  });
+
+  it("captures other members' in-workspace connector rows with their own ids as subject", async () => {
+    const wsId = await createWorkspace(admin.sessionToken);
+    createdWorkspaceIds.push(wsId);
+    const elsewhere = await createWorkspace(admin.sessionToken);
+    createdWorkspaceIds.push(elsewhere);
+    await putCmWorkspaceMember(wsId, member.id, 'editor');
+    await putCmWorkspaceMember(elsewhere, member.id, 'editor');
+    const inside = await createCmConnectorFixture({ ...member, workspaceId: wsId });
+    const outside = await createCmConnectorFixture({ ...member, workspaceId: elsewhere });
+    connectorIds.push(inside.accountId, outside.accountId);
+    expect(await hide(wsId, admin.sessionToken)).toMatchObject({ status: 200 });
+    const response = await remove(wsId, admin.sessionToken);
+    expect(response.status).toBe(204);
+    expect(await findConnectorFixture(inside.accountId)).toHaveLength(0);
+    expect(await findConnectorFixture(outside.accountId)).toHaveLength(1);
+    const deliveries = await cmQuery<{ delivery_id: string; subject_id: string; target_ref: string; state: string }>(
+      `SELECT delivery_id, subject_id, target_ref, state FROM ${cmTable('identity_revocation_outbox')}
+       WHERE target_ref = $1 AND step = 'connector_grants'`,
+      [inside.accountId],
+    );
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]).toMatchObject({ subject_id: member.id, state: 'pending' });
+    const custody = await cmQuery(
+      `SELECT 1 FROM control.connector_revocation_custody WHERE delivery_id = $1`,
+      [deliveries[0]!.delivery_id],
+    );
+    expect(custody).toHaveLength(1);
+  });
+
+  it('deletes the workspace chats with the workspace (Q-WS1)', async () => {
+    const wsId = await createWorkspace(admin.sessionToken);
+    createdWorkspaceIds.push(wsId);
+    const sessionId = `chat-${wsId}`;
+    await db.insert(chatSessions).values({ id: sessionId, userId: member.id, workspaceId: wsId });
+    expect(await hide(wsId, admin.sessionToken)).toMatchObject({ status: 200 });
+    expect((await remove(wsId, admin.sessionToken)).status).toBe(204);
+    expect(await db.select().from(chatSessions).where(eq(chatSessions.id, sessionId))).toHaveLength(0);
+  });
+
+  it('notifies deleted only after commit', async () => {
+    const seen: Array<{ channel: string; payload: string }> = [];
+    const client = await pool.connect();
+    const handler = (msg: { channel: string; payload?: string }) => {
+      seen.push({ channel: msg.channel, payload: msg.payload ?? '' });
+    };
+    client.on('notification', handler);
+    try {
+      await client.query('LISTEN workspace_events');
+      const wsId = await createWorkspace(admin.sessionToken);
+      createdWorkspaceIds.push(wsId);
+      await putCmWorkspaceMember(wsId, member.id, 'viewer');
+      const premature = await remove(wsId, admin.sessionToken);
+      expect(premature.status).toBe(400);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(seen.filter((s) => s.payload.includes(wsId) && s.payload.includes('deleted'))).toHaveLength(0);
+      expect(await hide(wsId, admin.sessionToken)).toMatchObject({ status: 200 });
+      expect((await remove(wsId, admin.sessionToken)).status).toBe(204);
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline) {
+        if (seen.some((s) => s.payload.includes(wsId) && s.payload.includes('deleted'))) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const deleted = seen.filter((s) => s.payload.includes(wsId) && s.payload.includes('deleted'));
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0]!.payload).toContain(member.id);
+    } finally {
+      client.removeListener('notification', handler);
+      await client.query('UNLISTEN *').catch(() => undefined);
+      client.release();
+    }
   });
 });
