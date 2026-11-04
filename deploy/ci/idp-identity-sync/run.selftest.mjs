@@ -49,7 +49,7 @@ export async function runTests(load, bundles) {
     delete entry.valueFrom; entry.value = values.JOB_NAME;
     assert.deepEqual(job.spec, expected);
     const hostile = '"\nother: injected\\value';
-    assert.equal(loadText(render(raw, { ...values, ALLOWED_REKEY: hostile })).spec.template.spec.containers[0].env.find(e => e.name === 'ALLOWED_REKEY').value, hostile);
+    assert.equal(loadText(render(raw, { ...values, ALLOWED_CLIENTS: hostile })).spec.template.spec.containers[0].env.find(e => e.name === 'ALLOWED_CLIENTS').value, hostile);
   });
   function loadText(raw) { return parse(raw); }
   await check('import refreshes the matching preprod bundle before creating a Job against a stale importer', async () => {
@@ -88,17 +88,10 @@ export async function runTests(load, bundles) {
     let calls = 0;
     assert.equal(await waitJob('test', 'job', 1, () => ({ stdout: JSON.stringify({ status: ++calls === 1 ? { active: 1 } : { succeeded: 1 } }) }), async () => {}), 'complete');
   });
-  await check('rendered prod export reports user, WebAuthn and consent counts only', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'idp-export-test-'));
-    try {
-      writeFileSync(join(dir, 'snapshot.csv'), '2026-10-04 00:00:00,108,118,128,138\n');
-      const script = bundles.prod.find(o => o.kind === 'ConfigMap' && o.metadata.name === 'sentropic-idp-identity-export-sql').data['export-prod.sh'];
-      const reporting = script.slice(script.indexOf('IFS=, read')).replace('/dev/termination-log', './termination.json');
-      const result = spawnSync('sh', ['-ec', reporting], { cwd: dir, encoding: 'utf8' });
-      assert.equal(result.status, 0); assert.equal(result.stderr, '');
-      assert.equal(result.stdout, 'users=108 webauthn=118 consents=128 clients=138\n');
-      assert.deepEqual(JSON.parse(readFileSync(join(dir, 'termination.json'), 'utf8')), { users: 108, webauthn: 118, consents: 128, clients: 138 });
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+  await check('rendered prod export invokes the gated SQL legs without reporting', () => {
+    const script = bundles.prod.find(o => o.kind === 'ConfigMap' && o.metadata.name === 'sentropic-idp-identity-export-sql').data['export-prod.sh'];
+    assert(script.includes('/sql/export-prod.sql'), 'the executed file is the gated SQL leg');
+    assert(!script.includes('SHA256SUMS'), 'the CM runner writes the manifest, not the SQL leg');
   });
   for (const verdict of ['complete', 'failed', 'invalid', 'zero-consents', 'missing-consents', 'invalid-consents', 'negative-consents', 'fractional-consents', 'unsafe-consents']) await check(`export ${verdict} always re-suspends and uses pod status only`, async () => {
     const patches = []; let lists = 0;
