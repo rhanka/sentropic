@@ -1,6 +1,7 @@
 import { isArtifactId } from '../contracts.js';
 import { isWithinMimeCeiling } from '../server/mime.js';
-import { SERVER_MAX_FILE_BYTES, SERVER_MAX_FILES_PER_RELEASE, SERVER_MAX_TOTAL_BYTES } from '../server/publication-limits.js';
+import { SERVER_MAX_FILE_BYTES, SERVER_MAX_FILES_PER_RELEASE, SERVER_MAX_SOURCE_FILES,
+  SERVER_MAX_SOURCE_INLINE_BYTES, SERVER_MAX_SOURCE_TOTAL_BYTES, SERVER_MAX_TOTAL_BYTES } from '../server/publication-limits.js';
 import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError, PROFILE_CONTRACT_VERSION,
   type ArtifactCapabilityName, type ArtifactProviderProfile, type ArtifactSchema,
   type CompiledArtifactsProfile, type EffectiveArtifactProfile } from './contracts.js';
@@ -74,6 +75,9 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       releaseFileBytesMax: SERVER_MAX_FILE_BYTES,
       maxDecodedTotalBytes: SERVER_MAX_TOTAL_BYTES,
       releaseTotalBytesMax: SERVER_MAX_TOTAL_BYTES,
+      sourceFilesMax: SERVER_MAX_SOURCE_FILES,
+      sourceInlineFileBytesMax: SERVER_MAX_SOURCE_INLINE_BYTES,
+      sourceTotalBytesMax: SERVER_MAX_SOURCE_TOTAL_BYTES,
     };
     for (const [key, ceiling] of Object.entries(limitCeilings)) {
       if (op.limits[key] !== undefined && op.limits[key] > ceiling) {
@@ -120,7 +124,8 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     for (const [key, value] of Object.entries(defaults)) {
       if (!Object.hasOwn(props, key) || !matchesSchema(value, props[key])) throw new Error('profile/schema default mismatch');
     }
-    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) {
+    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_publish_bundle',
+      'artifacts_publish_bundle_v2', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) {
       (idempotency as Record<string, unknown>)[name] = { required: true, scope: 'principal' };
     }
   }
@@ -142,8 +147,11 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       if (method === 'POST' && path === '/ensure') name = 'artifacts_ensure';
       if (method === 'POST' && path === '/publish') name = 'artifacts_publish';
       if (method === 'POST' && path === '/publish_bundle') name = 'artifacts_publish_bundle';
+      if (method === 'POST' && path === '/publish_bundle_v2') name = 'artifacts_publish_bundle_v2';
       if (method === 'POST' && path === '/uploads/create') name = 'artifacts_create_upload';
       if (method === 'POST' && path === '/uploads/commit') name = 'artifacts_commit_upload';
+      if (method === 'POST' && path === '/uploads/page') name = 'artifacts_create_upload_page';
+      if (method === 'POST' && path === '/list_assets') name = 'artifacts_list_assets';
       if (method === 'POST' && path === '/list') name = 'artifacts_list';
       if (method === 'POST' && path === '/get_source') name = 'artifacts_get_source';
       if (method === 'POST' && path === '/set_access') name = 'artifacts_set_access';

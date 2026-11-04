@@ -59,6 +59,28 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
         throw error;
       }
     },
+    async getBlobRange(key: string, start: number, endInclusive: number): Promise<Uint8Array | undefined> {
+      assertBlobKey(key);
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(endInclusive) || start < 0 ||
+        endInclusive < start) {
+        return undefined;
+      }
+      try {
+        const out = await options.client.send(
+          new GetObjectCommand({ Bucket: options.bucket, Key: key,
+            Range: `bytes=${start}-${endInclusive}` }),
+        );
+        if (out.Body === undefined) return undefined;
+        const collected = await out.Body.transformToByteArray();
+        return new Uint8Array(collected);
+      } catch (error) {
+        if (typeof error === 'object' && error !== null && 'name' in error) {
+          const name = (error as { name?: unknown }).name;
+          if (name === 'NoSuchKey' || name === 'NotFound' || name === 'InvalidRange') return undefined;
+        }
+        throw error;
+      }
+    },
     async listKeys(prefix: string): Promise<string[]> {
       assertBlobPrefix(prefix);
       const keys: string[] = [];
