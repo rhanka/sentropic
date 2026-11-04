@@ -485,6 +485,77 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           return { ok: true, result: { status: 200, body: result }, invocationId: invocation.invocationId,
             commitState: 'not_committed', replayed: false };
         }
+        if (capability === 'artifacts_list_assets') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          const listState = (normalized.state as string | undefined) ?? 'all';
+          const wantStaged = listState === 'staged' || listState === 'all';
+          const wantReleased = listState === 'released' || listState === 'all';
+          // Staged rows are owner-only (access_denied, never a filtered empty list);
+          // the source read right gates the released branch below.
+          if (wantStaged && acl.ownerId !== invocation.actorId) {
+            throw new ArtifactOperationError('access_denied');
+          }
+          const limit = normalized.limit as number;
+          const cursor = normalized.cursor as string | undefined;
+          const releaseId = normalized.releaseId as string | undefined;
+          const pageSessionId = normalized.pageSessionId as string | undefined;
+          type AssetEntry = { path: string; mimeType: string; size: number; digest: string;
+            state: 'staged' | 'released'; uploadId?: string; pageSessionId?: string; releaseId?: string };
+          const stagedEntries: AssetEntry[] = [];
+          if (wantStaged) {
+            if (deps.uploads === undefined) throw new ArtifactProfileInputError(true);
+            const rows = await deps.uploads.sessions.listStagedFiles(artifactId);
+            for (const record of rows
+              .filter((entry) => pageSessionId === undefined || entry.pageSessionId === pageSessionId)
+              .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))) {
+              stagedEntries.push({ path: record.path, mimeType: record.mimeType, size: record.size,
+                digest: record.digest, state: 'staged', uploadId: record.uploadId,
+                ...(record.pageSessionId === undefined ? {} : { pageSessionId: record.pageSessionId }) });
+            }
+          }
+          const releasedEntries: AssetEntry[] = [];
+          let listedReleaseId: string | undefined;
+          if (wantReleased) {
+            const artifactState = await deps.lifecycle.stateOf(artifactId);
+            if (!deps.lifecycle.canRead({ artifactId, state: artifactState }, acl, invocation.actorId, 'source',
+              deps.isApprovedAccount, await sharingPolicyContext(invocation.storageScopeId))) {
+              throw new ArtifactOperationError('access_denied');
+            }
+            const current = releaseId === undefined ? await deps.publication.getCurrent(artifactId)
+              : deps.publication.getRelease === undefined ? undefined
+                : await deps.publication.getRelease(releaseId);
+            // A release of another artifact reads as empty (no cross-artifact oracle).
+            if (current !== undefined && (releaseId === undefined || current.artifactId === artifactId)) {
+              listedReleaseId = current.releaseId;
+              const manifest = parseManifest(current.manifest);
+              for (const file of (manifest.files as { path: string; mimeType: string;
+                size: number; digest: string }[] | undefined) ?? []) {
+                releasedEntries.push({ path: file.path, mimeType: file.mimeType, size: file.size,
+                  digest: file.digest, state: 'released', releaseId: current.releaseId });
+              }
+            }
+          }
+          const stagedPaths = new Set(stagedEntries.map((entry) => entry.path));
+          const entries = [...stagedEntries,
+            ...releasedEntries.filter((entry) => !stagedPaths.has(entry.path))];
+          let offset = 0;
+          if (cursor !== undefined) {
+            const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+            const match = /^lot2-assets:(\d+)$/.exec(decoded);
+            if (match?.[1] === undefined || !Number.isSafeInteger(Number(match[1]))) {
+              throw new ArtifactProfileInputError();
+            }
+            offset = Math.min(Number(match[1]), entries.length);
+          }
+          const page = entries.slice(offset, offset + limit);
+          const nextCursor = offset + limit < entries.length
+            ? Buffer.from(`lot2-assets:${offset + limit}`, 'utf8').toString('base64url') : undefined;
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 200, body: { artifactId,
+              ...(listedReleaseId === undefined ? {} : { releaseId: listedReleaseId }), assets: page,
+              total: entries.length, ...(nextCursor === undefined ? {} : { nextCursor }) } } };
+        }
         if (capability === 'artifacts_set_access' || capability === 'artifacts_delete') {
           const artifactId = normalized.artifactId as string;
           const acl = capability === 'artifacts_set_access'
