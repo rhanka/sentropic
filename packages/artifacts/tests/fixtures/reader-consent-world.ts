@@ -20,9 +20,11 @@ export const RC_SCOPE_VERSION = 'v1';
 /** Radar profile with the single new consent tool selected (frozen four-tool vector otherwise untouched). */
 export const rcProfile = (): ArtifactProviderProfile => ({
   ...RADAR_ARTIFACTS_PROFILE,
-  selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_revoke_reader_consent'],
+  selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities,
+    'artifacts_set_access', 'artifacts_revoke_reader_consent'],
   operations: [...RADAR_ARTIFACTS_PROFILE.operations,
-    { operation: 'revoke_reader_consent', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
+    // revoke_reader_consent ships in the radar operations since lot 1a; set_access stays test-only (G2 owns it).
+    { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
 });
 
 export interface RcWorld {
@@ -30,6 +32,7 @@ export interface RcWorld {
   store: ArtifactReaderStore;
   artifactId: string;
   grant(input?: Partial<ConsentKey & { consentId?: string; grantedAt?: string }>): Promise<ReaderConsentRecord>;
+  grantRead(principalId: string): Promise<void>;
   revokeHttp(actor: string, body: Record<string, unknown>): Promise<{ status: number; body: any }>;
   revokeMcp(actor: string, args: Record<string, unknown>): Promise<{ status: number; body: any }>;
   setApproved(internalId: string, value: boolean): void;
@@ -58,6 +61,11 @@ export async function rcWorldWith(actors = [RC_OWNER, RC_ALICE, RC_BOB]): Promis
         grantedVia: 'reader_screen',
       };
       return store.grantConsent(record);
+    },
+    grantRead: async (principalId) => {
+      const res = await call('POST', '/set_access', { artifactId, action: 'grant',
+        grant: 'read', principalId, idempotencyKey: `grant-${principalId}` }, RC_OWNER);
+      if (res.status !== 200) throw new Error(`set_access failed: ${res.status}`);
     },
     revokeHttp: (actor, body) => call('POST', '/revoke_reader_consent', { artifactId, ...body }, actor),
     revokeMcp: async (actor, args) => {

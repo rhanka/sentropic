@@ -778,6 +778,47 @@
         "type": "object"
       }
     },
+    "artifacts_revoke_reader_consent": {
+      "description": "Artifacts revoke reader consent: withdraw persistent consent of the caller for one scope of one artifact, or for every scope when scope is omitted. Self-revocation only; the next call asks again.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "scope": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
     "artifacts_set_access": {
       "description": "Artifacts set access.",
       "gates": {
