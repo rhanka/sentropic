@@ -180,4 +180,52 @@ describe('files parity LOT 2 (a): browser upload page', () => {
     expect(mcp.leaks).toEqual([]);
     expect(events.map((event) => event.name)).toContain('upload_pages_minted');
   });
+
+  it('refuses token reuse, expired pages, foreign artifacts, spoofed types and CSRF gaps', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const events: ArtifactsMetricEvent[] = [];
+    let now = new Date('2026-01-01T00:00:00Z');
+    const page = makePage(world, events, () => now);
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'page-negatives');
+
+    const minted = await mcp.invoke('artifacts_create_upload_page', { artifactId, maxFiles: 2 });
+    expect(minted.status).toBe(201);
+    const body = unwrap<{ pageSessionId: string; uploadPageUrl: string }>(minted.body);
+    const token = body.uploadPageUrl.split('#t=')[1] as string;
+    const { cookie } = await page.exchange({ pageSessionId: body.pageSessionId, token, origin: CONTROL_ORIGIN });
+    await expect(page.exchange({ pageSessionId: body.pageSessionId, token, origin: CONTROL_ORIGIN }))
+      .rejects.toThrow();
+    await expect(page.createFile({ cookie, origin: 'https://evil.test', customHeader: true,
+      artifactId, path: 'x.png', mimeType: 'image/png', size: 8 })).rejects.toThrow();
+    await expect(page.createFile({ cookie, origin: CONTROL_ORIGIN, customHeader: false,
+      artifactId, path: 'x.png', mimeType: 'image/png', size: 8 })).rejects.toThrow();
+    await expect(page.createFile({ cookie, origin: CONTROL_ORIGIN, customHeader: true,
+      artifactId: randomUUID(), path: 'x.png', mimeType: 'image/png', size: 8 })).rejects.toThrow();
+    now = new Date(now.getTime() + UPLOAD_PAGE_TTL_MS + 1000);
+    await expect(page.createFile({ cookie, origin: CONTROL_ORIGIN, customHeader: true,
+      artifactId, path: 'late.png', mimeType: 'image/png', size: 8 })).rejects.toThrow();
+  });
+
+  it('refuses a renamed executable at page commit with no pin', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const events: ArtifactsMetricEvent[] = [];
+    const now = new Date('2026-01-01T00:00:00Z');
+    const page = makePage(world, events, () => now);
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'page-spoof');
+    const minted = await mcp.invoke('artifacts_create_upload_page', { artifactId });
+    const body = unwrap<{ pageSessionId: string; uploadPageUrl: string }>(minted.body);
+    const { cookie } = await page.exchange({ pageSessionId: body.pageSessionId,
+      token: body.uploadPageUrl.split('#t=')[1] as string, origin: CONTROL_ORIGIN });
+    const evil = new TextEncoder().encode('MZ fake executable');
+    const created = await page.createFile({ cookie, origin: CONTROL_ORIGIN, customHeader: true,
+      artifactId, path: 'evil.png', mimeType: 'image/png', size: evil.length });
+    await world.uploadStaging.put(created.stagingKey, evil);
+    await expect(page.commitFile({ cookie, origin: CONTROL_ORIGIN, customHeader: true, artifactId,
+      uploadId: created.uploadId, path: 'evil.png', mimeType: 'image/png',
+      digest: sha256(evil), size: evil.length, idempotencyKey: 'spoof-1' })).rejects.toThrow();
+    expect(await world.refs.isPinned(sha256(evil))).toBe(false);
+    expect(await world.uploadSessions.getStagedFile(created.uploadId)).toBeUndefined();
+  });
 });
