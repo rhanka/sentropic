@@ -7,6 +7,7 @@
  */
 import type { Pool, PoolClient } from 'pg';
 import type { StagedFileRecord, UploadSession, UploadSessionStore } from '../server/uploads.js';
+import type { UploadPageRow as ServicePageRow, UploadPageStore } from '../server/upload-page.js';
 
 type Db = Pick<Pool, 'query'>;
 
@@ -180,4 +181,78 @@ function using(pool: Pool, db: Db, inTx: boolean): UploadSessionStore {
 /** Postgres upload session ledger; quota writes hold the scope advisory lock. */
 export function createPostgresUploadSessionStore(pool: Pool): UploadSessionStore {
   return using(pool, pool, false);
+}
+
+interface PgUploadPageRow {
+  id: string;
+  artifact_id: string;
+  storage_scope_id: string;
+  owner_id: string;
+  token_hash: string;
+  state: string;
+  max_files: number;
+  created_at: Date;
+  expires_at: Date;
+  exchanged_at: Date | null;
+}
+
+/** Postgres upload-page rows over the 0009 table; rows are kept after expiry. */
+export function createPostgresUploadPageStore(pool: Pool): UploadPageStore {
+  const toRow = (row: PgUploadPageRow): ServicePageRow => ({
+    pageSessionId: row.id,
+    artifactId: row.artifact_id,
+    storageScopeId: row.storage_scope_id,
+    ownerId: row.owner_id,
+    tokenHash: row.token_hash,
+    state: row.state as ServicePageRow['state'],
+    maxFiles: row.max_files,
+    createdAt: row.created_at.toISOString(),
+    expiresAt: row.expires_at.toISOString(),
+    ...(row.exchanged_at === null ? {} : { exchangedAt: row.exchanged_at.toISOString() }),
+  });
+  return {
+    async create(row) {
+      await pool.query(
+        `INSERT INTO artifacts.upload_pages (id, artifact_id, storage_scope_id, owner_id,
+          token_hash, state, max_files, expires_at, created_at, exchanged_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [row.pageSessionId, row.artifactId, row.storageScopeId, row.ownerId, row.tokenHash,
+          row.state, row.maxFiles, row.expiresAt, row.createdAt, row.exchangedAt ?? null],
+      );
+    },
+    async get(pageSessionId) {
+      const { rows } = await pool.query<PgUploadPageRow>(
+        'SELECT * FROM artifacts.upload_pages WHERE id = $1', [pageSessionId]);
+      return rows[0] === undefined ? undefined : toRow(rows[0]);
+    },
+    async countActiveByOwner(ownerId) {
+      const { rows } = await pool.query<{ n: string }>(
+        `SELECT COUNT(*) AS n FROM artifacts.upload_pages
+         WHERE owner_id = $1 AND state IN ('open', 'exchanged')`,
+        [ownerId]);
+      return Number(rows[0]?.n ?? 0);
+    },
+    async listExpiredPages(at) {
+      const { rows } = await pool.query<PgUploadPageRow>(
+        `SELECT * FROM artifacts.upload_pages
+         WHERE state IN ('open', 'exchanged') AND expires_at <= $1 ORDER BY expires_at`,
+        [at.toISOString()]);
+      return rows.map(toRow);
+    },
+    async markExchanged(pageSessionId, at) {
+      const current = await pool.query<PgUploadPageRow>(
+        'SELECT * FROM artifacts.upload_pages WHERE id = $1', [pageSessionId]);
+      if (current.rows[0] === undefined) throw new Error(`unknown upload page: ${pageSessionId}`);
+      if (current.rows[0].state !== 'open') {
+        throw new Error(`upload page not open (${current.rows[0].state}): ${pageSessionId}`);
+      }
+      await pool.query(
+        `UPDATE artifacts.upload_pages SET state = 'exchanged', exchanged_at = $2 WHERE id = $1`,
+        [pageSessionId, at]);
+    },
+    async markExpired(pageSessionId) {
+      await pool.query(
+        `UPDATE artifacts.upload_pages SET state = 'expired' WHERE id = $1`, [pageSessionId]);
+    },
+  };
 }
