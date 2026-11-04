@@ -118,6 +118,10 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
   - [x] Full suites: `test-mcp-platform` 363 passed; `test-artifacts` 556 passed (53 files); `test-artifacts-integration` green (exit 0, 14 files); `test-lazy-package` 135 passed (16 files, sibling receipts recollected at train HEAD, byte-identical tarballs).
   - [x] No UI surface, no E2E, no AI-generation path in wagons D/B: full suites + AI shards run in the PR CI.
   - [x] `make down-volumes ENV=test-train` last (stack + volumes removed, no test-train containers left).
+- [ ] **Lot 8 — CI run 41809308029 fence gap (union-only, deterministic, not flaky)**
+  - [x] New head green on `validate-artifacts` + `validate-cluster-mesh` (union fixes confirmed); `test-api-unit-integration (endpoints, 2)` failed on `root-mount-fence-completeness`: wagon C routes `/resources/artifacts/reader-consents{,/revoke,/revoke-all,/admin-revoke}` registered but missing from `RESOURCE_PATHS` fence + `IMMUTABLE_ARTIFACT_ROUTES` pin (C lane never ran that file; no E502 flake, never a rerun).
+  - [x] Fix: extend `RESOURCE_PATHS` (`api/src/routes/namespaces/resources.ts`) and both immutable pins (`root-mount-fence-completeness`, `cluster-mesh-resources` inventory) with the 4 routes in mount order; wildcard `/resources/artifacts/*` fence already covers method wiring.
+  - [ ] Validate `root-mount-fence-completeness` + `cluster-mesh-resources` on `ENV=test-train`, commit, push, watch the single new CI run.
 - [ ] **Lot 5 — PR + report**
   - [x] Atomic commits via `make commit MSG="…"` (specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` PASS C2 before every commit; no AI trailers; no `[skip ci]`.
   - [ ] Push `release/train-2026-11-04` to origin; update body of PR #911 to list wagons A, B, C, D (body = this BRANCH.md); comment PR #910 as superseded by #911 and close it; exactly one CI run on the final head; do NOT merge #911 (conductor merges after review).
