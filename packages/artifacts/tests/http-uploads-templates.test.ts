@@ -7,6 +7,8 @@ import { createRadarKeyDerivation } from '../src/server/command-identity.js';
 it.each([
   ['POST', '/uploads/begin'], ['POST', '/uploads/complete'],
   ['POST', '/upload_begin'], ['POST', '/upload_complete'],
+  // Files parity LOT 1 routes exist, but stay unselected in the Radar profile.
+  ['POST', '/uploads/create'], ['POST', '/uploads/commit'], ['POST', '/publish_bundle'],
   ['POST', '/clone_from_template'], ['POST', '/set_public_template'],
   ['GET', '/templates'], ['GET', '/template/template-id'],
   ['POST', '/get_template'], ['POST', '/get_api_guide'],

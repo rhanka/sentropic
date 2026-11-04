@@ -19,10 +19,22 @@ const HTML_CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "connect-src 'self'",
+  "font-src 'self'",
+  "media-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'none'",
 ].join('; ');
+
+/**
+ * Active-content types that can script or navigate when navigated to
+ * directly get a sandboxed CSP in addition to `nosniff`: SVG (validated at
+ * commit against scripts/handlers/external references, sandboxed at serve
+ * time so direct navigation cannot script even if a construct slips
+ * through) and PDF.
+ */
+const SANDBOX_CSP = "sandbox";
+const SANDBOXED_MIME_TYPES = new Set(['image/svg+xml', 'application/pdf']);
 
 export interface ContentHeaderInput {
   mimeType: string;
@@ -46,6 +58,7 @@ export function contentHeaders(input: ContentHeaderInput): Record<string, string
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
     ...(isHtml ? { 'content-security-policy': HTML_CSP } : {}),
+    ...(SANDBOXED_MIME_TYPES.has(mimeType) ? { 'content-security-policy': SANDBOX_CSP } : {}),
   };
 }
 

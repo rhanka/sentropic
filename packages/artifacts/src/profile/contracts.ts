@@ -9,6 +9,7 @@ export const ARTIFACT_CAPABILITY_NAMES = [
   'artifacts_set_access', 'artifacts_promote', 'artifacts_renew',
   'artifacts_delete', 'artifacts_restore', 'artifacts_list_versions', 'artifacts_revert',
   'artifacts_lookup_people', 'artifacts_list_access',
+  'artifacts_publish_bundle',
 ] as const;
 export type ArtifactCapabilityName = (typeof ARTIFACT_CAPABILITY_NAMES)[number];
 export type ArtifactSchema = Readonly<Record<string, unknown>>;

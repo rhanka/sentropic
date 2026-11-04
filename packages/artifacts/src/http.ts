@@ -6,11 +6,15 @@ import { assertCompiledArtifactsProfile, ArtifactProfileInputError,
   type CompiledArtifactsProfile } from './profile/index.js';
 import { createArtifactCommand, type ArtifactKeyDerivationBinding } from './server/command-identity.js';
 import { createGuardedEnsureService, type GuardedEnsureHost } from './server/service.js';
-import { assertArtifactReplayMigration } from './server/idempotency.js';
+import { assertArtifactReplayMigration, type IdempotencyStore } from './server/idempotency.js';
 import { combineSharingPolicy, maskEmailHint, resolveSharingPolicy, type KvPort, type PrincipalDirectoryPort,
   type SharingPolicy, type SharingPolicyPort } from './server/ports.js';
-import { createGuardedPublicationService, type GuardedPublicationDeps,
-  type PublicationService } from './server/publication.js';
+import { createGuardedPublicationService, resolveBlobConcurrency, runBlobPool, verifyStagedBlobs,
+  type GuardedPublicationDeps, type PublicationService } from './server/publication.js';
+import { SERVER_MAX_FILE_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
+import { releaseBudget } from './profile/validation.js';
+import { createUploadService, stagingKey, type StagingStore, type UploadSession, type UploadSessionStore,
+  type UploadSignerPort } from './server/uploads.js';
 import { accessModeOf, evaluateGrant, type ArtifactAcl, type ArtifactMetadata, type AclStore } from './server/access.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import { applyEdits, type EditableFile, type EditOperation } from './server/edits.js';
@@ -25,7 +29,7 @@ import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } fr
 import { createPostgresManagementUnit } from './adapters/postgres-management.js';
 import type { FinalizeTxClient } from './server/commit/types.js';
 import type { SourceStore } from './server/sources.js';
-import { TEXT_MIME_RE } from './server/mime.js';
+import { TEXT_MIME_RE, validateFileBytes } from './server/mime.js';
 import { API_GUIDE_REF } from './server/templates.js';
 export { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 
@@ -73,6 +77,13 @@ export interface HttpAppDeps {
   directory?: PrincipalDirectoryPort;
   /** One trusted URL policy shared by HTTP and MCP receipts: the artifact page and the exact version page. */
   publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; versionUrl: string };
+  /** Files parity LOT 1: upload session ports, required when an upload capability is selected. */
+  uploads?: {
+    sessions: UploadSessionStore;
+    staging: StagingStore;
+    signer: UploadSignerPort;
+    idempotency?: IdempotencyStore;
+  };
 }
 export interface ArtifactApp {
   readonly selectedCapabilities: CompiledArtifactsProfile['selectedCapabilities'];
@@ -93,7 +104,8 @@ export function assertArtifactsTransportProfile(value: unknown): asserts value i
   assertCompiledArtifactsProfile(value);
   const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get',
     'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert', 'artifacts_set_access', 'artifacts_delete',
-    'artifacts_lookup_people', 'artifacts_list_access'];
+    'artifacts_lookup_people', 'artifacts_list_access',
+    'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
@@ -114,6 +126,16 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   if (profile.selectedCapabilities.includes('artifacts_delete') && !deps.management?.confirmation) {
     throw new Error('artifact delete confirmation port required');
   }
+  // Files parity LOT 1: upload ports are required as soon as one upload capability is selected.
+  const uploadCapabilities = ['artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle'];
+  const needsUploads = uploadCapabilities.some((name) =>
+    (profile.selectedCapabilities as readonly string[]).includes(name));
+  if (needsUploads && !deps.uploads) throw new Error('artifact upload ports required');
+  const budget = releaseBudget(profile);
+  const uploadService = deps.uploads === undefined ? undefined : createUploadService(
+    { sessions: deps.uploads.sessions, staging: deps.uploads.staging, signer: deps.uploads.signer },
+    { maxUploadBytes: Math.min(budget.fileBytesMax, SERVER_MAX_FILE_BYTES),
+      maxSessionsPerPrincipal: SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL });
   const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
     derivation: deps.derivation, host: {
       lockBinding: (client, binding) => deps.ensureHost.lockBinding(client, binding),
@@ -365,7 +387,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           }
         }
         const normalized = profile.validate(capability, args, request.idempotencyKey, { deferPrecondition: true });
-        const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(capability)
+        const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
+          'artifacts_commit_upload', 'artifacts_publish_bundle'].includes(capability)
           ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey,
             { deferPrecondition: true }) : undefined;
         if (command && ['ensure', 'publish'].includes(command.operation)) {
@@ -477,11 +500,185 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             source = { kind: 'base-commit', commit: releaseId };
             releaseProfile = (targetManifest.profile ?? {}) as Record<string, JsonValue>;
           }
+          if (capability === 'artifacts_publish') {
+            // B.2 MIME ceiling: magic-byte / strict-UTF-8 / SVG validation on every
+            // newly published file (revert re-releases already-verified blobs).
+            for (const file of files) validateFileBytes(file.mimeType, file.bytes);
+          }
           const outcome = await publication.publishFinalized({
             ...input, source, profile: releaseProfile, files,
           });
           const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
           return await conflictSource(committed, normalized, invocation);
+        }
+        if (capability === 'artifacts_create_upload') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          let created;
+          try {
+            created = await uploadService!.create({
+              artifactId, storageScopeId: invocation.storageScopeId, ownerId: acl.ownerId,
+              mimeType: normalized.mimeType as string,
+              ...(normalized.maxSize === undefined ? {} : { maxSize: normalized.maxSize as number }),
+            });
+          } catch (cause) {
+            if (cause instanceof Error && /quota exceeded/.test(cause.message)) {
+              throw new ArtifactOperationError('limit_exceeded', { cause,
+                publicDetails: { upload: { reason: 'open_session_quota' } } });
+            }
+            if (cause instanceof Error && /invalid/.test(cause.message)) throw new ArtifactProfileInputError();
+            throw cause;
+          }
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 201, body: { uploadId: created.uploadId, uploadUrl: created.uploadUrl,
+              method: created.method, expiresAt: created.expiresAt, maxSize: created.maxSize,
+              requiredHeaders: created.requiredHeaders, checksumHeader: created.checksumHeader } } };
+        }
+        if (capability === 'artifacts_commit_upload') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          const uploadId = normalized.uploadId as string;
+          const digest = normalized.digest as string;
+          const size = normalized.size as number;
+          const mimeType = normalized.mimeType as string;
+          const path = normalized.path as string;
+          const commitInput = { uploadId, artifactId, storageScopeId: invocation.storageScopeId,
+            ownerId: acl.ownerId, path, mimeType, digest, size };
+          const work = async (): Promise<Record<string, unknown>> => {
+            let session: UploadSession;
+            try {
+              session = await uploadService!.sessionForCommit(commitInput);
+            } catch (cause) {
+              // One response for unknown, foreign-bound, closed or expired sessions (no oracle).
+              throw new ArtifactOperationError('verification_failed', { cause,
+                publicDetails: { upload: { reason: 'session unknown, bound elsewhere, closed or expired' } } });
+            }
+            const key = stagingKey(invocation.storageScopeId, uploadId);
+            const bytes = await deps.uploads!.staging.get(key);
+            if (bytes === undefined) {
+              throw new ArtifactOperationError('verification_failed',
+                { publicDetails: { upload: { reason: 'staged object missing' } } });
+            }
+            // Re-verify declared size + digest + MIME against the staged bytes (review finding 3).
+            try {
+              uploadService!.verifyStaged(session, bytes, { digest, size, mimeType });
+            } catch (cause) {
+              throw new ArtifactOperationError('verification_failed', { cause,
+                publicDetails: { upload: { reason: 'size/digest/MIME mismatch' } } });
+            }
+            // Promote to the digest-addressed CAS blob via the #907 bounded pool + read-back.
+            const casKey = blobKey(invocation.storageScopeId, digest);
+            const concurrency = resolveBlobConcurrency(deps.publication.blobConcurrency);
+            await runBlobPool([{ key: casKey, bytes }], { concurrency },
+              async (item) => { await deps.publication.blobs.putBlob(item.key, item.bytes); });
+            await verifyStagedBlobs(deps.publication.blobs, [{ key: casKey, bytes }], { concurrency });
+            const pinReason = `upload:${uploadId}`;
+            await deps.publication.refs.pin(digest, pinReason);
+            let staged;
+            try {
+              staged = await uploadService!.completeCommit(session, { path, mimeType, digest, size });
+            } catch (cause) {
+              await deps.publication.refs.unpin(digest, pinReason).catch(() => undefined);
+              throw cause;
+            }
+            await deps.uploads!.staging.delete(key);
+            return { artifactId, uploadId, path, mimeType, digest, size, state: 'staged', stagedAt: staged.createdAt };
+          };
+          let body: Record<string, unknown>;
+          if (deps.uploads!.idempotency !== undefined && command !== undefined) {
+            // Same key + same digest replays; same key + different payload is command_conflict.
+            const storeKey = JSON.stringify(['commit_upload', acl.ownerId, normalized.idempotencyKey]);
+            try {
+              const { result } = await deps.uploads!.idempotency.execute(storeKey, command.identity.commandHash, work);
+              body = result as Record<string, unknown>;
+            } catch (cause) {
+              if (cause instanceof Error && /idempotency conflict/.test(cause.message)) {
+                throw new ArtifactOperationError('command_conflict', { cause });
+              }
+              throw cause;
+            }
+          } else {
+            body = await work();
+          }
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'committed', replayed: false,
+            result: { status: 201, body } };
+        }
+        if (capability === 'artifacts_publish_bundle') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          const publication = createGuardedPublicationService({ ...deps.publication, coordinator: deps.coordinator,
+            limits: { maxFiles: budget.filesMax, maxFileBytes: budget.fileBytesMax, maxTotalBytes: budget.totalBytesMax } });
+          const meta = metadataOf(normalized);
+          const input = { ownerId: acl.ownerId, storageScopeId: invocation.storageScopeId, artifactId,
+            identity: command!.identity, actorId: invocation.actorId, invocationId: invocation.invocationId,
+            attemptId: invocation.invocationId, policyRevision: await deps.ensureHost.readPolicyRevision(),
+            authorizeCommit: invocation.authorizeCommit, metadata: meta, operation: 'publish' as const,
+            expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null };
+          const replay = await publication.replayFinalized(input);
+          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
+          profile.validate(capability, args, request.idempotencyKey);
+          // Resolve the files/assets union BEFORE any commit step: one missing or
+          // digest-mismatched asset fails the whole publish and commits nothing.
+          const files: { path: string; mimeType: string; bytes: Uint8Array }[] = [];
+          const origins: Record<string, string> = {};
+          for (const file of (normalized.files ?? []) as Record<string, JsonValue>[]) {
+            const bytes = Uint8Array.from(file.bytes as number[]);
+            validateFileBytes(file.mimeType as string, bytes);
+            files.push({ path: file.path as string, mimeType: file.mimeType as string, bytes });
+            origins[file.path as string] = 'inline';
+          }
+          for (const asset of (normalized.assets ?? []) as Record<string, JsonValue>[]) {
+            const path = asset.path as string;
+            if (Object.hasOwn(asset, 'uploadId')) {
+              const staged = await deps.uploads!.sessions.getStagedFile(asset.uploadId as string);
+              if (staged === undefined || staged.artifactId !== artifactId) {
+                throw new ArtifactOperationError('verification_failed',
+                  { publicDetails: { asset: { path, reason: 'unknown upload' } } });
+              }
+              const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, staged.digest));
+              if (bytes === undefined || bytes.length !== staged.size ||
+                `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== staged.digest) {
+                throw new ArtifactOperationError('verification_failed',
+                  { publicDetails: { asset: { path, reason: 'staged blob missing or digest mismatch' } } });
+              }
+              validateFileBytes(staged.mimeType, bytes);
+              files.push({ path, mimeType: staged.mimeType, bytes });
+              origins[path] = `upload:${staged.uploadId}`;
+            } else {
+              const digest = asset.digest as string;
+              const size = asset.size as number;
+              const mimeType = asset.mimeType as string;
+              const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, digest));
+              if (bytes === undefined) {
+                throw new ArtifactOperationError('verification_failed',
+                  { publicDetails: { asset: { path, reason: 'blob missing' } } });
+              }
+              if (bytes.length !== size || `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== digest) {
+                throw new ArtifactOperationError('verification_failed',
+                  { publicDetails: { asset: { path, reason: 'size/digest mismatch' } } });
+              }
+              validateFileBytes(mimeType, bytes);
+              files.push({ path, mimeType, bytes });
+              origins[path] = 'cas';
+            }
+          }
+          const outcome = await publication.publishFinalized({
+            ...input, source: { kind: 'inline-original' },
+            profile: normalized.profile as Record<string, JsonValue>, files,
+          });
+          const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
+          if (committed.ok) {
+            const parsedBundleManifest = parseManifest((committed.result.body as { manifest: string }).manifest);
+            const entries = (parsedBundleManifest.files as ManifestFileEntry[] | undefined) ?? [];
+            (committed.result.body as Record<string, unknown>).files = entries.map((entry) => ({
+              path: entry.path, mimeType: entry.mimeType, size: entry.size, digest: entry.digest,
+              origin: origins[entry.path] ?? 'inline',
+            }));
+          }
+          return committed;
         }
         if (capability === 'artifacts_get') {
           const artifactId = normalized.artifactId as string;
