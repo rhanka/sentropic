@@ -63,6 +63,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const uploadStaging: StagingStore = createMemoryStaging();
   const uploadSigner = createMemoryUploadSigner();
   const uploadIdempotency = createIdempotencyStore(createMemoryIdempotencyKv());
+  const uploadPages = createMemoryUploadPageStore();
   const lifecycleStore = createMemoryLifecycleStore();
   const lifecycle = createLifecycleService(lifecycleStore, () => '2026-01-01T00:00:00Z', state);
   const sources = createMemorySourceStore();
@@ -216,7 +217,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     },
     uploads: { sessions: uploadSessions, staging: uploadStaging, signer: uploadSigner.signer,
       idempotency: uploadIdempotency },
-    uploadPage: { pages: createMemoryUploadPageStore(), cookieSecret: 'transport-world-page-secret',
+    uploadPage: { pages: uploadPages, cookieSecret: 'transport-world-page-secret',
       controlOrigin: 'https://control.test', pageBaseUrl: 'https://control.test',
       s3Origins: ['https://s3.test'] },
   };
@@ -226,7 +227,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
   return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, refs, legacyRecords, quotaReservations,
-    accessEvents, uploadSessions, uploadStaging, uploadSigner, uploadIdempotency,
+    accessEvents, uploadSessions, uploadStaging, uploadSigner, uploadIdempotency, uploadPages,
     withProfile: (input: ArtifactProviderProfile) => createHttpArtifactApp({ ...appDeps, profile: compileArtifactsProfile(input) }),
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
