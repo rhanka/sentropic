@@ -14,7 +14,7 @@ import { createGuardedPublicationService,
 import { SERVER_MAX_FILE_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
 import { releaseBudget } from './profile/validation.js';
 import { commitStagedUpload, createUploadService, STAGED_FILE_TTL_MS, stagedFileExpired,
-  type CommitStagedUploadDeps, type StagingStore, type UploadSessionStore,
+  type CommitStagedUploadDeps, type StagedFileRecord, type StagingStore, type UploadSessionStore,
   type UploadSignerPort } from './server/uploads.js';
 import { createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from './server/upload-page.js';
 import type { ArtifactsMetrics } from './server/metrics.js';
@@ -249,8 +249,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       validateFileBytes(mimeType, bytes);
     };
     const readCas = async (path: string, digest: string, size: number): Promise<Uint8Array> => {
-      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, digest));
-      if (bytes === undefined) fail(path, 'blob missing');
+      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, digest)) ??
+        fail(path, 'blob missing');
       if (bytes.length !== size ||
         `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== digest) {
         fail(path, 'size/digest mismatch');
@@ -269,11 +269,13 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     for (const asset of entries.assets) {
       const path = asset.path as string;
       if (Object.hasOwn(asset, 'uploadId')) {
-        const staged = await deps.uploads!.sessions.getStagedFile(asset.uploadId as string);
-        if (staged === undefined || staged.artifactId !== artifactId) fail(path, 'unknown upload');
+        const staged = await deps.uploads!.sessions.getStagedFile(asset.uploadId as string) ??
+          fail(path, 'unknown upload');
+        if (staged.artifactId !== artifactId) fail(path, 'unknown upload');
         if (stagedFileExpired(staged, Date.now(), stagedFileTtlMs)) fail(path, 'staged file expired');
-        const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, staged.digest));
-        if (bytes === undefined || bytes.length !== staged.size ||
+        const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, staged.digest)) ??
+          fail(path, 'staged blob missing or digest mismatch');
+        if (bytes.length !== staged.size ||
           `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== staged.digest) {
           fail(path, 'staged blob missing or digest mismatch');
         }
@@ -302,8 +304,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       }
     }
     if (options.keepUnmodifiedPaths && options.expectedCurrentReleaseId !== null) {
-      const base = await deps.publication.getRelease!(options.expectedCurrentReleaseId);
-      if (base === undefined || base.artifactId !== artifactId) fail('(base release)', 'unknown release');
+      const base = await deps.publication.getRelease!(options.expectedCurrentReleaseId) ??
+        fail('(base release)', 'unknown release');
+      if (base.artifactId !== artifactId) fail('(base release)', 'unknown release');
       const manifest = parseManifest(base.manifest);
       for (const file of (manifest.files as { path: string; mimeType: string;
         size: number; digest: string }[] | undefined) ?? []) {
@@ -325,8 +328,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     const path = asset.path as string;
     const readManifestFile = async (sourceArtifactId: string, sourceReleaseId: string | undefined,
       sourcePath: string | undefined): Promise<{ mimeType: string; bytes: Uint8Array }> => {
-      const sourceAcl = await deps.acls.getArtifactAcl(sourceArtifactId);
-      if (sourceAcl === undefined) fail(path, 'unknown source artifact');
+      const sourceAcl = await deps.acls.getArtifactAcl(sourceArtifactId) ??
+        fail(path, 'unknown source artifact');
       if (sourceAcl.storageScopeId !== invocation.storageScopeId) fail(path, 'cross-scope copy not supported');
       const sourceState = await deps.lifecycle.stateOf(sourceArtifactId);
       if (!deps.lifecycle.canRead({ artifactId: sourceArtifactId, state: sourceState }, sourceAcl,
@@ -334,17 +337,18 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         await sharingPolicyContext(invocation.storageScopeId))) {
         throw new ArtifactOperationError('access_denied');
       }
-      const release = sourceReleaseId === undefined ? await deps.publication.getCurrent(sourceArtifactId)
+      const release = (sourceReleaseId === undefined ? await deps.publication.getCurrent(sourceArtifactId)
         : deps.publication.getRelease === undefined ? undefined
-          : await deps.publication.getRelease(sourceReleaseId);
-      if (release === undefined || release.artifactId !== sourceArtifactId) fail(path, 'unknown source release');
+          : await deps.publication.getRelease(sourceReleaseId)) ?? fail(path, 'unknown source release');
+      if (release.artifactId !== sourceArtifactId) fail(path, 'unknown source release');
       const manifest = parseManifest(release.manifest);
       const wanted = sourcePath ?? path;
       const entry = ((manifest.files as { path: string; mimeType: string; size: number;
-        digest: string }[] | undefined) ?? []).find((file) => file.path === wanted);
-      if (entry === undefined) fail(path, 'source path missing');
-      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, entry.digest));
-      if (bytes === undefined || bytes.length !== entry.size ||
+        digest: string }[] | undefined) ?? []).find((file) => file.path === wanted) ??
+        fail(path, 'source path missing');
+      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, entry.digest)) ??
+        fail(path, 'source blob missing or digest mismatch');
+      if (bytes.length !== entry.size ||
         `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== entry.digest) {
         fail(path, 'source blob missing or digest mismatch');
       }
@@ -359,8 +363,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       return { mimeType, bytes, origin: `copy:${sourceArtifactId}:${release ?? 'current'}` };
     }
     const carryFromReleaseId = asset.carryFromReleaseId as string;
-    const release = await deps.publication.getRelease!(carryFromReleaseId);
-    if (release === undefined || release.artifactId !== artifactId) fail(path, 'unknown release');
+    const release = await deps.publication.getRelease!(carryFromReleaseId) ??
+      fail(path, 'unknown release');
+    if (release.artifactId !== artifactId) fail(path, 'unknown release');
     const { mimeType, bytes } = await readManifestFile(artifactId, carryFromReleaseId,
       asset.sourcePath as string | undefined);
     return { mimeType, bytes, origin: `carry:${carryFromReleaseId}` };
