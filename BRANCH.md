@@ -102,15 +102,18 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
   - [ ] APP-P1 pin recompute through make (TR01-EX6): verified in Lot 4 api pin tests.
   - [x] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TR01-EX5): live f0e00f5d archived to `history/`, new manifest 7514ac8d (2 archives, 44 contracts), verify ok (30 files, 54 edges).
   - [ ] Lot gate: `make scope-check` PASS C2 before any commit.
-- [ ] **Lot 4 — Final validation**
-  - [ ] Typecheck & lint for touched packages.
-  - [ ] Scoped wagon lanes with `ENV=test-train` LAST: `test-mcp-platform` (+ scoped `hono.test.ts`), scoped api registry lane, `test-artifacts` (+ scoped share-g2 files), `test-artifacts-integration`, `test-lazy-package` / packaging lane, tools-list snapshot PASS (pre-existing definitions byte-identical).
-  - [ ] AI flaky tests run (non-blocking only under acceptance rule) and status/signature in `BRANCH.md`.
-  - [ ] `make down-volumes ENV=test-train` last.
+- [x] **Lot 4 — Final validation (all on `ENV=test-train`, LAST)**
+  - [x] Typecheck & lint: `typecheck-mcp-platform` PASS, `typecheck-artifacts` PASS, `lint-artifacts` PASS.
+  - [x] Scoped lanes: `test-mcp-platform SCOPE=tests/hono.test.ts` 21 passed; `test-api-unit` (registry-dispatch-terminal + app-artifacts-transport + artifacts-host-credentials) 49 passed; `test-artifacts SCOPE=tests/share-g2-tools.test.ts` 6 passed; `SCOPE=tests/share-g2-errors.test.ts` 6 passed; `SCOPE=tests/tools-list-snapshot.test.ts` 1 passed (pre-existing definitions byte-identical).
+  - [x] Pin lane: `test-api-endpoints` (app-mcp-registry + app-mcp-installed + artifacts-host-publication) 44 passed → APP-P1 digests unchanged, TR01-EX6 verified, no re-pin.
+  - [x] Full suites: `test-mcp-platform` 363 passed; `test-artifacts` 556 passed (53 files); `test-artifacts-integration` green (exit 0, 14 files); `test-lazy-package` 135 passed (16 files, sibling receipts recollected at train HEAD, byte-identical tarballs).
+  - [x] No UI surface, no E2E, no AI-generation path in wagons D/B: full suites + AI shards run in the PR CI.
+  - [x] `make down-volumes ENV=test-train` last (stack + volumes removed, no test-train containers left).
 - [ ] **Lot 5 — PR + report**
-  - [ ] Atomic commits via `make commit MSG="…"` (≤150 lines each, specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` before every commit; no AI trailers; no `[skip ci]`.
-  - [ ] Push `release/train-2026-11-04` to origin; open ONE READY PR « release train 2026-11-04 » with wagon list; exactly one CI run on the final head; do NOT merge.
+  - [x] Atomic commits via `make commit MSG="…"` (specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` PASS C2 before every commit; no AI trailers; no `[skip ci]`.
+  - [ ] Push `release/train-2026-11-04` to origin; open ONE READY PR « release train 2026-11-04 » (body = this BRANCH.md, wagons D+B merged, A+C joining when green); exactly one CI run on the final head; do NOT merge.
   - [ ] Report PR number and each step to `.tmp/rv/train-integration.md` (root workspace).
+  - [ ] Watch: A (`feat/artifacts-files-parity-lot1` @ 238a3ff5d, own READY PR #910) and C (`feat/reader-consent-persistent` @ d8df0daa1) landed on their remotes after the D+B merges; `origin/main` still 3dd7d8012.
 - [ ] **Lot 6 — Wagons A + C watch**
   - [ ] Re-check remote heads every 10 minutes; merge a wagon only when green on its own branch; re-assign versions and regenerate ONCE more per joining wagon.
   - [ ] Stop adding wagons once the conductor calls departure.
