@@ -187,7 +187,8 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
   });
 
   it('should NOT include batch_create_organizations for neutral workspace', async () => {
-    // The fixture workspace is neutral by default, no update needed
+    // The CM fixture workspace defaults to ai-priorities: pin neutral explicitly.
+    await db.update(workspaces).set({ type: 'neutral' }).where(eq(workspaces.id, workspaceId));
 
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let capturedTools: string[] = [];
@@ -235,7 +236,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
         yield { type: 'tool_call_start', data: { tool_call_id: 'revoked-batch',
           name: 'batch_create_organizations', args: JSON.stringify({ description: 'Acme' }) } };
         yield { type: 'done', data: {} };
-      }).mockImplementation(() => stream([{ type: 'done', data: {} }]));
+      }).mockImplementation(() => stream([{ type: 'content_delta', data: { delta: 'OK' } }, { type: 'done', data: {} }]));
       await chatService.runAssistantGeneration({ userId, ...message });
       if (timing === 'before-selection') expect(selected).not.toContain('batch_create_organizations');
       else expect(selected).toContain('batch_create_organizations');
@@ -266,7 +267,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
         },
         { type: 'done', data: {} },
       ]),
-    );
+    ).mockImplementation(() => stream([{ type: 'content_delta', data: { delta: 'OK' } }, { type: 'done', data: {} }]));
 
     const { sessionId, assistantMessageId, model } =
       await createAdmittedChatMessage({
@@ -322,7 +323,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
         },
         { type: 'done', data: {} },
       ]),
-    );
+    ).mockImplementation(() => stream([{ type: 'content_delta', data: { delta: 'OK' } }, { type: 'done', data: {} }]));
 
     const { sessionId, assistantMessageId, model } =
       await createAdmittedChatMessage({

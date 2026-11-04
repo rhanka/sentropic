@@ -14,7 +14,9 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { createCmUser } from '../../src/services/identity/cm-users';
-import { cmDeleteForUsers } from '../utils/cm-identity-test-store';
+import { enrolCmWorkspace, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
+import { cmDeleteForUsers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 
 describe('Tool Service', () => {
   let testInitiativeId: string;
@@ -31,6 +33,11 @@ describe('Tool Service', () => {
       displayName: 'Test User',
       role: 'editor',
       emailVerified: true,
+    });
+    // Auto-field comments resolve the tenant through the CM directory even for
+    // seed-workspace initiatives: the user must be an approved tenant member.
+    await setCmMembershipState(testUserId, PLATFORM_TENANT_ID, {
+      status: 'approved', role: 'member', decidedBy: testUserId,
     });
 
     testSessionId = createId();
@@ -338,6 +345,18 @@ describe('Tool Service', () => {
         role: 'editor',
         emailVerified: true,
       });
+      await setCmMembershipState(testUserId, PLATFORM_TENANT_ID, {
+        status: 'approved', role: 'member', decidedBy: testUserId,
+      });
+      // Post-cutover tenant resolution is authoritative through the CM directory:
+      // the workspace must be enrolled and the user an approved tenant member.
+      await cmQuery(`INSERT INTO ${cmTable('cm_tenants')} (tenant_id, slug, status, created_at)
+        VALUES ($1, $1, 'active', $2) ON CONFLICT (tenant_id) DO NOTHING`,
+      [PLATFORM_TENANT_ID, new Date().toISOString()]);
+      await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
+      await setCmMembershipState(testUserId, PLATFORM_TENANT_ID, {
+        status: 'approved', role: 'member', decidedBy: testUserId,
+      });
 
       testSessionId = createId();
       await db.insert(chatSessions).values({
@@ -425,6 +444,7 @@ describe('Tool Service', () => {
       await db.delete(chatMessages).where(eq(chatMessages.sessionId, testSessionId));
       await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
       await cmDeleteForUsers([testUserId]);
+      await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
       await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     });
 

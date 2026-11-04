@@ -111,9 +111,11 @@ describe('cluster mesh app adapter', () => {
     const adapter = createClusterMeshAppAdapter(dependencies({
       pollDeviceCode,
       sessionAdmission: admission,
+      ...boundaryStores(approvedMembership()),
     }));
     const secondAdapter = createClusterMeshAppAdapter(dependencies({
       sessionAdmission: admission,
+      ...boundaryStores(approvedMembership()),
     }));
 
     expect(adapter.devices.pollDeviceCode('device-code')).toBe(approved);
