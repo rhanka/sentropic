@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,10 @@
     "./adapters/s3": {
       "types": "./dist/adapters/s3.d.ts",
       "import": "./dist/adapters/s3.js"
+    },
+    "./adapters/s3-uploads": {
+      "types": "./dist/adapters/s3-uploads.d.ts",
+      "import": "./dist/adapters/s3-uploads.js"
     },
     "./adapters/postgres": {
       "types": "./dist/adapters/postgres.d.ts",
@@ -208,11 +212,15 @@
   },
   "peerDependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
+    "@aws-sdk/s3-request-presigner": "^3.980.0",
     "@sentropic/mcp-platform": ">=0.4.1 <0.5.0",
     "pg": "^8.12.0"
   },
   "peerDependenciesMeta": {
     "@aws-sdk/client-s3": {
+      "optional": true
+    },
+    "@aws-sdk/s3-request-presigner": {
       "optional": true
     },
     "@sentropic/mcp-platform": {
@@ -224,6 +232,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
+    "@aws-sdk/s3-request-presigner": "^3.980.0",
     "@types/node": "^22.10.10",
     "@types/pg": "^8.15.5",
     "pg": "^8.12.0",

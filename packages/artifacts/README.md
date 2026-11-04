@@ -227,21 +227,53 @@ Keys are isolated by operation and
 principal. A changed payload under the same key returns an explicit conflict.
 Persisted unscoped replay keys are no longer consulted after upgrading.
 
-Publication defaults to 128 files, 16 MiB per file and 64 MiB total. Hosts can
+Publication defaults to 255 files, 16 MiB per file and 64 MiB total. Hosts can
 override these positive integer limits through `createPublicationService({
 limits: { maxFiles, maxFileBytes, maxTotalBytes } })`; the HTTP decoder uses the
-same byte budgets before allocating bytes. Paths must be unique canonical
+same byte budgets before allocating bytes. These profile values are bounded by
+generic server maxima — 255 files per release, 16 MiB per file, 64 MiB per
+release — enforced both when a profile is compiled and again in
+`publicationLimits`, so a profile can only narrow them, never exceed them.
+Paths must be unique canonical
 relative paths, at most 1024 UTF-8 bytes: empty/dot segments, backslashes,
 percent escapes, URL delimiters, colons and control characters are rejected.
 Existing integrations using larger bundles or noncanonical paths must adjust
 their limits or filenames. Invalid publications fail before object-store effects.
-Upload sessions cap client `maxSize` by the host `maxUploadBytes` and publication
-file/total limits. Every append checks remaining cumulative capacity before
-decoding bytes or writing staging. Upload publication metadata is validated
-before the session is consumed; a rejected path or MIME type can be corrected
-and committed using the same staged bytes. Finalization validates, hashes and
-publishes one copied snapshot. Overlapping append/commit operations return 409;
-failed verification or metadata validation leaves the session retryable.
+
+Two budgets exist because inline MCP bytes cost model tokens while uploaded
+bytes do not: the inline keys (`publishFilesMax`, `maxDecodedFileBytes`,
+`maxDecodedTotalBytes`) bound what travels inside `artifacts_publish` and the
+inline `files` of `artifacts_publish_bundle`, while the release keys
+(`releaseFilesMax`, `releaseFileBytesMax`, `releaseTotalBytesMax` on the same
+publish operation) bound the final release however its files arrived; absent
+release keys default to the inline values.
+
+## Uploading files outside the model (signed PUT)
+
+Large or binary files never travel through the model or the MCP payload:
+`artifacts_create_upload` mints a presigned PUT for exactly one staging key
+`artifacts/<scope>/staging/<uploadId>` (URL expiry ≤ 10 minutes). A SigV4
+presigned PUT cannot carry a content-length range, so the signature binds the
+content type and the exact declared `Content-Length` (`maxSize`, itself capped
+by the release per-file limit and the 16 MiB server ceiling); the PUT must also
+carry `x-amz-checksum-sha256` (base64 SHA-256 of the body), which S3 validates
+against the body (`BadDigest` on mismatch). The local agent performs the PUT
+with exactly the returned `requiredHeaders`. Open sessions per principal are
+capped (server maximum 8); stale sessions are expired by the enforced sweeper
+in `gc.ts` (`createUploadSweeper`, driven by `uploads.expires_at`).
+`artifacts_commit_upload` then declares `{path, mimeType, digest, size}`; the
+server re-reads the staged object once and re-verifies size, SHA-256 digest and
+MIME (magic bytes, strict UTF-8, SVG script/handler/href rules) before
+promoting the bytes to the digest-addressed blob store
+(`artifacts/<scope>/blobs/sha256/<hex>`) through the bounded blob pool with
+read-back verification, and pinning them with reason `upload:<uploadId>`.
+A wrong size or digest is refused with `verification_failed` (422) and nothing
+is pinned; commit alone creates no release. `artifacts_publish_bundle` finally
+publishes one atomic release from inline `files` and/or `assets` (each asset
+`{path, uploadId}` or `{path, digest, size, mimeType}` referencing an
+already-pinned blob of the same scope); `expectedCurrentReleaseId` is always
+required, the release budget applies to the union, and one missing or
+mismatched asset fails the whole publish before anything commits.
 
 Content `HEAD` responses have the corresponding GET headers and no body,
 including errors and activation. Errors and activation responses include the
@@ -457,7 +489,10 @@ Size and digest are verified on the raw bytes, then each file is encoded for the
 wire: text mime types as `text` with `encoding: "utf8"`, all other files as
 `base64` with `encoding: "base64"` — never an integer array. The result carries
 a `guideRef` (`{tool, version}`) instead of the guide body. The snapshot is
-limited to 32 files and 262144 decoded bytes. Hosts must qualify
+limited to 32 files and 262144 decoded bytes: that ceiling is part of the
+frozen `artifacts_get_source` tool definition and does not move; server-side
+caps may only go below it, and larger listings belong to dedicated listing
+tools. Hosts must qualify
 a 2 MiB serialized MCP result budget before selecting this capability.
 
 `POST /set_access` grants or revokes a named principal's read access, requires a
