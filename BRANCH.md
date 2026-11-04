@@ -1,166 +1,68 @@
-# Feature: A4 train — cluster-mesh gap lots G1-G5
+# Feature: Release train N+1 (integration lane, wagons E + F)
 
 ## Objective
-Integrate the five approved A4 cluster-mesh gap lots G1 to G5 (PRs #899, #902, #900, #903, #904) onto origin/main in one train PR, with a single version bump and single lock/fixture/manifest regeneration.
+Integrate the wagon branches into one release branch with `--no-ff` merges in order E then F, assign package versions once, regenerate the integration-owned files once through make, and open exactly one READY PR with one CI.
 
 ## Scope / Guardrails
-- Scope limited to the union of the five lot path lists (design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md`, lots G1-G5).
-- Wagon branches merged with `git merge --no-ff` in order G1, G2, G3, G4, G5; conflicts resolved as UNION (keep every lot code and test).
-- Version and lock conflicts: take either side during merges, then set `@sentropic/cluster-mesh` once to the next free dev version above main and regenerate through make.
-- Make-only workflow, no direct Docker commands; one Docker lock per make command (`flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make ...`), never nested; the sibling train `release/train-2026-11-04` keeps Docker priority.
-- Tests on `ENV=test-train-a4` only, ENV always last; `make down-volumes ENV=test-train-a4` at the end, including on failure.
-- No `[skip ci]` anywhere; commits via `make commit MSG="..."` only, <=150 lines, selective staging.
-- Branch development happens in worktree `tmp/worktrees/train-a4` (branch `release/train-a4-gaps` from `origin/main`).
-- In every `make` command, `ENV=<env>` is passed as the last argument.
-# Feature: Release train 2026-11-04 (integration lane, wagons D + B + A + C)
-
-## Objective
-Integrate the wagon branches into one release branch with `--no-ff` merges in order D, B, A, C, assign package versions once, regenerate the integration-owned files once through make, and open exactly one READY PR with one CI.
-
-## Scope / Guardrails
-- Scope limited to the union of wagons D (`fix/mcp-terminal-jsonrpc-response`), B (`feat/share-g2-mcp-tools`), A (`feat/artifacts-files-parity-lot1` @ 238a3ff5d) and C (`feat/reader-consent-persistent` @ d8df0daa1); all four merged, departure called.
-- Merge order: D first, then B, then A, then C, each with `git merge --no-ff`; conflicts resolved as UNION.
+- Scope limited to the union of wagons E (`chore/ci-ai-tests-scoped` @ fe78bfcbf, AI test shards scoped to AI-relevant path changes + async-wait root-cause fix) and F (`feat/artifacts-sqlite-u1` @ 0d4acee17, h2a artifacts durable local SQLite adapter U1); both merged, departure called.
+- Merge order: E first, then F, each with `git merge --no-ff`; conflicts resolved as UNION.
 - The integration lane owns versions, CHANGELOG entries, locks, the APP-P1 pin, cluster-mesh fixtures and the L5 manifest: on conflict take either side, then REGENERATE once at the end through make.
-- Versions: `@sentropic/artifacts` 0.2.13, `@sentropic/mcp-platform` 0.4.2 (verified free on the registry through a repo make target, never npm on the host).
+- Versions: `@sentropic/artifacts` 0.2.14 (stays in 0.2.x: cluster-mesh pins peer `>=0.2.0 <0.3.0`); no other package bumped unless touched.
 - Pre-existing MCP tool definitions stay byte-identical (tools/list snapshot must pass).
-- Make-only workflow, no direct Docker commands; Docker under `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md` taken PER COMMAND (never nested, never a held shell).
-- Tests on `ENV=test-train` (always LAST argument), never `ENV=dev`; every lane ends with `make down-volumes ENV=test-train`.
-- No `[skip ci]` in any commit; CI budget: one run on the final head; never `gh run rerun`.
+- Make-only workflow, no direct Docker commands; Docker through `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make … ENV=test-train-next` (one slot per command, never nested).
+- Tests on `ENV=test-train-next` (always LAST argument), never `ENV=dev`; the lane ends with `make down-volumes ENV=test-train-next`.
+- No `[skip ci]` in any commit; CI budget: one run on the final head; never `gh run rerun` (fresh pull_request run via a new commit instead).
 - Never merge `main` into this branch; future updates go through `git rebase` only if the conductor orders it.
 - All new text in English.
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/src/identity-contracts/**`
-  - `packages/cluster-mesh/src/identity-stores/tenancy-postgres.ts`
-  - `packages/cluster-mesh/src/identity-stores/tenancy-sqlite.ts`
-  - `packages/cluster-mesh/src/identity/**`
-  - `packages/cluster-mesh/src/storage/identity/**`
-  - `packages/cluster-mesh/tests/identity/oauth-reads.spec.ts`
-  - `packages/cluster-mesh/tests/boundary-resolution.spec.ts`
-  - `packages/cluster-mesh/tests/identity/service-tenancy.spec.ts`
-  - `packages/cluster-mesh/tests/identity/workspace-deletion.spec.ts`
-  - `packages/cluster-mesh/tests/identity/replica-sync.spec.ts`
-  - `packages/cluster-mesh/package.json`
-  - `package-lock.json` (mechanical lockfile sync of the single train version bump only)
-  - `api/package-lock.json` (mechanical `file:` sync of the same bump only, pattern ddbe7b65e)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `tools/memory-mcp-l5/artifacts/**` (BR-TRAIN-EX1)
-  - `packages/mcp-platform/**`
-  - `packages/mcp-broker/package.json`
-  - `packages/artifacts/**`
-  - `api/src/services/mcp/registry-dispatch.ts`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/tests/api/registry-dispatch-terminal.test.ts`
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
-  - `api/tests/api/artifacts-host-publication.test.ts`
-  - `api/tests/api/app-artifacts-transport.test.ts`
-  - `api/tests/api/artifacts-host-credentials.test.ts`
-  - `package-lock.json` (TR01-EX2, version lines only)
-  - `api/package-lock.json` (TR01-EX2, `file:` link lines only)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (TR01-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (TR01-EX3)
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (TR01-EX3)
-  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` (TR01-EX8, SPEC_TOOLS union only)
-  - `packages/artifacts/probe/packed-consumer.mjs` (TR01-EX8, EXPECTED_TOOLS union only)
-  - `api/src/services/artifacts/host-storage.ts` (TR01-EX8, 0008 asset pin + relations only)
-  - `api/src/services/artifacts/reader-consent.ts`, `api/src/services/artifacts/composition.ts`, `api/src/services/artifacts/instance.ts` (TR01-EX8, wagon C binding union)
-  - `api/src/routes/namespaces/artifacts.ts`, `api/src/routes/namespaces/resources-module.ts` (TR01-EX8, wagon C routes union)
-  - `api/tests/api/artifacts-reader-consent.test.ts` (TR01-EX8, wagon C test)
-  - `Makefile` (TR01-EX7, wagon A presigner dep-sync lines only), `scripts/ci/tool-locks.json` (TR01-EX7, append-only presigner entries), `packages/cluster-mesh/tests/storage/cold-workspace.sh` (TR01-EX7, one-line presigner install)
-  - `tools/memory-mcp-l5/artifacts/**` (TR01-EX5, P1 manifest regen)
+  - `.github/workflows/ci.yml` (TN01-EX9, wagon E scoped AI shards)
+  - `scripts/ci/ci-expected-results.test.mjs` (TN01-EX9, wagon E expected-results sync)
+  - `api/tests/ai/initiative-generation-async.test.ts` (TN01-EX9, wagon E root-cause wait fix)
+  - `packages/artifacts/**` (wagon F sqlite adapter set + 0.2.14 version normalization)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (TN01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (TN01-EX3)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (TN01-EX3)
+  - `api/src/services/mcp/cluster-registry.ts` (TN01-EX6, APP-P1 pin only)
+  - `api/tests/api/app-mcp-installed.test.ts` (TN01-EX6, pin digest only)
+  - `api/tests/api/app-mcp-registry.test.ts` (TN01-EX6, pin digest only)
+  - `package-lock.json` (TN01-EX2, version lines only)
+  - `api/package-lock.json` (TN01-EX2, `file:` link lines only)
+  - `tools/memory-mcp-l5/artifacts/**` (TN01-EX5, P1 manifest regen)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/cluster-mesh/src/**` except the identity-contracts, identity and storage/identity paths above
-  - `api/src/**`
-  - `api/tests/**`
-  - `ui/**`, `e2e/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (only if the fixture re-pin flow requires it)
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
   - `api/**`, `ui/**`, `e2e/**`, `apps/**`, `deploy/**` except the Allowed files above
-  - `packages/**` other than `packages/artifacts/**`, `packages/mcp-platform/**` and the TR01-EX3 files above
+  - `packages/**` other than `packages/artifacts/**` and the TN01-EX3 files above
 - **Exception process**:
-  - Declare exception ID `TRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Declare exception ID `TNxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- BR-TRAIN-EX1 (scope exception, `tools/memory-mcp-l5/artifacts/**`): the root lock carries the new train cluster-mesh dev version after `make lock-root`, so the committed P1 manifest no longer matches the live lock fingerprint; regenerate through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (never hand-editing digests), previous manifest retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot. Precedent: G1 lane (969adf3a), main 3dd7d8012.
-- BR-TRAIN-EX2 (packaging fixture re-pin): `tests/packaging/prepare-artifacts.spec.ts` requires the `selected` fixture to pin the workspace candidate version exactly; re-pin `fixtures/selected/package.json` + `package-lock.json` through `make pack-candidate-siblings` + `refresh-lazy-package-lock`. Rollback: revert the fixture files to the main pin. Precedent: G4 BR-G4-EX2, G5 BR-G5-EX2.
-- G1 review (`.h2a/reviews/pr899-large4_r1.md`): VERDICT APPROVE.
-- G2 review (`.h2a/reviews/pr902-large4_r1.md`): VERDICT APPROVE (parallel dev.7 collision expected, conductor assigns versions in merge order).
-- G3 review (`.h2a/reviews/pr900-large4_r1.md`): VERDICT CHANGES; only findings are the version collision and its lockfile desync — both resolved by this train (single dev.9 bump + root lock regen, no per-wagon bump).
-- G4 review (`.h2a/reviews/pr903-large4_r1.md`): VERDICT APPROVE.
-- G5 review (`.h2a/reviews/pr904-large4_r1.md`): VERDICT APPROVE.
-- TR01-EX2 (lock pins): the 0.2.13 + 0.4.2 union changes workspace version lines, so root `package-lock.json` entries are refreshed through `make lock-root` (version lines only) and the two `../packages/*` version lines in `api/package-lock.json` are synced (same targeted one-line syncs as #878 BRP0B-EX1). No dependency graph change. Rollback: revert the lock lines with the version fix.
-- TR01-EX3 (cluster-mesh packaging fixture re-pin): the `selected` fixture must pin both workspace candidate versions exactly (artifacts 0.2.13, mcp-platform 0.4.2). Re-pin through `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` with the packed sibling receipts, never hand-editing integrities. Rollback: revert the fixture files to the origin/main pins.
-- TR01-EX5 (memory-l5 P1 manifest): every lock change requires regenerating the P1 manifest through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`; previous manifest+sidecar retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot.
-- TR01-EX6 (APP-P1 pin): the shipped profile digest and manifest digest in `api/src/services/mcp/cluster-registry.ts` are recomputed through make after the union; pre-existing tool selection unchanged. Rollback: restore origin/main digests.
-- TR01-EX7 (wagon A mechanical sync, inherited union): `Makefile` presigner dep-sync lines on the artifacts lanes only, append-only presigner entries in `scripts/ci/tool-locks.json`, one-line presigner install in `packages/cluster-mesh/tests/storage/cold-workspace.sh`; no other lane touched. Rollback: revert those hunks to the D+B state.
-- TR01-EX8 (wagons A+C tool-union wiring): `EXPECTED_TOOLS` (probe) and `SPEC_TOOLS` (mesh surface spec) extended to the 21-name union in capability order; 0008 migration asset pin + `reader_consents`/`reader_consent_events` relations in `host-storage.ts`; wagon C api binding/routes/test union. Pre-existing tool selection and definitions unchanged. Rollback: restore the D+B pins and drop the C api files.
-- Wagon watch: CLOSED. A (`feat/artifacts-files-parity-lot1` @ 238a3ff5d) merged with `--no-ff` (union), then C (`feat/reader-consent-persistent` @ d8df0daa1) merged with `--no-ff` (union). Both wagon tips are ancestors of HEAD. Departure called: no more wagons join this train.
+- TN01-EX2 (lock pins): the 0.2.14 union changes workspace version lines, so root `package-lock.json` entries are refreshed through `make lock-root` (version lines only) and the `../packages/*` version lines in `api/package-lock.json` are synced. No dependency graph change. Rollback: revert the lock lines with the version fix.
+- TN01-EX3 (cluster-mesh packaging fixture re-pin): the `selected` fixture must pin the workspace candidate version exactly (artifacts 0.2.14). Re-pin through `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` with the packed sibling receipts, never hand-editing integrities. Rollback: revert the fixture files to the origin/main pins.
+- TN01-EX5 (memory-l5 P1 manifest): every lock change requires regenerating the P1 manifest through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`; previous manifest+sidecar retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot.
+- TN01-EX6 (APP-P1 pin): the shipped profile digest and manifest digest in `api/src/services/mcp/cluster-registry.ts` are recomputed through make after the union; pre-existing tool selection unchanged. Rollback: restore origin/main digests.
+- TN01-EX9 (wagon E CI scoping): `.github/workflows/ci.yml` AI-shard path filter, `ci-expected-results.test.mjs` sync and the `initiative-generation-async` deterministic-wait fix (BR02-EX3 on the wagon branch) are taken as the wagon union; the integration lane amends nothing there except conflict union. Rollback: revert those hunks to origin/main.
+- Wagon watch: OPEN until the single train CI is green, then wagons E and F are commented as superseded and closed.
 
 ## AI Flaky tests
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
   - Non-systematic means at least one success on the same commit and same command.
   - Never amend tests with additive timeouts.
-  - G2 precedent: PostgreSQL spec timeouts under shared-host load, same head + same command rerun 16/16 — proven transient, no timeout change.
-
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single integration branch, merges of five reviewed heads, one final test cycle)
-- Rationale: five approved wagon heads merged in order with union resolution; one version bump; one test cycle.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: no UI surface change; cluster-mesh package lanes only on `ENV=test-train-a4`.
-
-## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and worktree**
-  - [x] Read `rules/MASTER.md`, `.tmp/packets/COMMON-RULES.md`, design `.tmp/cm-identity-agents/a4-cm-gaps-r2.md` §5.
-  - [x] Create worktree `tmp/worktrees/train-a4` on branch `release/train-a4-gaps` from `origin/main` (3dd7d8012).
-  - [x] Write this `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` with BRLOCK-EX1 review_by line retained.
-  - [x] Environment mapping: `ENV=test-train-a4` for every test stack, never root dev; sibling train `release/train-2026-11-04` keeps Docker priority, lock taken per make command only.
-  - [x] Confirm command style: `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make ... ENV=test-train-a4` with `ENV` last.
-- [x] **Lot 1 — Merge G1-G5 in order**
-  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g1-oauth-reads` (G1, #899).
-  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g2-boundary` (G2, #902); union `composition-descriptors.ts` + `index.ts`.
-  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g3-service-tenancy` (G3, #900); union `composition-descriptors.ts` + `index.ts` + `custody-auth.ts`.
-  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g4-workspace-deletion` (G4, #903); union `composition-descriptors.ts` + `index.ts` + `custody-errors.ts`.
-  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g5-replica-sync` (G5, #904); union `composition-descriptors.ts` + `index.ts` + `custody-errors.ts` + storage index.
-  - [x] Version/lock conflicts: take either side during merges, regenerate once in Lot 2.
-- [x] **Lot 2 — Single version bump and regeneration**
-  - [x] Set `packages/cluster-mesh/package.json` to the next free dev version above main (`0.26.0-dev.9` unless another cluster-mesh bump merged first).
-  - [x] Regenerate root lock (`make lock-root`), `api/package-lock.json` file sync, packaging fixtures, L5 P1 manifest — all through make, once.
-  - [x] `make scope-check` before every commit; atomic `make commit` commits.
-- [x] **Lot 3 — Test gates on ENV=test-train-a4**
-  - [x] `make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-train-a4` (G1): 5/5 sqlite.
-  - [x] `make test-cluster-mesh SCOPE=tests/boundary-resolution.spec.ts ENV=test-train-a4` (G2): 12 passed + 4 skipped sqlite; 16/16 postgres (one 5s-timeout run rerun green, proven transient).
-  - [x] `make test-cluster-mesh SCOPE=tests/identity/service-tenancy.spec.ts ENV=test-train-a4` (G3 sqlite): 19/19 after pre-G1 simulation + positive union test; postgres via identity campaign.
-  - [x] `make test-cluster-mesh SCOPE=tests/identity/workspace-deletion.spec.ts ENV=test-train-a4` (G4): 16/16 after descriptor containment fix.
-  - [x] `make test-cluster-mesh SCOPE=tests/identity/replica-sync.spec.ts ENV=test-train-a4` (G5 sqlite): 10/10; postgres via identity campaign.
-  - [x] `cluster-mesh-identity-test` both profiles: 28 files / 346 tests green on sqlite AND postgres.
-  - [x] `make down-volumes ENV=test-train-a4` at the end, including on failure (pg container removed, exit 0).
-- [ ] **Lot 4 — Train PR and wagon closure**
-  - [ ] Push `release/train-a4-gaps`, open one READY PR « A4 train: cluster-mesh gap lots G1–G5 ».
-  - [ ] Comment on PRs #899, #902, #900, #903, #904 that they are superseded by the train PR, and close them.
-- [ ] **Lot 5 — CI watch**
-  - [ ] Watch the single pull_request CI; fix real failures at the root; empty-commit retrigger only for AI-flaky shards, max 3.
-  - [ ] Report steps, PR number and run ids to `.tmp/rv/train-a4.md`; do NOT merge.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-- This lane adds no AI-generation path; no AI flaky tests expected.
+- Owner rule for this train: the AI tests must pass green at least once; `initiative-generation-async` / `executive-summary-sync` flakiness fixed at the root on wagon E (deterministic waits on real conditions, isolation, capped retry only on a provider rate limit), never masked by longer timeouts.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single integration branch, single final test cycle)
@@ -169,56 +71,42 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI surface changes in wagons D + B + A + C (C lot 1a is package + thin api binding, no screen); UAT = package suites + scoped api lanes + CI. No browser UAT for this train.
+- No UI surface changes in wagons E + F; UAT = package suites + scoped api lanes + CI. No browser UAT for this train.
 - Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/train-1104`.
+  - Develop and run tests in `tmp/worktrees/train-next`.
   - Push branch before CI.
   - No root-workspace UAT needed (no app surface changed).
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, `.tmp/release-train/TRAIN-2026-11-05.md` (incl. REVISION section).
-  - [x] Create isolated worktree `tmp/worktrees/train-1104` on branch `release/train-2026-11-04` from `origin/main` (HEAD 3dd7d8012); copy root `.env`.
-  - [x] Verify wagon heads: D `origin/fix/mcp-terminal-jsonrpc-response` = 4e47903bd; B `origin/feat/share-g2-mcp-tools` = ead444fab; A and C have no remote heads yet (local lanes in progress).
-  - [x] Verify neither wagon touches `.track` (union-safe, no reseal needed).
-  - [x] Confirm command style: `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make … ENV=test-train` with `ENV` last, one lock per make command, never nested.
-  - [x] Confirm scope boundaries declared above (TR01-EX2/EX3/EX5/EX6).
-  - [x] Environment mapping: `ENV=test-train` for every test lane; no custom ports (disposable compose services per make target).
-- [x] **Lot 1 — Merge wagon D (`fix/mcp-terminal-jsonrpc-response` @ 4e47903bd)**
-  - [x] `git merge --no-ff origin/fix/mcp-terminal-jsonrpc-response`; resolve conflicts as UNION (`BRANCH.md` keeps this train doc; only BRANCH.md conflicted).
-  - [x] Lot gate: `git status --short` shows only wagon-D paths plus owned files.
-- [x] **Lot 2 — Merge wagon B (`feat/share-g2-mcp-tools` @ ead444fab)**
-  - [x] `git merge --no-ff origin/feat/share-g2-mcp-tools`; resolve conflicts as UNION (BRANCH.md + L5 manifest + sha: ours; locks auto-merged).
-  - [x] Lot gate: both wagon tips are ancestors of HEAD (`git merge-base --is-ancestor`).
-- [x] **Lot 3 — Versions + regeneration ONCE through make**
-  - [x] Registry check through a repo make target (Docker-based `qualify-published-install` probes with a published-version positive control): artifacts 0.2.13 free, mcp-platform 0.4.2 free (controls 0.2.12/0.4.1 confirmed published).
-  - [x] Keep `packages/artifacts/package.json` at 0.2.13 and `packages/mcp-platform/package.json` at 0.4.2; CHANGELOG entries list wagons D and B.
-  - [x] `make lock-root`, `make lock-api` (+ targeted `file:` syncs) (TR01-EX2): both no-diff, union already correct; `lock-api` needed the test-train api stack (ports 8789/5176/1082, 1080 left to wagon C).
-  - [x] Cluster-mesh `selected` fixture re-pin through `packaging.mk refresh-lazy-package-lock` (TR01-EX3): no-diff; sibling receipts recollected at train HEAD (artifacts 0.2.13 sha256 844fdaaa, mcp-platform 0.4.2 sha256 f9b3b3c1, both byte-identical to wagon packs); tarball sha512 == spec == fixture lock.
-  - [ ] APP-P1 pin recompute through make (TR01-EX6): verified in Lot 4 api pin tests.
-  - [x] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TR01-EX5): live f0e00f5d archived to `history/`, new manifest 7514ac8d (2 archives, 44 contracts), verify ok (30 files, 54 edges).
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Create isolated worktree `tmp/worktrees/train-next` on branch `release/train-next` from `origin/main` (HEAD fa7199852).
+  - [x] Verify wagon heads: E `chore/ci-ai-tests-scoped` = fe78bfcbf; F `feat/artifacts-sqlite-u1` = 0d4acee17; neither touches `.track`.
+  - [x] Confirm command style: `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make … ENV=test-train-next` with `ENV` last, one slot per make command, never nested.
+  - [x] Confirm scope boundaries declared above (TN01-EX2/EX3/EX5/EX6/EX9).
+  - [x] Environment mapping: `ENV=test-train-next` for every test lane; no custom ports (disposable compose services per make target).
+- [ ] **Lot 1 — Merge wagon E (`chore/ci-ai-tests-scoped` @ fe78bfcbf)**
+  - [ ] `git merge --no-ff chore/ci-ai-tests-scoped`; resolve conflicts as UNION (`BRANCH.md` keeps this train doc).
+  - [ ] Lot gate: `git status --short` shows only wagon-E paths plus owned files.
+- [ ] **Lot 2 — Merge wagon F (`feat/artifacts-sqlite-u1` @ 0d4acee17)**
+  - [ ] `git merge --no-ff feat/artifacts-sqlite-u1`; resolve conflicts as UNION.
+  - [ ] Normalize 0.3.0 to 0.2.14 (`packages/artifacts/package.json`, `ARTIFACTS_PROVIDER_VERSION`, CHANGELOG heading); keep main's cluster-mesh `0.26.0-dev.8` and peer range `>=0.2.0 <0.3.0`.
+  - [ ] Lot gate: both wagon tips are ancestors of HEAD (`git merge-base --is-ancestor`).
+- [ ] **Lot 3 — Versions + regeneration ONCE through make**
+  - [ ] Registry check through a repo make target: artifacts 0.2.14 free (0.2.13 confirmed published).
+  - [ ] `make lock-root`, `make lock-api` (TN01-EX2) through docker-slot.sh.
+  - [ ] Cluster-mesh `selected` fixture re-pin through `packaging.mk refresh-lazy-package-lock` (TN01-EX3).
+  - [ ] APP-P1 pin recompute through make if the pin tests fail on the union (TN01-EX6).
+  - [ ] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TN01-EX5).
   - [ ] Lot gate: `make scope-check` PASS C2 before any commit.
-- [x] **Lot 4 — Final validation (all on `ENV=test-train`, LAST)**
-  - [x] Typecheck & lint: `typecheck-mcp-platform` PASS, `typecheck-artifacts` PASS, `lint-artifacts` PASS.
-  - [x] Scoped lanes: `test-mcp-platform SCOPE=tests/hono.test.ts` 21 passed; `test-api-unit` (registry-dispatch-terminal + app-artifacts-transport + artifacts-host-credentials) 49 passed; `test-artifacts SCOPE=tests/share-g2-tools.test.ts` 6 passed; `SCOPE=tests/share-g2-errors.test.ts` 6 passed; `SCOPE=tests/tools-list-snapshot.test.ts` 1 passed (pre-existing definitions byte-identical).
-  - [x] Pin lane: `test-api-endpoints` (app-mcp-registry + app-mcp-installed + artifacts-host-publication) 44 passed → APP-P1 digests unchanged, TR01-EX6 verified, no re-pin.
-  - [x] Full suites: `test-mcp-platform` 363 passed; `test-artifacts` 556 passed (53 files); `test-artifacts-integration` green (exit 0, 14 files); `test-lazy-package` 135 passed (16 files, sibling receipts recollected at train HEAD, byte-identical tarballs).
-  - [x] No UI surface, no E2E, no AI-generation path in wagons D/B: full suites + AI shards run in the PR CI.
-  - [x] `make down-volumes ENV=test-train` last (stack + volumes removed, no test-train containers left).
-- [ ] **Lot 8 — CI run 41809308029 fence gap (union-only, deterministic, not flaky)**
-  - [x] New head green on `validate-artifacts` + `validate-cluster-mesh` (union fixes confirmed); `test-api-unit-integration (endpoints, 2)` failed on `root-mount-fence-completeness`: wagon C routes `/resources/artifacts/reader-consents{,/revoke,/revoke-all,/admin-revoke}` registered but missing from `RESOURCE_PATHS` fence + `IMMUTABLE_ARTIFACT_ROUTES` pin (C lane never ran that file; no E502 flake, never a rerun).
-  - [x] Fix: extend `RESOURCE_PATHS` (`api/src/routes/namespaces/resources.ts`) and both immutable pins (`root-mount-fence-completeness`, `cluster-mesh-resources` inventory) with the 4 routes in mount order; wildcard `/resources/artifacts/*` fence already covers method wiring.
-  - [ ] Validate `root-mount-fence-completeness` + `cluster-mesh-resources` on `ENV=test-train`, commit, push, watch the single new CI run.
-- [ ] **Lot 5 — PR + report**
-  - [x] Atomic commits via `make commit MSG="…"` (specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` PASS C2 before every commit; no AI trailers; no `[skip ci]`.
-  - [ ] Push `release/train-2026-11-04` to origin; update body of PR #911 to list wagons A, B, C, D (body = this BRANCH.md); comment PR #910 as superseded by #911 and close it; exactly one CI run on the final head; do NOT merge #911 (conductor merges after review).
-  - [ ] Report every step and every CI run id to `.tmp/rv/train-fix.md` (root workspace).
-- [x] **Lot 6 — Wagons A + C watch: CLOSED**
-  - [x] A (`feat/artifacts-files-parity-lot1` @ 238a3ff5d) merged with `--no-ff` (union conflicts resolved, no markers left); then C (`feat/reader-consent-persistent` @ d8df0daa1) merged with `--no-ff` (union conflicts resolved, no markers left).
-  - [x] Departure called by owner (MAX PRIORITY: ONE train PR shipped now); no more wagons join this train.
-- [x] **Lot 7 — A+C union fixes + regeneration ONCE + validation (all on `ENV=test-train`, LAST)**
-  - [ ] Root causes from CI logs: train `validate-artifacts` probe `tool name mismatch` (B tools vs 17-name EXPECTED_TOOLS) + `validate-cluster-mesh (source installed major)` SPEC_TOOLS 17 vs 19 (+`artifacts_lookup_people`, `artifacts_list_access`); wagon A same probe cause + stale fixture lock (0.2.12 vs 0.2.13) + SPEC_TOOLS 17 vs 18 (+`artifacts_publish_bundle`). No npm E502 flake in any CI log: real mismatches, fixed in the union, never a rerun. Local E502 on the 127.0.0.1 mirror during refresh traced to stale sibling receipts (unpublished 0.2.13 unresolvable); receipts recollected at union HEAD via repo make flow, refresh then green.
-  - [x] Union fixes: probe EXPECTED_TOOLS + mesh SPEC_TOOLS extended to the 21-name union (capability order: 17 + 2 B + 1 A + 1 C); probe css bytes made valid UTF-8 (LOT 1 commit validation); train-numbered migration `0008_reader_consent.sql` + host-storage pin/relations; stale wagon-local test assumptions evolved to the union (files-parity 17+4 pin, reader-consent-world duplicate `set_access` op); CHANGELOG 0.2.13 entries for A and C; versions stay 0.2.13 / 0.4.2 (A+C touch neither mcp-platform nor cluster-mesh versions).
-  - [x] Regenerated ONCE through make: `make lock-root` no-diff, `api/package-lock.json` verified in sync (`file:` links + presigner entries, no stack change), `refresh-lazy-package-lock` 1-line integrity re-pin + tuple spec sync, APP-P1 digests verified unchanged on the union (pin tests green, no re-pin), `make memory-l5-pack STAGE=pre-candidate …` (7514ac8d archived, new 7443fd03) + `make memory-l5-verify` ok (30 files, 54 edges).
-  - [x] Lot gate: typecheck-artifacts + lint-artifacts + typecheck-mcp-platform + typecheck-api green; scoped lanes of all four wagons on `ENV=test-train` (D: registry-dispatch-terminal 16; B: share-g2 6+6, sharing-management 8, mcp-platform 363; A: files-parity 7, uploads 6, http-uploads-templates 15, migration proof in integration 42; C: reader-consent 5+5+4, api reader-consent 3, host-migrations 16; transport 8, credentials 25, pin lane 27, publication 17; full test-artifacts 579, integration 42+42+29, lazy-package 135, mesh surface 21, probe PACKED_*_OK); tools/list snapshot pre-existing definitions unchanged; `make scope-check` PASS C2 before commit.
-  - [x] `make down-volumes ENV=test-train` last (stack + volumes removed, no test-train containers left).
+- [ ] **Lot 4 — Final validation (all on `ENV=test-train-next`, LAST)**
+  - [ ] Typecheck & lint: `typecheck-artifacts` + `lint-artifacts` + `typecheck-api` scoped lanes.
+  - [ ] Scoped lanes: artifacts sqlite suites (conformance, export), cluster-mesh tuple/lazy-package specs, api pin tests (app-mcp-registry + app-mcp-installed), AI scoped lane (`initiative-generation-async` + `executive-summary-sync`).
+  - [ ] Pre-existing MCP tool definitions byte-identical (tools/list snapshot lane).
+  - [ ] `make down-volumes ENV=test-train-next` last (stack + volumes removed).
+- [ ] **Lot 5 — PR + wagon closure + report**
+  - [ ] Atomic commits via `make commit MSG="…"` (specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` PASS C2 before every commit; no AI trailers; no `[skip ci]`.
+  - [ ] Push `release/train-next` to origin; open exactly one READY PR (body = this BRANCH.md); comment #908 and #891 as superseded by the train PR and close them; do NOT merge the train PR.
+  - [ ] Report every step and every CI run id to `.tmp/rv/train-next.md` (root workspace).
+- [ ] **Lot 6 — Single CI watch**
+  - [ ] Watch the single PR CI; fix real failures at the root; if only the AI shards fail, retrigger with an empty commit, up to 3 times (owner-authorized).
