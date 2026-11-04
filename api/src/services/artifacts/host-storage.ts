@@ -11,7 +11,7 @@ const requiredRelations = [
   'artifact_host.activation_namespaces', 'artifact_host.activation_tickets', 'artifact_host.browser_flows',
   ...['storage_scopes', 'artifacts', 'releases', 'artifact_current', 'blobs', 'uploads',
     'object_intents', 'idempotency_keys', 'artifact_access', 'artifact_access_events', 'artifact_sources',
-    'blob_ref_holders', 'blob_pins', 'operation_keys', 'operation_receipts'].map((name) => `artifacts.${name}`),
+    'blob_ref_holders', 'blob_pins', 'operation_keys', 'operation_receipts', 'staged_files'].map((name) => `artifacts.${name}`),
 ];
 
 /** Upstream identities and bytes are pinned independently of package versions. */
@@ -35,6 +35,9 @@ export const artifactMigrationAssets = Object.freeze([
   Object.freeze({ id: '@sentropic/artifacts/migrations/0006_sharing.sql',
     sha256: '038d94000a78d0bc8f47788c99763e7765f75feac6c2265963d2a8ee17a8bfba',
     read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0006_sharing.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0007_uploads.sql',
+    sha256: '22c0668cd2bcc13650f733978135087e8a04c64c16f9ff307c1d6ceb88fe15b1',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0007_uploads.sql'), 'utf8') }),
 ]);
 
 /** Called only by the API migration runner, after the control stream. */
