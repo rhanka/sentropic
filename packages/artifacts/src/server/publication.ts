@@ -58,6 +58,11 @@ export interface PublicationStateStore {
 export interface PublicationBlobStore {
   putBlob(key: string, bytes: Uint8Array): Promise<void>;
   getBlob(key: string): Promise<Uint8Array | undefined>;
+  /**
+   * Files parity LOT 2 §B.4: byte-range read (inclusive bounds). Optional:
+   * the content handler falls back to getBlob + in-memory slicing.
+   */
+  getBlobRange?(key: string, start: number, endInclusive: number): Promise<Uint8Array | undefined>;
   /** List keys under a prefix (orphan enumeration for crash recovery/GC). */
   listKeys(prefix: string): Promise<string[]>;
   /** Delete a key (strict: unknown keys fail so callers notice). */
@@ -111,6 +116,11 @@ export function createMemoryBlobStore(): PublicationBlobStore {
     },
     getBlob(key: string): Promise<Uint8Array | undefined> {
       return Promise.resolve(blobs.get(key));
+    },
+    getBlobRange(key: string, start: number, endInclusive: number): Promise<Uint8Array | undefined> {
+      const bytes = blobs.get(key);
+      if (bytes === undefined || start < 0 || endInclusive < start) return Promise.resolve(undefined);
+      return Promise.resolve(bytes.slice(start, Math.min(endInclusive + 1, bytes.length)));
     },
     async listKeys(prefix: string): Promise<string[]> {
       assertBlobPrefix(prefix);
