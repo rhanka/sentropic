@@ -11,6 +11,8 @@ import { createPrivateArtifactStorage } from './lifecycle';
 import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdentity } from './credentials';
 import { createArtifactTransport } from './transport';
 import { createArtifactReaderActivation } from './reader-activation';
+import { createPostgresReaderConsentStore } from '@sentropic/artifacts/adapters/postgres-reader-consent';
+import { createReaderConsentService } from './reader-consent';
 import type { ArtifactHttpPorts } from '../../routes/namespaces/artifacts';
 
 export const artifactHostEnabled = () => process.env.APP_ARTIFACT_HOST_ENABLED === '1';
@@ -55,6 +57,29 @@ export function getProductArtifactReader() {
   return reader ??= createArtifactReaderActivation({ pool, baseDomain,
     profileDigest: productArtifactHost.profile.profileDigest });
 }
+export const productArtifactReaderConsentPort: NonNullable<ArtifactHttpPorts['readerConsent']> = {
+  enabled: artifactReaderEnabled,
+  get controlOrigin() {
+    if (!process.env.UI_BASE_URL) throw new Error('Approved reader control origin required');
+    return new URL(process.env.UI_BASE_URL).origin;
+  },
+  /** One service per bound session: scope, readability and titles resolve under that session. */
+  async service({ identity, workspaceId }, admin) {
+    const host = await productArtifactHost.bind(identity, workspaceId);
+    return createReaderConsentService({
+      store: createPostgresReaderConsentStore(pool),
+      storageScopeId: host.invocation.storageScopeId,
+      canReadArtifact: async (artifactId, readerAccountId) => {
+        if (readerAccountId !== identity.subject) return false;
+        const result = await host.http({ method: 'GET', path: `/meta/${artifactId}`, body: undefined });
+        return result.status === 200;
+      },
+      isAdmin: async () => admin,
+      resolveTitle: async (artifactId) =>
+        (await productArtifactHost.store.getArtifactAcl(artifactId))?.metadata?.title,
+    });
+  },
+};
 export const productArtifactReaderPort: NonNullable<ArtifactHttpPorts['reader']> = {
   enabled: artifactReaderEnabled,
   get controlOrigin() {
