@@ -408,6 +408,35 @@
         "type": "object"
       }
     },
+    "artifacts_list_access": {
+      "description": "Artifacts list access: sharing mode, owner and grant list of one artifact, projected to userRefs. The owner and platform admins see every entry; a simple reader sees the mode and its own entry only.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
     "artifacts_list_versions": {
       "description": "Artifacts list versions.",
       "gates": {
@@ -438,6 +467,39 @@
         },
         "required": [
           "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_lookup_people": {
+      "description": "Artifacts lookup people: search the host directory by name or email and return opaque userRefs with masked email hints (approved callers only; homonyms are returned, never silently resolved). Use the returned userRef as principalId of artifacts_set_access.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
         ],
         "type": "object"
       },
@@ -1623,6 +1685,52 @@
           "type": "object"
         },
         "name": "artifacts_revert",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts lookup people: search the host directory by name or email and return opaque userRefs with masked email hints (approved callers only; homonyms are returned, never silently resolved). Use the returned userRef as principalId of artifacts_set_access.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "query": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_lookup_people",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts list access: sharing mode, owner and grant list of one artifact, projected to userRefs. The owner and platform admins see every entry; a simple reader sees the mode and its own entry only.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_list_access",
         "outputSchema": {
           "additionalProperties": true,
           "type": "object"
