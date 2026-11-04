@@ -20,8 +20,11 @@ import { describe, expect, it } from 'vitest';
 import { ARTIFACTS_TOOL_DEFINITIONS, ARTIFACTS_TOOL_NAMES } from '../src/mcp-core.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../src/profile/index.js';
 import { checksumHeaderValue, createMemoryStaging, createMemoryUploadSessionStore, createUploadService, stagingKey } from '../src/server/uploads.js';
-import { UPLOAD_PAGE_TTL_MS, createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from '../src/server/upload-page.js';
+import { UPLOAD_PAGE_TTL_MS, createHmacUploadPageCookieSigner, createUploadPageService } from '../src/server/upload-page.js';
 import type { ArtifactsMetricEvent } from '../src/server/metrics.js';
+import { createUploadSweeper } from '../src/server/gc.js';
+import { createHmacGrantSigner, createMemoryTicketStore, createTicketService } from '../src/content/grants.js';
+import { createContentHandler } from '../src/content/handler.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
 
 const SCOPE = 'scope-l7';
@@ -134,8 +137,9 @@ function makePage(world: World, events: ArtifactsMetricEvent[], now: () => Date)
 
 describe('files parity LOT 2 (a): browser upload page', () => {
   it('publishes PNG+PDF+WOFF2 through the page with zero file bytes in any MCP payload', async () => {
-    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
     const events: ArtifactsMetricEvent[] = [];
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile(),
+      metrics: { emit: (event) => { events.push(event); } } });
     const now = new Date();
     const page = makePage(world, events, () => now);
     const mcp = scannedMcp(world);
@@ -278,9 +282,9 @@ describe('files parity LOT 2 (b1): list_assets', () => {
     const mcp = scannedMcp(world);
     const artifactId = await ensureArtifact(world, mcp, 'list-staged');
     const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType: 'image/png', maxSize: 64 });
-    const upload = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
+    const upload = unwrap<{ uploadId: string }>(created.body);
     const bytes = pngBytes(21, 64);
-    await world.uploadStaging.put(upload.stagingKey, bytes);
+    await world.uploadStaging.put(stagingKey(SCOPE, upload.uploadId), bytes);
     const committed = await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: upload.uploadId,
       path: 's.png', mimeType: 'image/png', digest: sha256(bytes), size: bytes.length, idempotencyKey: 'c-1' });
     expect(committed.status).toBe(201);
@@ -391,8 +395,8 @@ describe('files parity LOT 2 (b3): get_source caps', () => {
   async function commitFile(world: World, mcp: ReturnType<typeof scannedMcp>, artifactId: string,
     path: string, mimeType: string, bytes: Uint8Array, key: string): Promise<string> {
     const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType, maxSize: bytes.length });
-    const body = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
-    await world.uploadStaging.put(body.stagingKey, bytes);
+    const body = unwrap<{ uploadId: string }>(created.body);
+    await world.uploadStaging.put(stagingKey(SCOPE, body.uploadId), bytes);
     const committed = await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: body.uploadId,
       path, mimeType, digest: sha256(bytes), size: bytes.length, idempotencyKey: key });
     expect(committed.status).toBe(201);
@@ -543,8 +547,8 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
     const artifactId = await ensureArtifact(world, mcp, 'gc-unpin');
     const bytes = pngBytes(31, 128);
     const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType: 'image/png', maxSize: 128 });
-    const upload = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
-    await world.uploadStaging.put(upload.stagingKey, bytes);
+    const upload = unwrap<{ uploadId: string }>(created.body);
+    await world.uploadStaging.put(stagingKey(SCOPE, upload.uploadId), bytes);
     await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: upload.uploadId,
       path: 'u.png', mimeType: 'image/png', digest: sha256(bytes), size: bytes.length, idempotencyKey: 'u-1' });
     expect(await world.refs.isPinned(sha256(bytes))).toBe(true);
@@ -561,8 +565,8 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
     const artifactId = await ensureArtifact(world, mcp, 'gc-staged-ttl');
     const bytes = pngBytes(33, 64);
     const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType: 'image/png', maxSize: 64 });
-    const upload = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
-    await world.uploadStaging.put(upload.stagingKey, bytes);
+    const upload = unwrap<{ uploadId: string }>(created.body);
+    await world.uploadStaging.put(stagingKey(SCOPE, upload.uploadId), bytes);
     await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: upload.uploadId,
       path: 's.png', mimeType: 'image/png', digest: sha256(bytes), size: bytes.length, idempotencyKey: 's-1' });
     const sessions = world.uploadSessions;
