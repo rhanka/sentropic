@@ -18,6 +18,7 @@ export interface CmAuthBindingConfig {
   readonly hostPortsForTransaction: (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts) => AuthHonoPorts;
   readonly tokens: ReturnType<typeof createCmTokenCustodian>;
   readonly rp: AuthHonoRelyingPartyConfig;
+  readonly webAuthnTimeouts: { readonly registration: number; readonly authentication: number };
   readonly accountPolicy: IdentityAuthAccountPolicyV1;
   readonly business: IdentityAuthBusinessHooksV1<PoolClient>;
   readonly emailCodeKeys: IdentityEmailCodeKeyRingV1;
@@ -46,7 +47,8 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
         tx, hostPorts, digest: config.tokens.digest,
         loginTokens: config.tokens.loginTokens, ticketTokens: config.tokens.ticketTokens,
         rp: config.rp, accountPolicy: config.accountPolicy, emailCodeKeys: config.emailCodeKeys,
-        webAuthnPolicy: { registrationUserVerification: 'preferred', authenticationUserVerification: 'required' },
+        webAuthnPolicy: { registrationUserVerification: 'preferred', authenticationUserVerification: 'required',
+          registrationTimeoutMs: config.webAuthnTimeouts.registration, authenticationTimeoutMs: config.webAuthnTimeouts.authentication },
         magicLink: { baseUrl: config.magicLinkBaseUrl, tokenBytes: 32, ttlSeconds: 600 },
         social: { autoLinkProviders: ['google'] }, business: config.business, trustedRegistration,
         serviceTenancy: { enrollments: createServiceTenantEnrollmentSource(tx) },
