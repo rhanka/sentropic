@@ -54,7 +54,7 @@ export interface HttpResponse { status: number; body: unknown }
 /** Stable content-route error codes; private driver messages never leave the host. */
 export function errorBody(status: number): { error: string } {
   return { error: ({ 400: 'invalid_request', 401: 'anonymous', 403: 'access_denied',
-    404: 'not_found', 409: 'conflict', 410: 'gone', 422: 'verification_failed',
+    404: 'not_found', 409: 'conflict', 410: 'gone', 416: 'range_not_satisfiable', 422: 'verification_failed',
     500: 'internal_error', 503: 'capability_unavailable' } as Record<number, string>)[status] ?? 'internal_error' };
 }
 export interface HttpAppDeps {
