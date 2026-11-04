@@ -931,7 +931,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           profile.validate(capability, args, request.idempotencyKey);
           // Resolve the files/assets union BEFORE any commit step: one missing,
           // expired or digest-mismatched asset fails the whole publish and commits nothing.
-          const { files, origins } = await resolveBundleAssets(invocation, artifactId, {
+          const { files, origins, uploadPins } = await resolveBundleAssets(invocation, artifactId, {
             files: (normalized.files ?? []) as Record<string, JsonValue>[],
             assets: (normalized.assets ?? []) as Record<string, JsonValue>[],
           }, { allowExtendedForms: false, keepUnmodifiedPaths: false, expectedCurrentReleaseId: null });
@@ -947,6 +947,18 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               path: entry.path, mimeType: entry.mimeType, size: entry.size, digest: entry.digest,
               origin: origins[entry.path] ?? 'inline',
             }));
+            // LOT 2 §D.1/D.3: unpin consumed upload pins (sweeper is the
+            // backstop) and meter every bundled asset by coarse origin.
+            for (const pin of uploadPins) {
+              await deps.publication.refs.unpin(pin.digest, `upload:${pin.uploadId}`).catch(() => undefined);
+            }
+            if (deps.uploads?.metrics !== undefined) {
+              for (const file of files) {
+                const origin = origins[file.path] ?? 'inline';
+                deps.uploads.metrics.emit({ name: 'bundle_assets',
+                  labels: { origin: origin.startsWith('upload:') ? 'upload' : origin } });
+              }
+            }
           }
           return committed;
         }
