@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.12
+
+- Bounded concurrency in multi-file publication blob staging (#art-conc, P1):
+  `publishFinalized` no longer issues one `putBlob` per file in a sequential
+  loop and `verifyStagedBlobs` no longer issues one `getBlob` per file
+  sequentially. Both now run through a shared worker pool with a default of 6
+  in-flight operations, configurable via `blobConcurrency` on the publication
+  service deps and clamped to at most 8 (`MAX_BLOB_CONCURRENCY`), so no
+  unbounded parallelism is possible. On slow S3 hosts (e.g. OVH BHS at
+  1.1–1.5 s per request) a 30-file `artifacts_publish` now takes about
+  ceil(n/k) round trips instead of n, staying inside the host blob budget
+  instead of returning 503 `provider_unavailable`.
+- The pool keeps the sequential loop's guarantees: all-or-nothing publication
+  (intent, pins, cleanup and finalization paths unchanged), the same
+  per-operation error projection (the first fatal error is rethrown unchanged,
+  so provider error codes and failure mapping are identical), and one shared
+  deadline across the whole batch when `blobDeadlineMs` is configured — no new
+  blob operation starts after it, and expiry classifies exactly like a
+  provider timeout (503 `provider_unavailable`). MCP tool definitions are
+  byte-identical.
+
 ## 0.2.10
 
 - G1 sharing access model: artifacts carry an explicit `access_mode`

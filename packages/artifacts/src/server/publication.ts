@@ -187,9 +187,86 @@ function preparePublication(input: PublishInput): PreparedPublication {
   return { entries, digest, manifest };
 }
 
-/** Read-back verification shared by the split and finalized paths. */
-async function verifyStagedBlobs(blobs: PublicationBlobStore, entries: StagedBlob[]): Promise<void> {
-  for (const { key, bytes } of entries) {
+/** Default bounded in-flight blob operations per publish batch. */
+export const DEFAULT_BLOB_CONCURRENCY = 6;
+/** Hard ceiling for the configurable blob concurrency: no unbounded parallelism. */
+export const MAX_BLOB_CONCURRENCY = 8;
+
+/** Resolve the bounded blob-operation concurrency: default 6, clamped to 8, never below 1. */
+export function resolveBlobConcurrency(value: number | undefined): number {
+  if (value === undefined) return DEFAULT_BLOB_CONCURRENCY;
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error('invalid blob concurrency');
+  return Math.min(value, MAX_BLOB_CONCURRENCY);
+}
+
+/** Deadline expiry is projected exactly like a provider timeout (failures.ts TIMEOUT_NAMES). */
+function blobDeadlineError(): Error {
+  const error = new Error('blob staging deadline exceeded');
+  error.name = 'TimeoutError';
+  return error;
+}
+
+export interface BlobPoolOptions {
+  /** Resolved max operations in flight (1..MAX_BLOB_CONCURRENCY). */
+  readonly concurrency: number;
+  /** One deadline (epoch ms) shared by every operation of the batch; no new operation starts after it. */
+  readonly deadlineAt?: number;
+  /** Checked before each operation starts; a throw becomes the batch's first fatal error. */
+  readonly beforeEach?: () => void | Promise<void>;
+}
+
+/**
+ * Run one async operation per item with bounded concurrency. At most
+ * `concurrency` operations are in flight at any time; every operation of the
+ * batch shares the same `deadlineAt`; the first fatal error stops scheduling
+ * (in-flight operations run to completion — the blob-store port has no abort
+ * signal) and is rethrown unchanged, so the per-operation error projection is
+ * identical to the sequential loop.
+ */
+export async function runBlobPool<T>(
+  items: readonly T[],
+  options: BlobPoolOptions,
+  operation: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  let fatal: { readonly error: unknown } | undefined;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (fatal !== undefined) return;
+      if (options.deadlineAt !== undefined && Date.now() >= options.deadlineAt) {
+        fatal = { error: blobDeadlineError() };
+        return;
+      }
+      const index = next++;
+      if (index >= items.length) return;
+      try {
+        if (options.beforeEach !== undefined) await options.beforeEach();
+        await operation(items[index]);
+      } catch (error) {
+        fatal = { error };
+        return;
+      }
+    }
+  };
+  const workers = Array.from({ length: Math.max(1, Math.min(options.concurrency, items.length)) }, () => worker());
+  await Promise.all(workers);
+  if (fatal !== undefined) throw fatal.error;
+}
+
+export interface VerifyStagedOptions {
+  /** Bounded in-flight read-backs; defaults to DEFAULT_BLOB_CONCURRENCY, clamped to MAX_BLOB_CONCURRENCY. */
+  readonly concurrency?: number;
+  /** Shared deadline (epoch ms) for the whole read-back batch. */
+  readonly deadlineAt?: number;
+}
+
+/** Read-back verification shared by the split and finalized paths (bounded concurrency). */
+async function verifyStagedBlobs(blobs: PublicationBlobStore, entries: StagedBlob[],
+  options: VerifyStagedOptions = {}): Promise<void> {
+  await runBlobPool(entries, {
+    concurrency: resolveBlobConcurrency(options.concurrency),
+    ...(options.deadlineAt === undefined ? {} : { deadlineAt: options.deadlineAt }),
+  }, async ({ key, bytes }) => {
     const stored = await blobs.getBlob(key);
     if (stored === undefined || shaHex(stored) !== shaHex(bytes)) {
       throw new Error(`publication digest mismatch for ${key}: read-back failed`);
@@ -197,7 +274,7 @@ async function verifyStagedBlobs(blobs: PublicationBlobStore, entries: StagedBlo
     if (stored.length !== bytes.length) {
       throw new Error(`publication size mismatch for ${key}: read-back failed`);
     }
-  }
+  });
 }
 
 export interface PublicationService {
@@ -217,8 +294,11 @@ export function createPublicationService(deps: {
   intents: IntentStore;
   idempotency?: IdempotencyStore;
   limits?: Partial<PublicationLimits>;
+  /** Bounded in-flight blob read-backs per publish; default 6, clamped to 8. */
+  blobConcurrency?: number;
 }): PublicationService {
   const limits = publicationLimits(deps.limits);
+  const blobConcurrency = resolveBlobConcurrency(deps.blobConcurrency);
   async function commitOnce(input: PublishInput, prepared: PreparedPublication, sources?: SourceStore): Promise<PublishResult> {
     const releaseId = crypto.randomUUID();
     const { entries, digest, manifest } = prepared;
@@ -231,7 +311,7 @@ export function createPublicationService(deps: {
     for (const { key, bytes } of entries) {
       await deps.blobs.putBlob(key, bytes);
     }
-    await verifyStagedBlobs(deps.blobs, entries);
+    await verifyStagedBlobs(deps.blobs, entries, { concurrency: blobConcurrency });
     await deps.state.putRelease({
       releaseId,
       artifactId: input.artifactId,
@@ -449,6 +529,10 @@ export interface GuardedPublicationDeps {
   readonly noteAbandoned?: (attemptId: string) => void | Promise<void>;
   readonly cleanupWindowMs?: number;
   readonly limits?: Partial<PublicationLimits>;
+  /** Bounded in-flight blob PUTs/read-backs per publish; default 6, clamped to 8. */
+  readonly blobConcurrency?: number;
+  /** Per-publish blob-staging budget in ms; one shared deadline for every concurrent blob operation. */
+  readonly blobDeadlineMs?: number;
 }
 
 export interface GuardedPublicationService {
@@ -463,6 +547,11 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
   const limits = publicationLimits(deps.limits);
   const cleanupWindowMs = deps.cleanupWindowMs ?? DEFAULT_CLEANUP_WINDOW_MS;
   if (!Number.isSafeInteger(cleanupWindowMs) || cleanupWindowMs < 1) throw new Error('invalid preparation lifetime');
+  const blobConcurrency = resolveBlobConcurrency(deps.blobConcurrency);
+  const blobDeadlineMs = deps.blobDeadlineMs;
+  if (blobDeadlineMs !== undefined && (!Number.isSafeInteger(blobDeadlineMs) || blobDeadlineMs < 1)) {
+    throw new Error('invalid blob deadline');
+  }
   const guard = (client: () => FinalizeTxClient, authorizeCommit?: AuthorizeCommit): AuthorizeCommit => async (context, transaction) => {
     const { state, acl } = await deps.createUnitWriter(client()).readAuthorization(context.artifactId);
     const verdict = decidePublishAuthorization({ lifecycleState: state, acl, actorId: context.actorId });
@@ -534,15 +623,27 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         pinned.push(digest);
       }
       await deps.coordinator.testObserver?.arrive('before_blob_put', invocationId);
-      for (const { key, bytes } of prepared.entries) {
-        if ((await deps.intents.get(intent.intentId))?.state !== 'pending') {
-          throw new Error('preparation abandoned before blob PUT');
-        }
+      // Bounded concurrency over the staged PUTs: one shared deadline for the
+      // whole batch, the intent-pending check before every PUT, and the first
+      // fatal error stops scheduling and propagates unchanged.
+      const deadlineAt = blobDeadlineMs === undefined ? undefined : nowMs + blobDeadlineMs;
+      await runBlobPool(prepared.entries, {
+        concurrency: blobConcurrency,
+        ...(deadlineAt === undefined ? {} : { deadlineAt }),
+        beforeEach: async () => {
+          if ((await deps.intents.get(intent.intentId))?.state !== 'pending') {
+            throw new Error('preparation abandoned before blob PUT');
+          }
+        },
+      }, async ({ key, bytes }) => {
         await deps.blobs.putBlob(key, bytes);
-      }
+      });
       await deps.coordinator.testObserver?.arrive('after_blob_put_before_verify', invocationId);
       await deps.coordinator.testObserver?.arrive('before_blob_readback', invocationId);
-      await verifyStagedBlobs(deps.blobs, prepared.entries);
+      await verifyStagedBlobs(deps.blobs, prepared.entries, {
+        concurrency: blobConcurrency,
+        ...(deadlineAt === undefined ? {} : { deadlineAt }),
+      });
       const addedRefs: string[] = [];
       const source = input.source === undefined ? undefined : parseSourceRef(input.source);
       let finalizationClient: FinalizeTxClient | undefined;
