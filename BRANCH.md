@@ -94,13 +94,13 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
 - [x] **Lot 2 — Merge wagon B (`feat/share-g2-mcp-tools` @ ead444fab)**
   - [x] `git merge --no-ff origin/feat/share-g2-mcp-tools`; resolve conflicts as UNION (BRANCH.md + L5 manifest + sha: ours; locks auto-merged).
   - [x] Lot gate: both wagon tips are ancestors of HEAD (`git merge-base --is-ancestor`).
-- [ ] **Lot 3 — Versions + regeneration ONCE through make**
-  - [ ] Registry check through a repo make target (Docker-based `qualify-published-install` probes with a published-version positive control): artifacts 0.2.13 free, mcp-platform 0.4.2 free.
-  - [ ] Keep `packages/artifacts/package.json` at 0.2.13 and `packages/mcp-platform/package.json` at 0.4.2; CHANGELOG entries list wagons D and B.
-  - [ ] `make lock-root`, `make lock-api` (+ targeted `file:` syncs) (TR01-EX2).
-  - [ ] Cluster-mesh `selected` fixture re-pin through `packaging.mk refresh-lazy-package-lock` (TR01-EX3).
-  - [ ] APP-P1 pin recompute through make (TR01-EX6).
-  - [ ] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TR01-EX5).
+- [x] **Lot 3 — Versions + regeneration ONCE through make**
+  - [x] Registry check through a repo make target (Docker-based `qualify-published-install` probes with a published-version positive control): artifacts 0.2.13 free, mcp-platform 0.4.2 free (controls 0.2.12/0.4.1 confirmed published).
+  - [x] Keep `packages/artifacts/package.json` at 0.2.13 and `packages/mcp-platform/package.json` at 0.4.2; CHANGELOG entries list wagons D and B.
+  - [x] `make lock-root`, `make lock-api` (+ targeted `file:` syncs) (TR01-EX2): both no-diff, union already correct; `lock-api` needed the test-train api stack (ports 8789/5176/1082, 1080 left to wagon C).
+  - [x] Cluster-mesh `selected` fixture re-pin through `packaging.mk refresh-lazy-package-lock` (TR01-EX3): no-diff; sibling receipts recollected at train HEAD (artifacts 0.2.13 sha256 844fdaaa, mcp-platform 0.4.2 sha256 f9b3b3c1, both byte-identical to wagon packs); tarball sha512 == spec == fixture lock.
+  - [ ] APP-P1 pin recompute through make (TR01-EX6): verified in Lot 4 api pin tests.
+  - [x] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TR01-EX5): live f0e00f5d archived to `history/`, new manifest 7514ac8d (2 archives, 44 contracts), verify ok (30 files, 54 edges).
   - [ ] Lot gate: `make scope-check` PASS C2 before any commit.
 - [ ] **Lot 4 — Final validation**
   - [ ] Typecheck & lint for touched packages.
