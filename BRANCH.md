@@ -33,7 +33,10 @@ Persistent basket consent per (reader account, artifactId, scope): the reader sc
   - `packages/artifacts/tests/snapshots/tools-list-catalogue.json` (RC-EX1: append one tool entry, pre-existing bytes unchanged)
   - `api/src/services/artifacts/reader-consent.ts` (new: grant service binding, list/revoke/revoke-all)
   - `api/src/services/artifacts/composition.ts` (wire the Postgres reader-consent store)
+  - `api/src/services/artifacts/instance.ts` (consent port construction only)
   - `api/src/routes/namespaces/artifacts.ts` (control-origin list/revoke routes)
+  - `api/src/routes/namespaces/resources-module.ts` (port wiring, two lines)
+  - `packages/artifacts/package.json` (RC-EX2: three additive exports entries only; version field untouched)
   - `api/tests/api/artifacts-reader-consent.test.ts` (new, memory-store service test)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -41,8 +44,7 @@ Persistent basket consent per (reader account, artifactId, scope): the reader sc
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md`
-  - `packages/artifacts/package.json` (no version bump; train assigns 0.2.13)
-  - `packages/artifacts/CHANGELOG.md` (train writes the entry)
+  - `packages/artifacts/package.json` version field and `packages/artifacts/CHANGELOG.md` (no bump; train assigns 0.2.13)
   - `package-lock.json`, `api/package-lock.json` (no lock regeneration)
   - `api/src/services/mcp/cluster-registry.ts` (no APP-P1 re-pin)
   - `packages/artifacts/migrations/*.sql` (no pre-assigned migration number)
@@ -58,6 +60,7 @@ Persistent basket consent per (reader account, artifactId, scope): the reader sc
 
 ## Feedback Loop
 - RC-EX1 (scope exception, `packages/artifacts/tests/snapshots/tools-list-catalogue.json`): the new `artifacts_revoke_reader_consent` definition must appear in the checked-in snapshot or the byte-stability test fails; regenerate only by the file's own documented flow (delete + two scoped runs) and verify by `git diff` that pre-existing entries are byte-identical. Rollback: `git checkout` the snapshot and drop the new tool.
+- RC-EX2 (scope exception, `packages/artifacts/package.json` exports map only): three additive subpath entries (`./server/consent`, `./server/reader-store`, `./adapters/postgres-reader-consent`) so the api binding can import the port and the adapter; `version`, `files`, scripts and every other field untouched (no bump; the train assigns 0.2.13). Rollback: drop the three entries.
 - Review finding 1 (binding correction, lot split): this lane builds lot 1a only (generic + sentropic `api/`); immo binding, F14 wiring and the multi-device browser run move to lot 1b. The within-a-day claim is dropped for the full lot.
 - Review finding 2 (binding correction, citations): `actorId` bound from trusted invocation is `mcp-core.ts:229`; the immo seeded revision is `reader-storage.ts:11`. Code comments cite the corrected lines.
 
