@@ -94,11 +94,12 @@ done
 refresh_relay() {
   export_bundle
   { echo id; echo "$OWNER"; echo "$FARID"; for n in 3 4 5 6 7 8; do echo "prod-user-$n"; done; } > replica-users.csv
+  consents=$(($(wc -l < consents.csv) - 1)); clients=$(($(wc -l < clients.csv) - 1))
   snap_ts=$(date -u +'%Y-%m-%d %H:%M:%S')
-  printf '%s,8,18,1,4\n' "$snap_ts" > snapshot.csv
+  printf '%s,8,18,%s,%s\n' "$snap_ts" "$consents" "$clients" > snapshot.csv
   printf '{}\n' > identity-replica-batch.json
   sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
-  { echo 'synced_accounts|8'; echo 'synced_credentials|18'; echo 'synced_consents|1'; echo 'DRY RUN: rolled back'; printf '{"outcome":"rolled_back","counts":{"synced_accounts":8,"synced_credentials":18,"synced_consents":1}}\n'; } > /work/cm-sync.log
+  { echo 'synced_accounts|8'; echo 'synced_credentials|18'; echo "synced_consents|$consents"; echo 'DRY RUN: rolled back'; printf '{"outcome":"rolled_back","counts":{"synced_accounts":8,"synced_credentials":18,"synced_consents":%s}}\n' "$consents"; } > /work/cm-sync.log
   IFS=, read -r snap_ts accounts credentials consents clients < snapshot.csv
 }
 sync() { sql -d preprod -v expected_accounts="$accounts" -v expected_consents="$consents" -v expected_clients="$clients" -v allowed_clients="${SQL_CLIENTS-immo-mcp}" "$@" -f "$import"; }
@@ -119,3 +120,157 @@ grep -Fxq 'DRY RUN: rolled back' /tmp/sql.log
 grep -Fxq 'consents_upserted|1' /tmp/sql.log
 unchanged
 echo 'PASS: default and explicit dry-run converge protocol rows and roll back'
+stage=pod-import-wrapper
+mkdir -p /work /sql
+ln -s "$import" /sql/import-preprod.sql
+refresh_relay
+export_bundle
+IFS=, read -r snapshot accounts credentials consents clients < snapshot.csv
+wrapper() {
+  (
+    export PGDATABASE=preprod DRY_RUN="${WRAPPER_DRY_RUN-1}" MAX_SNAPSHOT_AGE_S="${WRAPPER_AGE-7200}" ALLOWED_CLIENTS="${WRAPPER_CLIENTS-immo-mcp}"
+    PATH="${WRAPPER_PATH-$PATH}" sh /workspace/deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh
+  ) > /tmp/wrapper.log 2>&1
+}
+reject_wrapper() {
+  stage="pod wrapper $1"
+  if wrapper; then exit 1; fi
+  grep -Fxq "{\"outcome\":\"failed\",\"code\":\"$1\"}" /dev/termination-log
+  [ "$(cat /tmp/wrapper.log)" = "$1" ]
+  unchanged
+  echo "PASS: $stage"
+}
+wrapper
+grep -Fq '"outcome":"rolled_back"' /dev/termination-log
+grep -Fq '"consents_upserted":1' /dev/termination-log
+grep -Fq '"consents_removed":1' /dev/termination-log
+grep -Fq '"clients_upserted":1' /dev/termination-log
+grep -Fq '"services_upserted":1' /dev/termination-log
+unchanged
+echo 'PASS: actual pod import wrapper emits safe rolled-back JSON audit'
+cp /sql/client-map.csv map.original
+mv /sql/client-map.csv map.absent
+reject_wrapper sql_error
+mv map.absent /sql/client-map.csv
+for mode in missing duplicate shared_target empty zero_bytes; do
+  cp "$map" /sql/client-map.csv
+  case "$mode" in
+    missing) sed 's/radar-immobilier-preprod/missing-client/' "$map" > /sql/client-map.csv ;;
+    duplicate) tail -n 1 "$map" >> /sql/client-map.csv ;;
+    shared_target) printf 'other-prod-client,radar-immobilier-preprod\n' >> /sql/client-map.csv ;;
+    empty) head -n 1 "$map" > /sql/client-map.csv ;;
+    zero_bytes) : > /sql/client-map.csv ;;
+  esac
+  reject_wrapper consent_client_missing
+done
+mv map.original /sql/client-map.csv
+sql -d preprod -c "CREATE FUNCTION test_consent_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN NEW.scopes := ARRAY['unexpected']; RETURN NEW; END \$\$; CREATE TRIGGER test_consent_tamper BEFORE INSERT OR UPDATE ON oauth_consents FOR EACH ROW EXECUTE FUNCTION test_consent_tamper();"
+reject_wrapper consent_postcondition_failed
+sql -d preprod -c 'DROP TRIGGER test_consent_tamper ON oauth_consents; DROP FUNCTION test_consent_tamper();'
+cp SHA256SUMS checksums.original
+for file in replica-users.csv consents.csv clients.csv snapshot.csv identity-replica-batch.json; do
+  sed "/ $file\$/d" checksums.original > SHA256SUMS
+  reject_wrapper invalid_manifest
+done
+cp checksums.original SHA256SUMS
+sed -n '/ clients.csv$/p' checksums.original >> SHA256SUMS
+reject_wrapper invalid_manifest
+cp checksums.original SHA256SUMS
+sha256sum /sql/client-map.csv | sed 's@/sql/@@' >> SHA256SUMS
+reject_wrapper invalid_manifest
+cp checksums.original SHA256SUMS
+cp consents.csv consents.original
+printf 'tampered\n' >> consents.csv
+reject_wrapper integrity_failed
+mv consents.original consents.csv
+cp snapshot.csv snapshot.original
+printf '%s,8,18,2,4\n' "$snap_ts" > snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+reject_wrapper manifest_mismatch
+mv snapshot.original snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+WRAPPER_DRY_RUN=invalid reject_wrapper invalid_dry_run
+WRAPPER_AGE=invalid reject_wrapper invalid_age_limit
+cp SHA256SUMS checksums.original
+printf 'invalid manifest\n' > SHA256SUMS
+reject_wrapper invalid_manifest
+mv checksums.original SHA256SUMS
+cp snapshot.csv snapshot.original
+for ending in '' '\r\n'; do
+  printf '%s,8,18,1,4%b' "$snap_ts" "$ending" > snapshot.csv
+  sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+  wrapper; grep -Fq '"outcome":"rolled_back"' /dev/termination-log; unchanged
+done
+printf '%s\r,8\r,18\r,1\r,4\r\n' "$snap_ts" > snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+wrapper; grep -Fq '"outcome":"rolled_back"' /dev/termination-log; unchanged
+echo 'PASS: snapshot EOF and trailing CR fields are accepted'
+for code in invalid_counts invalid_timestamp; do
+  if [ "$code" = invalid_counts ]; then printf '%s,8,18,invalid,4\n' "$snap_ts"; else printf 'invalid,8,18,1,4\n'; fi > snapshot.csv
+  sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+  reject_wrapper "$code"
+done
+mv snapshot.original snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+for code in empty_export sql_error; do
+  if [ "$code" = empty_export ]; then
+    cp replica-users.csv replica-users.original
+    head -n 1 replica-users.original > replica-users.csv
+  else
+    cp consents.csv consents.original
+    printf 'private@example.invalid\n' >> consents.csv
+  fi
+  sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+  reject_wrapper "$code"
+  if [ "$code" = empty_export ]; then mv replica-users.original replica-users.csv; else mv consents.original consents.csv; fi
+done
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+# Exercise safe classification and filtering without changing the import SQL.
+mkdir -p /tmp/mock-bin
+cat > /tmp/mock-bin/psql <<'MOCK'
+#!/bin/sh
+printf '%s\n' "${MOCK_STDERR:-}" >&2
+[ "${MOCK_SUCCESS:-0}" = 1 ]
+MOCK
+chmod +x /tmp/mock-bin/psql
+WRAPPER_PATH="/tmp/mock-bin:$PATH" MOCK_STDERR='ERROR:  canceling statement due to lock timeout' reject_wrapper lock_timeout
+WRAPPER_PATH="/tmp/mock-bin:$PATH" MOCK_SUCCESS=1 reject_wrapper invalid_audit
+cp replica-users.csv replica-users.original
+printf 'tampered\n' >> replica-users.csv
+reject_wrapper integrity_failed
+mv replica-users.original replica-users.csv
+echo 'PASS: pod wrapper rejects checksum tampering'
+cp snapshot.csv snapshot.original
+printf '2000-01-01 00:00:00,8,18,1,4\n' > snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+reject_wrapper stale_snapshot
+mv snapshot.original snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+unchanged
+echo 'PASS: pod wrapper rejects stale snapshot'
+cp snapshot.csv snapshot.original
+printf '%s,9,18,1,4\n' "$snap_ts" > snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+reject_wrapper manifest_mismatch
+mv snapshot.original snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+reject 'manifest mismatch fails closed' 'export row count does not match manifest' -d preprod -v dry_run=0 -v expected_accounts=9 -v expected_consents=1 -v expected_clients=4 -v allowed_clients=immo-mcp -f "$import"
+unchanged
+stage=install-dv5-tamper
+sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET client_secret_hash = 'synthetic-tamper' WHERE client_id = 'synthetic-client'; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON oauth_consents FOR EACH ROW EXECUTE FUNCTION test_tamper();"
+reject_wrapper dv5_invariant_changed
+reject 'DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v expected_accounts=8 -v expected_consents=1 -v expected_clients=4 -v allowed_clients=immo-mcp -f "$import"
+unchanged
+sql -d preprod -c 'DROP TRIGGER test_tamper ON oauth_consents; DROP FUNCTION test_tamper();'
+sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET name = 'synthetic-tamper' WHERE client_id = 'synthetic-client'; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON oauth_consents FOR EACH ROW EXECUTE FUNCTION test_tamper();"
+reject 'non-desired-row tampering fails DV5' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v expected_accounts=8 -v expected_consents=1 -v expected_clients=4 -v allowed_clients=immo-mcp -f "$import"
+unchanged
+sql -d preprod -c 'DROP TRIGGER test_tamper ON oauth_consents; DROP FUNCTION test_tamper();'
+sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET redirect_uris = ARRAY['https://tampered.example.invalid/callback'] WHERE client_id = 'immo-mcp'; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON oauth_consents FOR EACH ROW EXECUTE FUNCTION test_tamper();"
+reject 'converged-config tampering fails the client postcondition' 'client post-condition failed' -d preprod -v dry_run=0 -v expected_accounts=8 -v expected_consents=1 -v expected_clients=4 -v allowed_clients=immo-mcp -f "$import"
+unchanged
+sql -d preprod -c 'DROP TRIGGER test_tamper ON oauth_consents; DROP FUNCTION test_tamper();'
+sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE id_token_signing_keys SET public_jwk = '{}'::jsonb; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON oauth_consents FOR EACH ROW EXECUTE FUNCTION test_tamper();"
+reject 'signing-key tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v expected_accounts=8 -v expected_consents=1 -v expected_clients=4 -v allowed_clients=immo-mcp -f "$import"
+unchanged
+sql -d preprod -c 'DROP TRIGGER test_tamper ON oauth_consents; DROP FUNCTION test_tamper();'
