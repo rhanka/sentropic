@@ -87,6 +87,7 @@ Fix review findings R1 (raw sub fallback in userRef projection) and R5 (revoke b
 - [x] **Lot 1 — R1 no-raw-sub projection**
   - [ ] Replace every `describePrincipal(...)?.userRef ?? internalId` fallback with the opaque unknown value.
   - [ ] Cover `projectUserRef`, `list_access` grants + owner, `set_access` receipt, `list_versions` v1 author (plus v2 authorPrincipalId).
+  - [x] R1b: `list_versions` v2 `authorPrincipalId` projection proven by tests (known author → userRef, deleted author → unknown, no raw sub).
   - [ ] Add tests proving no raw internal id appears in any output.
   - [ ] Lot gate:
     - [ ] `make typecheck` + `make lint` scoped to artifacts
