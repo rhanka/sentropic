@@ -158,6 +158,12 @@ interface StagedBlob {
   bytes: Uint8Array;
 }
 
+/** Minimal shape needed for a read-back verification batch (uploads commit reuses this). */
+export interface VerifyStagedBlobEntry {
+  readonly key: string;
+  readonly bytes: Uint8Array;
+}
+
 interface PreparedPublication {
   entries: StagedBlob[];
   digest: string;
@@ -260,9 +266,11 @@ export interface VerifyStagedOptions {
   readonly deadlineAt?: number;
 }
 
-/** Read-back verification shared by the split and finalized paths (bounded concurrency). */
-async function verifyStagedBlobs(blobs: PublicationBlobStore, entries: StagedBlob[],
-  options: VerifyStagedOptions = {}): Promise<void> {
+/** Read-back verification shared by the split and finalized paths (bounded concurrency).
+ *  Exported for files parity LOT 1: commit_upload re-verifies a promoted staging object
+ *  through the same #907 bounded pool before pinning it. */
+export async function verifyStagedBlobs<T extends VerifyStagedBlobEntry>(blobs: PublicationBlobStore,
+  entries: readonly T[], options: VerifyStagedOptions = {}): Promise<void> {
   await runBlobPool(entries, {
     concurrency: resolveBlobConcurrency(options.concurrency),
     ...(options.deadlineAt === undefined ? {} : { deadlineAt: options.deadlineAt }),
