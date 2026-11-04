@@ -89,6 +89,22 @@ export async function cmPurgeAllIdentity(): Promise<void> {
     seen.add(table);
     await cmStoreClient.query(`DELETE FROM ${q(table)}`);
   }
+  // Restore the platform tenant the cutover import carries on every fresh boot
+  // (public seed `sentropic`): fixtures that provision workspaces, OAuth clients
+  // or memberships assume it exists, whatever the suite order.
+  await cmStoreClient.query(
+    `INSERT INTO ${q('cm_tenants')} (tenant_id, slug, status, created_at)
+     VALUES ('sentropic', 'sentropic', 'active', now()) ON CONFLICT (tenant_id) DO NOTHING`,
+  );
+  // Restore the seed workspace enrolment the import carries with it (public seed
+  // `00000000-0000-0000-0000-000000000001`, tenant backfilled to `sentropic`):
+  // business rows default to the seed workspace, so its directory edge must
+  // survive purges exactly as it survives a fresh boot.
+  await cmStoreClient.query(
+    `INSERT INTO ${q('cm_workspaces')} (workspace_id, tenant_id, repo_identity, aliases, enrolled_at)
+     VALUES ('00000000-0000-0000-0000-000000000001', 'sentropic', NULL, '[]', now())
+     ON CONFLICT (workspace_id) DO NOTHING`,
+  );
 }
 
 /** Count rows in a cm_identity table (assertions: no orphan left behind). */

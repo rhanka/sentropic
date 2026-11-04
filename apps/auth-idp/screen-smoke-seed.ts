@@ -20,6 +20,11 @@ import { createSession } from '../../api/src/services/session-manager';
 
 const TEST_EMAIL = process.env.SCREEN_SMOKE_EMAIL ?? 'idp-screen-smoke@example.com';
 
+const failSeed = (msg: string): never => {
+  console.error(`SCREEN-SMOKE-SEED FAIL: ${msg}`);
+  process.exit(1);
+};
+
 const main = async (): Promise<void> => {
   const now = new Date().toISOString();
   const userId = `idp-screen-${randomUUID()}`;
@@ -29,18 +34,18 @@ const main = async (): Promise<void> => {
     ON CONFLICT (email) DO UPDATE SET account_status = 'active', updated_at = ${now}`);
   const found = await db.execute(
     sql`SELECT user_id FROM cm_identity.identity_user_accounts WHERE email = ${TEST_EMAIL} LIMIT 1`);
-  const row = found.rows[0];
-  if (!row) {
-    console.error('SCREEN-SMOKE-SEED FAIL: seeded user not found after upsert');
-    process.exit(1);
-  }
+  const row = found.rows[0] as { user_id?: unknown } | undefined;
+  const seededUserId: string =
+    typeof row?.user_id === 'string' && row.user_id.length > 0
+      ? row.user_id
+      : failSeed('seeded user id missing after upsert');
   await db.execute(sql`INSERT INTO cm_identity.identity_account_profiles
-    (user_id, email_verified, legacy_account_status) VALUES (${row.user_id}, true, 'active')
+    (user_id, email_verified, legacy_account_status) VALUES (${seededUserId}, true, 'active')
     ON CONFLICT (user_id) DO UPDATE SET email_verified = true, legacy_account_status = 'active'`);
 
-  const session = await createSession(row.user_id, 'editor', { name: 'idp-screen-smoke' });
+  const session = await createSession(seededUserId, 'editor', { name: 'idp-screen-smoke' });
   // Machine-readable lines for the Playwright step to capture.
-  console.log(`USER_ID=${row.user_id}`);
+  console.log(`USER_ID=${seededUserId}`);
   console.log(`SESSION_TOKEN=${session.sessionToken}`);
   process.exit(0);
 };
