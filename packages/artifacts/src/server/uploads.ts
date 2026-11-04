@@ -574,15 +574,10 @@ export async function commitStagedUpload(service: UploadService, deps: CommitSta
     }
     throw error;
   };
-  let session: UploadSession;
-  try {
-    session = await service.sessionForCommit(input);
-  } catch (error) { fail(error); }
+  const session = await service.sessionForCommit(input).catch((error) => fail(error));
   const key = stagingKey(input.storageScopeId, input.uploadId);
-  const bytes = await deps.staging.get(key);
-  if (bytes === undefined) {
+  const bytes = await deps.staging.get(key) ??
     fail(new Error(`staged object missing for ${input.uploadId}`));
-  }
   try {
     service.verifyStaged(session, bytes, { digest: input.digest, size: input.size, mimeType: input.mimeType });
   } catch (error) { fail(error); }
