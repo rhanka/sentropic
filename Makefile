@@ -1070,7 +1070,7 @@ ci-package-qualification: ci-package-verify
 	    case "$(PACKAGE_LANE)" in \
 	      installed) target=cluster-mesh-comments-installed ;; \
 	      major) target=cluster-mesh-pg-major-upgrade ;; \
-	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1,@sentropic/engram@0.22.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
+	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1,@sentropic/engram@0.22.0,@sentropic/auth-ui@0.9.0,@sentropic/design-system-svelte@0.34.75 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
 	    esac; \
 	    $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk "$$target" CM_COMMENTS_TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/$(PACKAGE_LANE) ENV=$(ENV) ;; \
 	  *) echo 'Unknown package qualification lane' >&2; exit 1 ;; \
@@ -3718,7 +3718,7 @@ API_TEST_ARGS ?=
 .PHONY: test-api-%
 
 test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
-	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
+	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) $(if $(filter unit endpoints,$*),-e NODE_ENV=test) -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
 	  TEST_TYPE="$*"; \
 	  requested_workers="$${VITEST_MAX_WORKERS:-4}"; \
 	  extra_args="$${API_TEST_ARGS:-}"; \
