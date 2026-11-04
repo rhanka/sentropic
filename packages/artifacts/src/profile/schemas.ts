@@ -31,6 +31,9 @@ export function assertCompleteOperation(config: OperationProfile): void {
     list: { limits: ['listLimitMin', 'listLimitMax'], defaults: ['limit', 'offset'] },
     commit_upload: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
     publish_bundle: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
+    create_upload_page: { limits: [], defaults: [] },
+    list_assets: { limits: ['listAssetsLimitMin', 'listAssetsLimitMax'], defaults: ['limit'] },
+    publish_bundle_v2: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
     set_access: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     lookup_people: { limits: ['lookupQueryMinUnits', 'lookupQueryMaxUnits', 'lookupLimitMax'], defaults: ['limit'] },
     list_access: { limits: [], defaults: [] },
@@ -116,6 +119,17 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
     case 'get_template': return obj({ templateId: str }, ['templateId']);
     case 'get_api_guide': return obj({ version: str });
     case 'create_upload': return obj({ artifactId: id, mimeType: str, maxSize: integer(1) }, ['artifactId', 'mimeType']);
+    case 'create_upload_page': return obj({ artifactId: id,
+      maxFiles: { type: 'integer', minimum: 1, maximum: 255,
+        description: 'Files the page may stage; capped by the release budget (min asked, profile releaseFilesMax).' },
+    }, ['artifactId']);
+    case 'list_assets': return obj({ artifactId: id, releaseId: id,
+      state: { type: 'string', enum: ['staged', 'released', 'all'], default: 'all',
+        description: 'Released assets come from the release manifest; staged assets from committed uploads.' },
+      pageSessionId: { ...id, description: 'Only staged files committed through this browser page.' },
+      limit: { ...integer(limits.listAssetsLimitMin, limits.listAssetsLimitMax), default: config.defaults.limit },
+      cursor: { ...str, maxLength: 4096, description: 'Opaque paging cursor from a previous response.' },
+    }, ['artifactId']);
     case 'commit_upload': return obj({ artifactId: id, uploadId: str, path: str, mimeType: str,
       digest: str, size: integer(0), profile: primitiveRecord, idempotencyKey: key },
     ['artifactId', 'uploadId', 'path', 'mimeType', 'digest', 'size', 'idempotencyKey']);
@@ -155,6 +169,57 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
           description: `Assets whose bytes already left the model: an uploadId staged via create_upload/commit_upload, or a CAS reference to an already-pinned blob. Release budget (max ${filesMax} files, ${fileBytesMax} bytes/file, ${totalBytesMax} bytes total) applies to the union of files and assets.` },
         expectedCurrentReleaseId: { ...id, type: ['string', 'null'],
           description: 'Compare the current release atomically; null requires an unpublished artifact. Always required for this tool.' },
+        profile: { ...primitiveRecord, default: config.defaults.profile },
+        ...(part1 ? metadata : {}) },
+        ['artifactId', 'idempotencyKey', 'expectedCurrentReleaseId']),
+        anyOf: [{ required: ['files'] }, { required: ['assets'] }] };
+    }
+    case 'publish_bundle_v2': {
+      // V2 carries everything v1 has, plus copy/carry asset forms and the
+      // keep-unmodified carry of the expected current release. V1 is untouched.
+      const publishLimits = profile.operations.find((entry) => entry.operation === 'publish')?.limits;
+      const filesMax = publishLimits?.releaseFilesMax ?? publishLimits?.publishFilesMax ?? SERVER_MAX_FILES_PER_RELEASE;
+      const fileBytesMax = publishLimits?.releaseFileBytesMax ?? publishLimits?.maxDecodedFileBytes ?? SERVER_MAX_FILE_BYTES;
+      const totalBytesMax = publishLimits?.releaseTotalBytesMax ?? publishLimits?.maxDecodedTotalBytes ?? SERVER_MAX_TOTAL_BYTES;
+      const inlineFileBytesMax = publishLimits?.maxDecodedFileBytes ?? SERVER_MAX_FILE_BYTES;
+      const inlineTotalBytesMax = publishLimits?.maxDecodedTotalBytes ?? SERVER_MAX_TOTAL_BYTES;
+      const reserved = profile.rules.reservedFirstSegments.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+      const bundlePath = { type: 'string', minLength: 1, maxLength: profile.rules.pathMaxBytes,
+        allOf: [{ not: { pattern: profile.rules.forbiddenPathPattern } },
+          { not: { pattern: '(^|/)(\\.\\.?|)(/|$)' } },
+          { not: { pattern: `^(?:${reserved})(?:/|$)` } }],
+        description: `At most ${profile.rules.pathMaxBytes} UTF-8 bytes; no empty/dot segments, colon or DEL.` };
+      const inlineFile = { ...obj({ path: bundlePath, mimeType: { type: 'string', enum: profile.rules.mimeTypes },
+        text: { type: 'string', maxLength: inlineFileBytesMax, description: 'UTF-8 decoded-byte budget applies.' },
+        bytes: { type: 'array', maxItems: inlineFileBytesMax, items: integer(0, 255) } }, ['path', 'mimeType']),
+        oneOf: [{ required: ['text'], not: { required: ['bytes'] } },
+          { required: ['bytes'], not: { required: ['text'] } }] };
+      const uploadAsset = obj({ path: bundlePath, uploadId: id,
+        description: 'Staged file committed via artifacts_commit_upload; the server re-reads and re-verifies it.' },
+        ['path', 'uploadId']);
+      const casAsset = obj({ path: bundlePath,
+        digest: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$',
+          description: 'Canonical sha256:<hex> digest of an already-pinned blob in the same scope.' },
+        size: integer(1), mimeType: { type: 'string', enum: profile.rules.mimeTypes } },
+        ['path', 'digest', 'size', 'mimeType']);
+      const copyAsset = obj({ path: bundlePath, sourceArtifactId: id,
+        sourcePath: bundlePath, sourceReleaseId: id,
+        description: 'Copy one manifest file from another artifact of the same scope (MIME taken from the source manifest).' },
+        ['path', 'sourceArtifactId']);
+      const carryAsset = obj({ path: bundlePath, carryFromReleaseId: id,
+        sourcePath: bundlePath,
+        description: 'Carry one manifest file from a release of this artifact (defaults to the same path).' },
+        ['path', 'carryFromReleaseId']);
+      return { ...obj({ artifactId: id, idempotencyKey: key,
+        files: { type: 'array', items: inlineFile, minItems: 1, maxItems: filesMax,
+          description: `Inline files (bytes travel through the model, inline budget ${inlineFileBytesMax}/${inlineTotalBytesMax} bytes); at least one of files/assets is required.` },
+        assets: { type: 'array', minItems: 1, maxItems: filesMax,
+          items: { oneOf: [uploadAsset, casAsset, copyAsset, carryAsset] },
+          description: `Assets whose bytes already left the model: a staged uploadId, a CAS digest, a copy from another artifact of the same scope, or a carry from a release of this artifact. Release budget (max ${filesMax} files, ${fileBytesMax} bytes/file, ${totalBytesMax} bytes total) applies to the union.` },
+        expectedCurrentReleaseId: { ...id, type: ['string', 'null'],
+          description: 'Compare the current release atomically; null requires an unpublished artifact. Always required for this tool.' },
+        keepUnmodifiedPaths: { type: 'boolean', default: false,
+          description: 'Carry every path of expectedCurrentReleaseId not overridden by an explicit file or asset.' },
         profile: { ...primitiveRecord, default: config.defaults.profile },
         ...(part1 ? metadata : {}) },
         ['artifactId', 'idempotencyKey', 'expectedCurrentReleaseId']),

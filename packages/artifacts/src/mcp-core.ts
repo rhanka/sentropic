@@ -15,7 +15,7 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.13';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.14';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
@@ -65,9 +65,10 @@ const ARTIFACTS_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true } a
 
 const READ_ONLY_TOOLS: readonly ArtifactsToolName[] = ['artifacts_list', 'artifacts_get',
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_get_source', 'artifacts_list_versions',
-  'artifacts_lookup_people', 'artifacts_list_access'];
+  'artifacts_lookup_people', 'artifacts_list_access', 'artifacts_list_assets'];
 const IDEMPOTENT_WRITERS: readonly ArtifactsToolName[] = ['artifacts_ensure', 'artifacts_publish',
-  'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
+  'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_publish_bundle_v2',
+  'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
   'artifacts_revoke_reader_consent'];
 
 export interface ArtifactsToolDefinition {
@@ -86,7 +87,8 @@ function staticTool(name: ArtifactsToolName, inputSchema: Record<string, unknown
     inputSchema,
     outputSchema: ARTIFACTS_OUTPUT_SCHEMA,
     mutability: READ_ONLY_TOOLS.includes(name) ? 'read-only'
-      : name === 'artifacts_publish' || name === 'artifacts_publish_bundle' ? 'append' : 'state-transition',
+      : name === 'artifacts_publish' || name === 'artifacts_publish_bundle' ||
+        name === 'artifacts_publish_bundle_v2' ? 'append' : 'state-transition',
     idempotency: IDEMPOTENT_WRITERS.includes(name) ? { required: true, scope: 'principal' } : { required: false },
     gates: { requiresElicitation: false, requiresHumanConfirmation: name === 'artifacts_delete',
       requiresPrincipalGate: false },
@@ -168,6 +170,38 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
     scope: { type: 'string', minLength: 1, maxLength: 128 }, idempotencyKey }, ['artifactId', 'idempotencyKey']),
     'Artifacts revoke reader consent: withdraw persistent consent of the caller for one scope of one artifact, '
       + 'or for every scope when scope is omitted. Self-revocation only; the next call asks again.'),
+  // Files parity LOT 2 — appended last; frozen at birth like every definition above.
+  artifacts_create_upload_page: staticTool('artifacts_create_upload_page', obj({ artifactId: id,
+    maxFiles: integer(1, 255) }, ['artifactId']),
+    'Artifacts create upload page: mint a short-lived browser upload page for one artifact. '
+      + 'The user provides files from their own disk; bytes travel browser to S3 directly and never cross the model. '
+      + 'List staged files with artifacts_list_assets, then publish with artifacts_publish_bundle.'),
+  artifacts_list_assets: staticTool('artifacts_list_assets', obj({ artifactId: id, releaseId: id,
+    state: { type: 'string', enum: ['staged', 'released', 'all'] }, pageSessionId: id,
+    limit: integer(1, 255), cursor: { ...str, maxLength: 4096 } }, ['artifactId']),
+    'Artifacts list assets: released assets from a manifest, staged assets from committed uploads, '
+      + 'optionally filtered by browser upload page. Released listing needs the source read right; '
+      + 'staged listing is owner-only.'),
+  artifacts_publish_bundle_v2: staticTool('artifacts_publish_bundle_v2', { ...obj({
+    artifactId: id, idempotencyKey,
+    files: { type: 'array', items: file, minItems: 1,
+      description: 'Inline files (bytes travel through the model, inline budget); at least one of files/assets is required.' },
+    assets: { type: 'array', minItems: 1,
+      items: { oneOf: [
+        obj({ path, uploadId: id }, ['path', 'uploadId']),
+        obj({ path, digest: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' }, size: integer(1), mimeType: str },
+          ['path', 'digest', 'size', 'mimeType']),
+        obj({ path, sourceArtifactId: id, sourcePath: path, sourceReleaseId: id }, ['path', 'sourceArtifactId']),
+        obj({ path, carryFromReleaseId: id, sourcePath: path }, ['path', 'carryFromReleaseId']),
+      ] },
+      description: 'Assets whose bytes already left the model: a staged uploadId, a CAS digest, a copy from the same scope, or a carry from a release of this artifact. Set keepUnmodifiedPaths to carry every other path of the expected release.' },
+    keepUnmodifiedPaths: { type: 'boolean' },
+    expectedCurrentReleaseId, profile: primitiveRecord, ...metadata },
+    ['artifactId', 'idempotencyKey', 'expectedCurrentReleaseId']),
+    anyOf: [{ required: ['files'] }, { required: ['assets'] }] },
+    'Artifacts publish bundle v2: like artifacts_publish_bundle, plus copies from other artifacts of the same scope '
+      + 'and carries from releases of this artifact, with optional keep-unmodified carry. expectedCurrentReleaseId '
+      + 'is always required (CAS); null requires an unpublished artifact.'),
 };
 
 export const ARTIFACTS_TOOL_SPECS = ARTIFACTS_TOOL_NAMES.map((name) => ({ name,
@@ -242,6 +276,9 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
         case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
         case 'artifacts_publish_bundle': request = { method: 'POST', path: '/publish_bundle', body: args }; break;
+        case 'artifacts_publish_bundle_v2': request = { method: 'POST', path: '/publish_bundle_v2', body: args }; break;
+        case 'artifacts_list_assets': request = { method: 'POST', path: '/list_assets', body: args }; break;
+        case 'artifacts_create_upload_page': request = { method: 'POST', path: '/uploads/page', body: args }; break;
         case 'artifacts_create_upload': request = { method: 'POST', path: '/uploads/create', body: args }; break;
         case 'artifacts_commit_upload': request = { method: 'POST', path: '/uploads/commit', body: args }; break;
         case 'artifacts_list': request = { method: 'POST', path: '/list', body: args }; break;

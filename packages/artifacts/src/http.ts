@@ -9,12 +9,17 @@ import { createGuardedEnsureService, type GuardedEnsureHost } from './server/ser
 import { assertArtifactReplayMigration, type IdempotencyStore } from './server/idempotency.js';
 import { combineSharingPolicy, maskEmailHint, resolveSharingPolicy, type KvPort, type PrincipalDirectoryPort,
   type SharingPolicy, type SharingPolicyPort } from './server/ports.js';
-import { createGuardedPublicationService, resolveBlobConcurrency, runBlobPool, verifyStagedBlobs,
+import { createGuardedPublicationService,
   type GuardedPublicationDeps, type PublicationService } from './server/publication.js';
-import { SERVER_MAX_FILE_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
+import { SERVER_MAX_FILE_BYTES, SERVER_MAX_SOURCE_FILES, SERVER_MAX_SOURCE_INLINE_BYTES,
+  SERVER_MAX_SOURCE_TOTAL_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
 import { releaseBudget } from './profile/validation.js';
-import { createUploadService, stagingKey, type StagingStore, type UploadSession, type UploadSessionStore,
+import { commitStagedUpload, createUploadService, STAGED_FILE_TTL_MS, stagedFileExpired,
+  type CommitStagedUploadDeps, type StagedFileRecord, type StagingStore, type UploadSessionStore,
   type UploadSignerPort } from './server/uploads.js';
+import { createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from './server/upload-page.js';
+import type { ArtifactsMetrics } from './server/metrics.js';
+import type { UploadPageStore } from './server/upload-page.js';
 import { accessModeOf, evaluateGrant, type ArtifactAcl, type ArtifactMetadata, type AclStore } from './server/access.js';
 import { assertConsentScopeId } from './server/consent.js';
 import type { ArtifactReaderStore } from './server/reader-store.js';
@@ -49,7 +54,7 @@ export interface HttpResponse { status: number; body: unknown }
 /** Stable content-route error codes; private driver messages never leave the host. */
 export function errorBody(status: number): { error: string } {
   return { error: ({ 400: 'invalid_request', 401: 'anonymous', 403: 'access_denied',
-    404: 'not_found', 409: 'conflict', 410: 'gone', 422: 'verification_failed',
+    404: 'not_found', 409: 'conflict', 410: 'gone', 416: 'range_not_satisfiable', 422: 'verification_failed',
     500: 'internal_error', 503: 'capability_unavailable' } as Record<number, string>)[status] ?? 'internal_error' };
 }
 export interface HttpAppDeps {
@@ -87,6 +92,20 @@ export interface HttpAppDeps {
     staging: StagingStore;
     signer: UploadSignerPort;
     idempotency?: IdempotencyStore;
+    /** LOT 2 §D: per-artifact staged TTL (host option, ceiling 7 days) and per-scope staging aggregate. */
+    stagedFileTtlMs?: number;
+    stagingQuotaBytesPerScope?: number;
+    /** LOT 2 §D.3: upload/storage metering; absent ⇒ no-op. */
+    metrics?: ArtifactsMetrics;
+  };
+  /** LOT 2 §A.5: browser upload page host wiring (required when `artifacts_create_upload_page` is selected). */
+  uploadPage?: {
+    /** Page ledger; absent ⇒ an in-memory ledger (single process only). */
+    pages?: UploadPageStore;
+    cookieSecret: string | Uint8Array;
+    controlOrigin: string;
+    pageBaseUrl: string;
+    s3Origins: readonly string[];
   };
 }
 export interface ArtifactApp {
@@ -110,6 +129,7 @@ export function assertArtifactsTransportProfile(value: unknown): asserts value i
     'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert', 'artifacts_set_access', 'artifacts_delete',
     'artifacts_lookup_people', 'artifacts_list_access',
     'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
+    'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2',
     'artifacts_revoke_reader_consent'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
@@ -132,7 +152,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     throw new Error('artifact delete confirmation port required');
   }
   // Files parity LOT 1: upload ports are required as soon as one upload capability is selected.
-  const uploadCapabilities = ['artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle'];
+  // list_assets needs only the session ledger (released listing works without staging/signer).
+  const uploadCapabilities = ['artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
+    'artifacts_create_upload_page', 'artifacts_publish_bundle_v2'];
   const needsUploads = uploadCapabilities.some((name) =>
     (profile.selectedCapabilities as readonly string[]).includes(name));
   if (needsUploads && !deps.uploads) throw new Error('artifact upload ports required');
@@ -140,7 +162,34 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   const uploadService = deps.uploads === undefined ? undefined : createUploadService(
     { sessions: deps.uploads.sessions, staging: deps.uploads.staging, signer: deps.uploads.signer },
     { maxUploadBytes: Math.min(budget.fileBytesMax, SERVER_MAX_FILE_BYTES),
-      maxSessionsPerPrincipal: SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL });
+      maxSessionsPerPrincipal: SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL,
+      ...(deps.uploads.stagedFileTtlMs === undefined ? {} : { stagedFileTtlMs: deps.uploads.stagedFileTtlMs }),
+      ...(deps.uploads.stagingQuotaBytesPerScope === undefined ? {}
+        : { stagingQuotaBytesPerScope: deps.uploads.stagingQuotaBytesPerScope }),
+      ...(deps.uploads.metrics === undefined ? {} : { metrics: deps.uploads.metrics }) });
+  // LOT 2 §A: the browser page shares the session ledger, the CAS blobs and
+  // the refs with the agent channel, so quotas cover both together.
+  if (profile.selectedCapabilities.includes('artifacts_create_upload_page') && deps.uploadPage === undefined) {
+    throw new Error('artifacts control plane needs upload page host wiring (uploadPage)');
+  }
+  const pageService = profile.selectedCapabilities.includes('artifacts_create_upload_page') &&
+    uploadService !== undefined ? createUploadPageService({
+      pages: deps.uploadPage?.pages ?? createMemoryUploadPageStore(),
+      sessions: deps.uploads!.sessions, staging: deps.uploads!.staging, signer: deps.uploads!.signer,
+      blobs: deps.publication.blobs, refs: deps.publication.refs,
+      ...(deps.uploads!.idempotency === undefined ? {} : { idempotency: deps.uploads!.idempotency }),
+      cookieSigner: createHmacUploadPageCookieSigner({ secret: deps.uploadPage!.cookieSecret }),
+      controlOrigin: deps.uploadPage!.controlOrigin, pageBaseUrl: deps.uploadPage!.pageBaseUrl,
+      s3Origins: deps.uploadPage!.s3Origins,
+      profile: { maxFiles: budget.filesMax, maxFileBytes: budget.fileBytesMax,
+        maxTotalBytes: budget.totalBytesMax, mimeTypes: profile.rules.mimeTypes,
+        pathMaxBytes: profile.rules.pathMaxBytes },
+      budget: { filesMax: budget.filesMax, totalBytesMax: budget.totalBytesMax },
+      ...(deps.uploads!.stagingQuotaBytesPerScope === undefined ? {}
+        : { stagingQuotaBytesPerScope: deps.uploads!.stagingQuotaBytesPerScope }),
+      ...(deps.uploads!.metrics === undefined ? {} : { metrics: deps.uploads!.metrics }),
+    }) : undefined;
+  const stagedFileTtlMs = deps.uploads?.stagedFileTtlMs ?? STAGED_FILE_TTL_MS;
   const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
     derivation: deps.derivation, host: {
       lockBinding: (client, binding) => deps.ensureHost.lockBinding(client, binding),
@@ -177,6 +226,150 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       throw new ArtifactOperationError('not_found');
     }
     return acl;
+  }
+
+  /**
+   * Files parity LOT 2 — resolve the files/assets union to bytes BEFORE any
+   * commit step. One missing, expired, digest-mismatched or unauthorized asset
+   * fails the whole publish and commits nothing. v1 only produces inline,
+   * upload and cas forms; v2 additionally resolves copy/carry and the
+   * keep-unmodified carry of the expected current release.
+   */
+  async function resolveBundleAssets(invocation: ArtifactInvocationContext, artifactId: string,
+    entries: { files: Record<string, JsonValue>[]; assets: Record<string, JsonValue>[] },
+    options: { allowExtendedForms: boolean; keepUnmodifiedPaths: boolean;
+      expectedCurrentReleaseId: string | null }): Promise<{ files: { path: string; mimeType: string;
+        bytes: Uint8Array }[]; origins: Record<string, string>; uploadPins: { digest: string;
+          uploadId: string }[] }> {
+    const fail = (path: string, reason: string): never => {
+      throw new ArtifactOperationError('verification_failed',
+        { publicDetails: { asset: { path, reason } } });
+    };
+    const checkBytes = (path: string, mimeType: string, bytes: Uint8Array): void => {
+      if (!profile.rules.mimeTypes.includes(mimeType)) fail(path, 'MIME type not allowed by profile');
+      validateFileBytes(mimeType, bytes);
+    };
+    const readCas = async (path: string, digest: string, size: number): Promise<Uint8Array> => {
+      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, digest)) ??
+        fail(path, 'blob missing');
+      if (bytes.length !== size ||
+        `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== digest) {
+        fail(path, 'size/digest mismatch');
+      }
+      return bytes;
+    };
+    const files: { path: string; mimeType: string; bytes: Uint8Array }[] = [];
+    const origins: Record<string, string> = {};
+    const uploadPins: { digest: string; uploadId: string }[] = [];
+    for (const file of entries.files) {
+      const bytes = Uint8Array.from(file.bytes as number[]);
+      checkBytes(file.path as string, file.mimeType as string, bytes);
+      files.push({ path: file.path as string, mimeType: file.mimeType as string, bytes });
+      origins[file.path as string] = 'inline';
+    }
+    for (const asset of entries.assets) {
+      const path = asset.path as string;
+      if (Object.hasOwn(asset, 'uploadId')) {
+        const staged = await deps.uploads!.sessions.getStagedFile(asset.uploadId as string) ??
+          fail(path, 'unknown upload');
+        if (staged.artifactId !== artifactId) fail(path, 'unknown upload');
+        if (stagedFileExpired(staged, Date.now(), stagedFileTtlMs)) fail(path, 'staged file expired');
+        const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, staged.digest)) ??
+          fail(path, 'staged blob missing or digest mismatch');
+        if (bytes.length !== staged.size ||
+          `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== staged.digest) {
+          fail(path, 'staged blob missing or digest mismatch');
+        }
+        checkBytes(path, staged.mimeType, bytes);
+        files.push({ path, mimeType: staged.mimeType, bytes });
+        origins[path] = `upload:${staged.uploadId}`;
+        uploadPins.push({ digest: staged.digest, uploadId: staged.uploadId });
+      } else if (Object.hasOwn(asset, 'sourceArtifactId') || Object.hasOwn(asset, 'carryFromReleaseId')) {
+        if (!options.allowExtendedForms) fail(path, 'extended asset form needs publish_bundle_v2');
+        const copy = await resolveCopiedAsset(invocation, artifactId, asset, fail);
+        // The copied/carried MIME comes from a manifest, not the caller: it
+        // must still be inside the target profile allowlist (v1 forms keep
+        // their LOT 1 magic-only check; only the staged TTL is new there).
+        if (!profile.rules.mimeTypes.includes(copy.mimeType)) fail(path, 'MIME type not allowed by profile');
+        checkBytes(path, copy.mimeType, copy.bytes);
+        files.push({ path, mimeType: copy.mimeType, bytes: copy.bytes });
+        origins[path] = copy.origin;
+      } else {
+        const digest = asset.digest as string;
+        const size = asset.size as number;
+        const mimeType = asset.mimeType as string;
+        const bytes = await readCas(path, digest, size);
+        checkBytes(path, mimeType, bytes);
+        files.push({ path, mimeType, bytes });
+        origins[path] = 'cas';
+      }
+    }
+    if (options.keepUnmodifiedPaths && options.expectedCurrentReleaseId !== null) {
+      const base = await deps.publication.getRelease!(options.expectedCurrentReleaseId) ??
+        fail('(base release)', 'unknown release');
+      if (base.artifactId !== artifactId) fail('(base release)', 'unknown release');
+      const manifest = parseManifest(base.manifest);
+      for (const file of (manifest.files as { path: string; mimeType: string;
+        size: number; digest: string }[] | undefined) ?? []) {
+        if (Object.hasOwn(origins, file.path)) continue;
+        const bytes = await readCas(file.path, file.digest, file.size);
+        checkBytes(file.path, file.mimeType, bytes);
+        files.push({ path: file.path, mimeType: file.mimeType, bytes });
+        origins[file.path] = `carry:${options.expectedCurrentReleaseId}`;
+      }
+    }
+    return { files, origins, uploadPins };
+  }
+
+  /** Copy/carry resolution for `artifacts_publish_bundle_v2` (same failure contract). */
+  async function resolveCopiedAsset(invocation: ArtifactInvocationContext, artifactId: string,
+    asset: Record<string, JsonValue>,
+    fail: (path: string, reason: string) => never): Promise<{ mimeType: string; bytes: Uint8Array;
+      origin: string }> {
+    const path = asset.path as string;
+    const readManifestFile = async (sourceArtifactId: string, sourceReleaseId: string | undefined,
+      sourcePath: string | undefined): Promise<{ mimeType: string; bytes: Uint8Array }> => {
+      const sourceAcl = await deps.acls.getArtifactAcl(sourceArtifactId) ??
+        fail(path, 'unknown source artifact');
+      if (sourceAcl.storageScopeId !== invocation.storageScopeId) fail(path, 'cross-scope copy not supported');
+      const sourceState = await deps.lifecycle.stateOf(sourceArtifactId);
+      if (!deps.lifecycle.canRead({ artifactId: sourceArtifactId, state: sourceState }, sourceAcl,
+        invocation.actorId, 'source', deps.isApprovedAccount,
+        await sharingPolicyContext(invocation.storageScopeId))) {
+        throw new ArtifactOperationError('access_denied');
+      }
+      const release = (sourceReleaseId === undefined ? await deps.publication.getCurrent(sourceArtifactId)
+        : deps.publication.getRelease === undefined ? undefined
+          : await deps.publication.getRelease(sourceReleaseId)) ?? fail(path, 'unknown source release');
+      if (release.artifactId !== sourceArtifactId) fail(path, 'unknown source release');
+      const manifest = parseManifest(release.manifest);
+      const wanted = sourcePath ?? path;
+      const entry = ((manifest.files as { path: string; mimeType: string; size: number;
+        digest: string }[] | undefined) ?? []).find((file) => file.path === wanted) ??
+        fail(path, 'source path missing');
+      const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, entry.digest)) ??
+        fail(path, 'source blob missing or digest mismatch');
+      if (bytes.length !== entry.size ||
+        `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== entry.digest) {
+        fail(path, 'source blob missing or digest mismatch');
+      }
+      return { mimeType: entry.mimeType, bytes };
+    };
+    if (Object.hasOwn(asset, 'sourceArtifactId')) {
+      const sourceArtifactId = asset.sourceArtifactId as string;
+      const { mimeType, bytes } = await readManifestFile(sourceArtifactId,
+        asset.sourceReleaseId as string | undefined, asset.sourcePath as string | undefined);
+      const release = (asset.sourceReleaseId as string | undefined) ??
+        await deps.publication.getCurrent(sourceArtifactId).then((current) => current?.releaseId);
+      return { mimeType, bytes, origin: `copy:${sourceArtifactId}:${release ?? 'current'}` };
+    }
+    const carryFromReleaseId = asset.carryFromReleaseId as string;
+    const release = await deps.publication.getRelease!(carryFromReleaseId) ??
+      fail(path, 'unknown release');
+    if (release.artifactId !== artifactId) fail(path, 'unknown release');
+    const { mimeType, bytes } = await readManifestFile(artifactId, carryFromReleaseId,
+      asset.sourcePath as string | undefined);
+    return { mimeType, bytes, origin: `carry:${carryFromReleaseId}` };
   }
 
   /**
@@ -393,7 +586,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         }
         const normalized = profile.validate(capability, args, request.idempotencyKey, { deferPrecondition: true });
         const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
-          'artifacts_commit_upload', 'artifacts_publish_bundle'].includes(capability)
+          'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_publish_bundle_v2'].includes(capability)
           ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey,
             { deferPrecondition: true }) : undefined;
         if (command && ['ensure', 'publish'].includes(command.operation)) {
@@ -421,6 +614,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         }
         if (capability === 'artifacts_get_source') {
           const artifactId = normalized.artifactId as string;
+          // LOT 2 §B.3: profile caps instead of hard-coded ceilings (fail-closed
+          // at compile time; defaults stay 32 files / 262 144 B total).
+          const sourceOp = profile.operations.find((entry) => entry.operation === 'get_source');
           const result = await readArtifactSource({
             storageScopeId: invocation.storageScopeId,
             authorize: async () => {
@@ -432,10 +628,84 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               }
             }, getCurrent: deps.publication.getCurrent, getRelease: deps.publication.getRelease!,
             getSource: (id) => deps.sources!.getSource(id), getBlob: (key) => deps.publication.blobs.getBlob(key),
-            urls: deps.publicationUrls, maxFiles: 32, maxTotalBytes: 262144,
+            urls: deps.publicationUrls,
+            maxFiles: sourceOp?.limits['sourceFilesMax'] ?? SERVER_MAX_SOURCE_FILES,
+            maxInlineBytes: sourceOp?.limits['sourceInlineFileBytesMax'] ?? SERVER_MAX_SOURCE_INLINE_BYTES,
+            maxTotalBytes: sourceOp?.limits['sourceTotalBytesMax'] ?? SERVER_MAX_SOURCE_TOTAL_BYTES,
           }, normalized as unknown as Parameters<typeof readArtifactSource>[1]);
           return { ok: true, result: { status: 200, body: result }, invocationId: invocation.invocationId,
             commitState: 'not_committed', replayed: false };
+        }
+        if (capability === 'artifacts_list_assets') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          const listState = (normalized.state as string | undefined) ?? 'all';
+          const wantStaged = listState === 'staged' || listState === 'all';
+          const wantReleased = listState === 'released' || listState === 'all';
+          // Staged rows are owner-only (access_denied, never a filtered empty list);
+          // the source read right gates the released branch below.
+          if (wantStaged && acl.ownerId !== invocation.actorId) {
+            throw new ArtifactOperationError('access_denied');
+          }
+          const limit = normalized.limit as number;
+          const cursor = normalized.cursor as string | undefined;
+          const releaseId = normalized.releaseId as string | undefined;
+          const pageSessionId = normalized.pageSessionId as string | undefined;
+          type AssetEntry = { path: string; mimeType: string; size: number; digest: string;
+            state: 'staged' | 'released'; uploadId?: string; pageSessionId?: string; releaseId?: string };
+          const stagedEntries: AssetEntry[] = [];
+          if (wantStaged) {
+            if (deps.uploads === undefined) throw new ArtifactProfileInputError(true);
+            const rows = await deps.uploads.sessions.listStagedFiles(artifactId);
+            for (const record of rows
+              .filter((entry) => pageSessionId === undefined || entry.pageSessionId === pageSessionId)
+              .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))) {
+              stagedEntries.push({ path: record.path, mimeType: record.mimeType, size: record.size,
+                digest: record.digest, state: 'staged', uploadId: record.uploadId,
+                ...(record.pageSessionId === undefined ? {} : { pageSessionId: record.pageSessionId }) });
+            }
+          }
+          const releasedEntries: AssetEntry[] = [];
+          let listedReleaseId: string | undefined;
+          if (wantReleased) {
+            const artifactState = await deps.lifecycle.stateOf(artifactId);
+            if (!deps.lifecycle.canRead({ artifactId, state: artifactState }, acl, invocation.actorId, 'source',
+              deps.isApprovedAccount, await sharingPolicyContext(invocation.storageScopeId))) {
+              throw new ArtifactOperationError('access_denied');
+            }
+            const current = releaseId === undefined ? await deps.publication.getCurrent(artifactId)
+              : deps.publication.getRelease === undefined ? undefined
+                : await deps.publication.getRelease(releaseId);
+            // A release of another artifact reads as empty (no cross-artifact oracle).
+            if (current !== undefined && (releaseId === undefined || current.artifactId === artifactId)) {
+              listedReleaseId = current.releaseId;
+              const manifest = parseManifest(current.manifest);
+              for (const file of (manifest.files as { path: string; mimeType: string;
+                size: number; digest: string }[] | undefined) ?? []) {
+                releasedEntries.push({ path: file.path, mimeType: file.mimeType, size: file.size,
+                  digest: file.digest, state: 'released', releaseId: current.releaseId });
+              }
+            }
+          }
+          const stagedPaths = new Set(stagedEntries.map((entry) => entry.path));
+          const entries = [...stagedEntries,
+            ...releasedEntries.filter((entry) => !stagedPaths.has(entry.path))];
+          let offset = 0;
+          if (cursor !== undefined) {
+            const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+            const match = /^lot2-assets:(\d+)$/.exec(decoded);
+            if (match?.[1] === undefined || !Number.isSafeInteger(Number(match[1]))) {
+              throw new ArtifactProfileInputError();
+            }
+            offset = Math.min(Number(match[1]), entries.length);
+          }
+          const page = entries.slice(offset, offset + limit);
+          const nextCursor = offset + limit < entries.length
+            ? Buffer.from(`lot2-assets:${offset + limit}`, 'utf8').toString('base64url') : undefined;
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 200, body: { artifactId,
+              ...(listedReleaseId === undefined ? {} : { releaseId: listedReleaseId }), assets: page,
+              total: entries.length, ...(nextCursor === undefined ? {} : { nextCursor }) } } };
         }
         if (capability === 'artifacts_set_access' || capability === 'artifacts_delete') {
           const artifactId = normalized.artifactId as string;
@@ -553,9 +823,13 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               ...(normalized.maxSize === undefined ? {} : { maxSize: normalized.maxSize as number }),
             });
           } catch (cause) {
-            if (cause instanceof Error && /quota exceeded/.test(cause.message)) {
+            if (cause instanceof Error && /open upload session quota/.test(cause.message)) {
               throw new ArtifactOperationError('limit_exceeded', { cause,
                 publicDetails: { upload: { reason: 'open_session_quota' } } });
+            }
+            if (cause instanceof Error && /scope staging quota/.test(cause.message)) {
+              throw new ArtifactOperationError('limit_exceeded', { cause,
+                publicDetails: { upload: { reason: 'scope_staging_quota' } } });
             }
             if (cause instanceof Error && /invalid/.test(cause.message)) throw new ArtifactProfileInputError();
             throw cause;
@@ -576,45 +850,34 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const path = normalized.path as string;
           const commitInput = { uploadId, artifactId, storageScopeId: invocation.storageScopeId,
             ownerId: acl.ownerId, path, mimeType, digest, size };
+          // LOT 2: the shared commit core — same code as the browser page channel.
+          const commitDeps: CommitStagedUploadDeps = { sessions: deps.uploads!.sessions,
+            staging: deps.uploads!.staging, blobs: deps.publication.blobs, refs: deps.publication.refs,
+            budget: { filesMax: budget.filesMax, totalBytesMax: budget.totalBytesMax },
+            ...(deps.uploads!.metrics === undefined ? {} : { metrics: deps.uploads!.metrics }) };
           const work = async (): Promise<Record<string, unknown>> => {
-            let session: UploadSession;
+            let staged: StagedFileRecord;
             try {
-              session = await uploadService!.sessionForCommit(commitInput);
+              staged = await commitStagedUpload(uploadService!, commitDeps, commitInput);
             } catch (cause) {
-              // One response for unknown, foreign-bound, closed or expired sessions (no oracle).
-              throw new ArtifactOperationError('verification_failed', { cause,
-                publicDetails: { upload: { reason: 'session unknown, bound elsewhere, closed or expired' } } });
-            }
-            const key = stagingKey(invocation.storageScopeId, uploadId);
-            const bytes = await deps.uploads!.staging.get(key);
-            if (bytes === undefined) {
-              throw new ArtifactOperationError('verification_failed',
-                { publicDetails: { upload: { reason: 'staged object missing' } } });
-            }
-            // Re-verify declared size + digest + MIME against the staged bytes (review finding 3).
-            try {
-              uploadService!.verifyStaged(session, bytes, { digest, size, mimeType });
-            } catch (cause) {
+              if (cause instanceof Error && /budget exceeded/.test(cause.message)) {
+                throw new ArtifactOperationError('limit_exceeded', { cause,
+                  publicDetails: { upload: { reason: 'staged_budget' } } });
+              }
+              if (cause instanceof Error && (/unknown upload/.test(cause.message) || /closed/.test(cause.message))) {
+                // One response for unknown, foreign-bound, closed or expired sessions (no oracle).
+                throw new ArtifactOperationError('verification_failed', { cause,
+                  publicDetails: { upload: { reason: 'session unknown, bound elsewhere, closed or expired' } } });
+              }
+              if (cause instanceof Error && /staged object missing/.test(cause.message)) {
+                throw new ArtifactOperationError('verification_failed',
+                  { publicDetails: { upload: { reason: 'staged object missing' } } });
+              }
               throw new ArtifactOperationError('verification_failed', { cause,
                 publicDetails: { upload: { reason: 'size/digest/MIME mismatch' } } });
             }
-            // Promote to the digest-addressed CAS blob via the #907 bounded pool + read-back.
-            const casKey = blobKey(invocation.storageScopeId, digest);
-            const concurrency = resolveBlobConcurrency(deps.publication.blobConcurrency);
-            await runBlobPool([{ key: casKey, bytes }], { concurrency },
-              async (item) => { await deps.publication.blobs.putBlob(item.key, item.bytes); });
-            await verifyStagedBlobs(deps.publication.blobs, [{ key: casKey, bytes }], { concurrency });
-            const pinReason = `upload:${uploadId}`;
-            await deps.publication.refs.pin(digest, pinReason);
-            let staged;
-            try {
-              staged = await uploadService!.completeCommit(session, { path, mimeType, digest, size });
-            } catch (cause) {
-              await deps.publication.refs.unpin(digest, pinReason).catch(() => undefined);
-              throw cause;
-            }
-            await deps.uploads!.staging.delete(key);
-            return { artifactId, uploadId, path, mimeType, digest, size, state: 'staged', stagedAt: staged.createdAt };
+            return { artifactId, uploadId, path, mimeType, digest, size,
+              state: 'staged', stagedAt: staged.createdAt };
           };
           let body: Record<string, unknown>;
           if (deps.uploads!.idempotency !== undefined && command !== undefined) {
@@ -635,6 +898,29 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           return { ok: true, invocationId: invocation.invocationId, commitState: 'committed', replayed: false,
             result: { status: 201, body } };
         }
+        if (capability === 'artifacts_create_upload_page') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          let minted;
+          try {
+            minted = await pageService!.mint({ artifactId, storageScopeId: invocation.storageScopeId,
+              ownerId: acl.ownerId,
+              ...(normalized.maxFiles === undefined ? {} : { maxFiles: normalized.maxFiles as number }) });
+          } catch (cause) {
+            if (cause instanceof Error && /quota exceeded/.test(cause.message)) {
+              throw new ArtifactOperationError('limit_exceeded', { cause,
+                publicDetails: { upload: { reason: 'open_page_quota' } } });
+            }
+            if (cause instanceof Error && /invalid/.test(cause.message)) throw new ArtifactProfileInputError();
+            throw cause;
+          }
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+            result: { status: 201, body: { pageSessionId: minted.pageSessionId,
+              uploadPageUrl: minted.uploadPageUrl, expiresAt: minted.expiresAt, maxFiles: minted.maxFiles,
+              maxFileBytes: minted.maxFileBytes, maxTotalBytes: minted.maxTotalBytes,
+              allowedMimeTypes: minted.allowedMimeTypes } } };
+        }
         if (capability === 'artifacts_publish_bundle') {
           const artifactId = normalized.artifactId as string;
           const acl = await visible(artifactId, invocation);
@@ -650,51 +936,12 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const replay = await publication.replayFinalized(input);
           if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
           profile.validate(capability, args, request.idempotencyKey);
-          // Resolve the files/assets union BEFORE any commit step: one missing or
-          // digest-mismatched asset fails the whole publish and commits nothing.
-          const files: { path: string; mimeType: string; bytes: Uint8Array }[] = [];
-          const origins: Record<string, string> = {};
-          for (const file of (normalized.files ?? []) as Record<string, JsonValue>[]) {
-            const bytes = Uint8Array.from(file.bytes as number[]);
-            validateFileBytes(file.mimeType as string, bytes);
-            files.push({ path: file.path as string, mimeType: file.mimeType as string, bytes });
-            origins[file.path as string] = 'inline';
-          }
-          for (const asset of (normalized.assets ?? []) as Record<string, JsonValue>[]) {
-            const path = asset.path as string;
-            if (Object.hasOwn(asset, 'uploadId')) {
-              const staged = await deps.uploads!.sessions.getStagedFile(asset.uploadId as string);
-              if (staged === undefined || staged.artifactId !== artifactId) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'unknown upload' } } });
-              }
-              const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, staged.digest));
-              if (bytes === undefined || bytes.length !== staged.size ||
-                `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== staged.digest) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'staged blob missing or digest mismatch' } } });
-              }
-              validateFileBytes(staged.mimeType, bytes);
-              files.push({ path, mimeType: staged.mimeType, bytes });
-              origins[path] = `upload:${staged.uploadId}`;
-            } else {
-              const digest = asset.digest as string;
-              const size = asset.size as number;
-              const mimeType = asset.mimeType as string;
-              const bytes = await deps.publication.blobs.getBlob(blobKey(invocation.storageScopeId, digest));
-              if (bytes === undefined) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'blob missing' } } });
-              }
-              if (bytes.length !== size || `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== digest) {
-                throw new ArtifactOperationError('verification_failed',
-                  { publicDetails: { asset: { path, reason: 'size/digest mismatch' } } });
-              }
-              validateFileBytes(mimeType, bytes);
-              files.push({ path, mimeType, bytes });
-              origins[path] = 'cas';
-            }
-          }
+          // Resolve the files/assets union BEFORE any commit step: one missing,
+          // expired or digest-mismatched asset fails the whole publish and commits nothing.
+          const { files, origins, uploadPins } = await resolveBundleAssets(invocation, artifactId, {
+            files: (normalized.files ?? []) as Record<string, JsonValue>[],
+            assets: (normalized.assets ?? []) as Record<string, JsonValue>[],
+          }, { allowExtendedForms: false, keepUnmodifiedPaths: false, expectedCurrentReleaseId: null });
           const outcome = await publication.publishFinalized({
             ...input, source: { kind: 'inline-original' },
             profile: normalized.profile as Record<string, JsonValue>, files,
@@ -707,6 +954,68 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               path: entry.path, mimeType: entry.mimeType, size: entry.size, digest: entry.digest,
               origin: origins[entry.path] ?? 'inline',
             }));
+            // LOT 2 §D.1/D.3: unpin consumed upload pins (sweeper is the
+            // backstop) and meter every bundled asset by coarse origin.
+            for (const pin of uploadPins) {
+              await deps.publication.refs.unpin(pin.digest, `upload:${pin.uploadId}`).catch(() => undefined);
+            }
+            if (deps.uploads?.metrics !== undefined) {
+              for (const file of files) {
+                const origin = origins[file.path] ?? 'inline';
+                deps.uploads.metrics.emit({ name: 'bundle_assets',
+                  labels: { origin: origin.startsWith('upload:') ? 'upload' : origin } });
+              }
+            }
+          }
+          return committed;
+        }
+        if (capability === 'artifacts_publish_bundle_v2') {
+          const artifactId = normalized.artifactId as string;
+          const acl = await visible(artifactId, invocation);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+          const publication = createGuardedPublicationService({ ...deps.publication, coordinator: deps.coordinator,
+            limits: { maxFiles: budget.filesMax, maxFileBytes: budget.fileBytesMax, maxTotalBytes: budget.totalBytesMax } });
+          const meta = metadataOf(normalized);
+          const input = { ownerId: acl.ownerId, storageScopeId: invocation.storageScopeId, artifactId,
+            identity: command!.identity, actorId: invocation.actorId, invocationId: invocation.invocationId,
+            attemptId: invocation.invocationId, policyRevision: await deps.ensureHost.readPolicyRevision(),
+            authorizeCommit: invocation.authorizeCommit, metadata: meta, operation: 'publish' as const,
+            expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null };
+          const replay = await publication.replayFinalized(input);
+          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
+          profile.validate(capability, args, request.idempotencyKey);
+          const resolved = await resolveBundleAssets(invocation, artifactId, {
+            files: (normalized.files ?? []) as Record<string, JsonValue>[],
+            assets: (normalized.assets ?? []) as Record<string, JsonValue>[],
+          }, { allowExtendedForms: true,
+            keepUnmodifiedPaths: normalized.keepUnmodifiedPaths === true,
+            expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null });
+          const outcome = await publication.publishFinalized({
+            ...input, source: { kind: 'inline-original' },
+            profile: normalized.profile as Record<string, JsonValue>, files: resolved.files,
+          });
+          const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
+          if (committed.ok) {
+            const parsedBundleManifest = parseManifest((committed.result.body as { manifest: string }).manifest);
+            const entries = (parsedBundleManifest.files as ManifestFileEntry[] | undefined) ?? [];
+            (committed.result.body as Record<string, unknown>).files = entries.map((entry) => ({
+              path: entry.path, mimeType: entry.mimeType, size: entry.size, digest: entry.digest,
+              origin: resolved.origins[entry.path] ?? 'inline',
+            }));
+            // LOT 2 §D.1: consumed upload pins leave with the bundle; the
+            // release ref keeps the blob alive. Best-effort: the sweeper is
+            // the backstop and reports what it unpins.
+            for (const pin of resolved.uploadPins) {
+              await deps.publication.refs.unpin(pin.digest, `upload:${pin.uploadId}`).catch(() => undefined);
+            }
+            if (deps.uploads?.metrics !== undefined) {
+              for (const file of resolved.files) {
+                const origin = resolved.origins[file.path] ?? 'inline';
+                const coarse = origin.startsWith('copy:') ? 'copy' : origin.startsWith('carry:') ? 'carry'
+                  : origin.startsWith('upload:') ? 'upload' : origin;
+                deps.uploads.metrics.emit({ name: 'bundle_assets', labels: { origin: coarse } });
+              }
+            }
           }
           return committed;
         }
