@@ -1,5 +1,5 @@
 import type { AuthHonoConsentGrant, AuthHonoConsentStorePort } from '@sentropic/auth-hono';
-import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1, oauthTenantStoreV1 } from '@sentropic/cluster-mesh';
 import { randomUUID } from 'node:crypto';
 import { and, eq, type SQL } from 'drizzle-orm';
 
@@ -18,11 +18,10 @@ export const createConsentStoreAdapter = (
   options: CreateConsentStoreAdapterOptions = {}
 ): AuthHonoConsentStorePort => {
   const now = options.now ?? (() => new Date());
+  /** CM consent authority through the P4 finder; a revoked row confers no authority. */
   const hasAuthority = async (tx: CmIdentityTransaction, userId: string, clientId: string, tenantId: string) => {
-    const result = await tx.hostTransaction.query(
-      'SELECT consent_id FROM cm_identity.cm_oauth_consents WHERE consent_id = $1 AND revoked_at IS NULL',
-      [cmOAuthConsentId(userId, clientId, tenantId)]);
-    return result.rows.length > 0;
+    const record = await oauthTenantStoreV1(tx).findConsent(cmOAuthConsentId(userId, clientId, tenantId));
+    return record?.revokedAt === undefined;
   };
 
   const grantFilter = (userId: string, clientId: string, tenantId: string): SQL => {
