@@ -67,7 +67,7 @@ const READ_ONLY_TOOLS: readonly ArtifactsToolName[] = ['artifacts_list', 'artifa
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_get_source', 'artifacts_list_versions',
   'artifacts_lookup_people', 'artifacts_list_access'];
 const IDEMPOTENT_WRITERS: readonly ArtifactsToolName[] = ['artifacts_ensure', 'artifacts_publish',
-  'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'];
+  'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'];
 
 export interface ArtifactsToolDefinition {
   readonly description: string;
@@ -85,7 +85,7 @@ function staticTool(name: ArtifactsToolName, inputSchema: Record<string, unknown
     inputSchema,
     outputSchema: ARTIFACTS_OUTPUT_SCHEMA,
     mutability: READ_ONLY_TOOLS.includes(name) ? 'read-only'
-      : name === 'artifacts_publish' ? 'append' : 'state-transition',
+      : name === 'artifacts_publish' || name === 'artifacts_publish_bundle' ? 'append' : 'state-transition',
     idempotency: IDEMPOTENT_WRITERS.includes(name) ? { required: true, scope: 'principal' } : { required: false },
     gates: { requiresElicitation: false, requiresHumanConfirmation: name === 'artifacts_delete',
       requiresPrincipalGate: false },
@@ -114,6 +114,9 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
   artifacts_list: staticTool('artifacts_list', obj({ limit: integer(1), offset: integer(0) })),
   artifacts_get: staticTool('artifacts_get', idOnly),
   artifacts_get_source: staticTool('artifacts_get_source', obj({ artifactId: id, releaseId: id,
+    // Frozen ceiling (review finding 5): maxItems 32 is part of this frozen
+    // definition and must NOT change. Server-side caps only move BELOW the
+    // frozen schema; larger listings belong to the new listing tools.
     paths: { type: 'array', minItems: 1, maxItems: 32, items: str } }, ['artifactId']),
     'Artifacts get source: verified files of the current or a selected release as `text` (encoding "utf8") '
       + 'or `base64` (encoding "base64"), never an integer array, plus a guideRef instead of the guide body.'),
@@ -142,6 +145,24 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
   artifacts_list_access: staticTool('artifacts_list_access', idOnly,
     'Artifacts list access: sharing mode, owner and grant list of one artifact, projected to userRefs. '
       + 'The owner and platform admins see every entry; a simple reader sees the mode and its own entry only.'),
+  // Files parity LOT 1 — appended last; frozen at birth like every definition above.
+  artifacts_publish_bundle: staticTool('artifacts_publish_bundle', { ...obj({
+    artifactId: id, idempotencyKey,
+    files: { type: 'array', items: file, minItems: 1,
+      description: 'Inline files (bytes travel through the model, inline budget); at least one of files/assets is required.' },
+    assets: { type: 'array', minItems: 1,
+      items: { oneOf: [
+        obj({ path, uploadId: id }, ['path', 'uploadId']),
+        obj({ path, digest: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' }, size: integer(1), mimeType: str },
+          ['path', 'digest', 'size', 'mimeType']),
+      ] },
+      description: 'Assets whose bytes already left the model: an uploadId staged via artifacts_create_upload/artifacts_commit_upload, or a sha256 digest of an already-pinned blob in the same scope. The release budget applies to the union of files and assets; duplicate paths are refused.' },
+    expectedCurrentReleaseId, profile: primitiveRecord, ...metadata },
+    ['artifactId', 'idempotencyKey', 'expectedCurrentReleaseId']),
+    anyOf: [{ required: ['files'] }, { required: ['assets'] }] },
+    'Artifacts publish bundle: one atomic release combining inline files with assets whose bytes already left the model '
+      + '(an uploadId staged via artifacts_create_upload + signed PUT + artifacts_commit_upload, or a sha256:<hex> digest '
+      + 'of an already-pinned blob). expectedCurrentReleaseId is always required (CAS); null requires an unpublished artifact.'),
 };
 
 export const ARTIFACTS_TOOL_SPECS = ARTIFACTS_TOOL_NAMES.map((name) => ({ name,
@@ -215,6 +236,9 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
       switch (input.tool) {
         case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
+        case 'artifacts_publish_bundle': request = { method: 'POST', path: '/publish_bundle', body: args }; break;
+        case 'artifacts_create_upload': request = { method: 'POST', path: '/uploads/create', body: args }; break;
+        case 'artifacts_commit_upload': request = { method: 'POST', path: '/uploads/commit', body: args }; break;
         case 'artifacts_list': request = { method: 'POST', path: '/list', body: args }; break;
         case 'artifacts_get': request = { method: 'GET', path: `/meta/${args.artifactId}`, body: undefined }; break;
         case 'artifacts_get_source': request = { method: 'POST', path: '/get_source', body: args }; break;

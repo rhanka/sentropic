@@ -19,6 +19,9 @@ import { createMemorySourceStore } from '../../src/server/sources.js';
 import type { DeleteConfirmationContext } from '../../src/server/management.js';
 import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
   type PublicationService } from '../../src/server/publication.js';
+import { createMemoryIdempotencyKv, createIdempotencyStore } from '../../src/server/idempotency.js';
+import { createMemoryStaging, createMemoryUploadSessionStore, createMemoryUploadSigner,
+  type UploadSessionStore, type StagingStore } from '../../src/server/uploads.js';
 
 export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], scope = 'scope-l6',
   options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver;
@@ -50,6 +53,11 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const blobs = createMemoryBlobStore();
   const legacyRecords = createMemoryKv();
   const intents = createMemoryIntentStore();
+  // Files parity LOT 1: memory upload ports (session ledger, staging, signer, idempotency).
+  const uploadSessions: UploadSessionStore = createMemoryUploadSessionStore();
+  const uploadStaging: StagingStore = createMemoryStaging();
+  const uploadSigner = createMemoryUploadSigner();
+  const uploadIdempotency = createIdempotencyStore(createMemoryIdempotencyKv());
   const lifecycleStore = createMemoryLifecycleStore();
   const lifecycle = createLifecycleService(lifecycleStore, () => '2026-01-01T00:00:00Z', state);
   const sources = createMemorySourceStore();
@@ -201,6 +209,8 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
         async putSource(id, source) { writes.get(client)!.push(() => sources.putSource(id, source)); }, async registerBlob() {}, async addReleaseRef() {},
       }),
     },
+    uploads: { sessions: uploadSessions, staging: uploadStaging, signer: uploadSigner.signer,
+      idempotency: uploadIdempotency },
   };
   const app = createHttpArtifactApp(appDeps);
   const mcp = createArtifactsToolExecutor({ ...options, app, profile });
@@ -208,7 +218,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
   return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, legacyRecords, quotaReservations,
-    accessEvents,
+    accessEvents, uploadSessions, uploadStaging, uploadSigner,
     withProfile: (input: ArtifactProviderProfile) => createHttpArtifactApp({ ...appDeps, profile: compileArtifactsProfile(input) }),
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },

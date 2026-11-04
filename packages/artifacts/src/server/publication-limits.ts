@@ -5,14 +5,34 @@ export interface PublicationLimits {
   maxFileBytes: number;
   maxTotalBytes: number;
 }
+
+/**
+ * Generic server maxima (files parity LOT 1). A profile above any ceiling
+ * fails compilation, and `publicationLimits` refuses overrides above them:
+ * the ceiling is generic, the values are profile-owned below it.
+ * 255 files per release, 16 MiB per file, 64 MiB per release.
+ */
+export const SERVER_MAX_FILES_PER_RELEASE = 255;
+export const SERVER_MAX_FILE_BYTES = 16 * 1024 * 1024;
+export const SERVER_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+/** Concurrent open upload sessions per principal (leaked-URL DoS bound). */
+export const SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL = 8;
+
+/** Generic defaults: 255 files, 16 MiB per file, 64 MiB total (files parity LOT 1). */
 export const DEFAULT_PUBLICATION_LIMITS: Readonly<PublicationLimits> = Object.freeze({
-  maxFiles: 128, maxFileBytes: 16 * 1024 * 1024, maxTotalBytes: 64 * 1024 * 1024,
+  maxFiles: SERVER_MAX_FILES_PER_RELEASE,
+  maxFileBytes: SERVER_MAX_FILE_BYTES,
+  maxTotalBytes: SERVER_MAX_TOTAL_BYTES,
 });
 
 export function publicationLimits(overrides: Partial<PublicationLimits> = {}): Readonly<PublicationLimits> {
   const limits = { ...DEFAULT_PUBLICATION_LIMITS, ...overrides };
   if (Object.values(limits).some((value) => !Number.isSafeInteger(value) || value <= 0)) {
     throw new Error('invalid publication limits');
+  }
+  if (limits.maxFiles > SERVER_MAX_FILES_PER_RELEASE || limits.maxFileBytes > SERVER_MAX_FILE_BYTES ||
+    limits.maxTotalBytes > SERVER_MAX_TOTAL_BYTES) {
+    throw new Error('publication limits above the server maxima');
   }
   return Object.freeze(limits);
 }

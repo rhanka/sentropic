@@ -26,6 +26,36 @@
 - Shipped radar profile gains the `set_access`, `lookup_people` and
   `list_access` operation profiles (the four-tool radar selection itself is
   unchanged).
+- Files parity LOT 1: a local agent can publish large dossiers with the bytes
+  outside the model. New tools `artifacts_create_upload`,
+  `artifacts_commit_upload` and `artifacts_publish_bundle` (static
+  definitions, frozen at birth; the 17 pre-existing tool definitions are
+  byte-identical, pinned by sha256 in the tests).
+- Upload sessions are durable rows (migration `0007_uploads.sql` ALTERs the
+  existing `artifacts.uploads` table: artifact/scope/owner binding,
+  `expires_at`, `staged_files`) with a presigned signed PUT per session. A
+  SigV4 presigned PUT cannot carry a content-length range, so the signature
+  binds the EXACT declared Content-Length plus `content-type`, the PUT must
+  carry `x-amz-checksum-sha256` (S3 validates the body, BadDigest on
+  mismatch), and `commit_upload` re-verifies size, SHA-256 digest and MIME
+  server-side before pinning. Open sessions per principal are quota-bounded
+  (8) and an enforced sweeper (gc.ts) expires stale sessions and deletes their
+  staging objects.
+- Server maxima are hard ceilings: 255 files per release, 16 MiB per file,
+  64 MiB per release; profile limit keys (`releaseFilesMax`,
+  `releaseFileBytesMax`, `releaseTotalBytesMax` on the publish operation) may
+  only move below them and default to the inline values. The MIME ceiling
+  (17 types) is enforced at profile compile time, and every file — inline or
+  uploaded — is validated at commit: magic bytes for binary types, strict
+  UTF-8 for text, script/handler/external-reference-free SVG.
+- `artifacts_publish_bundle` publishes one atomic release from the union of
+  inline files, `{path, uploadId}` assets and `{path, digest, size, mimeType}`
+  CAS assets, reusing the 0.2.12 bounded blob pool and `verifyStagedBlobs`;
+  one missing or digest-mismatched asset fails the whole publish and commits
+  nothing. The strict-profile writer ban does not cover the upload tools (they
+  mutate no release pointer). `artifacts_get_source` keeps its frozen
+  maxItems 32 ceiling; server-side caps only move below the frozen schema.
+
 ## 0.2.12
 
 - Bounded concurrency in multi-file publication blob staging (#art-conc, P1):
