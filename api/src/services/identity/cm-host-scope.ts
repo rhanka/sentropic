@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1, isSocialRaceRetry } from '@sentropic/cluster-mesh';
 
 interface Scope { active: boolean; acceptingQueries: boolean; failure: unknown; inFlight: number }
 const scopes = new WeakMap<PoolClient, Scope>();
@@ -113,6 +113,10 @@ export function createCmPortFailureFence(client: PoolClient) {
   const fail = (error: unknown): never => {
     const scope = scopes.get(client);
     if (!scope?.active || !scope.acceptingQueries) return unbound();
+    // Whole-callback retry signals are control instructions, never failures: the scoped
+    // wrapper may already have remembered the raw driver error, but the signal must reach
+    // the unit of work untouched so the callback restarts instead of surfacing raw SQL.
+    if (isSocialRaceRetry(error)) throw error;
     if (scope.failure === undefined) scope.failure = error;
     throw scope.failure;
   };

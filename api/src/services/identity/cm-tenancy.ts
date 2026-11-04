@@ -162,13 +162,25 @@ export const setCmMembershipState = async (
   const { tenancy } = getCmIdentity();
   const now = new Date().toISOString();
   const existing = await tenancy.memberships.findMembership(userId, tenantId);
-  const row = await tenancy.memberships.setMembershipState(userId, tenantId, {
-    status: state.status,
-    tenantRole: state.role ?? existing?.tenantRole ?? 'member',
-    decidedBy: state.decidedBy,
-    decidedAt: now,
-    updatedAt: now,
-  });
+  // The store transitions existing rows only; a missing row is created in the
+  // target state so fixtures and seeds can ensure membership unconditionally.
+  const row = existing
+    ? await tenancy.memberships.setMembershipState(userId, tenantId, {
+      status: state.status,
+      tenantRole: state.role ?? existing.tenantRole,
+      decidedBy: state.decidedBy,
+      decidedAt: now,
+      updatedAt: now,
+    })
+    : await tenancy.memberships.upsertMembershipRequest({
+      userId,
+      tenantId,
+      status: state.status,
+      tenantRole: state.role ?? 'member',
+      decidedBy: state.decidedBy,
+      decidedAt: now,
+      updatedAt: now,
+    });
   return {
     userId: row.userId,
     tenantId: row.tenantId,

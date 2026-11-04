@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { invalidA4Import } from './cm-import-values';
+import { invalidA4Import, sourceTextList } from './cm-import-values';
 
 const legacy = ['users', 'webauthn_credentials', 'webauthn_challenges', 'email_verification_codes',
   'magic_links', 'auth_invite_tokens', 'user_sessions', 'identities', 'tenants', 'tenant_memberships', 'workspace_memberships'];
@@ -18,7 +18,7 @@ const actions: Readonly<Record<string, string>> = { a: 'NO ACTION', r: 'RESTRICT
 const action = (code: string): string => actions[code] ?? invalidA4Import();
 interface SourceForeignKey {
   name: string; child_schema: string; child_table: string; parent: string;
-  child_columns: string[]; parent_columns: string[]; on_delete: string; on_update: string;
+  child_columns: unknown; parent_columns: unknown; on_delete: string; on_update: string;
   deferrable: boolean; deferred: boolean; match: string;
 }
 
@@ -27,35 +27,37 @@ export async function rebindA4BusinessReferences(client: PoolClient): Promise<vo
   const result = await client.query<SourceForeignKey>(`SELECT c.conname AS name, ns.nspname AS child_schema,
     child.relname AS child_table, parent.relname AS parent, c.confdeltype AS on_delete, c.confupdtype AS on_update,
     c.condeferrable AS deferrable, c.condeferred AS deferred, c.confmatchtype AS match,
-    ARRAY(SELECT a.attname FROM unnest(c.conkey) WITH ORDINALITY k(num, ord)
-      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.num ORDER BY k.ord) AS child_columns,
-    ARRAY(SELECT a.attname FROM unnest(c.confkey) WITH ORDINALITY k(num, ord)
-      JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.num ORDER BY k.ord) AS parent_columns
+    (SELECT json_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(num, ord)
+      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.num) AS child_columns,
+    (SELECT json_agg(a.attname ORDER BY k.ord) FROM unnest(c.confkey) WITH ORDINALITY k(num, ord)
+      JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.num) AS parent_columns
     FROM pg_constraint c JOIN pg_class child ON child.oid = c.conrelid JOIN pg_namespace ns ON ns.oid = child.relnamespace
     JOIN pg_class parent ON parent.oid = c.confrelid JOIN pg_namespace pn ON pn.oid = parent.relnamespace
     WHERE c.contype = 'f' AND pn.nspname = 'public' AND parent.relname = ANY($1::text[])
     ORDER BY ns.nspname COLLATE "C", child.relname COLLATE "C", c.conname COLLATE "C"`, [legacy]);
   const inventory = [];
   for (const foreignKey of result.rows) {
+    const childColumns = sourceTextList(foreignKey.child_columns);
+    const parentColumns = sourceTextList(foreignKey.parent_columns);
     const table = `${quote(foreignKey.child_schema)}.${quote(foreignKey.child_table)}`;
     const deletedChild = foreignKey.child_schema === 'public' && legacy.includes(foreignKey.child_table);
     const movedWorkspaceEdge = foreignKey.child_schema === 'public' && foreignKey.child_table === 'workspaces'
-      && foreignKey.child_columns.length === 1 && foreignKey.child_columns[0] === 'tenant_id';
+      && childColumns.length === 1 && childColumns[0] === 'tenant_id';
     const destination = destinations[foreignKey.parent];
     if (!deletedChild && !movedWorkspaceEdge && !destination) return invalidA4Import();
-    const targetColumns = deletedChild || movedWorkspaceEdge ? [] : foreignKey.parent_columns
+    const targetColumns = deletedChild || movedWorkspaceEdge ? [] : parentColumns
       .map(column => destination.columns[column] ?? invalidA4Import());
     await client.query(`ALTER TABLE ${table} DROP CONSTRAINT ${quote(foreignKey.name)}`);
     if (!deletedChild && !movedWorkspaceEdge) {
       const match = foreignKey.match === 's' ? 'SIMPLE' : foreignKey.match === 'f' ? 'FULL' : invalidA4Import();
       await client.query(`ALTER TABLE ${table} ADD CONSTRAINT ${quote(foreignKey.name)}
-        FOREIGN KEY (${foreignKey.child_columns.map(quote).join(', ')})
+        FOREIGN KEY (${childColumns.map(quote).join(', ')})
         REFERENCES cm_identity.${quote(destination.table)} (${targetColumns.map(quote).join(', ')})
         MATCH ${match} ON UPDATE ${action(foreignKey.on_update)} ON DELETE ${action(foreignKey.on_delete)}
         ${foreignKey.deferrable ? `DEFERRABLE INITIALLY ${foreignKey.deferred ? 'DEFERRED' : 'IMMEDIATE'}` : 'NOT DEFERRABLE'}`);
     }
     inventory.push({ schema: foreignKey.child_schema, table: foreignKey.child_table, constraint: foreignKey.name,
-      columns: foreignKey.child_columns, sourceParent: foreignKey.parent,
+      columns: childColumns, sourceParent: foreignKey.parent,
       destination: deletedChild || movedWorkspaceEdge ? null : destination.table,
       disposition: deletedChild ? 'legacy_table_deleted' : movedWorkspaceEdge ? 'cm_directory_edge' : 'rebound',
       onDelete: action(foreignKey.on_delete), onUpdate: action(foreignKey.on_update) });
