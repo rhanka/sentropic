@@ -88,8 +88,13 @@ export interface UploadSessionStore {
   sumStagedBytesByScope(storageScopeId: string): Promise<number>;
   /** LOT 2 §A.3: sessions minted through one browser page (file-count bound). */
   listPageSessions(pageSessionId: string): Promise<UploadSession[]>;
-  /** LOT 2 §D.2: serialize the quota check and insert per scope (race-proof backstop). */
-  withScopeLock<T>(storageScopeId: string, action: () => Promise<T>): Promise<T>;
+  /**
+   * LOT 2 §D.2: serialize the quota check and insert per scope (race-proof
+   * backstop). The PG store runs `action` on a transaction holding the scope
+   * advisory lock; the memory double runs it under a per-scope mutex. The
+   * service performs every quota read and the insert through `locked`.
+   */
+  withScopeLock<T>(storageScopeId: string, action: (locked: UploadSessionStore) => Promise<T>): Promise<T>;
   /** LOT 2 §D.1: staged rows older than the TTL (sweeper pass 2 input). */
   listExpiredStaged(now: Date, ttlMs: number): Promise<StagedFileRecord[]>;
   deleteStagedFile(uploadId: string): Promise<void>;
@@ -196,16 +201,16 @@ export function createMemoryUploadSessionStore(now: () => Date = () => new Date(
   const stagedFiles = new Map<string, StagedFileRecord>();
   // LOT 2 §D.2: per-scope serialization of the quota check and insert.
   const scopeTails = new Map<string, Promise<unknown>>();
-  const withScopeLock = <T>(storageScopeId: string, action: () => Promise<T>): Promise<T> => {
+  const scopeLock = <T>(storageScopeId: string, action: (locked: UploadSessionStore) => Promise<T>): Promise<T> => {
     const previous = scopeTails.get(storageScopeId) ?? Promise.resolve();
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     scopeTails.set(storageScopeId, previous.then(() => gate));
-    return previous.then(action).finally(release);
+    return previous.then(() => action(store)).finally(release);
   };
   const scopeOfStaged = (record: StagedFileRecord): string | undefined =>
     sessions.get(record.uploadId)?.storageScopeId;
-  return {
+  const store: UploadSessionStore = {
     create(session) {
       sessions.set(session.uploadId, session);
       return Promise.resolve();
@@ -263,7 +268,7 @@ export function createMemoryUploadSessionStore(now: () => Date = () => new Date(
     listPageSessions(pageSessionId) {
       return Promise.resolve([...sessions.values()].filter((session) => session.pageSessionId === pageSessionId));
     },
-    withScopeLock,
+    withScopeLock: scopeLock,
     listExpiredStaged(at, ttlMs) {
       return Promise.resolve([...stagedFiles.values()].filter((record) =>
         new Date(record.createdAt).getTime() + ttlMs <= at.getTime()));
@@ -273,6 +278,7 @@ export function createMemoryUploadSessionStore(now: () => Date = () => new Date(
       return Promise.resolve();
     },
   };
+  return store;
 }
 
 /**
@@ -453,22 +459,22 @@ export function createUploadService(deps: {
       // LOT 2 §D.2: the quota check and the insert run inside the scope lock,
       // so parallel creates against one scope quota admit exactly the quota.
       // Callers must not hold the scope lock across service calls (no nesting).
-      return deps.sessions.withScopeLock(input.storageScopeId, async () => {
-        const open = await deps.sessions.countOpen(input.storageScopeId, input.ownerId);
+      return deps.sessions.withScopeLock(input.storageScopeId, async (locked) => {
+        const open = await locked.countOpen(input.storageScopeId, input.ownerId);
         if (open >= options.maxSessionsPerPrincipal) {
           emit({ name: 'upload_quota_refusals', labels: { reason: 'open_session_quota' } });
           throw new Error(`open upload session quota exceeded for principal (max ${options.maxSessionsPerPrincipal})`);
         }
         if (options.stagingQuotaBytesPerScope !== undefined) {
-          const reserved = await deps.sessions.sumOpenMaxSize(input.storageScopeId) +
-            await deps.sessions.sumStagedBytesByScope(input.storageScopeId);
+          const reserved = await locked.sumOpenMaxSize(input.storageScopeId) +
+            await locked.sumStagedBytesByScope(input.storageScopeId);
           if (reserved + maxSize > options.stagingQuotaBytesPerScope) {
             emit({ name: 'upload_quota_refusals', labels: { reason: 'scope_staging_quota' } });
             throw new Error(`scope staging quota exceeded (max ${options.stagingQuotaBytesPerScope} bytes)`);
           }
         }
         if (input.pageSessionId !== undefined) {
-          const pageCount = (await deps.sessions.listPageSessions(input.pageSessionId)).length;
+          const pageCount = (await locked.listPageSessions(input.pageSessionId)).length;
           if (pageCount >= input.pageFileLimit!) {
             emit({ name: 'upload_quota_refusals', labels: { reason: 'page_file_quota' } });
             throw new Error(`open upload page file quota exceeded (max ${input.pageFileLimit})`);
@@ -478,7 +484,7 @@ export function createUploadService(deps: {
         const createdAt = now().toISOString();
         const expiresAt = new Date(now().getTime() + UPLOAD_SESSION_TTL_MS).toISOString();
         const key = stagingKey(input.storageScopeId, uploadId);
-        await deps.sessions.create({
+        await locked.create({
           uploadId, artifactId: input.artifactId, storageScopeId: input.storageScopeId,
           ownerId: input.ownerId, mimeType: input.mimeType, maxSize, state: 'open', expiresAt, createdAt,
           ...(input.pageSessionId === undefined ? {} : { pageSessionId: input.pageSessionId }),
