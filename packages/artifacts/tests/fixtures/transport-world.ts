@@ -15,6 +15,7 @@ import { createMemoryRefcountStore } from '../../src/server/gc.js';
 import { createLifecycleService, createMemoryLifecycleStore } from '../../src/server/lifecycle.js';
 import { createMemoryIntentStore } from '../../src/server/object-intents.js';
 import { createMemoryKv, type PrincipalDirectoryPort, type SharingPolicyPort } from '../../src/server/ports.js';
+import type { ArtifactReaderStore } from '../../src/server/reader-store.js';
 import { createMemorySourceStore } from '../../src/server/sources.js';
 import type { DeleteConfirmationContext } from '../../src/server/management.js';
 import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
@@ -28,7 +29,9 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     parity?: boolean; profile?: ArtifactProviderProfile; sharingPolicy?: SharingPolicyPort;
     actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean>;
     /** G2: host principal directory; flows into appDeps via the options spread. */
-    directory?: PrincipalDirectoryPort } = {}) {
+    directory?: PrincipalDirectoryPort;
+    /** Lot 1a: reader consent store; flows into appDeps via the options spread. */
+    readerConsent?: ArtifactReaderStore } = {}) {
   const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
     operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),

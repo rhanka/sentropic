@@ -36,6 +36,7 @@ export function assertCompleteOperation(config: OperationProfile): void {
     list_access: { limits: [], defaults: [] },
     delete: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     revert: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    revoke_reader_consent: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
   };
   const fields = required[config.operation];
   if (fields && (fields.limits.some((key) => !Object.hasOwn(config.limits, key)) ||
@@ -170,6 +171,10 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
       limit: { ...integer(1, limits.lookupLimitMax), default: config.defaults.limit } }, ['query']);
     case 'list_access': return idOnly;
     case 'promote': return obj({ artifactId: id, releaseId: id, expectedCurrent: id }, ['artifactId', 'releaseId', 'expectedCurrent']);
+    case 'revoke_reader_consent': return obj({ artifactId: id,
+      scope: { type: 'string', minLength: 1, maxLength: 128,
+        description: 'One consent scope of this artifact; omitted revokes every scope of the artifact.' },
+      idempotencyKey: key }, ['artifactId', 'idempotencyKey']);
     default: throw new Error(`unsupported operation profile: ${operation}`);
   }
 }
