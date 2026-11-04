@@ -128,6 +128,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       if (method === 'POST' && path === '/delete') name = 'artifacts_delete';
       if (method === 'POST' && path === '/revert') name = 'artifacts_revert';
       if (method === 'POST' && path === '/list_versions') name = 'artifacts_list_versions';
+    if (method === 'POST' && path === '/revoke_reader_consent') name = 'artifacts_revoke_reader_consent';
       if (method === 'GET' && path.startsWith('/meta/') && isArtifactId(path.slice(6))) name = 'artifacts_get';
       if (method === 'GET' && path.startsWith('/versions/') && isArtifactId(path.slice(10))) name = 'artifacts_list_versions';
       if (method === 'GET' && path.startsWith('/source/') && isArtifactId(path.slice(8))) name = 'artifacts_get_source';

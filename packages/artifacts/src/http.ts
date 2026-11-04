@@ -12,6 +12,8 @@ import { combineSharingPolicy, resolveSharingPolicy, type KvPort, type SharingPo
 import { createGuardedPublicationService, type GuardedPublicationDeps,
   type PublicationService } from './server/publication.js';
 import type { ArtifactAcl, ArtifactMetadata, AclStore } from './server/access.js';
+import { assertConsentScopeId } from './server/consent.js';
+import type { ArtifactReaderStore } from './server/reader-store.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import { applyEdits, type EditableFile, type EditOperation } from './server/edits.js';
 import { CommitQuarantineError, type ArtifactInvocationContext,
@@ -69,6 +71,8 @@ export interface HttpAppDeps {
   sharingPolicy?: SharingPolicyPort;
   /** G1: server-resolved platform admin predicate (never a tool argument). */
   actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean>;
+  /** Lot 1a: reader consent store; absent ⇒ consent routes fail closed with `capability_unavailable`. */
+  readerConsent?: ArtifactReaderStore;
   /** One trusted URL policy shared by HTTP and MCP receipts: the artifact page and the exact version page. */
   publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; versionUrl: string };
 }
@@ -90,7 +94,8 @@ function object(value: unknown): Record<string, unknown> {
 export function assertArtifactsTransportProfile(value: unknown): asserts value is CompiledArtifactsProfile {
   assertCompiledArtifactsProfile(value);
   const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get',
-    'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert', 'artifacts_set_access', 'artifacts_delete'];
+    'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert', 'artifacts_set_access', 'artifacts_delete',
+    'artifacts_revoke_reader_consent'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
@@ -381,6 +386,31 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             validateNewCommand: () => { profile.validate(capability, args, request.idempotencyKey); },
           }, invocation, command!, normalized.confirmationRef as string | undefined);
           return outcome.ok ? { ...outcome, result: { status: 200, body: outcome.result } } : outcome;
+        }
+        if (capability === 'artifacts_revoke_reader_consent') {
+          // Self-revocation only: the reader is the invocation principal
+          // (mcp-core.ts:229); no principalId argument exists, so the model
+          // can never target another person. Error order: syntax (validated
+          // above) → visibility (not_found, no existence oracle) → store
+          // gate (capability_unavailable when no port is wired).
+          const artifactId = normalized.artifactId as string;
+          await visible(artifactId, invocation);
+          const store = deps.readerConsent;
+          if (!store) throw new ArtifactProfileInputError(true);
+          const scope = normalized.scope as string | undefined;
+          if (scope !== undefined) assertConsentScopeId(scope);
+          const at = new Date().toISOString();
+          // The route serves the MCP revocation tool; the api binding records
+          // first-party screen/api surfaces through the service layer instead.
+          const audit = { actor: invocation.actorId, surface: 'mcp' as const };
+          const result = await store.revokeAllConsents({ storageScopeId: invocation.storageScopeId,
+            readerAccountId: invocation.actorId, artifactId, ...(scope === undefined ? {} : { scopeId: scope }) },
+            'self', at, audit);
+          return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed' as const,
+            replayed: false, result: { status: 200, body: scope === undefined
+              ? { artifactId, scopeId: null, changed: result.changed, revoked: result.revoked }
+              : { artifactId, scopeId: scope, changed: result.changed,
+                revokedAt: result.changed ? at : null } } };
         }
         if (capability === 'artifacts_publish' || capability === 'artifacts_revert') {
           const artifactId = normalized.artifactId as string;
