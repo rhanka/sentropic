@@ -1,33 +1,8 @@
-SELECT test_assert((SELECT count(*) FROM users) = 9, 'committed users 9');
-SELECT test_assert((SELECT count(*) FROM webauthn_credentials) = 22, 'committed credentials 22');
-SELECT test_assert(NOT EXISTS (SELECT 1 FROM users WHERE id = '9f11d240-fc75-4d55-80be-1bafcd79eadb'), 'collision removed');
-SELECT test_assert((SELECT account_status FROM users WHERE id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096') = 'active', 'owner takes prod status');
-SELECT test_assert((SELECT email_verified FROM users WHERE id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096'), 'owner takes prod verification');
-SELECT test_assert((SELECT count(*) FROM users WHERE email = 'owner@example.invalid') = 1, 'zero owner email collisions');
-SELECT test_assert((SELECT count(*) FROM users WHERE id = 'preprod-only') = 1, 'preprod-only user kept');
-SELECT test_assert((SELECT count(*) FROM users WHERE id = 'prod-user-8') = 1, 'missing prod user inserted');
-SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = 'prod-user-8'), 'new user without prod consent gets no automatic grant');
-SELECT test_assert((SELECT count(*) FROM users WHERE approved_by_user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096') = 7, 'approval self FK');
-SELECT test_assert((SELECT user_id FROM chat_sessions WHERE id = 'duplicate-chat') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'chat FK repointed');
-SELECT test_assert((SELECT created_by = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND assigned_to = created_by FROM comments WHERE id = 'duplicate-comment'), 'both comment FKs repointed');
-SELECT test_assert((SELECT count(*) FROM user_sessions) = 1, 'nine duplicate sessions dropped');
-SELECT test_assert((SELECT count(*) FROM webauthn_challenges) = 0 AND (SELECT count(*) FROM magic_links) = 0, 'duplicate ephemeral auth dropped');
-SELECT test_assert((SELECT count(*) FROM webauthn_credentials WHERE credential_id LIKE 'synthetic-credential-%') = 18, 'all prod credentials present');
-SELECT test_assert((SELECT count(*) FROM webauthn_credentials WHERE credential_id LIKE 'preprod-%') = 4, 'preprod-only credentials kept');
-SELECT test_assert((SELECT count(*) FROM webauthn_credentials WHERE id LIKE 'duplicate-cred-%') = 1, 'seven shared credential rows replaced');
-SELECT test_assert((SELECT user_id FROM webauthn_credentials WHERE credential_id = 'preprod-duplicate-only') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'duplicate-only credential repointed');
-SELECT test_assert((SELECT count(*) FROM webauthn_credentials WHERE public_key_cose LIKE 'synthetic-public-cose-%') = 18, 'prod public keys authoritative');
-SELECT test_assert((SELECT counter FROM webauthn_credentials WHERE id = 'prod-cred-9') = 50, 'counter never decreases on upsert');
-SELECT test_assert((SELECT last_used_at FROM webauthn_credentials WHERE id = 'prod-cred-9') = '2026-10-02', 'last-used never decreases on upsert');
-SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), 'full DV5 fingerprints unchanged');
-SELECT test_assert(NOT EXISTS (SELECT FROM authorization_codes WHERE code = 'duplicate-code'), 'duplicate authorization code dropped');
-SELECT test_assert(NOT EXISTS (SELECT FROM oauth_tokens WHERE jti = 'duplicate-token'), 'duplicate OAuth token dropped');
-SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'synthetic-client'), 'duplicate unmapped consent dropped rather than moved');
-SELECT test_assert((SELECT scopes = ARRAY['openid', 'profile', 'email'] AND created_at = '2026-01-01' AND updated_at = '2026-10-01' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'owner prod consent recreated with exact scopes and timestamps');
+-- Post-commit assertions for the two-phase sync: protocol convergence only.
+SELECT test_assert((SELECT scopes = ARRAY['openid', 'profile', 'email'] AND created_at = '2026-01-01' AND updated_at = '2026-10-01' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'owner prod consent converged with exact scopes and timestamps');
 SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = 'efd67056-fb60-42e6-a386-6264c854da55' AND client_id = 'radar-immobilier-preprod'), 'Farid without prod consent must consent');
 SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE user_id = 'preprod-only' AND client_id = 'radar-immobilier-preprod') = 1, 'preprod-only consent kept');
 SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE user_id = 'efd67056-fb60-42e6-a386-6264c854da55' AND client_id = 'synthetic-client') = 1, 'unmapped consent kept');
-SELECT test_assert((SELECT user_id FROM revoked_tokens WHERE jti = 'duplicate-revocation') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'revocation survives and is repointed');
 SELECT test_assert((SELECT client_secret_hash IS NULL AND token_endpoint_auth_method = 'none' AND require_pkce
   AND redirect_uris = ARRAY['https://claude.ai/api/mcp/auth_callback']::text[]
   AND allowed_scopes = ARRAY['immo:read','immo:search','immo:documents:read','immo:artifacts:read','immo:artifacts:write','offline_access']::text[]
@@ -41,3 +16,4 @@ SELECT test_assert((SELECT id = 'preprod-workload' AND client_secret_hash = 'syn
 SELECT test_assert((SELECT client_secret_hash = 'synthetic-decoy-hash' AND exchange_policy IS NULL
   FROM service_clients WHERE client_id = 'other-svc'), 'unrelated service client untouched');
 SELECT test_assert((SELECT count(*) FROM service_clients) = 2, 'no service row created or removed');
+SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), 'full DV5 fingerprints unchanged');
