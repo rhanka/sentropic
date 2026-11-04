@@ -15,7 +15,6 @@ const parityProfile = (allowPublicSharing?: boolean): ArtifactProviderProfile =>
   selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities,
     'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
   operations: [...RADAR_ARTIFACTS_PROFILE.operations,
-    { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
     { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
   rules: allowPublicSharing === undefined ? RADAR_ARTIFACTS_PROFILE.rules
     : { ...RADAR_ARTIFACTS_PROFILE.rules, allowPublicSharing },
@@ -203,7 +202,7 @@ describe('G1 sharing management', () => {
     expect((await get('bob')).status).toBe(404);
     // the grant row is kept (paused, not deleted)
     expect((await world.acls.getArtifactAcl((await world.acls.listArtifactIds())[0]!))?.grants)
-      .toEqual([{ principalId: 'bob', grant: 'read' }]);
+      .toEqual([{ principalId: 'bob', grant: 'read', createdAt: expect.any(String) }]);
     world.setAccountApproved('bob', true);
     expect((await get('bob')).status).toBe(200);
   });
