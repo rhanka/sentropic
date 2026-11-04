@@ -1,24 +1,26 @@
 # Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
 
 ## Objective
-One lot: migrate app identity data (users, proofs, invitations, login sessions, tenants, both memberships, workspaces) into the cluster-mesh stores, switch the single author under the r13 D11 protocol with the rollback checkpoint recorded before any legacy table deletion, point every reader/writer at the CM stores, delete the legacy app identity tables/files, replace request-authority with F15, and land the F11 screens.
+One lot: migrate app identity data (users, proofs, invitations, login sessions, tenants, both memberships, workspaces) into the cluster-mesh stores, switch the single author under the r13 D11 protocol with the rollback checkpoint recorded before any legacy table deletion, point every reader/writer at the CM stores, delete the legacy app identity tables/files, replace request-authority with F15, and land the F11 screens. Cutover (2026-11-04, PR #879): rebased onto `origin/main` past the A2.0b merge (#882) and the G1–G5 train (#912); fold lot G0 (#906, superseded); consume G1–G5 in the app (lot G6, four series, no fallback); prepare the preprod sync replacement up to a dry run only (lot G7, no preprod run without the owner nominative list).
 
 ## Scope / Guardrails
-- Scope limited to the app cutover: api identity read/write paths, one control data migration, ui F11 screens, e2e.
-- One migration max: `api/drizzle/control/0014_app_cm_identity_cutover.sql` (control stream).
-- Make-only workflow, no direct Docker commands; Docker under the packet flock; `make down ENV=<env>` after.
-- Branch development in isolated worktree `tmp/worktrees/app-cm-a4-3` on branch `feat/app-cm-a4` from `origin/feat/cm-identity-a2-0b` (code against the A2.0b contract; missing A2.0b APIs are stack dependencies, recorded in the report, not implemented here).
-- Test campaigns on `ENV=test-app-a4` / `ENV=e2e-app-a4` (ENV last), never root dev.
+- Scope limited to the app cutover: api identity read/write paths, one control data migration, ui F11 screens, e2e; plus G6 CM-consumption swaps and the G7 ops replacement (scripts + idp-identity-sync overlays).
+- One migration max: `api/drizzle/control/0015_app_cm_identity_cutover.sql` (control stream; slot 0015, main owns 0014).
+- Make-only workflow, no direct Docker commands; each Docker-using make command through `.tmp/packets/docker-slot.sh make ...`, one slot per command, never nested; `make down-volumes ENV=<env>` after every test stack.
+- Branch development in isolated worktree `tmp/worktrees/app-cm-a4-3` on branch `feat/app-cm-a4` (base `main` since #882 merged; PR #879 retargeted).
+- Test campaigns on `ENV=test-a4-cutover` (ENV last), never root dev; never `ENV=dev`.
 - All new text in English.
 - No dual writer, no legacy fallback; the app keeps business data only.
-- Pins: A2-lots.md sha256 015d821d066a6bcc368113adf3fa45dd73a32abebc2f37cedb5f4eb1ced8c0c2; r2.md (APPROVED) sha256 f24480ee9e39396c2ecfb71be790e2a5a247976be15980a18b185101542cd518; A2.0b amendment r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; owner-answers-20261030.md sha256 01554c2f81d88f1c96815b5e4a60e7f5c91ad51622d637ca83af5422a578c1c7 (Q-G answered 2026-11-01: interim accepted); gap.fr.md; STOP reports .tmp/rv/lot-A4-2.md and .tmp/rv/lot-A4.2.md; base origin/feat/cm-identity-a2-0b.
+- Pins: a4-cm-gaps-r2.md (binding design, lots G0/G6/G7); A2.0b amendment r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; owner-answers-20261030.md (Q-G interim accepted; Q-K=A with HMAC + .env/k8s rotation; Q-WS1 deleted-with-workspace; Q-IDP1 case-by-case with nominative consent); PR #879 base `main` at `a1d0a815a` (train #912).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `api/src/**`
   - `api/tests/**`
   - `api/vitest.config.ts`
-  - `api/drizzle/control/0014_app_cm_identity_cutover.sql` + `api/drizzle/control/meta/**`
+  - `api/drizzle/control/0015_app_cm_identity_cutover.sql` + `api/drizzle/control/meta/**`
+  - `deploy/k8s/overlays/prod/idp-identity-sync/**` + `deploy/k8s/overlays/preprod/idp-identity-sync/**` (G7 ops replacement only)
+  - `deploy/ci/idp-identity-sync/**` (G7 selftests only)
   - `ui/src/**`
   - `ui/tests/**`
   - `e2e/tests/**`
@@ -59,6 +61,10 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 - [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
 - [x] A4-OWNERSHIP — r6 §5.3 requires business-authorized ownership. Preserve `public.workspaces.owner_user_id` solely for destruction policy; CM owns membership/tenant access. Membership never substitutes for ownership. Rollback uses the recorded source checkpoint.
 - [x] A4-CONVERSATION — Business chats retain an opaque CM authority reference. Verified HTTP admission opens a separate seven-day conversation lifetime; login expiry/logout never renews or revokes it. Revoked/expired records cannot be reopened. Workspace adoption must revoke/clear the prior binding.
+- [x] CUTOVER-REBASE — `feat/app-cm-a4` rebased onto `origin/main` (`a1d0a815a`, train #912 with G1–G5): 266 A4-only commits replayed, zero `packages/cluster-mesh/src` touches; conflicts resolved by union (BRANCH.md kept A4's own + train reference block; lock/manifest/journal merged keeping main's versions). A2.0b stack items above (A4-STACK, A4-AUTH-BINDING) are delivered by the #882 merge; A4-MEMBERSHIP-SEAM/A4-SERVICE-TENANCY/A4-CONSENT-READER/A4-WORKSPACE-DELETE/A4-IDP-SYNC move to G6/G7 below. PR #879 retargeted to base `main`.
+- [x] CUTOVER-G0 — lot G0 folded from #906 (closed as superseded; review `pr906-large4_r1.md` APPROVE): import split (9 auth-hono names to subpath), `handlerId` on both `deletePerson` calls, migration slot 0014→0015, 2 new specs green at G0 time. Version bump skipped (rebased tree already `0.26.0-dev.9` > published). Residual: P1a host widening (G0C) NOT on main — `IdentityUnitOfWorkV1<PoolClient>` vs `<CustodyOpHost>` typecheck residuals stay a named stack dependency; `packages/cluster-mesh/src/**` stays forbidden.
+- [ ] CUTOVER-G6 — app consumption of G1–G5 per design §10.7, tests first, no fallback: (1) consent finder swap + tenant-scan removal; (2) boundary seam deletion; (3) service-tenancy adapter deletion; (4) workspace DELETE via `createAtomicWorkspaceDeletionV1`. Closes A4-CONSENT-READER/A4-MEMBERSHIP-SEAM/A4-SERVICE-TENANCY/A4-WORKSPACE-DELETE.
+- [ ] CUTOVER-G7 — preprod sync replacement per design §9.2/§10.8 up to `--dry-run` only on the test env; no preprod run (waits for the owner nominative list per Q-IDP1; CronJob stays `suspend: true`).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -107,7 +113,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Port artifacts-host-recovery.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
   - [x] Port artifacts-host-credentials.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
   - [x] Port artifacts-reader-activation.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
-  - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
+  - [ ] Docker stack through `docker-slot.sh` (one slot per command), `make down-volumes ENV=test-a4-cutover` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
   - [x] Bind the r6 combined UOW to one app PostgreSQL connection, including indeterminate-commit refusal.
