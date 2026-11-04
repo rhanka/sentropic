@@ -7,7 +7,7 @@ import { assertWellFormed, copyJson, freezeDeep, orderedDigest } from '../profil
 export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
 export type CallerIdempotencyKey = string & { readonly __brand: 'caller-key' };
 export type InternalIdempotencyKey = string & { readonly __brand: 'internal-key' };
-export type ArtifactCommandOperation = 'ensure' | 'publish' | 'set_access' | 'delete' | 'revert' | 'commit_upload' | 'publish_bundle';
+export type ArtifactCommandOperation = 'ensure' | 'publish' | 'set_access' | 'delete' | 'revert' | 'commit_upload' | 'publish_bundle' | 'publish_bundle_v2';
 export interface CommandIdentity {
   readonly internalKey: InternalIdempotencyKey;
   readonly commandHash: string;
@@ -52,7 +52,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
       if (other === actor || !other.startsWith(`${actor}|`)) continue;
       const [operation, objectId] = other.slice(actor.length + 1).split('|');
       if ((operation === 'ensure' && objectId === '') ||
-        (['publish', 'set_access', 'delete', 'revert', 'commit_upload', 'publish_bundle'].includes(operation) && isArtifactId(objectId))) {
+        (['publish', 'set_access', 'delete', 'revert', 'commit_upload', 'publish_bundle', 'publish_bundle_v2'].includes(operation) && isArtifactId(objectId))) {
         throw new Error('ambiguous Radar actor domain');
       }
     }
@@ -62,7 +62,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
     derive(input) {
       const { storageScopeId, actorId, operation, objectId, callerKey } = input;
       if (storageScopeId !== scope || !actors.has(actorId) ||
-        !['ensure', 'publish', 'set_access', 'delete', 'revert', 'commit_upload', 'publish_bundle'].includes(operation) ||
+        !['ensure', 'publish', 'set_access', 'delete', 'revert', 'commit_upload', 'publish_bundle', 'publish_bundle_v2'].includes(operation) ||
         (operation === 'ensure' ? objectId !== '' : !isArtifactId(objectId))) throw new ArtifactProfileInputError();
       assertWellFormed(callerKey);
       if (!callerKey.trim() || callerKey.length > 256) throw new ArtifactProfileInputError();
