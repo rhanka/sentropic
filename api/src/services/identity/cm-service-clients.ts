@@ -1,14 +1,12 @@
-import { IdentityNotFoundError, TenantNotActiveError } from '@sentropic/cluster-mesh';
+import { IdentityNotFoundError, oauthTenantStoreV1, TenantNotActiveError } from '@sentropic/cluster-mesh';
 import { runCmIdentityRead, type CmIdentityTransaction } from './cm-transaction';
 
 /** Fixed service-client authority lives exclusively in the CM tenant registry. */
 export const findCmServiceClientBinding = (clientId: string) => runCmIdentityRead(async tx => {
-  for (const tenant of await tx.stores.tenants.listTenants()) {
-    const clients = await tx.stores.oauth.listTenantServiceClients(tenant.tenantId);
-    const binding = clients.find(client => client.clientId === clientId);
-    if (binding) return { binding, tenant };
-  }
-  return null;
+  const binding = await oauthTenantStoreV1(tx).findServiceClientBinding(clientId);
+  if (!binding) return null;
+  const tenant = await tx.stores.tenants.findTenant(binding.tenantId);
+  return tenant ? { binding, tenant } : null;
 });
 
 export const findCmServiceClientTenant = async (clientId: string): Promise<string | null> => {
