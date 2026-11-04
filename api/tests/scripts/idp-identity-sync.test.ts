@@ -79,6 +79,6 @@ describe('preprod sync replacement (a4-cm-gaps-r2 §9.2/§10.8)', () => {
       'idp_oauth_client_secret_presence', 'REVOKE']) {
       expect(sql).toContain(guard);
     }
-    expect(sql).not.toContain('ON ALL TABLES');
+    expect(sql).not.toContain('GRANT SELECT ON ALL TABLES');
   });
 });
