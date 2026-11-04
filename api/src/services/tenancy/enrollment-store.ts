@@ -11,9 +11,11 @@
  * inactive CM tenants never confer authority. All reads share one snapshot.
  */
 import { and, eq } from 'drizzle-orm';
+import type { ServiceTenantEnrollmentSourceV1 } from '@sentropic/cluster-mesh';
 
 import { connectorTenantEnrollments } from '../../db/control-schema';
-import { bindCmAppDatabase, runCmIdentityRead } from '../identity/cm-transaction';
+import { requireCmOAuthTransaction } from '../identity/cm-oauth-tenancy';
+import { bindCmAppDatabase, runCmIdentityRead, type CmIdentityTransaction } from '../identity/cm-transaction';
 import { findCmServiceClientTenant } from '../identity/cm-service-clients';
 
 /** Active enrollment tenant_ids for a principal on ONE connector instance (no fixed-tenant union). */
@@ -35,22 +37,29 @@ async function activeEnrollmentTenantsForConnector(
 }
 
 /**
- * Active enrollment tenant_ids for a principal across ALL connector instances. Used by the S2S OBO
- * mint (§2.2), which validates a `tenant` on-behalf-of selector at the token endpoint — where there
- * is no single connector instance in scope (the finer per-connector check is `mcp-platform`'s job).
+ * Attempt-scoped enrollment source for the CM-owned S2S OBO selector
+ * (a4-cm-gaps-r2 §7.2). The closure captures the binding attempt's
+ * transaction: CM re-reads each id and keeps only active tenants, so the
+ * source returns registry ids (not slugs) with no activity filtering of its
+ * own. Reusing the source after its attempt ended refuses
+ * `identity_transaction_unbound` — a reused handle is an app composition
+ * bug and must never read enrollments on a foreign or expired handle.
  */
-export async function activeEnrollmentTenantsForPrincipal(principalSub: string): Promise<string[]> {
-  return runCmIdentityRead(async tx => {
+export const createServiceTenantEnrollmentSource = (
+  transaction: CmIdentityTransaction,
+): ServiceTenantEnrollmentSourceV1 => ({
+  async listEnrolledTenantIds(clientId) {
+    const tx = requireCmOAuthTransaction(transaction);
     const rows = await bindCmAppDatabase(tx)
       .select({ tenantId: connectorTenantEnrollments.tenantId })
       .from(connectorTenantEnrollments)
       .where(and(
-        eq(connectorTenantEnrollments.principalSub, principalSub),
+        eq(connectorTenantEnrollments.principalSub, clientId),
         eq(connectorTenantEnrollments.status, 'active'),
       ));
-    return activeTenantSlugs(rows.map(row => row.tenantId));
-  });
-}
+    return [...new Set(rows.map(row => row.tenantId))];
+  },
+});
 
 const activeTenantSlugs = (ids: string[]) => runCmIdentityRead(async tx => {
   const slugs: string[] = [];

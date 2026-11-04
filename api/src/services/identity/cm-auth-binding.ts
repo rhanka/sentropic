@@ -8,6 +8,7 @@ import type { PoolClient } from 'pg';
 import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
   type CmIdentityTransaction } from './cm-transaction';
 import type { createCmTokenCustodian } from './cm-token-custodian';
+import { createServiceTenantEnrollmentSource } from '../tenancy/enrollment-store';
 import { createCmAuthEntityPlan, withCmAuthEntityPlan } from './cm-auth-entity-plan';
 import { assertCmHostHealthy, createCmPortFailureFence } from './cm-host-scope';
 import { resolveCmRegistrationContext, type CmRegistrationPresentation } from './cm-registration-context';
@@ -48,6 +49,7 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
         webAuthnPolicy: { registrationUserVerification: 'preferred', authenticationUserVerification: 'required' },
         magicLink: { baseUrl: config.magicLinkBaseUrl, tokenBytes: 32, ttlSeconds: 600 },
         social: { autoLinkProviders: ['google'] }, business: config.business, trustedRegistration,
+        serviceTenancy: { enrollments: createServiceTenantEnrollmentSource(tx) },
       }));
       currentBinding = binding;
       try {
