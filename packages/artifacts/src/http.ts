@@ -13,8 +13,12 @@ import { createGuardedPublicationService, resolveBlobConcurrency, runBlobPool, v
   type GuardedPublicationDeps, type PublicationService } from './server/publication.js';
 import { SERVER_MAX_FILE_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
 import { releaseBudget } from './profile/validation.js';
-import { createUploadService, stagingKey, type StagingStore, type UploadSession, type UploadSessionStore,
+import { commitStagedUpload, createUploadService, STAGED_FILE_TTL_MS, stagingKey,
+  type CommitStagedUploadDeps, type StagingStore, type UploadSession, type UploadSessionStore,
   type UploadSignerPort } from './server/uploads.js';
+import { createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from './server/upload-page.js';
+import type { ArtifactsMetrics } from './server/metrics.js';
+import type { UploadPageStore } from './server/upload-page.js';
 import { accessModeOf, evaluateGrant, type ArtifactAcl, type ArtifactMetadata, type AclStore } from './server/access.js';
 import { assertConsentScopeId } from './server/consent.js';
 import type { ArtifactReaderStore } from './server/reader-store.js';
@@ -87,6 +91,20 @@ export interface HttpAppDeps {
     staging: StagingStore;
     signer: UploadSignerPort;
     idempotency?: IdempotencyStore;
+    /** LOT 2 §D: per-artifact staged TTL (host option, ceiling 7 days) and per-scope staging aggregate. */
+    stagedFileTtlMs?: number;
+    stagingQuotaBytesPerScope?: number;
+    /** LOT 2 §D.3: upload/storage metering; absent ⇒ no-op. */
+    metrics?: ArtifactsMetrics;
+  };
+  /** LOT 2 §A.5: browser upload page host wiring (required when `artifacts_create_upload_page` is selected). */
+  uploadPage?: {
+    /** Page ledger; absent ⇒ an in-memory ledger (single process only). */
+    pages?: UploadPageStore;
+    cookieSecret: string | Uint8Array;
+    controlOrigin: string;
+    pageBaseUrl: string;
+    s3Origins: readonly string[];
   };
 }
 export interface ArtifactApp {
@@ -143,7 +161,34 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   const uploadService = deps.uploads === undefined ? undefined : createUploadService(
     { sessions: deps.uploads.sessions, staging: deps.uploads.staging, signer: deps.uploads.signer },
     { maxUploadBytes: Math.min(budget.fileBytesMax, SERVER_MAX_FILE_BYTES),
-      maxSessionsPerPrincipal: SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL });
+      maxSessionsPerPrincipal: SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL,
+      ...(deps.uploads.stagedFileTtlMs === undefined ? {} : { stagedFileTtlMs: deps.uploads.stagedFileTtlMs }),
+      ...(deps.uploads.stagingQuotaBytesPerScope === undefined ? {}
+        : { stagingQuotaBytesPerScope: deps.uploads.stagingQuotaBytesPerScope }),
+      ...(deps.uploads.metrics === undefined ? {} : { metrics: deps.uploads.metrics }) });
+  // LOT 2 §A: the browser page shares the session ledger, the CAS blobs and
+  // the refs with the agent channel, so quotas cover both together.
+  if (profile.selectedCapabilities.includes('artifacts_create_upload_page') && deps.uploadPage === undefined) {
+    throw new Error('artifacts control plane needs upload page host wiring (uploadPage)');
+  }
+  const pageService = profile.selectedCapabilities.includes('artifacts_create_upload_page') &&
+    uploadService !== undefined ? createUploadPageService({
+      pages: deps.uploadPage?.pages ?? createMemoryUploadPageStore(),
+      sessions: deps.uploads!.sessions, staging: deps.uploads!.staging, signer: deps.uploads!.signer,
+      blobs: deps.publication.blobs, refs: deps.publication.refs,
+      ...(deps.uploads!.idempotency === undefined ? {} : { idempotency: deps.uploads!.idempotency }),
+      cookieSigner: createHmacUploadPageCookieSigner({ secret: deps.uploadPage!.cookieSecret }),
+      controlOrigin: deps.uploadPage!.controlOrigin, pageBaseUrl: deps.uploadPage!.pageBaseUrl,
+      s3Origins: deps.uploadPage!.s3Origins,
+      profile: { maxFiles: budget.filesMax, maxFileBytes: budget.fileBytesMax,
+        maxTotalBytes: budget.totalBytesMax, mimeTypes: profile.rules.mimeTypes,
+        pathMaxBytes: profile.rules.pathMaxBytes },
+      budget: { filesMax: budget.filesMax, totalBytesMax: budget.totalBytesMax },
+      ...(deps.uploads!.stagingQuotaBytesPerScope === undefined ? {}
+        : { stagingQuotaBytesPerScope: deps.uploads!.stagingQuotaBytesPerScope }),
+      ...(deps.uploads!.metrics === undefined ? {} : { metrics: deps.uploads!.metrics }),
+    }) : undefined;
+  const stagedFileTtlMs = deps.uploads?.stagedFileTtlMs ?? STAGED_FILE_TTL_MS;
   const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
     derivation: deps.derivation, host: {
       lockBinding: (client, binding) => deps.ensureHost.lockBinding(client, binding),
