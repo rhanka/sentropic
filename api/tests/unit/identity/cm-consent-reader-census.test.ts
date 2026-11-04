@@ -12,8 +12,8 @@ import { join, resolve } from 'node:path';
  * artifact-host work, not an identity-contract gap).
  */
 
-const repoRoot = resolve(process.cwd(), '..');
-const apiSrc = join(repoRoot, 'api/src');
+const candidates = [join(process.cwd(), 'api/src'), join(process.cwd(), '..', 'api/src')];
+const apiSrc = candidates.find((dir) => statSync(dir, { throwIfNoEntry: false })?.isDirectory()) ?? candidates[0]!;
 const EXCEPTION = join(apiSrc, 'services/artifacts/credentials.ts');
 
 function listSources(dir: string, out: string[] = []): string[] {
