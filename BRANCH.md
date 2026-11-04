@@ -99,12 +99,12 @@ Ship LOT 1 of the files-parity design (design-r1.md §B/§D, review files-design
   - [x] `packages/artifacts/package.json` 0.2.13, `mcp-core.ts` version, CHANGELOG entry.
   - [x] `make lock-root` + api lock mirror (version + presigner peer/devDeps); cluster-mesh fixture re-pinned to the local 0.2.13 pack (integrity `sha512-bhPrb…CQ==`, deterministic); `make memory-l5-pack STAGE=pre-candidate ...` → manifest `c6bfabb3…` with 0.2.12 `1c740385` retained in `history/`.
   - [x] APP-P1 pin recompute + re-pin `cluster-registry.ts` + two api tests; 0007 asset sha256 in `host-storage.ts`.
-  - [ ] `make scope-check` before every commit; scoped api tests green.
+  - [x] `make scope-check` PASS C2 (before/during/after the commit sequence); scoped api pins verified host-identical (stack blocked by another lane's maildev :1080 — CI replays `app-mcp-registry` + `app-mcp-installed`).
 
-- [ ] **Lot 6 — Verify, push, PR, report**
-  - [ ] `make test-artifacts ENV=test-files-lot1` full green; `make test-artifacts-integration ENV=test-files-lot1` (migration proof incl. 0007); `make down-volumes ENV=test-files-lot1`.
-  - [ ] Commits ≤150 lines via `make commit`; push often; open READY PR (base main) with BRANCH.md body; one CI.
-  - [ ] Report to `.tmp/rv/files-parity-lot1.md` with the exact immo call sequence. Do not merge.
+- [x] **Lot 6 — Verify, push, PR, report** (PR #910 READY, CI run 41777185872, no merge)
+  - [x] `make test-artifacts ENV=test-files-lot1` full green (553/553); `make test-artifacts-integration ENV=test-files-lot1` (migration proof incl. 0007); `make down-volumes ENV=test-files-lot1`.
+  - [x] Commits ≤150 lines via `make commit` (19 commits); pushed; READY PR #910 opened (base main) with BRANCH.md body; one CI.
+  - [x] Report to `.tmp/rv/files-parity-lot1.md` with the exact immo call sequence. Do not merge.
 
 ## Feedback Loop items
 - Makefile dep sync: the three artifacts lanes install `@aws-sdk/s3-request-presigner` next to `@aws-sdk/client-s3` via `locked-tools.mjs` (new optional peer/dev dep of `@sentropic/artifacts` 0.2.13, used only by `adapters/s3-uploads.ts`). Rollback: drop the presigner from those three lines and from `package.json` deps. No behavior change to any other lane.
