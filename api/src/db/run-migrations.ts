@@ -6,8 +6,10 @@ import type { Pool, PoolClient } from 'pg';
 import { pool } from './client';
 import { installArtifactPackageAssets } from '../services/artifacts/host-storage';
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
-import { A4_CONTROL_MIGRATION_TIMESTAMP, loadAppCmCutoverConfiguration } from '../services/identity/cm-cutover-config';
+import { A4_CONTROL_MIGRATION_TIMESTAMP, loadAppCmCutoverConfiguration,
+  loadEmptyAppCmCutoverConfiguration } from '../services/identity/cm-cutover-config';
 import { importAppCmIdentityInTransaction } from '../services/identity/cm-cutover-import';
+import { readA4IdentitySource } from '../services/identity/cm-import-source';
 
 /**
  * Heal drifted databases where migration metadata is ahead of the actual settings schema.
@@ -62,6 +64,17 @@ async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<voi
  * Applied AFTER the public migration stream to respect boot ordering.
  * The `CREATE SCHEMA IF NOT EXISTS control` is the very first control migration.
  */
+/** Fresh databases import an empty source without an operator checkpoint; any legacy
+ *  row requires the checkpoint (fail-closed). */
+async function loadIdentityImportConfiguration(migrationClient: PoolClient | undefined) {
+  if (!migrationClient) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  if (!process.env.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE) {
+    const source = await readA4IdentitySource(migrationClient);
+    if (!Object.values(source.inventory).some(entry => entry.count > 0)) return loadEmptyAppCmCutoverConfiguration();
+  }
+  return loadAppCmCutoverConfiguration();
+}
+
 export async function runControlMigrations(db: NodePgDatabase, migrationsFolder = './drizzle/control', migrationClient?: PoolClient): Promise<void> {
   const migrations = readMigrationFiles({ migrationsFolder });
   const journalBefore = await db.execute(sql`SELECT to_regclass('public.__drizzle_control_migrations') AS relation`);
@@ -71,7 +84,7 @@ export async function runControlMigrations(db: NodePgDatabase, migrationsFolder 
     && appliedBefore.length === 0;
   if (needsIdentityImport && !migrationClient) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   // Files, keys and immutable policy are loaded before a transaction/store handle exists.
-  const identityConfig = needsIdentityImport ? await loadAppCmCutoverConfiguration() : undefined;
+  const identityConfig = needsIdentityImport ? await loadIdentityImportConfiguration(migrationClient) : undefined;
   try {
   // Reserved branches can arrive in either order. A timestamp frontier alone loses earlier slots.
   await db.transaction(async (tx) => {
