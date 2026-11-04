@@ -13,43 +13,34 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 import { db } from '../../api/src/db/client';
-import { users } from '../../api/src/db/schema';
 import { createSession } from '../../api/src/services/session-manager';
 
 const TEST_EMAIL = process.env.SCREEN_SMOKE_EMAIL ?? 'idp-screen-smoke@example.com';
-const TEST_NAME = 'IdP Screen Smoke User';
 
 const main = async (): Promise<void> => {
-  const now = new Date();
+  const now = new Date().toISOString();
   const userId = `idp-screen-${randomUUID()}`;
-  await db
-    .insert(users)
-    .values({
-      id: userId,
-      email: TEST_EMAIL,
-      displayName: TEST_NAME,
-      role: 'editor',
-      accountStatus: 'active',
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      set: { accountStatus: 'active', displayName: TEST_NAME, emailVerified: true, updatedAt: now },
-      target: users.email,
-    });
-
-  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.email, TEST_EMAIL)).limit(1);
+  await db.execute(sql`INSERT INTO cm_identity.identity_user_accounts
+    (user_id, email, account_status, global_role, created_at, updated_at)
+    VALUES (${userId}, ${TEST_EMAIL}, 'active', 'editor', ${now}, ${now})
+    ON CONFLICT (email) DO UPDATE SET account_status = 'active', updated_at = ${now}`);
+  const found = await db.execute(
+    sql`SELECT user_id FROM cm_identity.identity_user_accounts WHERE email = ${TEST_EMAIL} LIMIT 1`);
+  const row = found.rows[0];
   if (!row) {
     console.error('SCREEN-SMOKE-SEED FAIL: seeded user not found after upsert');
     process.exit(1);
   }
-  const session = await createSession(row.id, 'editor', { name: 'idp-screen-smoke' });
+  await db.execute(sql`INSERT INTO cm_identity.identity_account_profiles
+    (user_id, email_verified, legacy_account_status) VALUES (${row.user_id}, true, 'active')
+    ON CONFLICT (user_id) DO UPDATE SET email_verified = true, legacy_account_status = 'active'`);
+
+  const session = await createSession(row.user_id, 'editor', { name: 'idp-screen-smoke' });
   // Machine-readable lines for the Playwright step to capture.
-  console.log(`USER_ID=${row.id}`);
+  console.log(`USER_ID=${row.user_id}`);
   console.log(`SESSION_TOKEN=${session.sessionToken}`);
   process.exit(0);
 };
