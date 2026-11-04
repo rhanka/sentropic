@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cmAdminIdentityRouter } from './admin-identity';
 import { db } from '../../db/client';
-import { folders, organizations, initiatives, workspaces } from '../../db/schema';
+import { folders, organizations, initiatives } from '../../db/schema';
 import { sql } from 'drizzle-orm';
 import { getTenantResolutionMetrics } from '../../services/tenancy/tenant-resolution-metrics';
 

@@ -6,15 +6,11 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { IdentityDigestV1 } from '@sentropic/cluster-mesh';
-
 import { CM_IDENTITY_SCHEMA, cmStoreClient, getCmIdentity } from './cm-identity';
 import { runCmIdentityWrite } from './cm-transaction';
 
 export const sha256Hex = (secret: string): string =>
   createHash('sha256').update(secret).digest('hex');
-
-const sha256Digest = (secret: string): IdentityDigestV1 => ({ algorithm: 'sha256', value: sha256Hex(secret) });
 
 const date = (value: string | null | undefined): Date | null =>
   value ? new Date(value) : null;
