@@ -108,4 +108,4 @@ export const withAppDatabaseMethods = (database: NodePgDatabase): typeof db =>
     get: async (query: SQL): Promise<unknown> => (await database.execute(query)).rows[0],
   }) as typeof db;
 export const bindCmAppDatabase = (tx: CmIdentityTransaction): typeof db =>
-  withAppDatabaseMethods(drizzle(tx.hostTransaction) as NodePgDatabase);
+  withAppDatabaseMethods(drizzle(tx.hostTransaction) as unknown as NodePgDatabase);
