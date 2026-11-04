@@ -27,7 +27,8 @@ const seedInvite = async (input: {
 }): Promise<void> => {
   await createCmInvitation({ email: input.email, clientId: null, token: input.token, expiresAt: input.expiresAt, now: new Date() });
   if (input.consumedAt) {
-    const consumed = await consumeCmInvitationByTokenHash(hashInviteToken(input.token), input.email, randomUUID(), input.consumedAt);
+    // The cutover FK requires a real consuming user: use the fixture user.
+    const consumed = await consumeCmInvitationByTokenHash(hashInviteToken(input.token), input.email, userId, input.consumedAt);
     if (!consumed) throw new Error('Failed to seed consumed invite.');
   }
 };
