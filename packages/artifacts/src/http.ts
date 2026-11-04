@@ -110,6 +110,7 @@ export function assertArtifactsTransportProfile(value: unknown): asserts value i
     'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert', 'artifacts_set_access', 'artifacts_delete',
     'artifacts_lookup_people', 'artifacts_list_access',
     'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
+    'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2',
     'artifacts_revoke_reader_consent'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
@@ -132,7 +133,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     throw new Error('artifact delete confirmation port required');
   }
   // Files parity LOT 1: upload ports are required as soon as one upload capability is selected.
-  const uploadCapabilities = ['artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle'];
+  // list_assets needs only the session ledger (released listing works without staging/signer).
+  const uploadCapabilities = ['artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
+    'artifacts_create_upload_page', 'artifacts_publish_bundle_v2'];
   const needsUploads = uploadCapabilities.some((name) =>
     (profile.selectedCapabilities as readonly string[]).includes(name));
   if (needsUploads && !deps.uploads) throw new Error('artifact upload ports required');
@@ -393,7 +396,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         }
         const normalized = profile.validate(capability, args, request.idempotencyKey, { deferPrecondition: true });
         const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
-          'artifacts_commit_upload', 'artifacts_publish_bundle'].includes(capability)
+          'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_publish_bundle_v2'].includes(capability)
           ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey,
             { deferPrecondition: true }) : undefined;
         if (command && ['ensure', 'publish'].includes(command.operation)) {
