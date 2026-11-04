@@ -54,6 +54,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const acls = createMemoryAclStore();
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
+  const refs = createMemoryRefcountStore();
   const legacyRecords = createMemoryKv();
   const intents = createMemoryIntentStore();
   // Files parity LOT 1: memory upload ports (session ledger, staging, signer, idempotency).
@@ -184,7 +185,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       },
     },
     publication: {
-      blobs, intents, refs: createMemoryRefcountStore(), getCurrent: publication.getCurrent,
+      blobs, intents, refs, getCurrent: publication.getCurrent,
       getRelease: publication.getRelease, listReleases: publication.listReleases,
       createUnitWriter: (client) => ({
         async lockCurrent(artifactId) {
@@ -220,8 +221,8 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
-  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, legacyRecords, quotaReservations,
-    accessEvents, uploadSessions, uploadStaging, uploadSigner,
+  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, refs, legacyRecords, quotaReservations,
+    accessEvents, uploadSessions, uploadStaging, uploadSigner, uploadIdempotency,
     withProfile: (input: ArtifactProviderProfile) => createHttpArtifactApp({ ...appDeps, profile: compileArtifactsProfile(input) }),
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
