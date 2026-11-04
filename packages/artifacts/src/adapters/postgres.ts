@@ -350,8 +350,8 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
       );
       const row = rows[0];
       if (row === undefined) return undefined;
-      const grants = await pool.query<{ principal_id: string; permission: AccessGrant }>(
-        `SELECT principal_id, permission FROM artifacts.artifact_access
+      const grants = await pool.query<{ principal_id: string; permission: AccessGrant; created_at: Date }>(
+        `SELECT principal_id, permission, created_at FROM artifacts.artifact_access
          WHERE artifact_id = $1 ORDER BY principal_id`,
         [artifactId],
       );
@@ -368,6 +368,7 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         grants: grants.rows.map((grant) => ({
           principalId: grant.principal_id,
           grant: grant.permission,
+          createdAt: grant.created_at.toISOString(),
         })),
         ...(row.metadata === null || Object.keys(row.metadata).length === 0 ? {} : { metadata: row.metadata }),
       };
@@ -394,9 +395,9 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         // to read — the grant row is kept, never dropped.
         const permission = grant.grant === 'source' && accessMode !== 'restricted' ? 'read' : grant.grant;
         await pool.query(
-          `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission)
-           VALUES ($1, $2, $3)`,
-          [artifactId, grant.principalId, permission],
+          `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission, created_at)
+           VALUES ($1, $2, $3, COALESCE($4::timestamptz, now()))`,
+          [artifactId, grant.principalId, permission, grant.createdAt ?? null],
         );
       }
     },

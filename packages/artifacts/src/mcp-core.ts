@@ -15,7 +15,7 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.12';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.13';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
@@ -64,7 +64,8 @@ const idOnly = obj({ artifactId: id }, ['artifactId']);
 const ARTIFACTS_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true } as const;
 
 const READ_ONLY_TOOLS: readonly ArtifactsToolName[] = ['artifacts_list', 'artifacts_get',
-  'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_get_source', 'artifacts_list_versions'];
+  'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_get_source', 'artifacts_list_versions',
+  'artifacts_lookup_people', 'artifacts_list_access'];
 const IDEMPOTENT_WRITERS: readonly ArtifactsToolName[] = ['artifacts_ensure', 'artifacts_publish',
   'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'];
 
@@ -134,6 +135,13 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
     limit: integer(1, 100), cursor: { ...str, maxLength: 4096 } }, ['artifactId'])),
   artifacts_revert: staticTool('artifacts_revert', obj({ artifactId: id, releaseId: id, targetReleaseId: id,
     expectedCurrentReleaseId, idempotencyKey }, ['artifactId', 'idempotencyKey'])),
+  artifacts_lookup_people: staticTool('artifacts_lookup_people', obj({ query: str, limit: integer(1) }, ['query']),
+    'Artifacts lookup people: search the host directory by name or email and return opaque userRefs with '
+      + 'masked email hints (approved callers only; homonyms are returned, never silently resolved). '
+      + 'Use the returned userRef as principalId of artifacts_set_access.'),
+  artifacts_list_access: staticTool('artifacts_list_access', idOnly,
+    'Artifacts list access: sharing mode, owner and grant list of one artifact, projected to userRefs. '
+      + 'The owner and platform admins see every entry; a simple reader sees the mode and its own entry only.'),
 };
 
 export const ARTIFACTS_TOOL_SPECS = ARTIFACTS_TOOL_NAMES.map((name) => ({ name,
@@ -211,6 +219,8 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
         case 'artifacts_get': request = { method: 'GET', path: `/meta/${args.artifactId}`, body: undefined }; break;
         case 'artifacts_get_source': request = { method: 'POST', path: '/get_source', body: args }; break;
         case 'artifacts_set_access': request = { method: 'POST', path: '/set_access', body: args }; break;
+        case 'artifacts_lookup_people': request = { method: 'POST', path: '/lookup_people', body: args }; break;
+        case 'artifacts_list_access': request = { method: 'POST', path: '/list_access', body: args }; break;
         case 'artifacts_delete': request = { method: 'POST', path: '/delete', body: args }; break;
         case 'artifacts_list_versions': request = { method: 'POST', path: '/list_versions', body: args }; break;
         case 'artifacts_revert': request = { method: 'POST', path: '/revert', body: args }; break;
