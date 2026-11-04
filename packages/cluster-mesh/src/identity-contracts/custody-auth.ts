@@ -47,7 +47,14 @@ export interface IdentityAuthBindingInput<H> {
   readonly digest: IdentityDigestPortV1; readonly loginTokens: IdentityLoginTokenPortV1;
   readonly ticketTokens: IdentityEmailTicketTokenPortV1; readonly emailCodeKeys: IdentityEmailCodeKeyRingV1;
   readonly rp: AuthHonoRelyingPartyConfig; readonly accountPolicy: IdentityAuthAccountPolicyV1;
-  readonly webAuthnPolicy: { readonly registrationUserVerification: 'required' | 'preferred' | 'discouraged'; readonly authenticationUserVerification: 'required' | 'preferred' | 'discouraged' };
+  /**
+   * Optional per-flow ceremony timeouts in milliseconds. When present, both the
+   * client-facing `timeout` and the server-side challenge TTL derive from the
+   * same value so the stored proof never outlives the ceremony the user sees.
+   * When absent, the auth service defaults apply.
+   */
+  readonly webAuthnPolicy: { readonly registrationUserVerification: 'required' | 'preferred' | 'discouraged'; readonly authenticationUserVerification: 'required' | 'preferred' | 'discouraged';
+    readonly registrationTimeoutMs?: number; readonly authenticationTimeoutMs?: number };
   readonly magicLink: { readonly baseUrl: string; readonly tokenBytes: number; readonly ttlSeconds: number };
   readonly social: { readonly autoLinkProviders: readonly string[] };
   readonly business: IdentityAuthBusinessHooksV1<H>;

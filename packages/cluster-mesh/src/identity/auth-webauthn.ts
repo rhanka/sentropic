@@ -38,7 +38,11 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
     if (stored.rpId !== input.rp.id || origins.length === 0) refuseWebAuthn(flow, flow + '_verification_failed', flow === 'registration' ? 'Registration verification failed.' : 'Authentication verification failed.', flow === 'registration' ? 400 : 401);
     return { expectedRPID: stored.rpId, expectedOrigin: origins, requireUserVerification: strongest(stored.userVerification, await uv(flow, state.owner)) === 'required' };
   };
+  const registrationTimeoutMs = input.webAuthnPolicy.registrationTimeoutMs;
+  const authenticationTimeoutMs = input.webAuthnPolicy.authenticationTimeoutMs;
   const registration = runtime.createAuthWebAuthnRegistrationService({ ports, rp: input.rp,
+    timeoutMs: registrationTimeoutMs,
+    challengeTtlSeconds: registrationTimeoutMs === undefined ? undefined : Math.max(1, Math.ceil(registrationTimeoutMs / 1000)),
     verifyRegistrationResponse: async (args) => {
       const policy = await verificationPolicy('registration', args.expectedChallenge);
       let result;
@@ -52,6 +56,8 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
     },
   });
   const authentication = runtime.createAuthWebAuthnAuthenticationService({ ports, rp: input.rp,
+    timeoutMs: authenticationTimeoutMs,
+    challengeTtlSeconds: authenticationTimeoutMs === undefined ? undefined : Math.max(1, Math.ceil(authenticationTimeoutMs / 1000)),
     verifyAuthenticationResponse: async (args) => {
       const policy = await verificationPolicy('authentication', args.expectedChallenge);
       let result;

@@ -23,6 +23,7 @@ export async function withAppCmAuth<T>(operation: (runner: ReturnType<typeof cre
     return await operation(createCmAuthRequestRunner({
       hostPortsForTransaction: createSentropicOAuthHostPorts, tokens,
       rp: { id: rp.rpID, name: rp.rpName, expectedOrigins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin] },
+      webAuthnTimeouts: { registration: rp.timeout.registration, authentication: rp.timeout.authentication },
       accountPolicy: {
         normalizeEmail: policy.normalizeEmail, deriveDisplayName: policy.deriveDisplayName,
         resolveUserVerification: () => 'required', roleForNewUser: policy.roleForNewUser,
