@@ -87,8 +87,10 @@ SELECT s.target_client_id AS client_id, s.has_secret, s.name,
        s.allowed_scopes, s.grant_types, s.response_types, s.token_endpoint_auth_method,
        s.dpop_bound_access_tokens, s.require_pkce,
        ARRAY(SELECT pg_temp.rewrite_client_uri(uri) FROM unnest(s.resource_indicators) uri) AS resource_indicators,
-       coalesce(s.tenant_id, 'sentropic') AS tenant_id, u.id AS owner_user_id, s.created_at, s.updated_at
-FROM selected_clients s LEFT JOIN users u ON u.id = s.owner_user_id;
+       coalesce(s.tenant_id, 'sentropic') AS tenant_id, a.user_id AS owner_user_id, s.created_at, s.updated_at
+-- Owner ids resolve against the CM identity accounts converged in phase 1
+-- (the legacy users table is gone); unknown owners converge to NULL as before.
+FROM selected_clients s LEFT JOIN cm_identity.identity_user_accounts a ON a.user_id = s.owner_user_id;
 -- Preprod-only scope divergence (owner decision, immo artifacts): the immo-mcp
 -- client grants immo:artifacts:read and immo:artifacts:write in preprod only;
 -- prod never carries them. The scopes are appended after the prod convergence and
