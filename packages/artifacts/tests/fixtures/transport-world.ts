@@ -14,7 +14,7 @@ import { accessModeOf, applyModeTransition, createMemoryAclStore,
 import { createMemoryRefcountStore } from '../../src/server/gc.js';
 import { createLifecycleService, createMemoryLifecycleStore } from '../../src/server/lifecycle.js';
 import { createMemoryIntentStore } from '../../src/server/object-intents.js';
-import { createMemoryKv, type SharingPolicyPort } from '../../src/server/ports.js';
+import { createMemoryKv, type PrincipalDirectoryPort, type SharingPolicyPort } from '../../src/server/ports.js';
 import { createMemorySourceStore } from '../../src/server/sources.js';
 import type { DeleteConfirmationContext } from '../../src/server/management.js';
 import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
@@ -23,12 +23,13 @@ import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
 export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], scope = 'scope-l6',
   options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver;
     parity?: boolean; profile?: ArtifactProviderProfile; sharingPolicy?: SharingPolicyPort;
-    actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean> } = {}) {
+    actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean>;
+    /** G2: host principal directory; flows into appDeps via the options spread. */
+    directory?: PrincipalDirectoryPort } = {}) {
   const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
     operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
       { operation: 'get_source', limits: {}, defaults: {} },
-      { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
       { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
   } : RADAR_ARTIFACTS_PROFILE));
   const receipts = new Map<string, StoredCommitReceipt>();
@@ -146,7 +147,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
             }
             const exists = acl.grants.some((g) => g.principalId === principalId);
             const grants = action === 'revoke' ? acl.grants.filter((g) => g.principalId !== principalId)
-              : exists ? acl.grants : [...acl.grants, { principalId, grant: 'read' as const }];
+              : exists ? acl.grants : [...acl.grants, { principalId, grant: 'read' as const, createdAt: updatedAt }];
             writes.get(client)!.push(() => acls.putArtifactAcl(id, { ...acl, grants, updatedAt }));
             return { grants, updatedAt, accessMode: mode, changed: action === 'revoke' ? exists : !exists };
           },
