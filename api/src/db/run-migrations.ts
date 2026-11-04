@@ -9,7 +9,7 @@ import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { A4_CONTROL_MIGRATION_TIMESTAMP, loadAppCmCutoverConfiguration,
   loadEmptyAppCmCutoverConfiguration } from '../services/identity/cm-cutover-config';
 import { importAppCmIdentityInTransaction } from '../services/identity/cm-cutover-import';
-import { readA4IdentitySource } from '../services/identity/cm-import-source';
+import { a4IdentitySourceTables } from '../services/identity/cm-import-source';
 
 /**
  * Heal drifted databases where migration metadata is ahead of the actual settings schema.
@@ -64,13 +64,23 @@ async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<voi
  * Applied AFTER the public migration stream to respect boot ordering.
  * The `CREATE SCHEMA IF NOT EXISTS control` is the very first control migration.
  */
+/** Lock-free legacy presence probe (same table set as the import reader): the full
+ *  `readA4IdentitySource` fences writers with LOCK TABLE, which is only legal
+ *  inside the import transaction. */
+async function hasLegacyIdentityRows(client: PoolClient): Promise<boolean> {
+  for (const table of a4IdentitySourceTables) {
+    const probe = await client.query(`SELECT 1 FROM public.${table} LIMIT 1`);
+    if (probe.rows.length > 0) return true;
+  }
+  return false;
+}
+
 /** Fresh databases import an empty source without an operator checkpoint; any legacy
  *  row requires the checkpoint (fail-closed). */
 async function loadIdentityImportConfiguration(migrationClient: PoolClient | undefined) {
   if (!migrationClient) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   if (!process.env.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE) {
-    const source = await readA4IdentitySource(migrationClient);
-    if (!Object.values(source.inventory).some(entry => entry.count > 0)) return loadEmptyAppCmCutoverConfiguration();
+    if (!await hasLegacyIdentityRows(migrationClient)) return loadEmptyAppCmCutoverConfiguration();
   }
   return loadAppCmCutoverConfiguration();
 }
