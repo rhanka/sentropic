@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { Client, Pool, type PoolClient } from 'pg';
-import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { encryptSecret } from '../../../src/services/secret-crypto';
+import { prepareCmFixtureCutover } from '../../utils/cm-fresh-database';
 
 const publicFolder = new URL('../../../drizzle/', import.meta.url).pathname;
 const controlFolder = `${publicFolder}control`;
@@ -13,6 +13,7 @@ let admin: Client;
 let database: PoolClient;
 let databasePool: Pool;
 let databaseName: string;
+let restoreFixture: (() => Promise<void>) | undefined;
 
 beforeEach(async () => {
   // The test owns a database in the isolated test stack, never the source DB.
@@ -25,12 +26,9 @@ beforeEach(async () => {
   url.pathname = `/${databaseName}`;
   databasePool = new Pool({ connectionString: url.toString() });
   database = await databasePool.connect();
-  for (const migration of readMigrationFiles({ migrationsFolder: publicFolder })) {
-    for (const statement of migration.sql) await database.query(statement);
-  }
-  for (const migration of readMigrationFiles({ migrationsFolder: controlFolder }).slice(0, -1)) {
-    for (const statement of migration.sql) await database.query(statement);
-  }
+  // Apply migrations through the real runner (journal bookkeeping included) up
+  // to the cutover itself, which migrate() applies statement by statement.
+  restoreFixture = await prepareCmFixtureCutover(databasePool, ['0015_app_cm_identity_cutover']);
   await database.query(`INSERT INTO users (id, email, role, account_status, email_verified)
     VALUES ('a4-owner', 'a4-owner@example.test', 'editor', 'active', true)`);
   await database.query(`INSERT INTO workspaces (id, name, owner_user_id, tenant_id)
@@ -42,6 +40,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await restoreFixture?.();
+  restoreFixture = undefined;
   database?.release();
   await databasePool?.end();
   if (admin) {
@@ -130,8 +130,8 @@ describe('A4 single control identity migration', () => {
 
   it('should preserve refresh revocation when a migrated account is disabled', async () => {
     await migrate();
-    await database.query(`INSERT INTO oauth_clients (id, client_id, name, redirect_uris)
-      VALUES ('a4-client', 'a4-client', 'A4 client', ARRAY['https://client.test/callback'])`);
+    await database.query(`INSERT INTO oauth_clients (id, client_id, name, redirect_uris, allowed_scopes)
+      VALUES ('a4-client', 'a4-client', 'A4 client', ARRAY['https://client.test/callback'], ARRAY['offline_access'])`);
     await database.query(`INSERT INTO oauth_refresh_tokens
       (id, token_hash, family_id, client_id, user_id, scope, offline_grant_id, issuer, audience,
         acr, amr, auth_time, expires_at, family_expires_at)
