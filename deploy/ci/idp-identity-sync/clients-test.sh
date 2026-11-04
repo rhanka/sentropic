@@ -74,13 +74,13 @@ echo 'PASS: owned host rewrite, external callback preservation and ambiguous URI
 stage=client-classification
 cp clients.csv clients.header.original
 sed '1s/redirect_uris/incorrect_header/' clients.header.original > clients.csv
-sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
 reject_wrapper sql_error
 mv clients.header.original clients.csv
 refresh_relay
 cp snapshot.csv snapshot.clients.original
-printf '%s,%s,%s,%s,%s\n' "$snapshot" "$users" "$credentials" "$consents" "$((clients + 1))" > snapshot.csv
-sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+printf '%s,8,18,%s,%s\n' "$snap_ts" "$consents" "$((clients + 1))" > snapshot.csv
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
 reject_wrapper manifest_mismatch
 mv snapshot.clients.original snapshot.csv
 refresh_relay
@@ -100,7 +100,7 @@ sql -d app -c "UPDATE oauth_clients SET require_pkce = true WHERE client_id = 'i
 refresh_relay
 cp clients.csv clients.original
 sed 's/prod-user-8/missing-preprod-owner/' clients.original > clients.csv
-sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+sha256sum identity-replica-batch.json replica-users.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
 sync -v dry_run=0
 assert_sql "SELECT test_assert((SELECT owner_user_id IS NULL FROM oauth_clients WHERE client_id = 'immo-mcp'), 'absent owner safely becomes null')"
 assert_sql 'UPDATE test_before SET state = test_state()'
@@ -120,7 +120,7 @@ sql -d app -c "UPDATE oauth_clients SET name = 'Changed immo' WHERE client_id = 
 refresh_relay
 reject_wrapper client_postcondition_failed
 sql -d preprod -c 'DROP TRIGGER test_client_tamper ON oauth_clients; DROP FUNCTION test_client_tamper();'
-sql -d preprod -c "CREATE FUNCTION test_client_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET name = 'unexpected' WHERE client_id = 'radar-immobilier-preprod'; RETURN NEW; END \$\$; CREATE TRIGGER test_client_tamper BEFORE INSERT OR UPDATE ON oauth_clients FOR EACH ROW WHEN (NEW.client_id = 'immo-mcp') EXECUTE FUNCTION test_client_tamper();"
+sql -d preprod -c "CREATE FUNCTION test_client_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET client_secret_hash = 'synthetic-tamper' WHERE client_id = 'synthetic-client'; RETURN NEW; END \$\$; CREATE TRIGGER test_client_tamper BEFORE INSERT OR UPDATE ON oauth_clients FOR EACH ROW WHEN (NEW.client_id = 'immo-mcp') EXECUTE FUNCTION test_client_tamper();"
 reject_wrapper dv5_invariant_changed
 sql -d preprod -c 'DROP TRIGGER test_client_tamper ON oauth_clients; DROP FUNCTION test_client_tamper();'
 sql -d app -c "UPDATE oauth_clients SET name = 'Immo MCP', resource_indicators = ARRAY['https://immo.sent-tech.ca/mcp'] WHERE client_id = 'immo-mcp'"

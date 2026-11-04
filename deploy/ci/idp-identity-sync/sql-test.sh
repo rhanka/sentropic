@@ -274,3 +274,53 @@ sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsq
 reject 'signing-key tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v expected_accounts=8 -v expected_consents=1 -v expected_clients=4 -v allowed_clients=immo-mcp -f "$import"
 unchanged
 sql -d preprod -c 'DROP TRIGGER test_tamper ON oauth_consents; DROP FUNCTION test_tamper();'
+stage=export-manifest-import-commit
+refresh_relay
+WRAPPER_DRY_RUN=0 wrapper
+grep -Fq '"outcome":"committed"' /dev/termination-log
+grep -Fq '"clients_upserted":1' /dev/termination-log
+grep -Fq '"clients_removed":0' /dev/termination-log
+sql -d preprod -f "$fixtures/assert-committed.sql"
+psql -XAtq -v ON_ERROR_STOP=1 -d preprod -c "SELECT to_jsonb(c) FROM oauth_clients c WHERE client_id = 'immo-mcp'" > /acceptance/immo-client.json
+assert_sql 'UPDATE test_before SET state = test_state()'
+echo 'PASS: real export script and five-file manifest import immo-mcp; owner consent converged; product FKs and DV5 preserved'
+stage=idempotent-rerun
+WRAPPER_DRY_RUN=0 wrapper
+for key in consents_upserted consents_removed clients_upserted clients_removed; do
+  grep -Fq "\"$key\":0" /dev/termination-log
+done
+unchanged
+echo 'PASS: rerun with committed state is a no-op'
+WRAPPER_DRY_RUN=0 WRAPPER_CLIENTS='' wrapper
+grep -Fq '"clients_upserted":0' /dev/termination-log
+unchanged
+stage=consent-scope-change
+sql -d app -c "UPDATE oauth_consents SET scopes = ARRAY['openid'], updated_at = '2026-10-03'"
+refresh_relay
+wrapper
+grep -Fq '"consents_upserted":1' /dev/termination-log
+grep -Fq '"consents_removed":0' /dev/termination-log
+unchanged
+sync -v dry_run=0
+assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid'] AND updated_at = '2026-10-03' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod scope change applied')"
+assert_sql 'UPDATE test_before SET state = test_state()'
+sync -v dry_run=0
+grep -Fxq 'consents_upserted|0' /tmp/sql.log
+grep -Fxq 'consents_removed|0' /tmp/sql.log
+unchanged
+echo 'PASS: consent scope change rolls back in dry-run, commits and reruns as 0/0'
+stage=consent-tenant-and-revocation
+sql -d app -c "INSERT INTO oauth_consents (user_id, client_id, tenant_id, scopes) VALUES ('1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'radar-immobilier', 'other-tenant', ARRAY['openid', 'email'])"
+refresh_relay
+sync -v dry_run=0
+assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid', 'email'] FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'other-tenant'), 'consent tenant preserved')"
+sql -d app -c "DELETE FROM oauth_consents WHERE tenant_id = 'sentropic'"
+refresh_relay
+sync -v dry_run=0
+grep -Fxq 'consents_upserted|0' /tmp/sql.log
+grep -Fxq 'consents_removed|1' /tmp/sql.log
+assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod revocation applied'); SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE tenant_id = 'other-tenant') = 1, 'other tenant grant retained')"
+assert_sql "SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), 'protected clients, keys and grants unchanged')"
+echo 'PASS: tenant grants remain separate; prod revocation removes only its mapped grant'
+. /workspace/deploy/ci/idp-identity-sync/clients-test.sh
+. /workspace/deploy/ci/idp-identity-sync/services-test.sh
