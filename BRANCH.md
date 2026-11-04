@@ -88,9 +88,9 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
   - [x] Confirm command style: `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make … ENV=test-train` with `ENV` last, one lock per make command, never nested.
   - [x] Confirm scope boundaries declared above (TR01-EX2/EX3/EX5/EX6).
   - [x] Environment mapping: `ENV=test-train` for every test lane; no custom ports (disposable compose services per make target).
-- [ ] **Lot 1 — Merge wagon D (`fix/mcp-terminal-jsonrpc-response` @ 4e47903bd)**
-  - [ ] `git merge --no-ff origin/fix/mcp-terminal-jsonrpc-response`; resolve conflicts as UNION (`BRANCH.md` keeps this train doc).
-  - [ ] Lot gate: `git status --short` shows only wagon-D paths plus owned files.
+- [x] **Lot 1 — Merge wagon D (`fix/mcp-terminal-jsonrpc-response` @ 4e47903bd)**
+  - [x] `git merge --no-ff origin/fix/mcp-terminal-jsonrpc-response`; resolve conflicts as UNION (`BRANCH.md` keeps this train doc; only BRANCH.md conflicted).
+  - [x] Lot gate: `git status --short` shows only wagon-D paths plus owned files.
 - [ ] **Lot 2 — Merge wagon B (`feat/share-g2-mcp-tools` @ ead444fab)**
   - [ ] `git merge --no-ff origin/feat/share-g2-mcp-tools`; resolve conflicts as UNION (integration-owned files: take either side, regenerate in Lot 3).
   - [ ] Lot gate: both wagon tips are ancestors of HEAD (`git merge-base --is-ancestor`).

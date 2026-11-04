@@ -14,7 +14,7 @@
     "@sentropic/mcp-auth": "0.2.1",
     "@sentropic/artifacts": "0.2.12",
     "@sentropic/auth-hono": "0.18.0",
-    "@sentropic/mcp-platform": "0.4.1",
+    "@sentropic/mcp-platform": "0.4.2",
     "hono": "4.10.7",
     "jose": "5.10.0",
     "pg": "8.23.1"
