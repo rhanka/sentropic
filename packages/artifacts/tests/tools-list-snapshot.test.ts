@@ -53,9 +53,8 @@ const r2StrictProfile = () => compileArtifactsProfile({
   resultEnvelopeVersion: 2,
   selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities,
     'artifacts_list_versions', 'artifacts_revert', 'artifacts_get_source',
-    'artifacts_set_access', 'artifacts_delete'],
+    'artifacts_set_access', 'artifacts_delete', 'artifacts_lookup_people', 'artifacts_list_access'],
   operations: [...RADAR_ARTIFACTS_PROFILE.operations,
-    { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
     { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
 });
 
