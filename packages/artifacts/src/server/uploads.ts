@@ -139,6 +139,11 @@ export function stagingKey(storageScopeId: string, uploadId: string): string {
   return `artifacts/${storageScopeId}/staging/${uploadId}`;
 }
 
+/** Staging prefix of one scope (LOT 2 §D.1 orphan pass enumerates it). */
+export function stagingPrefix(storageScopeId: string): string {
+  return `artifacts/${storageScopeId}/staging/`;
+}
+
 /**
  * Value of the `x-amz-checksum-sha256` header for a canonical `sha256:<hex>`
  * digest: S3 expects the base64 of the raw digest bytes (no `sha256:` prefix).
