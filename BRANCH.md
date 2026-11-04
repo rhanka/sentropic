@@ -76,7 +76,7 @@ Fix review findings R1 (raw sub fallback in userRef projection) and R5 (revoke b
   - Switch back to `tmp/worktrees/share-r1-r5` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [ ] Read the relevant `.mdc` files and `README.md`.
   - [ ] Create/confirm isolated worktree `tmp/worktrees/share-r1-r5` and run development there.
   - [ ] Capture Makefile targets needed for debug/testing.
@@ -84,18 +84,18 @@ Fix review findings R1 (raw sub fallback in userRef projection) and R5 (revoke b
   - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [ ] Confirm scope and guardrails.
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-- [ ] **Lot 1 — R1 no-raw-sub projection**
+- [x] **Lot 1 — R1 no-raw-sub projection**
   - [ ] Replace every `describePrincipal(...)?.userRef ?? internalId` fallback with the opaque unknown value.
   - [ ] Cover `projectUserRef`, `list_access` grants + owner, `set_access` receipt, `list_versions` v1 author (plus v2 authorPrincipalId).
   - [ ] Add tests proving no raw internal id appears in any output.
   - [ ] Lot gate:
     - [ ] `make typecheck` + `make lint` scoped to artifacts
     - [ ] Scoped run: `docker-slot.sh make test-artifacts` equivalent with `ENV=test-share-r1r5`
-- [ ] **Lot 2 — R5 revoke for dormant principals**
+- [x] **Lot 2 — R5 revoke for dormant principals**
   - [ ] Limit `assertShareable` approval enforcement to `grant`; allow `revoke` for suspended/deleted principals.
   - [ ] Add tests: suspend beneficiary then revoke then re-approve still refused; deleted principal grant revoked.
   - [ ] Lot gate: scoped artifacts tests `ENV=test-share-r1r5`
-- [ ] **Lot 3 — Single-wagon 0.2.15 release**
+- [x] **Lot 3 — Single-wagon 0.2.15 release**
   - [ ] Bump `@sentropic/artifacts` to 0.2.15 with CHANGELOG entry.
   - [ ] Refresh locks, APP-P1 pin, fixtures and L5 manifest through make.
   - [ ] Verify MCP tool definitions byte-identical (tools/list snapshot).
