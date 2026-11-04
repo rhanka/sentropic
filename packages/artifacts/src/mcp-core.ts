@@ -137,7 +137,7 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
     expectedCurrentReleaseId, idempotencyKey }, ['artifactId', 'idempotencyKey'])),
   artifacts_revoke_reader_consent: staticTool('artifacts_revoke_reader_consent', obj({ artifactId: id,
     scope: { type: 'string', minLength: 1, maxLength: 128 }, idempotencyKey }, ['artifactId', 'idempotencyKey']),
-    'Artifacts revoke reader consent: withdraw the caller\u2019s own persistent consent for one scope of one artifact, '
+    'Artifacts revoke reader consent: withdraw persistent consent of the caller for one scope of one artifact, '
       + 'or for every scope when scope is omitted. Self-revocation only; the next call asks again.'),
 };
 
