@@ -125,3 +125,59 @@ function makePage(world: World, events: ArtifactsMetricEvent[], now: () => Date)
     metrics: { emit: (event) => { events.push(event); } },
   }, { now, ids: () => randomUUID() });
 }
+
+describe('files parity LOT 2 (a): browser upload page', () => {
+  it('publishes PNG+PDF+WOFF2 through the page with zero file bytes in any MCP payload', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const events: ArtifactsMetricEvent[] = [];
+    const now = new Date('2026-01-01T00:00:00Z');
+    const page = makePage(world, events, () => now);
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'page-journey');
+
+    const minted = await mcp.invoke('artifacts_create_upload_page', { artifactId, maxFiles: 3 });
+    expect(minted.status).toBe(201);
+    const mintedBody = unwrap<{ pageSessionId: string; uploadPageUrl: string; expiresAt: string;
+      maxFiles: number; maxFileBytes: number; maxTotalBytes: number; allowedMimeTypes: string[] }>(minted.body);
+    expect(mintedBody.uploadPageUrl).toContain(`${CONTROL_ORIGIN}/artifacts/upload/${mintedBody.pageSessionId}#t=`);
+    expect(mintedBody.maxFiles).toBe(3);
+    expect(mintedBody.allowedMimeTypes).toContain('font/woff2');
+    const token = mintedBody.uploadPageUrl.split('#t=')[1] as string;
+    expect(token.length).toBeGreaterThan(16);
+
+    const { cookie } = await page.exchange({ pageSessionId: mintedBody.pageSessionId, token, origin: CONTROL_ORIGIN });
+    const files = [
+      { path: 'pic.png', mimeType: 'image/png', bytes: pngBytes(7, 4096) },
+      { path: 'doc.pdf', mimeType: 'application/pdf', bytes: pdfBytes(1024) },
+      { path: 'font.woff2', mimeType: 'font/woff2', bytes: woff2Bytes(2048) },
+    ];
+    const uploadIds: string[] = [];
+    for (const [index, file] of files.entries()) {
+      const created = await page.createFile({ cookie, origin: CONTROL_ORIGIN, customHeader: true,
+        artifactId, path: file.path, mimeType: file.mimeType, size: file.bytes.length });
+      expect(created.method).toBe('PUT');
+      const signed = world.uploadSigner.signed.at(-1)!;
+      world.uploadSigner.put(signed, file.bytes, { ...created.requiredHeaders,
+        'x-amz-checksum-sha256': checksumHeaderValue(sha256(file.bytes)) });
+      await world.uploadStaging.put(created.stagingKey, file.bytes);
+      const committed = await page.commitFile({ cookie, origin: CONTROL_ORIGIN, customHeader: true,
+        artifactId, uploadId: created.uploadId, path: file.path, mimeType: file.mimeType,
+        digest: sha256(file.bytes), size: file.bytes.length, idempotencyKey: `page-commit-${index}` });
+      expect(committed.path).toBe(file.path);
+      uploadIds.push(created.uploadId);
+    }
+
+    const listed = await mcp.invoke('artifacts_list_assets',
+      { artifactId, pageSessionId: mintedBody.pageSessionId });
+    expect(listed.status).toBe(200);
+    const staged = unwrap<{ assets: { path: string; uploadId: string }[] }>(listed.body).assets;
+    expect(staged.map((asset) => asset.uploadId).sort()).toEqual([...uploadIds].sort());
+
+    const bundle = await mcp.invoke('artifacts_publish_bundle', { artifactId,
+      idempotencyKey: 'page-bundle-1', expectedCurrentReleaseId: null,
+      assets: staged.map((asset) => ({ path: asset.path, uploadId: asset.uploadId })) });
+    expect(bundle.status).toBe(201);
+    expect(mcp.leaks).toEqual([]);
+    expect(events.map((event) => event.name)).toContain('upload_pages_minted');
+  });
+});
