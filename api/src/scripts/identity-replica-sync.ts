@@ -17,13 +17,19 @@
 //
 
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-import type {
-  IdentityReplicaSyncBatchV1,
-  IdentityReplicaSyncReceiptV1,
+import {
+  createIdentityReplicaSyncV1,
+  type IdentityReplicaSyncBatchV1,
+  type IdentityReplicaSyncReceiptV1,
 } from '@sentropic/cluster-mesh';
+
+import { pool } from '../db/client';
+import { cmIdentityUnitOfWork } from '../services/identity/cm-transaction';
+import { loadReplicaRunOptions } from '../services/identity/cm-deletion-options';
 
 const EXIT = {
   invalid_manifest: 10,
@@ -131,4 +137,95 @@ export interface ReplicaSyncResult {
   readonly code?: string;
   readonly counts: Record<string, number>;
   readonly conflict_subject_ids?: string[];
+}
+
+export async function runReplicaSync(options: {
+  readonly relayDir?: string;
+  readonly commit?: boolean;
+  readonly maxSnapshotAgeS?: number;
+  readonly source?: NodeJS.ProcessEnv;
+} = {}): Promise<ReplicaSyncResult> {
+  const source = options.source ?? process.env;
+  const relayDir = options.relayDir ?? source.RELAY_DIR ?? '.';
+  const commit = options.commit ?? source.DRY_RUN === '0';
+  const maxSnapshotAgeS = options.maxSnapshotAgeS ?? Number(source.MAX_SNAPSHOT_AGE_S ?? '7200');
+  if (!Number.isSafeInteger(maxSnapshotAgeS) || maxSnapshotAgeS < 0) fail('invalid_manifest', 'bad MAX_SNAPSHOT_AGE_S');
+  const { sync: syncOptions, validation: validationOptions } = loadReplicaRunOptions(source);
+
+  const { batch, fileCounts } = await readRelay(relayDir, maxSnapshotAgeS);
+  const sync = createIdentityReplicaSyncV1({ unitOfWork: cmIdentityUnitOfWork, clock: () => new Date().toISOString(), syncOptions, validationOptions });
+
+  const validation = await sync.validate(batch);
+  if (!validation.valid) {
+    const conflicts = validation.issues.filter((issue) => issue.code === 'identity_sync_conflict');
+    const subjects = [...new Set(conflicts.flatMap((issue) => issue.references.flatMap((ref) => ref.safeIdentity ?? [])))].slice(0, 50);
+    return {
+      outcome: 'failed',
+      code: conflicts.length > 0 ? 'identity_sync_conflict' : 'identity_sync_invalid',
+      counts: fileCounts,
+      ...(conflicts.length > 0 ? { conflict_subject_ids: subjects } : {}),
+    };
+  }
+
+  const counts: Record<string, number> = {
+    synced_accounts: fileCounts.accounts,
+    synced_credentials: fileCounts.credentials,
+    synced_consents: fileCounts.consents,
+  };
+  if (!commit) {
+    try {
+      await cmIdentityUnitOfWork.run(syncOptions, async (tx) => {
+        const receipt = await sync.syncBatchInTransaction(batch, tx);
+        throw new DryRunRollback(receipt);
+      });
+      throw new Error('dry-run attempt unexpectedly committed');
+    } catch (error) {
+      if (!(error instanceof DryRunRollback)) throw error;
+      void error.receipt;
+    }
+    return { outcome: 'rolled_back', counts };
+  }
+  await sync.syncBatch(batch);
+  return { outcome: 'committed', counts };
+}
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const relayDir = args.find((arg) => arg.startsWith('--relay-dir='))?.slice('--relay-dir='.length);
+  const commit = args.includes('--commit') || process.env.DRY_RUN === '0';
+  try {
+    const result = await runReplicaSync({ ...(relayDir ? { relayDir } : {}), commit });
+    for (const [key, value] of Object.entries(result.counts)) console.log(`${key}|${value}`);
+    console.log(result.outcome === 'committed' ? 'COMMITTED' : 'DRY RUN: rolled back');
+    const termination = result.outcome === 'failed'
+      ? { outcome: result.outcome, code: result.code, ...result.counts, ...(result.conflict_subject_ids ? { conflict_subject_ids: result.conflict_subject_ids } : {}) }
+      : { outcome: result.outcome, ...result.counts };
+    console.log(JSON.stringify(termination));
+    try {
+      await writeFile('/dev/termination-log', `${JSON.stringify(termination)}\n`);
+    } catch { /* no termination log outside a Job container */ }
+    if (result.outcome === 'failed') process.exitCode = EXIT[result.code as FailCode] ?? 1;
+  } catch (error) {
+    if (error instanceof RunnerFailure) {
+      console.error(error.message);
+      try {
+        await writeFile('/dev/termination-log', `${JSON.stringify({ outcome: 'failed', code: error.code })}\n`);
+      } catch { /* no termination log outside a Job container */ }
+      process.exitCode = EXIT[error.code];
+    } else {
+      console.error('Identity replica sync failed:', error);
+      process.exitCode = 1;
+    }
+  } finally {
+    await pool.end();
+  }
+}
+
+// Only run the sync when executed directly; importing this module (e.g. from a
+// unit test of `runReplicaSync`) is side-effect-free.
+const entrypoint = process.argv[1];
+const invokedDirectly = entrypoint !== undefined && import.meta.url === pathToFileURL(entrypoint).href;
+
+if (invokedDirectly) {
+  await main();
 }
