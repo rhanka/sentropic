@@ -64,10 +64,10 @@ Add reviewed make targets for Docker builder-cache and worktree hygiene so lanes
   - [x] Confirm command style: `make ... ENV=<env>` with `ENV` last; Docker through make targets or `docker-slot.sh` (one slot per command, never nested).
   - [x] Confirm scope boundaries and declare DH01-EX1 before touching `Makefile`.
   - [x] Environment mapping: no stack needed; validation with dry-runs and `ENV=test-disk-hygiene` (LAST); never `ENV=dev`.
-- [ ] **Lot 1 — Builder-cache targets**
-  - [ ] Add `DOCKER_BUILDER_KEEP ?= 5GB` plus `docker-builder-prune` (`docker builder prune -f --keep-storage "$(DOCKER_BUILDER_KEEP)"`).
-  - [ ] Add `disk-hygiene` running `down-volumes ENV=<env>` then `docker-builder-prune`.
-  - [ ] Lot gate: `make -n docker-builder-prune` shows keep-storage 5GB; override `DOCKER_BUILDER_KEEP=10GB` shows 10GB; `make -n disk-hygiene ENV=test-disk-hygiene` wires both steps; `ENV=dev` refused by the inherited guard.
+- [x] **Lot 1 — Builder-cache targets**
+  - [x] Add `DOCKER_BUILDER_KEEP ?= 5GB` plus `docker-builder-prune` (`docker builder prune -f --keep-storage "$(DOCKER_BUILDER_KEEP)"`).
+  - [x] Add `disk-hygiene` running `down-volumes ENV=<env>` then `docker-builder-prune`.
+  - [x] Lot gate: `make -n docker-builder-prune` shows keep-storage 5GB; override `DOCKER_BUILDER_KEEP=10GB` shows 10GB; `make -n disk-hygiene ENV=test-disk-hygiene` wires both steps; `ENV=dev` refused by the inherited guard.
 - [ ] **Lot 2 — Worktree targets**
   - [ ] Add `worktrees-prune-merged` (merged-into-origin/main only; skips root-owned via `find -user root` and dirty via `status --porcelain`; `git worktree remove` without `--force`; then `git worktree prune`; summary of removed/skipped; `DRY_RUN=1` default).
   - [ ] Add `worktrees-purge-root-residue` (only under `tmp/worktrees/`; skips worktrees whose HEAD is NOT merged plus main-ro; container-as-root `rm` following the `clean-node-modules` mount pattern, no host sudo; `DRY_RUN=1` default listing deletions; document `DRY_RUN=0` run).
