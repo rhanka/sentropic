@@ -22,7 +22,7 @@ Persistent basket consent per (reader account, artifactId, scope): the reader sc
   - `packages/artifacts/sql/reader-consent.sql` (new: unnumbered table body; the train numbers the migration at land time)
   - `packages/artifacts/src/server/ports.ts` (re-export of the reader store port only)
   - `packages/artifacts/src/profile/contracts.ts` (append one capability name)
-  - `packages/artifacts/src/profile/radar.ts` (append one operation profile)
+  - `packages/artifacts/src/profile/radar.ts` (revert to the frozen APP-P1 state only; net-zero vs origin/main)
   - `packages/artifacts/src/profile/schemas.ts` (append one schema case)
   - `packages/artifacts/src/profile/index.ts` (append one route mapping)
   - `packages/artifacts/src/mcp-core.ts` (append one static definition, one executor case, idempotency list entry)
@@ -82,24 +82,23 @@ Persistent basket consent per (reader account, artifactId, scope): the reader sc
   - [x] Define environment: `ENV=test-reader-consent` for every make command, ENV last.
   - [x] Confirm scope and guardrails (train rules, review corrections as binding).
   - [x] Validate scope boundaries and declare `RC-EX1`.
-- [ ] **Lot 1a — Tests first (acceptance criteria of design-merged lot 1, consent slice)**
-  - [ ] `packages/artifacts/tests/reader-consent.test.ts`: store scenarios (grant to find live; revoke to undefined with tombstone at exact revokedAt; duplicate live grant converges; stale scopeVersion ineffective; cross-reader/cross-scope isolation; rollback removes grant plus event; ordering grantedAt then bytewise consentId).
-  - [ ] Decision-table suite (design-merged 3.2, all 8 rows): suspended-with-consent refused then auto-resumes; withdrawn share refused, re-share reuses consent; absent consent re-asks; revoked re-asks; stale version re-asks; deleted artifact refused.
-  - [ ] `tools/list` hash: pre-existing definitions byte-identical across a profileRevisionId bump; MCP self-revoke works; forged other-principal impossible; admin grant refused; non-reader revoke is `not_found`; double revoke is `changed:false`.
-  - [ ] Person purge removes rows plus events; artifact purge leaves zero consent rows.
-  - [ ] Sub-lot gate: `make test-artifacts SCOPE=tests/reader-consent.test.ts ENV=test-reader-consent` (unit, no compose stack).
-- [ ] **Lot 1b — Implementation (generic package)**
-  - [ ] `src/server/consent.ts`: record, scope rules, `consentAllows`, Gate B helper.
-  - [ ] `src/server/reader-store.ts`: port, memory double, fail-closed resolver, purge/export.
-  - [ ] `src/adapters/postgres-reader-consent.ts` + `sql/reader-consent.sql` (unnumbered body for the train).
-  - [ ] Profile append (`contracts.ts`, `radar.ts`, `schemas.ts`, `index.ts`), MCP append (`mcp-core.ts`), HTTP route append (`http.ts`), snapshot growth (RC-EX1).
-  - [ ] Sub-lot gate: `make test-artifacts SCOPE=tests/reader-consent.test.ts ENV=test-reader-consent`.
-- [ ] **Lot 1c — Implementation (sentropic api binding)**
-  - [ ] `api/src/services/artifacts/reader-consent.ts` + `composition.ts` wiring + control-origin routes in `routes/namespaces/artifacts.ts`.
-  - [ ] `api/tests/api/artifacts-reader-consent.test.ts` (service-level, memory store).
+- [x] **Lot 1a — Tests first (acceptance criteria of design-merged lot 1, consent slice)**
+  - [x] `reader-consent-store.test.ts` + `reader-consent-gate.test.ts`: memory-double scenarios plus the 3.2 decision table, all 8 rows.
+  - [x] `reader-consent-mcp.test.ts`: definitions byte-identical across a profileRevisionId bump; self-revoke; forged principal refused; no grant route; non-reader `not_found`; double revoke `changed:false`.
+  - [x] `reader-consent-store.integration.test.ts`: Postgres adapter matrix; purge leaves zero rows; events carry no content.
+  - [x] Sub-lot gate: full `make test-artifacts ENV=test-reader-consent` green, 558/558.
+- [x] **Lot 1b — Implementation (generic package)**
+  - [x] `src/server/consent.ts`: record, scope rules, `consentAllows`, Gate B helper.
+  - [x] `src/server/reader-store.ts`: port, memory double, purge/export (fail-closed inline in `http.ts`).
+  - [x] `src/adapters/postgres-reader-consent.ts` + `sql/reader-consent.sql` (unnumbered body for the train).
+  - [x] Profile append (`contracts.ts`, `schemas.ts`, `index.ts`), MCP append (`mcp-core.ts`), HTTP route append (`http.ts`), snapshot growth (RC-EX1, +41/-0, ASCII). `radar.ts` untouched: the frozen APP-P1 digest (api boot) and the radar/APP-P1 selection belong to the train; hosts extend the profile host-side (fixture pattern).
+  - [x] Sub-lot gate: `make test-artifacts ENV=test-reader-consent` green, 558/558.
+- [x] **Lot 1c — Implementation (sentropic api binding)**
+  - [x] `api/src/services/artifacts/reader-consent.ts` + `composition.ts` wiring + `instance.ts` port + control-origin routes in `routes/namespaces/artifacts.ts` + `resources-module.ts` wiring + `package.json` exports (RC-EX2).
+  - [x] `api/tests/api/artifacts-reader-consent.test.ts` (service-level, memory store).
   - [ ] Sub-lot gate: `make test-api-unit SCOPE=tests/api/artifacts-reader-consent.test.ts ENV=test-reader-consent`.
 - [ ] **Lot N — Final validation**
-  - [ ] `make typecheck` + `make lint` for touched packages (scoped targets where available).
-  - [ ] Retest: `make test-artifacts SCOPE=tests/reader-consent.test.ts ENV=test-reader-consent`, snapshot test file, `make scope-check ENV=test-reader-consent`.
+  - [x] `make typecheck-artifacts`, `make lint-artifacts`, `make typecheck-api` green.
+  - [ ] Retest api unit + integration (`make test-artifacts-integration SCOPE=tests/reader-consent-store.integration.test.ts`); `make scope-check ENV=test-reader-consent`.
   - [ ] Push branch (no release PR; the wagon joins the train); write `.tmp/rv/reader-consent-lot1.md`.
   - [ ] `make down-volumes ENV=test-reader-consent`.

@@ -6,8 +6,6 @@ export const RADAR_ARTIFACTS_PROFILE: EffectiveArtifactProfile = freezeDeep<Effe
   version: 'artifacts-profile/v1',
   selectedCapabilities: ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'],
   operations: [
-    // Lot 1a consent revocation ships with the profile (the frozen tool
-    // selection stays four tools; hosts opt in by selecting the capability).
     { operation: 'ensure', limits: { bindingNameMinUnits: 1, bindingNameMaxUnits: 128,
       idempotencyKeyMaxUnits: 256 }, defaults: { parameters: {} } },
     { operation: 'publish', limits: { idempotencyKeyMaxUnits: 256, publishFilesMin: 1, publishFilesMax: 32,
@@ -17,7 +15,6 @@ export const RADAR_ARTIFACTS_PROFILE: EffectiveArtifactProfile = freezeDeep<Effe
     { operation: 'list_versions', limits: {}, defaults: {} },
     { operation: 'get_source', limits: {}, defaults: {} },
     { operation: 'revert', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
-    { operation: 'revoke_reader_consent', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
   ],
   rules: { lengthUnit: 'utf16', textEncoding: 'utf8', callerKeyNormalization: 'none',
     rejectLoneSurrogates: true, provenance: 'inline-original', keyDerivationAlgorithm: 'radar-derive-idempotency-v1', pathMaxBytes: 1024,
