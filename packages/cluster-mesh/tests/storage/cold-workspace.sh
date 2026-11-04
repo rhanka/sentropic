@@ -33,7 +33,7 @@ node --input-type=module -e 'import { readFileSync, writeFileSync } from "node:f
 npm_config_cache=/tmp/npm-cache node /source/scripts/ci/locked-tools.mjs --prefix /tmp/cm-tools --no-save \
   --ignore-scripts --no-audit --no-fund --install-strategy=shallow typescript@5.4.5 @types/node \
   vitest@4.1.5 pg@8.16.3 @stablelib/sha256@2.0.1 \
-  @modelcontextprotocol/sdk@1.31.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 \
+  @modelcontextprotocol/sdk@1.31.0 @aws-sdk/client-s3@3.1095.0 @aws-sdk/s3-request-presigner@3.1095.0 @types/pg@8.20.0 \
   esbuild@0.25.12 $CM_PEER_TOOLS >/dev/null
 ln -s /tmp/cm-tools/node_modules node_modules
 export NODE_PATH=/tmp/cm-tools/node_modules

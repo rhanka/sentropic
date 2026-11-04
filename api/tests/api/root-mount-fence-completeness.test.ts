@@ -58,6 +58,10 @@ const IMMUTABLE_ARTIFACT_ROUTES = [
   ['POST', '/resources/artifacts/list'],
   ['GET', '/resources/artifacts/meta/:artifactId'],
   ['POST', '/resources/artifacts/reader-activation'],
+  ['GET', '/resources/artifacts/reader-consents'],
+  ['POST', '/resources/artifacts/reader-consents/revoke'],
+  ['POST', '/resources/artifacts/reader-consents/revoke-all'],
+  ['POST', '/resources/artifacts/reader-consents/admin-revoke'],
 ] as const;
 const IMMUTABLE_ARTIFACT_FENCE = [['ALL', '/resources/artifacts/*']] as const;
 const IMMUTABLE_ADMIN_AUTH_ROUTES = [

@@ -1,6 +1,6 @@
 import { audienceOf, canManageAccess, PUBLIC_PRINCIPAL,
   type AccessEvent, type AccessMode, type ArtifactAcl, type GrantRecord, type ModeAction } from './access.js';
-import { combineSharingPolicy, resolveSharingPolicy, type SharingPolicyPort } from './ports.js';
+import { combineSharingPolicy, resolveSharingPolicy, type PrincipalDirectoryPort, type SharingPolicyPort } from './ports.js';
 import type { ArtifactInvocationContext, ArtifactCommitCoordinator, FinalizeTxClient, FinalizeRequest } from './commit/types.js';
 import type { EffectiveArtifactCommand } from './command-identity.js';
 import { ArtifactOperationError, type ArtifactOutcome } from './failures.js';
@@ -53,6 +53,11 @@ function policyRefused(): ArtifactOperationError {
   return new ArtifactOperationError('unauthorized_at_commit', { refusal: { allowed: false,
     reason: 'denied', status: 403, publicCode: 'public_sharing_disabled', retriable: false } });
 }
+/** G2 §2.3 step (4): the single merged non-shareable refusal (422), like the policy refusal above. */
+function shareableRefused(): ArtifactOperationError {
+  return new ArtifactOperationError('unauthorized_at_commit', { refusal: { allowed: false,
+    reason: 'denied', status: 422, publicCode: 'person_not_shareable', retriable: false } });
+}
 
 /** Targeted writes and proof consumption share the existing coordinator receipt transaction. */
 export async function manageArtifact(deps: {
@@ -68,6 +73,8 @@ export async function manageArtifact(deps: {
   profileAllowPublicSharing?: boolean;
   /** G1: server-resolved platform admin predicate (never a tool argument). */
   actorIsAdmin?: (actorId: string, storageScopeId: string) => boolean | Promise<boolean>;
+  /** G2: host principal directory; required for userRef resolution and output projection. */
+  directory?: PrincipalDirectoryPort;
 }, invocation: ArtifactInvocationContext, command: EffectiveArtifactCommand, proof?: string): Promise<ArtifactOutcome<unknown>> {
   const artifactId = command.payload.artifactId as string;
   const deleting = command.operation === 'delete';
@@ -101,6 +108,34 @@ export async function manageArtifact(deps: {
   };
   const sharingPolicy = async () => combineSharingPolicy(deps.profileAllowPublicSharing,
     await resolveSharingPolicy(deps.sharingPolicy, invocation.storageScopeId));
+  // G2 §2.3 step (4): resolve the opaque userRef to the internal principal
+  // inside the transaction, after visibility and the management right — the
+  // commandHash was computed on the payload as provided (userRef), so no
+  // resolution can leak to a non-reader. Without a directory port, legacy
+  // trusted callers keep passing internal principals directly (G1 behaviour).
+  const resolveTarget = async (principalId: string): Promise<string> => {
+    if (deps.directory === undefined) return principalId;
+    return await deps.directory.resolvePrincipal(invocation.storageScopeId, principalId) ?? principalId;
+  };
+  // Unknown, inactive, unapproved and out-of-scope targets merge into the
+  // single `person_not_shareable` so no account status can be probed.
+  const assertShareable = async (internal: string, action: ModeAction): Promise<void> => {
+    if (deps.directory === undefined) {
+      if (action === 'grant' && !await deps.isApprovedPrincipal(internal)) throw refused('access_denied');
+      return;
+    }
+    if (!await deps.isApprovedPrincipal(internal)) throw shareableRefused();
+  };
+  // The receipt is model-visible: project internal principals to userRefs
+  // (audit events keep the internal form).
+  const projectGrants = async (grants: GrantRecord[]): Promise<GrantRecord[]> => {
+    if (deps.directory === undefined) return grants;
+    return Promise.all(grants.map(async (grant) => ({
+      ...grant,
+      principalId: (await deps.directory!.describePrincipal(invocation.storageScopeId, grant.principalId))?.userRef
+        ?? grant.principalId,
+    })));
+  };
   const request: FinalizeRequest = {
     ...command.identity, scopeId: invocation.storageScopeId, actorId: invocation.actorId,
     invocationId: invocation.invocationId, operation: command.operation, artifactId,
@@ -130,15 +165,17 @@ export async function manageArtifact(deps: {
       } else {
         const { action, principalId } = access!;
         const audience = audienceOf(principalId);
-        if (audience === 'user' && action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw refused('access_denied');
+        const internal = audience === 'user' ? await resolveTarget(principalId) : principalId;
+        if (audience === 'user') await assertShareable(internal, action);
         // Double lock (profile capability AND runtime port) resolved in the
         // transaction; the revision rides the receipt/audit, never the commandHash.
         const policy = await sharingPolicy();
         if (action === 'grant' && principalId === PUBLIC_PRINCIPAL && !policy.allowPublicSharing) throw policyRefused();
-        const output = await unit.setAccess(artifactId, principalId, action, now);
+        const output = await unit.setAccess(artifactId, internal, action, now);
         await unit.recordEvent({ artifactId, actorId: invocation.actorId, action, audience,
-          principalId: audience === 'user' ? principalId : null, policyRevision: policy.policyRevision });
-        Object.assign(receipt, { artifactId, ...output, policyRevision: policy.policyRevision });
+          principalId: audience === 'user' ? internal : null, policyRevision: policy.policyRevision });
+        Object.assign(receipt, { artifactId, ...output, grants: await projectGrants(output.grants),
+          policyRevision: policy.policyRevision });
       }
     },
     guard: async (ctx, tx) => {
@@ -147,7 +184,10 @@ export async function manageArtifact(deps: {
       if (!deleting) {
         const { action, principalId } = access!;
         const audience = audienceOf(principalId);
-        if (audience === 'user' && action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw refused('access_denied');
+        if (audience === 'user') {
+          const internal = await resolveTarget(principalId);
+          await assertShareable(internal, action);
+        }
         const policy = await sharingPolicy();
         if (action === 'grant' && principalId === PUBLIC_PRINCIPAL && !policy.allowPublicSharing) throw policyRefused();
       }

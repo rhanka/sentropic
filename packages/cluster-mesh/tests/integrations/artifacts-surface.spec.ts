@@ -24,6 +24,8 @@ const SPEC_TOOLS = [
   'artifacts_set_access', 'artifacts_promote', 'artifacts_renew',
   'artifacts_delete', 'artifacts_restore',
   'artifacts_list_versions', 'artifacts_revert',
+  'artifacts_lookup_people', 'artifacts_list_access',
+  'artifacts_publish_bundle', 'artifacts_revoke_reader_consent',
 ];
 
 interface ModuleOptions { failArtifacts?: boolean; loads?: string[] }

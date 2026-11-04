@@ -98,7 +98,7 @@ describe('app artifact host publication', () => {
     expect((await bound.http({ method: 'POST', path: '/ensure', body: { ...ensureArgs(), actorId: 'bob' } })).status).toBe(400);
     expect(await durable()).toEqual(before);
     expect(bound.profile.selectedCapabilities).toEqual(['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get']);
-    expect(bound.profile.profileDigest).toBe('94212e75c52e23f3f254496d98fca7c052568f7c03526ff3def3db020cd24168');
+    expect(bound.profile.profileDigest).toBe('9d21623107192b42e683d4712c69093ed19f1498e406d199c4fe3153394cba11');
   });
 
   it('should recheck current membership on a previously bound request and guarded replay', async () => {

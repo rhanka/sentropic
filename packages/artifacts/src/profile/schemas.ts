@@ -1,4 +1,5 @@
 import type { ArtifactCapabilityName, ArtifactProviderProfile, EffectiveArtifactProfile, ArtifactSchema, OperationProfile } from './contracts.js';
+import { SERVER_MAX_FILE_BYTES, SERVER_MAX_FILES_PER_RELEASE, SERVER_MAX_TOTAL_BYTES } from '../server/publication-limits.js';
 
 const str = { type: 'string', minLength: 1 };
 const integer = (minimum: number, maximum?: number) => ({ type: 'integer', minimum,
@@ -21,13 +22,21 @@ export function assertCompleteOperation(config: OperationProfile): void {
   const required: Record<string, { limits: string[]; defaults: string[] }> = {
     ensure: { limits: ['bindingNameMinUnits', 'bindingNameMaxUnits', 'idempotencyKeyMaxUnits'],
       defaults: ['parameters'] },
+    // publish additionally accepts the optional release-budget keys
+    // releaseFilesMax / releaseFileBytesMax / releaseTotalBytesMax (files parity
+    // LOT 1): they bound the final release however its files arrived and default
+    // to the inline values below when absent.
     publish: { limits: ['idempotencyKeyMaxUnits', 'publishFilesMin', 'publishFilesMax',
       'maxDecodedFileBytes', 'maxDecodedTotalBytes'], defaults: ['profile'] },
     list: { limits: ['listLimitMin', 'listLimitMax'], defaults: ['limit', 'offset'] },
     commit_upload: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
+    publish_bundle: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
     set_access: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    lookup_people: { limits: ['lookupQueryMinUnits', 'lookupQueryMaxUnits', 'lookupLimitMax'], defaults: ['limit'] },
+    list_access: { limits: [], defaults: [] },
     delete: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     revert: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    revoke_reader_consent: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
   };
   const fields = required[config.operation];
   if (fields && (fields.limits.some((key) => !Object.hasOwn(config.limits, key)) ||
@@ -88,6 +97,10 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
     case 'list_versions': return profile.resultEnvelopeVersion !== 2 ? idOnly : obj({ artifactId: id,
       limit: { ...integer(1, 100), default: 20 }, cursor: { ...str, maxLength: 4096 } }, ['artifactId']);
     case 'get_source': return obj({ artifactId: id, releaseId: id,
+      // Frozen ceiling (review finding 5): maxItems 32 and the 256 KiB decoded
+      // budget are part of the frozen get_source definition and must NOT move.
+      // Server-side caps may only move BELOW this frozen schema; larger listings
+      // belong to the new listing tools, not to this one.
       paths: { type: 'array', minItems: 1, maxItems: 32, items: { ...str, maxLength: profile.rules.pathMaxBytes },
         description: 'Unique manifest paths; omit to read the whole snapshot (max 32 files, 256 KiB decoded). ' +
           'Result files are `text` with encoding "utf8" or `base64` with encoding "base64" (never an integer ' +
@@ -106,13 +119,62 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
     case 'commit_upload': return obj({ artifactId: id, uploadId: str, path: str, mimeType: str,
       digest: str, size: integer(0), profile: primitiveRecord, idempotencyKey: key },
     ['artifactId', 'uploadId', 'path', 'mimeType', 'digest', 'size', 'idempotencyKey']);
+    case 'publish_bundle': {
+      // Release budgets come from the publish operation (release* keys override the
+      // inline values; absent keys default to them, never above the server maxima).
+      const publishLimits = profile.operations.find((entry) => entry.operation === 'publish')?.limits;
+      const filesMax = publishLimits?.releaseFilesMax ?? publishLimits?.publishFilesMax ?? SERVER_MAX_FILES_PER_RELEASE;
+      const fileBytesMax = publishLimits?.releaseFileBytesMax ?? publishLimits?.maxDecodedFileBytes ?? SERVER_MAX_FILE_BYTES;
+      const totalBytesMax = publishLimits?.releaseTotalBytesMax ?? publishLimits?.maxDecodedTotalBytes ?? SERVER_MAX_TOTAL_BYTES;
+      const inlineFileBytesMax = publishLimits?.maxDecodedFileBytes ?? SERVER_MAX_FILE_BYTES;
+      const inlineTotalBytesMax = publishLimits?.maxDecodedTotalBytes ?? SERVER_MAX_TOTAL_BYTES;
+      const reserved = profile.rules.reservedFirstSegments.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+      const bundlePath = { type: 'string', minLength: 1, maxLength: profile.rules.pathMaxBytes,
+        allOf: [{ not: { pattern: profile.rules.forbiddenPathPattern } },
+          { not: { pattern: '(^|/)(\\.\\.?|)(/|$)' } },
+          { not: { pattern: `^(?:${reserved})(?:/|$)` } }],
+        description: `At most ${profile.rules.pathMaxBytes} UTF-8 bytes; no empty/dot segments, colon or DEL.` };
+      const inlineFile = { ...obj({ path: bundlePath, mimeType: { type: 'string', enum: profile.rules.mimeTypes },
+        text: { type: 'string', maxLength: inlineFileBytesMax, description: 'UTF-8 decoded-byte budget applies.' },
+        bytes: { type: 'array', maxItems: inlineFileBytesMax, items: integer(0, 255) } }, ['path', 'mimeType']),
+        oneOf: [{ required: ['text'], not: { required: ['bytes'] } },
+          { required: ['bytes'], not: { required: ['text'] } }] };
+      const uploadAsset = obj({ path: bundlePath, uploadId: id,
+        description: 'Staged file committed via artifacts_commit_upload; the server re-reads and re-verifies it.' },
+        ['path', 'uploadId']);
+      const casAsset = obj({ path: bundlePath,
+        digest: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$',
+          description: 'Canonical sha256:<hex> digest of an already-pinned blob in the same scope.' },
+        size: integer(1), mimeType: { type: 'string', enum: profile.rules.mimeTypes } },
+        ['path', 'digest', 'size', 'mimeType']);
+      return { ...obj({ artifactId: id, idempotencyKey: key,
+        files: { type: 'array', items: inlineFile, minItems: 1, maxItems: filesMax,
+          description: `Inline files (bytes travel through the model, inline budget ${inlineFileBytesMax}/${inlineTotalBytesMax} bytes); at least one of files/assets is required.` },
+        assets: { type: 'array', minItems: 1, maxItems: filesMax,
+          items: { oneOf: [uploadAsset, casAsset] },
+          description: `Assets whose bytes already left the model: an uploadId staged via create_upload/commit_upload, or a CAS reference to an already-pinned blob. Release budget (max ${filesMax} files, ${fileBytesMax} bytes/file, ${totalBytesMax} bytes total) applies to the union of files and assets.` },
+        expectedCurrentReleaseId: { ...id, type: ['string', 'null'],
+          description: 'Compare the current release atomically; null requires an unpublished artifact. Always required for this tool.' },
+        profile: { ...primitiveRecord, default: config.defaults.profile },
+        ...(part1 ? metadata : {}) },
+        ['artifactId', 'idempotencyKey', 'expectedCurrentReleaseId']),
+        anyOf: [{ required: ['files'] }, { required: ['assets'] }] };
+    }
     case 'set_access': return { ...obj({ artifactId: id, action: { type: 'string', enum: ['grant', 'revoke'] },
       principalId: { ...str, maxLength: 256 }, grant: { type: 'string', enum: ['read'] }, idempotencyKey: key },
     ['artifactId', 'action', 'principalId', 'idempotencyKey']), oneOf: [
       { properties: { action: { enum: ['grant'] } }, required: ['grant'] },
       { properties: { action: { enum: ['revoke'] } }, not: { required: ['grant'] } },
     ] };
+    case 'lookup_people': return obj({ query: { type: 'string', minLength: limits.lookupQueryMinUnits,
+      maxLength: limits.lookupQueryMaxUnits, description: 'Name or email fragment; matched case- and accent-insensitively against approved accounts of the scope.' },
+      limit: { ...integer(1, limits.lookupLimitMax), default: config.defaults.limit } }, ['query']);
+    case 'list_access': return idOnly;
     case 'promote': return obj({ artifactId: id, releaseId: id, expectedCurrent: id }, ['artifactId', 'releaseId', 'expectedCurrent']);
+    case 'revoke_reader_consent': return obj({ artifactId: id,
+      scope: { type: 'string', minLength: 1, maxLength: 128,
+        description: 'One consent scope of this artifact; omitted revokes every scope of the artifact.' },
+      idempotencyKey: key }, ['artifactId', 'idempotencyKey']);
     default: throw new Error(`unsupported operation profile: ${operation}`);
   }
 }

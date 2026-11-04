@@ -1,151 +1,404 @@
 /**
- * L-5b — bounded uploads (spec-v8 §9).
+ * Files parity LOT 1 — durable upload sessions with a presigned signed PUT
+ * (design-r1 §B.3, review finding 3 applied).
  *
- * Uploads stage bytes under a bounded prefix with a strict size budget and
- * sequential offsets. Commit verifies the staged bytes against the declared
- * SHA-256 digest and size before returning a blob reference; false
- * hashes/sizes, over-budget appends, out-of-order offsets and any write
- * after commit are refused fail-closed. Staging is ephemeral: sessions live
- * in memory and never become visible releases (publication owns durability
- * via object intents). The byte store is injected; the memory double serves
- * unit tests and the S3 adapter serves the L-5b integration proof.
+ * Bytes never travel through the model or the MCP host: `create_upload`
+ * mints a presigned PUT for exactly one staging key
+ * `artifacts/<scope>/staging/<uploadId>`; the local agent performs the PUT;
+ * `commit_upload` re-reads the staged object once and verifies the declared
+ * size and SHA-256 digest before anything is pinned.
+ *
+ * SigV4 note (review finding 3): a presigned PUT cannot carry a
+ * content-length RANGE (that exists only in POST policies), so the signature
+ * binds an EXACT Content-Length (the declared size) plus the checksum header
+ * (`x-amz-checksum-sha256`) whenever the digest is known at signing time;
+ * S3 itself rejects a PUT whose signed headers do not match. The digest is
+ * declared at commit, so the create-time signature binds content-type +
+ * exact content-length, the PUT must carry `x-amz-checksum-sha256` (S3
+ * validates it against the body, BadDigest on mismatch), and commit
+ * re-verifies size and digest server-side before pinning. Residual exposure
+ * of a leaked URL is bounded by the declared size (≤ 16 MiB), the
+ * per-principal open-session quota and the enforced sweeper (gc.ts).
+ *
+ * Sessions are durable rows (migration 0007 ALTERs `artifacts.uploads`);
+ * the byte store, session store and signer are injected ports — the memory
+ * doubles serve unit tests, the S3 adapter serves the host.
  */
 import { createHash } from 'node:crypto';
+import { validateFileBytes } from './mime.js';
 
-export interface BlobRef {
-  digest: string;
-  size: number;
+export const UPLOAD_URL_TTL_SECONDS = 600; // presigned URL: ≤ 10 minutes
+export const UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // staged file: 24 h
+
+export type UploadSessionState = 'open' | 'committed' | 'discarded' | 'expired';
+
+export interface UploadSession {
+  readonly uploadId: string;
+  readonly artifactId: string;
+  readonly storageScopeId: string;
+  readonly ownerId: string;
+  readonly mimeType: string;
+  readonly maxSize: number;
+  readonly state: UploadSessionState;
+  readonly expiresAt: string;
+  readonly createdAt: string;
 }
 
+export interface StagedFileRecord {
+  readonly uploadId: string;
+  readonly artifactId: string;
+  readonly path: string;
+  readonly mimeType: string;
+  readonly digest: string;
+  readonly size: number;
+  readonly createdAt: string;
+}
+
+/** Durable session ledger (Postgres in the host via migration 0007; memory double in tests). */
+export interface UploadSessionStore {
+  create(session: UploadSession): Promise<void>;
+  get(uploadId: string): Promise<UploadSession | undefined>;
+  /** Open sessions of one principal in one scope (quota check). */
+  countOpen(storageScopeId: string, ownerId: string): Promise<number>;
+  /** Sessions still open whose expires_at passed (sweeper input). */
+  listExpiredOpen(now: Date): Promise<UploadSession[]>;
+  markCommitted(uploadId: string): Promise<void>;
+  markExpired(uploadId: string): Promise<void>;
+  recordStagedFile(record: StagedFileRecord): Promise<void>;
+  getStagedFile(uploadId: string): Promise<StagedFileRecord | undefined>;
+  listStagedFiles(artifactId: string): Promise<StagedFileRecord[]>;
+}
+
+/** Byte store under the staging prefix (S3 in the host; memory double in tests). */
 export interface StagingStore {
-  write(uploadId: string, bytes: Uint8Array): Promise<void>;
-  read(uploadId: string): Promise<Uint8Array>;
-  discard(uploadId: string): Promise<void>;
+  put(key: string, bytes: Uint8Array): Promise<void>;
+  get(key: string): Promise<Uint8Array | undefined>;
+  delete(key: string): Promise<void>;
+  listKeys(prefix: string): Promise<string[]>;
+}
+
+/**
+ * Presigner port. The signature binds content-type, the EXACT content-length
+ * (declared size) and, when known at signing time, x-amz-checksum-sha256;
+ * no content-length range exists in a SigV4 presigned PUT (review finding 3).
+ */
+export interface UploadSignerPort {
+  signPut(input: {
+    key: string;
+    contentType: string;
+    contentLength: number;
+    /** Canonical `sha256:<hex>` digest, when known at signing time. */
+    checksumSha256?: string;
+    expiresInSeconds: number;
+  }): Promise<{
+    url: string;
+    method: 'PUT';
+    /** Headers the client must send with exactly these values. */
+    headers: Record<string, string>;
+    expiresAt: string;
+  }>;
+}
+
+export const STAGING_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/staging\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Staging key of one upload session. */
+export function stagingKey(storageScopeId: string, uploadId: string): string {
+  return `artifacts/${storageScopeId}/staging/${uploadId}`;
+}
+
+/**
+ * Value of the `x-amz-checksum-sha256` header for a canonical `sha256:<hex>`
+ * digest: S3 expects the base64 of the raw digest bytes (no `sha256:` prefix).
+ */
+export function checksumHeaderValue(digest: string): string {
+  const match = /^sha256:([0-9a-f]{64})$/.exec(digest);
+  if (match === null) throw new Error(`invalid sha256 digest: ${digest}`);
+  return Buffer.from(match[1], 'hex').toString('base64');
+}
+
+/** Reject anything but a staging key, before any I/O. */
+export function assertStagingKey(key: string): void {
+  if (!STAGING_KEY_PATTERN.test(key)) {
+    throw new Error(`invalid staging key (must be artifacts/<scope>/staging/<uuid>): ${key}`);
+  }
+}
+
+/** Reject empty or escaping staging prefixes before enumeration. */
+export function assertStagingPrefix(prefix: string): void {
+  if (prefix.length === 0 || prefix.includes('..') || !prefix.endsWith('/staging/')) {
+    throw new Error(`invalid staging prefix: ${prefix}`);
+  }
 }
 
 /** In-memory StagingStore double for unit tests. */
 export function createMemoryStaging(): StagingStore {
   const staged = new Map<string, Uint8Array>();
   return {
-    write(uploadId: string, bytes: Uint8Array): Promise<void> {
-      staged.set(uploadId, bytes);
+    put(key: string, bytes: Uint8Array): Promise<void> {
+      assertStagingKey(key);
+      staged.set(key, new Uint8Array(bytes));
       return Promise.resolve();
     },
-    read(uploadId: string): Promise<Uint8Array> {
-      const bytes = staged.get(uploadId);
-      if (bytes === undefined) throw new Error(`unknown upload: ${uploadId}`);
-      return Promise.resolve(bytes);
+    get(key: string): Promise<Uint8Array | undefined> {
+      assertStagingKey(key);
+      const bytes = staged.get(key);
+      return Promise.resolve(bytes === undefined ? undefined : new Uint8Array(bytes));
     },
-    discard(uploadId: string): Promise<void> {
-      staged.delete(uploadId);
+    delete(key: string): Promise<void> {
+      assertStagingKey(key);
+      staged.delete(key);
       return Promise.resolve();
+    },
+    listKeys(prefix: string): Promise<string[]> {
+      assertStagingPrefix(prefix);
+      return Promise.resolve([...staged.keys()].filter((key) => key.startsWith(prefix)).sort());
     },
   };
 }
 
-export interface BeginUploadInput {
+/** In-memory UploadSessionStore double for unit tests. */
+export function createMemoryUploadSessionStore(now: () => Date = () => new Date()): UploadSessionStore {
+  const sessions = new Map<string, UploadSession>();
+  const stagedFiles = new Map<string, StagedFileRecord>();
+  return {
+    create(session) {
+      sessions.set(session.uploadId, session);
+      return Promise.resolve();
+    },
+    get(uploadId) {
+      return Promise.resolve(sessions.get(uploadId));
+    },
+    countOpen(storageScopeId, ownerId) {
+      let count = 0;
+      for (const session of sessions.values()) {
+        if (session.storageScopeId === storageScopeId && session.ownerId === ownerId && session.state === 'open') count += 1;
+      }
+      return Promise.resolve(count);
+    },
+    listExpiredOpen(at) {
+      return Promise.resolve([...sessions.values()].filter((session) =>
+        session.state === 'open' && new Date(session.expiresAt).getTime() <= at.getTime()).sort());
+    },
+    markCommitted(uploadId) {
+      const session = sessions.get(uploadId);
+      if (session === undefined) throw new Error(`unknown upload: ${uploadId}`);
+      sessions.set(uploadId, { ...session, state: 'committed' });
+      return Promise.resolve();
+    },
+    markExpired(uploadId) {
+      const session = sessions.get(uploadId);
+      if (session === undefined) throw new Error(`unknown upload: ${uploadId}`);
+      sessions.set(uploadId, { ...session, state: 'expired' });
+      return Promise.resolve();
+    },
+    recordStagedFile(record) {
+      stagedFiles.set(record.uploadId, record);
+      return Promise.resolve();
+    },
+    getStagedFile(uploadId) {
+      return Promise.resolve(stagedFiles.get(uploadId));
+    },
+    listStagedFiles(artifactId) {
+      return Promise.resolve([...stagedFiles.values()].filter((record) => record.artifactId === artifactId));
+    },
+  };
+}
+
+/**
+ * Memory signer double: records every signed PUT and simulates S3's
+ * enforcement of the signed headers (exact content-length equality) and of
+ * the checksum header (body must hash to it when present).
+ */
+export function createMemoryUploadSigner() {
+  const signed: {
+    key: string; contentType: string; contentLength: number;
+    checksumSha256?: string; expiresAt: string; url: string;
+  }[] = [];
+  const signer: UploadSignerPort = {
+    signPut(input) {
+      assertStagingKey(input.key);
+      if (!Number.isSafeInteger(input.contentLength) || input.contentLength < 0) {
+        throw new Error('invalid signed content-length');
+      }
+      const expiresAt = new Date(Date.now() + input.expiresInSeconds * 1000).toISOString();
+      const url = `https://s3.test/${input.key}?X-Amz-Signature=mem-${signed.length}`;
+      const checksumHeader = input.checksumSha256 === undefined ? undefined : checksumHeaderValue(input.checksumSha256);
+      signed.push({ key: input.key, contentType: input.contentType, contentLength: input.contentLength,
+        ...(checksumHeader === undefined ? {} : { checksumSha256: checksumHeader }),
+        expiresAt, url });
+      return Promise.resolve({
+        url,
+        method: 'PUT' as const,
+        headers: {
+          'content-type': input.contentType,
+          'content-length': String(input.contentLength),
+          ...(checksumHeader === undefined ? {} : { 'x-amz-checksum-sha256': checksumHeader }),
+        },
+        expiresAt,
+      });
+    },
+  };
+  return {
+    signer,
+    signed,
+    /** Simulate the client PUT against "S3": signed headers are enforced exactly. */
+    put(signedPut: { key: string; contentType: string; contentLength: number; checksumSha256?: string },
+      bytes: Uint8Array, headers: Record<string, string>): void {
+      if (String(bytes.length) !== headers['content-length'] || bytes.length !== signedPut.contentLength) {
+        throw new Error(`content-length mismatch: signed ${signedPut.contentLength}, body ${bytes.length}`);
+      }
+      if (headers['content-type'] !== signedPut.contentType) {
+        throw new Error('content-type mismatch with the signed header');
+      }
+      if (signedPut.checksumSha256 !== undefined && headers['x-amz-checksum-sha256'] !== signedPut.checksumSha256) {
+        throw new Error('x-amz-checksum-sha256 mismatch with the signed header');
+      }
+      if (headers['x-amz-checksum-sha256'] !== undefined &&
+        createHash('sha256').update(bytes).digest('base64') !== headers['x-amz-checksum-sha256']) {
+        throw new Error('BadDigest: body does not match x-amz-checksum-sha256');
+      }
+    },
+  };
+}
+
+export interface CreateUploadInput {
+  artifactId: string;
+  storageScopeId: string;
+  ownerId: string;
   mimeType: string;
+  /** Declared size; clamped to the host budget. Bound as the exact signed Content-Length. */
   maxSize?: number;
 }
 
-export interface UploadServiceOptions {
-  maxUploadBytes: number;
+export interface CreateUploadResult {
+  uploadId: string;
+  uploadUrl: string;
+  method: 'PUT';
+  /** Presigned-URL expiry (≤ 10 minutes). */
+  expiresAt: string;
+  maxSize: number;
+  /** Headers the client must send with exactly these values (bound by the signature). */
+  requiredHeaders: Record<string, string>;
+  /**
+   * The PUT must also carry this header with the base64 SHA-256 of the body;
+   * S3 validates it against the body (BadDigest on mismatch) and commit
+   * re-verifies size and digest server-side.
+   */
+  checksumHeader: 'x-amz-checksum-sha256';
+  stagingKey: string;
 }
 
-interface Session {
-  committed: boolean;
-  busy: boolean;
-  maxSize: number;
+export interface CommitUploadInput {
+  uploadId: string;
+  artifactId: string;
+  storageScopeId: string;
+  ownerId: string;
+  path: string;
+  mimeType: string;
+  digest: string;
   size: number;
 }
 
-export interface UploadService {
-  begin(input: BeginUploadInput): Promise<{ uploadId: string }>;
-  /** Check that the session is open and optionally validate its sequential offset before decoding. */
-  remainingBytes(uploadId: string, offset?: number): number;
-  append(uploadId: string, offset: number, chunk: Uint8Array): Promise<{ size: number }>;
-  /** Validate the commit snapshot before consuming the session; rejected validation remains retryable. */
-  commit(uploadId: string, expected: BlobRef, validate?: (bytes: Uint8Array) => void): Promise<BlobRef>;
+export interface UploadServiceOptions {
+  /** Host ceiling for one upload (min of profile releaseFileBytesMax and the server maximum). */
+  maxUploadBytes: number;
+  maxSessionsPerPrincipal: number;
+  now?: () => Date;
+  ids?: () => string;
 }
 
-/** Create an upload service over an injected staging store (no S3 imports). */
-export function createUploadService(
-  staging: StagingStore,
-  options: UploadServiceOptions,
-  ids: () => string = () => crypto.randomUUID(),
-): UploadService {
+export interface UploadService {
+  create(input: CreateUploadInput): Promise<CreateUploadResult>;
+  /**
+   * Load the session for commit: must exist, be open, unexpired and bound to
+   * the same artifact + scope + owner. Returns the session (caller reads the
+   * staged bytes once and verifies size/digest/MIME before pinning).
+   */
+  sessionForCommit(input: CommitUploadInput): Promise<UploadSession>;
+  /** Verify the staged bytes against the declared size, digest and MIME type. */
+  verifyStaged(session: UploadSession, bytes: Uint8Array, expected: { digest: string; size: number; mimeType: string }): void;
+  /** Record the staged file and close the session after a successful promotion. */
+  completeCommit(session: UploadSession, record: Omit<StagedFileRecord, 'uploadId' | 'artifactId' | 'createdAt'>): Promise<StagedFileRecord>;
+}
+
+export function createUploadService(deps: {
+  sessions: UploadSessionStore;
+  staging: StagingStore;
+  signer: UploadSignerPort;
+}, options: UploadServiceOptions): UploadService {
+  const now = options.now ?? (() => new Date());
+  const ids = options.ids ?? (() => crypto.randomUUID());
   if (!Number.isSafeInteger(options.maxUploadBytes) || options.maxUploadBytes < 1) {
     throw new Error('invalid upload byte budget');
   }
-  const sessions = new Map<string, Session>();
-  function openSession(uploadId: string): Session {
-    const session = sessions.get(uploadId);
-    if (session === undefined) throw new Error(`unknown upload: ${uploadId}`);
-    if (session.committed) throw new Error(`upload already committed: ${uploadId}`);
-    if (session.busy) throw new Error(`upload conflict: operation in progress for ${uploadId}`);
-    return session;
-  }
-  async function exclusive<T>(uploadId: string, run: (session: Session) => Promise<T>): Promise<T> {
-    const session = openSession(uploadId);
-    session.busy = true;
-    try {
-      return await run(session);
-    } finally {
-      session.busy = false;
-    }
-  }
-  function remainingBytes(uploadId: string, offset?: number): number {
-    const session = openSession(uploadId);
-    if (offset !== undefined && (!Number.isSafeInteger(offset) || offset !== session.size)) {
-      throw new Error(`upload offset mismatch for ${uploadId}: expected ${session.size}, got ${offset}`);
-    }
-    return session.maxSize - session.size;
+  if (!Number.isSafeInteger(options.maxSessionsPerPrincipal) || options.maxSessionsPerPrincipal < 1) {
+    throw new Error('invalid upload session quota');
   }
   return {
-    remainingBytes,
-    async begin(input: BeginUploadInput): Promise<{ uploadId: string }> {
+    async create(input) {
       if (input.maxSize !== undefined && (!Number.isSafeInteger(input.maxSize) || input.maxSize < 1)) {
         throw new Error('invalid upload byte budget');
       }
+      const open = await deps.sessions.countOpen(input.storageScopeId, input.ownerId);
+      if (open >= options.maxSessionsPerPrincipal) {
+        throw new Error(`open upload session quota exceeded for principal (max ${options.maxSessionsPerPrincipal})`);
+      }
+      const maxSize = Math.min(input.maxSize ?? options.maxUploadBytes, options.maxUploadBytes);
       const uploadId = ids();
-      sessions.set(uploadId, {
-        committed: false,
-        busy: false,
-        maxSize: Math.min(input.maxSize ?? options.maxUploadBytes, options.maxUploadBytes),
-        size: 0,
+      const createdAt = now().toISOString();
+      const expiresAt = new Date(now().getTime() + UPLOAD_SESSION_TTL_MS).toISOString();
+      const key = stagingKey(input.storageScopeId, uploadId);
+      await deps.sessions.create({
+        uploadId, artifactId: input.artifactId, storageScopeId: input.storageScopeId,
+        ownerId: input.ownerId, mimeType: input.mimeType, maxSize, state: 'open', expiresAt, createdAt,
       });
-      await staging.write(uploadId, new Uint8Array(0));
-      return { uploadId };
+      // The signature binds content-type and the EXACT declared Content-Length
+      // (a presigned PUT cannot carry a content-length range). The digest is
+      // declared at commit, so the PUT must also carry x-amz-checksum-sha256,
+      // which S3 validates against the body; commit re-verifies both.
+      const signed = await deps.signer.signPut({
+        key, contentType: input.mimeType, contentLength: maxSize, expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
+      });
+      return {
+        uploadId, uploadUrl: signed.url, method: signed.method, expiresAt: signed.expiresAt, maxSize,
+        requiredHeaders: signed.headers, checksumHeader: 'x-amz-checksum-sha256',
+        stagingKey: key,
+      };
     },
-    async append(uploadId: string, offset: number, chunk: Uint8Array): Promise<{ size: number }> {
-      const remaining = remainingBytes(uploadId, offset);
-      return exclusive(uploadId, async (session) => {
-        if (chunk.length > remaining) {
-          throw new Error(`upload budget exceeded for ${uploadId}: max ${session.maxSize} bytes`);
+    sessionForCommit(input) {
+      return deps.sessions.get(input.uploadId).then((session) => {
+        if (session === undefined || session.artifactId !== input.artifactId ||
+          session.storageScopeId !== input.storageScopeId || session.ownerId !== input.ownerId) {
+          throw new Error(`unknown upload for this artifact/owner/scope: ${input.uploadId}`);
         }
-        const current = await staging.read(uploadId);
-        const next = new Uint8Array(current.length + chunk.length);
-        next.set(current, 0);
-        next.set(chunk, current.length);
-        await staging.write(uploadId, next);
-        session.size = next.length;
-        return { size: session.size };
+        if (session.state !== 'open') throw new Error(`upload not open (${session.state}): ${input.uploadId}`);
+        if (new Date(session.expiresAt).getTime() <= now().getTime()) {
+          throw new Error(`upload session expired: ${input.uploadId}`);
+        }
+        return session;
       });
     },
-    async commit(uploadId: string, expected: BlobRef, validate?: (bytes: Uint8Array) => void): Promise<BlobRef> {
-      return exclusive(uploadId, async (session) => {
-        const bytes = new Uint8Array(await staging.read(uploadId));
-        validate?.(bytes);
-        if (bytes.length !== expected.size) {
-          throw new Error(`upload size mismatch for ${uploadId}: staged ${bytes.length}, declared ${expected.size}`);
-        }
-        const actual = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-        if (actual !== expected.digest) {
-          throw new Error(`upload digest mismatch for ${uploadId}: staged ${actual}`);
-        }
-        session.committed = true;
-        return { digest: actual, size: bytes.length };
-      });
+    verifyStaged(session, bytes, expected) {
+      if (bytes.length !== expected.size) {
+        throw new Error(`upload size mismatch for ${session.uploadId}: staged ${bytes.length}, declared ${expected.size}`);
+      }
+      const actual = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+      if (actual !== expected.digest) {
+        throw new Error(`upload digest mismatch for ${session.uploadId}: staged ${actual}`);
+      }
+      if (expected.mimeType !== session.mimeType) {
+        throw new Error(`upload MIME mismatch for ${session.uploadId}: session ${session.mimeType}, declared ${expected.mimeType}`);
+      }
+      validateFileBytes(expected.mimeType, bytes);
+    },
+    async completeCommit(session, record) {
+      const staged: StagedFileRecord = {
+        uploadId: session.uploadId, artifactId: session.artifactId, createdAt: now().toISOString(),
+        path: record.path, mimeType: record.mimeType, digest: record.digest, size: record.size,
+      };
+      await deps.sessions.recordStagedFile(staged);
+      await deps.sessions.markCommitted(session.uploadId);
+      return staged;
     },
   };
 }

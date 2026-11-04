@@ -112,8 +112,8 @@ const consumerDigest = computeCompatibilityDigest(manifest);
 // algorithm or fixture change fails these before it can drift silently.
 const GOLDEN_MANIFEST_DIGEST = '1b3514cd8e7d0991f9dadc4061da7950a04f2bcf655c4be0f04b4bee28a8ea4d';
 // Version-bound synthetic configuration receipt; Immo wire fixtures remain unchanged.
-const GOLDEN_PAYLOAD_DIGEST = '35bfad0a674b022ff64be13e639d80ac466962067e70f00a3f077f94dbe6ac75';
-const GOLDEN_COMPILED_DIGEST = '9f1ad39b32f2ae7a27489781faceb5c2722d56e8ce1fa74bacf286a99e00fdc8';
+const GOLDEN_PAYLOAD_DIGEST = '3531fb4434fc77f3efa782d25c65d8f518f32cb4b4f0db406b792610f9a0a58a';
+const GOLDEN_COMPILED_DIGEST = '4c0b0f008bae891f4b283cd26015c003e5b4517f1f70b4ad73bb266a994fa479';
 
 function buildSnapshot(): ApprovedToolSnapshot {
   const revision = 'rev-1';
