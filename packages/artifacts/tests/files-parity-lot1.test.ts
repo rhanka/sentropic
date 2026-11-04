@@ -399,15 +399,18 @@ describe('files parity LOT 1 acceptance', () => {
     };
     const { artifacts_publish_bundle: _bundle, artifacts_lookup_people: _lookup,
       artifacts_list_access: _access, artifacts_revoke_reader_consent: _revoke,
-      ...preexisting } = ARTIFACTS_TOOL_DEFINITIONS;
+      artifacts_create_upload_page: _page, artifacts_list_assets: _list,
+      artifacts_publish_bundle_v2: _v2, ...preexisting } = ARTIFACTS_TOOL_DEFINITIONS;
     const canonical = JSON.stringify(sortKeys(preexisting), null, 2);
     expect(createHash('sha256').update(canonical).digest('hex'))
       .toBe('6589d5930620ea12e5b185a8b72e2657e08a2c32e9b5943a7d0e4e89aa304b2c');
     expect(Object.keys(preexisting)).toHaveLength(17);
-    // The four union tools are appended in merge order and frozen at birth.
-    expect(ARTIFACTS_TOOL_NAMES).toHaveLength(21);
-    expect(ARTIFACTS_TOOL_NAMES.slice(-4)).toEqual(['artifacts_lookup_people', 'artifacts_list_access',
-      'artifacts_publish_bundle', 'artifacts_revoke_reader_consent']);
+    // The union tools are appended in merge order and frozen at birth: the
+    // four train tools, then the three LOT 2 tools.
+    expect(ARTIFACTS_TOOL_NAMES).toHaveLength(24);
+    expect(ARTIFACTS_TOOL_NAMES.slice(-7)).toEqual(['artifacts_lookup_people', 'artifacts_list_access',
+      'artifacts_publish_bundle', 'artifacts_revoke_reader_consent',
+      'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2']);
     expect(ARTIFACTS_TOOL_DEFINITIONS.artifacts_publish_bundle.description).toContain('publish bundle');
   });
 });

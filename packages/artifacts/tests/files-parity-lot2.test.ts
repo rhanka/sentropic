@@ -582,7 +582,7 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
     expect(await world.refs.isPinned(sha256(bytes))).toBe(false);
   });
 
-  it('pins the 21 frozen definitions and declares the 3 new tools', () => {
+  it('pins the 17 LOT 1 definitions, names the 21 current ones, declares the 3 new tools', () => {
     const sortKeys = (value: unknown): unknown => {
       if (Array.isArray(value)) return value.map(sortKeys);
       if (value !== null && typeof value === 'object') {
@@ -594,10 +594,20 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
       return value;
     };
     const { artifacts_create_upload_page: _page, artifacts_list_assets: _list,
-      artifacts_publish_bundle_v2: _v2, ...preexisting } = ARTIFACTS_TOOL_DEFINITIONS;
+      artifacts_publish_bundle_v2: _v2, artifacts_publish_bundle: _bundle,
+      artifacts_lookup_people: _lookup, artifacts_list_access: _access,
+      artifacts_revoke_reader_consent: _revoke, ...preexisting } = ARTIFACTS_TOOL_DEFINITIONS;
+    // Byte freeze of the 17 LOT 1 definitions (same canonical hash as the
+    // LOT 1 pin test): no silent edit of a shipped tool, ever.
     expect(createHash('sha256').update(JSON.stringify(sortKeys(preexisting), null, 2)).digest('hex'))
       .toBe('6589d5930620ea12e5b185a8b72e2657e08a2c32e9b5943a7d0e4e89aa304b2c');
-    expect(Object.keys(preexisting)).toHaveLength(21);
+    expect(Object.keys(preexisting)).toHaveLength(17);
+    // The 21 current names on origin/main (the 17 above plus the 4 train
+    // union tools): no removal or rename of a shipped tool.
+    expect([...Object.keys(preexisting), 'artifacts_publish_bundle', 'artifacts_lookup_people',
+      'artifacts_list_access', 'artifacts_revoke_reader_consent'].sort()).toEqual(
+      [...ARTIFACT_TOOL_NAMES].filter((name) => !['artifacts_create_upload_page', 'artifacts_list_assets',
+        'artifacts_publish_bundle_v2'].includes(name)).sort());
     expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_create_upload_page');
     expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_list_assets');
     expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_publish_bundle_v2');

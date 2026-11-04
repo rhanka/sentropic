@@ -81,7 +81,8 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);
   const normalized = { ...copyJson(defaults) as Record<string, JsonValue>, ...args } as Record<string, JsonValue>;
-  if (['ensure', 'publish', 'commit_upload', 'publish_bundle', 'set_access', 'delete', 'revert'].includes(operation)) {
+  if (['ensure', 'publish', 'commit_upload', 'publish_bundle', 'publish_bundle_v2',
+    'set_access', 'delete', 'revert'].includes(operation)) {
     const key = args.idempotencyKey;
     requireInput(typeof key === 'string' && key.trim().length > 0 && key.length <= limits.idempotencyKeyMaxUnits);
     requireInput(envelopeKey === undefined || envelopeKey === key);
