@@ -196,7 +196,7 @@ async function main(): Promise<void> {
   try {
     const result = await runReplicaSync({ ...(relayDir ? { relayDir } : {}), commit });
     for (const [key, value] of Object.entries(result.counts)) console.log(`${key}|${value}`);
-    console.log(result.outcome === 'committed' ? 'COMMITTED' : 'DRY RUN: rolled back');
+    if (result.outcome !== 'failed') console.log(result.outcome === 'committed' ? 'COMMITTED' : 'DRY RUN: rolled back');
     const termination = result.outcome === 'failed'
       ? { outcome: result.outcome, code: result.code, ...result.counts, ...(result.conflict_subject_ids ? { conflict_subject_ids: result.conflict_subject_ids } : {}) }
       : { outcome: result.outcome, ...result.counts };
@@ -204,7 +204,8 @@ async function main(): Promise<void> {
     try {
       await writeFile('/dev/termination-log', `${JSON.stringify(termination)}\n`);
     } catch { /* no termination log outside a Job container */ }
-    if (result.outcome === 'failed') process.exitCode = EXIT[result.code as FailCode] ?? 1;
+    // A failed batch is a business outcome, not an infra failure: exit 0 and let
+    // the job shell report the code (with conflict ids) in the merged log.
   } catch (error) {
     if (error instanceof RunnerFailure) {
       console.error(error.message);
