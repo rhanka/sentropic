@@ -50,7 +50,8 @@ function lot2Profile(): ArtifactProviderProfile {
   return {
     ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get',
-      'artifacts_get_source', 'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
+      'artifacts_get_source', 'artifacts_set_access',
+      'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
       'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2'],
     operations: [
       { operation: 'ensure', limits: { bindingNameMinUnits: 1, bindingNameMaxUnits: 128,
@@ -63,6 +64,7 @@ function lot2Profile(): ArtifactProviderProfile {
       { operation: 'get', limits: {}, defaults: {} },
       { operation: 'list_versions', limits: {}, defaults: {} },
       { operation: 'get_source', limits: {}, defaults: {} },
+      { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
       { operation: 'revert', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
       { operation: 'create_upload', limits: {}, defaults: {} },
       { operation: 'commit_upload', limits: { idempotencyKeyMaxUnits: 256 }, defaults: { profile: {} } },
@@ -227,5 +229,73 @@ describe('files parity LOT 2 (a): browser upload page', () => {
       digest: sha256(evil), size: evil.length, idempotencyKey: 'spoof-1' })).rejects.toThrow();
     expect(await world.refs.isPinned(sha256(evil))).toBe(false);
     expect(await world.uploadSessions.getStagedFile(created.uploadId)).toBeUndefined();
+  });
+});
+
+describe('files parity LOT 2 (b1): list_assets', () => {
+  async function publishInline(world: World, mcp: ReturnType<typeof scannedMcp>,
+    artifactId: string, files: { path: string; mimeType: string; bytes: Uint8Array }[],
+    key: string, expectedCurrent: string | null): Promise<string> {
+    const published = await mcp.invoke('artifacts_publish', { artifactId, idempotencyKey: key,
+      expectedCurrentReleaseId: expectedCurrent,
+      files: files.map((file) => ({ path: file.path, mimeType: file.mimeType, bytes: Array.from(file.bytes) })) });
+    expect(published.status).toBe(201);
+    return (unwrap<{ releaseId: string }>(published.body)).releaseId;
+  }
+
+  const tinyHtml = (n: number): Uint8Array => new TextEncoder().encode(`<html><body>${'x'.repeat(n)}</body></html>`);
+
+  it('lists released assets with digests and paginates', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'list-released');
+    await publishInline(world, mcp, artifactId, [
+      { path: 'a.html', mimeType: 'text/html', bytes: tinyHtml(10) },
+      { path: 'b.html', mimeType: 'text/html', bytes: tinyHtml(20) },
+      { path: 'c.html', mimeType: 'text/html', bytes: tinyHtml(30) },
+    ], 'pub-1', null);
+    const first = await mcp.invoke('artifacts_list_assets', { artifactId, state: 'released', limit: 2 });
+    expect(first.status).toBe(200);
+    const firstBody = unwrap<{ assets: { path: string; state: string; digest: string }[];
+      total: number; nextCursor?: string }>(first.body);
+    expect(firstBody.assets).toHaveLength(2);
+    expect(firstBody.total).toBe(3);
+    expect(firstBody.assets.every((asset) => asset.state === 'released')).toBe(true);
+    expect(firstBody.assets[0]!.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(typeof firstBody.nextCursor).toBe('string');
+    const second = await mcp.invoke('artifacts_list_assets',
+      { artifactId, state: 'released', limit: 2, cursor: firstBody.nextCursor });
+    expect(second.status).toBe(200);
+    expect(unwrap<{ assets: unknown[] }>(second.body).assets).toHaveLength(1);
+  });
+
+  it('keeps staged listing owner-only and refuses readers with access_denied', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'list-staged');
+    const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType: 'image/png', maxSize: 64 });
+    const upload = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
+    const bytes = pngBytes(21, 64);
+    await world.uploadStaging.put(upload.stagingKey, bytes);
+    const committed = await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: upload.uploadId,
+      path: 's.png', mimeType: 'image/png', digest: sha256(bytes), size: bytes.length, idempotencyKey: 'c-1' });
+    expect(committed.status).toBe(201);
+    const ownerList = await mcp.invoke('artifacts_list_assets', { artifactId, state: 'staged' });
+    expect(ownerList.status).toBe(200);
+    const staged = unwrap<{ assets: { state: string; uploadId: string }[] }>(ownerList.body).assets;
+    expect(staged).toHaveLength(1);
+    expect(staged[0]).toMatchObject({ state: 'staged', uploadId: upload.uploadId });
+    const grant = await mcp.invoke('artifacts_set_access', { artifactId, action: 'grant',
+      principalId: 'bob', grant: 'read', idempotencyKey: 'g-1' });
+    expect(grant.status).toBe(200);
+    const asBob = (tool: string, args: Record<string, unknown>) =>
+      world.mcp.invoke({ tool, invocation: world.invocation('bob'), args });
+    const readerStaged = await asBob('artifacts_list_assets', { artifactId, state: 'staged' });
+    expect(readerStaged.status).toBe(403);
+    const readerReleased = await asBob('artifacts_list_assets', { artifactId, state: 'released' });
+    expect(readerReleased.status).toBe(200);
+    const unknownPage = await mcp.invoke('artifacts_list_assets', { artifactId, pageSessionId: randomUUID() });
+    expect(unknownPage.status).toBe(200);
+    expect(unwrap<{ assets: unknown[] }>(unknownPage.body).assets).toEqual([]);
   });
 });
