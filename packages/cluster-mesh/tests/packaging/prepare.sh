@@ -110,6 +110,13 @@ platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
 receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/mcp-platform "$MPLATFORM")"
 if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
 
+# The app cutover adds @sentropic/auth-ui as an optional peer with no committed registry
+# metadata yet (BRxx-EX6): pack the workspace exactly as published so the frozen
+# `latest` consumer resolves it from a verified local tarball. Direct pack only:
+# auth-ui carries no train receipt, so candidate_archive would fail closed here.
+(cd ../auth-ui && npm pack --silent --pack-destination "$work/src" >/dev/null)
+auth_ui_tgz="$(ls "$work"/src/sentropic-auth-ui-*.tgz)"
+
 # Release-train specs for workspace packages that may be ahead of the registry
 # (pre-publication gate, e.g. before their publish jobs run): pack each one exactly as
 # published (dist built by the packaging.mk prerequisites), then resolve through the verified
@@ -326,7 +333,7 @@ for sib in llm-mesh llm-gateway auth-hono comments mcp-platform mcp-auth oauth-v
   esac
   case "$sib_spec" in file:*) latest_overrides="$latest_overrides @sentropic/$sib=$sib_spec" ;; esac
 done
-consumer "$work/latest" $latest_overrides "@sentropic/artifacts=file:$artifacts_tgz"
+consumer "$work/latest" $latest_overrides "@sentropic/artifacts=file:$artifacts_tgz" "@sentropic/auth-ui=file:$auth_ui_tgz"
 sources "$work/latest"
 : > "$work/latest/npm-install-detail"
 attempt "$work/latest" plain
