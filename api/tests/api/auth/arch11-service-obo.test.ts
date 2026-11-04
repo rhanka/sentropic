@@ -8,7 +8,7 @@ import { app } from '../../../src/app';
 import { db } from '../../../src/db/client';
 import { connectorTenantEnrollments } from '../../../src/db/control-schema';
 import { serviceClients } from '../../../src/db/schema';
-import { createCmTenant } from '../../../src/services/identity/cm-tenancy';
+import { createCmTenant, setCmTenantStatus } from '../../../src/services/identity/cm-tenancy';
 import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 
@@ -123,6 +123,32 @@ describe('ARCH-11 G1c — S2S OBO mint (token endpoint)', () => {
     const response = await mint(SINGLE_CLIENT_ID, SINGLE_SECRET, { tenant: ORG_B });
     expect(response.status).toBe(400);
     expect(((await response.json()) as { error: string }).error).toBe('invalid_target');
+  });
+
+  it('single-org: a suspended fixed tenant authorizes nothing (fail closed)', async () => {
+    await setCmTenantStatus(ORG_A, 'suspended');
+    try {
+      const selected = await mint(SINGLE_CLIENT_ID, SINGLE_SECRET, { tenant: ORG_A });
+      expect(selected.status).toBe(400);
+      expect(((await selected.json()) as { error: string }).error).toBe('invalid_target');
+      const omitted = await mint(SINGLE_CLIENT_ID, SINGLE_SECRET);
+      expect(omitted.status).toBe(400);
+      expect(((await omitted.json()) as { error: string }).error).toBe('invalid_target');
+    } finally {
+      await setCmTenantStatus(ORG_A, 'active');
+    }
+  });
+
+  it('multi-org: a suspended enrolled tenant drops out of the authorized set', async () => {
+    await setCmTenantStatus(ORG_B, 'suspended');
+    try {
+      expect(await tidOf(await mint(MULTI_CLIENT_ID, MULTI_SECRET))).toBe(ORG_A);
+      const denied = await mint(MULTI_CLIENT_ID, MULTI_SECRET, { tenant: ORG_B });
+      expect(denied.status).toBe(400);
+      expect(((await denied.json()) as { error: string }).error).toBe('invalid_target');
+    } finally {
+      await setCmTenantStatus(ORG_B, 'active');
+    }
   });
 
   it('multi-org (NON-VACUOUS ≥2-org): tenant selects the authorized org; out-of-set + absent fail closed', async () => {
