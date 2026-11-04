@@ -7,8 +7,8 @@ import { assertCompiledArtifactsProfile, ArtifactProfileInputError,
 import { createArtifactCommand, type ArtifactKeyDerivationBinding } from './server/command-identity.js';
 import { createGuardedEnsureService, type GuardedEnsureHost } from './server/service.js';
 import { assertArtifactReplayMigration, type IdempotencyStore } from './server/idempotency.js';
-import { combineSharingPolicy, maskEmailHint, resolveSharingPolicy, type KvPort, type PrincipalDirectoryPort,
-  type SharingPolicy, type SharingPolicyPort } from './server/ports.js';
+import { combineSharingPolicy, maskEmailHint, resolveSharingPolicy, UNKNOWN_USER_REF, type KvPort,
+  type PrincipalDirectoryPort, type SharingPolicy, type SharingPolicyPort } from './server/ports.js';
 import { createGuardedPublicationService,
   type GuardedPublicationDeps, type PublicationService } from './server/publication.js';
 import { SERVER_MAX_FILE_BYTES, SERVER_MAX_SOURCE_FILES, SERVER_MAX_SOURCE_INLINE_BYTES,
@@ -415,7 +415,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
    */
   async function projectUserRef(internalId: string, storageScopeId: string): Promise<string> {
     if (!deps.directory) return internalId;
-    return (await deps.directory.describePrincipal(storageScopeId, internalId))?.userRef ?? internalId;
+    return (await deps.directory.describePrincipal(storageScopeId, internalId))?.userRef ?? UNKNOWN_USER_REF;
   }
   async function projectSummary<T extends { ownerId: string }>(summary: T, storageScopeId: string): Promise<T> {
     if (!deps.directory) return summary;
@@ -1042,14 +1042,26 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               limit: normalized.limit as number | undefined, cursor: normalized.cursor as string | undefined,
               state: id => deps.lifecycle.getReleaseState(id), urls: deps.publicationUrls });
             await visible(artifactId, invocation);
+            if (deps.directory) {
+              for (const version of body.versions as { authorPrincipalId: string | null }[]) {
+                if (typeof version.authorPrincipalId === 'string') {
+                  version.authorPrincipalId = (await deps.directory.describePrincipal(
+                    invocation.storageScopeId, version.authorPrincipalId))?.userRef ?? UNKNOWN_USER_REF;
+                }
+              }
+            }
             return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
               result: { status: 200, body } };
           }
           const releases = [];
           for (const release of await deps.publication.listReleases(artifactId)) {
             const manifest = parseManifest(release.manifest);
+            const rawAuthor = typeof manifest.ownerId === 'string' ? manifest.ownerId : null;
+            const author = rawAuthor === null || !deps.directory ? rawAuthor
+              : (await deps.directory.describePrincipal(invocation.storageScopeId, rawAuthor))?.userRef
+                ?? UNKNOWN_USER_REF;
             releases.push({ releaseId: release.releaseId, createdAt: release.createdAt,
-              author: typeof manifest.ownerId === 'string' ? manifest.ownerId : null,
+              author,
               state: await deps.lifecycle.getReleaseState(release.releaseId),
               isCurrent: current?.releaseId === release.releaseId,
               digest: release.manifestDigest });
@@ -1081,7 +1093,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             : acl.grants.filter((grant) => grant.principalId === invocation.actorId);
           const grants = await Promise.all(visibleGrants.map(async (grant) => {
             const person = await deps.directory!.describePrincipal(invocation.storageScopeId, grant.principalId);
-            const userRef = person?.userRef ?? grant.principalId;
+            const userRef = person?.userRef ?? UNKNOWN_USER_REF;
             const { effective, blockedBy } = evaluateGrant(acl, grant.principalId, deps.isApprovedAccount ?? (() => false));
             return { userRef, displayName: person?.displayName ?? userRef,
               ...(person === undefined ? {} : { emailHint: maskEmailHint(person.email) }),
@@ -1091,7 +1103,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const owner = await deps.directory.describePrincipal(invocation.storageScopeId, acl.ownerId);
           return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
             result: { status: 200, body: { artifactId, accessMode: accessModeOf(acl),
-              owner: { userRef: owner?.userRef ?? acl.ownerId, displayName: owner?.displayName ?? acl.ownerId },
+              owner: { userRef: owner?.userRef ?? UNKNOWN_USER_REF,
+                displayName: owner?.displayName ?? UNKNOWN_USER_REF },
               canManage, grants } } };
         }
         const visibleArtifacts: unknown[] = [];
