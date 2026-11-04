@@ -20,7 +20,9 @@ describe('reader consent store (memory double)', () => {
     const store = createMemoryReaderConsentStore();
     expect(await store.findLiveConsent(key())).toBeUndefined();
     await store.grantConsent(record());
-    expect(await store.findLiveConsent(key())).toMatchObject({ consentId: 'c-1', revokedAt: undefined });
+    const found = await store.findLiveConsent(key());
+    expect(found).toMatchObject({ consentId: 'c-1' });
+    expect(found?.revokedAt).toBeUndefined();
     const revoked = await store.revokeConsent(key(), 'self', '2026-11-04T09:00:00.000Z',
       { actor: RC_ALICE, surface: 'api' });
     expect(revoked).toEqual({ changed: true, revokedAt: '2026-11-04T09:00:00.000Z' });

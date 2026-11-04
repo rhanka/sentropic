@@ -66,7 +66,8 @@ const ARTIFACTS_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true } a
 const READ_ONLY_TOOLS: readonly ArtifactsToolName[] = ['artifacts_list', 'artifacts_get',
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_get_source', 'artifacts_list_versions'];
 const IDEMPOTENT_WRITERS: readonly ArtifactsToolName[] = ['artifacts_ensure', 'artifacts_publish',
-  'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'];
+  'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
+  'artifacts_revoke_reader_consent'];
 
 export interface ArtifactsToolDefinition {
   readonly description: string;
@@ -134,6 +135,10 @@ export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, Arti
     limit: integer(1, 100), cursor: { ...str, maxLength: 4096 } }, ['artifactId'])),
   artifacts_revert: staticTool('artifacts_revert', obj({ artifactId: id, releaseId: id, targetReleaseId: id,
     expectedCurrentReleaseId, idempotencyKey }, ['artifactId', 'idempotencyKey'])),
+  artifacts_revoke_reader_consent: staticTool('artifacts_revoke_reader_consent', obj({ artifactId: id,
+    scope: { type: 'string', minLength: 1, maxLength: 128 }, idempotencyKey }, ['artifactId', 'idempotencyKey']),
+    'Artifacts revoke reader consent: withdraw the caller\u2019s own persistent consent for one scope of one artifact, '
+      + 'or for every scope when scope is omitted. Self-revocation only; the next call asks again.'),
 };
 
 export const ARTIFACTS_TOOL_SPECS = ARTIFACTS_TOOL_NAMES.map((name) => ({ name,
@@ -214,6 +219,7 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
         case 'artifacts_delete': request = { method: 'POST', path: '/delete', body: args }; break;
         case 'artifacts_list_versions': request = { method: 'POST', path: '/list_versions', body: args }; break;
         case 'artifacts_revert': request = { method: 'POST', path: '/revert', body: args }; break;
+        case 'artifacts_revoke_reader_consent': request = { method: 'POST', path: '/revoke_reader_consent', body: args }; break;
         default: throw new ArtifactProfileInputError(true);
       }
       return await deps.app.execute({ ...request, actorId: input.invocation.actorId,
