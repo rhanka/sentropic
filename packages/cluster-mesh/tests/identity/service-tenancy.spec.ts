@@ -288,9 +288,34 @@ describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)
 
   it('fails closed with identity_contract_unavailable on pre-G1 stores when serviceTenancy is set', async () => {
     const unitOfWork = await open();
-    await expect(unitOfWork.run(WRITE, async (tx) => createIdentityAuthHonoTransactionBindingV1({
-      ...shared, tx,
-      serviceTenancy: { enrollments: { listEnrolledTenantIds: async () => [] } },
-    }))).rejects.toMatchObject({ code: 'identity_contract_unavailable' });
+    await expect(unitOfWork.run(WRITE, async (tx) => {
+      // Union world: the durable stores already carry G1's OAuth read
+      // surface, so simulate a genuinely pre-G1 store set by hiding the G1
+      // finder on the live store for the duration of this attempt only.
+      const oauth = tx.stores.oauth as unknown as Record<string, unknown>;
+      const saved = oauth['findServiceClientBinding'];
+      oauth['findServiceClientBinding'] = undefined;
+      try {
+        return createIdentityAuthHonoTransactionBindingV1({
+          ...shared, tx,
+          serviceTenancy: { enrollments: { listEnrolledTenantIds: async () => [] } },
+        });
+      } finally {
+        oauth['findServiceClientBinding'] = saved;
+      }
+    })).rejects.toMatchObject({ code: 'identity_contract_unavailable' });
+  });
+
+  it('builds the CM-owned serviceTenant port on G1 stores when serviceTenancy is set', async () => {
+    const unitOfWork = await open();
+    const outcome = await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({
+        ...shared, tx,
+        serviceTenancy: { enrollments: { listEnrolledTenantIds: async () => [] } },
+      });
+      expect(binding.ports.serviceTenant).toBeDefined();
+      return binding.ports.serviceTenant!.resolveOboTenant({ clientId: 'svc-unknown', fixedTenantId: 'ignored-by-cm', requestedTenant: null });
+    });
+    expect(outcome).toEqual({ error: 'invalid_target', description: 'The client has no authorized tenant to act on behalf of.' });
   });
 });

@@ -80,24 +80,25 @@ Integrate the five approved A4 cluster-mesh gap lots G1 to G5 (PRs #899, #902, #
   - [x] Write this `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` with BRLOCK-EX1 review_by line retained.
   - [x] Environment mapping: `ENV=test-train-a4` for every test stack, never root dev; sibling train `release/train-2026-11-04` keeps Docker priority, lock taken per make command only.
   - [x] Confirm command style: `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make ... ENV=test-train-a4` with `ENV` last.
-- [ ] **Lot 1 — Merge G1-G5 in order**
-  - [ ] `git merge --no-ff origin/feat/cm-a4-gaps-g1-oauth-reads` (G1, #899).
-  - [ ] `git merge --no-ff origin/feat/cm-a4-gaps-g2-boundary` (G2, #902); union `composition-descriptors.ts` + `index.ts`.
-  - [ ] `git merge --no-ff origin/feat/cm-a4-gaps-g3-service-tenancy` (G3, #900); union `composition-descriptors.ts` + `index.ts` + `custody-auth.ts`.
-  - [ ] `git merge --no-ff origin/feat/cm-a4-gaps-g4-workspace-deletion` (G4, #903); union `composition-descriptors.ts` + `index.ts` + `custody-errors.ts`.
-  - [ ] `git merge --no-ff origin/feat/cm-a4-gaps-g5-replica-sync` (G5, #904); union `composition-descriptors.ts` + `index.ts` + `custody-errors.ts` + storage index.
-  - [ ] Version/lock conflicts: take either side during merges, regenerate once in Lot 2.
-- [ ] **Lot 2 — Single version bump and regeneration**
-  - [ ] Set `packages/cluster-mesh/package.json` to the next free dev version above main (`0.26.0-dev.9` unless another cluster-mesh bump merged first).
-  - [ ] Regenerate root lock (`make lock-root`), `api/package-lock.json` file sync, packaging fixtures, L5 P1 manifest — all through make, once.
-  - [ ] `make scope-check` before every commit; atomic `make commit` commits.
-- [ ] **Lot 3 — Test gates on ENV=test-train-a4**
-  - [ ] `make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-train-a4` (G1).
-  - [ ] `make test-cluster-mesh SCOPE=tests/boundary-resolution.spec.ts ENV=test-train-a4` (G2).
-  - [ ] `make test-cluster-mesh SCOPE=tests/identity/service-tenancy.spec.ts ENV=test-train-a4` (G3 sqlite) + postgres storage target (G3).
-  - [ ] `make test-cluster-mesh SCOPE=tests/identity/workspace-deletion.spec.ts ENV=test-train-a4` (G4).
-  - [ ] `make test-cluster-mesh SCOPE=tests/identity/replica-sync.spec.ts ENV=test-train-a4` (G5 sqlite) + postgres storage target (G5).
-  - [ ] `make down-volumes ENV=test-train-a4` at the end, including on failure.
+- [x] **Lot 1 — Merge G1-G5 in order**
+  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g1-oauth-reads` (G1, #899).
+  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g2-boundary` (G2, #902); union `composition-descriptors.ts` + `index.ts`.
+  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g3-service-tenancy` (G3, #900); union `composition-descriptors.ts` + `index.ts` + `custody-auth.ts`.
+  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g4-workspace-deletion` (G4, #903); union `composition-descriptors.ts` + `index.ts` + `custody-errors.ts`.
+  - [x] `git merge --no-ff origin/feat/cm-a4-gaps-g5-replica-sync` (G5, #904); union `composition-descriptors.ts` + `index.ts` + `custody-errors.ts` + storage index.
+  - [x] Version/lock conflicts: take either side during merges, regenerate once in Lot 2.
+- [x] **Lot 2 — Single version bump and regeneration**
+  - [x] Set `packages/cluster-mesh/package.json` to the next free dev version above main (`0.26.0-dev.9` unless another cluster-mesh bump merged first).
+  - [x] Regenerate root lock (`make lock-root`), `api/package-lock.json` file sync, packaging fixtures, L5 P1 manifest — all through make, once.
+  - [x] `make scope-check` before every commit; atomic `make commit` commits.
+- [x] **Lot 3 — Test gates on ENV=test-train-a4**
+  - [x] `make test-cluster-mesh SCOPE=tests/identity/oauth-reads.spec.ts ENV=test-train-a4` (G1): 5/5 sqlite.
+  - [x] `make test-cluster-mesh SCOPE=tests/boundary-resolution.spec.ts ENV=test-train-a4` (G2): 12 passed + 4 skipped sqlite; 16/16 postgres (one 5s-timeout run rerun green, proven transient).
+  - [x] `make test-cluster-mesh SCOPE=tests/identity/service-tenancy.spec.ts ENV=test-train-a4` (G3 sqlite): 19/19 after pre-G1 simulation + positive union test; postgres via identity campaign.
+  - [x] `make test-cluster-mesh SCOPE=tests/identity/workspace-deletion.spec.ts ENV=test-train-a4` (G4): 16/16 after descriptor containment fix.
+  - [x] `make test-cluster-mesh SCOPE=tests/identity/replica-sync.spec.ts ENV=test-train-a4` (G5 sqlite): 10/10; postgres via identity campaign.
+  - [x] `cluster-mesh-identity-test` both profiles: 28 files / 346 tests green on sqlite AND postgres.
+  - [x] `make down-volumes ENV=test-train-a4` at the end, including on failure (pg container removed, exit 0).
 - [ ] **Lot 4 — Train PR and wagon closure**
   - [ ] Push `release/train-a4-gaps`, open one READY PR « A4 train: cluster-mesh gap lots G1–G5 ».
   - [ ] Comment on PRs #899, #902, #900, #903, #904 that they are superseded by the train PR, and close them.

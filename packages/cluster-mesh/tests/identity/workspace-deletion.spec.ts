@@ -19,6 +19,7 @@ import {
   createAtomicWorkspaceDeletionV1,
   createConnectorRevocationCustodyPortV1,
   createNodeConnectorCustody,
+  IDENTITY_COMPOSITION_CONTRACT_VERSION,
   IDENTITY_COMPOSITION_DESCRIPTORS,
   IdentityCustodyErrorV1,
   IdentityNotFoundError,
@@ -272,9 +273,13 @@ describe.each(PROFILES.map((profile) => ({ profile })))('G4 atomic workspace del
   };
 
   it('pins the 1.2.0 descriptor row and the new error code', () => {
-    expect(IDENTITY_COMPOSITION_DESCRIPTORS).toEqual([{
+    // Train union: sibling lots contribute their own rows to the same
+    // bundle array, so pin the G4 row by containment, not whole-array
+    // equality (each lot still owns exactly one row).
+    expect(IDENTITY_COMPOSITION_CONTRACT_VERSION).toBe('1.2.0');
+    expect(IDENTITY_COMPOSITION_DESCRIPTORS.filter((entry) => entry.domain === 'atomic_workspace_deletion')).toEqual([{
       domain: 'atomic_workspace_deletion',
-      version: '1.2.0',
+      version: IDENTITY_COMPOSITION_CONTRACT_VERSION,
       baseContractVersion: '1.0.0',
       amendment: 'A4-composition-gaps',
       status: 'contract-only',
