@@ -118,5 +118,6 @@ Integrate the wagon branches into one release branch with `--no-ff` merges in or
   - [ ] Atomic commits via `make commit MSG="…"` (specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` PASS C2 before every commit; no AI trailers; no `[skip ci]`.
   - [ ] Push `release/train-next` to origin; open exactly one READY PR (body = this BRANCH.md); comment #908 and #891 as superseded by the train PR and close them; do NOT merge the train PR.
   - [ ] Report every step and every CI run id to `.tmp/rv/train-next.md` (root workspace).
-- [ ] **Lot 6 — Single CI watch**
+- [ ] **Lot 6 — Single CI watch** (in progress)
+  - [x] PR #914 `pull_request` event spawned no Actions run within ~12 min (zero check-runs on the head, zero workflow runs on the branch; same quirk as wagon F's first push; `ci.yml` YAML valid, global Actions flow healthy). Triggering the single CI with a normal content commit (this BRANCH.md update) instead of an empty one; empty-commit budget (3, owner-authorized) untouched.
   - [ ] Watch the single PR CI; fix real failures at the root; if only the AI shards fail, retrigger with an empty commit, up to 3 times (owner-authorized).
