@@ -6,7 +6,7 @@ import type { SQL } from 'drizzle-orm';
 import { createPostgresIdentityUnitOfWorkV1, IdentityCustodyErrorV1, PostgresCustodyHandle,
   type CustodyOpHost, type IdentityTransactionV1, type PostgresIdentityBindingV1,
   type PostgresIdentityHostV1 } from '@sentropic/cluster-mesh';
-import { pool, type CompatDbMethods } from '../../db/client';
+import { pool, type db } from '../../db/client';
 import { aliasCmHostScope, createCmScopedHostClient } from './cm-host-scope';
 
 /** Request host: the pooled connection plus the custody stores/journal the CM V2 flows require. */
@@ -97,11 +97,15 @@ export const runCmIdentityRead = <T>(operation: (tx: CmIdentityTransaction) => P
     : cmIdentityUnitOfWork.run(cmRequestReadOptions, tx => current.run(tx, () => operation(tx)));
 };
 
-/** Existing app adapters also use all/run/get; each method stays on this executor. */
-export const withAppDatabaseMethods = (database: NodePgDatabase): NodePgDatabase & CompatDbMethods => Object.assign(database, {
-  all: async (query: SQL): Promise<unknown[]> => (await database.execute(query)).rows,
-  run: async (query: SQL): Promise<unknown> => database.execute(query),
-  get: async (query: SQL): Promise<unknown> => (await database.execute(query)).rows[0],
-});
-export const bindCmAppDatabase = (tx: CmIdentityTransaction): NodePgDatabase & CompatDbMethods =>
-  withAppDatabaseMethods(drizzle(tx.hostTransaction));
+/** Existing app adapters also use all/run/get; each method stays on this executor.
+ *  The tx-bound drizzle instance satisfies the app-database contract: no caller
+ *  reads `$client` (verified: no `$client` use in api/src) and every query goes
+ *  through the same drizzle surface as the pool-bound instance. */
+export const withAppDatabaseMethods = (database: NodePgDatabase): typeof db =>
+  Object.assign(database, {
+    all: async (query: SQL): Promise<unknown[]> => (await database.execute(query)).rows,
+    run: async (query: SQL): Promise<unknown> => database.execute(query),
+    get: async (query: SQL): Promise<unknown> => (await database.execute(query)).rows[0],
+  }) as typeof db;
+export const bindCmAppDatabase = (tx: CmIdentityTransaction): typeof db =>
+  withAppDatabaseMethods(drizzle(tx.hostTransaction) as NodePgDatabase);

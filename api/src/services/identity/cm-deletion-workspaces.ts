@@ -1,6 +1,6 @@
-import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1, type IdentityTransactionV1 } from '@sentropic/cluster-mesh';
 import { getPublicJobStreamId } from '../public-job-stream';
-import type { CmIdentityTransaction } from './cm-transaction';
+import type { PoolClient } from 'pg';
 
 const identifier = (value: string): string => {
   if (!/^[a-z_][a-z0-9_]*$/.test(value)) throw new IdentityCustodyErrorV1('identity_material_invalid');
@@ -8,7 +8,7 @@ const identifier = (value: string): string => {
 };
 
 /** The plan already authorizes every listed workspace; retain unrelated/shared scopes. */
-export async function deleteCmBusinessWorkspaces(workspaceIds: readonly string[], tx: CmIdentityTransaction) {
+export async function deleteCmBusinessWorkspaces(workspaceIds: readonly string[], tx: IdentityTransactionV1<PoolClient>) {
   const deletedByTable: Record<string, number> = {}, detachedByTable: Record<string, number> = {};
   if (!workspaceIds.length) return { deletedByTable, detachedByTable };
   const execute = async (table: string, statement: string, values: unknown[], detach = false) => {
