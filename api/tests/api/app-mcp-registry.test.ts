@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: 'adcd8079e80841aaf786320d6c6522efc26d31a7ca273b545781ece8485342c7' },
+      'sentropic.artifacts': { manifestDigest: '8ae391ecabf70d75bd07836f0394bd672d996dc4e4a5a26c1cc4adc19d895486' },
     } };
 }
 
