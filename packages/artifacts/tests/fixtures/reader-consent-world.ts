@@ -25,8 +25,10 @@ export const rcProfile = (): ArtifactProviderProfile => ({
   operations: [...RADAR_ARTIFACTS_PROFILE.operations,
     // set_access stays test-only (G2 owns it); revoke_reader_consent rides the same
     // host-extension pattern — the train owns the radar/APP-P1 selection, the wagon never re-pins it.
-    { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
-    { operation: 'revoke_reader_consent', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
+    // The union RADAR already carries set_access (wagon B): append only missing operations (duplicates refuse).
+    ...(['set_access', 'revoke_reader_consent'] as const)
+      .filter((operation) => !RADAR_ARTIFACTS_PROFILE.operations.some((op) => op.operation === operation))
+      .map((operation) => ({ operation, limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }))],
 });
 
 export interface RcWorld {
