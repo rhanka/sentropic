@@ -1,28 +1,36 @@
-# Feature: Bounded concurrency in artifacts publish blob staging (P1 #art-conc)
+# Feature: G2 — MCP sharing tools in @sentropic/artifacts
 
 ## Objective
-A multi-file `artifacts_publish` returns 503 `provider_unavailable` on slow S3 hosts (OVH BHS answers in 1.1–1.5 s per request) because `publishFinalized` does one `putBlob` per file in a sequential loop and `verifyStagedBlobs` does one `getBlob` per file, also sequential; 30 files take ~78 s against the host's 20 s blob budget. This branch makes both loops bounded-concurrent (default 6, configurable, never above 8) with a shared deadline, first-fatal cancellation and unchanged error projection, all-or-nothing semantics, cleanup/finalization and MCP tool definitions.
+Implement sharing lot G2 of the binding convergence `.tmp/concertation-share/converged-r2.md` (sha256 1d5723e4…) — row G2 of §4 with its acceptance column, plus §2.3/§2.4/§2.5 as referenced — with owner answers (`.tmp/concertation-share/owner-answers.md`): collaboration is an additional right granted case by case to one named colleague only; sharing is visible; a share covers all retained versions. G1 (#901, 0.2.10) is the base: byte-stable tool definitions (#896, 0.2.9) are built on, never redone. Existing MCP tool definitions stay byte-identical before and after this lot.
 
 ## Scope / Guardrails
-- Scope limited to `packages/artifacts` (`src/server/publication.ts`, `src/mcp-core.ts` version constant, tests, CHANGELOG/package.json), the mechanical lockfile sync (`package-lock.json`, `api/package-lock.json`), the APP-P1 pin sites (`api/src/services/mcp/cluster-registry.ts` + the two api registry tests), the L5 P1 manifest (`tools/memory-mcp-l5/artifacts/**`, BR01-EX5) and the cluster-mesh selected packaging fixture re-pin (BR01-EX3).
-- MCP tool definitions stay byte-identical: no change to `ARTIFACTS_TOOL_DEFINITIONS` or the tools/list snapshot; only `ARTIFACTS_PROVIDER_VERSION` (manifest version field) moves to 0.2.12, so the APP-P1 manifest pin is refreshed, never weakened.
-- Make-only workflow; one Docker lock per make command (`flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make ...`), never nested; tests on `ENV=test-art-conc-rb` only, ENV always last; `make down-volumes ENV=test-art-conc-rb` at the end. No `[skip ci]` anywhere.
-- Branch development happens in worktree `tmp/worktrees/artifacts-publish-concurrency` (branch `fix/artifacts-publish-bounded-concurrency` from `origin/main`).
-- In every `make` command, `ENV=<env>` is passed as the last argument.
-- All new text in English.
+- Scope limited to `packages/artifacts/**` plus the pin/lock/manifest refresh files listed under Allowed Paths.
+- No new migration (G1's `0006_sharing.sql` is reused unchanged).
+- Make-only workflow, no direct Docker commands; Docker under `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md` taken PER COMMAND (never nested).
+- Tests on `ENV=test-share-g2` (always LAST argument), never `ENV=dev`; every test lane ends with `make down-volumes ENV=test-share-g2`.
+- No `[skip ci]` in any commit; CI budget: one run on the final head; never `gh run rerun`.
+- All new text in English. No human-effort or time estimates.
+- Crash safety: push `feat/share-g2-mcp-tools` to origin after every few commits.
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Version allocation: main is 0.2.10 (#901), 0.2.11 is reserved for #891, 0.2.12 for #907 (open PR `fix/artifacts-publish-bounded-concurrency`); this lot takes the next free version **0.2.13**, inside cluster-mesh's `>=0.2.0 <0.3.0` peer range.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `packages/artifacts/src/server/publication.ts`
   - `packages/artifacts/src/mcp-core.ts` (ARTIFACTS_PROVIDER_VERSION only)
   - `packages/artifacts/tests/**`
-  - `packages/artifacts/CHANGELOG.md`
-  - `packages/artifacts/package.json`
-  - `package-lock.json` and `api/package-lock.json` — mechanical lockfile sync of the 0.2.12 version bump only (version-string-only diffs, same pattern as origin/main ddbe7b65e / 5414304b0); explicit allowed wins over the `api/**` forbidden glob
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
+  - `packages/artifacts/package.json` (version bump only)
+  - `packages/artifacts/CHANGELOG.md` (release entry)
+  - `package-lock.json` (BR02-EX2, artifacts version line only)
+  - `api/package-lock.json` (BR02-EX2, one-line `file:` sync)
+  - `api/src/services/mcp/cluster-registry.ts` (BR02-EX6, APP-P1 pin)
+  - `api/tests/api/app-mcp-registry.test.ts` (BR02-EX6, pin vectors)
+  - `api/tests/api/app-mcp-installed.test.ts` (BR02-EX6, pin vectors)
+  - `api/tests/api/artifacts-host-publication.test.ts` (BR02-EX6, profileDigest pin)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR02-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR02-EX3)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR02-EX3)
+  - `tools/memory-mcp-l5/artifacts/**` (BR02-EX5, P1 manifest regen)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -33,63 +41,69 @@ A multi-file `artifacts_publish` returns 503 `provider_unavailable` on slow S3 h
   - every other packages/cluster-mesh path stays out of scope (classified unknown); only the three BR01-EX3 files are conditional below
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-  - `tools/memory-mcp-l5/artifacts/**` (BR01-EX5)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX3)
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR01-EX3)
+  - `.cursor/rules/**`, `rules/**`
+  - `api/**`, `ui/**`, `e2e/**`, `apps/**`, `deploy/**` except the BR02-EX6 files above
+  - `packages/**` other than `packages/artifacts/**` and the BR02-EX3 files above
+  - `src/**` (root app sources)
+- **Conditional Paths**: none beyond Allowed Paths above (all exception-bearing paths are declared in Allowed Paths, which takes precedence over Forbidden).
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- BR01-EX5 (scope exception, `tools/memory-mcp-l5/artifacts/**`): the root lock carries @sentropic/artifacts 0.2.12 after `make lock-root`, so the committed P1 manifest no longer matches the live lock fingerprint; regenerate through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (never hand-editing digests), previous manifest+sidecar retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot. Precedent: e52102c4c (0.2.9).
-- BR01-EX3 (cluster-mesh packaging fixture re-pin): `tests/packaging/prepare-artifacts.spec.ts` requires the `selected` fixture to pin the workspace candidate version exactly, and the lazy lane installs the same-PR sibling archives whose integrity the committed lock must carry. Re-pin `fixtures/selected/package.json` + `package-lock.json` through `make pack-candidate-siblings` + `refresh-lazy-package-lock` and update the hardcoded archive integrity in `artifacts-tuple.spec.ts`. Rollback: revert the three files to the 0.2.9 pin. Precedent: bfbdd78df.
-- Rebase on origin/main (3c0897b06, post-#901 sharing G1 / artifacts 0.2.10): UNION resolution — every #901 sharing change and every #art-conc concurrency change kept. Conflicts: `BRANCH.md` (this branch's content kept, BRLOCK-EX1 review_by line retained, test env moved to `test-art-conc-rb`), `packages/artifacts/package.json` + both lockfiles (0.2.12 kept per conductor allocation, above #901's 0.2.10), `mcp-core.ts` (0.2.12 version constant + #901/#896 tool definitions untouched), `CHANGELOG.md` (0.2.12 entry above #901's 0.2.10 entry), APP-P1 pin sites (`cluster-registry.ts` + the two app-mcp tests re-pinned to the 0.2.12 digest recomputed through make against the union source, #901's 0.2.8/0.2.10 refusal vectors kept), cluster-mesh fixtures + `artifacts-tuple.spec.ts` (re-pinned to 0.2.12 via the packaging make flow), L5 P1 manifest + history + lock snapshot (regenerated through `make memory-l5-pack` against the post-rebase HEAD). MCP tool definitions byte-identical; tools/list snapshot unchanged. Locks regenerated via `make lock-root` (+ documented one-line `file:` sync in `api/package-lock.json`, pattern ddbe7b65e), never hand-merged.
+- BR02-EX2 (lock pins): the 0.2.13 release bumps the workspace package version, so the root `package-lock.json` `packages/artifacts` entry is refreshed through `make lock-root` (only the artifacts version line is kept) and the single `"../packages/artifacts"` version line in `api/package-lock.json` is synced (same targeted one-line sync as #901 BR01-EX2). No dependency graph change; rollback with the version fix.
+- BR02-EX3 (cluster-mesh packaging fixture re-pin): `tests/packaging/prepare-artifacts.spec.ts` requires the `selected` fixture to pin the workspace candidate version exactly (artifacts 0.2.13). Re-pin `fixtures/selected/package.json` + `package-lock.json` through `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` and the hardcoded archive integrity in `artifacts-tuple.spec.ts` to the candidate tarball's sha512. Rollback: revert the three files to the 0.2.10 pin.
+- BR02-EX5 (scope exception, `tools/memory-mcp-l5/artifacts/**`): every rebase/lock change touching the root lock requires regenerating the memory-l5 P1 manifest through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (never hand-editing digests); previous manifest+sidecar retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot.
+- BR02-EX6 (APP-P1 pin): the provider version 0.2.13 changes the APP-P1 manifest digest, and the new operation profiles in the shipped radar profile change `APP_P1_PROFILE_DIGEST`; both constants in `api/src/services/mcp/cluster-registry.ts` and the app-mcp test fixtures are re-pinned to the digests computed through make. The four-tool host selection and every pre-existing tool definition stay byte-identical. Never weaken the pin guard. Rollback: restore the 0.2.10 digests.
 
 ## AI Flaky tests
-- Acceptance rule: no AI-flaky tests are involved; all tests here are deterministic (latency-injected fakes with generous margins).
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+- G2 touches no AI-generation path; no AI flaky tests expected.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single branch, single final test cycle)
-- Rationale: one cohesive fix inside one package plus mechanical pin/lock/manifest sync; no parallel sub-workstreams.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single lot G2 in one package; one branch, one worktree `tmp/worktrees/share-g2`, one test env `test-share-g2`.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: no UI surface change; package-level vitest lanes only (`make test-artifacts`, scoped api registry tests) on `ENV=test-art-conc-rb`.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- G2 is package-internal (no UI surface); UAT = package test suites + CI. No browser UAT for this lot.
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/share-g2`.
+  - Push branch before CI.
+  - No root-workspace UAT needed for G2 (no app surface changed).
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Worktree `tmp/worktrees/artifacts-publish-concurrency` on `fix/artifacts-publish-bounded-concurrency` from `origin/main`.
-  - [x] Read `packages/artifacts/src/server/publication.ts` (publishFinalized put loop ~L530, verifyStagedBlobs L191), `failures.ts` classification, `http.ts` dispatch, `mcp-core.ts` tool definitions.
-  - [x] Confirm command style: `make ... ENV=test-art-conc-rb` with ENV last; one `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md` per make command, never nested.
-  - [x] Version allocation: 0.2.12 (#art-conc; #901=0.2.10, #891=0.2.11 per conductor); post-bump gate `npm view @sentropic/artifacts version` < 0.2.12.
-
-- [x] **Lot 1 — Bounded concurrency in publication.ts**
-  - [ ] Add `DEFAULT_BLOB_CONCURRENCY = 6`, `MAX_BLOB_CONCURRENCY = 8`, `resolveBlobConcurrency` (clamp to 8, reject <1/non-integer) and a shared worker-pool helper (shared `deadlineAt`, first-fatal stop, at most k in flight, original first error rethrown unchanged).
-  - [ ] `verifyStagedBlobs(blobs, entries, options?)` runs getBlob read-backs through the pool (default 6); digest-then-size mismatch errors unchanged.
-  - [ ] `publishFinalized` runs the putBlob loop through the pool with the per-entry intent-pending check as the pool's before-each hook; `blobConcurrency`/`blobDeadlineMs` on `GuardedPublicationDeps`; shared deadline across put and verify pools; deadline expiry throws a `TimeoutError`-named error (classifies to the same 503 provider_unavailable projection).
-  - [ ] All-or-nothing unchanged: intent record, pins, finally-unpin, coordinator.finalizePrepared and compensation paths untouched; MCP tool definitions byte-identical.
-  - [ ] Lot gate: `make typecheck-artifacts` + `make lint-artifacts` green on `ENV=test-art-conc-rb`.
-
-- [x] **Lot 2 — Latency-injected tests**
-  - [ ] New `packages/artifacts/tests/publication-concurrency.test.ts`: fake blob store with injected per-op latency and in-flight tracking.
-  - [ ] Wall time drops close to ceil(n/k) round trips (n=30, k=6, 100 ms/op → ~500 ms, asserted well under the 3000 ms sequential time).
-  - [ ] Failure in the middle rolls back cleanly: same error object rethrown, finalizePrepared never called, pins released, no visible release, no new ops started after the first fatal error.
-  - [ ] Concurrency limit respected: max in-flight ≤ k for default 6, configured 3, and configured 100 (clamped to 8).
-  - [ ] Error codes unchanged: sentinel provider errors classify to the identical projection (503 provider_unavailable / capability_unavailable, retriable) through `classifyArtifactFailure`; digest-mismatch read-back error unchanged; deadline expiry classifies the same.
-  - [ ] Lot gate: `make test-artifacts SCOPE=tests/publication-concurrency.test.ts ENV=test-art-conc-rb`, then full `make test-artifacts ENV=test-art-conc-rb` green.
-
-- [x] **Lot 3 — Version bump 0.2.12, CHANGELOG, locks, APP-P1 pin, L5 manifest**
-  - [ ] `packages/artifacts/package.json` 0.2.9 → 0.2.12; `ARTIFACTS_PROVIDER_VERSION` = '0.2.12' in `src/mcp-core.ts`; CHANGELOG `## 0.2.12` entry above `## 0.2.9`.
-  - [ ] `make lock-root ENV=test-art-conc-rb`; api lock one-line `"../packages/artifacts"` version-string bump (pattern ddbe7b65e).
-  - [ ] Recompute APP-P1 manifest digest through the make test lane (temp test in `packages/artifacts/tests/`, since deleted); refresh `APP_P1_MANIFEST_DIGEST` in `api/src/services/mcp/cluster-registry.ts` + digests/version assertion in `api/tests/api/app-mcp-registry.test.ts` and `app-mcp-installed.test.ts`. Pin semantics unchanged; tools/list snapshot untouched (definitions byte-identical).
-  - [ ] BR01-EX3: `make pack-candidate-siblings` + `refresh-lazy-package-lock`; re-pin `fixtures/selected/package.json` + `package-lock.json` + `artifacts-tuple.spec.ts` integrity to 0.2.12.
-  - [ ] BR01-EX5: `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json ENV=test-art-conc-rb`.
-  - [ ] Lot gate: scoped api registry tests (`app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`) green on `ENV=test-art-conc-rb`.
-
-- [ ] **Lot N — Final validation**
-  - [ ] `make test-artifacts ENV=test-art-conc-rb` green (unit suite incl. new concurrency tests).
-  - [ ] `make scope-check` PASS before every commit; `harness check branch` on the worktree.
-  - [ ] `make down-volumes ENV=test-art-conc-rb` (exit 0) after the test lanes.
-  - [ ] Final gate step 1: `make commit`, push, open READY PR using this BRANCH.md as body.
-  - [ ] Final gate step 2: exactly one CI run on the final head.
-  - [ ] Report to `.tmp/rv/artifacts-publish-concurrency.md` (incl. the MCP/mcp-platform terminal-response audit). Do not merge.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, `.tmp/concertation-share/converged-r2.md` (§2.3–§2.5, §4 G2 row), `.tmp/concertation-share/owner-answers.md`.
+  - [x] Create isolated worktree `tmp/worktrees/share-g2` on branch `feat/share-g2-mcp-tools` from `origin/main` (HEAD 3c0897b06, #901 merged); `cp /home/antoinefa/src/sentropic/.env .env`.
+  - [x] Version check: main 0.2.10; open PRs — #891 reserves 0.2.11, #907 takes 0.2.12 ⇒ G2 takes **0.2.13**.
+  - [x] Make targets captured: `make test-artifacts SCOPE=… ENV=test-share-g2`, `make test-artifacts-integration SCOPE=… ENV=test-share-g2`, `make typecheck-artifacts`, `make lint-artifacts`, `make build-artifacts`, `make down-volumes ENV=test-share-g2`, `make scope-check`, `make commit MSG="…"`, `make lock-root`.
+  - [x] Command style confirmed: `flock /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md make … ENV=test-share-g2` with `ENV` last, one lock per make command, never nested.
+  - [x] Scope boundaries declared above (BR02-EX2/EX3/EX5/EX6).
+- [x] **Lot 1 — Tests first (G2 acceptance column of §4 row G2)**
+  - [x] `packages/artifacts/tests/share-g2-tools.test.ts` + `share-g2-errors.test.ts` (new, split with the `fixtures/share-g2-world.ts` helper): hash of pre-existing definitions unchanged across a `profileRevisionId` bump; end-to-end « share with Farid » (lookup_people → `userRef` → set_access → reader reads → revoke → next read refused); exhaustive payload capture (`get`, `list`, `set_access` receipt, `list_access`, `lookup_people`) with no internal principal and no full email; lookup by a `pending` caller refused without enumeration; homonyms returned with distinct `emailHint`, no silent choice; « tout le monde » (sentinel) opens to an approved account and refuses a `pending` one; non-reader + forged `userRef` ⇒ `not_found` (no resolution leak); owner + non-shareable target ⇒ single `person_not_shareable` 422 in all four causes (unknown, inactive, unapproved, out of scope); replay of the same key across a `policyRevision` change without a parasitic 409; admin lists/revokes someone else's `restricted` artifact without becoming a reader; reader sees only the mode and its own entry in `list_access`; without a `PrincipalDirectoryPort` the new tools answer `capability_unavailable`.
+  - [x] `packages/artifacts/tests/tools-list-snapshot.test.ts` (evolve): r2-strict profile also selects `artifacts_lookup_people` / `artifacts_list_access` with operation profiles; regenerate `tests/snapshots/tools-list-catalogue.json` through the test (delete + re-run + re-run) so the CI snapshot covers the new tools while every pre-existing definition keeps its exact bytes.
+  - [x] `packages/artifacts/tests/fixtures/transport-world.ts` (evolve): memory `PrincipalDirectoryPort` double (search / resolve / describe, userRef ≠ internal principal, masked-hint source emails), `directory` option, `createdAt` on grant records.
+  - [x] Scoped runs while evolving: `flock … make test-artifacts SCOPE=tests/share-g2-tools.test.ts ENV=test-share-g2` (6/6), `SCOPE=tests/share-g2-errors.test.ts` (6/6), then full `make test-artifacts ENV=test-share-g2` (51 files, 545/545); `flock … make down-volumes ENV=test-share-g2` after each stack.
+- [x] **Lot 2 — Implementation (G2)**
+  - [x] `src/server/ports.ts`: `PrincipalDirectoryPort` (search, `userRef`→internal resolution, inverse projection) + `DirectoryPerson` + email-hint masking helper.
+  - [x] `src/server/access.ts`: `GrantRecord.createdAt?`.
+  - [x] `src/server/management.ts`: `set_access` resolves `userRef` at §2.3 step 4 (after visibility and management right), merged `person_not_shareable` on resolution/approval failure, trusted internal-principal fallback, receipt grants projected to `userRef`, `policyRevision` stays a barrier (never hashed). The 422 is delivered through the operational refusal channel (`shareableRefused()`, same pattern as `policyRefused()`), not as a new `ArtifactErrorKind`: `failures.ts` is untouched because the coordinator classifies non-operational failures as 500.
+  - [x] `src/http.ts`: `directory` dep; `/lookup_people` (approved-caller guard) and `/list_access` (management visibility exception, owner/admin full list, reader mode + own entry) routes; projection of `ownerId`/`grants` on `get`/`list`/`ensure` summaries; transport profile allows the two new capabilities.
+  - [x] `src/profile/contracts.ts` + `src/mcp-core.ts`: two new capability names, static frozen definitions, read-only mutability, executor routes; `ARTIFACTS_PROVIDER_VERSION` 0.2.13.
+  - [x] `src/profile/schemas.ts` + `src/profile/index.ts` + `src/profile/radar.ts`: operation profiles `set_access` / `lookup_people` / `list_access` in the shipped profile, schemas and routes for the new operations.
+  - [x] `src/adapters/postgres-management.ts` + `src/adapters/postgres.ts`: grant `created_at` round-trip.
+  - [x] `src/server/templates.ts`: authoring-guide lines for the two new tools (guide text only, never a tool definition).
+  - [x] Lot gate: full `make test-artifacts ENV=test-share-g2` + `make test-artifacts-integration ENV=test-share-g2` green; `make typecheck-artifacts`, `make lint-artifacts` green; `make down-volumes ENV=test-share-g2`.
+- [ ] **Lot 3 — Refresh pins/locks/manifests through make, commit, push, PR, CI**
+  - [x] Bump `packages/artifacts/package.json` to 0.2.13 (> published 0.2.9); CHANGELOG entry.
+  - [x] `make lock-root` (BR02-EX2) + api lock one-liner; BR02-EX3 cluster-mesh fixtures via packaging.mk (`refresh-lazy-package-lock` with the packed 0.2.13 sibling receipt, sha256 15802f3c…, fixture integrity sha512-kq81A5RP…); BR02-EX6 APP-P1 digests recomputed through make (profileDigest 9d216231…, manifestDigest 108f7c19…); BR02-EX5 L5 P1 manifest via `make memory-l5-pack`.
+  - [ ] Atomic commits via `make commit MSG="…"` (≤150 lines each, specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` before every commit; no AI trailers.
+  - [ ] Push `feat/share-g2-mcp-tools` to origin after the commit wave (crash safety).
+  - [ ] Open READY PR (title/body from this BRANCH.md, English, test plan included), wait for exactly one CI run on the final head; report results.
+  - [ ] Write report to `.tmp/rv/share-g2.md` (root workspace). Do NOT merge; do NOT delete BRANCH.md. End with `make down-volumes ENV=test-share-g2`.
