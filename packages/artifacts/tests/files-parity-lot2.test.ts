@@ -299,3 +299,86 @@ describe('files parity LOT 2 (b1): list_assets', () => {
     expect(unwrap<{ assets: unknown[] }>(unknownPage.body).assets).toEqual([]);
   });
 });
+
+describe('files parity LOT 2 (b2): publish_bundle_v2', () => {
+  const tinyPng = (seed: number): Uint8Array => pngBytes(seed, 96);
+
+  async function publishV1Png(world: World,
+    artifactId: string, key: string): Promise<{ releaseId: string; digest: string }> {
+    const published = await world.mcp.invoke({ tool: 'artifacts_publish', invocation: world.invocation(),
+      args: { artifactId, idempotencyKey: key, expectedCurrentReleaseId: null,
+        files: [{ path: 'a.png', mimeType: 'image/png', bytes: Array.from(tinyPng(3)) }] } });
+    expect(published.status).toBe(201);
+    const body = unwrap<{ releaseId: string; manifest: string }>(published.body);
+    const files = JSON.parse(body.manifest).files as { digest: string }[];
+    return { releaseId: body.releaseId, digest: files[0]!.digest };
+  }
+
+  it('copies a screenshot between artifacts with zero client bytes and equal digest', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const sourceId = await ensureArtifact(world, mcp, 'v2-source');
+    const { releaseId, digest } = await publishV1Png(world, sourceId, 'v2-pub-1');
+    const targetId = await ensureArtifact(world, mcp, 'v2-target');
+    const copied = await mcp.invoke('artifacts_publish_bundle_v2', { artifactId: targetId,
+      idempotencyKey: 'v2-copy-1', expectedCurrentReleaseId: null,
+      assets: [{ path: 'copy.png', sourceArtifactId: sourceId, sourcePath: 'a.png' }] });
+    expect(copied.status).toBe(201);
+    const files = unwrap<{ files: { digest: string; origin: string }[] }>(copied.body).files;
+    expect(files).toHaveLength(1);
+    expect(files[0]!.digest).toBe(digest);
+    expect(files[0]!.origin).toBe(`copy:${sourceId}:${releaseId}`);
+    expect(mcp.leaks).toEqual([]);
+  });
+
+  it('refuses foreign-scope copies, copies without source right, and commits nothing on one bad ref', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const sourceId = await ensureArtifact(world, mcp, 'v2-foreign-source');
+    const { releaseId } = await publishV1Png(world, sourceId, 'v2-pub-2');
+    const foreignId = randomUUID();
+    await world.acls.putArtifactAcl(foreignId, { ownerId: 'alice', storageScopeId: 'scope-other',
+      bindingName: 'foreign', createdAt: '2026-01-01T00:00:00Z', isPublic: false, withdrawn: false, grants: [] });
+    const targetId = await ensureArtifact(world, mcp, 'v2-foreign-target');
+    const crossScope = await mcp.invoke('artifacts_publish_bundle_v2', { artifactId: targetId,
+      idempotencyKey: 'v2-cross-1', expectedCurrentReleaseId: null,
+      assets: [{ path: 'x.png', sourceArtifactId: foreignId, sourceReleaseId: releaseId }] });
+    expect(crossScope.status).toBe(422);
+    const bobEnsured = await world.mcp.invoke({ tool: 'artifacts_ensure',
+      invocation: world.invocation('bob'), args: { bindingName: 'v2-bob', idempotencyKey: 'ensure-bob' } });
+    expect(bobEnsured.status).toBe(201);
+    const bobId = unwrap<{ artifactId: string }>(bobEnsured.body).artifactId;
+    const noRight = await mcp.invoke('artifacts_publish_bundle_v2', { artifactId: targetId,
+      idempotencyKey: 'v2-noright-1', expectedCurrentReleaseId: null,
+      assets: [{ path: 'y.png', sourceArtifactId: bobId, sourcePath: 'a.png' }] });
+    expect(noRight.status).toBe(403);
+    const badRef = await mcp.invoke('artifacts_publish_bundle_v2', { artifactId: targetId,
+      idempotencyKey: 'v2-badref-1', expectedCurrentReleaseId: null,
+      assets: [{ path: 'z.png', uploadId: randomUUID() }] });
+    expect(badRef.status).toBe(422);
+    expect(await world.state.getCurrentReleaseId(targetId)).toBeUndefined();
+  });
+
+  it('carries a release and republishes text-only via keepUnmodifiedPaths', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'v2-carry');
+    const first = await publishV1Png(world, artifactId, 'v2-carry-1');
+    const carried = await mcp.invoke('artifacts_publish_bundle_v2', { artifactId,
+      idempotencyKey: 'v2-carry-2', expectedCurrentReleaseId: first.releaseId,
+      assets: [{ path: 'a.png', carryFromReleaseId: first.releaseId }],
+      keepUnmodifiedPaths: false });
+    expect(carried.status).toBe(201);
+    const carriedFiles = unwrap<{ files: { digest: string; origin: string }[] }>(carried.body).files;
+    expect(carriedFiles[0]!.digest).toBe(first.digest);
+    expect(carriedFiles[0]!.origin).toBe(`carry:${first.releaseId}`);
+    const kept = await mcp.invoke('artifacts_publish_bundle_v2', { artifactId,
+      idempotencyKey: 'v2-carry-3',
+      expectedCurrentReleaseId: unwrap<{ releaseId: string }>(carried.body).releaseId,
+      files: [{ path: 'note.html', mimeType: 'text/html', text: '<html><body>hi</body></html>' }],
+      keepUnmodifiedPaths: true });
+    expect(kept.status).toBe(201);
+    expect(unwrap<{ files: { path: string }[] }>(kept.body).files.map((file) => file.path).sort())
+      .toEqual(['a.png', 'note.html']);
+  });
+});
