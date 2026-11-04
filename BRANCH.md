@@ -29,6 +29,7 @@ Persistent basket consent per (reader account, artifactId, scope): the reader sc
   - `packages/artifacts/src/http.ts` (optional `readerConsent` dep plus one route branch)
   - `packages/artifacts/tests/reader-consent*.test.ts` (new)
   - `packages/artifacts/tests/fixtures/reader-consent-world.ts` (new)
+  - `packages/artifacts/tests/fixtures/transport-world.ts` (options-type extension only: `readerConsent?`)
   - `packages/artifacts/tests/snapshots/tools-list-catalogue.json` (RC-EX1: append one tool entry, pre-existing bytes unchanged)
   - `api/src/services/artifacts/reader-consent.ts` (new: grant service binding, list/revoke/revoke-all)
   - `api/src/services/artifacts/composition.ts` (wire the Postgres reader-consent store)
