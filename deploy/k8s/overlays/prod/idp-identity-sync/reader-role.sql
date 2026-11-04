@@ -17,7 +17,7 @@ SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'idp_identity_reader')
 \if :need_create
   CREATE ROLE idp_identity_reader LOGIN CONNECTION LIMIT 2;
 \endif
-ALTER ROLE idp_identity_reader WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2 PASSWORD :'pw';
+ALTER ROLE idp_identity_reader WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2 PASSWORD :'pw';
 ALTER ROLE idp_identity_reader SET default_transaction_read_only = on;
 ALTER ROLE idp_identity_reader SET statement_timeout = '60s';
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM idp_identity_reader;
