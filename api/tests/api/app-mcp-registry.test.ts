@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: 'adcd8079e80841aaf786320d6c6522efc26d31a7ca273b545781ece8485342c7' },
+      'sentropic.artifacts': { manifestDigest: '108f7c1975194ca4216cb36272626e9eab0c56165890182f69f4f3dc23f6adf9' },
     } };
 }
 
@@ -37,18 +37,18 @@ describe('app MCP registry compilation', () => {
   it('should expose the exact APP-P1 names and schemas without invoking a host port', async () => {
     const input = fixture();
     expect(input.artifacts.profile.profileDigest)
-      .toBe('94212e75c52e23f3f254496d98fca7c052568f7c03526ff3def3db020cd24168');
+      .toBe('9d21623107192b42e683d4712c69093ed19f1498e406d199c4fe3153394cba11');
     const { manifest } = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
     expect(computeManifestDigest({ ...manifest, version: '0.2.5' }))
-      .toBe('da14b7bda89fc0f92552e2f6ceefbf3f1f68d118a643e5724f7d441f684386e8');
+      .toBe('3158b20d0a89d508afff9468fddc4ac96ae0625e5cbe1f42244545cfd1674fb1');
     expect(computeManifestDigest({ ...manifest, version: '0.2.6' }))
-      .toBe('1c3de88bae05879c5122e1bfc06217103544f4312e3f0840fb64acc845492708');
+      .toBe('1b646cd577d43bed4ec1a231d632c9180fc858bc4880db6e4641b07d2c0603e3');
     expect(computeManifestDigest({ ...manifest, version: '0.2.7' }))
-      .toBe('bd0ea9593ad78a1b4e84cbf409cb150e21ba53df40b3ec91775a388e8605fbde');
+      .toBe('b4f5d2adf7592a00793180f1dfd6bbb68c601954806f998dbe8683f5797699ca');
     expect(computeManifestDigest({ ...manifest, version: '0.2.8' }))
-      .toBe('96226d32f64ca7ac06749d5083084b6f572eac23d27256cae8d37e7f7579933d');
+      .toBe('7c0379168b2d159c70d8c1fbc1462e7fcdf154fe356e5b57216ff4a87cc142b3');
     expect(computeManifestDigest({ ...manifest, version: '0.2.10' }))
-      .toBe('1ad86bab8d8f9cb29c5ea57569a7a7f93d0d43a650c3ac58dcbc5de1b9fde686');
+      .toBe('0cbf1def8ccf9ac0958c84887102e2a0f12412005a58d53f2526a3bdbb59a659');
     const result = await compileAppMcpRegistry(input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));

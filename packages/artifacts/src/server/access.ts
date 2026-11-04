@@ -48,6 +48,8 @@ export interface AccessEvent {
 export interface GrantRecord {
   principalId: string;
   grant: AccessGrant;
+  /** Grant creation stamp (migration 0006 `created_at`); absent on legacy rows. */
+  createdAt?: string;
 }
 
 /** Display metadata of one artifact (title/description/icon); cosmetic, owner-set. */

@@ -408,6 +408,35 @@
         "type": "object"
       }
     },
+    "artifacts_list_access": {
+      "description": "Artifacts list access: sharing mode, owner and grant list of one artifact, projected to userRefs. The owner and platform admins see every entry; a simple reader sees the mode and its own entry only.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
     "artifacts_list_versions": {
       "description": "Artifacts list versions.",
       "gates": {
@@ -438,6 +467,39 @@
         },
         "required": [
           "artifactId"
+        ],
+        "type": "object"
+      },
+      "mutability": "read-only",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_lookup_people": {
+      "description": "Artifacts lookup people: search the host directory by name or email and return opaque userRefs with masked email hints (approved callers only; homonyms are returned, never silently resolved). Use the returned userRef as principalId of artifacts_set_access.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": false
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
         ],
         "type": "object"
       },
@@ -668,6 +730,207 @@
         "type": "object"
       }
     },
+    "artifacts_publish_bundle": {
+      "description": "Artifacts publish bundle: one atomic release combining inline files with assets whose bytes already left the model (an uploadId staged via artifacts_create_upload + signed PUT + artifacts_commit_upload, or a sha256:<hex> digest of an already-pinned blob). expectedCurrentReleaseId is always required (CAS); null requires an unpublished artifact.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "files"
+            ]
+          },
+          {
+            "required": [
+              "assets"
+            ]
+          }
+        ],
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "assets": {
+            "description": "Assets whose bytes already left the model: an uploadId staged via artifacts_create_upload/artifacts_commit_upload, or a sha256 digest of an already-pinned blob in the same scope. The release budget applies to the union of files and assets; duplicate paths are refused.",
+            "items": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "uploadId": {
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "uploadId"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "digest": {
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "path": {
+                      "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "size": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "digest",
+                    "size",
+                    "mimeType"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "description": {
+            "description": "Short artifact description.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "expectedCurrentReleaseId": {
+            "description": "Compare the current release atomically; null requires an unpublished artifact.",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "files": {
+            "description": "Inline files (bytes travel through the model, inline budget); at least one of files/assets is required.",
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "not": {
+                    "required": [
+                      "bytes"
+                    ]
+                  },
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "not": {
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  "required": [
+                    "bytes"
+                  ]
+                }
+              ],
+              "properties": {
+                "bytes": {
+                  "items": {
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "mimeType": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "mimeType"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "icon": {
+            "description": "One short lowercase word.",
+            "pattern": "^[a-z][a-z0-9-]{0,31}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "profile": {
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            },
+            "type": "object"
+          },
+          "title": {
+            "description": "Artifact display title.",
+            "maxLength": 160,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "idempotencyKey",
+          "expectedCurrentReleaseId"
+        ],
+        "type": "object"
+      },
+      "mutability": "append",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
     "artifacts_renew": {
       "description": "Artifacts renew.",
       "gates": {
@@ -763,6 +1026,47 @@
           },
           "targetReleaseId": {
             "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "mutability": "state-transition",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "artifacts_revoke_reader_consent": {
+      "description": "Artifacts revoke reader consent: withdraw persistent consent of the caller for one scope of one artifact, or for every scope when scope is omitted. Self-revocation only; the next call asks again.",
+      "gates": {
+        "requiresElicitation": false,
+        "requiresHumanConfirmation": false,
+        "requiresPrincipalGate": false
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "principal"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactId": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "description": "Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "scope": {
+            "maxLength": 128,
+            "minLength": 1,
             "type": "string"
           }
         },
@@ -1623,6 +1927,52 @@
           "type": "object"
         },
         "name": "artifacts_revert",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts lookup people: search the host directory by name or email and return opaque userRefs with masked email hints (approved callers only; homonyms are returned, never silently resolved). Use the returned userRef as principalId of artifacts_set_access.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "query": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_lookup_people",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "description": "Artifacts list access: sharing mode, owner and grant list of one artifact, projected to userRefs. The owner and platform admins see every entry; a simple reader sees the mode and its own entry only.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifactId"
+          ],
+          "type": "object"
+        },
+        "name": "artifacts_list_access",
         "outputSchema": {
           "additionalProperties": true,
           "type": "object"

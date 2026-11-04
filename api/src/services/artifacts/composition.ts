@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { createPostgresArtifactStore, createPostgresLegacyArtifactRecords } from '@sentropic/artifacts/adapters/postgres';
 import { createPostgresCommitExecutor } from '@sentropic/artifacts/adapters/postgres-commit';
+import { createPostgresReaderConsentStore } from '@sentropic/artifacts/adapters/postgres-reader-consent';
 import { createArtifactCommitCoordinator, type ArtifactInvocationContext } from '@sentropic/artifacts/server/commit-contract';
 import { createHttpArtifactApp, type ArtifactApp, type HttpRequest } from '@sentropic/artifacts/http';
 import { compileArtifactsProfile, createArtifactsToolExecutor, createRadarKeyDerivation,
@@ -56,6 +57,7 @@ export function createArtifactHost(options: ArtifactHostOptions) {
     const application = (artifactId?: string) => createHttpArtifactApp({ profile, coordinator, legacyRecords: createPostgresLegacyArtifactRecords(pool),
       derivation: createRadarKeyDerivation({ storageScopeId, actorIds: [identity.subject] }),
       acls: store, lifecycle: createLifecycleService(store),
+      readerConsent: createPostgresReaderConsentStore(pool),
       ensureHost: {
         async lockBinding(client, input) {
           await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
