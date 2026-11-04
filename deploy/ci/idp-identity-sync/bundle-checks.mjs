@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 export const postgresImage = 'postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24';
 export const s5cmdImage = 'peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a';
+// Two-phase G7 bundle (a4-cm-gaps-r2 §9.2): the CM replica runners execute from the
+// api image (same convention as the base Jobs; release pins it via kustomize
+// `images: newTag`, commented in both parent overlays). The gate allowlists the
+// exact convention string and binds it to the two runner containers only.
+export const apiImage = 'rg.fr-par.scw.cloud/nc-reg/sentropic-api:main';
+const runnerContainers = ['export-replica', 'replica-sync'];
 export const envValue = (container, name) => container.env.find(e => e.name === name)?.value;
 export function checkBundle(objects, tier) {
   const prod = tier === 'prod', namespace = prod ? 'sentropic' : 'sentropic-preprod';
@@ -25,7 +31,8 @@ export function checkBundle(objects, tier) {
   assert(volumes.length); for (const v of volumes) { assert.equal(v.emptyDir.medium, 'Memory'); assert(v.emptyDir.sizeLimit); }
   const containers = [...pod.initContainers, ...pod.containers];
   for (const c of containers) {
-    assert([postgresImage, s5cmdImage].includes(c.image), 'image must match the approved pinned images');
+    assert([postgresImage, s5cmdImage, apiImage].includes(c.image), 'image must match the approved pinned images');
+    if (c.image === apiImage) assert(runnerContainers.includes(c.name), 'api image is reserved for the CM replica runners');
     assert.equal(c.securityContext.allowPrivilegeEscalation, false); assert.deepEqual(c.securityContext.capabilities.drop, ['ALL']);
     for (const budget of ['requests', 'limits']) for (const resource of ['cpu', 'memory']) assert(c.resources[budget][resource]);
     assert(!c.envFrom, 'explicit env only');
@@ -33,17 +40,27 @@ export function checkBundle(objects, tier) {
     for (const e of c.env ?? []) if (/PASSWORD|SECRET|ACCESS_KEY/.test(e.name)) assert(e.valueFrom?.secretKeyRef, 'credential must use a Secret ref');
   }
   const secretNames = containers.flatMap(c => (c.env ?? []).flatMap(e => e.valueFrom?.secretKeyRef?.name ?? []));
-  const expectedSecrets = prod ? ['sentropic-idp-identity-reader', 'sentropic-idp-relay-writer'] : ['sentropic-postgres', 'sentropic-pgbackup', 'sentropic-idp-relay-reader', 'immo-mcp-workload'];
+  const expectedSecrets = prod ? ['sentropic-idp-identity-reader', 'sentropic-idp-relay-writer', 'sentropic-identity-budgets'] : ['sentropic-postgres', 'sentropic-pgbackup', 'sentropic-idp-relay-reader', 'immo-mcp-workload', 'sentropic-identity-budgets'];
   assert.deepEqual([...new Set(secretNames)].sort(), expectedSecrets.sort(), 'tier credential separation');
   const network = get('NetworkPolicy', prod ? 'allow-idp-export-to-postgres' : 'allow-idp-sync-to-postgres');
   assert.deepEqual(network.spec.podSelector.matchLabels, { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'postgres' });
   assert.deepEqual(network.spec.policyTypes, ['Ingress']);
   assert.deepEqual(network.spec.ingress, [{ from: [{ podSelector: { matchLabels: { 'app.kubernetes.io/component': component } } }], ports: [{ protocol: 'TCP', port: 5432 }] }]);
   if (prod) {
-    assert.deepEqual(pod.initContainers.map(c => c.name), ['export']); assert.deepEqual(pod.containers.map(c => c.name), ['upload']);
-    assert.deepEqual(pod.initContainers[0].command, ['sh', '/sql/export-prod.sh']);
-    assert(get('ConfigMap', 'sentropic-idp-identity-export-sql').data['export-prod.sh'].includes('sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS'));
-    assert(!Object.hasOwn(get('ConfigMap', 'sentropic-idp-identity-export-sql').data, 'client-map.csv'));
+    assert.deepEqual(pod.initContainers.map(c => c.name), ['export-sql', 'export-replica']); assert.deepEqual(pod.containers.map(c => c.name), ['upload']);
+    const sqlLeg = pod.initContainers[0];
+    assert.equal(sqlLeg.image, postgresImage);
+    assert.deepEqual(sqlLeg.command, ['sh', '/sql/export-prod.sh']);
+    const replicaLeg = pod.initContainers[1];
+    assert.equal(replicaLeg.image, apiImage);
+    assert(replicaLeg.command.join(' ').includes('/app/dist/scripts/identity-replica-export.js'), 'runner entrypoint');
+    assert.equal(envValue(replicaLeg, 'SOURCE_PLACEMENT'), 'prod');
+    assert(replicaLeg.env.some(e => e.name === 'CM_IDENTITY_DELETION_BUDGETS_JSON' && e.valueFrom?.secretKeyRef?.name === 'sentropic-identity-budgets'), 'runner budgets');
+    const sql = get('ConfigMap', 'sentropic-idp-identity-export-sql').data;
+    assert(sql['export-prod.sql'].includes("FROM oauth_consents")); assert(sql['export-prod.sql'].includes('FROM oauth_clients'));
+    for (const legacy of ['FROM users', 'webauthn', 'GREATEST(', 'rekey']) assert(!sql['export-prod.sql'].includes(legacy), 'no legacy identity leg');
+    assert(!sql['export-prod.sh'].includes('SHA256SUMS'), 'the runner writes the manifest, not the SQL leg');
+    assert(!Object.hasOwn(sql, 'client-map.csv'));
     assert(pod.containers[0].args.includes('/work/*')); assert(pod.containers[0].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/'));
     get('ConfigMap', 'sentropic-idp-identity-export-sql'); get('ConfigMap', 'sentropic-idp-reader-role-sql');
     assert.equal(get('ServiceAccount', 'sentropic-ci-trigger-idp-export').automountServiceAccountToken, false);
@@ -58,10 +75,11 @@ export function checkBundle(objects, tier) {
     assert.deepEqual(binding.subjects, [{ kind: 'ServiceAccount', name: role.metadata.name, namespace }]);
   } else {
     assert(!objects.some(o => ['Role', 'RoleBinding'].includes(o.kind) || o.kind === 'ServiceAccount' && o.metadata.name !== sa), 'no preprod trigger delegation yet');
-    assert.deepEqual(pod.initContainers.map(c => c.name), ['pre-sync-dump', 'pre-sync-upload', 'fetch-relay']);
+    assert.deepEqual(pod.initContainers.map(c => c.name), ['pre-sync-dump', 'pre-sync-upload', 'fetch-relay', 'replica-sync']);
     assert.deepEqual(pod.containers.map(c => c.name), ['import-preprod']);
     const importer = pod.containers[0];
-    assert.equal(envValue(importer, 'DRY_RUN'), '1'); assert.equal(envValue(importer, 'ALLOWED_REKEY'), '');
+    assert.equal(envValue(importer, 'DRY_RUN'), '1');
+    assert(!importer.env.some(e => e.name === 'ALLOWED_REKEY'), 'no rekey allowlist in the two-phase sync');
     assert.equal(envValue(importer, 'ALLOWED_CLIENTS'), '');
     assert.deepEqual(importer.env.find(e => e.name === 'IMMO_MCP_WORKLOAD_CLIENT_SECRET').valueFrom.secretKeyRef,
       { name: 'immo-mcp-workload', key: 'IMMO_MCP_WORKLOAD_CLIENT_SECRET', optional: true });
@@ -71,6 +89,13 @@ export function checkBundle(objects, tier) {
     assert(pod.initContainers[0].args[0].includes('pre-idp-sync/%s.dump'));
     assert(pod.initContainers[1].args.includes('run')); assert(pod.initContainers[1].args.includes('/work/rb/upload.s5cmd'));
     assert(pod.initContainers[2].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/*'));
+    const replicaSync = pod.initContainers[3];
+    assert.equal(replicaSync.image, apiImage);
+    assert(replicaSync.command.join(' ').includes('/app/dist/scripts/identity-replica-sync.js'), 'runner entrypoint');
+    assert(replicaSync.command.join(' ').includes('/work/cm-sync.log'), 'phase-1 log feeds the phase-2 shell');
+    assert.equal(envValue(replicaSync, 'DRY_RUN'), '1');
+    assert.equal(envValue(replicaSync, 'MAX_SNAPSHOT_AGE_S'), '7200');
+    assert(replicaSync.env.some(e => e.name === 'CM_IDENTITY_DELETION_BUDGETS_JSON' && e.valueFrom?.secretKeyRef?.name === 'sentropic-identity-budgets'), 'runner budgets');
     const cm = get('ConfigMap', 'sentropic-idp-identity-sync-sql');
     assert.equal(cm.data['client-map.csv'], 'prod_client_id,preprod_client_id\nradar-immobilier,radar-immobilier-preprod\n');
     const hosts = cm.data['host-map.csv'].trim().split('\n').slice(1).map(row => row.split(','));
@@ -78,7 +103,9 @@ export function checkBundle(objects, tier) {
     for (const [prodHost, preprodHost] of hosts) assert.equal(preprodHost, `preprod.${prodHost}`);
     assert(cm.data['client-policy.sql'].includes("FROM 'clients.csv'"));
     assert(cm.data['import-preprod.sql'].includes('\\i /sql/client-postcondition.sql'));
-    for (const command of ['sha256sum -c SHA256SUMS', 'MAX_SNAPSHOT_AGE_S', 'expected_users', 'expected_webauthn', '/dev/termination-log']) assert(cm.data['import-preprod.sh'].includes(command));
+    assert(cm.data['import-preprod.sql'].includes('register-workload.sql'));
+    for (const command of ['sha256sum -c SHA256SUMS', 'MAX_SNAPSHOT_AGE_S', 'expected_accounts', 'expected_consents', '/dev/termination-log']) assert(cm.data['import-preprod.sh'].includes(command));
+    for (const legacy of ['expected_users', 'expected_webauthn', 'ALLOWED_REKEY', "'rekeyed'"]) assert(!cm.data['import-preprod.sh'].includes(legacy), 'no legacy identity sync');
   }
   return cj;
 }
