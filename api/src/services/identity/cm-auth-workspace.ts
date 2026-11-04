@@ -1,11 +1,11 @@
-import { createWorkspaceDirectory, IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { createWorkspaceDirectory, IdentityCustodyErrorV1, type IdentityTransactionV1 } from '@sentropic/cluster-mesh';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import type { PoolClient } from 'pg';
 import { workspaces, ADMIN_WORKSPACE_ID } from '../../db/schema';
-import type { CmIdentityTransaction } from './cm-transaction';
 import { plannedCmAuthWorkspaceId } from './cm-auth-entity-plan';
 
 /** Business provisioning called only from the CM authentication transaction. */
-export async function provisionCmAuthWorkspace(userId: string, tx: CmIdentityTransaction): Promise<void> {
+export async function provisionCmAuthWorkspace(userId: string, tx: IdentityTransactionV1<PoolClient>): Promise<void> {
   await tx.lockSubject(userId);
   const account = await tx.stores.accounts.findAccount(userId);
   if (!account) throw new IdentityCustodyErrorV1('identity_material_missing');
