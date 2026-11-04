@@ -55,6 +55,17 @@
   nothing. The strict-profile writer ban does not cover the upload tools (they
   mutate no release pointer). `artifacts_get_source` keeps its frozen
   maxItems 32 ceiling; server-side caps only move below the frozen schema.
+- Persistent reader consent (lot 1a): consent rows per (reader account,
+  artifact, scope, scope version) with a pure evaluator and Gate B helper;
+  the reader screen is skipped only when a live consent at the current scope
+  version meets fresh rights, suspension or withdrawn share refuses despite
+  consent. One new MCP tool `artifacts_revoke_reader_consent`
+  (self-revocation only, static definition frozen at birth; the 17
+  pre-existing tool definitions are byte-identical) plus control-origin
+  list/revoke API routes; revocation takes effect on the next call. Host
+  migration `0008_reader_consent.sql` (additive, train-numbered from the
+  reviewed `sql/reader-consent.sql` body); immo screen binding and silent
+  renew land in lot 1b.
 
 ## 0.2.12
 
