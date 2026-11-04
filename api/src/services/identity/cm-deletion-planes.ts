@@ -1,10 +1,9 @@
 import { IdentityCustodyErrorV1, type BusinessDeletionPlanV1, type PersonDeletionCommandV2,
   type PersonDeletionPlanePortV2 } from '@sentropic/cluster-mesh';
-import type { PoolClient } from 'pg';
-import type { CmIdentityTransaction } from './cm-transaction';
+import type { AppCustodyHost, CmIdentityTransaction } from './cm-transaction';
 import { createCmDeletionConnectorPlane } from './cm-deletion-connectors';
 
-type Plane = PersonDeletionPlanePortV2<PoolClient>;
+type Plane = PersonDeletionPlanePortV2<AppCustodyHost>;
 const mismatch = (): never => { throw new IdentityCustodyErrorV1('proof_binding_mismatch'); };
 
 const remote: Plane = {

@@ -1,9 +1,8 @@
 import { IdentityCustodyErrorV1, type BusinessDeletionPlanV1, type IdentityExternalRevocationDraftV1,
   type PersonDeletionCommandV2, type PersonDeletionPlanePortV2 } from '@sentropic/cluster-mesh';
-import type { PoolClient } from 'pg';
 import { createAppConnectorCustody, type ConnectorSourceScope } from './cm-connector-custody';
 import { identityDeliveryId } from './cm-delivery-record';
-import type { CmIdentityTransaction } from './cm-transaction';
+import type { AppCustodyHost, CmIdentityTransaction } from './cm-transaction';
 
 interface Attempt {
   readonly command: PersonDeletionCommandV2;
@@ -19,7 +18,7 @@ const matches = (attempt: Attempt | undefined, command: PersonDeletionCommandV2,
     && JSON.stringify([...plan.retainedWorkspaceIds].sort()) === JSON.stringify([...attempt.plan.retainedWorkspaceIds].sort());
 
 /** Capability capture and the coordinator's enqueue share the root's guarded transaction. */
-export function createCmDeletionConnectorPlane(): PersonDeletionPlanePortV2<PoolClient> {
+export function createCmDeletionConnectorPlane(): PersonDeletionPlanePortV2<AppCustodyHost> {
   const attempts = new WeakMap<CmIdentityTransaction, Attempt>();
   const custody = createAppConnectorCustody(async (source, input, tx) => {
     const attempt = attempts.get(tx), expected = attempt?.sources.get(source.id);
