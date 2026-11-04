@@ -19,7 +19,6 @@ import { createLifecycleService, createMemoryLifecycleStore } from '../src/serve
 import { createForkService, createMemoryForkStore } from '../src/server/fork.js';
 import { createMemoryAclStore } from '../src/server/access.js';
 import { createMemorySourceStore } from '../src/server/sources.js';
-import { createMemoryStaging, createUploadService } from '../src/server/uploads.js';
 import { createDefaultTemplateCatalog } from '../src/server/templates.js';
 import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
 import { defineParameters } from '../src/parameters.js';

@@ -5,9 +5,10 @@
  * fresh `artifacts` schema — the full upgrade path — and proves the domain
  * constraints: stable-binding uniqueness, intent kind/state guards, release
  * FK integrity, idempotency-key uniqueness, release states, access grants,
- * sources, ref holders and pins. Runs only under
- * `make test-artifacts-integration` (needs DATABASE_URL on the compose
- * network); excluded from the unit run.
+ * sources, ref holders and pins. 0006_sharing and 0007_uploads are applied in
+ * their own describe blocks below (0007 after a legacy uploads row exists, to
+ * prove the backfill). Runs only under `make test-artifacts-integration`
+ * (needs DATABASE_URL on the compose network); excluded from the unit run.
  */
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -383,5 +384,70 @@ describe('0006_sharing migration (G1 three-mode ACL)', () => {
       `SELECT access_mode FROM artifacts.artifacts WHERE id = '${legacyPrivate}'`,
     );
     expect(rows[0]?.access_mode).toBe('platform');
+  });
+});
+
+describe('0007_uploads migration (files parity LOT 1)', () => {
+  it('ALTERs the existing uploads table and backfills legacy rows to discarded', async () => {
+    // Legacy pre-0007 row: no artifact binding, state open.
+    await client.query(
+      `INSERT INTO artifacts.uploads (id, max_size, size, mime_type, state)
+       VALUES ('66666666-6666-4666-8666-666666666666', 1024, 0, 'image/png', 'open')`,
+    );
+    await client.query(migration('0007_uploads.sql'));
+    const { rows } = await client.query<{ state: string }>(
+      `SELECT state FROM artifacts.uploads WHERE id = '66666666-6666-4666-8666-666666666666'`,
+    );
+    expect(rows[0]?.state).toBe('discarded');
+    const { rows: cols } = await client.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'artifacts' AND table_name = 'uploads' ORDER BY column_name`,
+    );
+    expect(cols.map((c) => c.column_name)).toEqual([
+      'artifact_id', 'created_at', 'expires_at', 'id', 'max_size', 'mime_type',
+      'owner_id', 'size', 'state', 'storage_scope_id',
+    ]);
+    // 'expired' (sweeper) is an allowed state now; bogus states stay refused.
+    await client.query(
+      `INSERT INTO artifacts.uploads (id, max_size, mime_type, state, artifact_id, storage_scope_id, owner_id, expires_at)
+       VALUES ('77777777-7777-4777-8777-777777777777', 64, 'image/png', 'expired',
+         'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'scope-g1', 'owner-g1', now())`,
+    );
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.uploads (id, max_size, mime_type, state)
+         VALUES ('88888888-8888-4888-8888-888888888888', 64, 'image/png', 'bogus')`,
+      ),
+    ).rejects.toThrow(/check constraint|23514/);
+    // Re-applying 0007 is idempotent.
+    await client.query(migration('0007_uploads.sql'));
+  });
+
+  it('creates staged_files with digest format, unique (artifact_id, path) and FK cascade', async () => {
+    const { rows } = await client.query(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'artifacts' AND tablename = 'staged_files'`,
+    );
+    expect(rows).toHaveLength(1);
+    const artifact = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await client.query(
+      `INSERT INTO artifacts.staged_files (upload_id, artifact_id, path, mime_type, digest, size)
+       VALUES ('77777777-7777-4777-8777-777777777777', '${artifact}', 'shots/a.png', 'image/png',
+         'sha256:${'ab'.repeat(32)}', 64)`,
+    );
+    // Same artifact + same path twice: refused.
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.staged_files (upload_id, artifact_id, path, mime_type, digest, size)
+         VALUES ('66666666-6666-4666-8666-666666666666', '${artifact}', 'shots/a.png', 'image/png',
+           'sha256:${'cd'.repeat(32)}', 64)`,
+      ),
+    ).rejects.toThrow(/duplicate key|23505/);
+    // Non-canonical digest: refused by the CHECK.
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.staged_files (upload_id, artifact_id, path, mime_type, digest, size)
+         VALUES ('66666666-6666-4666-8666-666666666666', '${artifact}', 'shots/b.png', 'image/png', 'md5:xyz', 64)`,
+      ),
+    ).rejects.toThrow(/check constraint|23514/);
   });
 });
