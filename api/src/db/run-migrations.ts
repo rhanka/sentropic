@@ -66,9 +66,26 @@ async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<voi
  */
 /** Lock-free legacy presence probe (same table set as the import reader): the full
  *  `readA4IdentitySource` fences writers with LOCK TABLE, which is only legal
- *  inside the import transaction. */
+ *  inside the import transaction.
+ *
+ *  Deterministic migration seeds are not operator identity: the `sentropic`
+ *  bootstrap tenant (0031_tenancy_spine.sql) and the zero-UUID admin workspace
+ *  (0012_aberrant_swarm.sql) exist on every fresh database and are migrated
+ *  faithfully by the import itself. Any other row requires the checkpoint. */
+const SEEDED_TENANT_ID = 'sentropic';
+const SEEDED_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
 async function hasLegacyIdentityRows(client: PoolClient): Promise<boolean> {
   for (const table of a4IdentitySourceTables) {
+    if (table === 'tenants') {
+      const extra = await client.query(`SELECT 1 FROM public.tenants WHERE id <> $1 LIMIT 1`, [SEEDED_TENANT_ID]);
+      if (extra.rows.length > 0) return true;
+      continue;
+    }
+    if (table === 'workspaces') {
+      const extra = await client.query(`SELECT 1 FROM public.workspaces WHERE id <> $1 LIMIT 1`, [SEEDED_WORKSPACE_ID]);
+      if (extra.rows.length > 0) return true;
+      continue;
+    }
     const probe = await client.query(`SELECT 1 FROM public.${table} LIMIT 1`);
     if (probe.rows.length > 0) return true;
   }
