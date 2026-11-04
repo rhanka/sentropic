@@ -7,6 +7,8 @@ import {
   listUserSessions,
   revokeAllSessions,
 } from '../../../src/services/session-manager';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+
 import { createCmUser } from '../../../src/services/identity/cm-users';
 import { findCmSessionById } from '../../../src/services/identity/cm-sessions';
 import { cmPurgeAllIdentity } from '../../utils/cm-identity-test-store';
@@ -72,11 +74,12 @@ describe('Session Manager Service', () => {
       expect(row?.mfaVerified).toBe(false);
     });
 
-    it('should mint mfaVerified=true only when explicitly requested (B1 passkey+UV)', async () => {
-      const session = await createSession(testUserId, 'editor', undefined, { mfaVerified: true });
-
-      const row = await findCmSessionById(session.sessionId);
-      expect(row?.mfaVerified).toBe(true);
+    it('should refuse mfaVerified minting outside the verified assertion completion', async () => {
+      // Post-cutover, mfaVerified=true is minted only by the verified CM assertion
+      // completion (auth-hono binding); the facade refuses self-asserted MFA.
+      await expect(
+        createSession(testUserId, 'editor', undefined, { mfaVerified: true }),
+      ).rejects.toThrow(IdentityCustodyErrorV1);
     });
   });
 

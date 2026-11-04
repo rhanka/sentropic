@@ -1,6 +1,7 @@
 import { Pool, type PoolClient } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { assertCmHostHealthy, createCmPortFailureFence, createCmScopedHostClient } from '../../../src/services/identity/cm-host-scope';
+import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 let pool: Pool, client: PoolClient;
 let scope: ReturnType<typeof createCmScopedHostClient>;
@@ -24,7 +25,7 @@ describe('A4 host capability over the real PostgreSQL driver', () => {
     expect(bound.rows).toEqual(original.rows);
     const retainedQuery = scope.client.query;
     scope.seal(); scope.expire();
-    expect(() => retainedQuery('SELECT 1')).toThrow('identity_transaction_unbound');
+    await expectCustodyCode(() => retainedQuery('SELECT 1'), 'identity_transaction_unbound');
   });
 
   it('should rethrow a SQL failure even when an unchanged handler catches it', async () => {
@@ -36,18 +37,18 @@ describe('A4 host capability over the real PostgreSQL driver', () => {
     catch (error) { expect(error).toBe(failure); }
   });
 
-  it('should reject nested transaction control and poison the callback even when caught', () => {
-    expect(() => scope.client.query('BEGIN')).toThrow('identity_transaction_unbound');
-    expect(() => scope.seal()).toThrow('identity_transaction_unbound');
+  it('should reject nested transaction control and poison the callback even when caught', async () => {
+    await expectCustodyCode(() => scope.client.query('BEGIN'), 'identity_transaction_unbound');
+    await expectCustodyCode(() => scope.seal(), 'identity_transaction_unbound');
   });
 
   it.each(['/* prefix */ COMMIT', '-- prefix\nROLLBACK', '-- prefix\rCOMMIT', '; END',
     '/* outer /* nested */ comment */ ABORT', 'SET /* gap */ LOCAL TRANSACTION READ ONLY',
     'PREPARE /* gap */ TRANSACTION \'nested\''])('rejects disguised transaction control: %s', async sql => {
     const original = await client.query('SELECT txid_current()::text AS xid');
-    expect(() => scope.client.query(sql)).toThrow('identity_transaction_unbound');
+    await expectCustodyCode(() => scope.client.query(sql), 'identity_transaction_unbound');
     expect((await client.query('SELECT txid_current()::text AS xid')).rows).toEqual(original.rows);
-    expect(() => scope.seal()).toThrow('identity_transaction_unbound');
+    await expectCustodyCode(() => scope.seal(), 'identity_transaction_unbound');
   });
 
   it('uses the PostgreSQL extended protocol to refuse multiple statements before any execution', async () => {
@@ -82,9 +83,9 @@ describe('A4 host capability over the real PostgreSQL driver', () => {
 
   it('should refuse to commit while a submitted query has not been awaited', async () => {
     const pending = scope.client.query('SELECT 1');
-    expect(() => scope.seal()).toThrow('identity_transaction_unbound');
+    await expectCustodyCode(() => scope.seal(), 'identity_transaction_unbound');
     await pending;
-    expect(() => assertCmHostHealthy(scope.client)).toThrow('identity_transaction_unbound');
+    await expectCustodyCode(() => assertCmHostHealthy(scope.client), 'identity_transaction_unbound');
   });
 
   it('should preserve the real callback-style driver API and finish it before sealing', async () => {

@@ -4,14 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadCmCutoverCheckpoint, cmCutoverCheckpointReceipt } from '../../../src/services/identity/cm-cutover-checkpoint';
+import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 let directory: string | undefined;
 afterEach(async () => { if (directory) await rm(directory, { recursive: true, force: true }); });
 
 describe('A4 D11 protected checkpoint', () => {
   it('should refuse absent checkpoint evidence before authorizing a data migration', async () => {
-    await expect(loadCmCutoverCheckpoint(undefined, { mappingSha256: '', identityAssetSha256: '', connectorAssetSha256: '' }))
-      .rejects.toThrow('identity_import_invalid');
+    await expectCustodyCode(() => loadCmCutoverCheckpoint(undefined,
+      { mappingSha256: '', identityAssetSha256: '', connectorAssetSha256: '' }), 'identity_import_invalid');
   });
 
   it('should verify the snapshot and asset digests while retaining only evidence references in the durable receipt', async () => {
@@ -30,6 +31,6 @@ describe('A4 D11 protected checkpoint', () => {
     const checkpoint = await loadCmCutoverCheckpoint(path, expected);
     expect(cmCutoverCheckpointReceipt(checkpoint)).not.toHaveProperty('sourceSnapshotPath');
     await writeFile(snapshot, 'changed backup');
-    await expect(loadCmCutoverCheckpoint(path, expected)).rejects.toThrow('identity_import_invalid');
+    await expectCustodyCode(() => loadCmCutoverCheckpoint(path, expected), 'identity_import_invalid');
   });
 });

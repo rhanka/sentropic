@@ -72,7 +72,11 @@ describe('CM WebAuthn services with actual attestation and assertion verificatio
       `SELECT user_id, expires_at FROM ${cmTable('identity_single_use_proofs')} WHERE challenge = $1`, [options.challenge]);
     expect(stored.user_id).toBeNull();
     expect(Math.abs(Date.parse(stored.expires_at) - Date.now() - getWebAuthnConfig().timeout.registration)).toBeLessThan(5_000);
+    // Retention only purges terminal rows, so the expired fixture is a completed
+    // ceremony (consumed), not an abandoned pending challenge the store retains.
+    await enroll();
     const expired = await authenticationOptions(userId);
+    await authenticate(expired.challenge);
     await expire(expired.challenge);
     await purgeCmExpiredProofs();
     expect(await cmQuery(`SELECT state FROM ${cmTable('identity_single_use_proofs')} WHERE challenge = $1`, [expired.challenge])).toEqual([]);
