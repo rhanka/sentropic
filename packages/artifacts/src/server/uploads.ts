@@ -337,6 +337,10 @@ export interface CreateUploadInput {
   mimeType: string;
   /** Declared size; clamped to the host budget. Bound as the exact signed Content-Length. */
   maxSize?: number;
+  /** Browser page that mints this session (agent-channel rows stay null). */
+  pageSessionId?: string;
+  /** Page file bound enforced with the quota check; required when pageSessionId is set. */
+  pageFileLimit?: number;
 }
 
 export interface CreateUploadResult {
@@ -372,6 +376,13 @@ export interface UploadServiceOptions {
   /** Host ceiling for one upload (min of profile releaseFileBytesMax and the server maximum). */
   maxUploadBytes: number;
   maxSessionsPerPrincipal: number;
+  /** LOT 2 §D.2: per-scope staging aggregate (reserved open + staged bytes). Absent ⇒ no aggregate bound. */
+  stagingQuotaBytesPerScope?: number;
+  /** LOT 2 §D.1: staged-file TTL (host option, ceiling 7 days). Absent ⇒ 24 h. */
+  stagedFileTtlMs?: number;
+  /** Metric channel of sessions minted through this service (`agent` or `browser`). */
+  channel?: string;
+  metrics?: ArtifactsMetrics;
   now?: () => Date;
   ids?: () => string;
 }
@@ -403,24 +414,64 @@ export function createUploadService(deps: {
   if (!Number.isSafeInteger(options.maxSessionsPerPrincipal) || options.maxSessionsPerPrincipal < 1) {
     throw new Error('invalid upload session quota');
   }
+  if (options.stagingQuotaBytesPerScope !== undefined &&
+    (!Number.isSafeInteger(options.stagingQuotaBytesPerScope) || options.stagingQuotaBytesPerScope < 1)) {
+    throw new Error('invalid scope staging quota');
+  }
+  if (options.stagedFileTtlMs !== undefined &&
+    (!Number.isSafeInteger(options.stagedFileTtlMs) || options.stagedFileTtlMs < 1 ||
+      options.stagedFileTtlMs > STAGED_FILE_TTL_MAX_MS)) {
+    throw new Error('invalid staged file TTL');
+  }
+  const channel = options.channel ?? 'agent';
+  const emit = (event: { name: string; labels?: Record<string, string>; value?: number }): void => {
+    if (options.metrics !== undefined) options.metrics.emit({ ...event,
+      labels: { channel, ...(event.labels ?? {}) } });
+  };
   return {
     async create(input) {
       if (input.maxSize !== undefined && (!Number.isSafeInteger(input.maxSize) || input.maxSize < 1)) {
         throw new Error('invalid upload byte budget');
       }
-      const open = await deps.sessions.countOpen(input.storageScopeId, input.ownerId);
-      if (open >= options.maxSessionsPerPrincipal) {
-        throw new Error(`open upload session quota exceeded for principal (max ${options.maxSessionsPerPrincipal})`);
+      if (input.pageSessionId !== undefined && (input.pageFileLimit === undefined ||
+        !Number.isSafeInteger(input.pageFileLimit) || input.pageFileLimit < 1)) {
+        throw new Error('invalid page file bound');
       }
       const maxSize = Math.min(input.maxSize ?? options.maxUploadBytes, options.maxUploadBytes);
-      const uploadId = ids();
-      const createdAt = now().toISOString();
-      const expiresAt = new Date(now().getTime() + UPLOAD_SESSION_TTL_MS).toISOString();
-      const key = stagingKey(input.storageScopeId, uploadId);
-      await deps.sessions.create({
-        uploadId, artifactId: input.artifactId, storageScopeId: input.storageScopeId,
-        ownerId: input.ownerId, mimeType: input.mimeType, maxSize, state: 'open', expiresAt, createdAt,
-      });
+      // LOT 2 §D.2: the quota check and the insert run inside the scope lock,
+      // so parallel creates against one scope quota admit exactly the quota.
+      // Callers must not hold the scope lock across service calls (no nesting).
+      return deps.sessions.withScopeLock(input.storageScopeId, async () => {
+        const open = await deps.sessions.countOpen(input.storageScopeId, input.ownerId);
+        if (open >= options.maxSessionsPerPrincipal) {
+          emit({ name: 'upload_quota_refusals', labels: { reason: 'open_session_quota' } });
+          throw new Error(`open upload session quota exceeded for principal (max ${options.maxSessionsPerPrincipal})`);
+        }
+        if (options.stagingQuotaBytesPerScope !== undefined) {
+          const reserved = await deps.sessions.sumOpenMaxSize(input.storageScopeId) +
+            await deps.sessions.sumStagedBytesByScope(input.storageScopeId);
+          if (reserved + maxSize > options.stagingQuotaBytesPerScope) {
+            emit({ name: 'upload_quota_refusals', labels: { reason: 'scope_staging_quota' } });
+            throw new Error(`scope staging quota exceeded (max ${options.stagingQuotaBytesPerScope} bytes)`);
+          }
+        }
+        if (input.pageSessionId !== undefined) {
+          const pageCount = (await deps.sessions.listPageSessions(input.pageSessionId)).length;
+          if (pageCount >= input.pageFileLimit!) {
+            emit({ name: 'upload_quota_refusals', labels: { reason: 'page_file_quota' } });
+            throw new Error(`open upload page file quota exceeded (max ${input.pageFileLimit})`);
+          }
+        }
+        const uploadId = ids();
+        const createdAt = now().toISOString();
+        const expiresAt = new Date(now().getTime() + UPLOAD_SESSION_TTL_MS).toISOString();
+        const key = stagingKey(input.storageScopeId, uploadId);
+        await deps.sessions.create({
+          uploadId, artifactId: input.artifactId, storageScopeId: input.storageScopeId,
+          ownerId: input.ownerId, mimeType: input.mimeType, maxSize, state: 'open', expiresAt, createdAt,
+          ...(input.pageSessionId === undefined ? {} : { pageSessionId: input.pageSessionId }),
+        });
+        emit({ name: 'upload_sessions_created' });
       // The signature binds content-type and the EXACT declared Content-Length
       // (a presigned PUT cannot carry a content-length range). The digest is
       // declared at commit, so the PUT must also carry x-amz-checksum-sha256,
@@ -428,11 +479,12 @@ export function createUploadService(deps: {
       const signed = await deps.signer.signPut({
         key, contentType: input.mimeType, contentLength: maxSize, expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
       });
-      return {
-        uploadId, uploadUrl: signed.url, method: signed.method, expiresAt: signed.expiresAt, maxSize,
-        requiredHeaders: signed.headers, checksumHeader: 'x-amz-checksum-sha256',
-        stagingKey: key,
-      };
+        return {
+          uploadId, uploadUrl: signed.url, method: signed.method, expiresAt: signed.expiresAt, maxSize,
+          requiredHeaders: signed.headers, checksumHeader: 'x-amz-checksum-sha256',
+          stagingKey: key,
+        };
+      });
     },
     sessionForCommit(input) {
       return deps.sessions.get(input.uploadId).then((session) => {
