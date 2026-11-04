@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapA4Account, mapA4Credential, mapA4Login, mapA4Proof } from '../../../src/services/identity/cm-import-mapping';
+import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 const created = '2026-10-30T12:34:56.789';
 const account = { id: 'subject', email: ' Subject@Example.test ', role: 'editor',
@@ -16,9 +17,9 @@ describe('A4 source mapping preservation', () => {
       legacyAccountStatus: 'approval_expired_readonly', approvedAt: null, disabledAt: null });
   });
 
-  it('should refuse missing email and unknown status without inventing data', () => {
-    expect(() => mapA4Account({ ...account, email: null })).toThrow('identity_import_invalid');
-    expect(() => mapA4Account({ ...account, account_status: 'unexpected' })).toThrow('identity_import_invalid');
+  it('should refuse missing email and unknown status without inventing data', async () => {
+    await expectCustodyCode(() => mapA4Account({ ...account, email: null }), 'identity_import_invalid');
+    await expectCustodyCode(() => mapA4Account({ ...account, account_status: 'unexpected' }), 'identity_import_invalid');
   });
 
   it('should preserve the disabled entry point independently from its descriptive reason', () => {

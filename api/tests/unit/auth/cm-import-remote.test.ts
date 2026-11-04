@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapLegacyRemoteIntent } from '../../../src/services/identity/cm-import-remote';
+import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 describe('A4 pending remote intent import', () => {
   it('should preserve every distinct session and subject target with stable replay identity', async () => {
@@ -18,8 +19,8 @@ describe('A4 pending remote intent import', () => {
   it('should refuse an unprovable historical owner or a contradictory source binding', async () => {
     const input = { key: 'remote_session_revocation:legacy', at: '2026-11-01T00:00:00.000Z',
       value: JSON.stringify({ sessionIds: ['session'] }), resolveSessionOwner: async () => null };
-    await expect(mapLegacyRemoteIntent(input)).rejects.toThrow('identity_import_invalid');
-    await expect(mapLegacyRemoteIntent({ ...input, value: JSON.stringify({ sessionIds: ['session'], userId: 'other' }),
-      resolveSessionOwner: async () => 'owner' })).rejects.toThrow('identity_import_invalid');
+    await expectCustodyCode(() => mapLegacyRemoteIntent(input), 'identity_import_invalid');
+    await expectCustodyCode(() => mapLegacyRemoteIntent({ ...input, value: JSON.stringify({ sessionIds: ['session'], userId: 'other' }),
+      resolveSessionOwner: async () => 'owner' }), 'identity_import_invalid');
   });
 });
