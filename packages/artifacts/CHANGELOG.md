@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.2.13
+
+- G2 MCP sharing tools: new read-only tools `artifacts_lookup_people`
+  (approved-caller guard, directory search returning opaque `userRef`s with
+  masked `emailHint`s, homonyms never silently resolved) and
+  `artifacts_list_access` (mode, owner, grant list; readers see only their own
+  entry; admin management visibility exception). Both ship with static,
+  frozen-at-publication definitions; every pre-existing tool definition keeps
+  its exact bytes (CI tools/list snapshot extended to the new tools).
+- New `PrincipalDirectoryPort` (search, `userRef` → internal resolution,
+  inverse projection). `artifacts_set_access` accepts opaque `userRef`s in
+  `principalId` alongside the `sentropic:` sentinels; resolution happens inside
+  the commit transaction after visibility and the management right, so the
+  `commandHash` (computed on the payload as provided) never leaks a resolution.
+- Every model-visible output is projected through the directory: `ownerId` and
+  `grants[].principalId` of `artifacts_get`/`artifacts_list`/`artifacts_ensure`,
+  the `artifacts_set_access` receipt, and both new tools — no internal
+  principal id or full email reaches a model payload. Without a port, the new
+  tools answer `capability_unavailable` (sentinels keep working).
+- Single `person_not_shareable` 422 error merging the four non-shareable
+  causes (unknown, inactive, unapproved, out-of-scope), evaluated at §2.3 step
+  4 after visibility and the management right; grant rows gain `createdAt`
+  (read from the existing `artifact_access.created_at`, no new migration).
+- Shipped radar profile gains the `set_access`, `lookup_people` and
+  `list_access` operation profiles (the four-tool radar selection itself is
+  unchanged).
 ## 0.2.12
 
 - Bounded concurrency in multi-file publication blob staging (#art-conc, P1):

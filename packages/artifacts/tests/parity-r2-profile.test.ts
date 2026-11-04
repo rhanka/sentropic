@@ -11,7 +11,6 @@ const profile = (strict: boolean, envelope: 1 | 2) => ({
     ...(strict && envelope === 2 ? ['artifacts_list_versions', 'artifacts_revert'] : []),
     'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
   operations: [...RADAR_ARTIFACTS_PROFILE.operations,
-    { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
     { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
 });
 const world = (strict: boolean, envelope: 1 | 2) => createTransportWorld(['alice', 'bob'], 'scope-r2',
@@ -74,7 +73,7 @@ describe('R2 explicit profile and result switchovers', () => {
     const source = output(await call('artifacts_get_source', { artifactId }));
     expect(source.files[0]).toMatchObject({ path: 'index.html', text: 'one', encoding: 'utf8' });
     expect(source.files[0]).not.toHaveProperty('bytes');
-    expect((await w.acls.getArtifactAcl(artifactId))?.grants).toEqual([{ principalId: 'bob', grant: 'read' }]);
+    expect((await w.acls.getArtifactAcl(artifactId))?.grants).toEqual([{ principalId: 'bob', grant: 'read', createdAt: expect.any(String) }]);
   });
 
   it('should reject inconsistent trusted descriptors and expose the selected revision', () => {

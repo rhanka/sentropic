@@ -26,6 +26,8 @@ export function assertCompleteOperation(config: OperationProfile): void {
     list: { limits: ['listLimitMin', 'listLimitMax'], defaults: ['limit', 'offset'] },
     commit_upload: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
     set_access: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    lookup_people: { limits: ['lookupQueryMinUnits', 'lookupQueryMaxUnits', 'lookupLimitMax'], defaults: ['limit'] },
+    list_access: { limits: [], defaults: [] },
     delete: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     revert: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
   };
@@ -112,6 +114,10 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
       { properties: { action: { enum: ['grant'] } }, required: ['grant'] },
       { properties: { action: { enum: ['revoke'] } }, not: { required: ['grant'] } },
     ] };
+    case 'lookup_people': return obj({ query: { type: 'string', minLength: limits.lookupQueryMinUnits,
+      maxLength: limits.lookupQueryMaxUnits, description: 'Name or email fragment; matched case- and accent-insensitively against approved accounts of the scope.' },
+      limit: { ...integer(1, limits.lookupLimitMax), default: config.defaults.limit } }, ['query']);
+    case 'list_access': return idOnly;
     case 'promote': return obj({ artifactId: id, releaseId: id, expectedCurrent: id }, ['artifactId', 'releaseId', 'expectedCurrent']);
     default: throw new Error(`unsupported operation profile: ${operation}`);
   }
