@@ -96,7 +96,7 @@ export function createCmScopedHostClient(client: PoolClient) {
 
 export const assertCmHostHealthy = (client: PoolClient): void => {
   const scope = scopes.get(client);
-  if (!scope?.active || !scope.acceptingQueries) unbound();
+  if (!scope || !scope.active || !scope.acceptingQueries) unbound();
   if (scope.failure !== undefined) throw scope.failure;
 };
 

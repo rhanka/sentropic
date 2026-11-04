@@ -22,6 +22,7 @@ import {
   createTidIssuer,
   createWorkspaceDirectory,
   identityEnforcementPgSchema,
+  oauthTenantStoreV1,
   type DecisionToolCatalog,
   type PostgresStoreClient,
 } from '@sentropic/cluster-mesh';
@@ -193,7 +194,7 @@ const composeCmTransaction = (tx: CmIdentityTransaction): CmIdentityComposition 
     invitations: tx.stores.invitations, deviceCodes: tx.stores.deviceCodes,
     sessions: tx.stores.sessions, audit: tx.stores.audit };
   const tenancy = { tenants: tx.stores.tenants, memberships: tx.stores.memberships,
-    workspaces: tx.stores.workspaces, workspaceMembers: tx.stores.workspaceMembers, oauth: tx.stores.oauth };
+    workspaces: tx.stores.workspaces, workspaceMembers: tx.stores.workspaceMembers, oauth: oauthTenantStoreV1(tx) };
   return {
     ...createCmIdentityComposition(lazyCatalog), core, custody: tx.custody, tenancy,
     enforcement: { conversations: tx.conversations, ledger: tx.ledger },
