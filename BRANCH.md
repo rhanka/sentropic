@@ -96,9 +96,9 @@ Persistent basket consent per (reader account, artifactId, scope): the reader sc
 - [x] **Lot 1c — Implementation (sentropic api binding)**
   - [x] `api/src/services/artifacts/reader-consent.ts` + `composition.ts` wiring + `instance.ts` port + control-origin routes in `routes/namespaces/artifacts.ts` + `resources-module.ts` wiring + `package.json` exports (RC-EX2).
   - [x] `api/tests/api/artifacts-reader-consent.test.ts` (service-level, memory store).
-  - [ ] Sub-lot gate: `make test-api-unit SCOPE=tests/api/artifacts-reader-consent.test.ts ENV=test-reader-consent`.
-- [ ] **Lot N — Final validation**
+  - [x] Sub-lot gate: `make test-api-unit SCOPE=tests/api/artifacts-reader-consent.test.ts ENV=test-reader-consent` green, 3/3.
+- [x] **Lot N — Final validation**
   - [x] `make typecheck-artifacts`, `make lint-artifacts`, `make typecheck-api` green.
-  - [ ] Retest api unit + integration (`make test-artifacts-integration SCOPE=tests/reader-consent-store.integration.test.ts`); `make scope-check ENV=test-reader-consent`.
-  - [ ] Push branch (no release PR; the wagon joins the train); write `.tmp/rv/reader-consent-lot1.md`.
-  - [ ] `make down-volumes ENV=test-reader-consent`.
+  - [x] Retest api unit (3/3) + integration Postgres (2/2); `make scope-check ENV=test-reader-consent` PASS.
+  - [x] Push branch (no release PR; the wagon joins the train); write `.tmp/rv/reader-consent-lot1.md`.
+  - [x] `make down-volumes ENV=test-reader-consent`.
