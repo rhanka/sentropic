@@ -24,10 +24,11 @@ import { UPLOAD_PAGE_TTL_MS, createHmacUploadPageCookieSigner, createUploadPageS
 import type { ArtifactsMetricEvent } from '../src/server/metrics.js';
 import { createUploadSweeper } from '../src/server/gc.js';
 import { createHmacGrantSigner, createMemoryTicketStore, createTicketService } from '../src/content/grants.js';
+import { grantAccess } from '../src/server/access.js';
 import { createContentHandler } from '../src/content/handler.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
 
-const SCOPE = 'scope-l7';
+const SCOPE = 'scope-l6';
 const CONTROL_ORIGIN = 'https://control.test';
 const S3_ORIGIN = 'https://s3.test';
 const sha256 = (bytes: Uint8Array): string => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -300,9 +301,33 @@ describe('files parity LOT 2 (b1): list_assets', () => {
       world.mcp.invoke({ tool, invocation: world.invocation('bob'), args });
     const readerStaged = await asBob('artifacts_list_assets', { artifactId, state: 'staged' });
     expect(readerStaged.status).toBe(403);
+    // A plain read grant lacks the source right: released rows stay refused
+    // (design B.1 — digests are source-level disclosure, like get_source).
+    expect((await asBob('artifacts_list_assets', { artifactId, state: 'released' })).status).toBe(403);
+    const bundle = await mcp.invoke('artifacts_publish_bundle', { artifactId, idempotencyKey: 'staged-bundle',
+      expectedCurrentReleaseId: null, assets: [{ path: 's.png', uploadId: upload.uploadId }] });
+    expect(bundle.status).toBe(201);
+    const releaseId = unwrap<{ releaseId: string }>(bundle.body).releaseId;
+    const releasedRow = {
+      path: 's.png', mimeType: 'image/png', size: bytes.length, digest: sha256(bytes),
+      state: 'released', releaseId,
+    };
+    const ownerReleased = await mcp.invoke('artifacts_list_assets', { artifactId, state: 'released' });
+    expect(ownerReleased.status).toBe(200);
+    expect(unwrap<{ assets: unknown[] }>(ownerReleased.body).assets).toEqual([releasedRow]);
+    // The frozen set_access schema cannot express a source grant; revoke the
+    // read grant, seed a source grant the same way the e2e suite does, then
+    // the reader sees the released row.
+    const ungrant = await mcp.invoke('artifacts_set_access', { artifactId, action: 'revoke',
+      principalId: 'bob', idempotencyKey: 'g-2' });
+    expect(ungrant.status).toBe(200);
+    const acl = await world.acls.getArtifactAcl(artifactId);
+    await world.acls.putArtifactAcl(artifactId, grantAccess(acl!, 'alice', { principalId: 'bob', grant: 'source' }));
     const readerReleased = await asBob('artifacts_list_assets', { artifactId, state: 'released' });
     expect(readerReleased.status).toBe(200);
-    const unknownPage = await mcp.invoke('artifacts_list_assets', { artifactId, pageSessionId: randomUUID() });
+    expect(unwrap<{ assets: unknown[] }>(readerReleased.body).assets).toEqual([releasedRow]);
+    const unknownPage = await mcp.invoke('artifacts_list_assets', { artifactId, state: 'staged',
+      pageSessionId: randomUUID() });
     expect(unknownPage.status).toBe(200);
     expect(unwrap<{ assets: unknown[] }>(unknownPage.body).assets).toEqual([]);
   });
@@ -426,7 +451,14 @@ describe('files parity LOT 2 (b3): get_source caps', () => {
   });
 
   it('omits single files above the inline cap and keeps prior reads byte-identical', async () => {
-    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    // Empty get_source limits mean the 1 MiB server ceiling, which inlines the
+    // 300 KiB fixture; pin an explicit inline cap like the tight test does.
+    const profile = lot2Profile();
+    const capped = { ...profile,
+      operations: profile.operations.map((op) => op.operation === 'get_source'
+        ? { ...op, limits: { sourceFilesMax: 32, sourceInlineFileBytesMax: 1024, sourceTotalBytesMax: 262144 } }
+        : op) };
+    const world = createTransportWorld(undefined, undefined, { profile: capped });
     const mcp = scannedMcp(world);
     const artifactId = await ensureArtifact(world, mcp, 'source-inline');
     const big = pngBytes(5, 300 * 1024);
@@ -444,7 +476,7 @@ describe('files parity LOT 2 (b3): get_source caps', () => {
     expect(read.status).toBe(200);
     const files = unwrap<{ files: Record<string, unknown>[] }>(read.body).files;
     const byPath = new Map(files.map((file) => [file.path, file]));
-    expect(byPath.get('big.png')).toMatchObject({ omitted: 'over_total_budget' });
+    expect(byPath.get('big.png')).toMatchObject({ omitted: 'too_large' });
     expect(byPath.get('small.html')).toMatchObject({ text: '<html><body>small</body></html>', encoding: 'utf8' });
     const single = await mcp.invoke('artifacts_get_source', { artifactId, paths: ['small.html'] });
     expect(unwrap<{ files: Record<string, unknown>[] }>(single.body).files).toEqual([{
@@ -556,7 +588,7 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
       expectedCurrentReleaseId: null, assets: [{ path: 'u.png', uploadId: upload.uploadId }] });
     expect(bundle.status).toBe(201);
     expect(await world.refs.isPinned(sha256(bytes))).toBe(false);
-    expect(await world.blobs.getBlob(`artifacts/${SCOPE}/blobs/${sha256(bytes).slice(7)}`)).toBeDefined();
+    expect(await world.blobs.getBlob(`artifacts/${SCOPE}/blobs/sha256/${sha256(bytes).slice(7)}`)).toBeDefined();
   });
 
   it('refuses expired staged files at bundle and sweeps them with unpin', async () => {
@@ -606,11 +638,11 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
     // union tools): no removal or rename of a shipped tool.
     expect([...Object.keys(preexisting), 'artifacts_publish_bundle', 'artifacts_lookup_people',
       'artifacts_list_access', 'artifacts_revoke_reader_consent'].sort()).toEqual(
-      [...ARTIFACT_TOOL_NAMES].filter((name) => !['artifacts_create_upload_page', 'artifacts_list_assets',
+      [...ARTIFACTS_TOOL_NAMES].filter((name) => !['artifacts_create_upload_page', 'artifacts_list_assets',
         'artifacts_publish_bundle_v2'].includes(name)).sort());
-    expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_create_upload_page');
-    expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_list_assets');
-    expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_publish_bundle_v2');
+    expect(ARTIFACTS_TOOL_NAMES).toContain('artifacts_create_upload_page');
+    expect(ARTIFACTS_TOOL_NAMES).toContain('artifacts_list_assets');
+    expect(ARTIFACTS_TOOL_NAMES).toContain('artifacts_publish_bundle_v2');
   });
 
   it('admits exactly 3 parallel creates against a 3-session scope quota', async () => {
