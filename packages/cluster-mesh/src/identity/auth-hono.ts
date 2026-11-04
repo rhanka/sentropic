@@ -6,3 +6,4 @@
 export * from '../identity-contracts/custody-auth.js';
 export * from './auth-binding.js';
 export * from './auth-completion.js';
+export * from './auth-service-tenant.js';
