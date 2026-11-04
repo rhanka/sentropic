@@ -7,6 +7,7 @@ import { createRadarKeyDerivation } from '../../src/server/command-identity.js';
 import { createArtifactCommitCoordinator } from '../../src/server/commit/coordinator.js';
 import type { ArtifactHostFailureMapper } from '../../src/server/failures.js';
 import type { CommitBarrierObserver } from '../../src/testing.js';
+import type { ArtifactsMetrics } from '../../src/server/metrics.js';
 import type { ArtifactInvocationContext, CommitExecutor, FinalizeConnection,
   FinalizeTxClient, StoredCommitReceipt } from '../../src/server/commit/types.js';
 import { accessModeOf, applyModeTransition, createMemoryAclStore,
@@ -32,7 +33,9 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     /** G2: host principal directory; flows into appDeps via the options spread. */
     directory?: PrincipalDirectoryPort;
     /** Lot 1a: reader consent store; flows into appDeps via the options spread. */
-    readerConsent?: ArtifactReaderStore } = {}) {
+    readerConsent?: ArtifactReaderStore;
+    /** LOT 2: upload/storage metering sink for the world app. */
+    metrics?: ArtifactsMetrics } = {}) {
   const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
     operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
@@ -216,7 +219,8 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       }),
     },
     uploads: { sessions: uploadSessions, staging: uploadStaging, signer: uploadSigner.signer,
-      idempotency: uploadIdempotency },
+      idempotency: uploadIdempotency,
+      ...(options.metrics === undefined ? {} : { metrics: options.metrics }) },
     uploadPage: { pages: uploadPages, cookieSecret: 'transport-world-page-secret',
       controlOrigin: 'https://control.test', pageBaseUrl: 'https://control.test',
       s3Origins: ['https://s3.test'] },
