@@ -21,8 +21,9 @@ export const createAppCmBusinessDeletion = (handlerId: BusinessDeletionHandlerId
   async deleteRows(plan, tx) {
     const workspace = await deleteCmBusinessWorkspaces(plan.workspaceIdsToDelete, tx);
     const subject = await deleteCmBusinessSubjectReferences(plan.userId, tx);
-    return { handlerId, deletedByTable: sum(workspace.deletedByTable, subject.deletedByTable),
-      detachedByTable: sum(workspace.detachedByTable, subject.detachedByTable) };
+    const deletedByTable = sum(workspace.deletedByTable, subject.deletedByTable);
+    const detachedByTable = sum(workspace.detachedByTable, subject.detachedByTable);
+    return { handlerId, deletedRows: sum(deletedByTable, detachedByTable) };
   },
   async assertNoOrphans(plan, tx) {
     await assertNoCmBusinessSubjectReferences(plan.userId, tx);

@@ -25,7 +25,7 @@ export const cmMagicLinkHandlers: AuthHonoRouteHandlers = {
     } });
     const response = await handlers.verifyMagicLink!(staged);
     if (!issued) return response;
-    return staged.json({ ...await response.json(), sessionToken: issued.sessionToken, refreshToken: issued.refreshToken,
+    return staged.json({ ...(await response.json() as Record<string, unknown>), sessionToken: issued.sessionToken, refreshToken: issued.refreshToken,
       expiresAt: issued.expiresAt.toISOString(), ...(requiresDeviceRegistration ? { requiresDeviceRegistration: true } : {}) });
   })),
 };

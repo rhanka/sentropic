@@ -13,9 +13,9 @@ const coordinator = (handlerId: BusinessDeletionHandlerIdV1) => createAtomicPers
 });
 
 /** Caller ids come from verified HTTP authority; the request cannot select a handler. */
-export const deleteOwnCmAccount = (userId: string, operationId = randomUUID()) => {
+export const deleteOwnCmAccount = (userId: string, operationId: string = randomUUID()) => {
   return coordinator('self_account').deletePerson({ operationId, userId, actorId: userId, handlerId: 'self_account' });
 };
-export const deleteCmAccountAsAdmin = (input: { readonly userId: string; readonly actorId: string }, operationId = randomUUID()) => {
+export const deleteCmAccountAsAdmin = (input: { readonly userId: string; readonly actorId: string }, operationId: string = randomUUID()) => {
   return coordinator('admin_account').deletePerson({ operationId, ...input, handlerId: 'admin_account' });
 };

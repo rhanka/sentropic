@@ -45,12 +45,11 @@ export function mapA4Login(row: A4SourceRow, importedAt: string, remotelyRevoked
   const createdAt = time(row.created_at), expiresAt = time(row.expires_at), mfaVerified = bool(row.mfa_verified);
   const sessionVersion = Date.parse(createdAt);
   return { sessionId: text(row.id), userId: text(row.user_id),
-    status: remotelyRevoked ? 'revoked' : expiresAt <= time(importedAt) ? 'expired' : 'active',
-    mfaState: mfaVerified ? 'step_up' : 'none', refreshCount: 0,
     sessionTokenHash: digest(row.session_token_hash),
     refreshTokenHash: row.refresh_token_hash === null ? null : digest(row.refresh_token_hash),
     login: { mfaVerified, sessionVersion, authTime: Math.floor(sessionVersion / 1000) }, rotationVersion: 0,
-    createdAt, expiresAt, deviceName: nullable(row.device_name), ipAddress: nullable(row.ip_address),
+    createdAt, expiresAt, revokedAt: remotelyRevoked ? importedAt : null,
+    deviceName: nullable(row.device_name), ipAddress: nullable(row.ip_address),
     userAgent: nullable(row.user_agent), lastActivityAt: nullableTime(row.last_activity_at),
   };
 }

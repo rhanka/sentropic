@@ -7,8 +7,8 @@ export async function readA4MetadataInvitations(tx: CmIdentityTransaction): Prom
   const result = await tx.hostTransaction.query('SELECT * FROM cm_identity.identity_invitations ORDER BY invitation_id COLLATE "C" FOR UPDATE');
   return result.rows.map(row => ({ entity: 'invitation', record: {
     invitationId: sourceText(row.invitation_id), email: sourceText(row.email).trim().toLowerCase(),
-    ...(row.tenant_id === null ? {} : { tenantId: sourceText(row.tenant_id) }),
-    ...(row.workspace_id === null ? {} : { workspaceId: sourceText(row.workspace_id) }),
+    tenantId: row.tenant_id === null ? null : sourceText(row.tenant_id),
+    workspaceId: row.workspace_id === null ? null : sourceText(row.workspace_id),
     tokenHash: createHash('sha256').update(sourceText(row.token)).digest('hex'), clientId: null,
     status: sourceChoice(row.status, ['pending', 'consumed', 'revoked']), expiresAt: sourceText(row.expires_at),
     createdAt: null, consumedAt: sourceNullableTime(row.consumed_at), consumedByUserId: null, revision: 0,

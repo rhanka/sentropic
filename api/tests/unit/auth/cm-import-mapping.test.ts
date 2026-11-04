@@ -46,12 +46,13 @@ describe('A4 source mapping preservation', () => {
   });
 
   it('should retain both login hashes and exact immutable lineage with a zero CAS baseline', () => {
-    const result = mapA4Login({ id: 'login', user_id: 'subject', session_token_hash: 'a'.repeat(64),
+    const source = { id: 'login', user_id: 'subject', session_token_hash: 'a'.repeat(64),
       refresh_token_hash: null, device_name: null, ip_address: null, user_agent: null, mfa_verified: true,
-      created_at: created, expires_at: '2026-11-30T12:34:56.789', last_activity_at: null }, '2026-11-01T00:00:00.000Z');
-    expect(result).toMatchObject({ status: 'active', mfaState: 'step_up', refreshCount: 0,
+      created_at: created, expires_at: '2026-11-30T12:34:56.789', last_activity_at: null };
+    const result = mapA4Login(source, '2026-11-01T00:00:00.000Z');
+    expect(result).toMatchObject({ revokedAt: null,
       rotationVersion: 0, refreshTokenHash: null, login: { mfaVerified: true,
         sessionVersion: Date.parse(`${created}Z`), authTime: Math.floor(Date.parse(`${created}Z`) / 1000) } });
-    expect(result).not.toHaveProperty('revokedAt');
+    expect(mapA4Login(source, '2026-11-01T00:00:00.000Z', true).revokedAt).toBe('2026-11-01T00:00:00.000Z');
   });
 });
