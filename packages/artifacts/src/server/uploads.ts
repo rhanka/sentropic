@@ -27,6 +27,8 @@
 import { createHash } from 'node:crypto';
 import { validateFileBytes } from './mime.js';
 import type { ArtifactsMetrics } from './metrics.js';
+import type { RefcountStore } from './gc.js';
+import type { PublicationBlobStore } from './publication.js';
 
 export const UPLOAD_URL_TTL_SECONDS = 600; // presigned URL: ≤ 10 minutes
 export const UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // staged file: 24 h
@@ -343,6 +345,16 @@ export interface CreateUploadInput {
   pageFileLimit?: number;
 }
 
+/** Digest-addressed CAS blob key of one scope and canonical `sha256:<hex>` digest. */
+export function casBlobKey(storageScopeId: string, digest: string): string {
+  return `artifacts/${storageScopeId}/blobs/${digest.replace(':', '/')}`;
+}
+
+/** LOT 2 §D.1: true when a staged file is older than the staged-file TTL. */
+export function stagedFileExpired(record: Pick<StagedFileRecord, 'createdAt'>, nowMs: number, ttlMs: number): boolean {
+  return new Date(record.createdAt).getTime() + ttlMs <= nowMs;
+}
+
 export interface CreateUploadResult {
   uploadId: string;
   uploadUrl: string;
@@ -516,10 +528,85 @@ export function createUploadService(deps: {
       const staged: StagedFileRecord = {
         uploadId: session.uploadId, artifactId: session.artifactId, createdAt: now().toISOString(),
         path: record.path, mimeType: record.mimeType, digest: record.digest, size: record.size,
+        ...(session.pageSessionId === undefined ? {} : { pageSessionId: session.pageSessionId }),
       };
       await deps.sessions.recordStagedFile(staged);
       await deps.sessions.markCommitted(session.uploadId);
       return staged;
     },
   };
+}
+
+/**
+ * Files parity LOT 2 — shared commit core for both channels (agent MCP and
+ * browser page). Verification and pin logic live here once: the MCP handler
+ * and the page service both call it, so neither duplicates the other.
+ */
+export interface CommitStagedUploadDeps {
+  sessions: UploadSessionStore;
+  staging: StagingStore;
+  blobs: PublicationBlobStore;
+  refs: RefcountStore;
+  /** Per-artifact staged caps (`releaseFilesMax`/`releaseTotalBytesMax`). */
+  budget: { filesMax: number; totalBytesMax: number };
+  metrics?: ArtifactsMetrics;
+}
+
+export interface CommitStagedUploadInput extends CommitUploadInput {
+  pageSessionId?: string;
+}
+
+export async function commitStagedUpload(service: UploadService, deps: CommitStagedUploadDeps,
+  input: CommitStagedUploadInput, channel = 'agent'): Promise<StagedFileRecord> {
+  const emit = (event: { name: string; labels?: Record<string, string>; value?: number }): void => {
+    if (deps.metrics !== undefined) deps.metrics.emit({ ...event,
+      labels: { channel, ...(event.labels ?? {}) } });
+  };
+  const fail = (error: unknown): never => {
+    if (!(error instanceof Error) || !/budget exceeded/.test(error.message)) {
+      emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
+    }
+    throw error;
+  };
+  let session: UploadSession;
+  try {
+    session = await service.sessionForCommit(input);
+  } catch (error) { fail(error); }
+  const key = stagingKey(input.storageScopeId, input.uploadId);
+  const bytes = await deps.staging.get(key);
+  if (bytes === undefined) {
+    fail(new Error(`staged object missing for ${input.uploadId}`));
+  }
+  try {
+    service.verifyStaged(session, bytes, { digest: input.digest, size: input.size, mimeType: input.mimeType });
+  } catch (error) { fail(error); }
+  // LOT 2 §D.2: per-artifact staged caps, checked at commit for both channels.
+  const existing = await deps.sessions.listStagedFiles(input.artifactId);
+  const stagedBytes = existing.reduce((total, record) => total + record.size, 0);
+  if (existing.length + 1 > deps.budget.filesMax || stagedBytes + input.size > deps.budget.totalBytesMax) {
+    emit({ name: 'upload_quota_refusals', labels: { reason: 'staged_budget' } });
+    throw new Error(`staged file budget exceeded for artifact (max ${deps.budget.filesMax} files, ` +
+      `${deps.budget.totalBytesMax} bytes total)`);
+  }
+  const casKey = casBlobKey(input.storageScopeId, input.digest);
+  await deps.blobs.putBlob(casKey, bytes);
+  const readBack = await deps.blobs.getBlob(casKey);
+  if (readBack === undefined || readBack.byteLength !== input.size ||
+    `sha256:${createHash('sha256').update(readBack).digest('hex')}` !== input.digest) {
+    fail(new Error(`CAS read-back mismatch for ${input.uploadId}`));
+  }
+  const pinReason = `upload:${input.uploadId}`;
+  await deps.refs.pin(input.digest, pinReason);
+  let staged: StagedFileRecord;
+  try {
+    staged = await service.completeCommit(session, { path: input.path, mimeType: input.mimeType,
+      digest: input.digest, size: input.size });
+  } catch (error) {
+    await deps.refs.unpin(input.digest, pinReason).catch(() => undefined);
+    throw error;
+  }
+  await deps.staging.delete(key);
+  emit({ name: 'upload_commits', labels: { result: 'ok' } });
+  emit({ name: 'upload_bytes_committed', value: input.size });
+  return staged;
 }
