@@ -34,7 +34,8 @@ describe('transactional management store', () => {
       await b.setAccess(artifactId, 'carol', 'grant', '2026-11-01T00:00:00Z');
       await second.query('COMMIT');
       expect((await store.getArtifactAcl(artifactId))?.grants).toEqual([
-        { principalId: 'bob', grant: 'read' }, { principalId: 'carol', grant: 'read' }]);
+        { principalId: 'bob', grant: 'read', createdAt: expect.any(String) },
+        { principalId: 'carol', grant: 'read', createdAt: expect.any(String) }]);
       expect((await store.getArtifactAcl(artifactId))?.bindingName).toBe('shares');
       const before = (await store.getArtifactAcl(artifactId))?.updatedAt;
       await a.setAccess(artifactId, 'bob', 'grant', '2026-11-02T00:00:00Z');
