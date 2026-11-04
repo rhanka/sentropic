@@ -314,6 +314,11 @@ jobs:
         run: make check-ci-version-filters
       - name: Assert every numbered E2E spec has a CI lane
         run: make check-e2e-inventory
+      # AI shards (test-api-ai) run only on `ai` (or `global`) changes, but
+      # ci-gate still requires them green when selected: a false negative skips
+      # the suite while moving AI behavior. Runs in `changes` (always executed).
+      - name: Assert AI change-filter covers AI service paths
+        run: ./scripts/check-ci-ai-filters.sh
       # Release train lock-sync (BRDP-EX10): a train package whose manifest version differs from its
       # root lockfile workspace entry fails `changes`, which blocks every publisher (barrier below).
       - name: Assert train package versions match the root lockfile
@@ -413,6 +418,9 @@ jobs:
               - 'api/src/services/queue-manager.ts'
               - 'api/src/services/chat-service.ts'
               - 'api/src/services/chat/**'
+              - 'api/src/services/comments/**'
+              - 'api/src/services/context-*.ts'
+              - 'api/src/services/document-*.ts'
               - 'api/src/services/business/initiatives.ts'
               - 'api/src/services/business/organizations.ts'
               - 'api/src/services/business/folders.ts'
@@ -423,8 +431,9 @@ jobs:
               - 'api/src/routes/namespaces/business/**'
               - 'api/src/routes/namespaces/workflows-queue.ts'
               - 'api/src/routes/namespaces/config-product-ai.ts'
-              - 'api/src/config/default-org-aware-prompts.ts'
+              - 'api/src/config/**'
               - 'packages/llm-mesh/**'
+              - 'packages/llm-gateway/**'
             ui:
               - 'ui/**'
               - 'packages/chat-ui/**'
