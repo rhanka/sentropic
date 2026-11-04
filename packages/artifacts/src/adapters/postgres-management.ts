@@ -6,9 +6,10 @@ import type { ManagementUnit, SetAccessOutput } from '../server/management.js';
 /** Parent lock serializes ACL inserts, lifecycle changes and publication FKs. */
 export function createPostgresManagementUnit(client: FinalizeTxClient): ManagementUnit {
   const listGrants = async (id: string): Promise<GrantRecord[]> => {
-    const { rows } = await client.query<{ principal_id: string; permission: GrantRecord['grant'] }>(
-      'SELECT principal_id, permission FROM artifacts.artifact_access WHERE artifact_id = $1 ORDER BY principal_id', [id]);
-    return rows.map((row) => ({ principalId: row.principal_id, grant: row.permission }));
+    const { rows } = await client.query<{ principal_id: string; permission: GrantRecord['grant']; created_at: Date }>(
+      'SELECT principal_id, permission, created_at FROM artifacts.artifact_access WHERE artifact_id = $1 ORDER BY principal_id', [id]);
+    return rows.map((row) => ({ principalId: row.principal_id, grant: row.permission,
+      createdAt: row.created_at.toISOString() }));
   };
   return {
     async lock(id) {

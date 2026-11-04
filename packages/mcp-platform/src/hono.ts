@@ -101,6 +101,26 @@ const respond = (c: Context, result: unknown): Response => {
   return c.json(result, statusFor(result));
 };
 
+/** JSON-RPC 2.0 reserved code for a handler-internal failure; the message never carries internals. */
+const RPC_INTERNAL_ERROR = -32603;
+
+const rpcError = (c: Context, id: unknown, code: number, message: string): Response =>
+  c.json({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
+
+/**
+ * Request id for a /mcp handler, read from a clone BEFORE the SDK consumes the body:
+ * a mid-request throw must still answer with the request id, never with null. Never throws.
+ */
+const requestId = async (c: Context): Promise<unknown> => {
+  try {
+    const body: unknown = await c.req.raw.clone().json();
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      return (body as Record<string, unknown>).id ?? null;
+    }
+  } catch { /* body unreadable or not JSON */ }
+  return null;
+};
+
 export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
   const app = new Hono();
   const authorize = options.invocation?.authorize ?? (async () => ({ allowed: true as const }));
@@ -135,7 +155,13 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
   const handle = (operation: 'invoke' | 'read') => async (c: Context): Promise<Response> => {
     const intent = await parseIntent(c);
     if (!intent) return c.json({ error: { code: 'invalid_request', message: 'Request body is invalid.' } }, 400);
-    const outcome = await dispatch(operation, c, intent);
+    let outcome: Awaited<ReturnType<typeof dispatch>>;
+    try {
+      outcome = await dispatch(operation, c, intent);
+    } catch {
+      // REST surface: terminal JSON error with a stable code, never a hang, never internals.
+      return c.json({ error: { code: 'internal_error', message: 'Internal error.' } }, 500);
+    }
     if (!outcome.allowed) {
       return c.json(
         { error: { code: 'invocation_refused', message: outcome.decision.reason } },
@@ -158,17 +184,44 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
     app.use('/mcp', options.auth.require([options.auth.scopes.invoke]));
     if (mount.stateful) {
       const transport = mount.createTransport();
-      const ready = mount.server.connect(transport);
+      let ready: Promise<void>;
+      try {
+        ready = mount.server.connect(transport);
+      } catch (error) {
+        ready = Promise.reject(error);
+      }
+      // Rejection is observed here and rethrown per request below, where it is
+      // answered with a terminal JSON-RPC response instead of hanging the stream.
+      void ready.catch(() => undefined);
       app.all('/mcp', async (c) => {
-        await ready;
-        return transport.handleRequest(c.req.raw);
+        // Capture the id before the SDK consumes the body, so a mid-request throw
+        // still answers with the request id.
+        const id = await requestId(c);
+        try {
+          await ready;
+          return await transport.handleRequest(c.req.raw);
+        } catch {
+          // One transport serves every session: a single request's throw must not
+          // close the shared transport — the envelope is that request's terminal
+          // response.
+          return rpcError(c, id, RPC_INTERNAL_ERROR, 'Internal error');
+        }
       });
     } else {
       // Stateless: the SDK requires a fresh transport per request.
       app.all('/mcp', async (c) => {
-        const transport = mount.createTransport();
-        await mount.server.connect(transport);
-        return transport.handleRequest(c.req.raw);
+        const id = await requestId(c);
+        let transport: WebStandardStreamableHTTPServerTransport | undefined;
+        try {
+          transport = mount.createTransport();
+          await mount.server.connect(transport);
+          return await transport.handleRequest(c.req.raw);
+        } catch {
+          // Per-request transport: close it so the SSE stream ends after the
+          // terminal response.
+          await transport?.close().catch(() => undefined);
+          return rpcError(c, id, RPC_INTERNAL_ERROR, 'Internal error');
+        }
       });
     }
   }
@@ -202,16 +255,21 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
     if (!intent) {
       return c.json({ jsonrpc: '2.0', id, error: { code: -32602, message: 'Invalid params' } }, 400);
     }
-    const principal = options.auth.context(c);
-    const scope = operation === 'invoke' ? options.auth.scopes.invoke : options.auth.scopes.read;
-    if (!principal.scopes.includes(scope)) {
-      return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: 'Insufficient scope' } }, 403);
+    try {
+      const principal = options.auth.context(c);
+      const scope = operation === 'invoke' ? options.auth.scopes.invoke : options.auth.scopes.read;
+      if (!principal.scopes.includes(scope)) {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: 'Insufficient scope' } }, 403);
+      }
+      const outcome = await dispatch(operation, c, intent);
+      if (!outcome.allowed) {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: outcome.decision.reason } }, outcome.decision.status ?? 503);
+      }
+      return c.json({ jsonrpc: '2.0', id, result: outcome.result });
+    } catch {
+      // Every JSON-RPC request gets a terminal envelope carrying its id.
+      return rpcError(c, id, RPC_INTERNAL_ERROR, 'Internal error');
     }
-    const outcome = await dispatch(operation, c, intent);
-    if (!outcome.allowed) {
-      return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: outcome.decision.reason } }, outcome.decision.status ?? 503);
-    }
-    return c.json({ jsonrpc: '2.0', id, result: outcome.result });
   });
   return app;
 };

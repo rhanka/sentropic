@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.2.13
+
+- G2 MCP sharing tools: new read-only tools `artifacts_lookup_people`
+  (approved-caller guard, directory search returning opaque `userRef`s with
+  masked `emailHint`s, homonyms never silently resolved) and
+  `artifacts_list_access` (mode, owner, grant list; readers see only their own
+  entry; admin management visibility exception). Both ship with static,
+  frozen-at-publication definitions; every pre-existing tool definition keeps
+  its exact bytes (CI tools/list snapshot extended to the new tools).
+- New `PrincipalDirectoryPort` (search, `userRef` → internal resolution,
+  inverse projection). `artifacts_set_access` accepts opaque `userRef`s in
+  `principalId` alongside the `sentropic:` sentinels; resolution happens inside
+  the commit transaction after visibility and the management right, so the
+  `commandHash` (computed on the payload as provided) never leaks a resolution.
+- Every model-visible output is projected through the directory: `ownerId` and
+  `grants[].principalId` of `artifacts_get`/`artifacts_list`/`artifacts_ensure`,
+  the `artifacts_set_access` receipt, and both new tools — no internal
+  principal id or full email reaches a model payload. Without a port, the new
+  tools answer `capability_unavailable` (sentinels keep working).
+- Single `person_not_shareable` 422 error merging the four non-shareable
+  causes (unknown, inactive, unapproved, out-of-scope), evaluated at §2.3 step
+  4 after visibility and the management right; grant rows gain `createdAt`
+  (read from the existing `artifact_access.created_at`, no new migration).
+- Shipped radar profile gains the `set_access`, `lookup_people` and
+  `list_access` operation profiles (the four-tool radar selection itself is
+  unchanged).
+- Files parity LOT 1: a local agent can publish large dossiers with the bytes
+  outside the model. New tools `artifacts_create_upload`,
+  `artifacts_commit_upload` and `artifacts_publish_bundle` (static
+  definitions, frozen at birth; the 17 pre-existing tool definitions are
+  byte-identical, pinned by sha256 in the tests).
+- Upload sessions are durable rows (migration `0007_uploads.sql` ALTERs the
+  existing `artifacts.uploads` table: artifact/scope/owner binding,
+  `expires_at`, `staged_files`) with a presigned signed PUT per session. A
+  SigV4 presigned PUT cannot carry a content-length range, so the signature
+  binds the EXACT declared Content-Length plus `content-type`, the PUT must
+  carry `x-amz-checksum-sha256` (S3 validates the body, BadDigest on
+  mismatch), and `commit_upload` re-verifies size, SHA-256 digest and MIME
+  server-side before pinning. Open sessions per principal are quota-bounded
+  (8) and an enforced sweeper (gc.ts) expires stale sessions and deletes their
+  staging objects.
+- Server maxima are hard ceilings: 255 files per release, 16 MiB per file,
+  64 MiB per release; profile limit keys (`releaseFilesMax`,
+  `releaseFileBytesMax`, `releaseTotalBytesMax` on the publish operation) may
+  only move below them and default to the inline values. The MIME ceiling
+  (17 types) is enforced at profile compile time, and every file — inline or
+  uploaded — is validated at commit: magic bytes for binary types, strict
+  UTF-8 for text, script/handler/external-reference-free SVG.
+- `artifacts_publish_bundle` publishes one atomic release from the union of
+  inline files, `{path, uploadId}` assets and `{path, digest, size, mimeType}`
+  CAS assets, reusing the 0.2.12 bounded blob pool and `verifyStagedBlobs`;
+  one missing or digest-mismatched asset fails the whole publish and commits
+  nothing. The strict-profile writer ban does not cover the upload tools (they
+  mutate no release pointer). `artifacts_get_source` keeps its frozen
+  maxItems 32 ceiling; server-side caps only move below the frozen schema.
+- Persistent reader consent (lot 1a): consent rows per (reader account,
+  artifact, scope, scope version) with a pure evaluator and Gate B helper;
+  the reader screen is skipped only when a live consent at the current scope
+  version meets fresh rights, suspension or withdrawn share refuses despite
+  consent. One new MCP tool `artifacts_revoke_reader_consent`
+  (self-revocation only, static definition frozen at birth; the 17
+  pre-existing tool definitions are byte-identical) plus control-origin
+  list/revoke API routes; revocation takes effect on the next call. Host
+  migration `0008_reader_consent.sql` (additive, train-numbered from the
+  reviewed `sql/reader-consent.sql` body); immo screen binding and silent
+  renew land in lot 1b.
+
 ## 0.2.12
 
 - Bounded concurrency in multi-file publication blob staging (#art-conc, P1):

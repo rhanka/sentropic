@@ -1,4 +1,6 @@
 import { isArtifactId } from '../contracts.js';
+import { isWithinMimeCeiling } from '../server/mime.js';
+import { SERVER_MAX_FILE_BYTES, SERVER_MAX_FILES_PER_RELEASE, SERVER_MAX_TOTAL_BYTES } from '../server/publication-limits.js';
 import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError, PROFILE_CONTRACT_VERSION,
   type ArtifactCapabilityName, type ArtifactProviderProfile, type ArtifactSchema,
   type CompiledArtifactsProfile, type EffectiveArtifactProfile } from './contracts.js';
@@ -42,7 +44,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     throw new Error('invalid publication precondition policy');
   }
   if (profile.requireExpectedCurrentReleaseId && requested.some(name => [
-    'artifacts_promote', 'artifacts_restore', 'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_fork',
+    'artifacts_promote', 'artifacts_restore', 'artifacts_fork',
   ].includes(name))) throw new Error('strict profile contains a writer without CAS');
   if (new Set(requested).size !== requested.length ||
     requested.some((name) => !(ARTIFACT_CAPABILITY_NAMES as readonly string[]).includes(name))) {
@@ -63,6 +65,21 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       ['publishFilesMin', 'publishFilesMax'], ['listLimitMin', 'listLimitMax']]) {
       if (op.limits[minimum] > op.limits[maximum]) throw new Error('inconsistent profile bounds');
     }
+    // Server maxima are hard ceilings: profile limit keys may only move BELOW
+    // them (255 files / 16 MiB per file / 64 MiB per release), never above.
+    const limitCeilings: Record<string, number> = {
+      publishFilesMax: SERVER_MAX_FILES_PER_RELEASE,
+      releaseFilesMax: SERVER_MAX_FILES_PER_RELEASE,
+      maxDecodedFileBytes: SERVER_MAX_FILE_BYTES,
+      releaseFileBytesMax: SERVER_MAX_FILE_BYTES,
+      maxDecodedTotalBytes: SERVER_MAX_TOTAL_BYTES,
+      releaseTotalBytesMax: SERVER_MAX_TOTAL_BYTES,
+    };
+    for (const [key, ceiling] of Object.entries(limitCeilings)) {
+      if (op.limits[key] !== undefined && op.limits[key] > ceiling) {
+        throw new Error(`profile limit above the server maximum: ${key}`);
+      }
+    }
     operations.add(op.operation);
   }
   const rules = profile.rules;
@@ -76,6 +93,8 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     typeof rules.keyDerivationAlgorithm !== 'string' || !rules.keyDerivationAlgorithm ||
     !Number.isSafeInteger(rules.pathMaxBytes) || rules.pathMaxBytes < 1 || rules.pathMaxBytes > 1024 ||
     !Array.isArray(rules.mimeTypes) || !rules.mimeTypes.length || rules.mimeTypes.some((v) => typeof v !== 'string' || !v) ||
+    // The profile MIME allowlist may only narrow the server MIME ceiling.
+    rules.mimeTypes.some((v) => !isWithinMimeCeiling(v)) ||
     !Array.isArray(rules.reservedFirstSegments) || rules.reservedFirstSegments.some((v) => typeof v !== 'string' || !v) ||
     rules.forbiddenPathPattern !== '[\\\\%?#:\\u0000-\\u001f\\u007f]') throw new Error('invalid profile semantics');
   if (!profile.contractRevisions || profile.contractRevisions.profile !== PROFILE_CONTRACT_VERSION ||
@@ -101,7 +120,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     for (const [key, value] of Object.entries(defaults)) {
       if (!Object.hasOwn(props, key) || !matchesSchema(value, props[key])) throw new Error('profile/schema default mismatch');
     }
-    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) {
+    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) {
       (idempotency as Record<string, unknown>)[name] = { required: true, scope: 'principal' };
     }
   }
@@ -122,12 +141,18 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       let name: ArtifactCapabilityName | undefined;
       if (method === 'POST' && path === '/ensure') name = 'artifacts_ensure';
       if (method === 'POST' && path === '/publish') name = 'artifacts_publish';
+      if (method === 'POST' && path === '/publish_bundle') name = 'artifacts_publish_bundle';
+      if (method === 'POST' && path === '/uploads/create') name = 'artifacts_create_upload';
+      if (method === 'POST' && path === '/uploads/commit') name = 'artifacts_commit_upload';
       if (method === 'POST' && path === '/list') name = 'artifacts_list';
       if (method === 'POST' && path === '/get_source') name = 'artifacts_get_source';
       if (method === 'POST' && path === '/set_access') name = 'artifacts_set_access';
+      if (method === 'POST' && path === '/lookup_people') name = 'artifacts_lookup_people';
+      if (method === 'POST' && path === '/list_access') name = 'artifacts_list_access';
       if (method === 'POST' && path === '/delete') name = 'artifacts_delete';
       if (method === 'POST' && path === '/revert') name = 'artifacts_revert';
       if (method === 'POST' && path === '/list_versions') name = 'artifacts_list_versions';
+    if (method === 'POST' && path === '/revoke_reader_consent') name = 'artifacts_revoke_reader_consent';
       if (method === 'GET' && path.startsWith('/meta/') && isArtifactId(path.slice(6))) name = 'artifacts_get';
       if (method === 'GET' && path.startsWith('/versions/') && isArtifactId(path.slice(10))) name = 'artifacts_list_versions';
       if (method === 'GET' && path.startsWith('/source/') && isArtifactId(path.slice(8))) name = 'artifacts_get_source';
