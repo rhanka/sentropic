@@ -17,6 +17,14 @@ export const SERVER_MAX_FILE_BYTES = 16 * 1024 * 1024;
 export const SERVER_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
 /** Concurrent open upload sessions per principal (leaked-URL DoS bound). */
 export const SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL = 8;
+/**
+ * Generic `get_source` server maxima (files parity LOT 2 §B.3): 32 files, 1 MiB
+ * per file, 2 MiB total. A profile may only narrow them; the frozen definition
+ * caps `paths` at 32, so larger listings belong to `artifacts_list_assets`.
+ */
+export const SERVER_MAX_SOURCE_FILES = 32;
+export const SERVER_MAX_SOURCE_INLINE_BYTES = 1024 * 1024;
+export const SERVER_MAX_SOURCE_TOTAL_BYTES = 2 * 1024 * 1024;
 
 /** Generic defaults: 255 files, 16 MiB per file, 64 MiB total (files parity LOT 1). */
 export const DEFAULT_PUBLICATION_LIMITS: Readonly<PublicationLimits> = Object.freeze({
