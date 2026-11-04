@@ -21,6 +21,7 @@ import type { DeleteConfirmationContext } from '../../src/server/management.js';
 import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
   type PublicationService } from '../../src/server/publication.js';
 import { createMemoryIdempotencyKv, createIdempotencyStore } from '../../src/server/idempotency.js';
+import { createMemoryUploadPageStore } from '../../src/server/upload-page.js';
 import { createMemoryStaging, createMemoryUploadSessionStore, createMemoryUploadSigner,
   type UploadSessionStore, type StagingStore } from '../../src/server/uploads.js';
 
@@ -215,6 +216,9 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     },
     uploads: { sessions: uploadSessions, staging: uploadStaging, signer: uploadSigner.signer,
       idempotency: uploadIdempotency },
+    uploadPage: { pages: createMemoryUploadPageStore(), cookieSecret: 'transport-world-page-secret',
+      controlOrigin: 'https://control.test', pageBaseUrl: 'https://control.test',
+      s3Origins: ['https://s3.test'] },
   };
   const app = createHttpArtifactApp(appDeps);
   const mcp = createArtifactsToolExecutor({ ...options, app, profile });
