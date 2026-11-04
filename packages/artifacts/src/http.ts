@@ -9,12 +9,12 @@ import { createGuardedEnsureService, type GuardedEnsureHost } from './server/ser
 import { assertArtifactReplayMigration, type IdempotencyStore } from './server/idempotency.js';
 import { combineSharingPolicy, maskEmailHint, resolveSharingPolicy, type KvPort, type PrincipalDirectoryPort,
   type SharingPolicy, type SharingPolicyPort } from './server/ports.js';
-import { createGuardedPublicationService, resolveBlobConcurrency, runBlobPool, verifyStagedBlobs,
+import { createGuardedPublicationService,
   type GuardedPublicationDeps, type PublicationService } from './server/publication.js';
 import { SERVER_MAX_FILE_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
 import { releaseBudget } from './profile/validation.js';
-import { commitStagedUpload, createUploadService, STAGED_FILE_TTL_MS, stagingKey,
-  type CommitStagedUploadDeps, type StagingStore, type UploadSession, type UploadSessionStore,
+import { commitStagedUpload, createUploadService, STAGED_FILE_TTL_MS, stagedFileExpired,
+  type CommitStagedUploadDeps, type StagingStore, type UploadSessionStore,
   type UploadSignerPort } from './server/uploads.js';
 import { createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from './server/upload-page.js';
 import type { ArtifactsMetrics } from './server/metrics.js';
@@ -601,9 +601,13 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               ...(normalized.maxSize === undefined ? {} : { maxSize: normalized.maxSize as number }),
             });
           } catch (cause) {
-            if (cause instanceof Error && /quota exceeded/.test(cause.message)) {
+            if (cause instanceof Error && /open upload session quota/.test(cause.message)) {
               throw new ArtifactOperationError('limit_exceeded', { cause,
                 publicDetails: { upload: { reason: 'open_session_quota' } } });
+            }
+            if (cause instanceof Error && /scope staging quota/.test(cause.message)) {
+              throw new ArtifactOperationError('limit_exceeded', { cause,
+                publicDetails: { upload: { reason: 'scope_staging_quota' } } });
             }
             if (cause instanceof Error && /invalid/.test(cause.message)) throw new ArtifactProfileInputError();
             throw cause;
@@ -624,45 +628,34 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const path = normalized.path as string;
           const commitInput = { uploadId, artifactId, storageScopeId: invocation.storageScopeId,
             ownerId: acl.ownerId, path, mimeType, digest, size };
+          // LOT 2: the shared commit core — same code as the browser page channel.
+          const commitDeps: CommitStagedUploadDeps = { sessions: deps.uploads!.sessions,
+            staging: deps.uploads!.staging, blobs: deps.publication.blobs, refs: deps.publication.refs,
+            budget: { filesMax: budget.filesMax, totalBytesMax: budget.totalBytesMax },
+            ...(deps.uploads!.metrics === undefined ? {} : { metrics: deps.uploads!.metrics }) };
           const work = async (): Promise<Record<string, unknown>> => {
-            let session: UploadSession;
+            let staged: StagedFileRecord;
             try {
-              session = await uploadService!.sessionForCommit(commitInput);
+              staged = await commitStagedUpload(uploadService!, commitDeps, commitInput);
             } catch (cause) {
-              // One response for unknown, foreign-bound, closed or expired sessions (no oracle).
-              throw new ArtifactOperationError('verification_failed', { cause,
-                publicDetails: { upload: { reason: 'session unknown, bound elsewhere, closed or expired' } } });
-            }
-            const key = stagingKey(invocation.storageScopeId, uploadId);
-            const bytes = await deps.uploads!.staging.get(key);
-            if (bytes === undefined) {
-              throw new ArtifactOperationError('verification_failed',
-                { publicDetails: { upload: { reason: 'staged object missing' } } });
-            }
-            // Re-verify declared size + digest + MIME against the staged bytes (review finding 3).
-            try {
-              uploadService!.verifyStaged(session, bytes, { digest, size, mimeType });
-            } catch (cause) {
+              if (cause instanceof Error && /budget exceeded/.test(cause.message)) {
+                throw new ArtifactOperationError('limit_exceeded', { cause,
+                  publicDetails: { upload: { reason: 'staged_budget' } } });
+              }
+              if (cause instanceof Error && (/unknown upload/.test(cause.message) || /closed/.test(cause.message))) {
+                // One response for unknown, foreign-bound, closed or expired sessions (no oracle).
+                throw new ArtifactOperationError('verification_failed', { cause,
+                  publicDetails: { upload: { reason: 'session unknown, bound elsewhere, closed or expired' } } });
+              }
+              if (cause instanceof Error && /staged object missing/.test(cause.message)) {
+                throw new ArtifactOperationError('verification_failed',
+                  { publicDetails: { upload: { reason: 'staged object missing' } } });
+              }
               throw new ArtifactOperationError('verification_failed', { cause,
                 publicDetails: { upload: { reason: 'size/digest/MIME mismatch' } } });
             }
-            // Promote to the digest-addressed CAS blob via the #907 bounded pool + read-back.
-            const casKey = blobKey(invocation.storageScopeId, digest);
-            const concurrency = resolveBlobConcurrency(deps.publication.blobConcurrency);
-            await runBlobPool([{ key: casKey, bytes }], { concurrency },
-              async (item) => { await deps.publication.blobs.putBlob(item.key, item.bytes); });
-            await verifyStagedBlobs(deps.publication.blobs, [{ key: casKey, bytes }], { concurrency });
-            const pinReason = `upload:${uploadId}`;
-            await deps.publication.refs.pin(digest, pinReason);
-            let staged;
-            try {
-              staged = await uploadService!.completeCommit(session, { path, mimeType, digest, size });
-            } catch (cause) {
-              await deps.publication.refs.unpin(digest, pinReason).catch(() => undefined);
-              throw cause;
-            }
-            await deps.uploads!.staging.delete(key);
-            return { artifactId, uploadId, path, mimeType, digest, size, state: 'staged', stagedAt: staged.createdAt };
+            return { artifactId, uploadId, path, mimeType, digest, size,
+              state: 'staged', stagedAt: staged.createdAt };
           };
           let body: Record<string, unknown>;
           if (deps.uploads!.idempotency !== undefined && command !== undefined) {
