@@ -11,7 +11,8 @@ import { combineSharingPolicy, maskEmailHint, resolveSharingPolicy, type KvPort,
   type SharingPolicy, type SharingPolicyPort } from './server/ports.js';
 import { createGuardedPublicationService,
   type GuardedPublicationDeps, type PublicationService } from './server/publication.js';
-import { SERVER_MAX_FILE_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
+import { SERVER_MAX_FILE_BYTES, SERVER_MAX_SOURCE_FILES, SERVER_MAX_SOURCE_INLINE_BYTES,
+  SERVER_MAX_SOURCE_TOTAL_BYTES, SERVER_MAX_UPLOAD_SESSIONS_PER_PRINCIPAL } from './server/publication-limits.js';
 import { releaseBudget } from './profile/validation.js';
 import { commitStagedUpload, createUploadService, STAGED_FILE_TTL_MS, stagedFileExpired,
   type CommitStagedUploadDeps, type StagedFileRecord, type StagingStore, type UploadSessionStore,
@@ -613,6 +614,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         }
         if (capability === 'artifacts_get_source') {
           const artifactId = normalized.artifactId as string;
+          // LOT 2 §B.3: profile caps instead of hard-coded ceilings (fail-closed
+          // at compile time; defaults stay 32 files / 262 144 B total).
+          const sourceOp = profile.operations.find((entry) => entry.operation === 'get_source');
           const result = await readArtifactSource({
             storageScopeId: invocation.storageScopeId,
             authorize: async () => {
@@ -624,7 +628,10 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               }
             }, getCurrent: deps.publication.getCurrent, getRelease: deps.publication.getRelease!,
             getSource: (id) => deps.sources!.getSource(id), getBlob: (key) => deps.publication.blobs.getBlob(key),
-            urls: deps.publicationUrls, maxFiles: 32, maxTotalBytes: 262144,
+            urls: deps.publicationUrls,
+            maxFiles: sourceOp?.limits['sourceFilesMax'] ?? SERVER_MAX_SOURCE_FILES,
+            maxInlineBytes: sourceOp?.limits['sourceInlineFileBytesMax'] ?? SERVER_MAX_SOURCE_INLINE_BYTES,
+            maxTotalBytes: sourceOp?.limits['sourceTotalBytesMax'] ?? SERVER_MAX_SOURCE_TOTAL_BYTES,
           }, normalized as unknown as Parameters<typeof readArtifactSource>[1]);
           return { ok: true, result: { status: 200, body: result }, invocationId: invocation.invocationId,
             commitState: 'not_committed', replayed: false };
