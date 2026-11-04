@@ -49,6 +49,10 @@
       "types": "./dist/adapters/postgres-reader-consent.d.ts",
       "import": "./dist/adapters/postgres-reader-consent.js"
     },
+    "./adapters/postgres-uploads": {
+      "types": "./dist/adapters/postgres-uploads.d.ts",
+      "import": "./dist/adapters/postgres-uploads.js"
+    },
     "./adapters/postgres-activation": {
       "types": "./dist/adapters/postgres-activation.d.ts",
       "import": "./dist/adapters/postgres-activation.js"
@@ -106,6 +110,10 @@
     "./server/uploads": {
       "types": "./dist/server/uploads.d.ts",
       "import": "./dist/server/uploads.js"
+    },
+    "./server/upload-page": {
+      "types": "./dist/server/upload-page.d.ts",
+      "import": "./dist/server/upload-page.js"
     },
     "./server/publication": {
       "types": "./dist/server/publication.d.ts",
