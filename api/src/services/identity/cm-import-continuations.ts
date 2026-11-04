@@ -6,6 +6,7 @@ import { invalidA4Import, sourceBoolean as bool, sourceDigest as digest, sourceN
 
 export const mapA4Invitation = (row: A4SourceRow): DigestInvitationV1 => ({
   invitationId: text(row.id), email: text(row.email).trim().toLowerCase(), clientId: nullable(row.client_id),
+  tenantId: null, workspaceId: null,
   tokenHash: digest(row.token_hash), status: row.consumed_at === null ? 'pending' : 'consumed',
   expiresAt: time(row.expires_at), createdAt: time(row.created_at), consumedAt: nullableTime(row.consumed_at),
   consumedByUserId: nullable(row.consumed_by_user_id), revision: 0,
