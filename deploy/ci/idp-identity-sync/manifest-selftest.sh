@@ -16,7 +16,7 @@ pass=0; failed=0
 expect_code() {
   want="$1"; shift
   dir="$1"; shift
-  if (cd "$dir" && npx --prefix "$ROOT/api" tsx "$RUNNER" "$@" > /dev/null 2>&1); then got=0; else got=$?; fi
+  if (cd "$dir" && "$ROOT/api/node_modules/.bin/tsx" "$RUNNER" "$@" > /dev/null 2>&1); then got=0; else got=$?; fi
   if [ "$got" = "$want" ]; then pass=$((pass + 1)); else failed=$((failed + 1)); printf 'FAIL: want %s got %s in %s\n' "$want" "$got" "$dir" >&2; fi
 }
 
