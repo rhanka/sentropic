@@ -27,7 +27,10 @@ export type IdentityCustodyErrorCodeV1 =
   | 'identity_revocation_custody_missing'
   | 'identity_revocation_custody_invalid'
   | 'identity_orphan_detected'
-  | 'identity_operation_conflict';
+  | 'identity_operation_conflict'
+  | 'identity_workspace_admin_required'
+  | 'identity_sync_conflict'
+  | 'identity_sync_invalid';
 
 const FIXED_MESSAGES: Readonly<Record<IdentityCustodyErrorCodeV1, string>> = {
   identity_contract_unavailable: 'Identity custody contract is unavailable for this composition',
@@ -55,6 +58,9 @@ const FIXED_MESSAGES: Readonly<Record<IdentityCustodyErrorCodeV1, string>> = {
   identity_revocation_custody_invalid: 'Revocation custody material is invalid',
   identity_orphan_detected: 'Orphan identity or business reference detected',
   identity_operation_conflict: 'Operation id conflicts with a different command',
+  identity_workspace_admin_required: 'Workspace administration is required for this operation.',
+  identity_sync_conflict: 'Replica sync row conflicts with stored material',
+  identity_sync_invalid: 'Replica sync row is invalid',
 };
 
 export class IdentityCustodyErrorV1 extends Error {

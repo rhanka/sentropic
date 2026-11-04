@@ -10,7 +10,6 @@ import type {
   InvitationStore,
   InvitationTokenPort,
   LoginSessionStore,
-  OAuthTenantStore,
   TenantMembershipStore,
   TenantRegistryStore,
   UserAccountStore,
@@ -18,6 +17,7 @@ import type {
   WorkspaceMembershipStore,
   IdentityStores,
 } from './ports.js';
+import type { OAuthTenantStoreV1 } from './oauth-reads.js';
 import type {
   DeviceCodeRecord,
   DivergenceSample,
@@ -369,7 +369,10 @@ export class InMemoryWorkspaceMembershipStore implements WorkspaceMembershipStor
   }
 }
 
-export class InMemoryOAuthTenantStore implements OAuthTenantStore {
+const bytewise = (a: string, b: string): number =>
+  Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+
+export class InMemoryOAuthTenantStore implements OAuthTenantStoreV1 {
   private readonly consents = new Map<string, OAuthConsentRecord>();
   private readonly clients = new Map<string, ServiceClientBinding>();
 
@@ -390,6 +393,40 @@ export class InMemoryOAuthTenantStore implements OAuthTenantStore {
 
   async listTenantServiceClients(tenantId: string): Promise<readonly ServiceClientBinding[]> {
     return [...this.clients.values()].filter((client) => client.tenantId === tenantId);
+  }
+
+  async findConsent(consentId: string): Promise<OAuthConsentRecord | null> {
+    return this.consents.get(consentId) ?? null;
+  }
+
+  async findConsentForGrant(input: {
+    readonly userId: string;
+    readonly clientId: string;
+    readonly tenantId: string;
+  }): Promise<OAuthConsentRecord | null> {
+    const live = [...this.consents.values()].filter(
+      (row) =>
+        row.userId === input.userId &&
+        row.clientId === input.clientId &&
+        row.tenantId === input.tenantId &&
+        row.revokedAt === undefined,
+    );
+    live.sort((a, b) =>
+      a.grantedAt === b.grantedAt ? bytewise(b.consentId, a.consentId) : a.grantedAt < b.grantedAt ? 1 : -1,
+    );
+    return live[0] ?? null;
+  }
+
+  async listConsentsForUser(userId: string): Promise<readonly OAuthConsentRecord[]> {
+    return [...this.consents.values()]
+      .filter((row) => row.userId === userId)
+      .sort((a, b) =>
+        a.grantedAt === b.grantedAt ? bytewise(a.consentId, b.consentId) : a.grantedAt < b.grantedAt ? -1 : 1,
+      );
+  }
+
+  async findServiceClientBinding(clientId: string): Promise<ServiceClientBinding | null> {
+    return this.clients.get(clientId) ?? null;
   }
 }
 

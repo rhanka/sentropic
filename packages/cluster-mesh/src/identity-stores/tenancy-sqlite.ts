@@ -5,12 +5,12 @@
 import { IdentityNotFoundError, WorkspaceAlreadyEnrolledError } from '../identity-contracts/errors.js';
 import { IdentityConflictError } from '../identity-contracts/errors.js';
 import type {
-  OAuthTenantStore,
   TenantMembershipStore,
   TenantRegistryStore,
   WorkspaceDirectoryStore,
   WorkspaceMembershipStore,
 } from '../identity-contracts/ports.js';
+import type { OAuthTenantStoreV1 } from '../identity-contracts/oauth-reads.js';
 import type {
   OAuthConsentRecord,
   ServiceClientBinding,
@@ -38,7 +38,7 @@ export interface SqliteIdentityStores {
   readonly memberships: TenantMembershipStore;
   readonly workspaces: WorkspaceDirectoryStore;
   readonly workspaceMembers: WorkspaceMembershipStore;
-  readonly oauth: OAuthTenantStore;
+  readonly oauth: OAuthTenantStoreV1;
 }
 
 const text = (value: unknown): string => {
@@ -116,6 +116,21 @@ const mapWorkspaceMember = (row: Record<string, unknown>): WorkspaceMembershipRe
   workspaceId: text(row['workspace_id']),
   userId: text(row['user_id']),
   role: text(row['role']) as WorkspaceMembershipRecord['role'],
+});
+
+const mapConsent = (row: Record<string, unknown>): OAuthConsentRecord => ({
+  consentId: text(row['consent_id']),
+  tenantId: text(row['tenant_id']),
+  userId: text(row['user_id']),
+  clientId: text(row['client_id']),
+  grantedAt: text(row['granted_at']),
+  revokedAt: optionalText(row['revoked_at']),
+});
+
+const mapServiceClient = (row: Record<string, unknown>): ServiceClientBinding => ({
+  clientId: text(row['client_id']),
+  tenantId: text(row['tenant_id']),
+  boundAt: text(row['bound_at']),
 });
 
 /** Applies the A2.2 DDL on the given database (idempotent). */
@@ -352,6 +367,29 @@ export function createSqliteIdentityStores(db: SqliteStoreDb): SqliteIdentitySto
           }),
         );
       },
-    } satisfies OAuthTenantStore,
+      async findConsent(consentId) {
+        const row = rowOf(db.prepare('SELECT * FROM cm_oauth_consents WHERE consent_id = ?').get(consentId));
+        return row ? mapConsent(row) : null;
+      },
+      async findConsentForGrant(input) {
+        const row = rowOf(
+          db
+            .prepare(
+              'SELECT * FROM cm_oauth_consents WHERE user_id = ? AND client_id = ? AND tenant_id = ? AND revoked_at IS NULL ORDER BY granted_at DESC, consent_id DESC LIMIT 1',
+            )
+            .get(input.userId, input.clientId, input.tenantId),
+        );
+        return row ? mapConsent(row) : null;
+      },
+      async listConsentsForUser(userId) {
+        return rowsOf(
+          db.prepare('SELECT * FROM cm_oauth_consents WHERE user_id = ? ORDER BY granted_at ASC, consent_id ASC').all(userId),
+        ).map(mapConsent);
+      },
+      async findServiceClientBinding(clientId) {
+        const row = rowOf(db.prepare('SELECT * FROM cm_service_clients WHERE client_id = ?').get(clientId));
+        return row ? mapServiceClient(row) : null;
+      },
+    } satisfies OAuthTenantStoreV1,
   };
 }
