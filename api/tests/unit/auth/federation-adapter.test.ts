@@ -1,4 +1,4 @@
-import { AuthHonoIdentityConflictError, type AuthHonoFederationPort } from '@sentropic/auth-hono';
+import type { AuthHonoFederationPort } from '@sentropic/auth-hono';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -10,6 +10,7 @@ import { createCmUser } from '../../../src/services/identity/cm-users';
 import { createCmMagicLink, consumeCmMagicLink, sha256Hex } from '../../../src/services/identity/cm-proofs';
 import { createMockCredential } from '../../utils/auth-helper';
 import { cmDeleteForUsers, cmDeleteForEmails } from '../../utils/cm-identity-test-store';
+import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 /**
  * CM-bound federation identity ports plus the app's one-time protocol flow-state store.
@@ -105,23 +106,26 @@ describe('CM federation identity binding and app protocol flow state', () => {
     await adapter.linkIdentity(input);
 
     // Same (provider, subject), even for a DIFFERENT user, must be rejected (one identity ↔ one user).
-    await expect(adapter.linkIdentity({ ...input, userId: userB })).rejects.toBeInstanceOf(
-      AuthHonoIdentityConflictError,
-    );
+    // Post-cutover the CM port reports the typed custody code; the broker maps it to 409.
+    await expectCustodyCode(() => adapter.linkIdentity({ ...input, userId: userB }), 'social_subject_conflict');
   });
 
   it('unlinkIdentity removes the link and touchLogin stamps last_login_at', async () => {
-    const linked = await adapter.linkIdentity({
-      emailAtLink: 'a@example.com',
-      emailVerifiedByProvider: true,
-      now: new Date(),
-      provider: 'google',
-      providerSubject: `unlink-${suffix}`,
-      userId: userA,
-    });
-
-    const stamp = new Date();
-    await adapter.touchLogin(linked.id, stamp);
+    // touchLogin consumes the same-callback snapshot populated by linkIdentity, so both
+    // run inside one binding callback exactly as the ceremony does; reads stay per-call.
+    const { stamp } = await withAppCmAuth(runner => runner.request(async binding => {
+      const linked = await binding.ports.federation.linkIdentity({
+        emailAtLink: 'a@example.com',
+        emailVerifiedByProvider: true,
+        now: new Date(),
+        provider: 'google',
+        providerSubject: `unlink-${suffix}`,
+        userId: userA,
+      });
+      const stamp = new Date();
+      await binding.ports.federation.touchLogin(linked.id, stamp);
+      return { stamp };
+    }));
     const row = await adapter.findIdentityBySubject('google', `unlink-${suffix}`);
     expect(row?.lastLoginAt?.getTime()).toBe(stamp.getTime());
 
