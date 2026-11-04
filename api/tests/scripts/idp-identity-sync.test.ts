@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8');
 
 const prodSql = () => read('deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql');
+const readerSql = () => read('deploy/k8s/overlays/prod/idp-identity-sync/reader-role.sql');
 const importSql = () => read('deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql');
 const importSh = () => read('deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh');
 
@@ -57,14 +58,27 @@ describe('preprod sync replacement (a4-cm-gaps-r2 §9.2/§10.8)', () => {
     expect(script).not.toContain('preprod');
   });
 
-  it('the prod export leg reads CM identity tables, never legacy identity tables', () => {
+  it('the prod SQL export stays on the two app-protocol legs, never legacy identity', () => {
     const sql = prodSql();
-    for (const table of ['cm_identity.identity_user_accounts', 'identity_account_profiles',
+    for (const leg of ['consents.csv', 'clients.csv', 'FROM oauth_consents',
+      'FROM oauth_clients', 'idp_oauth_client_secret_presence']) {
+      expect(sql).toContain(leg);
+    }
+    for (const legacy of ['FROM users', 'FROM webauthn_credentials', 'GREATEST(', 'rekey']) {
+      expect(sql).not.toContain(legacy);
+    }
+  });
+
+  it('the reader role grants the four pinned CM tables and keeps its guardrails', () => {
+    const sql = readerSql();
+    for (const table of ['identity_user_accounts', 'identity_account_profiles',
       'identity_webauthn_credentials', 'cm_oauth_consents']) {
       expect(sql).toContain(table);
     }
-    for (const legacy of ['FROM users', 'FROM webauthn_credentials', 'FROM oauth_consents']) {
-      expect(sql).not.toContain(legacy);
+    for (const guard of ['default_transaction_read_only', 'CONNECTION LIMIT 2',
+      'idp_oauth_client_secret_presence', 'REVOKE']) {
+      expect(sql).toContain(guard);
     }
+    expect(sql).not.toContain('ON ALL TABLES');
   });
 });
