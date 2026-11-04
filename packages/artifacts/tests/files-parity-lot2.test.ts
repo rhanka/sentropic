@@ -17,8 +17,9 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { ARTIFACTS_TOOL_DEFINITIONS, ARTIFACTS_TOOL_NAMES } from '../src/mcp-core.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../src/profile/index.js';
-import { checksumHeaderValue, stagingKey } from '../src/server/uploads.js';
+import { checksumHeaderValue, createMemoryStaging, createMemoryUploadSessionStore, createUploadService, stagingKey } from '../src/server/uploads.js';
 import { createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from '../src/server/upload-page.js';
 import type { ArtifactsMetricEvent } from '../src/server/metrics.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
@@ -531,5 +532,134 @@ describe('files parity LOT 2 (b4): HTTP Range', () => {
     }
     const noGrant = await handler.handle({ method: 'GET', host, path: '/v.mp4', range: 'bytes=300-400' });
     expect(noGrant.status).toBe(401);
+  });
+});
+
+describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
+  it('unpins consumed upload pins on bundle while the release keeps the blob', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'gc-unpin');
+    const bytes = pngBytes(31, 128);
+    const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType: 'image/png', maxSize: 128 });
+    const upload = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
+    await world.uploadStaging.put(upload.stagingKey, bytes);
+    await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: upload.uploadId,
+      path: 'u.png', mimeType: 'image/png', digest: sha256(bytes), size: bytes.length, idempotencyKey: 'u-1' });
+    expect(await world.refs.isPinned(sha256(bytes))).toBe(true);
+    const bundle = await mcp.invoke('artifacts_publish_bundle', { artifactId, idempotencyKey: 'u-bundle',
+      expectedCurrentReleaseId: null, assets: [{ path: 'u.png', uploadId: upload.uploadId }] });
+    expect(bundle.status).toBe(201);
+    expect(await world.refs.isPinned(sha256(bytes))).toBe(false);
+    expect(await world.blobs.getBlob(`artifacts/${SCOPE}/blobs/${sha256(bytes).slice(7)}`)).toBeDefined();
+  });
+
+  it('refuses expired staged files at bundle and sweeps them with unpin', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'gc-staged-ttl');
+    const bytes = pngBytes(33, 64);
+    const created = await mcp.invoke('artifacts_create_upload', { artifactId, mimeType: 'image/png', maxSize: 64 });
+    const upload = unwrap<{ uploadId: string; stagingKey: string }>(created.body);
+    await world.uploadStaging.put(upload.stagingKey, bytes);
+    await mcp.invoke('artifacts_commit_upload', { artifactId, uploadId: upload.uploadId,
+      path: 's.png', mimeType: 'image/png', digest: sha256(bytes), size: bytes.length, idempotencyKey: 's-1' });
+    const sessions = world.uploadSessions;
+    const record = (await sessions.listStagedFiles(artifactId)).find((entry) => entry.path === 's.png')!;
+    const aged = { ...record, createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString() };
+    await (sessions as unknown as { recordStagedFile(r: typeof record): Promise<void> }).recordStagedFile(aged);
+    const bundle = await mcp.invoke('artifacts_publish_bundle', { artifactId, idempotencyKey: 's-bundle',
+      expectedCurrentReleaseId: null, assets: [{ path: 's.png', uploadId: upload.uploadId }] });
+    expect(bundle.status).toBe(422);
+    const report = await createUploadSweeper({ sessions, staging: world.uploadStaging, refs: world.refs }).sweep();
+    expect(report.stagedExpired).toContain(upload.uploadId);
+    expect(await sessions.getStagedFile(upload.uploadId)).toBeUndefined();
+    expect(await world.refs.isPinned(sha256(bytes))).toBe(false);
+  });
+
+  it('pins the 21 frozen definitions and declares the 3 new tools', () => {
+    const sortKeys = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(sortKeys);
+      if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+          .filter(([, entry]) => entry !== undefined)
+          .map(([key, entry]) => [key, sortKeys(entry)] as const)
+          .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)));
+      }
+      return value;
+    };
+    const { artifacts_create_upload_page: _page, artifacts_list_assets: _list,
+      artifacts_publish_bundle_v2: _v2, ...preexisting } = ARTIFACTS_TOOL_DEFINITIONS;
+    expect(createHash('sha256').update(JSON.stringify(sortKeys(preexisting), null, 2)).digest('hex'))
+      .toBe('6589d5930620ea12e5b185a8b72e2657e08a2c32e9b5943a7d0e4e89aa304b2c');
+    expect(Object.keys(preexisting)).toHaveLength(21);
+    expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_create_upload_page');
+    expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_list_assets');
+    expect(ARTIFACT_TOOL_NAMES).toContain('artifacts_publish_bundle_v2');
+  });
+
+  it('admits exactly 3 parallel creates against a 3-session scope quota', async () => {
+    const events: ArtifactsMetricEvent[] = [];
+    const service = createUploadService({
+      sessions: createMemoryUploadSessionStore(),
+      staging: createMemoryStaging(),
+      signer: { signPut: async (input) => ({ url: `https://s3.test/${input.key}`, method: 'PUT' as const,
+        headers: {}, expiresAt: new Date().toISOString() }) },
+    }, { maxUploadBytes: 1024, maxSessionsPerPrincipal: 100, stagingQuotaBytesPerScope: 300,
+      metrics: { emit: (event) => { events.push(event); } } });
+    const attempts = await Promise.allSettled(Array.from({ length: 10 }, (_, i) => service.create({
+      artifactId: randomUUID(), storageScopeId: SCOPE, ownerId: `owner-${i % 3}`,
+      mimeType: 'image/png', maxSize: 100 })));
+    expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(3);
+    expect(attempts.filter((result) => result.status === 'rejected')).toHaveLength(7);
+    expect(events.filter((event) => event.name === 'upload_quota_refusals')).toHaveLength(7);
+  });
+
+  it('emits metric events without identifier labels', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const events: ArtifactsMetricEvent[] = [];
+    const now = new Date('2026-01-01T00:00:00Z');
+    const page = makePage(world, events, () => now);
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'metrics-labels');
+    const minted = await mcp.invoke('artifacts_create_upload_page', { artifactId });
+    expect(minted.status).toBe(201);
+    const body = unwrap<{ pageSessionId: string; uploadPageUrl: string }>(minted.body);
+    await page.exchange({ pageSessionId: body.pageSessionId,
+      token: body.uploadPageUrl.split('#t=')[1] as string, origin: CONTROL_ORIGIN });
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain(artifactId);
+    for (const event of events) {
+      expect(Object.values(event.labels ?? {})).not.toContain(artifactId);
+      expect(Object.values(event.labels ?? {})).not.toContain('alice');
+    }
+  });
+
+  it('deletes orphan staging keys past the grace and keeps fresh ones', async () => {
+    let now = new Date('2026-01-01T00:00:00Z');
+    const staging = createMemoryStaging(() => now);
+    const sessions = createMemoryUploadSessionStore(() => now);
+    const oldKey = `artifacts/${SCOPE}/staging/${randomUUID()}`;
+    await staging.put(oldKey, new Uint8Array([1]));
+    now = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const freshKey = `artifacts/${SCOPE}/staging/${randomUUID()}`;
+    await staging.put(freshKey, new Uint8Array([2]));
+    const report = await createUploadSweeper({ sessions, staging }).sweep(now, { scopes: [SCOPE] });
+    expect(report.orphanKeys).toEqual([oldKey]);
+    expect(await staging.get(oldKey)).toBeUndefined();
+    expect(await staging.get(freshKey)).toBeDefined();
+  });
+
+  it('refuses the fifth open page per principal', async () => {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'page-quota');
+    for (let i = 0; i < 4; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const minted = await mcp.invoke('artifacts_create_upload_page', { artifactId, maxFiles: 1 });
+      expect(minted.status).toBe(201);
+    }
+    const fifth = await mcp.invoke('artifacts_create_upload_page', { artifactId, maxFiles: 1 });
+    expect(fifth.status).toBe(413);
   });
 });
