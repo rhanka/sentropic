@@ -52,7 +52,7 @@ const pgDb = drizzle(pool);
 
 // Backward-compat helpers: provide .all/.run used in existing code paths
 // Map to drizzle execute() which returns rows array for raw SQL
-export type CompatDbMethods = {
+type CompatDbMethods = {
   all: (query: SQL) => Promise<unknown[]>;
   run: (query: SQL) => Promise<unknown>;
   get: (query: SQL) => Promise<unknown | undefined>;

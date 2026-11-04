@@ -6,6 +6,7 @@ import {
   type AtomicWorkspaceDeletionV1,
   type ConnectorRevocationCustodyPortV1,
   type IdentityExternalRevocationDraftV1,
+  type IdentityTransactionV1,
   type WorkspaceBusinessDeletionPortV1,
   type WorkspaceDeletionAuthorizationPortV1,
   type WorkspaceDeletionCommandV1,
@@ -17,7 +18,7 @@ import { createAppConnectorCustody, type ConnectorSourceScope } from './cm-conne
 import { deleteCmBusinessWorkspaces } from './cm-deletion-workspaces';
 import { loadCmWorkspaceDeletionOptions } from './cm-deletion-options';
 import { identityDeliveryId } from './cm-delivery-record';
-import { cmIdentityUnitOfWork, type CmIdentityTransaction } from './cm-transaction';
+import { cmIdentityUnitOfWork } from './cm-transaction';
 
 /**
  * App business/plane ports for standalone workspace deletion
@@ -91,7 +92,7 @@ const matches = (attempt: WorkspaceAttempt | undefined, command: WorkspaceDeleti
 /** Workspace-scoped connector plane; placement is always present. */
 export function createCmWorkspaceDeletionConnectorPlane(
   custody: ConnectorRevocationCustodyPortV1<PoolClient>,
-  attempts: WeakMap<CmIdentityTransaction, WorkspaceAttempt>,
+  attempts: WeakMap<IdentityTransactionV1<PoolClient>, WorkspaceAttempt>,
 ): WorkspaceDeletionPlanePortV1<PoolClient> {
   return {
     placement: 'present',
@@ -148,7 +149,7 @@ export const deleteCmWorkspace = (
   command: { readonly workspaceId: string; readonly actorId: string },
   operationId = randomUUID(),
 ): ReturnType<AtomicWorkspaceDeletionV1['deleteWorkspace']> => {
-  const attempts = new WeakMap<CmIdentityTransaction, WorkspaceAttempt>();
+  const attempts = new WeakMap<IdentityTransactionV1<PoolClient>, WorkspaceAttempt>();
   const custody = createAppConnectorCustody(async (source, input, tx) => {
     const attempt = attempts.get(tx);
     const expected = attempt?.sources.get(source.id);
