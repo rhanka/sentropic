@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reconcileA4RemoteSnapshot } from '../../../src/services/identity/cm-import-remote-snapshot';
+import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 const at = '2026-11-01T00:00:00.000Z';
 const source = { id: 'session', user_id: 'user', session_token_hash: 'a'.repeat(64), refresh_token_hash: 'b'.repeat(64),
@@ -19,13 +20,13 @@ describe('A4 coherent SQL and remote snapshot', () => {
     expect(result.inventory.divergence).toBe(0);
   });
 
-  it('should reject a live orphan and any changed immutable login or token binding', () => {
+  it('should reject a live orphan and any changed immutable login or token binding', async () => {
     const snapshot = { format: 'remote-session-projection-snapshot/1' as const, records: [record] };
-    expect(() => reconcileA4RemoteSnapshot([], snapshot, at)).toThrow('identity_import_invalid');
-    expect(() => reconcileA4RemoteSnapshot([source], { ...snapshot,
-      records: [{ ...record, login: { ...record.login, mfaVerified: false } }] }, at)).toThrow('identity_import_invalid');
-    expect(() => reconcileA4RemoteSnapshot([source], { ...snapshot,
-      records: [{ ...record, sessionTokenHash: 'c'.repeat(64) }] }, at)).toThrow('identity_import_invalid');
+    await expectCustodyCode(() => reconcileA4RemoteSnapshot([], snapshot, at), 'identity_import_invalid');
+    await expectCustodyCode(() => reconcileA4RemoteSnapshot([source], { ...snapshot,
+      records: [{ ...record, login: { ...record.login, mfaVerified: false } }] }, at), 'identity_import_invalid');
+    await expectCustodyCode(() => reconcileA4RemoteSnapshot([source], { ...snapshot,
+      records: [{ ...record, sessionTokenHash: 'c'.repeat(64) }] }, at), 'identity_import_invalid');
     expect(reconcileA4RemoteSnapshot([source], snapshot, at).inventory).toMatchObject({ files: 1, divergence: 0, orphanLive: 0 });
   });
 });

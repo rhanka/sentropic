@@ -2,6 +2,7 @@ import { SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 import { mapA4EmailTicket, mapA4Invitation, mapA4Social } from '../../../src/services/identity/cm-import-continuations';
 import { createCmTokenCustodian } from '../../../src/services/identity/cm-token-custodian';
+import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 describe('A4 continuation source mapping', () => {
   it('should verify an expired source token while retaining its exact digest, expiry and pending ticket lifecycle', async () => {
@@ -14,8 +15,8 @@ describe('A4 continuation source mapping', () => {
         verification_token: token }, tokens.ticketTokens);
       expect(ticket).toMatchObject({ codeProofId: 'code', state: 'pending', revision: 0,
         createdAt: '1970-01-01T00:01:40.000Z', expiresAt: '1970-01-01T00:03:20.000Z', consumedAt: null });
-      await expect(mapA4EmailTicket({ id: 'other', email: 'user@example.test', used: true,
-        verification_token: token }, tokens.ticketTokens)).rejects.toThrow('identity_import_invalid');
+      await expectCustodyCode(() => mapA4EmailTicket({ id: 'other', email: 'user@example.test', used: true,
+        verification_token: token }, tokens.ticketTokens), 'identity_import_invalid');
     } finally { key.fill(0); tokens.dispose(); }
   });
 
@@ -24,11 +25,11 @@ describe('A4 continuation source mapping', () => {
       created_at: '2026-10-01T00:00:00', expires_at: '2026-11-01T00:00:00',
       consumed_at: '2026-10-02T00:00:00', consumed_by_user_id: null });
     expect(row).toMatchObject({ status: 'consumed', clientId: 'client', consumedByUserId: null, revision: 0 });
-    expect(row).not.toHaveProperty('tenantId');
-    expect(row).not.toHaveProperty('workspaceId');
+    expect(row.tenantId).toBeNull();
+    expect(row.workspaceId).toBeNull();
   });
 
-  it('should refuse every non-null social provider secret before importing an identity', () => {
-    expect(() => mapA4Social({ token_secret: '' })).toThrow('identity_import_invalid');
+  it('should refuse every non-null social provider secret before importing an identity', async () => {
+    await expectCustodyCode(() => mapA4Social({ token_secret: '' }), 'identity_import_invalid');
   });
 });
