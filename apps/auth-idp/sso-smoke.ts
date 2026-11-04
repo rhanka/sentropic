@@ -45,14 +45,17 @@ const seedUserAndSession = async (): Promise<{ userId: string; sessionToken: str
     ON CONFLICT (email) DO UPDATE SET account_status = 'active', updated_at = ${now}`);
   const found = await db.execute(
     sql`SELECT user_id FROM cm_identity.identity_user_accounts WHERE email = ${TEST_EMAIL} LIMIT 1`);
-  const row = found.rows[0];
-  if (!row) fail('seeded user not found after upsert');
+  const row = found.rows[0] as { user_id?: unknown } | undefined;
+  const seededUserId: string =
+    typeof row?.user_id === 'string' && row.user_id.length > 0
+      ? row.user_id
+      : fail('seeded user id missing after upsert');
   await db.execute(sql`INSERT INTO cm_identity.identity_account_profiles
-    (user_id, email_verified, legacy_account_status) VALUES (${row!.user_id}, true, 'active')
+    (user_id, email_verified, legacy_account_status) VALUES (${seededUserId}, true, 'active')
     ON CONFLICT (user_id) DO UPDATE SET email_verified = true, legacy_account_status = 'active'`);
 
-  const session = await createSession(row!.user_id, 'editor', { name: 'idp-smoke' });
-  return { userId: row!.user_id, sessionToken: session.sessionToken };
+  const session = await createSession(seededUserId, 'editor', { name: 'idp-smoke' });
+  return { userId: seededUserId, sessionToken: session.sessionToken };
 };
 
 const main = async (): Promise<void> => {

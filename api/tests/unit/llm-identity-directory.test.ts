@@ -81,6 +81,7 @@ const seed = async () => {
 const cleanup = async () => {
   await db.delete(serviceClients).where(like(serviceClients.clientId, `llmid-${run}-%`));
   await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT]);
+  await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = ANY($1)`, [[WS, WS_2, WS_OTHER]]);
   await db.delete(workspaces).where(inArray(workspaces.id, [WS, WS_2, WS_OTHER]));
   await cmDeleteWorkspaceMembersForUser(USER);
   await cmDeleteForUsers([USER]);
