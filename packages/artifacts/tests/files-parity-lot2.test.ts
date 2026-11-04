@@ -44,6 +44,8 @@ const pdfBytes = (size: number): Uint8Array =>
   seededBytes(11, size, [0x25, 0x50, 0x44, 0x46, 0x2d]);
 const woff2Bytes = (size: number): Uint8Array =>
   seededBytes(13, size, [0x77, 0x4f, 0x46, 0x32]);
+const mp4Bytes = (size: number): Uint8Array =>
+  seededBytes(17, size, [0x66, 0x74, 0x79, 0x70, 0, 0, 0, 0, 0x69, 0x73, 0x6f, 0x6d]);
 
 /** LOT 2 host profile: LOT 1 upload capabilities plus the three new tools. */
 function lot2Profile(): ArtifactProviderProfile {
@@ -467,5 +469,67 @@ describe('files parity LOT 2 (b3): get_source caps', () => {
     expect(unwrap<{ files: Record<string, unknown>[] }>(read.body).files).toEqual([{
       path: 'shot.png', mimeType: 'image/png', size: bytes.length,
       digest: sha256(bytes), omitted: 'too_large' }]);
+  });
+});
+
+describe('files parity LOT 2 (b4): HTTP Range', () => {
+  const BASE = 'pages.example.test';
+
+  async function serveVideo(): Promise<{ handler: ReturnType<typeof createContentHandler>;
+    host: string; cookie: string; bytes: Uint8Array }> {
+    const world = createTransportWorld(undefined, undefined, { profile: lot2Profile() });
+    const mcp = scannedMcp(world);
+    const artifactId = await ensureArtifact(world, mcp, 'range-video');
+    const bytes = mp4Bytes(256);
+    const published = await world.mcp.invoke({ tool: 'artifacts_publish', invocation: world.invocation(),
+      args: { artifactId, idempotencyKey: 'range-pub', expectedCurrentReleaseId: null,
+        files: [{ path: 'v.mp4', mimeType: 'video/mp4', bytes: Array.from(bytes) }] } });
+    expect(published.status).toBe(201);
+    const releaseId = unwrap<{ releaseId: string }>(published.body).releaseId;
+    const tickets = createTicketService({ store: createMemoryTicketStore() });
+    const handler = createContentHandler({ acls: world.acls, lifecycle: world.lifecycle,
+      publication: world.publication, blobs: world.blobs,
+      grants: createHmacGrantSigner({ secret: 'range-secret' }), tickets, baseDomain: BASE,
+      isApprovedAccount: () => true });
+    const host = `${artifactId}.${BASE}`;
+    const issued = await tickets.issue({ subjectId: 'alice', artifactId, releaseId, channel: 'stable' });
+    const activation = await handler.handle({ method: 'GET', host, path: '/', actorId: 'alice', ticket: issued.ticketId });
+    expect(activation.status).toBe(200);
+    return { handler, host, cookie: activation.headers['set-cookie'] as string, bytes };
+  }
+
+  it('serves 206 slices with content-range and keeps HEAD header-parity', async () => {
+    const { handler, host, cookie, bytes } = await serveVideo();
+    const first = await handler.handle({ method: 'GET', host, path: '/v.mp4', cookie, range: 'bytes=0-9' });
+    expect(first.status).toBe(206);
+    expect(first.headers['content-range']).toBe('bytes 0-9/256');
+    expect(first.headers['accept-ranges']).toBe('bytes');
+    expect(first.headers['content-length']).toBe('10');
+    expect(first.bytes).toEqual(bytes.slice(0, 10));
+    const open = await handler.handle({ method: 'GET', host, path: '/v.mp4', cookie, range: 'bytes=200-' });
+    expect(open.status).toBe(206);
+    expect(open.headers['content-range']).toBe('bytes 200-255/256');
+    const suffix = await handler.handle({ method: 'GET', host, path: '/v.mp4', cookie, range: 'bytes=-8' });
+    expect(suffix.status).toBe(206);
+    expect(suffix.bytes).toEqual(bytes.slice(248));
+    const head = await handler.handle({ method: 'HEAD', host, path: '/v.mp4', cookie, range: 'bytes=0-9' });
+    expect(head.status).toBe(206);
+    expect(head.headers['content-range']).toBe('bytes 0-9/256');
+    expect(head.bytes).toBeUndefined();
+  });
+
+  it('answers 416 on unsatisfiable ranges, ignores malformed ones, checks auth first', async () => {
+    const { handler, host, cookie, bytes } = await serveVideo();
+    const pastEnd = await handler.handle({ method: 'GET', host, path: '/v.mp4', cookie, range: 'bytes=300-400' });
+    expect(pastEnd.status).toBe(416);
+    expect(pastEnd.headers['content-range']).toBe('bytes */256');
+    for (const range of ['bytes=abc', 'bytes=0-1,2-3', 'items=0-9']) {
+      // eslint-disable-next-line no-await-in-loop
+      const ignored = await handler.handle({ method: 'GET', host, path: '/v.mp4', cookie, range });
+      expect(ignored.status).toBe(200);
+      expect(ignored.bytes).toEqual(bytes);
+    }
+    const noGrant = await handler.handle({ method: 'GET', host, path: '/v.mp4', range: 'bytes=300-400' });
+    expect(noGrant.status).toBe(401);
   });
 });
