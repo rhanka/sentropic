@@ -168,8 +168,144 @@ export function uploadPageCsp(s3Origins: readonly string[]): string {
     'base-uri \'none\'', 'form-action \'none\'', 'frame-ancestors \'none\''].join('; ');
 }
 
-export function renderUploadPage(_options: { s3Origins: readonly string[] }): string {
-  throw new Error('not implemented');
+/**
+ * Self-contained static upload page (no external assets). Bytes travel
+ * browser → S3 via raw PUT (FormData is banned: multipart wrapping changes
+ * length and type); one session per file with `size = File.size`; at most 4
+ * PUTs in flight; commit each file before opening further sessions.
+ */
+export function renderUploadPage(options: { s3Origins: readonly string[] }): string {
+  const csp = uploadPageCsp(options.s3Origins);
+  const config = JSON.stringify({ s3Origins: [...options.s3Origins] });
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="${csp.replace(/"/g, '&quot;')}">
+<meta name="color-scheme" content="light dark">
+<title>Upload files</title>
+<style>body{font-family:system-ui,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem}
+#drop{border:2px dashed #888;border-radius:.5rem;padding:2rem;text-align:center;margin:1rem 0}
+#drop.over{border-color:#06c;background:#06c1}
+li{margin:.25rem 0;font-size:.9rem}pre{white-space:pre-wrap;word-break:break-all;background:#8882;padding:1rem}</style>
+</head>
+<body>
+<h1>Upload files</h1>
+<p>Pick files from your disk. They upload straight to object storage; the assistant never sees the bytes.
+When every file shows <b>staged</b>, go back to the chat and say <b>done</b>.</p>
+<div id="drop">Drop files or folders here, paste an image, or
+<input id="picker" type="file" multiple> <input id="folder" type="file" webkitdirectory></div>
+<ul id="files"></ul>
+<button id="copy" type="button">Copy asset list (chat fallback)</button>
+<pre id="assetJson" hidden></pre>
+<p id="error" role="alert"></p>
+<script>window.__ARTIFACTS_UPLOAD__ = ${config};</script>
+<script>
+'use strict';
+const sessionId = location.pathname.split('/').filter(Boolean).pop();
+let token = (location.hash.match(/#t=([^&]+)/) || [])[1] || '';
+const filesEl = document.getElementById('files');
+const errorEl = document.getElementById('error');
+const fail = (message) => { errorEl.textContent = String(message); };
+if (!sessionId || !token) fail('This upload link is incomplete. Ask the assistant for a fresh one.');
+const base = location.pathname.replace(/\\/+$/, '').replace(/artifacts\\/upload\\/[^/]+$/, 'artifacts/upload/' + sessionId);
+const api = async (path, body, method) => {
+  const response = await fetch(base + '/' + path, { method: method || 'POST',
+    headers: { 'content-type': 'application/json', 'x-artifact-upload': '1' },
+    body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
+  if (!response.ok) throw new Error(path + ' failed: ' + response.status);
+  return response.json();
+};
+const EXT_TYPES = { woff2: 'font/woff', avif: 'image/avif', ico: 'image/x-icon' };
+const chunked = (bytes, f) => {
+  const view = new Uint8Array(bytes);
+  let out = '';
+  for (let i = 0; i < view.length; i += 0x8000) out += f(view.subarray(i, i + 0x8000)));
+  return out;
+};
+const b64 = (bytes) => btoa(chunked(bytes, (part) => String.fromCharCode(...part)));
+const hex = (bytes) => chunked(bytes, (part) => [...part].map((b) => b.toString(16).padStart(2, '0')).join(''));
+const row = (path) => {
+  const li = document.createElement('li');
+  li.textContent = path + ': queued';
+  filesEl.appendChild(li);
+  return (text) => { li.textContent = path + ': ' + text; };
+};
+async function stage(file, relPath) {
+  const setStatus = row(relPath);
+  const ext = (relPath.split('.').pop() || '').toLowerCase();
+  const mimeType = file.type || EXT_TYPES[ext] || 'application/octet-stream';
+  const created = await api('files', { path: relPath, mimeType, size: file.size });
+  setStatus('uploading');
+  const buffer = await file.arrayBuffer();
+  const put = async (upload) => fetch(upload.uploadUrl, { method: 'PUT', body: file,
+    headers: { 'content-type': upload.requiredHeaders['content-type'],
+      'x-amz-checksum-sha256': b64(await crypto.subtle.digest('SHA-256', buffer)) } });
+  let upload = created;
+  let response = await put(upload);
+  if (!response.ok) {
+    upload = await api('files', { path: relPath, mimeType, size: file.size });
+    response = await put(upload);
+  }
+  if (!response.ok) throw new Error('PUT failed: ' + response.status);
+  setStatus('committing');
+  const digest = 'sha256:' + hex(await crypto.subtle.digest('SHA-256', buffer));
+  try {
+    await api('files/' + upload.uploadId + '/commit', { path: relPath, mimeType, digest,
+      size: file.size, idempotencyKey: crypto.randomUUID() });
+  } catch (error) {
+    const renamed = prompt('That path is already staged. Enter a new path, or cancel to skip:', relPath);
+    if (!renamed) throw error;
+    await api('files/' + upload.uploadId + '/commit', { path: renamed, mimeType, digest,
+      size: file.size, idempotencyKey: crypto.randomUUID() });
+  }
+  setStatus('staged');
+}
+async function runAll(entries) {
+  const workers = [];
+  const queue = [...entries];
+  for (let i = 0; i < 4; i += 1) {
+    workers.push((async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        try { await stage(next.file, next.path); }
+        catch (error) { row(next.path)(String(error && error.message || error)); }
+      }
+    })());
+  }
+  await Promise.all(workers);
+}
+const collect = (list) => [...list].map((file) => ({ file,
+  path: file.webkitRelativePath || file.name }));
+document.getElementById('picker').addEventListener('change', (event) => { runAll(collect(event.target.files)); });
+document.getElementById('folder').addEventListener('change', (event) => { runAll(collect(event.target.files)); });
+const drop = document.getElementById('drop');
+drop.addEventListener('dragover', (event) => { event.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (event) => {
+  event.preventDefault();
+  drop.classList.remove('over');
+  runAll(collect(event.dataTransfer.files));
+});
+document.addEventListener('paste', (event) => {
+  const images = [...(event.clipboardData ? event.clipboardData.files : [])]
+    .filter((file) => file.type.startsWith('image/'));
+  if (images.length > 0) runAll(collect(images));
+});
+document.getElementById('copy').addEventListener('click', async () => {
+  const staged = await api('files', undefined, 'GET');
+  const pre = document.getElementById('assetJson');
+  pre.hidden = false;
+  pre.textContent = JSON.stringify(staged, null, 2);
+});
+api('exchange', { token }).then(() => {
+  history.replaceState(null, '', location.pathname);
+  token = '';
+}).catch(fail);
+</script>
+</body>
+</html>`;
 }
 
 export interface UploadPageProfileCaps {
