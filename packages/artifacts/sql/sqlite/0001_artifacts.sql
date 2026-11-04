@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
     CHECK (lifecycle_state IN ('active', 'withdrawn', 'deleted', 'purged')),
   renewed_at TEXT,
   is_public INTEGER NOT NULL DEFAULT 0,
+  access_mode TEXT NOT NULL DEFAULT 'restricted'
+    CHECK (access_mode IN ('restricted', 'platform', 'public')),
   terminal_deleted_at TEXT,
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   metadata TEXT NOT NULL DEFAULT '{}',
@@ -99,6 +101,19 @@ CREATE TABLE IF NOT EXISTS artifact_access (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   PRIMARY KEY (artifact_id, principal_id)
 );
+
+CREATE TABLE IF NOT EXISTS artifact_access_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  artifact_id TEXT NOT NULL REFERENCES artifacts (id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('grant', 'revoke')),
+  audience TEXT NOT NULL CHECK (audience IN ('user', 'platform', 'public')),
+  principal_id TEXT,
+  policy_revision TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS access_events_by_artifact ON artifact_access_events (artifact_id);
 
 CREATE TABLE IF NOT EXISTS artifact_sources (
   artifact_id TEXT PRIMARY KEY REFERENCES artifacts (id) ON DELETE CASCADE,
