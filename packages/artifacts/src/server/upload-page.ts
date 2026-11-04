@@ -368,14 +368,45 @@ export function createUploadPageService(deps: UploadPageServiceDeps,
       return { cookie: buildUploadPageCookie(deps.cookieSigner.sign(input.pageSessionId), maxAgeSeconds),
         maxAgeSeconds };
     },
-    async createFile(_input) {
-      throw new Error('not implemented');
+    async createFile(input) {
+      const row = await checkPageRequest(input);
+      checkPath(input.path);
+      if (!deps.profile.mimeTypes.includes(input.mimeType)) throw new Error('unsupported page MIME type');
+      if (!Number.isSafeInteger(input.size) || input.size < 1 || input.size > deps.profile.maxFileBytes) {
+        throw new Error('invalid page file size');
+      }
+      return uploads.create({ artifactId: row.artifactId, storageScopeId: row.storageScopeId,
+        ownerId: row.ownerId, mimeType: input.mimeType, maxSize: input.size,
+        pageSessionId: row.pageSessionId, pageFileLimit: row.maxFiles });
     },
-    async commitFile(_input) {
-      throw new Error('not implemented');
+    async commitFile(input) {
+      const row = await checkPageRequest(input);
+      checkPath(input.path);
+      if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.trim().length === 0 ||
+        input.idempotencyKey.length > 256) {
+        throw new Error('invalid page idempotency key');
+      }
+      const commit = { uploadId: input.uploadId, artifactId: row.artifactId,
+        storageScopeId: row.storageScopeId, ownerId: row.ownerId, path: input.path,
+        mimeType: input.mimeType, digest: input.digest, size: input.size };
+      const paramsHash = createHash('sha256').update(JSON.stringify(commit), 'utf8').digest('hex');
+      const work = (): Promise<StagedFileRecord> => commitStagedUpload(uploads,
+        { sessions: deps.sessions, staging: deps.staging, blobs: deps.blobs, refs: deps.refs,
+          budget: deps.budget, metrics: deps.metrics }, commit, 'browser');
+      if (deps.idempotency === undefined) return work();
+      const storeKey = JSON.stringify(['commit_upload', row.ownerId, input.idempotencyKey]);
+      try {
+        const { result } = await deps.idempotency.execute(storeKey, paramsHash, work);
+        return result as StagedFileRecord;
+      } catch (cause) {
+        if (cause instanceof Error && /idempotency conflict/.test(cause.message)) throw cause;
+        throw cause;
+      }
     },
-    async listStaged(_input) {
-      throw new Error('not implemented');
+    async listStaged(input) {
+      const row = await checkPageRequest(input);
+      return (await deps.sessions.listStagedFiles(row.artifactId))
+        .filter((record) => record.pageSessionId === row.pageSessionId);
     },
   };
 }

@@ -114,7 +114,7 @@ async function ensureArtifact(world: World, mcp: ReturnType<typeof scannedMcp>, 
 
 function makePage(world: World, events: ArtifactsMetricEvent[], now: () => Date) {
   return createUploadPageService({
-    pages: createMemoryUploadPageStore(now),
+    pages: createMemoryUploadPageStore(),
     sessions: world.uploadSessions,
     staging: world.uploadStaging,
     signer: world.uploadSigner.signer,
@@ -127,6 +127,7 @@ function makePage(world: World, events: ArtifactsMetricEvent[], now: () => Date)
     s3Origins: [S3_ORIGIN],
     profile: { maxFiles: 255, maxFileBytes: 16 * 1024 * 1024, maxTotalBytes: 64 * 1024 * 1024,
       mimeTypes: ['text/html', 'application/json', 'image/png', 'application/pdf', 'font/woff2', 'video/mp4'] },
+    budget: { filesMax: 255, totalBytesMax: 64 * 1024 * 1024 },
     metrics: { emit: (event) => { events.push(event); } },
   }, { now, ids: () => randomUUID() });
 }
