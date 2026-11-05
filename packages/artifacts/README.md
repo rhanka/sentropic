@@ -255,20 +255,21 @@ Large or binary files never travel through the model or the MCP payload:
 `artifacts/<scope>/staging/<uploadId>` (URL expiry ≤ 10 minutes). A SigV4
 presigned PUT cannot carry a content-length range, so the signature binds the
 content type and the exact declared `Content-Length` (`maxSize`, itself capped
-by the release per-file limit and the 16 MiB server ceiling); the PUT must also
-carry `x-amz-checksum-sha256` (base64 SHA-256 of the body), which S3 validates
-against the body (`BadDigest` on mismatch). The local agent performs the PUT
-with exactly the returned `requiredHeaders`. Open sessions per principal are
-capped (server maximum 8); stale sessions are expired by the enforced sweeper
-in `gc.ts` (`createUploadSweeper`, driven by `uploads.expires_at`).
-`artifacts_commit_upload` then declares `{path, mimeType, digest, size}`; the
-server re-reads the staged object once and re-verifies size, SHA-256 digest and
-MIME (magic bytes, strict UTF-8, SVG script/handler/href rules) before
-promoting the bytes to the digest-addressed blob store
-(`artifacts/<scope>/blobs/sha256/<hex>`) through the bounded blob pool with
-read-back verification, and pinning them with reason `upload:<uploadId>`.
-A wrong size or digest is refused with `verification_failed` (422) and nothing
-is pinned; commit alone creates no release. `artifacts_publish_bundle` finally
+by the release per-file limit and the 16 MiB server ceiling), and nothing else:
+no checksum header is signed or announced, because strict S3 implementations
+(OVH) refuse presigned PUTs carrying an unsigned `x-amz-*` header. The local
+agent performs the PUT with exactly the returned `requiredHeaders` and no other
+header. Open sessions per principal are capped (server maximum 8); stale
+sessions are expired by the enforced sweeper in `gc.ts` (`createUploadSweeper`,
+driven by `uploads.expires_at`). `artifacts_commit_upload` then declares
+`{path, mimeType, digest, size}`; the server re-reads the staged object once
+and re-verifies size, SHA-256 digest and MIME (magic bytes, strict UTF-8, SVG
+script/handler/href rules) before promoting the bytes to the digest-addressed
+blob store (`artifacts/<scope>/blobs/sha256/<hex>`) through the bounded blob
+pool with read-back verification, and pinning them with reason
+`upload:<uploadId>`. A wrong size or digest is refused with
+`verification_failed` (422): the staged object is deleted, the session is
+closed, and nothing is pinned; commit alone creates no release. `artifacts_publish_bundle` finally
 publishes one atomic release from inline `files` and/or `assets` (each asset
 `{path, uploadId}` or `{path, digest, size, mimeType}` referencing an
 already-pinned blob of the same scope); `expectedCurrentReleaseId` is always

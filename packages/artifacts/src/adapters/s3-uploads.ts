@@ -7,11 +7,12 @@
  *
  * UploadSignerPort over `@aws-sdk/s3-request-presigner`: the signature binds
  * content-type and the EXACT Content-Length (a SigV4 presigned PUT cannot
- * carry a content-length range — review finding 3), plus the checksum header
- * when the digest is known at signing time. `x-amz-checksum-sha256` is passed
- * as unhoistable so it stays a signed header instead of being hoisted into
- * the query string. The client (endpoint, region, credentials, path style) is
- * built by the host and injected — this module never reads env or connects.
+ * carry a content-length range — review finding 3), and nothing else. No
+ * checksum header is signed or announced: the digest is declared at commit
+ * and strict S3 implementations (OVH) refuse presigned PUTs carrying unsigned
+ * `x-amz-*` headers. The returned headers are exactly the signed set. The
+ * client (endpoint, region, credentials, path style) is built by the host and
+ * injected — this module never reads env or connects.
  */
 import {
   DeleteObjectCommand,
@@ -24,7 +25,6 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   assertStagingKey,
   assertStagingPrefix,
-  checksumHeaderValue,
   type StagingStore,
   type UploadSignerPort,
 } from '../server/uploads.js';
@@ -89,8 +89,8 @@ export interface S3UploadSignerOptions {
 
 /**
  * Create a presigned-PUT signer over an injected client. The signature binds
- * content-type + exact content-length (declared size) and, when the digest is
- * known, x-amz-checksum-sha256 (kept as a signed header via unhoistableHeaders).
+ * content-type + exact content-length (declared size) and nothing else; the
+ * returned headers are exactly the signed set (no `x-amz-*` header).
  */
 export function createS3UploadSigner(options: S3UploadSignerOptions): UploadSignerPort {
   return {
@@ -99,22 +99,14 @@ export function createS3UploadSigner(options: S3UploadSignerOptions): UploadSign
       if (!Number.isSafeInteger(input.contentLength) || input.contentLength < 0) {
         throw new Error('invalid signed content-length');
       }
-      const checksumHeader = input.checksumSha256 === undefined
-        ? undefined
-        : checksumHeaderValue(input.checksumSha256);
       const command = new PutObjectCommand({
         Bucket: options.bucket,
         Key: input.key,
         ContentType: input.contentType,
         ContentLength: input.contentLength,
-        ...(checksumHeader === undefined ? {} : { ChecksumSHA256: checksumHeader }),
       });
       const url = await getSignedUrl(options.client, command, {
         expiresIn: input.expiresInSeconds,
-        // keep the checksum a signed header (x-amz-* headers are hoisted to the
-        // query by default); content-type/content-length are never hoisted and
-        // are therefore always signed headers the client must send exactly.
-        unhoistableHeaders: new Set(['x-amz-checksum-sha256']),
       });
       return {
         url,
@@ -122,7 +114,6 @@ export function createS3UploadSigner(options: S3UploadSignerOptions): UploadSign
         headers: {
           'content-type': input.contentType,
           'content-length': String(input.contentLength),
-          ...(checksumHeader === undefined ? {} : { 'x-amz-checksum-sha256': checksumHeader }),
         },
         expiresAt: new Date(Date.now() + input.expiresInSeconds * 1000).toISOString(),
       };

@@ -22,7 +22,7 @@ import { ARTIFACTS_TOOL_DEFINITIONS, ARTIFACTS_TOOL_NAMES } from '../src/mcp-cor
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../src/profile/index.js';
 import { parseManifest } from '../src/codecs.js';
 import { createUploadSweeper } from '../src/server/gc.js';
-import { checksumHeaderValue, stagingKey } from '../src/server/uploads.js';
+import { stagingKey } from '../src/server/uploads.js';
 import { createHmacGrantSigner, createMemoryTicketStore, createTicketService } from '../src/content/grants.js';
 import { createContentHandler } from '../src/content/handler.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
@@ -128,17 +128,16 @@ async function uploadFile(world: World, mcp: ReturnType<typeof scannedMcp>, html
     { artifactId, mimeType, maxSize: bytes.length }, html);
   expect(created.status).toBe(201);
   const body = unwrap<{ uploadId: string; uploadUrl: string; method: string; maxSize: number;
-    requiredHeaders: Record<string, string>; checksumHeader: string; expiresAt: string }>(created.body);
+    requiredHeaders: Record<string, string>; expiresAt: string }>(created.body);
   expect(body.method).toBe('PUT');
   expect(body.maxSize).toBe(bytes.length);
   expect(body.requiredHeaders['content-length']).toBe(String(bytes.length));
-  expect(body.checksumHeader).toBe('x-amz-checksum-sha256');
-  // The local agent performs the PUT straight against the presigned URL: the
-  // signer double enforces the signed exact content-length and the checksum.
+  expect(Object.keys(body.requiredHeaders).sort()).toEqual(['content-length', 'content-type']);
+  // The local agent performs the PUT straight against the presigned URL with
+  // exactly the announced headers: the signer double enforces the signed
+  // exact content-length and refuses any unsigned x-amz-* header.
   const signed = world.uploadSigner.signed.at(-1)!;
-  world.uploadSigner.put(signed, bytes, {
-    ...body.requiredHeaders, 'x-amz-checksum-sha256': checksumHeaderValue(sha256(bytes)),
-  });
+  world.uploadSigner.put(signed, bytes, { ...body.requiredHeaders });
   await world.uploadStaging.put(stagingKey(SCOPE, body.uploadId), bytes);
   const committed = await mcp.invoke('artifacts_commit_upload', {
     artifactId, uploadId: body.uploadId, path, mimeType, digest: sha256(bytes),
@@ -246,7 +245,7 @@ describe('files parity LOT 1 acceptance', () => {
     expect(new TextDecoder().decode(index.bytes)).toBe(html);
   });
 
-  it('refuses a wrong size or digest at commit and pins nothing', async () => {
+  it('refuses a wrong size or digest at commit, deletes staging and pins nothing', async () => {
     const world = createTransportWorld(undefined, undefined, { profile: lot1Profile() });
     const mcp = scannedMcp(world);
     const artifactId = await ensureArtifact(world, mcp, '', 'wrong-commit');
@@ -254,8 +253,7 @@ describe('files parity LOT 1 acceptance', () => {
     const created = await mcp.invoke('artifacts_create_upload',
       { artifactId, mimeType: 'image/png', maxSize: bytes.length }, '');
     const { uploadId, requiredHeaders } = created.body as { uploadId: string; requiredHeaders: Record<string, string> };
-    world.uploadSigner.put(world.uploadSigner.signed.at(-1)!, bytes,
-      { ...requiredHeaders, 'x-amz-checksum-sha256': checksumHeaderValue(sha256(bytes)) });
+    world.uploadSigner.put(world.uploadSigner.signed.at(-1)!, bytes, { ...requiredHeaders });
     await world.uploadStaging.put(stagingKey(SCOPE, uploadId), bytes);
 
     const wrongSize = await mcp.invoke('artifacts_commit_upload', {
@@ -264,22 +262,32 @@ describe('files parity LOT 1 acceptance', () => {
     }, '');
     expect(wrongSize.status).toBe(422);
     expect((wrongSize.body as { error: string }).error).toBe('verification_failed');
-    const wrongDigest = await mcp.invoke('artifacts_commit_upload', {
+    // Fail-closed: the staged object is deleted, the session is closed, and
+    // the poisoned session cannot be retried into a release.
+    expect(await world.uploadStaging.get(stagingKey(SCOPE, uploadId))).toBeUndefined();
+    expect((await world.uploadSessions.get(uploadId))!.state).toBe('expired');
+    const retry = await mcp.invoke('artifacts_commit_upload', {
       artifactId, uploadId, path: 'shots/a.png', mimeType: 'image/png',
+      digest: sha256(bytes), size: bytes.length, idempotencyKey: 'c-retry',
+    }, '');
+    expect(retry.status).toBe(422);
+    // Nothing pinned, no CAS blob.
+    expect(await world.blobs.listKeys(`artifacts/${SCOPE}/blobs/`)).toEqual([]);
+
+    const createdDigest = await mcp.invoke('artifacts_create_upload',
+      { artifactId, mimeType: 'image/png', maxSize: bytes.length }, '');
+    const digestUpload = createdDigest.body as { uploadId: string; requiredHeaders: Record<string, string> };
+    world.uploadSigner.put(world.uploadSigner.signed.at(-1)!, bytes, { ...digestUpload.requiredHeaders });
+    await world.uploadStaging.put(stagingKey(SCOPE, digestUpload.uploadId), bytes);
+    const wrongDigest = await mcp.invoke('artifacts_commit_upload', {
+      artifactId, uploadId: digestUpload.uploadId, path: 'shots/a.png', mimeType: 'image/png',
       digest: sha256(pngBytes(100, 4096)), size: bytes.length, idempotencyKey: 'c-digest',
     }, '');
     expect(wrongDigest.status).toBe(422);
     expect((wrongDigest.body as { error: string }).error).toBe('verification_failed');
-    // Nothing pinned, no CAS blob, session still open.
+    expect(await world.uploadStaging.get(stagingKey(SCOPE, digestUpload.uploadId))).toBeUndefined();
+    expect((await world.uploadSessions.get(digestUpload.uploadId))!.state).toBe('expired');
     expect(await world.blobs.listKeys(`artifacts/${SCOPE}/blobs/`)).toEqual([]);
-    expect((await world.uploadSessions.get(uploadId))!.state).toBe('open');
-    // The correct declaration commits.
-    const ok = await mcp.invoke('artifacts_commit_upload', {
-      artifactId, uploadId, path: 'shots/a.png', mimeType: 'image/png',
-      digest: sha256(bytes), size: bytes.length, idempotencyKey: 'c-ok',
-    }, '');
-    expect(ok.status).toBe(201);
-    expect(await world.blobs.getBlob(blobKey(sha256(bytes)))).toEqual(bytes);
   });
 
   it('commits nothing when a bundle references one missing asset', async () => {
@@ -321,8 +329,7 @@ describe('files parity LOT 1 acceptance', () => {
     const created = await mcp.invoke('artifacts_create_upload',
       { artifactId, mimeType: 'image/png', maxSize: bytes.length }, '');
     const { uploadId, requiredHeaders } = created.body as { uploadId: string; requiredHeaders: Record<string, string> };
-    world.uploadSigner.put(world.uploadSigner.signed.at(-1)!, bytes,
-      { ...requiredHeaders, 'x-amz-checksum-sha256': checksumHeaderValue(sha256(bytes)) });
+    world.uploadSigner.put(world.uploadSigner.signed.at(-1)!, bytes, { ...requiredHeaders });
     await world.uploadStaging.put(stagingKey(SCOPE, uploadId), bytes);
 
     // Not yet stale: the sweeper does nothing.
@@ -381,8 +388,7 @@ describe('files parity LOT 1 acceptance', () => {
     const { requiredHeaders } = created.body as { requiredHeaders: Record<string, string> };
     const signed = world.uploadSigner.signed.at(-1)!;
     expect(signed.contentLength).toBe(64);
-    expect(() => world.uploadSigner.put(signed, pngBytes(31, 65),
-      { ...requiredHeaders, 'x-amz-checksum-sha256': checksumHeaderValue(sha256(pngBytes(31, 65))) }))
+    expect(() => world.uploadSigner.put(signed, pngBytes(31, 65), { ...requiredHeaders }))
       .toThrow(/content-length mismatch/);
   });
 
