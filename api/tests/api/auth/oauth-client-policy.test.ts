@@ -11,7 +11,7 @@ import {
   oauthTokens,
   revokedTokens,
 } from '../../../src/db/schema';
-import { createSession } from '../../../src/services/session-manager';
+import { withAppCmAuth } from '../../../src/services/identity/cm-auth-runtime';
 import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
 
 const CLIENT_ID = 'example-policy-rp';
@@ -51,7 +51,12 @@ describe('OAuth authorize per-client policy API (B3+C1)', () => {
       email: 'policy-mfa@example.com',
       role: 'editor',
     });
-    const session = await createSession(user.id, user.role, undefined, { mfaVerified: true });
+    // Post-cutover the session facade refuses self-asserted MFA; mint through the binding.
+    const session = await withAppCmAuth(runner => runner.request(async binding => {
+      const subject = await binding.ports.users.findById(user.id);
+      if (!subject) throw new Error('missing oauth-client-policy fixture user');
+      return binding.sessions.createSession({ user: subject, mfaVerified: true });
+    }));
 
     const res = await app.request(buildAuthorizeUrl(), {
       headers: { Cookie: `session=${session.sessionToken}` },
