@@ -183,7 +183,7 @@ describe('Import/Export API', () => {
   const createdInitiativeIds: string[] = [];
 
   beforeEach(async () => {
-    admin = await createAuthenticatedUser('admin', `admin-${createTestId()}@example.com`);
+    admin = await createAuthenticatedUser('admin_org', `admin-${createTestId()}@example.com`);
     editor = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
     viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
 

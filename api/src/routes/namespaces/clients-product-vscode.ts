@@ -8,6 +8,7 @@ import { CHAT_SYSTEM_PROMPTS } from '../../config/default-chat-system';
 import { getUserWorkspaces } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
 import { bindCmAppDatabase, runCmIdentityWrite } from '../../services/identity/cm-transaction';
+import { requireEditor } from '../../middleware/rbac';
 import { CmIdentityForbiddenError } from '../../services/identity/cm-deletion-authorization';
 import { provisionWorkspace } from '../../services/workspace-provisioning';
 
@@ -420,6 +421,7 @@ vscodeExtensionRouter.put('/workspace-mapping', async (c) => {
 
 vscodeExtensionRouter.post(
   '/workspace-mapping/code-workspace',
+  requireEditor,
   async (c) => {
     const user = c.get('user') as { userId?: string } | undefined;
     if (!user?.userId) {
