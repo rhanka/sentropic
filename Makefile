@@ -2996,7 +2996,9 @@ restore-api-sut: ci-test-env ## Restore a dump before the first production boot;
 	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
 	@set -eu; overlay="$$(mktemp)"; trap 'rm -f "$$overlay"' EXIT; \
 	printf '%s\n' 'services:' '  api-sut:' '    environment:' \
-		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' > "$$overlay"; \
+		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' \
+		'      WEBAUTHN_RP_ID: localhost' \
+		'      WEBAUTHN_ORIGIN: http://localhost:$(or $(UI_PORT),5173)' > "$$overlay"; \
 	$(CI_COMPOSE) run --rm --no-deps -w /workspace/api \
 		-e WEBAUTHN_RP_ID=localhost \
 		-e WEBAUTHN_ORIGIN=http://localhost:$(or $(UI_PORT),5173) \
