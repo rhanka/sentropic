@@ -6,7 +6,11 @@ import { runCmAuthHttp } from './cm-http';
 const handle = (c: Context, method: AuthHonoAuthUiMethod, flow: IdentityAuthCompletionFlowV1 | null) =>
   runCmAuthHttp(c, flow, binding => {
     const handlers = createAuthCredentialRouteHandlers({
-      credentials: binding.ports.credentials,
+      // The CM credentials port lists revoked rows (its social sibling filters them);
+      // the management list hides revoked credentials instead of resurrecting them.
+      credentials: { ...binding.ports.credentials,
+        listForUser: async (userId: string) =>
+          (await binding.ports.credentials.listForUser(userId)).filter((row) => !row.revokedAt) },
       async resolveSession(context) {
         const token = binding.ports.cookies.readSessionToken(context.req.raw)
           ?? context.req.header('authorization')?.replace(/^Bearer /, '');
