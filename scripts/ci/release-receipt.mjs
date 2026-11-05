@@ -31,34 +31,41 @@ function publicationProblems(publication, source) {
   const label = publicationLabel(publication);
   if (publication.expected !== true) return [];
   if (publication.status === 'failed') return [`publication failed: ${label}`];
-  if (publication.status !== 'published') return [`missing publication: ${label}`];
-  const problems = [];
-  if (publication.kind === 'package' && publication.pack !== 'candidate') {
-    problems.push(`repacked publication: ${label} (pack=${publication.pack ?? 'missing'}, expected candidate)`);
-  }
-  if (publication.source !== source.sha) problems.push(`wrong source for ${label}: ${publication.source} (expected ${source.sha})`);
-  if (publication.digest !== undefined) {
-    if (!DIGEST.test(publication.digest)) {
-      problems.push(`invalid digest for ${label}: ${publication.digest}`);
-    } else {
-      if (publication.expectedDigest !== undefined && publication.digest !== publication.expectedDigest) {
-        problems.push(`digest mismatch for ${label}: published ${publication.digest}, tested ${publication.expectedDigest}`);
-      }
-      if (publication.remoteDigest !== undefined && publication.remoteDigest !== publication.digest) {
-        problems.push(`tag collision for ${label}: registry holds ${publication.remoteDigest}, tested ${publication.digest}`);
+  if (publication.status === 'published') {
+    const problems = [];
+    if (publication.kind === 'package' && publication.pack !== 'candidate') {
+      problems.push(`repacked publication: ${label} (pack=${publication.pack ?? 'missing'}, expected candidate)`);
+    }
+    if (publication.source !== source.sha) problems.push(`wrong source for ${label}: ${publication.source} (expected ${source.sha})`);
+    if (publication.digest !== undefined) {
+      if (!DIGEST.test(publication.digest)) {
+        problems.push(`invalid digest for ${label}: ${publication.digest}`);
+      } else {
+        if (publication.expectedDigest !== undefined && publication.digest !== publication.expectedDigest) {
+          problems.push(`digest mismatch for ${label}: published ${publication.digest}, tested ${publication.expectedDigest}`);
+        }
+        if (publication.remoteDigest !== undefined && publication.remoteDigest !== publication.digest) {
+          problems.push(`tag collision for ${label}: registry holds ${publication.remoteDigest}, tested ${publication.digest}`);
+        }
       }
     }
+    if (publication.integrity !== undefined && publication.registryIntegrity !== undefined
+      && publication.integrity !== publication.registryIntegrity) {
+      problems.push(`mismatched registry integrity for ${label}: ${publication.registryIntegrity} != ${publication.integrity}`);
+    }
+    if (publication.provenance !== undefined) {
+      const { sourceCommits = [], runId } = publication.provenance;
+      if (!sourceCommits.includes(source.sha)) problems.push(`mismatched provenance source for ${label}: ${sourceCommits.join(',') || 'none'}`);
+      if (runId !== undefined && runId !== source.runId) problems.push(`stale provenance run for ${label}: ${runId} (expected ${source.runId})`);
+    }
+    return problems;
   }
-  if (publication.integrity !== undefined && publication.registryIntegrity !== undefined
-    && publication.integrity !== publication.registryIntegrity) {
-    problems.push(`mismatched registry integrity for ${label}: ${publication.registryIntegrity} != ${publication.integrity}`);
-  }
-  if (publication.provenance !== undefined) {
-    const { sourceCommits = [], runId } = publication.provenance;
-    if (!sourceCommits.includes(source.sha)) problems.push(`mismatched provenance source for ${label}: ${sourceCommits.join(',') || 'none'}`);
-    if (runId !== undefined && runId !== source.runId) problems.push(`stale provenance run for ${label}: ${runId} (expected ${source.runId})`);
-  }
-  return problems;
+  // A publisher that ran green but explicitly reported no new publication
+  // (dev-line skip, registry-equal already-published) carries no pack to
+  // judge. A skip derived only from the job result still fails closed below.
+  if ((publication.status === 'skipped' || publication.status === 'already-published')
+    && publication.statusSource === 'publisher') return [];
+  return [`missing publication: ${label}`];
 }
 
 // A reused prior receipt is only valid for the same source, run and attempt:
@@ -84,10 +91,15 @@ export function assessReleaseReceipt(evidence = {}) {
 
 // Delivery-chain assessment for the release-receipts CI job: maps workflow
 // needs results plus change selections onto the release evidence above.
-// Images carry status/source only (digest verification already happens at
-// transport load, collision-safe push, and deploy-time manifest checks);
-// package publications additionally record the qualified sha256 and pack
-// source (candidate vs fresh) from their recorded publish receipts.
+// An expected publication is one whose publish step actually ran npm publish:
+// the publisher's own recorded status (publication_status output) decides.
+// A publisher that ran green but explicitly reported no new publication
+// (dev-line skip, registry-equal already-published) passes and is never
+// judged on pack; a publisher that DID publish with a missing or fresh pack
+// still fails. Images carry status/source only (digest verification already
+// happens at transport load, collision-safe push, and deploy-time manifest
+// checks); package publications additionally record the qualified sha256 and
+// pack source (candidate vs fresh) from their recorded publish receipts.
 const CHAIN_DELIVERY = [
   { job: 'publish-api-image', kind: 'image', name: 'sentropic-api', selected: (s) => s.api === true || s.global === true, tag: (s) => s.apiTag },
   { job: 'publish-ui-image', kind: 'image', name: 'sentropic-ui', selected: (s) => s.ui === true || s.global === true, tag: (s) => s.uiTag },
@@ -96,6 +108,8 @@ const CHAIN_DELIVERY = [
   { job: 'publish-cluster-mesh', kind: 'package', name: '@sentropic/cluster-mesh', selected: (s) => s.clusterPublish === true },
 ];
 const chainStatus = (result) => result === 'success' ? 'published' : result === 'skipped' ? 'skipped' : 'failed';
+
+const pickOutput = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
 
 export function assessChain({ needs = {}, selections = {}, source = {} } = {}) {
   const sel = { api: false, ui: false, global: false, meshPublish: false, gatewayPublish: false, clusterPublish: false, ...selections };
@@ -107,19 +121,31 @@ export function assessChain({ needs = {}, selections = {}, source = {} } = {}) {
     const outputs = needs[job]?.outputs ?? {};
     if (expected) requiredChecks.push({ job });
     checks.push({ job, conclusion: needs[job]?.result });
-    const publication = { kind, name, expected, source: source.sha, status: chainStatus(needs[job]?.result) };
-    const ref = tag?.(sel) ?? outputs.version;
+    const publication = { kind, name, expected, source: source.sha };
+    const reported = pickOutput(outputs.publication_status, outputs.status);
+    const conflict = pickOutput(outputs.publication_conflict, outputs.conflict);
+    if (!expected) {
+      publication.status = 'not-selected';
+      publication.statusSource = 'selection';
+    } else if (reported !== undefined) {
+      publication.statusSource = 'publisher';
+      publication.status = reported === 'skipped' && conflict === 'equal-integrity' ? 'already-published' : reported;
+    } else {
+      publication.status = chainStatus(needs[job]?.result);
+      publication.statusSource = 'job';
+    }
+    const ref = tag?.(sel) ?? pickOutput(outputs.publication_version, outputs.version);
     if (ref) publication.ref = ref;
-    if (outputs.sha256 !== undefined) {
-      publication.sha256 = outputs.sha256;
+    const sha256 = pickOutput(outputs.publication_sha256, outputs.sha256);
+    if (sha256 !== undefined) {
+      publication.sha256 = sha256;
       // The recorded hex sha becomes the evidence digest only in canonical
       // form; anything else fails the digest check below instead of passing
       // silently.
-      publication.digest = /^[a-f0-9]{64}$/.test(outputs.sha256) ? `sha256:${outputs.sha256}` : outputs.sha256;
+      publication.digest = /^[a-f0-9]{64}$/.test(sha256) ? `sha256:${sha256}` : sha256;
     }
-    const pack = outputs.pack ?? outputs.publication_pack;
+    const pack = pickOutput(outputs.publication_pack, outputs.pack);
     if (pack !== undefined) publication.pack = pack;
-    if (outputs.status) publication.receiptStatus = outputs.status;
     publications.push(publication);
   }
   // The train-lock check keeps its independent BRDP-EX10 verdict: no chain job
