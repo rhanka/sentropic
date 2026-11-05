@@ -77,10 +77,10 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
   - [ ] Copy `.env` into the worktree for compose runs (gitignored, never committed).
   - [ ] Confirm environment mapping: `ENV=test-upload-cksum` always last; `API_PORT=8797`, `UI_PORT=5197`, `MAILDEV_UI_PORT=1097`.
   - [ ] Confirm scope boundaries and no `BRxx-EXn` needed unless a CI gate demands `tools/memory-mcp-l5/**`.
-- [ ] **Lot 1 — Failing tests first (no implementation edits)**
-  - [ ] Add `packages/artifacts/tests/uploads-commit-integrity.test.ts` with three tests: corrupted upload refused at commit (typed error, staging object deleted, no release, session not committable); correct upload with exactly the announced headers commits; announced header set equals the signed header set (no `x-amz-*` beyond the signature, no `checksumHeader` field).
-  - [ ] Run the new file scoped: `SCOPE=tests/uploads-commit-integrity.test.ts` via `test-artifacts`; observe failures as the repro baseline.
-  - [ ] Sub-lot gate: `make typecheck-artifacts` + `make lint-artifacts` with `ENV=test-upload-cksum` last.
+- [x] **Lot 1 — Failing tests first (no implementation edits)**
+  - [x] Add `packages/artifacts/tests/uploads-commit-integrity.test.ts` with three tests: corrupted upload refused at commit (typed error, staging object deleted, no release, session not committable); correct upload with exactly the announced headers commits; announced header set equals the signed header set (no `x-amz-*` beyond the signature, no `checksumHeader` field).
+  - [x] Run the new file scoped: `SCOPE=tests/uploads-commit-integrity.test.ts` via `test-artifacts`; observe failures as the repro baseline (4/4 red with the expected failure modes: untyped refusal, announced `checksumHeader`).
+  - [x] Sub-lot gate: `make typecheck-artifacts` + `make lint-artifacts` with `ENV=test-upload-cksum` last (0 errors; 3 pre-existing warnings in `files-parity-lot2.test.ts`, untouched).
 - [ ] **Lot 2 — Fail-closed fix**
   - [ ] `packages/artifacts/src/server/uploads.ts`: stop announcing `checksumHeader`; `requiredHeaders` is exactly the signer output; typed verification error; delete/quarantine the staging object on size/digest mismatch; no release on mismatch.
   - [ ] `packages/artifacts/src/adapters/s3-uploads.ts`: sign content-type plus exact content-length only; remove the unsigned checksum announcement path.
