@@ -872,7 +872,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
             result: { status: 201, body: { uploadId: created.uploadId, uploadUrl: created.uploadUrl,
               method: created.method, expiresAt: created.expiresAt, maxSize: created.maxSize,
-              requiredHeaders: created.requiredHeaders, checksumHeader: created.checksumHeader } } };
+              requiredHeaders: created.requiredHeaders } } };
         }
         if (capability === 'artifacts_commit_upload') {
           const artifactId = normalized.artifactId as string;

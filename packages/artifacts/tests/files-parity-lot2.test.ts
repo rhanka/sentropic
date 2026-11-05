@@ -19,7 +19,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { ARTIFACTS_TOOL_DEFINITIONS, ARTIFACTS_TOOL_NAMES } from '../src/mcp-core.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../src/profile/index.js';
-import { checksumHeaderValue, createMemoryStaging, createMemoryUploadSessionStore, createUploadService, stagingKey } from '../src/server/uploads.js';
+import { createMemoryStaging, createMemoryUploadSessionStore, createUploadService, stagingKey } from '../src/server/uploads.js';
 import { UPLOAD_PAGE_TTL_MS, createHmacUploadPageCookieSigner, createUploadPageService } from '../src/server/upload-page.js';
 import type { ArtifactsMetricEvent } from '../src/server/metrics.js';
 import { createUploadSweeper } from '../src/server/gc.js';
@@ -168,8 +168,7 @@ describe('files parity LOT 2 (a): browser upload page', () => {
         artifactId, path: file.path, mimeType: file.mimeType, size: file.bytes.length });
       expect(created.method).toBe('PUT');
       const signed = world.uploadSigner.signed.at(-1)!;
-      world.uploadSigner.put(signed, file.bytes, { ...created.requiredHeaders,
-        'x-amz-checksum-sha256': checksumHeaderValue(sha256(file.bytes)) });
+      world.uploadSigner.put(signed, file.bytes, { ...created.requiredHeaders });
       await world.uploadStaging.put(created.stagingKey, file.bytes);
       const committed = await page.commitFile({ cookie, origin: CONTROL_ORIGIN, customHeader: true,
         artifactId, uploadId: created.uploadId, path: file.path, mimeType: file.mimeType,
