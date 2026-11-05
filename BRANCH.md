@@ -68,8 +68,9 @@ Unblock main deploys: `release-receipts` must pass when a selected package publi
     - [x] `make test-publishable-manifests SCOPE=scripts/ci/release-receipt.test.mjs ENV=test-ci-receipt` green (40/40); full manifest suite 119/119 green.
     - [x] `make scope-check` clean before every commit; commits via `make commit` only.
 - [ ] **Lot 2 — PR + CI to green**
-  - [ ] Open READY PR from `fix/release-receipt-skipped-publishers`, push head.
+  - [x] Opened READY PR #920 from `fix/release-receipt-skipped-publishers`, pushed head `5dde70c77`.
   - [ ] Watch PR CI to green (no `[skip ci]`, no `gh run rerun`).
+  - [ ] Run 42043369956: only `test-e2e (2)` failed (single `08-chat-workspace-switch` visibility assertion; no app code touched by this branch); main run 41981165023 failed `test-e2e (2)` + `(4)` without this change — unrelated e2e instability, retriggering via fresh head per CI budget.
 - [ ] **Lot 3 — Report, no merge**
   - [ ] Write `.tmp/rv/hotfix-release-receipt.md`.
   - [ ] Do NOT merge; hand control back.
