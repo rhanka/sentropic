@@ -3,6 +3,8 @@ import { createOptionalAuth, createRequireAuth, type AuthHonoAuthContext,
 import { Hono } from 'hono';
 import { withAppCmAuth } from './cm-auth-runtime';
 import { assertCmHostHealthy } from './cm-host-scope';
+import { pool } from '../../db/client';
+import { logger } from '../../logger';
 
 export type CmHttpPrincipal = Omit<AuthHonoAuthContext, 'token'>;
 type PrincipalResult =
@@ -11,12 +13,31 @@ type PrincipalResult =
 
 /** Only the authentication stage is replayable; application next runs after commit. */
 export const authenticateCmHttpRequest = (request: Request, required: boolean): Promise<PrincipalResult> =>
-  withAppCmAuth(runner => runner.request(async (binding, tx): Promise<PrincipalResult> => {
+  withAppCmAuth(runner => runner.authenticate(async (binding, tx): Promise<PrincipalResult> => {
     let principal: CmHttpPrincipal | null = null;
     let accepted = false;
+    // Session liveness is best-effort outside the serializable authentication
+    // transaction. Every page load fans out parallel same-session GETs, and a
+    // conflicting activity touch must never fail the auth decision it follows,
+    // so the middleware's touch is served here on a separate READ COMMITTED
+    // connection: it waits on the row lock instead of aborting with 40001,
+    // and a lost touch only stales last-activity display (logged, never
+    // thrown). The serializable attempt itself stays read-only and therefore
+    // write-free: no subject locks, no custody writes, no self-conflict.
+    const touch: typeof binding.ports.sessions.touch = async (id, at) => {
+      try {
+        await pool.query(
+          'UPDATE "cm_identity"."identity_login_token_bindings" SET "last_activity_at" = $2 WHERE "session_id" = $1',
+          [id, at.toISOString()],
+        );
+      } catch (error) {
+        logger.warn({ err: error, sessionId: id }, 'CM session activity touch unavailable');
+      }
+    };
     const router = new Hono<AuthHonoMiddlewareEnv>();
     router.onError(error => { throw error; });
-    router.use('*', (required ? createRequireAuth : createOptionalAuth)({ ports: binding.ports }));
+    router.use('*', (required ? createRequireAuth : createOptionalAuth)(
+      { ports: { ...binding.ports, sessions: { ...binding.ports.sessions, touch } } }));
     router.get('/authentication', c => {
       const auth = c.get('auth');
       // Copy only value records; no request token or bound port leaves this attempt.

@@ -5,7 +5,7 @@ import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1
   type IdentityAuthHonoTransactionBindingV1, type IdentityDeferredMailV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { IdentityCustodyErrorV1, type IdentityEmailCodeKeyRingV1 } from '@sentropic/cluster-mesh';
 import type { PoolClient } from 'pg';
-import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction, withSerializationRetry,
+import { cmIdentityUnitOfWork, cmRequestReadOptions, cmRequestWriteOptions, withCmIdentityTransaction, withSerializationRetry,
   type CmIdentityTransaction } from './cm-transaction';
 import type { createCmTokenCustodian } from './cm-token-custodian';
 import { createServiceTenantEnrollmentSource } from '../tenancy/enrollment-store';
@@ -86,6 +86,18 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
     async request<T>(work: Work<T>, trustedRegistration: RegistrationContext = null): Promise<T> {
       const entityPlan = createCmAuthEntityPlan();
       const result = await withSerializationRetry(() => cmIdentityUnitOfWork.run(cmRequestWriteOptions,
+        tx => attempt(tx, work, trustedRegistration, entityPlan)));
+      return publish(result);
+    },
+    // Per-request authentication is a read-only decision: the CM session
+    // validation skips subject locks and the activity touch when the
+    // transaction is read-only, so the page-load fan-out (half a dozen
+    // parallel GETs sharing one session) no longer aborts itself with 40001
+    // on the hot login-token-binding row. Liveness stays best-effort at the
+    // HTTP layer (cm-http-principal); fail-closed validation is unchanged.
+    async authenticate<T>(work: Work<T>, trustedRegistration: RegistrationContext = null): Promise<T> {
+      const entityPlan = createCmAuthEntityPlan();
+      const result = await withSerializationRetry(() => cmIdentityUnitOfWork.run(cmRequestReadOptions,
         tx => attempt(tx, work, trustedRegistration, entityPlan)));
       return publish(result);
     },
