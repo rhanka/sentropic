@@ -147,3 +147,20 @@ export function classifyCompatibility({ files = [], packages = [], semver = load
   return { kind: winner.kind, reasons: kinds.flatMap((row) => row.reasons) };
 }
 
+if (process.argv[1] && import.meta.url.endsWith('/compatibility-classifier.mjs') && process.argv.includes('--check')) {
+  const read = (flag) => {
+    const at = process.argv.indexOf(flag);
+    return at >= 0 ? process.argv[at + 1] : undefined;
+  };
+  try {
+    const files = JSON.parse(read('--files') ?? '[]');
+    const packages = JSON.parse(read('--packages') ?? '[]');
+    const verdict = classifyCompatibility({ files, packages });
+    process.stdout.write(`${JSON.stringify(verdict, null, 2)}\n`);
+    if (verdict.kind === 'unknown') process.exitCode = 1;
+  } catch (error) {
+    if (error instanceof GuardError) process.stderr.write(`::error::compatibility-classifier: ${error.message}\n`);
+    else process.stderr.write(`::error::compatibility-classifier: ${error?.message ?? error}\n`);
+    process.exitCode = 2;
+  }
+}
