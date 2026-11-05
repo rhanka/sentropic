@@ -98,7 +98,9 @@ export function createCmWorkspaceDeletionConnectorPlane(
     placement: 'present',
     async listConnectorOwners(command, tx) {
       const result = await tx.hostTransaction.query<{ user_id: string }>(
-        `SELECT DISTINCT user_id FROM public.document_connector_accounts WHERE workspace_id = $1 ORDER BY user_id COLLATE "C"`,
+        // Postgres rejects ORDER BY expressions (e.g. COLLATE) inside SELECT
+        // DISTINCT; sort outside so SQLite and Postgres agree.
+        `SELECT user_id FROM (SELECT DISTINCT user_id FROM public.document_connector_accounts WHERE workspace_id = $1) owners ORDER BY user_id COLLATE "C"`,
         [command.workspaceId]);
       return result.rows.map(row => String(row.user_id));
     },
