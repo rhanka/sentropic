@@ -198,6 +198,36 @@ test('should request real application tools with exact context IDs and consume t
   assert.ok(journeyResponse({ messages, tools }).content);
 });
 
+test('should answer with terminal text when the finalization pass disables execution tools', () => {
+  // runPass2Fallback sends no tools and asks for the final answer with the
+  // original request embedded: a live model answers with text, never throws.
+  const original = 'Consulte le document et appelle organization_update pour changer technologies.';
+  const messages = [
+    { role: 'system', content: 'System prompt. Si un contexte organizationId est présent, ne modifie que cette organisation.' },
+    { role: 'user', content: original },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'ci_tool_0', type: 'function', function: { name: 'documents', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'ci_tool_0', name: 'documents', content: '{"items":[]}' },
+    { role: 'user', content: `Demande utilisateur: ${original}\n\nRésultats disponibles (outils déjà exécutés):\n- documents\n\nRédige maintenant la réponse finale.` },
+  ];
+  const response = journeyResponse({ messages, tools: [] });
+  assert.ok(response.content);
+  assert.equal(response.tool_calls, undefined);
+});
+
+test('should prefer the user-stated entity id over system prompt decoys', () => {
+  const target = 'ff87af0a-8237-4c4b-a01d-100f4aa7aad4';
+  const decoy = '5cee01d5-2318-4cbe-af6d-ea95bce1dc25';
+  const tools = [{ type: 'function', function: { name: 'organization_update',
+    parameters: { required: ['organizationId', 'updates'] } } }];
+  const messages = [
+    { role: 'system', content: `Tu travailles sur l'organisation ${decoy}. Si un contexte organizationId est présent, ne modifie que cette organisation. {"id": "${decoy}"}` },
+    { role: 'user', content: `Use organization_update to update the technologies field of organization ${target} (Org Update Target) to exactly: Kubernetes, Terraform, GitOps. Apply the change with the tool before replying.` },
+  ];
+  const response = journeyResponse({ messages, tools });
+  assert.equal(response.tool_calls[0].function.name, 'organization_update');
+  assert.equal(JSON.parse(response.tool_calls[0].function.arguments).organizationId, target);
+});
+
 test('should serve web research locally and reject empty extraction requests', async t => {
   const { url, receipt } = await fixture(t);
   const post = (path, body) => fetch(`${url}/${path}`, { method: 'POST',
