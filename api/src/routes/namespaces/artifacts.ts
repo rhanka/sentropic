@@ -6,6 +6,7 @@ import type { ArtifactHostIdentity } from '../../services/artifacts/authorizatio
 import type { ArtifactTransport } from '../../services/artifacts/transport';
 import type { ArtifactReaderTarget, createArtifactReaderActivation } from '../../services/artifacts/reader-activation';
 import type { ReaderConsentService } from '../../services/artifacts/reader-consent';
+import { renderConsentScreen } from '../../services/artifacts/reader-consent-screen';
 
 export const ARTIFACT_HTTP_PATH = '/resources/artifacts/*';
 export interface ArtifactHttpPorts {
@@ -21,6 +22,10 @@ export interface ArtifactHttpPorts {
   readerConsent?: {
     enabled(): boolean;
     controlOrigin: string;
+    /** Host-declared consent scopes with current versions (J1.3b, generic grant contract). */
+    declaredScopes: readonly { scopeId: string; scopeVersion: string }[];
+    /** Neutral screen parameters (J1.3b, generic grant contract). */
+    consentScreen: { brand: string; title: string; supportUrl?: string };
     service(bound: { identity: ArtifactHostIdentity; workspaceId: string }, admin: boolean):
       Promise<ReaderConsentService>;
   };
@@ -34,6 +39,8 @@ const consentRevokeBody = z.object({ artifactId: z.uuid(), scopeId: consentScope
 const consentAllBody = z.object({ artifactId: z.uuid() }).strict();
 const consentAdminBody = z.object({ readerAccountId: z.string().min(1).max(256),
   artifactId: z.uuid(), scopeId: consentScope.optional() }).strict();
+const consentGateQuery = z.object({ artifactId: z.uuid(), scopeId: consentScope }).strict();
+const consentGrantBody = z.object({ artifactId: z.uuid(), scopeId: consentScope }).strict();
 
 /** APP-P1 dispatch and a separate host reader port; activation is never a public tool. */
 export function createArtifactHttpRouter(ports: ArtifactHttpPorts): Hono {
@@ -124,6 +131,92 @@ export function createArtifactHttpRouter(ports: ArtifactHttpPorts): Hono {
       const status = message === 'not_found' ? 404 : message === 'access_denied' ? 403 : 400;
       return context.json({ error: message === 'not_found' ? 'not_found'
         : message === 'access_denied' ? 'access_denied' : 'invalid_request' }, status as 400);
+    }
+  });
+  /**
+   * J1.3b — generic grant contract (first-party, host-declared scopes and
+   * versions). The gate answers the typed 403; the single prescribed
+   * navigation from it is the sibling screen; the grant posts once and the
+   * gate opens with no loop. An unreadable artifact never oracles consent.
+   */
+  const gatePorts = async (context: Context) => {
+    const service = await consentService(context, false);
+    if (!service || !ports.readerConsent) return undefined;
+    const resolved = await consentPorts(context);
+    if (!resolved) return undefined;
+    return { service, bound: resolved.bound };
+  };
+  const declaredScope = (scopeId: string) =>
+    ports.readerConsent!.declaredScopes.find((entry) => entry.scopeId === scopeId);
+  router.get('/reader-gate', async context => {
+    context.header('Cache-Control', 'no-store');
+    context.header('Referrer-Policy', 'no-referrer');
+    const resolved = await gatePorts(context);
+    if (!resolved) return context.json({ error: 'not_found' }, 404);
+    let query: { artifactId: string; scopeId: string };
+    try {
+      query = consentGateQuery.parse({ artifactId: context.req.query('artifactId'),
+        scopeId: context.req.query('scopeId') });
+    } catch { return context.json({ error: 'invalid_request' }, 400); }
+    const declared = declaredScope(query.scopeId);
+    if (!declared) return context.json({ error: 'not_found' }, 404);
+    let rights: 'ok' | 'gone' = 'gone';
+    try {
+      const probe = await (await ports.transport()).http(resolved.bound.identity,
+        resolved.bound.workspaceId, { method: 'GET', path: `/meta/${query.artifactId}`, body: undefined });
+      rights = probe.status === 200 ? 'ok' : 'gone';
+    } catch { rights = 'gone'; }
+    const decision = await resolved.service.evaluateGate({ readerAccountId: context.get('user').userId,
+      artifactId: query.artifactId, scopeId: query.scopeId,
+      scopeVersion: declared.scopeVersion, rights });
+    if (decision.allowed) {
+      return context.json({ allowed: true, artifactId: query.artifactId,
+        scopeId: query.scopeId, scopeVersion: declared.scopeVersion });
+    }
+    if (decision.refusal === 'reader_consent_required') {
+      return context.json({ code: 'reader_consent_required',
+        scopeId: query.scopeId, retryable: false }, 403);
+    }
+    return context.json({ error: decision.status === 401 ? 'access_denied' : 'not_found' },
+      decision.status as 400);
+  });
+  router.get('/reader-consents/screen', async context => {
+    context.header('Cache-Control', 'no-store');
+    context.header('Referrer-Policy', 'no-referrer');
+    const resolved = await gatePorts(context);
+    if (!resolved) return context.json({ error: 'not_found' }, 404);
+    let query: { artifactId: string; scopeId: string };
+    try {
+      query = consentGateQuery.parse({ artifactId: context.req.query('artifactId'),
+        scopeId: context.req.query('scopeId') });
+    } catch { return context.json({ error: 'invalid_request' }, 400); }
+    const declared = declaredScope(query.scopeId);
+    if (!declared) return context.json({ error: 'not_found' }, 404);
+    return context.html(renderConsentScreen({ ...ports.readerConsent!.consentScreen,
+      artifactId: query.artifactId, scopeId: query.scopeId, scopeVersion: declared.scopeVersion }));
+  });
+  router.post('/reader-consents/grant', bodyLimit({ maxSize: 4096 }), async context => {
+    context.header('Cache-Control', 'no-store');
+    const resolved = await gatePorts(context);
+    if (!resolved) return context.json({ error: 'not_found' }, 404);
+    try {
+      const contentType = context.req.header('content-type') ?? '';
+      const raw = contentType.startsWith('application/json') ? await context.req.json() :
+        Object.fromEntries(Object.entries(await context.req.parseBody())
+          .map(([key, value]) => [key, typeof value === 'string' ? value : '']));
+      const body = consentGrantBody.parse(raw);
+      const declared = declaredScope(body.scopeId);
+      if (!declared) return context.json({ error: 'not_found' }, 404);
+      const readerAccountId = context.get('user').userId;
+      const granted = await resolved.service.grantWithFreshRights({ readerAccountId,
+        artifactId: body.artifactId, scopeId: body.scopeId, scopeVersion: declared.scopeVersion },
+        () => resolved.service.checkReaderFreshRights({ readerAccountId, artifactId: body.artifactId }));
+      return context.json({ granted: true, artifactId: body.artifactId,
+        scopeId: body.scopeId, scopeVersion: declared.scopeVersion, grantedAt: granted.grantedAt });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      return context.json({ error: message === 'access_denied' ? 'access_denied' : 'invalid_request' },
+        (message === 'access_denied' ? 403 : 400) as 400);
     }
   });
   const handle = async (context: Context) => {
