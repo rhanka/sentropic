@@ -87,14 +87,15 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
   - [x] `packages/artifacts/src/server/upload-page.ts`: PUT carries exactly the announced headers.
   - [x] `packages/artifacts/src/server/templates.ts`: guide text matches the fixed channel (no checksum header).
   - [x] Update existing tests that assert the old announced header (`uploads.test.ts`, `files-parity-lot1.test.ts`, `files-parity-lot2.test.ts`) to the new contract without weakening refusal coverage (refusals kept; retry tail strengthened to refusal).
-  - [ ] Lot gate: new tests green; `make typecheck-artifacts` + `make lint-artifacts`; scoped `make test-artifacts SCOPE=tests/uploads.test.ts`, `SCOPE=tests/files-parity-lot1.test.ts`, `SCOPE=tests/files-parity-lot2.test.ts`, `SCOPE=tests/http-uploads-templates.test.ts` with `ENV=test-upload-cksum` last.
-- [ ] **Lot 3 — Patch release 0.2.16**
-  - [ ] Bump `packages/artifacts/package.json` to `0.2.16` (stays in `0.2.x` per the cluster-mesh `>=0.2.0 <0.3.0` allocation).
-  - [ ] Bump `ARTIFACTS_PROVIDER_VERSION` in `packages/artifacts/src/mcp-core.ts`.
-  - [ ] Add `CHANGELOG.md` entry for `0.2.16` with the fix and the header-contract choice plus OVH/minio justification.
-  - [ ] Refresh locks/pins through make: root and `api` lock workspace entries, `APP-P1` manifest digest re-pin in `api/src/services/mcp/cluster-registry.ts`, api registry tests, cluster-mesh selected fixture pin.
-  - [ ] Verify `npm view @sentropic/artifacts version` is below `0.2.16` (Post-Rebase Gate after any rebase).
-  - [ ] Lot gate: `make scope-check` before every commit; commits under 150 lines via `make commit`.
+  - [x] Lot gate: new tests green (4/4); `make typecheck-artifacts` + `make lint-artifacts` (0 errors); scoped `make test-artifacts` green for `uploads.test.ts` (6/6), `files-parity-lot1.test.ts` (7/7), `files-parity-lot2.test.ts` (20/20), `http-uploads-templates.test.ts` (15/15), `http-mcp-service-parity.test.ts` (9/9) with `ENV=test-upload-cksum` last.
+- [x] **Lot 3 — Patch release 0.2.16**
+  - [x] Bump `packages/artifacts/package.json` to `0.2.16` (stays in `0.2.x` per the cluster-mesh `>=0.2.0 <0.3.0` allocation).
+  - [x] Bump `ARTIFACTS_PROVIDER_VERSION` in `packages/artifacts/src/mcp-core.ts`.
+  - [x] Add `CHANGELOG.md` entry for `0.2.16` with the fix and the header-contract choice plus OVH/minio justification.
+  - [x] Refresh locks/pins: root and `api` lock workspace entries, `APP-P1` manifest digest re-pin in `api/src/services/mcp/cluster-registry.ts` (digest computed in the api container via `make exec-api`, corroborated by the registry tests), api registry tests updated.
+  - [x] Cluster-mesh selected fixture left at `0.2.15`: its integrity pin comes from the verified release archive (sanctioned `refresh-lazy-package-lock` flow, post-publish), and the packaging harness installs the selected fixture from the registry, which has no `0.2.16` yet. Precedent: `f11eca02e` shipped the release without the fixture; `b6631c4b5`/`530ed7aff` re-pinned after publication.
+  - [x] Verify `npm view @sentropic/artifacts version` is below `0.2.16` (Post-Rebase Gate after any rebase): registry reports `0.2.15`.
+  - [x] Lot gate: `make scope-check` before every commit; commits under 150 lines via `make commit`.
 - [ ] **Lot 4 — Final validation**
   - [ ] Typecheck & Lint for impacted components.
   - [ ] Scoped `make test-artifacts` full unit run with `ENV=test-upload-cksum` last.

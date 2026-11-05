@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.16
+
+- Upload channel integrity, fail-closed (immo preprod, OVH S3 403): the
+  presigned PUT no longer announces `x-amz-checksum-sha256`. The digest is
+  declared at commit, so the checksum header could never be signed at
+  `create_upload` time, and strict S3 implementations refuse presigned PUTs
+  carrying an unsigned `x-amz-*` header (`AccessDenied`, headers present but
+  not signed). `create_upload` now returns exactly the signed header set
+  (`content-type` + exact `content-length`) in `requiredHeaders`, with no
+  `checksumHeader` field; the client (agent SDK/CI and the browser upload
+  page) sends exactly those headers and nothing else. Signing the checksum
+  instead would have required the digest at create time, i.e. a change to the
+  frozen `artifacts_create_upload` input schema; it also depends on S3
+  checksum support that the repo's minio double does not guarantee, while a
+  plain PUT works on OVH and minio alike (immo verified the headerless PUT
+  returns 200 on preprod).
+- `commit_upload` no longer trusts the declared digest alone: it re-reads the
+  staged bytes and re-verifies size, SHA-256 and MIME server-side, and any
+  mismatch now refuses with a typed `UploadVerificationError` (mapped to
+  `verification_failed` at the HTTP layer with the same public reasons),
+  deletes the staged object, closes the session, and pins nothing — a
+  poisoned upload can never be retried into a release. The CAS read-back
+  mismatch path deletes the suspect blob too.
+- No MCP tool definition changes (the 17 pre-existing definitions stay
+  byte-identical); only the `create_upload` response shape loses the
+  `checksumHeader` field. Stays in `0.2.x` (cluster-mesh peer `>=0.2.0
+  <0.3.0`).
+
 ## 0.2.15
 
 - R1: every model-visible userRef projection emits the opaque `unknown` value
