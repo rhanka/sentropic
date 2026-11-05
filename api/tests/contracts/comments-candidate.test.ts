@@ -6,12 +6,11 @@
 // points at the BR-80 qualified archive, the packed manifest must expose the
 // same surface the consumer imports.
 import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 import { createCommentsRouter } from '@sentropic/comments/hono';
 import { InMemoryCommentStore } from '@sentropic/comments';
-import { readPackedManifest } from '../../../scripts/ci/publishable-manifests.mjs';
 
 const stubOptions = () => ({
   store: new InMemoryCommentStore(),
@@ -23,7 +22,7 @@ const stubOptions = () => ({
 const packedManifest = async () => {
   const tarball = process.env.COMMENTS_CANDIDATE_TARBALL;
   if (!tarball) return null;
-  return readPackedManifest(await readFile(tarball));
+  return JSON.parse(execFileSync('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' }));
 };
 
 describe('comments candidate through the API', () => {
