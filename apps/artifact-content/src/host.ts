@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createContentHandler, type ContentHandlerDeps } from '@sentropic/artifacts/content/handler';
-import { contentHeaders, GRANT_COOKIE_NAME, grantCookie, parseGrantCookie } from '@sentropic/artifacts/content/headers';
+import { contentHeaders, GRANT_COOKIE_NAME, grantCookie, parseGrantCookie, type ContentMode } from '@sentropic/artifacts/content/headers';
 import { CONTENT_GRANT_TTL_SECONDS, type ContentGrantClaims, type GrantSigner, type TicketRecord } from '@sentropic/artifacts/content/grants';
 import { parseContentHost } from '@sentropic/artifacts/content/routing';
 
@@ -20,6 +20,10 @@ export interface ContentHostOptions {
   blobs: Pick<ContentHandlerDeps['blobs'], 'getBlob'>;
   /** G1 owner Q2: live account approval re-checked on every content read (fail-closed when absent). */
   isApprovedAccount?: (principalId: string) => boolean | Promise<boolean>;
+  /** Host-configured mode (owner decision 05/11): `safe` default, `application` for real SPAs. */
+  contentMode?: ContentMode;
+  /** Per-release inline script hashes for the served HTML file, application mode only. */
+  getScriptHashes?: (filePath: string) => readonly string[] | undefined;
 }
 const NONCE_COOKIE = '__Host-artifacts_nonce';
 function nonceCookie(header: string | null) {
@@ -105,7 +109,8 @@ export function createContentHost(options: ContentHostOptions) {
     try { claims = options.grants.verify(token); } catch { return fail(401); }
     if (!await options.current(claims)) return fail(404);
     const result = await handler.handle({ method: request.method, host: url.host,
-      path: url.pathname, cookie: request.headers.get('cookie') ?? undefined });
+      path: url.pathname, cookie: request.headers.get('cookie') ?? undefined,
+      accept: request.headers.get('accept') ?? undefined });
     if (result.status === 200) {
       // An artifact id follows the current release (fresh consent on republish); a release id is frozen.
       const current = await options.publication.getCurrent(origin.id);
@@ -113,7 +118,11 @@ export function createContentHost(options: ContentHostOptions) {
       try { options.grants.verify(token); } catch { return fail(401); }
       if (!options.enabled() || !await options.current(claims)) return fail(404);
     }
-    if (result.headers['content-security-policy']) result.headers['content-security-policy'] += "; worker-src 'none'";
+    // Safe mode keeps the historic unconditional worker refusal; application
+    // mode serves `worker-src 'self'` from the handler instead.
+    if ((options.contentMode ?? 'safe') === 'safe' && result.headers['content-security-policy']) {
+      result.headers['content-security-policy'] += "; worker-src 'none'";
+    }
     return new Response(request.method === 'HEAD' ? null : result.bytes ? Buffer.from(result.bytes) : JSON.stringify(result.body),
       { status: result.status, headers: result.headers });
   }
