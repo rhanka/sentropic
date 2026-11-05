@@ -55,6 +55,11 @@ export async function deleteCmBusinessWorkspaces(workspaceIds: readonly string[]
     FROM pg_constraint fk JOIN pg_class child ON child.oid = fk.conrelid JOIN pg_class parent ON parent.oid = fk.confrelid
     JOIN pg_namespace cn ON cn.oid = child.relnamespace JOIN pg_namespace pn ON pn.oid = parent.relnamespace
     WHERE fk.contype = 'f' AND cn.nspname = 'public' AND pn.nspname = 'public' AND child.oid <> parent.oid`);
+  // `workspace_type_workflows` links types to definitions with no workspace_id scope,
+  // so the sweep below cannot order it: drop this scope's links first or the
+  // restrictive FK refuses the `workflow_definitions` delete.
+  await execute('workspace_type_workflows', `DELETE FROM public.workspace_type_workflows WHERE workflow_definition_id IN (
+    SELECT id FROM public.workflow_definitions WHERE workspace_id = ANY($1::text[]))`, [workspaceIds]);
   while (remaining.size) {
     const table = [...remaining].sort().find(candidate => !edges.rows.some(edge => edge.parent === candidate && remaining.has(edge.child)));
     if (!table) throw new IdentityCustodyErrorV1('identity_cascade_participant_missing');
