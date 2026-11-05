@@ -142,6 +142,37 @@ test('accepts an expected package publication sourced from the candidate', () =>
   assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
 });
 
+test('accepts a package publisher that explicitly skipped (dev-line, nothing published)', () => {
+  const evidence = base();
+  evidence.publications.push({
+    kind: 'package', name: '@sentropic/cluster-mesh', ref: '0.26.0-dev.9', expected: true,
+    source: sha, status: 'skipped', statusSource: 'publisher',
+  });
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+});
+
+test('accepts an explicitly already-published package without judging pack', () => {
+  const evidence = base();
+  evidence.publications.push({
+    kind: 'package', name: '@sentropic/cluster-mesh', ref: '0.25.0', expected: true,
+    source: sha, status: 'already-published', statusSource: 'publisher', pack: 'fresh',
+  });
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+});
+
+test('rejects a package publication skipped with no explicit publisher status', () => {
+  const evidence = base();
+  evidence.publications.push({
+    kind: 'package', name: '@sentropic/cluster-mesh', ref: '0.26.0-dev.9', expected: true,
+    source: sha, status: 'skipped',
+  });
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /missing publication: @sentropic\/cluster-mesh/);
+});
+
 test('rejects mismatched registry integrity', () => {
   const evidence = base();
   evidence.publications[0].integrity = 'sha512-AAA';
@@ -296,6 +327,88 @@ test('chain reads the production publication_pack output key', () => {
   });
   assert.equal(rejected.ok, false);
   assert.match(rejected.problems.join('\n'), /repacked publication: @sentropic\/llm-mesh/);
+});
+
+test('chain accepts a selected cluster-mesh publisher that explicitly skipped (dev-line decision)', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'skipped', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'success',
+    }, {
+      'publish-cluster-mesh': {
+        publication_status: 'skipped', publication_sha256: '', publication_pack: '',
+        publication_name: '@sentropic/cluster-mesh', publication_version: '0.26.0-dev.9',
+      },
+    }),
+    selections: chainSelections({ clusterPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+  const cluster = verdict.evidence.publications.find((row) => row.name === '@sentropic/cluster-mesh');
+  assert.equal(cluster.status, 'skipped');
+});
+
+test('chain accepts an equal-integrity already-published cluster-mesh without judging pack', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'skipped', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'success',
+    }, {
+      'publish-cluster-mesh': {
+        publication_status: 'skipped', publication_conflict: 'equal-integrity',
+        publication_sha256: 'b'.repeat(64), publication_pack: 'candidate',
+        publication_name: '@sentropic/cluster-mesh', publication_version: '0.25.0',
+      },
+    }),
+    selections: chainSelections({ clusterPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+  const cluster = verdict.evidence.publications.find((row) => row.name === '@sentropic/cluster-mesh');
+  assert.equal(cluster.status, 'already-published');
+});
+
+test('chain reads the production publication_status/sha256/version output keys', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'success',
+    }, {
+      'publish-llm-mesh': {
+        publication_status: 'published', publication_sha256: 'b'.repeat(64), publication_pack: 'candidate',
+        publication_name: '@sentropic/llm-mesh', publication_version: '0.33.0',
+      },
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+  const mesh = verdict.evidence.publications.find((row) => row.name === '@sentropic/llm-mesh');
+  assert.equal(mesh.digest, `sha256:${'b'.repeat(64)}`);
+  assert.equal(mesh.ref, '0.33.0');
+  assert.equal(mesh.pack, 'candidate');
+});
+
+test('chain rejects a derived publication with no pack under production keys (fail-closed)', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'success',
+    }, {
+      'publish-llm-mesh': {
+        publication_name: '@sentropic/llm-mesh', publication_version: '0.33.0',
+        publication_sha256: 'b'.repeat(64),
+      },
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /repacked publication: @sentropic\/llm-mesh(@0\.33\.0)? \(pack=missing, expected candidate\)/);
 });
 
 test('chain rejects a selected package publication with no recorded pack source', () => {
