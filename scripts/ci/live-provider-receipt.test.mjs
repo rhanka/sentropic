@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory, readAllPages, readPages, fixtureReceipt } from './live-provider-receipt.mjs';
+import { liveReceipt, scheduleHealth, qualifiedMain, QUALIFIED_MAIN_SELECTOR, receiptFromDirectory, readAllPages, readPages, fixtureReceipt } from './live-provider-receipt.mjs';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
@@ -95,13 +95,35 @@ test('should retain fresh completed qualification while the next daily run is ac
 
 test('should select completed main application qualification rather than a partial or PR run', () => {
   const run = { id: 1, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', head_sha: sourceSha,
-    jobs: [...Array.from({ length: 3 }, (_, i) => `test-api-unit-integration (ai, ${i})`),
+    jobs: [...Array.from({ length: 3 }, (_, i) => `test-api-ai (ai-specs-${i})`),
       ...Array.from({ length: 6 }, (_, i) => `test-e2e (${i + 1})`), 'e2e-vscode',
       'publish-api-image', 'publish-ui-image'].map(name => ({ name, conclusion: 'success' })) };
   assert.equal(qualifiedMain([run]).sourceSha, sourceSha);
   for (const changed of [{ ...run, event: 'pull_request' }, { ...run, jobs: run.jobs.slice(0, 1) },
     { ...run, jobs: run.jobs.slice(0, -1) }, { ...run, status: 'in_progress' },
     { ...run, conclusion: 'failure' }]) assert.throws(() => qualifiedMain([changed]), /tuple/);
+});
+
+test('should match the current AI and e2e job shapes on main so the daily selector finds a run', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const block = (id) => {
+    const start = workflow.indexOf(`\n  ${id}:`);
+    assert.ok(start !== -1, `missing job ${id} in ci.yml`);
+    const rest = workflow.slice(start + 1);
+    const next = rest.slice(id.length + 4).search(/\n  [A-Za-z0-9_-]+:/);
+    return next === -1 ? rest : rest.slice(0, id.length + 4 + next);
+  };
+  const aiSpecs = [...block('test-api-ai').matchAll(/-\s*ai_specs:\s*"([^"]+)"/g)].map(match => match[1]);
+  const e2eShards = [...block('test-e2e').matchAll(/-\s*shard:\s*(\d+)/g)].map(match => match[1]);
+  assert.equal(aiSpecs.length, QUALIFIED_MAIN_SELECTOR.aiCount, 'AI shard count drifted from the daily selector');
+  assert.equal(e2eShards.length, QUALIFIED_MAIN_SELECTOR.e2eCount, 'e2e shard count drifted from the daily selector');
+  const run = { id: 7, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', head_sha: sourceSha,
+    jobs: [...aiSpecs.map(specs => `test-api-ai (${specs})`), ...e2eShards.map(shard => `test-e2e (${shard})`),
+      'e2e-vscode', 'publish-api-image', 'publish-ui-image'].map(name => ({ name, conclusion: 'success' })) };
+  const matchedAi = run.jobs.filter(job => job.name.startsWith(QUALIFIED_MAIN_SELECTOR.aiPrefix)
+    && job.conclusion === 'success').length;
+  assert.ok(matchedAi > 0, 'daily selector matches zero AI jobs on the current workflow');
+  assert.equal(qualifiedMain([run]).sourceSha, sourceSha);
 });
 
 test('should retain application jobs and identities beyond the first GitHub page', () => {

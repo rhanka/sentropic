@@ -16,15 +16,21 @@ export function scheduleHealth(runs, { now = Date.now(), currentRun } = {}) {
   lastRun: latest.id, conclusion: latest.conclusion, ageSeconds };
 }
 
+export const QUALIFIED_MAIN_SELECTOR = {
+  aiPrefix: 'test-api-ai (', aiCount: 3,
+  e2ePrefix: 'test-e2e (', e2eCount: 6,
+  singleJobs: ['e2e-vscode', 'publish-api-image', 'publish-ui-image'],
+};
+
 export function qualifiedMain(runs) {
   const run = runs.find(row => row.head_branch === 'main' && row.event === 'push'
     && row.status === 'completed' && row.conclusion === 'success'
-    && ['test-api-unit-integration (ai', 'test-e2e (', 'e2e-vscode'].every(prefix =>
+    && [QUALIFIED_MAIN_SELECTOR.aiPrefix, QUALIFIED_MAIN_SELECTOR.e2ePrefix, 'e2e-vscode'].every(prefix =>
       row.jobs?.some(job => job.name.startsWith(prefix) && job.conclusion === 'success'))
-    && ['publish-api-image', 'publish-ui-image'].every(name =>
+    && QUALIFIED_MAIN_SELECTOR.singleJobs.filter(name => name.startsWith('publish')).every(name =>
       row.jobs?.some(job => job.name === name && job.conclusion === 'success'))
-    && row.jobs.filter(job => job.name.startsWith('test-api-unit-integration (ai') && job.conclusion === 'success').length === 3
-    && row.jobs.filter(job => job.name.startsWith('test-e2e (') && job.conclusion === 'success').length === 6);
+    && row.jobs.filter(job => job.name.startsWith(QUALIFIED_MAIN_SELECTOR.aiPrefix) && job.conclusion === 'success').length === QUALIFIED_MAIN_SELECTOR.aiCount
+    && row.jobs.filter(job => job.name.startsWith(QUALIFIED_MAIN_SELECTOR.e2ePrefix) && job.conclusion === 'success').length === QUALIFIED_MAIN_SELECTOR.e2eCount);
   if (!run || !/^[a-f0-9]{40}$/.test(run.head_sha)) throw new Error('No complete qualified main tuple');
   return { sourceSha: run.head_sha, workflowSha: run.head_sha, run: run.id, attempt: run.run_attempt };
 }
