@@ -1,8 +1,10 @@
 # BR45 (D1) — versioned one-off Job for prod-safe OIDC client registration.
 #
-# Runs `node dist/scripts/oauth-register-client.js` (compiled into the api image
-# by `api/package.json` build) as a one-off post-deploy step AGAINST the tier
-# IdP database. Idempotent upsert keyed on `client_id`; re-running is safe.
+# Runs `node api/dist/scripts/oauth-register-client.js` (compiled into the api
+# image by `api/package.json` build, resolved from the image WORKDIR-relative
+# repo root /workspace like 35-auth-idp.yaml) as a one-off post-deploy step
+# AGAINST the tier IdP database. Idempotent upsert keyed on `client_id`;
+# re-running is safe.
 #
 # Apply ONE-OFF per registration (never added to kustomization resources):
 #   kubectl -n sentropic apply -f 36-oauth-register-client-job.yaml
@@ -53,8 +55,11 @@ spec:
         - name: register
           image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
           imagePullPolicy: Always
+          # cwd is /workspace so the script resolves api/dist/... relative to the
+          # repo root — same convention as 35-auth-idp.yaml (the same image runs
+          # the IdP as `apps/auth-idp/dist/index.js` from /workspace).
           workingDir: /workspace
-          command: ["node", "dist/scripts/oauth-register-client.js"]
+          command: ["node", "api/dist/scripts/oauth-register-client.js"]
           envFrom:
             - secretRef:
                 name: sentropic-api
