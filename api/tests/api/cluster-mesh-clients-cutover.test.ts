@@ -76,7 +76,7 @@ const bridgeDigests = [
   ['config/default-chat-system.ts', '9203ab798a9396b15593f85aee38323d5d36fd3b35ce80f4a73954da6e12553d'],
   ['config/env.ts', '9854d0af531dd125d8f52843c8dc92ab509eb58511e71dbb00cef6336d3ddf63'],
   ['db/client.ts', 'a26b33f68913593f17d07f288b855d14e0f21e537592673a42d5ae28606a5b99'],
-  ['db/schema.ts', '45ad03d11cece58952dcbb4480a9d594ad9c5234a25b547195ee61eed8228650'],
+  ['db/schema.ts', 'e22d15a43290737ecbcd95de62e755be748d6e95abcadac846fd445a111c82a6'],
   ['middleware/rbac.ts', 'ece31f70cdf786170c4d5f29707268f6263f53e7eee8c0e52aae8c4c169b709b'],
   ['services/session-manager.ts', 'b80f05ab0bde4d657bd5dca444ef551f91bc26b256c8d560886573d4c2dcafe7'],
   ['services/settings.ts', '2ff7a556897605bf6d92b1a11ab73ec9c78849edd655dda25dc442d26d7ce3a6'],
