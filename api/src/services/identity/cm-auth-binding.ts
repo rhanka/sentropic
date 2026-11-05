@@ -5,7 +5,7 @@ import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1
   type IdentityAuthHonoTransactionBindingV1, type IdentityDeferredMailV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { IdentityCustodyErrorV1, type IdentityEmailCodeKeyRingV1 } from '@sentropic/cluster-mesh';
 import type { PoolClient } from 'pg';
-import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
+import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction, withSerializationRetry,
   type CmIdentityTransaction } from './cm-transaction';
 import type { createCmTokenCustodian } from './cm-token-custodian';
 import { createServiceTenantEnrollmentSource } from '../tenancy/enrollment-store';
@@ -72,17 +72,21 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
     async complete<T>(flow: IdentityAuthCompletionFlowV1, work: Work<T>, trustedRegistration: RegistrationContext = null)
       : Promise<IdentityAuthCompletionOutcomeV1<T>> {
       const entityPlan = createCmAuthEntityPlan();
-      const outcome = await runIdentityAuthCompletionV1({ flow, unitOfWork: cmIdentityUnitOfWork,
-        options: cmRequestWriteOptions, operation: tx => attempt(tx, work, trustedRegistration, entityPlan) });
+      // Concurrent requests on the same custody rows abort with 40001; each
+      // retry opens a fresh transaction and observes the winner (safe: an
+      // aborted attempt commits nothing and publishes nothing).
+      const outcome = await withSerializationRetry(() => runIdentityAuthCompletionV1({ flow, unitOfWork: cmIdentityUnitOfWork,
+        options: cmRequestWriteOptions, operation: tx => attempt(tx, work, trustedRegistration, entityPlan) }));
       if (!outcome.committed) return outcome;
       return { committed: true, value: await publish(outcome.value) };
     },
     // Both WebAuthn options calls and the unchanged OAuth/middleware consumers use
     // the bare UOW, with fresh ports and audit drain on every callback execution.
+    // Same serialization retry as complete (concurrent touchActivity writes abort).
     async request<T>(work: Work<T>, trustedRegistration: RegistrationContext = null): Promise<T> {
       const entityPlan = createCmAuthEntityPlan();
-      const result = await cmIdentityUnitOfWork.run(cmRequestWriteOptions,
-        tx => attempt(tx, work, trustedRegistration, entityPlan));
+      const result = await withSerializationRetry(() => cmIdentityUnitOfWork.run(cmRequestWriteOptions,
+        tx => attempt(tx, work, trustedRegistration, entityPlan)));
       return publish(result);
     },
     async registrationContext(presentation: CmRegistrationPresentation, tx: CmIdentityTransaction): Promise<Registration> {

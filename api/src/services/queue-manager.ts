@@ -498,9 +498,10 @@ export class QueueManager {
   private jobControllers: Map<string, AbortController> = new Map();
   private cachedJobRunnerDeps: JobRunnerDeps<JobQueueRow, JobType, JobData> | null = null;
 
-  constructor() {
-    this.loadSettings();
-  }
+  // The constructor never touches the database: the first settings load runs
+  // after runMigrations (see api/src/index.ts), so boot on a fresh database
+  // does not query the not-yet-created settings table.
+  constructor() { /* settings load after migrations, never here */ }
 
   /**
    * Returns the ids of all jobs currently in-flight in this process.
