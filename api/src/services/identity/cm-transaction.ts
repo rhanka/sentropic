@@ -97,6 +97,33 @@ export const runCmIdentityRead = <T>(operation: (tx: CmIdentityTransaction) => P
     : cmIdentityUnitOfWork.run(cmRequestReadOptions, tx => current.run(tx, () => operation(tx)));
 };
 
+/** Serializable transactions abort with 40001/40P01 when a concurrent write
+ *  commits first. Postgres requires the caller to retry in a fresh
+ *  transaction; the retry then observes the winner and maps the documented
+ *  domain code. Retry is safe here because a serialization abort discards the
+ *  whole attempt (external effects publish only after commit). */
+const isSerializationFailure = (error: unknown): boolean => {
+  const codes: string[] = [];
+  if (typeof error === 'object' && error !== null && 'code' in error) codes.push(String((error as { code: unknown }).code));
+  const cause = typeof error === 'object' && error !== null && 'cause' in error
+    ? (error as { cause: unknown }).cause : undefined;
+  if (typeof cause === 'object' && cause !== null && 'code' in cause) codes.push(String((cause as { code: unknown }).code));
+  return codes.some((code) => code === '40001' || code === '40P01');
+};
+
+export const withSerializationRetry = async <T>(operation: () => Promise<T>, attempts = 3): Promise<T> => {
+  let failure: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      failure = error;
+      if (!isSerializationFailure(error)) throw error;
+    }
+  }
+  throw failure;
+};
+
 /** Existing app adapters also use all/run/get; each method stays on this executor.
  *  The tx-bound drizzle instance satisfies the app-database contract: no caller
  *  reads `$client` (verified: no `$client` use in api/src) and every query goes

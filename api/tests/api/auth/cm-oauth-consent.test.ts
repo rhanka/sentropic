@@ -82,8 +82,11 @@ describe('CM OAuth consent authority and protocol participant', () => {
   it('never falls back to a default tenant or writes through an unbound participant', async () => {
     await expect(createConsentStoreAdapter().saveGrant(userId, clientId, ['read'], tenantId))
       .rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+    // Tenant-less grants are unkeyable by design (A4-LANE-R1R2): the save is a
+    // no-op resolving undefined — no default tenant is substituted and the
+    // empty protocol/authority below proves nothing was conferred.
     await expect(runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
-      .saveGrant(userId, clientId, ['read']))).rejects.toMatchObject({ code: 'identity_material_invalid' });
+      .saveGrant(userId, clientId, ['read']))).resolves.toBeUndefined();
     expect(await protocol()).toEqual([]);
     expect(await authority()).toEqual([]);
   });

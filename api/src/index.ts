@@ -81,6 +81,18 @@ try {
   process.exit(1);
 }
 
+// First queue settings load, after migrations own the settings table. The
+// QueueManager constructor never queries (a fresh database has no settings
+// table yet); the dynamic import avoids the circular import the lazy reaper
+// import below documents. A load failure keeps warn-and-defaults.
+try {
+  const { queueManager } = await import('./services/queue-manager');
+  await queueManager.reloadSettings();
+  logger.info('Queue settings loaded.');
+} catch (error) {
+  logger.error({ err: error }, 'Queue settings initial load failed, using defaults');
+}
+
 // Ensure indexes exist at boot (idempotent)
 try {
   logger.info('Ensuring database indexes at startup...');

@@ -10,7 +10,7 @@ import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
 import { workspaces } from '../../db/schema';
 import { createId } from '../../utils/id';
-import { bindCmAppDatabase, runCmIdentityRead, runCmIdentityWrite } from '../identity/cm-transaction';
+import { bindCmAppDatabase, runCmIdentityRead, runCmIdentityWrite, withSerializationRetry } from '../identity/cm-transaction';
 import { findCmUserById } from '../identity/cm-users';
 import { findCmMembership, findCmWorkspace } from '../identity/cm-tenancy';
 import { hasRole } from '../../middleware/rbac';
@@ -53,6 +53,7 @@ const requireId = (value: string | undefined, field: string): string => {
   if (!value?.trim()) throw new SessionWorkspaceError('invalid_request', `${field} is required`);
   return value;
 };
+
 const toRecord = (b: SessionWorkspaceBinding | BindingRow): AdoptedSessionWorkspace => ({
   bindingId: b.bindingId, sessionId: b.sessionId, workspaceId: b.workspaceId,
   tenantId: b.tenantId, principalId: b.principalId ?? undefined,
@@ -190,7 +191,7 @@ export class SessionWorkspaceService {
     // ended session cannot be resurrected, and a failed attach leaves no
     // orphan workspace behind.
     const prospectiveWorkspaceId = input.workspaceId ?? createId();
-    const { binding, seed: pendingSeed } = await runCmIdentityWrite(async (identityTx) => {
+    const { binding, seed: pendingSeed } = await withSerializationRetry(() => runCmIdentityWrite(async (identityTx) => {
       await identityTx.lockSubject(principalId);
       if (input.workspaceId) await identityTx.lockWorkspace(input.workspaceId);
       await this.checkTenantMember(tenantId, principalId);
@@ -241,7 +242,7 @@ export class SessionWorkspaceService {
         throw err;
       }
       return { binding, seed };
-    });
+    }));
     if (pendingSeed) {
       await this.seedCreatedWorkspace(
         principalId, pendingSeed.globalRole, pendingSeed.workspaceId, pendingSeed.type,
@@ -254,7 +255,18 @@ export class SessionWorkspaceService {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
-    return await runCmIdentityWrite(async identityTx => {
+    // Phase A (no transaction): pre-read the binding and resolve rights. Work
+    // committed here by a concurrent writer is observed by Phase B; the stale
+    // rights input is intentional (the version CAS still guards the write).
+    // Phase A holds no locks, so concurrent writers never deadlock on it.
+    const readStore = this.storeFactory(db);
+    await this.checkTenantMember(tenantId, principalId);
+    const pre = await readStore.findBySession(sessionId);
+    if (!pre || pre.tenantId !== tenantId) {
+      throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
+    }
+    const preIsAdmin = await this.checkIsAdmin(tenantId, principalId, pre.workspaceId);
+    return withSerializationRetry(() => runCmIdentityWrite(async identityTx => {
       await identityTx.lockSubject(principalId);
       await this.checkTenantMember(tenantId, principalId);
       const tx = bindCmAppDatabase(identityTx);
@@ -265,12 +277,11 @@ export class SessionWorkspaceService {
         throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
       }
       await identityTx.lockWorkspace(existing.workspaceId);
-      const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
       try {
         const binding = await mesh.detach({
-          sessionId, tenantId, principalId, isAdmin, expectedVersion: existing.version,
+          sessionId, tenantId, principalId, isAdmin: preIsAdmin, expectedVersion: pre.version,
         });
-        if (binding.version !== existing.version + 1 || binding.workspaceId !== existing.workspaceId) {
+        if (binding.version !== pre.version + 1 || binding.workspaceId !== pre.workspaceId) {
           throw new SessionWorkspaceError('session_not_attached', 'concurrent modification; retry the detach');
         }
         return toRecord(binding);
@@ -278,14 +289,24 @@ export class SessionWorkspaceService {
         if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
         throw err;
       }
-    });
+    }));
   }
 
   async end(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
-    return await runCmIdentityWrite(async identityTx => {
+    // Phase A (no transaction): pre-read the binding and resolve rights (see
+    // detach). The stale rights input is intentional; the version CAS still
+    // guards the write.
+    const readStore = this.storeFactory(db);
+    await this.checkTenantMember(tenantId, principalId);
+    const pre = await readStore.findBySession(sessionId);
+    if (!pre || pre.tenantId !== tenantId) {
+      throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
+    }
+    const preIsAdmin = await this.checkIsAdmin(tenantId, principalId, pre.workspaceId);
+    return withSerializationRetry(() => runCmIdentityWrite(async identityTx => {
       await identityTx.lockSubject(principalId);
       await this.checkTenantMember(tenantId, principalId);
       const tx = bindCmAppDatabase(identityTx);
@@ -296,16 +317,15 @@ export class SessionWorkspaceService {
         throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
       }
       await identityTx.lockWorkspace(existing.workspaceId);
-      const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
       try {
         const binding = await mesh.end({
-          sessionId, tenantId, principalId, isAdmin, expectedVersion: existing.version,
+          sessionId, tenantId, principalId, isAdmin: preIsAdmin, expectedVersion: pre.version,
         });
         // Idempotent replay: the domain returns the already-ended row
         // unchanged (same version), which never satisfies the write
         // post-control below — return it before that check.
         if (existing.status === 'ended') return toRecord(binding);
-        if (binding.version !== existing.version + 1 || binding.workspaceId !== existing.workspaceId) {
+        if (binding.version !== pre.version + 1 || binding.workspaceId !== pre.workspaceId) {
           throw new SessionWorkspaceError('session_not_attached', 'concurrent modification; retry the end');
         }
         return toRecord(binding);
@@ -313,26 +333,31 @@ export class SessionWorkspaceService {
         if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
         throw err;
       }
-    });
+    }));
   }
 
   async get(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace | null> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
+    // Phase A (no transaction): pre-read the binding and resolve rights. A
+    // concurrent writer committing here is observed by Phase B through the
+    // moved-row guard below (which compares against this pre-read).
+    const readStore = this.storeFactory(db);
+    await this.checkTenantMember(tenantId, principalId);
+    const pre = await readStore.findBySession(sessionId);
+    if (!pre || pre.tenantId !== tenantId) return null;
+    const preIsAdmin = await this.checkIsAdmin(tenantId, principalId, pre.workspaceId);
     return runCmIdentityRead(async identityTx => {
     await this.checkTenantMember(tenantId, principalId);
     const store = this.storeFactory(bindCmAppDatabase(identityTx));
-    const existing = await store.findBySession(sessionId);
-    if (!existing || existing.tenantId !== tenantId) return null;
-    const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
-    const binding = await createSessionWorkspaceBindingService(store).get({ sessionId, tenantId, principalId, isAdmin });
+    const binding = await createSessionWorkspaceBindingService(store).get({ sessionId, tenantId, principalId, isAdmin: preIsAdmin });
     if (!binding) return null;
     // The row may have moved between the two reads (detach + re-attach).
     // Rights decided on the first read must never disclose the second row:
     // when the row moved, re-resolve rights on the row actually returned.
-    if (binding.version !== existing.version || binding.status !== existing.status
-      || binding.workspaceId !== existing.workspaceId || binding.principalId !== existing.principalId) {
+    if (binding.version !== pre.version || binding.status !== pre.status
+      || binding.workspaceId !== pre.workspaceId || binding.principalId !== pre.principalId) {
       if (binding.tenantId !== tenantId) return null;
       if (binding.principalId !== principalId
         && !(await this.checkIsAdmin(tenantId, principalId, binding.workspaceId))) return null;

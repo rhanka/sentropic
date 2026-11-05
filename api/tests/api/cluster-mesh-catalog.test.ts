@@ -317,6 +317,11 @@ describe('cluster mesh catalog product authority', () => {
     const messageId = crypto.randomUUID();
     await db.insert(chatSessions).values({ id: sessionId, userId: user.id, workspaceId: user.workspaceId });
     await db.insert(chatMessages).values({ id: messageId, sessionId, role: 'assistant', sequence: 0 });
+    // Post-cutover turns require an admitted business conversation (the
+    // resolver reads chat_sessions.cm_conversation_session_id).
+    const [session] = await listCmSessionsForUser(user.id);
+    expect(await withCmConversationCaller({ userId: user.id, sessionId: session.id,
+      workspaceId: user.workspaceId!, role: 'editor' }, () => admitCmBusinessConversation(sessionId))).toBe(true);
     const handler = vi.fn((_args, context) => ({ actor: context.subjectId, workspace: context.workspaceId }));
     standaloneToolSource.register({ tool: { name: 'catalog_context_probe', description: 'Context probe',
       inputSchema: {}, sideEffect: false }, handler });

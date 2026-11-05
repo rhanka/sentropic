@@ -36,11 +36,19 @@ describe('ARCH-11 G1a outbox tenant re-key migration', () => {
     `);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await cmDeleteTenants([tenantId]);
+    await db.run(sql`ALTER TABLE public.workspaces DROP COLUMN IF EXISTS tenant_id`);
   });
 
   it('re-keys only proven aliases, including embedded tenant and UBO scope copies', async () => {
     await createCmTenant({ tenantId, slug: tenantId, status: 'active' });
     await db.insert(workspaces).values({ id: workspaceId, name: workspaceId });
+    // The migration under test predates cutover 0015: it resolves the workspace →
+    // tenant mapping from public.workspaces.tenant_id, which 0015 dropped (the
+    // mapping now lives in cm_identity.cm_workspaces). Recreate that column for
+    // this test only so the migration file executes against its real precondition;
+    // the journal hash-guard forbids changing the migration itself.
+    await db.run(sql`ALTER TABLE public.workspaces ADD COLUMN IF NOT EXISTS tenant_id text`);
+    await db.run(sql`UPDATE public.workspaces SET tenant_id = ${tenantId} WHERE id = ${workspaceId}`);
 
     const aliasedEnvelope = JSON.stringify({
       tenant: { tenantId: workspaceId, workspaceId, userId: 'user-a' },
