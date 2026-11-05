@@ -130,3 +130,62 @@ test('should classify an application adopting a new library range as explicit ad
   assert.equal(verdict.kind, 'explicit-adoption');
   assert.match(verdict.reasons.join('\n'), /adopts @sentropic\/comments/);
 });
+
+test('should classify root lock changes as root lock/toolchain', () => {
+  const verdict = classifyCompatibility({ files: ['package-lock.json'], packages: [] });
+  assert.equal(verdict.kind, 'root-lock-toolchain');
+});
+
+test('should classify api, deploy and security paths as runtime/security', () => {
+  for (const file of ['api/src/routes/x.ts', 'deploy/k8s/overlays/preprod/x.yaml', '.security/audit-allowlist.json']) {
+    const verdict = classifyCompatibility({ files: [file], packages: [] });
+    assert.equal(verdict.kind, 'runtime-security', file);
+  }
+});
+
+test('should classify Dockerfile and workflow edits as toolchain', () => {
+  for (const file of ['api/Dockerfile', '.github/workflows/ci.yml', 'Makefile']) {
+    assert.equal(classifyFileArea(file), 'toolchain', file);
+  }
+  const verdict = classifyCompatibility({ files: ['api/Dockerfile'], packages: [] });
+  assert.equal(verdict.kind, 'root-lock-toolchain');
+});
+
+test('should classify CI scripts as toolchain and docs as benign', () => {
+  assert.equal(classifyFileArea('scripts/ci/compatibility-classifier.mjs'), 'toolchain');
+  const verdict = classifyCompatibility({ files: ['scripts/ci/compatibility-classifier.mjs'], packages: [] });
+  assert.equal(verdict.kind, 'root-lock-toolchain');
+  const docs = classifyCompatibility({ files: ['spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md', 'BRANCH.md'], packages: [] });
+  assert.equal(docs.kind, 'internal-fix');
+});
+
+test('should classify ui-only edits as ui-only and shared auth-ui assets as shared asset', () => {
+  const ui = classifyCompatibility({ files: ['ui/src/routes/+page.svelte'], packages: [] });
+  assert.equal(ui.kind, 'ui-only');
+  const shared = classifyCompatibility({
+    files: ['packages/auth-ui/src/components/AuthProviderGlyph.svelte'],
+    packages: [{ slug: 'auth-ui', scope: 'library',
+      published: lib('auth-ui', '0.2.0'), candidate: lib('auth-ui', '0.2.1') }],
+  });
+  assert.equal(shared.kind, 'shared-asset');
+});
+
+test('should keep the most conservative kind when a change spans areas', () => {
+  const verdict = classifyCompatibility({
+    files: ['packages/comments/src/a.ts', 'packages/comments/package.json', 'ui/src/x.ts'],
+    packages: [{ slug: 'comments', scope: 'library',
+      published: lib('comments', '0.3.1', {}), candidate: lib('comments', '0.4.0', {}) }],
+  });
+  assert.equal(verdict.kind, 'additive');
+  const broke = classifyCompatibility({
+    files: ['packages/comments/src/a.ts', 'packages/comments/package.json', 'api/src/x.ts'],
+    packages: [{ slug: 'comments', scope: 'library',
+      published: lib('comments', '0.3.1', {}), candidate: lib('comments', '0.4.0', {}) }],
+  });
+  assert.equal(broke.kind, 'runtime-security');
+});
+
+test('should expose every documented change kind', () => {
+  assert.deepEqual([...CHANGE_KINDS].sort(), ['additive', 'breaking', 'explicit-adoption',
+    'internal-fix', 'root-lock-toolchain', 'runtime-security', 'shared-asset', 'ui-only', 'unknown'].sort());
+});
