@@ -45,16 +45,16 @@ afterEach(async () => {
   database?.release();
   await databasePool?.end();
   if (admin) {
-    if (databaseName) await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+    if (databaseName) await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
     await admin.end();
   }
 });
 
-async function migrate(failBeforeCommit = false, boundImport = true) {
+async function migrate(failBeforeCommit = false, boundImport = true, purpose: 'rehearsal' | 'cutover' = 'rehearsal') {
   // Import through the same real runner used by control migrations, with no SQL
   // fabrication of the CM receipt, schema attestations or D11 checkpoint.
   const fixture = boundImport ? await (await import('../../utils/cm-cutover-test-config'))
-    .createCmCutoverTestConfiguration(database) : null;
+    .createCmCutoverTestConfiguration(database, undefined, purpose) : null;
   await database.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
   try {
     if (fixture) await (await import('../../../src/services/identity/cm-cutover-import'))
@@ -69,6 +69,43 @@ async function migrate(failBeforeCommit = false, boundImport = true) {
 }
 
 describe('A4 single control identity migration', () => {
+  it.each([
+    ['webauthn_challenge', `INSERT INTO webauthn_challenges (id, challenge, user_id, type, expires_at)
+      VALUES ('challenge', 'challenge', 'a4-owner', 'authentication', now() + interval '1 day')`],
+    ['email_code', `INSERT INTO email_verification_codes (id, email, code_hash, expires_at)
+      VALUES ('code', 'a4-owner@example.test', repeat('a', 64), now() + interval '1 day')`],
+    ['email_ticket', `INSERT INTO email_verification_codes (id, email, code_hash, verification_token, used, expires_at)
+      VALUES ('ticket', 'a4-owner@example.test', repeat('a', 64), 'foreign-seed-ticket', true, now() + interval '1 day')`],
+    ['email_ticket', `INSERT INTO email_verification_codes (id, email, code_hash, verification_token, used, expires_at)
+      VALUES ('unused-ticket', 'a4-owner@example.test', repeat('a', 64), 'foreign-seed-ticket', false, now() + interval '1 day')`],
+    ['magic_link', `INSERT INTO magic_links (id, email, user_id, token_hash, expires_at)
+      VALUES ('magic', 'a4-owner@example.test', 'a4-owner', repeat('b', 64), now() + interval '1 day')`],
+    ['login_session', `INSERT INTO user_sessions (id, user_id, session_token_hash, expires_at)
+      VALUES ('login', 'a4-owner', repeat('c', 64), now() + interval '1 day')`],
+    ['login_refresh_token', `INSERT INTO user_sessions (id, user_id, session_token_hash, refresh_token_hash, expires_at)
+      VALUES ('refresh', 'a4-owner', repeat('d', 64), repeat('e', 64), now() + interval '1 day')`],
+  ].flatMap(([kind, insert]) => (['rehearsal', 'cutover'] as const).map(purpose => [kind, purpose, insert] as const)))(
+    'should invalidate %s during %s and retain its count', async (kind, purpose, insert) => {
+    await database.query(insert);
+    await migrate(false, true, purpose);
+    for (const table of ['identity_single_use_proofs', 'identity_email_registration_tickets', 'identity_login_sessions', 'identity_login_token_bindings']) {
+      expect((await database.query(`SELECT count(*)::int AS count FROM cm_identity.${table}`)).rows)
+        .toEqual([{ count: 0 }]);
+    }
+    const { rows } = await database.query('SELECT detail FROM control.app_cm_identity_cutover');
+    expect(rows[0].detail.invalidatedProofCounts[kind]).toBe(1);
+    expect(rows[0].detail.importReceipt.invalidatedProofCounts[kind]).toBe(1);
+    expect(rows[0].detail.purpose).toBe(purpose);
+    expect(JSON.stringify(rows[0].detail)).not.toContain('foreign-seed-ticket');
+    expect(rows[0].detail.importReceipt.identitiesPreserved).toBe(true);
+  });
+
+  it('should refuse an unknown source token column before dropping identity tables', async () => {
+    await database.query('ALTER TABLE email_verification_codes ADD COLUMN unknown_token text');
+    await expect(migrate()).rejects.toMatchObject({ code: 'identity_import_invalid' });
+    expect((await database.query("SELECT id FROM users WHERE id = 'a4-owner'")).rowCount).toBe(1);
+  });
+
   it.each(['recoverable', 'missing', 'unreadable'] as const)(
     'accounts for every historical connector event with %s source capability', async kind => {
       const secret = kind === 'recoverable' ? encryptSecret(JSON.stringify({ refreshToken: 'synthetic-legacy-token' }))

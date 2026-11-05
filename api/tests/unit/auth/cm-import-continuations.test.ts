@@ -1,23 +1,16 @@
-import { SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
-import { mapA4EmailTicket, mapA4Invitation, mapA4Social } from '../../../src/services/identity/cm-import-continuations';
-import { createCmTokenCustodian } from '../../../src/services/identity/cm-token-custodian';
+import { a4InvalidatedProofCounts, mapA4Invitation, mapA4Social } from '../../../src/services/identity/cm-import-continuations';
 import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 describe('A4 continuation source mapping', () => {
-  it('should verify an expired source token while retaining its exact digest, expiry and pending ticket lifecycle', async () => {
-    const key = new TextEncoder().encode('synthetic-source-key-for-import-test');
-    const tokens = createCmTokenCustodian({ sessionKey: key, ticketKey: key, emailCodeKeys: new Map() });
-    try {
-      const token = await new SignJWT({ email: 'user@example.test', codeId: 'code' })
-        .setProtectedHeader({ alg: 'HS256' }).setIssuedAt(100).setExpirationTime(200).sign(key);
-      const ticket = await mapA4EmailTicket({ id: 'code', email: 'user@example.test', used: true,
-        verification_token: token }, tokens.ticketTokens);
-      expect(ticket).toMatchObject({ codeProofId: 'code', state: 'pending', revision: 0,
-        createdAt: '1970-01-01T00:01:40.000Z', expiresAt: '1970-01-01T00:03:20.000Z', consumedAt: null });
-      await expectCustodyCode(() => mapA4EmailTicket({ id: 'other', email: 'user@example.test', used: true,
-        verification_token: token }, tokens.ticketTokens), 'identity_import_invalid');
-    } finally { key.fill(0); tokens.dispose(); }
+  it('should report invalidated proofs by type without publishing their material', () => {
+    expect(a4InvalidatedProofCounts(new Map([
+      ['webauthn_challenges', [{ challenge: 'private-challenge' }]],
+      ['email_verification_codes', [{ verification_token: null }, { verification_token: 'old-seed-ticket' }]],
+      ['magic_links', [{ token_hash: 'private-hash' }]],
+      ['user_sessions', [{ refresh_token_hash: null }, { refresh_token_hash: 'private-hash' }]],
+    ]))).toEqual({ webauthn_challenge: 1, email_code: 2, email_ticket: 1,
+      magic_link: 1, login_session: 2, login_refresh_token: 1 });
   });
 
   it('should preserve invitation consumption and client binding without inventing workspace or tenant grants', () => {
