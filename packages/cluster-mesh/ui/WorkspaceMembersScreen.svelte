@@ -55,7 +55,7 @@
 </script>
 
 <section class="space-y-4 rounded-lg border border-slate-200 bg-white p-4" aria-busy={busy}>
-  <h2 class="font-medium">{ports.text('workspaceSettings.members.title')}</h2>
+  <h4 class="font-medium">{ports.text('workspaceSettings.members.title')}</h4>
   {#if error}<Alert tone="error" title={error} />{/if}
   {#if canManage}
     <form class="flex flex-wrap items-end gap-2" onsubmit={event => { event.preventDefault(); void add(); }}>
