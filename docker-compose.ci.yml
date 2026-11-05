@@ -7,7 +7,8 @@ services:
     command: sh -c "npm run db:migrate && npm run dev"
     volumes:
       # A4 cutover (BRxx-EX13): the restore rehearsal checkpoint is generated
-      # by a one-shot toolbox run and read by api-sut at boot.
+      # by a one-shot api-sut image run (read-write overlay, Makefile-owned)
+      # and read by api-sut at boot.
       - cm-restore-checkpoint:/run/cm-checkpoint
     environment:
       - NODE_ENV=development
