@@ -37,6 +37,7 @@ test('should publish API-only changes with unselected UI jobs and reject every s
       assert.equal(publisherDispatch(name, changes), true, `${name}: ${JSON.stringify(changes)}`);
       for (const parent of workflow.jobs[name].needs) {
         if (['test-ui', 'build-ui-static'].includes(parent) && !changes.ui && !changes.global) continue;
+        if (parent === 'test-api-ai' && changes.ai !== 'true' && changes.global !== 'true') continue;
         if (parent === 'security-iac' && !changes.global) continue;
         for (const result of ['failure', 'cancelled', 'skipped']) {
           assert.equal(publisherDispatch(name, changes, { [parent]: result }), false, `${name}: ${parent}=${result}`);

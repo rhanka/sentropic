@@ -32,12 +32,14 @@
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR82-EX1; `Makefile` under BR82-EX2.
   - [ ] `deploy/k8s/overlays/preprod/kustomization.yaml`, `deploy/k8s/overlays/preprod/patch-api-config.yaml`, and `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml` under BR82-EX3.
+  - [ ] `scripts/ci/ci-dag.test.mjs` under BR82-EX4.
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
 - [ ] BR82-EX1 — Planned workflow exception: join `publish-api-image`, `publish-ui-image`, every selected package publisher, `verify-train-lock-integrity`, and `deploy-preprod` to complete qualification and release-result receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR82-EX2 — Planned Makefile exception: promote image metadata without rebuilding/reloading layers, publish prequalified tarballs, and instrument `k8s-deploy-preprod`; add release-receipt tests. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [ ] BR82-EX3 — Change only preproduction digest pins/readiness configuration justified by measured startup spans; impact: preproduction rollout; rollback: previous qualified immutable tuple and prior health settings. Production overlays remain forbidden.
+- [ ] BR82-EX4 — Test-only exception: `scripts/ci/ci-dag.test.mjs` gains the `test-api-ai` barrier exemption for unselected ai/global, mirroring the existing `test-ui`/`build-ui-static` pattern. Reason: BR82-EX1 joins `test-api-ai` into `publish-api-image` needs with the same skip-tolerance the workflow already uses for unselected UI lanes; the dag test's blanket barrier rule predates the join. Impact: one test expectation. Rollback: revert the exemption line (CI then fails on the new join, as observed in run `42007978636`).
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
 ## AI Flaky tests
@@ -62,18 +64,18 @@
   - [ ] Add `release-receipt.mjs` and its test: reject missing/failed/cancelled/skipped required checks, wrong source/digest, missing publication, tag collision, mismatched registry integrity/provenance, and stale receipt reuse.
   - [ ] Update the named image/manifest/qualification scripts and tests; every publisher waits for the complete verdict, publishes exact tested bytes, and retains clean registry qualification.
   - [ ] Preserve new-version mesh → gateway → cluster ordering; run unrelated publishers and train-lock verification concurrently only after their actual prerequisites. Record version-visible receipts rather than repacking or repeating registry checks.
-  - [ ] Lot gate: new `make test-ci-release-receipts ENV=test-cd-tested-artifacts`; `make test-ci-api-tag-guard test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts`; run both named lock-integrity tests through the packaging target.
-- [ ] **Lot 2 — Actual readiness and complete delivery**
+  - [x] Lot gate (measured 2026-11-05 on head `c42652a89`, ENV=test-cd-tested-artifacts, via docker-slot.sh): `make test-ci-release-receipts` 27/27; `make test-publishable-manifests` 114/114; `make test-ci-api-tag-guard test-qualify-published-install` pass; `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity` pass. Named vitest specs unchanged by this branch, covered in CI.
+- [ ] **Lot 2 — Actual readiness and complete delivery** (pending post-merge: publish jobs run only on `refs/heads/main`)
   - [ ] Measure pod scheduling, pull, init/migration, shutdown, and readiness before tuning; existing rollouts already start together, so parallel status commands alone cannot claim the 41-second saving.
   - [ ] Preserve image-existence, npm-absent runtime, and health/failure checks; UI-only merges retain the API digest; shared auth-ui/IdP assets qualify and deliver both consumers.
-  - [ ] Lot gate: a real main release with fresh selected package versions, registry/provenance/install receipts, `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-cd-tested-artifacts`, and real preproduction rollout/readiness; no manual bootstrap used as steady-state evidence.
-- [ ] **Lot 3 — UAT and measured acceptance**
+  - [ ] Lot gate: a real main release with fresh selected package versions, registry/provenance/install receipts, `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-cd-tested-artifacts`, and real preproduction rollout/readiness; no manual bootstrap used as steady-state evidence. Workflow join implemented (`release-receipts` job; deploy-preprod needs it; ci-gate requires it); first live evidence on the post-merge main run.
+- [ ] **Lot 3 — UAT and measured acceptance** (pending post-merge, same main-only cause as Lot 2)
   - [ ] Verify web and served IdP against the deployed immutable tuple; distinguish qualified PR, published images, preproduction readiness, and every selected package receipt. Exercise failed-promotion and rollback fixtures.
   - [ ] Budget to measure: image promotion ≤40s after candidate upload; full selected fresh npm train ≤195s; preproduction ≤75s versus 116s. Measure all from actual prerequisites and include queue time in complete event endpoints; already-published skips do not qualify the fresh-version budget.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
   - [ ] Rollback drill: restore the previous qualified preproduction image tuple and prior promotion/deploy recipes; issue a corrective npm version for released package defects, never overwrite published bytes or bypass artifact verification.
-- [ ] **Lot 4 — Docs consolidation**
-  - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
+- [x] **Lot 4 — Docs consolidation**
+  - [x] Updated this plan and BRANCH.md with measured receipts and remaining gaps; no EVOL notes or temporary spec scaffolding were created in this branch.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: application typecheck/lint is unchanged; `make test-ci-release-receipts test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts` covers changed release scripts and negative receipt/registry/provenance cases.
