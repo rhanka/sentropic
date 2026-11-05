@@ -25,8 +25,7 @@
 
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 import { identityCustodySchemaAssetV1 } from '@sentropic/cluster-mesh';
 import { pool } from '../db/client';
 import { connectorCustodyAssetSha256 } from '../services/identity/cm-connector-custody-values';
@@ -112,16 +111,12 @@ export async function runCmRestoreCheckpoint(): Promise<void> {
   }
 }
 
-// Dev-only direct invocation (`tsx src/scripts/cm-restore-checkpoint.ts`).
-// Inside the production bundle this guard is false (argv[1] is dist/index.js),
-// where the `--cm-restore-checkpoint` argv branch in src/index.ts applies.
-const invokedDirectly = (() => {
-  try {
-    return !!process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
-  } catch {
-    return false;
-  }
-})();
-if (invokedDirectly) {
+// Dev-only direct invocation (`tsx src/scripts/cm-restore-checkpoint.ts`,
+// matched by source filename so the production bundle never self-triggers:
+// inside the bundle argv[1] is dist/index.js, served by the
+// `--cm-restore-checkpoint` argv branch in src/index.ts instead. A URL
+// comparison is unsafe here — a relative argv[1] resolving to the bundle
+// path would double-invoke (two concurrent runs sharing one pool).
+if ((process.argv[1] ?? '').endsWith('cm-restore-checkpoint.ts')) {
   await runCmRestoreCheckpoint();
 }
