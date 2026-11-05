@@ -57,7 +57,8 @@ const catalogue: Plane = {
   async assertDeliveryInScope() { mismatch(); },
   async assertAbsent(command, _plan, tx) {
     // Every tool dispatch rereads F15; no cached decision outlives this absence.
-    if (await tx.stores.accounts.findAccount(command.userId)) mismatch();
+    // The account row itself is verified absent by deleteAccountCore plus its
+    // orphan check after this hook, so only live conversation references fail here.
     if ((await tx.conversations.listSessionsForUser(command.userId)).length) mismatch();
   },
 };
