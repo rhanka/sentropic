@@ -65,33 +65,35 @@
   - [ ] Confirm scope and guardrails.
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare BR82-EX1/EX2/EX3 before touching conditional paths.
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities (main merge run `41939652646` attempt 1, head `4d7517d94`: wall 1049s; `publish-api-image` 93s, `publish-ui-image` 76s, `deploy-preprod` 71s, `ci-gate` 19s).
-- [ ] **Lot 1 — Provider-boundary protocol fixtures**
-  - [x] Offline protocol gate: 15/15 HTTP/SSE, tools, errors/retries, cancellation/reconnection, egress, vision, document and PPTX request-shape tests pass; application qualification remains pending.
-  - [ ] Add the named HTTP/SSE fixture and tests; cover streaming, tool requests/results, malformed output, errors/rate limits, cancellation, reconnection, model routing, and retries; assert outbound request shape and forbid unexpected real egress.
-  - [ ] Adapt only the two named runtime composition seams and ten named API AI test files; preserve application HTTP/auth/database/queue/tool behavior. Runtime fixture configuration is test-only and cannot become a production bypass.
-  - [ ] Lot gate: new `make test-ci-provider-fixtures ENV=test-ci-br81`; run every changed API AI file through `make test-api-ai` scoped by file on the assigned isolated environment; failures must block.
-- [ ] **Lot 2 — Balanced browsers and daily live execution**
-  - [ ] Add `browser-shards.mjs` and its test; build explicit file/project manifests using real durations, initially about six balanced shards; every selected test executes exactly once, one setup per shard, retaining real login coverage.
-  - [ ] Update the listed browser setup/config/specs and inventory check; replace fixed autosave/provider sleeps with responses, persisted state, or events; preserve the production artifact under test.
-  - [ ] Add the daily workflow, `live-provider-receipt.mjs`, and its test; retain the full selected API AI and browser/VSCode provider assertions with exact application/package tuple, schedule health, result, calls, and cost.
-  - [ ] Lot gate: new `make test-ci-browser-shards test-ci-live-provider-receipt ENV=test-ci-br81`; `make check-e2e-inventory ENV=test-ci-br81`; all selected browser/VSCode shards and API groups on the assigned ports; one actual scheduled live run plus failure/schedule-health fixtures.
-  - [ ] Pre-UAT static gate: `make typecheck-api API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81` and `make lint-api API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81` must pass before Lot 3 because both named API runtime seams change.
+- [ ] **Lot 1 — Qualified candidate promotion and package train**
+  - [ ] Write `scripts/ci/release-receipt.test.mjs` first: reject missing/failed/cancelled/skipped required checks, wrong source/digest, missing publication, tag collision, mismatched registry integrity/provenance, stale receipt reuse.
+  - [ ] Add `scripts/ci/release-receipt.mjs` to satisfy the tests.
+  - [ ] Main builds upload non-deployment candidate layers inside BR-78 image budgets; all consumers verify the same digest; PRs retain artifact transport without registry credentials.
+  - [ ] Update the named image/manifest/qualification scripts and tests; every publisher waits for the complete verdict, publishes exact tested bytes, and retains clean registry qualification.
+  - [ ] Preserve new-version mesh → gateway → cluster ordering; run unrelated publishers and train-lock verification concurrently only after their actual prerequisites. Record version-visible receipts rather than repacking or repeating registry checks.
+  - [ ] Lot gate:
+    - [ ] New `make test-ci-release-receipts ENV=test-cd-tested-artifacts`.
+    - [ ] `make test-ci-api-tag-guard test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts`.
+    - [ ] Both named lock-integrity tests through the packaging target.
+- [ ] **Lot 2 — Actual readiness and complete delivery**
+  - [ ] Measure pod scheduling, pull, init/migration, shutdown, and readiness before tuning; existing rollouts already start together, so parallel status commands alone cannot claim the 41-second saving.
+  - [ ] Preserve image-existence, npm-absent runtime, and health/failure checks; UI-only merges retain the API digest; shared auth-ui/IdP assets qualify and deliver both consumers.
+  - [ ] Lot gate: a real main release with fresh selected package versions, registry/provenance/install receipts, `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-cd-tested-artifacts`, and real preproduction rollout/readiness; no manual bootstrap used as steady-state evidence.
 - [ ] **Lot 3 — UAT and measured acceptance**
-  - [ ] Exercise web streaming/tools/persistence/cancellation and VSCode streaming on tested production images; prove fixture traffic stays local while a separate daily receipt records real provider calls.
-  - [ ] Budget to measure: every complete browser/API shard ≤180s, VSCode ≤150s; compare browser maximum 255s from the source sample. PR/merge unexpected live calls = 0; missing daily data stays to measure, and live failures remain visible.
+  - [ ] Verify web and served IdP against the deployed immutable tuple; distinguish qualified PR, published images, preproduction readiness, and every selected package receipt. Exercise failed-promotion and rollback fixtures.
+  - [ ] Budget to measure: image promotion ≤40s after candidate upload; full selected fresh npm train ≤195s; preproduction ≤75s versus 116s. Measure all from actual prerequisites and include queue time in complete event endpoints; already-published skips do not qualify the fresh-version budget.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
-  - [ ] Rollback drill: restore prior test dispatch/transport wiring with visible provider status; keep application assertions and required deterministic checks; do not silently treat failed live or deterministic journeys as success.
+  - [ ] Rollback drill: restore the previous qualified preproduction image tuple and prior promotion/deploy recipes; issue a corrective npm version for released package defects, never overwrite published bytes or bypass artifact verification.
 - [ ] **Lot 4 — Docs consolidation**
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
-  - [ ] Static: `make typecheck-api lint-api API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81`; UI source typecheck/lint is not applicable because no UI source is edited; retain fixture/shard/live-receipt checks from Lots 1–2.
-  - [ ] Build: `make build-api build-ui-image API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81` with the selected provider-fixture overlay; record production-image digests and prove fixture configuration cannot enable a production endpoint bypass.
-  - [ ] API regression: `make test-api API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81`; run every selected group and all ten named AI files against local HTTP/SSE fixtures, with no live credentials or allowed deterministic failure.
-  - [ ] UI regression: `make test-ui API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81`; preserve the complete existing UI unit/DOM suite despite unchanged UI source.
-  - [ ] E2E regression: `make clean test-e2e API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81` and `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-ci-br81`; execute every generated file/project shard exactly once, reconcile expected/executed membership, retain real login, and verify the tested production-image tuple.
-  - [ ] Daily live regression: retain one actual scheduled run plus failure/schedule-health fixtures for the exact application/package tuple; provider assertions, calls, cost, and failures remain visible separately from blocking deterministic PR/merge results.
+  - [ ] Static: application typecheck/lint is unchanged; `make test-ci-release-receipts test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts` covers changed release scripts and negative receipt/registry/provenance cases.
+  - [ ] Build: verify the final API/UI and package producer receipts, tested/scanned digests, and qualified tarball hashes; publishers and deployment must consume those bytes without rebuilding or repacking.
+  - [ ] API regression: require complete `make test-api API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=test-cd-tested-artifacts` results on the selected candidate tuple before promotion, plus production-runtime/limits/restore receipts.
+  - [ ] UI regression: require `make test-ui API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=test-cd-tested-artifacts` and both selected UI/IdP consumer results; UI-only delivery must retain the unchanged API digest.
+  - [ ] E2E regression: require `make clean test-e2e API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=e2e-cd-tested-artifacts` and `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=e2e-cd-tested-artifacts` on the recorded images, screen-driven IdP smoke, and real preproduction readiness/rollback; keep daily live qualification separate.
   - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
-  - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
-  - [ ] Run `make scope-check ENV=test-ci-br81` before each commit; end isolated service lots with `make down ENV=test-ci-br81` and `make down ENV=test-ci-br81`.
-  - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.
+  - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived. (Per OPTIM train rule, version bumps belong to the train integration lane; this branch avoids `packages/*/src/**` changes.)
+  - [ ] Run `make scope-check ENV=test-cd-tested-artifacts` before each commit; end isolated service lots with `make down ENV=test-cd-tested-artifacts` and `make down ENV=e2e-cd-tested-artifacts`.
+  - [ ] Create/update the PR using `BRANCH.md` text as PR body; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.
