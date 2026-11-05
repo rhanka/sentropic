@@ -15,6 +15,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `docker-compose.test.yml` (BRxx-EX16)
+  - `packages/cluster-mesh/src/storage/identity/schema.ts` (BRxx-EX17)
   - `packages/cluster-mesh/src/identity-contracts/accounts.ts` (BRxx-EX15)
   - `packages/cluster-mesh/src/storage/identity/atomic-deletion.ts` (BRxx-EX15)
   - `packages/cluster-mesh/tests/identity-lifecycle.spec.ts` (BRxx-EX15)
@@ -57,6 +59,9 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [ ] A4-CLOSE-CONSENT — CI 42127383445 shows a consent-details 503 while concurrent settings requests run on the same admin session. A real same-session fan-out regression passes locally; retain only the typed custody code/SQLSTATE at the HTTP failure boundary so the next observed refusal has actionable evidence without error messages, parameters or proof material. No retries or assertion relaxation.
+- [x] BRxx-EX17 — Closing restore CI 42127383445: preserve the legacy critical session user/expiry indexes on CM-owned login sessions in the canonical custody schema. Rationale: the restored database now has CM identity tables, while its smoke assertions still inspect removed public tables/indexes; CM also lacked the two equivalent session lookup indexes. Impact: two additive indexes in the existing canonical schema application, with equivalent schema assertions plus legacy-absence and import-receipt checks. Rollback: revert the index declarations and smoke mapping together before cutover; no extra migration or data change.
+- [x] BRxx-EX16 — Closing CI 42127383445: provide the existing synthetic API-test deletion budgets in `docker-compose.test.yml` for the E2E API. Rationale: A4 introduced mandatory qualified operation budgets; the browser stack supplies no record, so account and workspace deletion fail closed with 503. Impact: test stacks receive explicit 10,000 ms / one-attempt budgets and a synthetic receipt reference; production still requires its protected qualification record, and browser assertions/timeouts/retries are unchanged. Rollback: remove the test environment entry.
 - [x] A4-CLOSE-COMMENTS — Translate authoritative tenant refusal after workspace authorization into HTTP 403 without masking unexpected failures. Approved creators can read comments immediately after atomic workspace provisioning (four concurrent reads); a withdrawn tenant grant is denied with no comment mutation. Tenant and workspace grants remain independent and fail-closed.
 - [x] A4-CLOSE-PRESENCE — Project email/display name from the validated CM account rather than absent JWT presentation claims. Bind pooled PostgreSQL notification callbacks to the SSE subscriber context so identity reads do not borrow an unrelated expired UOW. Regression probe reproduced the inherited context before the fix and passes after it; no polling timeout or retry change.
 - [x] A4-CLOSE-MEMBERS — Restore the workspace-admin-only members section and its existing h4 heading. The transport still derives mutation authority from committed workspace memberships; access-control E2E flow and assertions are unchanged.
