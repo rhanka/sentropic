@@ -71,6 +71,18 @@ async function purgeExpiredLocksSweep(): Promise<number> {
   return rows.length;
 }
 
+// A4 restore rehearsal: generate the cutover checkpoint fixture with THIS
+// bundle's own mapping implementation, then exit before migrations. The
+// mapping digest hashes Function.prototype.toString, which differs between
+// the tsx-interpreted source and the esbuild dist — only the bundle itself
+// can produce a checkpoint the booted SUT accepts. Boot path untouched:
+// active solely with the explicit argv flag (used by `make restore-api-sut`).
+if (process.argv.includes('--cm-restore-checkpoint')) {
+  const { runCmRestoreCheckpoint } = await import('./scripts/cm-restore-checkpoint');
+  await runCmRestoreCheckpoint();
+  process.exit(process.exitCode ?? 0);
+}
+
 // Run database migrations at boot (idempotent)
 try {
   logger.info('Running database migrations at startup...');

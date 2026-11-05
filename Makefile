@@ -2994,16 +2994,18 @@ restore-api-sut: ci-test-env ## Restore a dump before the first production boot;
 	$(CI_COMPOSE) stop api api-sut auth-idp
 	$(CI_COMPOSE) up -d --wait postgres
 	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
-	@set -eu; overlay="$$(mktemp)"; trap 'rm -f "$$overlay"' EXIT; \
+	@set -eu; overlay="$$(mktemp)"; genoverlay="$$(mktemp)"; trap 'rm -f "$$overlay" "$$genoverlay"' EXIT; \
 	printf '%s\n' 'services:' '  api-sut:' '    environment:' \
 		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' \
 		'      WEBAUTHN_RP_ID: localhost' \
 		'      WEBAUTHN_ORIGIN: http://localhost:$(or $(UI_PORT),5173)' > "$$overlay"; \
-	$(CI_COMPOSE) run --rm --no-deps -w /workspace/api \
+	printf '%s\n' 'services:' '  api-sut:' '    volumes:' \
+		'      - cm-restore-checkpoint:/run/cm-checkpoint' > "$$genoverlay"; \
+	$(CI_COMPOSE) -f "$$genoverlay" run --rm --no-deps -w /workspace/api \
 		-e WEBAUTHN_RP_ID=localhost \
 		-e WEBAUTHN_ORIGIN=http://localhost:$(or $(UI_PORT),5173) \
 		-e CANDIDATE_COMMIT="$$(git rev-parse HEAD 2>/dev/null || printf '%040d' 0)" \
-		api npx --no-install tsx src/scripts/cm-restore-checkpoint.ts; \
+		api-sut node dist/index.js --cm-restore-checkpoint; \
 	before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
 	$(MAKE) up-api-sut ENV=$(ENV) CI_SUT_OVERLAY="$$overlay"; \
 	after="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
