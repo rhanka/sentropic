@@ -1,41 +1,24 @@
-# Feature: artifacts upload checksum fail-closed (OVH 403 + commit integrity)
+# Feature: release-receipt skipped publishers hotfix
 
 ## Objective
-Fix the presigned upload checksum mismatch and close the commit integrity hole in @sentropic/artifacts, shipping as patch 0.2.16.
+Unblock main deploys: `release-receipts` must pass when a selected package publisher ran green but explicitly published nothing (dev-line skip, already-published equal-integrity).
 
 ## Scope / Guardrails
-- Scope limited to @sentropic/artifacts upload channel (adapters/s3-uploads, server/uploads, upload-page, templates), the 0.2.16 version bump with CHANGELOG, and lock/pin refresh through make.
-- One migration max in `api/drizzle/*.sql` (none expected; no migration planned).
-- Make-only workflow, no direct Docker commands; every Docker-using make command goes through `.tmp/packets/docker-slot.sh`, one slot per command, never nested.
+- Scope limited to release receipt assessment and the CI record outputs feeding it.
+- Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/artifacts-upload-checksum`.
-- Automated test campaigns run on dedicated environment (`ENV=test-upload-cksum`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- Branch development happens in isolated worktree `tmp/worktrees/release-receipt-hotfix`.
+- Automated tests run on dedicated environment (`ENV=test-ci-receipt`), never on root `dev`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/adapters/s3-uploads.ts`
-  - `packages/artifacts/src/server/uploads.ts`
-  - `packages/artifacts/src/server/upload-page.ts`
-  - `packages/artifacts/src/server/templates.ts`
-  - `packages/artifacts/src/mcp-core.ts` (provider version constant only)
-  - `packages/artifacts/src/http.ts` (create_upload response shape only)
-  - `packages/artifacts/tests/**`
-  - `packages/artifacts/CHANGELOG.md`
-  - `packages/artifacts/package.json`
-  - `packages/artifacts/README.md` (upload channel docs only)
-  - `package-lock.json` (workspace version entry only)
-  - `api/package-lock.json` (workspace version entry only)
-  - `api/src/services/mcp/cluster-registry.ts` (APP-P1 digest re-pin only)
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (integrity pin only)
+  - `scripts/ci/release-receipt.mjs`
+  - `scripts/ci/release-receipt.test.mjs`
+  - `.tmp/rv/hotfix-release-receipt.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -44,14 +27,15 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `tools/memory-mcp-l5/**` (L5 P1 manifest regen only if a CI gate demands it)
+  - `<none>`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- No exceptions declared.
+- `attention`: BR82-EX2 — `.github/workflows/ci.yml` record steps touched (conditional path). Reason: the cluster-mesh decision-skip path emits no `record` outputs today, so the receipt sees job `success` with no `pack` and fails a publisher that never published; the equal-integrity conflict is also not forwarded. Impact: three `record` steps only (llm-mesh, llm-gateway, cluster-mesh) gain an explicit `status=skipped` branch and a forwarded `conflict` output; no job `if` conditions change. Rollback: revert the `record` step blocks; the `.mjs` fix alone already passes already-published mesh/gateway receipts.
+- `acknowledge`: main is RED at `843efe3a1` (run 42036741718, `release-receipt: FAIL (1): repacked publication: @sentropic/cluster-mesh (pack=missing, expected candidate)`); this branch is the urgent hotfix lane, no merge until the PR CI is green.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -64,45 +48,28 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: Single orthogonal fix in one package plus its version pins; one final test cycle and one CI run.
+- Rationale: single orthogonal hotfix, one final test cycle on the PR CI.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this branch; no UAT lot. Preprod verification by immo happens after merge (out of scope; this lane does not merge).
+- No UI changes in this branch; no UAT required.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md` constraints (done: make-only, docker-slot.sh, no skip ci, never ENV=dev, no clean-all, make commit without AI trailer).
-  - [ ] Confirm worktree `tmp/worktrees/artifacts-upload-checksum` on branch `fix/artifacts-upload-checksum` tracking `origin/main`.
-  - [ ] Copy `.env` into the worktree for compose runs (gitignored, never committed).
-  - [ ] Confirm environment mapping: `ENV=test-upload-cksum` always last; `API_PORT=8797`, `UI_PORT=5197`, `MAILDEV_UI_PORT=1097`.
-  - [ ] Confirm scope boundaries and no `BRxx-EXn` needed unless a CI gate demands `tools/memory-mcp-l5/**`.
-- [x] **Lot 1 — Failing tests first (no implementation edits)**
-  - [x] Add `packages/artifacts/tests/uploads-commit-integrity.test.ts` with three tests: corrupted upload refused at commit (typed error, staging object deleted, no release, session not committable); correct upload with exactly the announced headers commits; announced header set equals the signed header set (no `x-amz-*` beyond the signature, no `checksumHeader` field).
-  - [x] Run the new file scoped: `SCOPE=tests/uploads-commit-integrity.test.ts` via `test-artifacts`; observe failures as the repro baseline (4/4 red with the expected failure modes: untyped refusal, announced `checksumHeader`).
-  - [x] Sub-lot gate: `make typecheck-artifacts` + `make lint-artifacts` with `ENV=test-upload-cksum` last (0 errors; 3 pre-existing warnings in `files-parity-lot2.test.ts`, untouched).
-- [ ] **Lot 2 — Fail-closed fix**
-  - [x] `packages/artifacts/src/server/uploads.ts`: stop announcing `checksumHeader`; `requiredHeaders` is exactly the signer output; typed verification error; delete/quarantine the staging object on size/digest mismatch; no release on mismatch (3 commits: typed errors, quarantine, header removal).
-  - [x] `packages/artifacts/src/adapters/s3-uploads.ts`: sign content-type plus exact content-length only; remove the unsigned checksum announcement path.
-  - [x] `packages/artifacts/src/server/upload-page.ts`: PUT carries exactly the announced headers.
-  - [x] `packages/artifacts/src/server/templates.ts`: guide text matches the fixed channel (no checksum header).
-  - [x] Update existing tests that assert the old announced header (`uploads.test.ts`, `files-parity-lot1.test.ts`, `files-parity-lot2.test.ts`) to the new contract without weakening refusal coverage (refusals kept; retry tail strengthened to refusal).
-  - [x] Lot gate: new tests green (4/4); `make typecheck-artifacts` + `make lint-artifacts` (0 errors); scoped `make test-artifacts` green for `uploads.test.ts` (6/6), `files-parity-lot1.test.ts` (7/7), `files-parity-lot2.test.ts` (20/20), `http-uploads-templates.test.ts` (15/15), `http-mcp-service-parity.test.ts` (9/9) with `ENV=test-upload-cksum` last.
-- [x] **Lot 3 — Patch release 0.2.16**
-  - [x] Bump `packages/artifacts/package.json` to `0.2.16` (stays in `0.2.x` per the cluster-mesh `>=0.2.0 <0.3.0` allocation).
-  - [x] Bump `ARTIFACTS_PROVIDER_VERSION` in `packages/artifacts/src/mcp-core.ts`.
-  - [x] Add `CHANGELOG.md` entry for `0.2.16` with the fix and the header-contract choice plus OVH/minio justification.
-  - [x] Refresh locks/pins: root and `api` lock workspace entries, `APP-P1` manifest digest re-pin in `api/src/services/mcp/cluster-registry.ts` (digest computed in the api container via `make exec-api`, corroborated by the registry tests), api registry tests updated.
-  - [x] Cluster-mesh selected fixture re-pinned to `0.2.16` in-branch (required by `prepare-artifacts.spec.ts`): `pack-artifacts` with receipts, `publishable-sibling-collect`, then `refresh-lazy-package-lock` with the sibling receipts, all through make. The sibling archive replaces the registry pre-publication by design; `prepare.sh` installs those exact sibling bytes.
-  - [x] Verify `npm view @sentropic/artifacts version` is below `0.2.16` (Post-Rebase Gate after any rebase): registry reports `0.2.15`.
-  - [x] Lot gate: `make scope-check` before every commit; commits under 150 lines via `make commit`.
-- [x] **Lot 4 — Final validation**
-  - [x] Typecheck & Lint for impacted components (`typecheck-artifacts` clean; `lint-artifacts` 0 errors, 3 pre-existing warnings in `files-parity-lot2.test.ts` left untouched).
-  - [x] Scoped `make test-artifacts` full unit run with `ENV=test-upload-cksum` last: 62 files, 635 tests, all passed.
-  - [x] Scoped api registry tests for the re-pin with `ENV=test-upload-cksum` last: `app-mcp-registry.test.ts` + `app-mcp-installed.test.ts`, 27 tests passed (digest `cb3a7968…` corroborated by probe + tests).
-  - [x] Scoped `make test-artifacts-integration SCOPE=tests/s3-upload-presign.integration.test.ts` with `ENV=test-upload-cksum` last: 2/2 passed (presigned PUT 200 with exactly the announced headers + verified commit on the minio double; corrupted declaration refused with S3 staging deleted).
-  - [ ] `make down-volumes ENV=test-upload-cksum` at the end (disk hygiene).
-  - [ ] Bumped `packages/artifacts/package.json` version verified (CI `enforce-package-bump` gate).
-  - [ ] Final gate step 1: create PR with `BRANCH.md` text as PR body, state READY.
-  - [ ] Final gate step 2: run/verify one branch CI on that head and resolve remaining blockers (no re-runs except proven transient; never `gh run rerun --failed`).
-  - [ ] No merge (packet: report only); no `BRANCH.md` deletion commit.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Create isolated worktree `tmp/worktrees/release-receipt-hotfix` on branch `fix/release-receipt-skipped-publishers` from `origin/main` (`843efe3a1`); harness branch check PASS C1.
+  - [x] Confirm scope boundaries and declare BR82-EX2 for `.github/workflows/ci.yml`.
+  - [x] Confirm command style: `make ... ENV=test-ci-receipt` with `ENV` last.
+- [ ] **Lot 1 — Tests-first receipt fix**
+  - [ ] Add red tests to `scripts/ci/release-receipt.test.mjs`: skipped publisher passes, already-published passes, published with `pack=candidate` passes, published with `pack=fresh` or missing fails.
+  - [ ] Fix `scripts/ci/release-receipt.mjs` (`assessChain` reads `publication_*` outputs + explicit status; `publicationProblems` passes explicit skipped/already-published, keeps pack FAIL-closed for real publications).
+  - [ ] Fix `ci.yml` record steps (explicit `status=skipped` on the cluster-mesh decision-skip path, forward `conflict`).
+  - [ ] Lot gate:
+    - [ ] `make test-publishable-manifests SCOPE=scripts/ci/release-receipt.test.mjs ENV=test-ci-receipt` green.
+    - [ ] `make scope-check` clean before each commit; commits via `make commit` only.
+- [ ] **Lot 2 — PR + CI to green**
+  - [ ] Open READY PR from `fix/release-receipt-skipped-publishers`, push head.
+  - [ ] Watch PR CI to green (no `[skip ci]`, no `gh run rerun`).
+- [ ] **Lot 3 — Report, no merge**
+  - [ ] Write `.tmp/rv/hotfix-release-receipt.md`.
+  - [ ] Do NOT merge; hand control back.
