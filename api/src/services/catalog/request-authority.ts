@@ -8,7 +8,7 @@ import { createCatalogContextResolver, type CatalogContextInput } from './reques
 /** F15: the fresh per-request decision producer (A2.3) is the ONLY authority for
  * catalog/tool access. The legacy SQL join over `user_sessions`/`users`/
  * `workspace_memberships`/`tenant_memberships`/`tenants` is gone — those tables
- * are dropped by control migration 0014; every input is read from the CM stores.
+ * are dropped by control migration 0015; every input is read from the CM stores.
  *
  * A refusal yields an EMPTY tool set (never a partial catalogue): the producer
  * owns that rule, and this module denies the context outright on refusal.

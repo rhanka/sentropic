@@ -6,7 +6,7 @@ import { bindCmAppDatabase, runCmIdentityRead } from './identity/cm-transaction'
 
 // Lot A4: workspace membership lives in the CM store
 // (cm_identity.cm_workspace_members); the legacy `workspace_memberships` table
-// is dropped by control migration 0014. `public.workspaces` keeps the business
+// is dropped by control migration 0015. `public.workspaces` keeps the business
 // columns only. No legacy fallback.
 
 export type WorkspaceType = 'neutral' | 'ai-priorities' | 'opportunity' | 'code';

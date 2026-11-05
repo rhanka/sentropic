@@ -1,7 +1,7 @@
 // Lot A4 test helper: raw access to the cm_identity stores for fixture
 // seeding/cleanup. The legacy public.users/userSessions/webauthn*/magicLinks/
 // emailVerificationCodes/workspaceMemberships/tenantMemberships tables are
-// dropped by control migration 0014; tests seed and purge through these.
+// dropped by control migration 0015; tests seed and purge through these.
 import { CM_IDENTITY_SCHEMA, cmStoreClient } from '../../src/services/identity/cm-identity';
 import type { CmSessionRecord } from '../../src/services/identity/cm-sessions';
 

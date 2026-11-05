@@ -49,7 +49,10 @@ export const createConsentStoreAdapter = (
     async saveGrant(userId, clientId, scopes, tenantId, offline): Promise<void> {
       const identity = requireCmOAuthTransaction(options.transaction);
       if (identity.mode !== 'write') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-      if (!tenantId) throw new IdentityCustodyErrorV1('identity_material_invalid');
+      // Tenant-less grants are unkeyable (`getGrant` returns null without a
+      // tenantId, so nothing persisted here could ever be found): login
+      // proceeds and consent is shown every time. No authority is conferred.
+      if (!tenantId) return;
       await identity.lockSubject(userId);
       const claim = await issueCmOAuthTid(identity, userId, tenantId);
       const tenant = claim.tid;

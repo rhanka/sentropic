@@ -15,9 +15,9 @@ import { a4IdentitySourceTables } from '../services/identity/cm-import-source';
  * Heal drifted databases where migration metadata is ahead of the actual settings schema.
  * This keeps user-scoped settings queries stable even when legacy snapshots are restored.
  *
- * Lot A4: control migration 0014 drops `public.users`; from then on the settings
+ * Lot A4: control migration 0015 drops `public.users`; from then on the settings
  * user-scope FK references the cluster-mesh account table
- * `cm_identity.identity_user_accounts` (same ids, migrated by 0014).
+ * `cm_identity.identity_user_accounts` (same ids, migrated by 0015).
  */
 async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<void> {
   await db.execute(sql.raw('ALTER TABLE "settings" DROP CONSTRAINT IF EXISTS "settings_pkey";'));
