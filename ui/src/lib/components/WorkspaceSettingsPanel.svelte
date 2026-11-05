@@ -283,7 +283,7 @@
     </div>
   {/if}
 
-{#if selectedWorkspace}
+{#if selectedWorkspace && isWorkspaceAdmin}
     <WorkspaceMembersScreen ports={memberPorts} workspaceId={selectedWorkspace.id} refreshVersion={membersRefreshVersion} />
   {/if}
 
