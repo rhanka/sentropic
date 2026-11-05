@@ -206,6 +206,9 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     const table = kind === 'session' ? 'cm_identity.identity_login_sessions' : 'oauth_tokens';
     await pool.query(`UPDATE ${table} SET expires_at = clock_timestamp() - interval '1 second'`);
     expect(await authority()).toEqual({ readable: false, writable: false });
+    // Token bindings restrict session deletes: remove the child rows first so the
+    // "removed credential" case deletes the same session the product revokes.
+    if (kind === 'session') await pool.query('DELETE FROM cm_identity.identity_login_token_bindings');
     await pool.query(`DELETE FROM ${table}`);
     expect(await authority()).toEqual({ readable: false, writable: false });
   });
@@ -276,6 +279,7 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     try {
       await vi.waitFor(async () => expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
         AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0));
+      if (kind === 'session') await pool.query('DELETE FROM cm_identity.identity_login_token_bindings');
       await pool.query(kind === 'session' ? 'DELETE FROM cm_identity.identity_login_sessions'
         : `INSERT INTO revoked_tokens (jti, expires_at) VALUES ('token-a', clock_timestamp() + interval '1 hour')`);
     } finally { await blocker.query('ROLLBACK'); blocker.release(); }
