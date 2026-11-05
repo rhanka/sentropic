@@ -92,8 +92,6 @@ const CHAIN_DELIVERY = [
   { job: 'publish-llm-gateway', kind: 'package', name: '@sentropic/llm-gateway', selected: (s) => s.gatewayPublish === true },
   { job: 'publish-cluster-mesh', kind: 'package', name: '@sentropic/cluster-mesh', selected: (s) => s.clusterPublish === true },
 ];
-const CHAIN_LOCK = { job: 'verify-train-lock-integrity', selected: (s) => s.meshPublish === true || s.gatewayPublish === true };
-
 const chainStatus = (result) => result === 'success' ? 'published' : result === 'skipped' ? 'skipped' : 'failed';
 
 export function assessChain({ needs = {}, selections = {}, source = {} } = {}) {
@@ -117,10 +115,19 @@ export function assessChain({ needs = {}, selections = {}, source = {} } = {}) {
       publication.digest = /^[a-f0-9]{64}$/.test(outputs.sha256) ? `sha256:${outputs.sha256}` : outputs.sha256;
     }
     if (outputs.pack) publication.pack = outputs.pack;
+    if (outputs.status) publication.receiptStatus = outputs.status;
     publications.push(publication);
   }
-  if (CHAIN_LOCK.selected(sel)) requiredChecks.push({ job: CHAIN_LOCK.job });
-  checks.push({ job: CHAIN_LOCK.job, conclusion: needs[CHAIN_LOCK.job]?.result });
+  // The train-lock check keeps its independent BRDP-EX10 verdict: no chain job
+  // may list it in needs, so its result reaches this receipt only when the
+  // caller supplies it (a missing lock entry never blocks the publisher join).
+  if (needs['verify-train-lock-integrity'] !== undefined) {
+    const conclusion = needs['verify-train-lock-integrity']?.result;
+    checks.push({ job: 'verify-train-lock-integrity', conclusion });
+    if ((sel.meshPublish === true || sel.gatewayPublish === true) && conclusion !== 'success') {
+      requiredChecks.push({ job: 'verify-train-lock-integrity' });
+    }
+  }
   const evidence = { source, requiredChecks, checks, publications, prior: null };
   return { ...assessReleaseReceipt(evidence), evidence };
 }

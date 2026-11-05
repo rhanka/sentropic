@@ -248,18 +248,31 @@ test('chain rejects a failed publisher', () => {
   assert.match(verdict.problems.join('\n'), /required check publish-api-image concluded failure/);
 });
 
-test('chain rejects a skipped train-lock check while the train published', () => {
+test('chain never blocks on a missing train-lock entry (BRDP-EX10 pin)', () => {
   const verdict = assessChain({
     needs: chainNeeds({
       'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
       'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
-      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'skipped',
+      'publish-cluster-mesh': 'skipped',
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+});
+
+test('chain rejects a supplied failing train-lock check while the train published', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'failure',
     }),
     selections: chainSelections({ meshPublish: true }),
     source: chainSource(),
   });
   assert.equal(verdict.ok, false);
-  assert.match(verdict.problems.join('\n'), /required check verify-train-lock-integrity concluded skipped/);
+  assert.match(verdict.problems.join('\n'), /required check verify-train-lock-integrity concluded failure/);
 });
 
 test('CLI assess-chain builds evidence from a needs file', () => {
