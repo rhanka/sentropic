@@ -2315,7 +2315,7 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
@@ -2327,6 +2327,7 @@ jobs:
       (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.build-ui-static.result == 'success' || (needs.build-ui-static.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       needs.test-api-unit-integration.result == 'success' &&
+      (needs.test-api-ai.result == 'success' || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.ai != 'true' && needs.changes.outputs.global != 'true')) &&
       needs.test-e2e.result == 'success' &&
       needs.e2e-vscode.result == 'success' &&
       needs.smoke-idp-screens.result == 'success' &&
@@ -2357,6 +2358,12 @@ jobs:
   publish-llm-mesh:
     runs-on: ubuntu-latest
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
+    outputs:
+      publication_status: ${{ steps.record.outputs.status }}
+      publication_sha256: ${{ steps.record.outputs.sha256 }}
+      publication_pack: ${{ steps.record.outputs.pack }}
+      publication_name: ${{ steps.record.outputs.name }}
+      publication_version: ${{ steps.record.outputs.version }}
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
@@ -2375,6 +2382,12 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Download the qualified package candidates
+        if: inputs.capacity_publish_dry_run != true
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
         env:
@@ -2385,6 +2398,7 @@ jobs:
       - name: Publish LLM Mesh
         if: inputs.capacity_publish_dry_run != true
         env:
+          CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
           CLOUD_CODE_OAUTH_CLIENT_SECRET: ${{ secrets.LLM_MESH_CLOUD_CODE_OAUTH_CLIENT_SECRET }}
         run: |
           set -eu
@@ -2395,10 +2409,22 @@ jobs:
           printf '%s' "$CLOUD_CODE_OAUTH_CLIENT_SECRET" > "$credential_file"
           unset CLOUD_CODE_OAUTH_CLIENT_SECRET
           make publish-llm-mesh CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE="$credential_file"
+      - name: Record the tested-bytes publication receipt
+        id: record
+        if: inputs.capacity_publish_dry_run != true
+        run: |
+          set -eu
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/llm-mesh.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
 
   publish-llm-gateway:
     runs-on: ubuntu-latest
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
+    outputs:
+      publication_status: ${{ steps.record.outputs.status }}
+      publication_sha256: ${{ steps.record.outputs.sha256 }}
+      publication_pack: ${{ steps.record.outputs.pack }}
+      publication_name: ${{ steps.record.outputs.name }}
+      publication_version: ${{ steps.record.outputs.version }}
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
@@ -2425,9 +2451,23 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=llm-gateway ENV=test-ci-capacity
+      - name: Download the qualified package candidates
+        if: inputs.capacity_publish_dry_run != true
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Publish LLM Gateway
         if: inputs.capacity_publish_dry_run != true
+        env:
+          CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
         run: make publish-llm-gateway
+      - name: Record the tested-bytes publication receipt
+        id: record
+        if: inputs.capacity_publish_dry_run != true
+        run: |
+          set -eu
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/llm-gateway.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
 
   publish-chat-ui:
     runs-on: ubuntu-latest
@@ -2893,6 +2933,12 @@ jobs:
   publish-cluster-mesh:
     runs-on: ubuntu-latest
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform, publish-artifacts]
+    outputs:
+      publication_status: ${{ steps.record.outputs.status }}
+      publication_sha256: ${{ steps.record.outputs.sha256 }}
+      publication_pack: ${{ steps.record.outputs.pack }}
+      publication_name: ${{ steps.record.outputs.name }}
+      publication_version: ${{ steps.record.outputs.version }}
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
@@ -2931,8 +2977,16 @@ jobs:
         id: cluster_mesh_publish_decision
         if: inputs.capacity_publish_dry_run != true
         run: make cluster-mesh-publish-decision
+      - name: Download the qualified package candidates
+        if: inputs.capacity_publish_dry_run != true
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Publish Cluster Mesh
         if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
+        env:
+          CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
         run: make publish-cluster-mesh
       - name: Qualify published Cluster Mesh from the registry
         if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
@@ -2972,6 +3026,12 @@ jobs:
           path: tmp/ci-manifest-guard/qualify-cluster-mesh/**
           retention-days: 7
           if-no-files-found: ignore
+      - name: Record the tested-bytes publication receipt
+        id: record
+        if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
+        run: |
+          set -eu
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/cluster-mesh.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
 
   # Release train (BRDP-EX10): after llm-mesh/llm-gateway publication, the registry dist.integrity of the
   # bytes actually published must equal the committed cluster-mesh `selected` fixture lock. A separate job,
@@ -2999,6 +3059,54 @@ jobs:
           if [ "$LLM_MESH_PUBLISH_RESULT" = success ]; then required="@sentropic/llm-mesh"; fi
           if [ "$LLM_GATEWAY_PUBLISH_RESULT" = success ]; then required="${required:+$required }@sentropic/llm-gateway"; fi
           make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity REQUIRE_PUBLISHED="$required" ENV=test-ci-cluster-mesh
+
+  # BR82-EX1: join the delivery chain on the complete qualification and
+  # release-receipt verdicts. The selected publishers report here;
+  # deploy-preprod waits for this verdict. Fails closed: a failed or
+  # cancelled required publisher, a missing publication, a source mismatch, or
+  # a stale receipt blocks the release. An overlay-only run (everything skipped,
+  # nothing selected) passes with a recorded empty receipt.
+  release-receipts:
+    runs-on: ubuntu-latest
+    # BRDP-EX10 pin: verify-train-lock-integrity keeps its independent verdict and
+    # no chain job may list it in needs. The lock result is assessed from the
+    # publisher join only when supplied; a missing lock entry never blocks here.
+    needs: [changes, publish-api-image, publish-ui-image, publish-llm-mesh, publish-llm-gateway, publish-cluster-mesh]
+    if: >-
+      always() && !cancelled() && inputs.decision_fixtures_only != true && inputs.capacity_publish_dry_run != true
+      && needs.changes.result == 'success' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Read the immutable image tags
+        id: tags
+        run: |
+          set -eu
+          echo "api_tag=$(make -s version | awk '/^API_VERSION:/ {print $2}')" >> "$GITHUB_OUTPUT"
+          echo "ui_tag=$(make -s version | awk '/^UI_VERSION:/ {print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Assess the tested-bytes release receipt
+        env:
+          RECEIPT_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -eu
+          printf '%s' "$RECEIPT_NEEDS" > /tmp/receipt-needs.json
+          node scripts/ci/release-receipt.mjs assess-chain --needs /tmp/receipt-needs.json \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --api "${{ needs.changes.outputs.api }}" --ui "${{ needs.changes.outputs.ui }}" --global "${{ needs.changes.outputs.global }}" \
+            --mesh-publish "${{ needs.changes.outputs.llm_mesh_publish }}" \
+            --gateway-publish "${{ needs.changes.outputs.llm_gateway_publish }}" \
+            --cluster-publish "${{ needs.changes.outputs.cluster_mesh_publish }}" \
+            --api-tag "${{ steps.tags.outputs.api_tag }}" --ui-tag "${{ steps.tags.outputs.ui_tag }}" \
+            --out release-receipt.json
+      - name: Upload the release receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-receipt
+          path: release-receipt.json
+          retention-days: 7
+          if-no-files-found: error
 
   bootstrap-publish:
     runs-on: ubuntu-latest
@@ -3125,15 +3233,21 @@ jobs:
   # overlays/preprod before applying (kills the floating :main staleness, D-c1).
   deploy-preprod:
     runs-on: ubuntu-latest
-    needs: [publish-api-image, publish-ui-image]
+    needs: [publish-api-image, publish-ui-image, release-receipts]
     # Deploy on every main merge. Run even when the publish jobs were SKIPPED (no
     # api/ui content change) so an overlay/manifest-only change still reaches preprod;
-    # only skip if a publish job actually FAILED.
+    # only skip if a publish job actually FAILED. The release receipt must also pass:
+    # a skipped receipt is only accepted for a fully skipped delivery (or a capacity
+    # dry run, which keeps its existing scheduling behavior). The train-lock signal
+    # reaches this gate through the receipt verdict, never as a direct chain edge.
     if: >-
       always() && github.ref == 'refs/heads/main' && !cancelled()
       && inputs.decision_fixtures_only != true
       && needs.publish-api-image.result != 'failure'
       && needs.publish-ui-image.result != 'failure'
+      && (needs.release-receipts.result == 'success' || (needs.release-receipts.result == 'skipped'
+        && (inputs.capacity_publish_dry_run == true || (needs.publish-api-image.result == 'skipped'
+          && needs.publish-ui-image.result == 'skipped'))))
     steps:
       - uses: actions/checkout@v6
       - name: Decode the preprod kubeconfig from secret
@@ -3240,6 +3354,7 @@ jobs:
       - ci-capacity-receipts
       - validate-ci-capacity-metrics
       - retain-daily-identities
+      - release-receipts
     steps:
       - name: Reject fixture-only merge evidence
         if: inputs.decision_fixtures_only == true
