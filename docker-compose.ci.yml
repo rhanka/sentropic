@@ -5,6 +5,10 @@ services:
     build:
       target: ci-tools
     command: sh -c "npm run db:migrate && npm run dev"
+    volumes:
+      # A4 cutover (BRxx-EX13): the restore rehearsal checkpoint is generated
+      # by a one-shot toolbox run and read by api-sut at boot.
+      - cm-restore-checkpoint:/run/cm-checkpoint
     environment:
       - NODE_ENV=development
       - JWT_SECRET=dev-secret-key-change-in-production-please
@@ -38,6 +42,10 @@ services:
       # A4 cutover (BRxx-EX12): synthetic CM email-code policy for the shipped API SUT (same values as the Makefile seed targets; test-only, never production).
       - CM_IDENTITY_EMAIL_CODE_POLICY=sha256
       - CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only
+    volumes:
+      # A4 cutover (BRxx-EX13): read-only mount of the restore rehearsal
+      # checkpoint (populated by the toolbox before boot; empty elsewhere).
+      - cm-restore-checkpoint:/run/cm-checkpoint:ro
 
   auth-idp:
     image: ${API_IMAGE_REF:-${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION}}
@@ -67,3 +75,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+volumes:
+  # A4 cutover (BRxx-EX13): restore rehearsal checkpoint shared by the
+  # toolbox generator (`api`) and the shipped SUT (`api-sut`).
+  cm-restore-checkpoint:
