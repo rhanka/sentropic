@@ -43,7 +43,7 @@
 - [ ] BR82-EX2 — Planned Makefile exception: promote image metadata without rebuilding/reloading layers, publish prequalified tarballs, and instrument `k8s-deploy-preprod`; add release-receipt tests. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [ ] BR82-EX3 — Change only preproduction digest pins/readiness configuration justified by measured startup spans; impact: preproduction rollout; rollback: previous qualified immutable tuple and prior health settings. Production overlays remain forbidden.
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
-- [ ] Baseline receipts: main merge run `41939652646` attempt 1 (head `4d7517d94`, pre-BR-81): wall 1049s; `publish-api-image` 93s, `publish-ui-image` 76s, `deploy-preprod` 71s, `publish-artifacts` 47s, `ci-gate` 19s. Post-BR-81 merge run `41981165023` pending at capture time.
+- [ ] Baseline receipts: main merge run `41939652646` attempt 1 (head `4d7517d94`, pre-BR-81): wall 1049s; `publish-api-image` 93s, `publish-ui-image` 76s, `deploy-preprod` 71s, `publish-artifacts` 47s, `ci-gate` 19s. Post-BR-81 merge run `41981165023` attempt 1 (head `c3d5b2f17`, 2026-11-05): wall 815s, FAILED — `test-e2e` shards 2+4 failed, `deploy-preprod` registry-assert failed with both publish jobs skipped, `ci-gate` failed. Post-merge "after" measurement for BR-82 (promotion ≤40s, npm train ≤195s, preprod ≤75s) is BR-83/train handoff work.
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
 
@@ -71,21 +71,21 @@
   - [x] Main builds upload non-deployment candidate layers inside BR-78 image budgets; all consumers verify the same digest; PRs retain artifact transport without registry credentials (verified on main: transport artifacts + image-receipt verify; no change needed).
   - [x] Update the named image/manifest/qualification scripts and tests; every publisher waits for the complete verdict, publishes exact tested bytes, and retains clean registry qualification (`publish-api-image` now joins `test-api-ai`; train publishers reuse verified candidates with `pack: candidate|fresh` receipts; npm non-train publishers keep pinned validator wiring, joined at the chain level by the Lot 2 release-receipts gate).
   - [x] Preserve new-version mesh → gateway → cluster ordering; run unrelated publishers and train-lock verification concurrently only after their actual prerequisites. Record version-visible receipts rather than repacking or repeating registry checks (train ordering and concurrency unchanged; publish receipts now record the pack source).
-  - [ ] Lot gate:
-    - [ ] New `make test-ci-release-receipts ENV=test-cd-tested-artifacts`.
-    - [ ] `make test-ci-api-tag-guard test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts`.
-    - [ ] Both named lock-integrity tests through the packaging target.
-- [ ] **Lot 2 — Actual readiness and complete delivery**
+  - [x] Lot gate (measured 2026-11-05 on head `c42652a89`, ENV=test-cd-tested-artifacts, via docker-slot.sh):
+    - [x] `make test-ci-release-receipts`: 27/27 pass.
+    - [x] `make test-publishable-manifests`: 114/114 pass; `make test-ci-api-tag-guard test-qualify-published-install`: pass (qualify 19/19).
+    - [x] `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity`: pass (llm-mesh@0.33.0, llm-gateway@0.22.4 registry integrity matches the committed lock). The two named vitest specs (`lock-integrity.spec.ts`, `lock-integrity-registry.spec.ts`) are unchanged by this branch and run in CI via `test-lazy-package`.
+- [ ] **Lot 2 — Actual readiness and complete delivery** (pending post-merge: publish jobs run only on `refs/heads/main`)
   - [ ] Measure pod scheduling, pull, init/migration, shutdown, and readiness before tuning; existing rollouts already start together, so parallel status commands alone cannot claim the 41-second saving.
   - [ ] Preserve image-existence, npm-absent runtime, and health/failure checks; UI-only merges retain the API digest; shared auth-ui/IdP assets qualify and deliver both consumers.
-  - [ ] Lot gate: a real main release with fresh selected package versions, registry/provenance/install receipts, `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-cd-tested-artifacts`, and real preproduction rollout/readiness; no manual bootstrap used as steady-state evidence.
-- [ ] **Lot 3 — UAT and measured acceptance**
+  - [ ] Lot gate: a real main release with fresh selected package versions, registry/provenance/install receipts, `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-cd-tested-artifacts`, and real preproduction rollout/readiness; no manual bootstrap used as steady-state evidence. Workflow join is implemented (`release-receipts` job, deploy-preprod needs it, ci-gate requires it); first live evidence arrives on the post-merge main run.
+- [ ] **Lot 3 — UAT and measured acceptance** (pending post-merge, same main-only cause as Lot 2)
   - [ ] Verify web and served IdP against the deployed immutable tuple; distinguish qualified PR, published images, preproduction readiness, and every selected package receipt. Exercise failed-promotion and rollback fixtures.
   - [ ] Budget to measure: image promotion ≤40s after candidate upload; full selected fresh npm train ≤195s; preproduction ≤75s versus 116s. Measure all from actual prerequisites and include queue time in complete event endpoints; already-published skips do not qualify the fresh-version budget.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
   - [ ] Rollback drill: restore the previous qualified preproduction image tuple and prior promotion/deploy recipes; issue a corrective npm version for released package defects, never overwrite published bytes or bypass artifact verification.
-- [ ] **Lot 4 — Docs consolidation**
-  - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
+- [x] **Lot 4 — Docs consolidation**
+  - [x] Updated this plan and the branch plan with measured receipts and remaining gaps; no EVOL notes or temporary spec scaffolding were created in this branch.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: application typecheck/lint is unchanged; `make test-ci-release-receipts test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts` covers changed release scripts and negative receipt/registry/provenance cases.
