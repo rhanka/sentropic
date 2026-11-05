@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import {
-  checksumHeaderValue, createMemoryStaging, createMemoryUploadSessionStore,
+  createMemoryStaging, createMemoryUploadSessionStore,
   createMemoryUploadSigner, createUploadService, stagingKey, UPLOAD_SESSION_TTL_MS,
 } from '../src/server/uploads.js';
 import { createUploadSweeper } from '../src/server/gc.js';
@@ -45,7 +45,8 @@ describe('upload sessions (files parity LOT 1)', () => {
     expect(created.maxSize).toBe(1024); // clamped to the host budget
     expect(created.requiredHeaders['content-type']).toBe('image/png');
     expect(created.requiredHeaders['content-length']).toBe('1024');
-    expect(created.checksumHeader).toBe('x-amz-checksum-sha256');
+    expect(Object.keys(created.requiredHeaders).sort()).toEqual(['content-length', 'content-type']);
+    expect('checksumHeader' in created).toBe(false);
     expect(created.stagingKey).toBe(stagingKey('scope-1', created.uploadId));
     expect(signer.signed).toHaveLength(1);
     expect(signer.signed[0]).toMatchObject({ contentType: 'image/png', contentLength: 1024 });
@@ -66,21 +67,19 @@ describe('upload sessions (files parity LOT 1)', () => {
     await service.create({ ...base, storageScopeId: 'scope-2', mimeType: 'image/png' });
   });
 
-  it('simulated PUT enforces the signed content-length and the checksum header', async () => {
+  it('simulated PUT enforces the signed headers and refuses unsigned x-amz-* headers', async () => {
     const { service, staging, signer } = makeService();
     const created = await service.create({ ...base, mimeType: 'image/png', maxSize: 12 });
     const bytes = png(7);
     // Wrong body size vs the signed exact content-length: refused.
     expect(() => signer.put(signer.signed[0], png(8).subarray(0, 8), { ...created.requiredHeaders, 'content-length': '12' }))
       .toThrow(/content-length mismatch/);
-    // Right size but wrong checksum header: BadDigest.
+    // Any x-amz-* header outside the signed set is refused (OVH strictness).
     expect(() => signer.put(signer.signed[0], bytes, {
-      ...created.requiredHeaders, 'x-amz-checksum-sha256': checksumHeaderValue(sha(png(9))),
-    })).toThrow(/BadDigest/);
-    // Correct PUT lands in staging.
-    signer.put(signer.signed[0], bytes, {
-      ...created.requiredHeaders, 'x-amz-checksum-sha256': checksumHeaderValue(sha(bytes)),
-    });
+      ...created.requiredHeaders, 'x-amz-checksum-sha256': 'unsigned',
+    })).toThrow(/not signed/);
+    // Correct PUT with exactly the announced headers lands in staging.
+    signer.put(signer.signed[0], bytes, { ...created.requiredHeaders });
     await staging.put(created.stagingKey, bytes);
     expect(await staging.get(created.stagingKey)).toEqual(bytes);
   });
