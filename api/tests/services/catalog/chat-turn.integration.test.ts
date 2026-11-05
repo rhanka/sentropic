@@ -5,6 +5,7 @@ import { chatMessages, chatSessions, workspaces } from '../../../src/db/schema';
 import { setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
 import { PLATFORM_TENANT_ID } from '../../../src/services/workspace-service';
 import { cmDeleteTenantMembershipsForUser, cmDeleteWorkspaceMembersForUser } from '../../utils/cm-identity-test-store';
+import { createAdmittedChatMessage } from '../../utils/cm-chat-fixture';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../../utils/auth-helper';
 
 vi.mock('../../../src/services/llm-runtime', () => ({ callLLMStream: vi.fn() }));
@@ -42,9 +43,15 @@ describe('chat turn catalog capability', () => {
     await setCmMembershipState(other.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
     await db.update(workspaces).set({ type: 'ai-priorities' }).where(eq(workspaces.id, user.workspaceId!));
     await db.update(workspaces).set({ type: 'neutral' }).where(eq(workspaces.id, other.workspaceId!));
-    const createTurn = async (actor: TestUser) => {
-      const turn = await chatService.createUserMessageWithAssistantPlaceholder({ userId: actor.id,
-        workspaceId: actor.workspaceId!, content: 'Hello', model: 'gpt-4.1-nano' });
+    // A revoked actor must still create a turn (creation is membership-free);
+    // only generation fail-closes to the empty tool set. Admission applies
+    // solely where the test expects tools.
+    const createTurn = async (actor: TestUser, admitted = true) => {
+      const input = { userId: actor.id,
+        workspaceId: actor.workspaceId!, content: 'Hello', model: 'gpt-4.1-nano' };
+      const turn = admitted
+        ? await createAdmittedChatMessage(input)
+        : await chatService.createUserMessageWithAssistantPlaceholder(input);
       await db.update(chatSessions).set({ title: 'Isolation test' }).where(eq(chatSessions.id, turn.sessionId));
       return { userId: actor.id, ...turn };
     };
@@ -67,7 +74,7 @@ describe('chat turn catalog capability', () => {
     for (const names of seen.values()) expect(names).toContain('search_catalog');
     await cmDeleteTenantMembershipsForUser(other.id);
     seen.clear();
-    const next = await Promise.all([createTurn(other), createTurn(user)]);
+    const next = await Promise.all([createTurn(other, false), createTurn(user)]);
     await Promise.all(next.map(turn => chatService.runAssistantGeneration(turn)));
     expect(seen.get(other.id)).toEqual([]);
     expect(seen.get(user.id)).toContain('products_list');
@@ -79,7 +86,7 @@ describe('chat turn catalog capability', () => {
 
   it.each(['missing tenant membership', 'requested tenant membership', 'null session workspace',
     'hidden workspace', 'non-member', 'transport failure'])('should complete chat without catalog for %s', async denial => {
-    const turn = await chatService.createUserMessageWithAssistantPlaceholder({ userId: user.id,
+    const turn = await createAdmittedChatMessage({ userId: user.id,
       workspaceId: user.workspaceId!, content: 'Hello', model: 'gpt-4.1-nano' });
     await db.update(chatSessions).set({ title: 'Capability test' }).where(eq(chatSessions.id, turn.sessionId));
     if (denial === 'missing tenant membership') await cmDeleteTenantMembershipsForUser(user.id);
