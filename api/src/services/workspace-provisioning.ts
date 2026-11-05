@@ -28,7 +28,11 @@ export const provisionWorkspace = async (
   const id = input.workspaceId;
   await tx.lockSubject(input.ownerUserId);
   const account = await tx.stores.accounts.findAccount(input.ownerUserId);
-  if (!account || account.accountStatus !== 'active' || !['editor', 'admin_org', 'admin_app'].includes(account.globalRole)) {
+  // Any active tenant member may provision: import creates a fresh workspace where the
+  // importer becomes admin, so guests are allowed here. Direct creation routes enforce
+  // editor+ with their own requireEditor middleware (workspaces, vscode mapping) or
+  // requireGlobalEditor (session adoption); this gate only rejects inactive accounts.
+  if (!account || account.accountStatus !== 'active') {
     throw new CmIdentityForbiddenError();
   }
   if (!await tx.custody.profiles.find(input.ownerUserId)) throw new IdentityCustodyErrorV1('identity_material_missing');
