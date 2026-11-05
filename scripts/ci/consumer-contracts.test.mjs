@@ -208,6 +208,23 @@ test('should carry the workflow-visible lane on every boundary contract', () => 
   }
 });
 
+test('should approve omission on identical qualified tuples', () => {
+  const workflow = { jobs: {
+    changes: {},
+    'ci-gate': { needs: ['validate-comments', 'validate-cluster-mesh'] },
+    'validate-comments': { if: "needs.changes.outputs.comments == 'true'" },
+    'validate-cluster-mesh': { if: "needs.changes.outputs.cluster_mesh == 'true'" },
+  } };
+  const text = 'run suite: contracts for api/tests/contracts/comments-candidate.test.ts';
+  const sha = 'a'.repeat(64);
+  const closure = { hono: { version: '4.13.14', integrity: 'sha512-x' },
+    '@sentropic/comments': { version: '0.3.2', candidate: sha, qualified: true } };
+  const identical = { before: { api: { closure, docker: {} } }, after: { api: { closure, docker: {} } } };
+  const verdict = verifyDispatch({ kind: 'additive', slugs: ['comments'], boundaries,
+    workflow, workflowText: text, changes: { comments: 'true', cluster_mesh: 'true' }, tuples: identical });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+});
+
 test('should refuse omission on identical but unqualified tuples', () => {
   const workflow = { jobs: {
     changes: {},
