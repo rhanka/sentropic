@@ -5,7 +5,6 @@ import { runCmAuthHttp } from './auth/cm-http';
 
 import {
   createSentropicOAuthOptions,
-  getSentropicOAuthPorts,
   resolveOAuthIssuer,
 } from '../auth/oauth';
 
@@ -41,26 +40,35 @@ export const createSentropicWellKnownIngress = (oauthPublicPath: string): Hono =
     url.pathname = path;
     url.search = '';
     if (clientId) url.searchParams.set('client_id', clientId);
-    return createWellKnownRouter({
-      issuer: resolveOAuthIssuer(c.req.raw),
-      oauthPathPrefix: oauthPublicPath,
-      ports: getSentropicOAuthPorts(),
-      // MCP Protected Resource Metadata remains owned by createMcpAuth; this AS
-      // projection only advertises the MCP scopes its allowlisted clients may receive.
-      // 2-IdP: the host side of Lot 3's scope correction — the union of generic MCP
-      // scopes and the grantable Immo scopes. Metadata is descriptive and never
-      // replaces client `allowedScopes`. The artifact scopes are granted by the
-      // preprod immo-mcp client only (idp-identity-sync preprod divergence).
-      additionalGrantTypesSupported: [TOKEN_EXCHANGE_GRANT_TYPE],
-      additionalScopesSupported: [
-        ...ALL_MCP_SCOPES,
-        'immo:read',
-        'immo:search',
-        'immo:documents:read',
-        'immo:artifacts:read',
-        'immo:artifacts:write',
-      ],
-    }).fetch(new Request(url, { headers: c.req.raw.headers, method: 'GET' }));
+    const target = new Request(url, { headers: c.req.raw.headers, method: 'GET' });
+    // The store ports are attempt-bound like every other OAuth route: the host
+    // bag has no transaction, so metadata reads run inside the CM attempt and
+    // see the canonical path through a single-route shell.
+    return runCmAuthHttp(c, null, binding => {
+      const wellKnown = createWellKnownRouter({
+        issuer: resolveOAuthIssuer(c.req.raw),
+        oauthPathPrefix: oauthPublicPath,
+        ports: binding.ports,
+        // MCP Protected Resource Metadata remains owned by createMcpAuth; this AS
+        // projection only advertises the MCP scopes its allowlisted clients may receive.
+        // 2-IdP: the host side of Lot 3's scope correction — the union of generic MCP
+        // scopes and the grantable Immo scopes. Metadata is descriptive and never
+        // replaces client `allowedScopes`. The artifact scopes are granted by the
+        // preprod immo-mcp client only (idp-identity-sync preprod divergence).
+        additionalGrantTypesSupported: [TOKEN_EXCHANGE_GRANT_TYPE],
+        additionalScopesSupported: [
+          ...ALL_MCP_SCOPES,
+          'immo:read',
+          'immo:search',
+          'immo:documents:read',
+          'immo:artifacts:read',
+          'immo:artifacts:write',
+        ],
+      });
+      const shell = new Hono();
+      shell.all('*', () => wellKnown.fetch(target.clone()));
+      return shell;
+    });
   };
 
   ingress.get('/openid-configuration', forward('/openid-configuration'));

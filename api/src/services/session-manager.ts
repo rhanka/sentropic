@@ -14,7 +14,7 @@ import { logger } from '../logger';
  *
  * Lot A4: session persistence lives in the cluster-mesh identity custody store
  * (cm_identity.identity_login_token_bindings + identity_login_sessions); the
- * legacy `public.user_sessions` table is dropped by control migration 0014.
+ * legacy `public.user_sessions` table is dropped by control migration 0015.
  */
 
 interface DeviceInfo {

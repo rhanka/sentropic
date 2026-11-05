@@ -8,7 +8,7 @@ import { bindCmAppDatabase, runCmIdentityRead } from './identity/cm-transaction'
 // Lot A4: workspace membership and the workspace->tenant edge live in the CM
 // stores (cm_identity.cm_workspace_members / cm_workspaces). `public.workspaces`
 // keeps business rows and the destruction-policy owner reference; the legacy
-// `workspace_memberships` table is dropped by control migration 0014.
+// `workspace_memberships` table is dropped by control migration 0015.
 
 export const ADMIN_WORKSPACE_NAME = 'Admin Workspace';
 
