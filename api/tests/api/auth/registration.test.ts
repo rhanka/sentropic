@@ -259,10 +259,13 @@ describe('Registration API — invitation tokens (BR-39r L4, C3 no-enum)', () =>
       now: new Date(),
     });
     if (input.consumedAt) {
+      const consumer = await createCmUser({
+        email: uniqueEmail('consumer'), displayName: 'Consumer', role: 'guest', emailVerified: true,
+      });
       const consumed = await consumeCmInvitationByTokenHash(
         hashInviteToken(input.token),
         input.email,
-        randomUUID(),
+        consumer.id,
         input.consumedAt,
       );
       if (!consumed) throw new Error('Failed to seed consumed invite.');
