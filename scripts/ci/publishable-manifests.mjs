@@ -833,6 +833,42 @@ export async function commandInventory(opts, { env = process.env, root = process
 // npm's answer when the version already exists (registry E403 text or the EPUBLISHCONFLICT code).
 export const PUBLISH_CONFLICT = /EPUBLISHCONFLICT|cannot publish over (?:the )?previously published version/i;
 
+// Tested-bytes publication (BR-82): reuse the verified shared release-candidate
+// tarball instead of repacking when CI_PACKAGE_CANDIDATES verifies a receipt for
+// the slug. An absent index or receipt falls back to a fresh pack (unchanged
+// behavior); a receipt that names this slug but fails verification fails closed
+// and never publishes.
+export function findVerifiedCandidate(dir, { slug, name, version, headSha }) {
+  if (!dir) return null;
+  let index;
+  try {
+    index = JSON.parse(fs.readFileSync(path.join(dir, 'candidates.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(index?.receipts)) return null;
+  const receipt = index.receipts.find((row) => row?.slug === slug);
+  if (!receipt) return null;
+  if (receipt.guard !== 'pass' || receipt.evidence !== 'release-candidate') {
+    throw new GuardError(`candidate receipt for ${slug} is not a passing release-candidate guard receipt`);
+  }
+  if (receipt.name !== name || receipt.version !== version) {
+    throw new GuardError(`candidate identity mismatch: receipt ${receipt.name}@${receipt.version} != ${name}@${version}`);
+  }
+  if (receipt.head_sha !== headSha) {
+    throw new GuardError(`candidate head mismatch: receipt packed from ${receipt.head_sha}, not head ${headSha}`);
+  }
+  if (typeof receipt.file !== 'string' || receipt.file.includes('..') || path.isAbsolute(receipt.file)) {
+    throw new GuardError(`invalid candidate archive path ${receipt.file}`);
+  }
+  const archive = path.join(dir, receipt.file);
+  if (!fs.lstatSync(archive, { throwIfNoEntry: false })?.isFile()) {
+    throw new GuardError(`missing candidate archive for ${name}@${version}: ${receipt.file}`);
+  }
+  if (sha256File(archive) !== receipt.sha256) throw new GuardError(`candidate hash mismatch for ${name}@${version}`);
+  return { archive, sha256: receipt.sha256 };
+}
+
 // Guarded publication: packed identity -> registry lookup -> existing version skips (WARN) BEFORE
 // candidate packing -> strict candidate check -> recheck -> npm publish <verified.tgz>; a version
 // conflict passes only when a no-cache registry read shows the verified archive's sha512.
@@ -857,26 +893,39 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
   if ((await registry.lookup(snap.name, snap.version)).status === 'present') return skip('registry lookup');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-publish-'));
   try {
-    const { archive } = runNpmPack(cwd, dir);
+    const headSha = env.MANIFEST_HEAD_SHA || env.GITHUB_SHA || null;
+    const candidate = findVerifiedCandidate(env.CI_PACKAGE_CANDIDATES,
+      { slug: opts.slug, name: snap.name, version: snap.version, headSha });
+    let archive;
+    const pack = candidate ? 'candidate' : 'fresh';
+    if (candidate) {
+      archive = path.join(dir, path.basename(candidate.archive));
+      fs.copyFileSync(candidate.archive, archive);
+    } else {
+      ({ archive } = runNpmPack(cwd, dir));
+    }
     const result = inspectArchive({ archive, sources, expected: { name: snap.name, version: snap.version } });
+    if (candidate && result.sha256 !== candidate.sha256) {
+      throw new GuardError(`candidate identity mismatch: inspected ${result.sha256} != receipt ${candidate.sha256}`);
+    }
     for (const s of result.structural) reporter.error(opts.slug, s);
     for (const f of result.findings) reporter.error(opts.slug, f);
     if (reporter.errors) {
-      writeReceipt('rejected', { sha256: result.sha256 });
+      writeReceipt('rejected', { sha256: result.sha256, pack });
       return 1;
     }
     if ((await registry.lookup(snap.name, snap.version, { fresh: true })).status === 'present') return skip('recheck before publish');
-    (out ?? process.stdout).write(`publishing verified archive ${path.basename(archive)} sha256=${result.sha256}\n`);
+    (out ?? process.stdout).write(`publishing verified archive ${path.basename(archive)} sha256=${result.sha256} pack=${pack}\n`);
     const integrity = `sha512-${createHash('sha512').update(fs.readFileSync(archive)).digest('base64')}`;
     const run = spawnSync(npm, ['publish', archive, ...opts.passthrough], { cwd, encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
     (out ?? process.stdout).write(run.stdout ?? '');
     process.stderr.write(run.stderr ?? '');
     if (run.status === 0) {
-      writeReceipt('published', { sha256: result.sha256, npm_exit: run.status });
+      writeReceipt('published', { sha256: result.sha256, npm_exit: run.status, pack });
       return 0;
     }
     if (!PUBLISH_CONFLICT.test(`${run.stdout ?? ''}${run.stderr ?? ''}`)) {
-      writeReceipt('failed', { sha256: result.sha256, npm_exit: run.status });
+      writeReceipt('failed', { sha256: result.sha256, npm_exit: run.status, pack });
       return 1;
     }
     // Version conflict: success only when the registry (read without cache) holds exactly these bytes.
@@ -893,7 +942,7 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
       }
       if (!published && i < budget.attempts) await sleep(budget.delaySeconds * 1000);
     }
-    const conflict = { sha256: result.sha256, npm_exit: run.status, integrity, registry_integrity: published };
+    const conflict = { sha256: result.sha256, npm_exit: run.status, integrity, registry_integrity: published, pack };
     if (published === integrity) {
       reporter.notice(opts.slug, `${snap.name}@${snap.version} publish conflict: the registry already holds the verified archive (same sha512); treated as already published`);
       writeReceipt('skipped', { ...conflict, conflict: 'equal-integrity' });
