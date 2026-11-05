@@ -33,6 +33,9 @@ function publicationProblems(publication, source) {
   if (publication.status === 'failed') return [`publication failed: ${label}`];
   if (publication.status !== 'published') return [`missing publication: ${label}`];
   const problems = [];
+  if (publication.kind === 'package' && publication.pack !== 'candidate') {
+    problems.push(`repacked publication: ${label} (pack=${publication.pack ?? 'missing'}, expected candidate)`);
+  }
   if (publication.source !== source.sha) problems.push(`wrong source for ${label}: ${publication.source} (expected ${source.sha})`);
   if (publication.digest !== undefined) {
     if (!DIGEST.test(publication.digest)) {
@@ -114,7 +117,8 @@ export function assessChain({ needs = {}, selections = {}, source = {} } = {}) {
       // silently.
       publication.digest = /^[a-f0-9]{64}$/.test(outputs.sha256) ? `sha256:${outputs.sha256}` : outputs.sha256;
     }
-    if (outputs.pack) publication.pack = outputs.pack;
+    const pack = outputs.pack ?? outputs.publication_pack;
+    if (pack !== undefined) publication.pack = pack;
     if (outputs.status) publication.receiptStatus = outputs.status;
     publications.push(publication);
   }
