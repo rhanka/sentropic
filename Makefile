@@ -33,7 +33,6 @@ CI_PROVIDER_MODE ?= fixture
 export CI_PROVIDER_MODE
 export CI_PROVIDER_REQUIRE_CALLS ?= 0
 export CI_PROVIDER_FIXTURE = $(if $(filter fixture,$(CI_PROVIDER_MODE)),1,0)
-export CI_PROVIDER_INTERNAL = $(if $(filter fixture,$(CI_PROVIDER_MODE)),true,false)
 export CI_PROVIDER_OPENAI_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(OPENAI_API_KEY),ci-provider-fixture-no-live-credential)
 export CI_PROVIDER_MISTRAL_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(MISTRAL_API_KEY),ci-provider-fixture-no-live-credential)
 export CI_PROVIDER_TAVILY_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(TAVILY_API_KEY),ci-provider-fixture-no-live-credential)
@@ -2778,7 +2777,7 @@ ci-live-provider-run: ci-test-env ## Preserve every selected API, browser and VS
 ci-live-provider-finish: ## Retain failures, actual wire calls and schedule-health gaps
 	node scripts/ci/live-provider-receipt.mjs finish
 
-ci-provider-receipt: ci-test-env ## Verify test-network isolation and retain actual fixture traffic
+ci-provider-receipt: ci-test-env ## Verify fixture redirect with fail-closed egress and retain actual fixture traffic
 	@test "$(CI_PROVIDER_MODE)" = fixture
 	@mkdir -p .tmp/ci-provider
 	@docker network inspect $(COMPOSE_PROJECT_NAME)_default --format '{{.Internal}}' > .tmp/ci-provider/network-internal.txt

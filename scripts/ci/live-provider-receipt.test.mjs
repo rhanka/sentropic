@@ -43,7 +43,11 @@ test('should require provider traffic for AI and VSCode while retaining non-prov
   const input = { traffic: { calls: 1, failedRequests: 0 }, networkInternal: true, requireCalls: true };
   assert.equal(fixtureReceipt(input).qualified, true);
   assert.equal(fixtureReceipt(input).liveProviderCalls, 0);
-  for (const changed of [{ networkInternal: false }, { traffic: { calls: 0, failedRequests: 0 } },
+  // networkInternal is recorded evidence only: an isolated Docker network
+  // cannot serve host-side readiness probes or daily live egress.
+  assert.equal(fixtureReceipt({ ...input, networkInternal: false }).qualified, true);
+  assert.equal(fixtureReceipt({ ...input, networkInternal: false }).liveProviderCalls, null);
+  for (const changed of [{ traffic: { calls: 0, failedRequests: 0 } },
     { traffic: { calls: 1, failedRequests: 1 } }, { unexpectedEgress: [{ host: 'unexpected.example' }] }]) {
     assert.equal(fixtureReceipt({ ...input, ...changed }).qualified, false);
   }

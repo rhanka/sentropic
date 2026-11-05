@@ -61,11 +61,16 @@ export function liveReceipt({ tuple, selection, events, results, schedule, event
 }
 
 export function fixtureReceipt({ traffic, networkInternal, unexpectedEgress = [], requireCalls = false }) {
-  const qualified = networkInternal && traffic.failedRequests === 0 && unexpectedEgress.length === 0
+  // Determinism rests on the fixture redirect (every provider host is rewritten
+  // to the local fixture) plus the fail-closed boundary (any unexpected host
+  // throws in-process, failing the calling test). networkInternal is recorded
+  // evidence only: an isolated Docker network cannot serve host-side readiness
+  // probes or daily live egress, so the overlay no longer requests one.
+  const qualified = traffic.failedRequests === 0 && unexpectedEgress.length === 0
     && Number.isSafeInteger(traffic.calls) && traffic.calls >= (requireCalls ? 1 : 0);
   return { qualified, networkInternal, unexpectedEgress, traffic, requireCalls,
     liveProviderCalls: networkInternal ? 0 : null,
-    proof: 'API test network has no external route; provider fetches are redirected locally' };
+    proof: 'provider fetches are redirected to the local fixture and unexpected hosts fail closed' };
 }
 
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
