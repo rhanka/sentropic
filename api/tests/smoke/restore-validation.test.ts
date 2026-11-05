@@ -22,12 +22,12 @@ describe('Restore Validation', () => {
 
     it('should have required core tables present', async () => {
       const tables = await db.all(sql`
-        SELECT table_name 
+        SELECT table_schema, table_name
         FROM information_schema.tables 
-        WHERE table_schema = 'public' 
+        WHERE table_schema IN ('public', 'cm_identity')
         AND table_type = 'BASE TABLE'
         ORDER BY table_name
-      `) as { table_name: string }[];
+      `) as { table_schema: string; table_name: string }[];
 
       const expectedTables = [
         'organizations',
@@ -37,17 +37,28 @@ describe('Restore Validation', () => {
         'business_config',
         'sessions',
         'job_queue',
-        'users',
-        'webauthn_credentials',
-        'user_sessions',
-        'webauthn_challenges',
-        'magic_links'
       ];
 
-      const actualTables = tables.map(t => t.table_name);
+      const actualTables = tables.filter(t => t.table_schema === 'public').map(t => t.table_name);
       expectedTables.forEach(expectedTable => {
         expect(actualTables).toContain(expectedTable);
       });
+      const identityTables = tables.filter(t => t.table_schema === 'cm_identity').map(t => t.table_name);
+      for (const table of ['identity_user_accounts', 'identity_account_profiles', 'identity_webauthn_credentials',
+        'identity_login_sessions', 'identity_login_token_bindings', 'identity_single_use_proofs',
+        'identity_email_registration_tickets']) expect(identityTables).toContain(table);
+      for (const table of ['users', 'webauthn_credentials', 'user_sessions', 'webauthn_challenges', 'magic_links']) {
+        expect(actualTables).not.toContain(table);
+      }
+      const checkpoint = await db.all(sql`SELECT detail FROM control.app_cm_identity_cutover
+        WHERE cutover_id = 'a4-identity-cutover'`) as { detail: { importReceipt: {
+          invalidatedProofCounts: Record<string, number>; identitiesPreserved: boolean;
+        } } }[];
+      expect(checkpoint).toHaveLength(1);
+      expect(checkpoint[0].detail.importReceipt.identitiesPreserved).toBe(true);
+      expect(Object.keys(checkpoint[0].detail.importReceipt.invalidatedProofCounts).sort()).toEqual([
+        'email_code', 'email_ticket', 'login_refresh_token', 'login_session', 'magic_link', 'webauthn_challenge',
+      ]);
     });
 
     it('should have Drizzle migrations applied', async () => {
@@ -64,15 +75,15 @@ describe('Restore Validation', () => {
       const indexes = await db.all(sql`
         SELECT indexname, tablename 
         FROM pg_indexes 
-        WHERE schemaname = 'public'
+        WHERE schemaname = 'cm_identity'
       `) as { indexname: string; tablename: string }[];
 
       const indexNames = indexes.map(i => i.indexname);
       
       // Verify critical indexes exist
-      expect(indexNames.some(name => name.includes('webauthn_credentials_user_id'))).toBe(true);
-      expect(indexNames.some(name => name.includes('user_sessions_user_id'))).toBe(true);
-      expect(indexNames.some(name => name.includes('user_sessions_expires_at'))).toBe(true);
+      expect(indexNames).toContain('identity_webauthn_credentials_user');
+      expect(indexNames).toContain('identity_login_sessions_user');
+      expect(indexNames).toContain('identity_login_sessions_expires');
     });
   });
 
