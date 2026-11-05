@@ -76,6 +76,14 @@ export interface PrincipalDirectoryPort {
 }
 
 /**
+ * R1 typed unknown principal (review 1002): every model-visible projection of
+ * an internal principal whose directory entry is missing emits this opaque
+ * value instead of the raw internal id (`sub`). It never resolves back to a
+ * principal, so re-injecting it fails closed with `person_not_shareable`.
+ */
+export const UNKNOWN_USER_REF = 'unknown';
+
+/**
  * Mask an email for model payloads: first local-part character kept, rest of
  * the local part masked, domain visible — lifts homonyms without disclosing
  * the directory. The package masks, so no full email can reach the wire.

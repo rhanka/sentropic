@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.15
+
+- R1: every model-visible userRef projection emits the opaque `unknown` value
+  when the directory entry is missing instead of falling back to the raw
+  internal id (`sub`): `projectUserRef`, `list_access` grants and owner,
+  the `set_access` receipt, and the `list_versions` v1 author (plus the v2
+  `authorPrincipalId`). No MCP tool definition changes.
+- R5: `assertShareable` enforces the approved-principal gate on `grant` only;
+  `revoke` stays allowed for dormant (suspended or deleted) principals as the
+  expected cleanup step. Revoking an absent grant is a no-op success.
+
 ## 0.2.14
 
 - Add a durable local SQLite adapter set behind the new `./sqlite` subpath export:

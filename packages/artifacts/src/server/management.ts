@@ -1,6 +1,7 @@
 import { audienceOf, canManageAccess, PUBLIC_PRINCIPAL,
   type AccessEvent, type AccessMode, type ArtifactAcl, type GrantRecord, type ModeAction } from './access.js';
-import { combineSharingPolicy, resolveSharingPolicy, type PrincipalDirectoryPort, type SharingPolicyPort } from './ports.js';
+import { combineSharingPolicy, resolveSharingPolicy, UNKNOWN_USER_REF, type PrincipalDirectoryPort,
+  type SharingPolicyPort } from './ports.js';
 import type { ArtifactInvocationContext, ArtifactCommitCoordinator, FinalizeTxClient, FinalizeRequest } from './commit/types.js';
 import type { EffectiveArtifactCommand } from './command-identity.js';
 import { ArtifactOperationError, type ArtifactOutcome } from './failures.js';
@@ -118,22 +119,26 @@ export async function manageArtifact(deps: {
     return await deps.directory.resolvePrincipal(invocation.storageScopeId, principalId) ?? principalId;
   };
   // Unknown, inactive, unapproved and out-of-scope targets merge into the
-  // single `person_not_shareable` so no account status can be probed.
+  // single `person_not_shareable` so no account status can be probed. R5: the
+  // approval gate applies to `grant` only; `revoke` is the expected cleanup
+  // step for dormant (suspended or deleted) principals and must stay allowed.
   const assertShareable = async (internal: string, action: ModeAction): Promise<void> => {
+    if (action !== 'grant') return;
     if (deps.directory === undefined) {
-      if (action === 'grant' && !await deps.isApprovedPrincipal(internal)) throw refused('access_denied');
+      if (!await deps.isApprovedPrincipal(internal)) throw refused('access_denied');
       return;
     }
     if (!await deps.isApprovedPrincipal(internal)) throw shareableRefused();
   };
   // The receipt is model-visible: project internal principals to userRefs
-  // (audit events keep the internal form).
+  // (audit events keep the internal form). R1: a missing directory entry
+  // projects to the opaque unknown value, never the raw internal id.
   const projectGrants = async (grants: GrantRecord[]): Promise<GrantRecord[]> => {
     if (deps.directory === undefined) return grants;
     return Promise.all(grants.map(async (grant) => ({
       ...grant,
       principalId: (await deps.directory!.describePrincipal(invocation.storageScopeId, grant.principalId))?.userRef
-        ?? grant.principalId,
+        ?? UNKNOWN_USER_REF,
     })));
   };
   const request: FinalizeRequest = {
