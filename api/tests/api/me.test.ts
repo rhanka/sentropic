@@ -164,6 +164,9 @@ describe('Me API', () => {
     await db.insert(folders).values({ id: folderId, workspaceId: wsId, name: `F ${createTestId()}`, status: 'completed' });
     await db.insert(initiatives).values({ id: initiativeId, workspaceId: wsId, folderId, data: { name: 'UC' } as any, status: 'completed' });
 
+    // Self-deletion requires a disabled account: deactivate first, then delete.
+    const deactivated = await authenticatedRequest(app, 'POST', '/api/v1/me/deactivate', user.sessionToken!, {});
+    expect(deactivated.status).toBe(200);
     const del = await authenticatedRequest(app, 'DELETE', '/api/v1/me', user.sessionToken!);
     expect(del.status).toBe(200);
 
@@ -220,6 +223,9 @@ describe('Me API', () => {
       createdAt: new Date(),
     });
 
+    // Self-deletion requires a disabled account: deactivate first, then delete.
+    const deactivated = await authenticatedRequest(app, 'POST', '/api/v1/me/deactivate', user.sessionToken!, {});
+    expect(deactivated.status).toBe(200);
     const del = await authenticatedRequest(app, 'DELETE', '/api/v1/me', user.sessionToken!);
     expect(del.status).toBe(200);
 
