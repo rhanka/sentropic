@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { assessReleaseReceipt } from './release-receipt.mjs';
+import { assessChain, assessReleaseReceipt } from './release-receipt.mjs';
 
 const sha = 'a'.repeat(40);
 const digest = `sha256:${'b'.repeat(64)}`;
@@ -179,4 +179,105 @@ test('CLI fails closed with ::error lines on a broken release', () => {
   assert.notEqual(result.status, 0);
   assert.match(result.output, /::error::/);
   assert.match(result.output, /required check publish-api-image concluded failure/);
+});
+
+// ---- delivery-chain assessment (release-receipts CI job input shape)
+const chainNeeds = (results, outputs = {}) => Object.fromEntries(
+  Object.entries(results).map(([job, result]) => [job, { result, outputs: outputs[job] ?? {} }]));
+const chainSelections = (overrides = {}) => ({
+  api: false, ui: false, global: false, meshPublish: false, gatewayPublish: false, clusterPublish: false, ...overrides,
+});
+const chainSource = () => ({ sha, runId: '4242', attempt: '1' });
+
+test('chain accepts a complete delivery of tested bytes', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'success', 'publish-ui-image': 'success',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'success',
+      'publish-cluster-mesh': 'success', 'verify-train-lock-integrity': 'success',
+    }, {
+      'publish-cluster-mesh': { name: '@sentropic/cluster-mesh', version: '0.2.9', status: 'published', sha256: 'c'.repeat(64), pack: 'candidate' },
+    }),
+    selections: chainSelections({ api: true, ui: true, meshPublish: true, gatewayPublish: true, clusterPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+  const cluster = verdict.evidence.publications.find((row) => row.name === '@sentropic/cluster-mesh');
+  assert.equal(cluster.digest, `sha256:${'c'.repeat(64)}`);
+  assert.equal(cluster.pack, 'candidate');
+});
+
+test('chain accepts an overlay-only run with every delivery job skipped', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'skipped', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'skipped',
+    }),
+    selections: chainSelections(),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+});
+
+test('chain rejects a selected image publication that stayed skipped', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'skipped', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'skipped',
+    }),
+    selections: chainSelections({ api: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /missing publication: sentropic-api/);
+});
+
+test('chain rejects a failed publisher', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'failure', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'skipped', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'skipped',
+    }),
+    selections: chainSelections({ api: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /required check publish-api-image concluded failure/);
+});
+
+test('chain rejects a skipped train-lock check while the train published', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'skipped',
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /required check verify-train-lock-integrity concluded skipped/);
+});
+
+test('CLI assess-chain builds evidence from a needs file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'release-chain-'));
+  const needsFile = path.join(dir, 'needs.json');
+  fs.writeFileSync(needsFile, JSON.stringify(chainNeeds({
+    'publish-api-image': 'success', 'publish-ui-image': 'skipped',
+    'publish-llm-mesh': 'skipped', 'publish-llm-gateway': 'skipped',
+    'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'skipped',
+  })));
+  const outFile = path.join(dir, 'receipt.json');
+  const output = execFileSync(process.execPath, [cli, 'assess-chain', '--needs', needsFile,
+    '--sha', sha, '--run-id', '4242', '--attempt', '1',
+    '--api', 'true', '--ui', 'false', '--global', 'false',
+    '--mesh-publish', 'false', '--gateway-publish', 'false', '--cluster-publish', 'false',
+    '--out', outFile], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.match(output, /release-receipt: PASS/);
+  const receipt = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+  assert.equal(receipt.ok, true);
+  assert.equal(receipt.evidence.source.sha, sha);
 });
