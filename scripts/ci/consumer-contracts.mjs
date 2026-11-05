@@ -214,3 +214,42 @@ if (process.argv[1] && import.meta.url.endsWith('/consumer-contracts.mjs') && pr
   }
 }
 
+if (process.argv[1] && import.meta.url.endsWith('/consumer-contracts.mjs') && process.argv.includes('--verify')) {
+  const read = (flag) => {
+    const at = process.argv.indexOf(flag);
+    return at >= 0 ? process.argv[at + 1] : undefined;
+  };
+  try {
+    const { classifyCompatibility } = await import('./compatibility-classifier.mjs');
+    const boundaries = loadBoundaries(read('--boundaries') ?? 'scripts/ci/consumer-boundaries.json');
+    const loadJson = (inline, file) => JSON.parse(
+      inline !== undefined ? inline : file !== undefined ? fs.readFileSync(file, 'utf8') : '[]');
+    const files = loadJson(read('--files'), read('--files-file'));
+    const packages = loadJson(read('--packages'), read('--packages-file'));
+    const changes = JSON.parse(read('--changes') ?? process.env.VERIFY_CHANGES_JSON ?? '{}');
+    const tuplesRaw = read('--tuples') ?? (read('--tuples-file') === undefined
+      ? undefined : fs.readFileSync(read('--tuples-file'), 'utf8'));
+    const { kind, reasons } = classifyCompatibility({ files, packages });
+    const slugs = packages
+      .filter((entry) => files.some((file) => file === `packages/${entry.slug}/package.json`
+        || file.startsWith(`packages/${entry.slug}/src/`)
+        || file === `${entry.slug}/package.json` || file === `apps/${entry.slug}/package.json`)
+        || JSON.stringify(entry.published ?? null) !== JSON.stringify(entry.candidate ?? null))
+      .map((entry) => entry.slug);
+    const workflowPath = read('--workflow') ?? '.github/workflows/ci.yml';
+    const workflowText = fs.readFileSync(workflowPath, 'utf8');
+    const verdict = verifyDispatch({ kind, slugs, boundaries, workflowText, changes,
+      event: read('--event') ?? process.env.VERIFY_EVENT ?? 'pull_request',
+      ref: read('--ref') ?? process.env.VERIFY_REF ?? '',
+      tuples: tuplesRaw === undefined ? null : JSON.parse(tuplesRaw),
+      expectOmission: (read('--expect-omission') ?? process.env.VERIFY_EXPECT_OMISSION ?? 'false') === 'true' });
+    process.stdout.write(`${JSON.stringify({ kind, classificationReasons: reasons, ...verdict }, null, 2)}\n`);
+    if (!verdict.ok) {
+      for (const problem of verdict.problems) process.stderr.write(`::error::consumer-contracts: ${problem}\n`);
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    process.stderr.write(`::error::consumer-contracts: ${error?.message ?? error}\n`);
+    process.exitCode = 2;
+  }
+}
