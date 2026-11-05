@@ -28,9 +28,17 @@ test.describe('Documents — résumés (court + long)', () => {
       data: { name: folderName, description: 'Docs summary e2e' }
     });
     expect(draftRes.ok()).toBeTruthy();
-    const draftJson = await draftRes.json().catch(() => null);
-    const folderId = String((draftJson as any)?.id ?? '');
+    const draftJson = (await draftRes.json().catch(() => null) as any) ?? {};
+    const folderId = String(draftJson?.id ?? '');
     expect(folderId).toBeTruthy();
+    // Pin the browser workspace scope to the draft's workspace: the folder
+    // page fetches scoped to localStorage while the raw API draft carries the
+    // session workspace. Without the pin the detail fetch 404s and the page
+    // renders the "Dossier" fallback without the Documents section.
+    await page.addInitScript((workspaceId: string) => {
+      if (workspaceId) localStorage.setItem('workspaceScopeId', workspaceId);
+      else localStorage.removeItem('workspaceScopeId');
+    }, String(draftJson?.workspaceId ?? draftJson?.workspace_id ?? ''));
 
     // Upload court + long via API (multipart)
     const shortName = `README-${Date.now()}.md`;

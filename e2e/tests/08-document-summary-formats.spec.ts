@@ -38,8 +38,17 @@ test.describe('Documents — summary across formats (docx + pdf)', () => {
       data: { name: folderName, description: 'Docx + pdf summary e2e' },
     });
     expect(draftRes.ok()).toBeTruthy();
-    const folderId = String((await draftRes.json().catch(() => null) as any)?.id ?? '');
+    const draftBody = (await draftRes.json().catch(() => null) as any) ?? {};
+    const folderId = String(draftBody?.id ?? '');
     expect(folderId).toBeTruthy();
+    // Pin the browser workspace scope to the draft's workspace: the folder
+    // page fetches scoped to localStorage while the raw API draft carries the
+    // session workspace. Without the pin the detail fetch 404s and the page
+    // renders the "Dossier" fallback without the Documents section.
+    await page.addInitScript((workspaceId: string) => {
+      if (workspaceId) localStorage.setItem('workspaceScopeId', workspaceId);
+      else localStorage.removeItem('workspaceScopeId');
+    }, String(draftBody?.workspaceId ?? draftBody?.workspace_id ?? ''));
 
     // BUG-3 fixture: a real docx that file-type sniffs as plain "zip".
     const docxName = `report-${Date.now()}.docx`;

@@ -127,6 +127,10 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       if (outcome.malformed) { ended = true; return res.end('data: {invalid}\n\n'); }
       if (message.tool_calls) event({ tool_calls: message.tool_calls.map((tool, index) => ({ index, ...tool })) });
       else {
+        // Pacing keeps paced journeys in-flight: hold the first byte so the
+        // steering flow can interrupt before any assistant row commits, then
+        // pace chunks so the run stays active through the interruption.
+        if (outcome.delay) await new Promise(resolve => setTimeout(resolve, outcome.initialDelayMs ?? outcome.delay));
         const parts = String(message.content ?? '').match(/.{1,80}/gsu) ?? [''];
         for (const content of parts) {
           if (res.destroyed) return;
@@ -253,7 +257,7 @@ export function journeyResponse(body) {
     // Chat-services journeys require [organizationId, updates]; skills-registry
     // journeys require [organizationId, patch]. Shape the args to the schema the
     // journey actually offered so the call validates either way.
-    const required = new Set(body.tools.find(t => t.function?.name === 'organization_update')?.function?.parameters?.required ?? []);
+    const required = new Set(body.tools?.find(t => t.function?.name === 'organization_update')?.function?.parameters?.required ?? []);
     const organizationId = id('organization');
     const technologies = 'Kubernetes, containers, CI/CD and infrastructure-as-code';
     if (required.has('patch')) return call('organization_update', { organizationId, patch: { technologies } });
@@ -273,7 +277,7 @@ export function journeyResponse(body) {
   if (results.length === 0 && longForm) {
     const total = Math.min(Number(longForm[1]), 200);
     const lines = Array.from({ length: total }, (_, i) => `Ligne ${i + 1} : point d'analyse maintenance prédictive ${i + 1}.`);
-    return { content: lines.join('\n'), delay: 50 };
+    return { content: lines.join('\n'), delay: 50, initialDelayMs: 3000 };
   }
   return { content: text.includes('Bob') ? 'Bonjour Bob, voici la réponse.' : 'CI provider response: opération terminée.' };
 }
