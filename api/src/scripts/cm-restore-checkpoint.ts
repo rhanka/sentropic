@@ -10,15 +10,23 @@
  * rows; the snapshot files are integrity evidence, exactly like the isolated
  * test fixture (`api/tests/utils/cm-cutover-test-config.ts`).
  *
- * CI-only: invoked once by `make restore-api-sut` inside the toolbox
- * container, which shares the `cm-restore-checkpoint` volume with `api-sut`.
- * The WebAuthn verifier comes from the environment, so the caller must pass
- * the same `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` the SUT boots with.
+ * CI-only: invoked once by `make restore-api-sut` via the api-sut image
+ * itself (`node dist/index.js --cm-restore-checkpoint`), which shares the
+ * `cm-restore-checkpoint` volume with the booted SUT. Running inside the
+ * production bundle is load-bearing, not incidental: the mapping digest
+ * hashes `Function.prototype.toString` of the mapping implementation, and
+ * that text differs between the tsx-interpreted source and the esbuild dist.
+ * A toolbox-side tsx generator can therefore never produce a checkpoint the
+ * booted SUT accepts; generating with the bundle's own functions makes the
+ * digests byte-identical by construction. The WebAuthn verifier comes from
+ * the environment, so the caller must pass the same `WEBAUTHN_RP_ID` /
+ * `WEBAUTHN_ORIGIN` the SUT boots with.
  */
 
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { identityCustodySchemaAssetV1 } from '@sentropic/cluster-mesh';
 import { pool } from '../db/client';
 import { connectorCustodyAssetSha256 } from '../services/identity/cm-connector-custody-values';
@@ -28,76 +36,92 @@ import { loadA4RemoteSnapshot } from '../services/identity/cm-import-remote-snap
 import { readA4IdentitySource } from '../services/identity/cm-import-source';
 import { getWebAuthnConfig } from '../services/webauthn-config';
 
-const directory = process.env.CM_RESTORE_CHECKPOINT_DIR ?? '/run/cm-checkpoint';
-const candidateCommit = process.env.CANDIDATE_COMMIT ?? '0'.repeat(40);
-if (!/^[a-f0-9]{40}$/.test(candidateCommit)) {
-  console.error('CANDIDATE_COMMIT must be a 40-char lowercase hex commit SHA.');
-  process.exitCode = 1;
-} else {
-  try {
-    const rp = getWebAuthnConfig();
-    const verifier = {
-      rpId: rp.rpID,
-      origins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin],
-    };
-    const client = await pool.connect();
-    try {
-      await mkdir(directory, { recursive: true, mode: 0o700 });
-      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      let snapshotBytes: string;
-      try {
-        const source = await readA4IdentitySource(client);
-        snapshotBytes = JSON.stringify({ rows: [...source.rows], inventory: source.inventory });
-      } finally {
-        await client.query('ROLLBACK');
-      }
-      const remoteBytes = JSON.stringify({ format: 'remote-session-projection-snapshot/1', records: [] });
-      const sourceSnapshotPath = join(directory, 'source.json');
-      const remoteSnapshotPath = join(directory, 'remote.json');
-      await writeFile(sourceSnapshotPath, snapshotBytes, { mode: 0o600 });
-      await writeFile(remoteSnapshotPath, remoteBytes, { mode: 0o600 });
-      const identityAsset = identityCustodySchemaAssetV1('postgres');
-      const expected = {
-        mappingSha256: a4MappingAssetSha256(verifier),
-        identityAssetSha256: identityAsset.assetSha256,
-        connectorAssetSha256: connectorCustodyAssetSha256,
-      };
-      const checkpointPath = join(directory, 'checkpoint.json');
-      await writeFile(checkpointPath, JSON.stringify({
-        format: 'app-cm-identity-cutover/1',
-        purpose: 'rehearsal',
-        candidateCommit,
-        sourceSnapshotPath,
-        sourceSnapshotRef: 'rehearsal:restored-source',
-        sourceSnapshotDigest: createHash('sha256').update(snapshotBytes).digest('hex'),
-        remoteSnapshotPath,
-        remoteSnapshotRef: 'rehearsal:empty-remote',
-        remoteSnapshotDigest: createHash('sha256').update(remoteBytes).digest('hex'),
-        ...expected,
-        writerFenceRef: 'rehearsal:quiesced-restore',
-        legacyWritersStopped: true,
-        remoteFileWriterStopped: true,
-        rollbackCheckpointRef: 'rehearsal:source-database',
-        rollbackLimitsRef: 'rehearsal:transaction-rollback',
-        sourceMetadataDispositionRef: 'rehearsal:source-database',
-        rehearsalReceiptRef: null,
-      }), { mode: 0o600 });
-      // Self-check with the same loader the migration boot uses.
-      await loadCmCutoverCheckpoint(checkpointPath, expected);
-      await loadA4RemoteSnapshot(remoteSnapshotPath);
-      console.log(`CHECKPOINT_FILE=${checkpointPath}`);
-      // Non-secret observability: the SUT recomputes these digests from its
-      // own code + env. Any mismatch fail-closes without detail by design, so
-      // a mismatch is debugged from this line (generator side).
-      console.log(`CHECKPOINT_VERIFIER rpId=${verifier.rpId} origins=${verifier.origins.join(',')}`);
-      console.log(`CHECKPOINT_DIGESTS mapping=${expected.mappingSha256} identity=${expected.identityAssetSha256} connector=${expected.connectorAssetSha256}`);
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Failed to write the restore rehearsal checkpoint:', error);
+export async function runCmRestoreCheckpoint(): Promise<void> {
+  const directory = process.env.CM_RESTORE_CHECKPOINT_DIR ?? '/run/cm-checkpoint';
+  const candidateCommit = process.env.CANDIDATE_COMMIT ?? '0'.repeat(40);
+  if (!/^[a-f0-9]{40}$/.test(candidateCommit)) {
+    console.error('CANDIDATE_COMMIT must be a 40-char lowercase hex commit SHA.');
     process.exitCode = 1;
-  } finally {
-    await pool.end();
+  } else {
+    try {
+      const rp = getWebAuthnConfig();
+      const verifier = {
+        rpId: rp.rpID,
+        origins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin],
+      };
+      const client = await pool.connect();
+      try {
+        await mkdir(directory, { recursive: true, mode: 0o700 });
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        let snapshotBytes: string;
+        try {
+          const source = await readA4IdentitySource(client);
+          snapshotBytes = JSON.stringify({ rows: [...source.rows], inventory: source.inventory });
+        } finally {
+          await client.query('ROLLBACK');
+        }
+        const remoteBytes = JSON.stringify({ format: 'remote-session-projection-snapshot/1', records: [] });
+        const sourceSnapshotPath = join(directory, 'source.json');
+        const remoteSnapshotPath = join(directory, 'remote.json');
+        await writeFile(sourceSnapshotPath, snapshotBytes, { mode: 0o600 });
+        await writeFile(remoteSnapshotPath, remoteBytes, { mode: 0o600 });
+        const identityAsset = identityCustodySchemaAssetV1('postgres');
+        const expected = {
+          mappingSha256: a4MappingAssetSha256(verifier),
+          identityAssetSha256: identityAsset.assetSha256,
+          connectorAssetSha256: connectorCustodyAssetSha256,
+        };
+        const checkpointPath = join(directory, 'checkpoint.json');
+        await writeFile(checkpointPath, JSON.stringify({
+          format: 'app-cm-identity-cutover/1',
+          purpose: 'rehearsal',
+          candidateCommit,
+          sourceSnapshotPath,
+          sourceSnapshotRef: 'rehearsal:restored-source',
+          sourceSnapshotDigest: createHash('sha256').update(snapshotBytes).digest('hex'),
+          remoteSnapshotPath,
+          remoteSnapshotRef: 'rehearsal:empty-remote',
+          remoteSnapshotDigest: createHash('sha256').update(remoteBytes).digest('hex'),
+          ...expected,
+          writerFenceRef: 'rehearsal:quiesced-restore',
+          legacyWritersStopped: true,
+          remoteFileWriterStopped: true,
+          rollbackCheckpointRef: 'rehearsal:source-database',
+          rollbackLimitsRef: 'rehearsal:transaction-rollback',
+          sourceMetadataDispositionRef: 'rehearsal:source-database',
+          rehearsalReceiptRef: null,
+        }), { mode: 0o600 });
+        // Self-check with the same loader the migration boot uses.
+        await loadCmCutoverCheckpoint(checkpointPath, expected);
+        await loadA4RemoteSnapshot(remoteSnapshotPath);
+        console.log(`CHECKPOINT_FILE=${checkpointPath}`);
+        // Non-secret observability: the SUT recomputes these digests from its
+        // own code + env. Any mismatch fail-closes without detail by design, so
+        // a mismatch is debugged from this line (generator side).
+        console.log(`CHECKPOINT_VERIFIER rpId=${verifier.rpId} origins=${verifier.origins.join(',')}`);
+        console.log(`CHECKPOINT_DIGESTS mapping=${expected.mappingSha256} identity=${expected.identityAssetSha256} connector=${expected.connectorAssetSha256}`);
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('Failed to write the restore rehearsal checkpoint:', error);
+      process.exitCode = 1;
+    } finally {
+      await pool.end();
+    }
   }
+}
+
+// Dev-only direct invocation (`tsx src/scripts/cm-restore-checkpoint.ts`).
+// Inside the production bundle this guard is false (argv[1] is dist/index.js),
+// where the `--cm-restore-checkpoint` argv branch in src/index.ts applies.
+const invokedDirectly = (() => {
+  try {
+    return !!process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+})();
+if (invokedDirectly) {
+  await runCmRestoreCheckpoint();
 }
