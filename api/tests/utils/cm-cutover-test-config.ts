@@ -14,7 +14,8 @@ import { createCmTokenCustodian } from '../../src/services/identity/cm-token-cus
 
 /** Synthetic isolated-database evidence, never a deployment/rehearsal receipt. */
 export async function createCmCutoverTestConfiguration(client: PoolClient,
-  verifier = { rpId: 'localhost', origins: ['http://localhost:5840'] }) {
+  verifier = { rpId: 'localhost', origins: ['http://localhost:5840'] },
+  purpose: 'rehearsal' | 'cutover' = 'rehearsal') {
   if (process.env.NODE_ENV !== 'test') throw new Error('Isolated test environment required');
   const directory = await mkdtemp(join(tmpdir(), 'a4-import-fixture-'));
   const sessionKey = randomBytes(32), ticketKey = randomBytes(32);
@@ -37,14 +38,14 @@ export async function createCmCutoverTestConfiguration(client: PoolClient,
       connectorAssetSha256: connectorCustodyAssetSha256 };
     const path = join(directory, 'checkpoint.json');
     await writeFile(path, JSON.stringify({
-      format: 'app-cm-identity-cutover/1', purpose: 'rehearsal', candidateCommit: '0'.repeat(40),
+      format: 'app-cm-identity-cutover/1', purpose, candidateCommit: '0'.repeat(40),
       sourceSnapshotPath, sourceSnapshotRef: 'fixture:isolated-source',
       sourceSnapshotDigest: createHash('sha256').update(snapshotBytes).digest('hex'),
       remoteSnapshotPath, remoteSnapshotRef: 'fixture:empty-remote',
       remoteSnapshotDigest: createHash('sha256').update(remoteBytes).digest('hex'), ...expected,
       writerFenceRef: 'fixture:exclusive-test-database', legacyWritersStopped: true, remoteFileWriterStopped: true,
       rollbackCheckpointRef: 'fixture:source', rollbackLimitsRef: 'fixture:transaction-rollback',
-      sourceMetadataDispositionRef: 'fixture:source', rehearsalReceiptRef: null,
+      sourceMetadataDispositionRef: 'fixture:source', rehearsalReceiptRef: purpose === 'cutover' ? 'fixture:rehearsal-only' : null,
     }), { mode: 0o600 });
     return { checkpointPath: path, config: { checkpoint: await loadCmCutoverCheckpoint(path, expected),
       remoteSnapshot: await loadA4RemoteSnapshot(remoteSnapshotPath), verifier, identityAsset, tokens, mappingSha256,
