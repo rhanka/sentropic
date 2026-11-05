@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { vi } from 'vitest';
 import { createGwNamespaceModule, GW_AUTHOR, type CreateGwNamespaceModuleOptions } from '../../src/routes/namespaces/gw';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
-import { authHonoSessionService } from '../../src/services/auth/session-adapter';
+import * as cmHttpPrincipal from '../../src/services/identity/cm-http-principal';
 import * as workspaces from '../../src/services/workspace-service';
 import * as access from '../../src/services/workspace-access';
 import { routePartitionHash } from '../../src/services/llm-metering';
@@ -17,11 +17,15 @@ export const gwNativeFixture = async (enabled = true, options: CreateGwNamespace
   const tenant = `native-${randomUUID()}`;
   const users = [`${tenant}-a`, `${tenant}-b`];
   const tokens = new Map([['a', users[0]!], ['a2', users[0]!], ['b', users[1]!]]);
-  vi.spyOn(authHonoSessionService, 'validateSessionToken').mockImplementation(async token => {
+  // requireAuth authenticates through the CM principal seam, not the legacy session
+  // adapter: mock the seam the middleware actually calls. Unknown tokens yield a
+  // null principal so the middleware answers 401.
+  vi.spyOn(cmHttpPrincipal, 'authenticateCmHttpRequest').mockImplementation(async request => {
+    const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
     const userId = tokens.get(token);
-    if (!userId) return null;
-    return { session: { userId, sessionId: token }, sessionRecord: { createdAt: new Date() }, role: 'user' } as
-      NonNullable<Awaited<ReturnType<typeof authHonoSessionService.validateSessionToken>>>;
+    if (!userId) return { accepted: true as const, principal: null };
+    return { accepted: true as const, principal: { role: 'user', session: { userId, sessionId: token },
+      sessionRecord: { createdAt: new Date() }, user: { id: userId } } as never };
   });
   vi.spyOn(workspaces, 'ensureWorkspaceForUser').mockResolvedValue({ workspaceId: `${tenant}-ws` });
   vi.spyOn(access, 'isWorkspaceDeleted').mockResolvedValue(false);
