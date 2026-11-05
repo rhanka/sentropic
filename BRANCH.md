@@ -82,11 +82,11 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
   - [x] Run the new file scoped: `SCOPE=tests/uploads-commit-integrity.test.ts` via `test-artifacts`; observe failures as the repro baseline (4/4 red with the expected failure modes: untyped refusal, announced `checksumHeader`).
   - [x] Sub-lot gate: `make typecheck-artifacts` + `make lint-artifacts` with `ENV=test-upload-cksum` last (0 errors; 3 pre-existing warnings in `files-parity-lot2.test.ts`, untouched).
 - [ ] **Lot 2 — Fail-closed fix**
-  - [ ] `packages/artifacts/src/server/uploads.ts`: stop announcing `checksumHeader`; `requiredHeaders` is exactly the signer output; typed verification error; delete/quarantine the staging object on size/digest mismatch; no release on mismatch.
-  - [ ] `packages/artifacts/src/adapters/s3-uploads.ts`: sign content-type plus exact content-length only; remove the unsigned checksum announcement path.
-  - [ ] `packages/artifacts/src/server/upload-page.ts`: PUT carries exactly the announced headers.
-  - [ ] `packages/artifacts/src/server/templates.ts`: guide text matches the fixed channel (no checksum header).
-  - [ ] Update existing tests that assert the old announced header (`uploads.test.ts`, `files-parity-lot1.test.ts`, `files-parity-lot2.test.ts`) to the new contract without weakening refusal coverage.
+  - [x] `packages/artifacts/src/server/uploads.ts`: stop announcing `checksumHeader`; `requiredHeaders` is exactly the signer output; typed verification error; delete/quarantine the staging object on size/digest mismatch; no release on mismatch (3 commits: typed errors, quarantine, header removal).
+  - [x] `packages/artifacts/src/adapters/s3-uploads.ts`: sign content-type plus exact content-length only; remove the unsigned checksum announcement path.
+  - [x] `packages/artifacts/src/server/upload-page.ts`: PUT carries exactly the announced headers.
+  - [x] `packages/artifacts/src/server/templates.ts`: guide text matches the fixed channel (no checksum header).
+  - [x] Update existing tests that assert the old announced header (`uploads.test.ts`, `files-parity-lot1.test.ts`, `files-parity-lot2.test.ts`) to the new contract without weakening refusal coverage (refusals kept; retry tail strengthened to refusal).
   - [ ] Lot gate: new tests green; `make typecheck-artifacts` + `make lint-artifacts`; scoped `make test-artifacts SCOPE=tests/uploads.test.ts`, `SCOPE=tests/files-parity-lot1.test.ts`, `SCOPE=tests/files-parity-lot2.test.ts`, `SCOPE=tests/http-uploads-templates.test.ts` with `ENV=test-upload-cksum` last.
 - [ ] **Lot 3 — Patch release 0.2.16**
   - [ ] Bump `packages/artifacts/package.json` to `0.2.16` (stays in `0.2.x` per the cluster-mesh `>=0.2.0 <0.3.0` allocation).
