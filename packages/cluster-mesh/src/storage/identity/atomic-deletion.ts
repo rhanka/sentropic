@@ -47,7 +47,8 @@ const authorize = async (command: PersonDeletionCommandV2, account: { readonly a
     if (account.globalRole === 'admin_app' || account.globalRole === 'admin_org') throw new AdminUserProtectedError(DELETE);
     if (actorStatus !== 'active') throw new IdentityNotFoundError('user', command.actorId);
   }
-  if (account.accountStatus !== 'disabled') {
+  if (account.accountStatus !== 'disabled'
+    && !(command.handlerId === 'admin_account' && account.accountStatus === 'pending_admin_approval')) {
     throw new AccountTransitionError('Account must be disabled before deletion');
   }
 };
