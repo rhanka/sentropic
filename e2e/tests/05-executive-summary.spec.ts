@@ -22,6 +22,10 @@ test.describe('Executive summary rendering', () => {
   };
 
   test.beforeAll(async () => {
+    // Retry-safety: beforeAll re-runs on retry with fresh seeded data, so
+    // stale titles from a previous attempt must not accumulate (the annex
+    // count assertion compares against exactly the current attempt's titles).
+    useCaseTitles.length = 0;
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,

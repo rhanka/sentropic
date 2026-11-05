@@ -7,7 +7,7 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatMessages, chatStreamEvents, jobQueue } from '../../src/db/schema';
+import { chatMessages, chatStreamEvents, jobQueue, tenantMemberships } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
 
@@ -17,6 +17,9 @@ describe('Chat AI - Complete Integration', () => {
   beforeEach(async () => {
     await cleanupAuthData();
     user = await createAuthenticatedUser('editor');
+    // Approved tenant membership so the turn catalog resolves (fail-closed otherwise) and
+    // the deterministic provider fixture is offered the real application tools.
+    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
   });
 
   afterEach(async () => {
@@ -44,7 +47,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 10;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(1000); // Wait 1 second between checks
+        if (attempts > 0) await sleep(1000);
 
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
         expect(job).toBeDefined();
@@ -109,7 +112,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 20;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(1000);
+        if (attempts > 0) await sleep(1000);
 
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
         expect(job).toBeDefined();
@@ -153,7 +156,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 5;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(5000);
+        if (attempts > 0) await sleep(5000);
 
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
         expect(job).toBeDefined();
@@ -199,7 +202,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 10;
 
       while (!firstJobCompleted && attempts < maxAttempts) {
-        await sleep(1000);
+        if (attempts > 0) await sleep(1000);
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, firstJobId)).limit(1);
         expect(job).toBeDefined();
         if (job && (job.status === 'completed' || job.status === 'failed')) {
@@ -226,7 +229,7 @@ describe('Chat AI - Complete Integration', () => {
       attempts = 0;
 
       while (!secondJobCompleted && attempts < maxAttempts) {
-        await sleep(1000);
+        if (attempts > 0) await sleep(1000);
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, secondJobId)).limit(1);
         expect(job).toBeDefined();
         if (job && (job.status === 'completed' || job.status === 'failed')) {

@@ -1,5 +1,10 @@
 services:
   api:
+    # Dev/test stacks always resolve the development tag: the canonical
+    # production pin (API_IMAGE_REF) is for SUT lanes only. Without this, any
+    # recorded production receipt redirects dev `build`/`run`/`up` at the
+    # production digest, which ships without npm (BR81-EX5).
+    image: ${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION:-latest}
     volumes:
       - ./:/workspace
       - workspace_node_modules:/workspace/node_modules

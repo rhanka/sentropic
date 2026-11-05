@@ -10,6 +10,7 @@ export default defineConfig({
   retries: 2,
   workers: 4,
   reporter: 'list',
+  metadata: { providerMode: process.env.CI_PROVIDER_MODE || 'fixture' },
   globalSetup: './global.setup.ts',
   use: {
     baseURL: uiBaseUrl,
