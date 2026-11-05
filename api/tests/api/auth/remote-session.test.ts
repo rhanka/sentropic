@@ -67,11 +67,11 @@ describe('RC1 current issuer session store', () => {
     if (failure === 'missing-pvc') rmSync(directory, { recursive: true });
     // Post-cutover only the CM binding supplies session authority (the OAuth
     // host bag keeps sessions unsupported by design); the oauth-* entries go
-    // through the binding ports, like the serving OAuth namespace does.
+    // through the binding session service, like the serving OAuth namespace does.
     const cmRevoke = (sessionId: string) => withAppCmAuth(runner =>
-      runner.request(async binding => binding.sessions.revoke(sessionId)));
+      runner.request(async binding => binding.sessions.revokeSession(sessionId)));
     const cmRevokeAll = (id: string) => withAppCmAuth(runner =>
-      runner.request(async binding => binding.sessions.revokeAllForUser(id)));
+      runner.request(async binding => binding.sessions.revokeAllSessions(id)));
     if (operation === 'logout') await expect(revokeSession(tokens.sessionId)).resolves.toBeUndefined();
     if (operation === 'revoke-all') await expect(revokeAllSessions(userId)).resolves.toBeUndefined();
     if (operation === 'oauth-logout') await expect(cmRevoke(tokens.sessionId)).resolves.toBe(true);
@@ -100,9 +100,9 @@ describe('RC1 current issuer session store', () => {
       if (operation === 'logout') await revokeSession(tokens.sessionId);
       if (operation === 'revoke-all') await revokeAllSessions(userId);
       if (operation === 'oauth-logout') await withAppCmAuth(runner =>
-        runner.request(async binding => binding.sessions.revoke(tokens.sessionId)));
+        runner.request(async binding => binding.sessions.revokeSession(tokens.sessionId)));
       if (operation === 'oauth-revoke-all') await withAppCmAuth(runner =>
-        runner.request(async binding => binding.sessions.revokeAllForUser(userId)));
+        runner.request(async binding => binding.sessions.revokeAllSessions(userId)));
       mkdirSync(directory, { recursive: true });
       await cmReinsertSession(row!);
       const code = failure === 'corrupt-foreign-file' && !operation.endsWith('all')
@@ -121,7 +121,7 @@ describe('RC1 current issuer session store', () => {
     // Reproduce the committed DB insert while its private-create continuation is paused.
     unlinkSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json`));
     expect(await withAppCmAuth(runner =>
-      runner.request(async binding => binding.sessions.revokeAllForUser(userId)))).toBe(1);
+      runner.request(async binding => binding.sessions.revokeAllSessions(userId)))).toBe(1);
     expect(() => store.create(pending)).toThrow();
     await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
