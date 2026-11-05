@@ -1,7 +1,8 @@
 import { createWorkspaceDirectory, IdentityConflictError, IdentityCustodyErrorV1, IdentityNotFoundError,
   type WorkspaceRole } from '@sentropic/cluster-mesh';
 import { CmIdentityForbiddenError } from './cm-deletion-authorization';
-import { runCmIdentityRead, runCmIdentityWrite, type CmIdentityTransaction } from './cm-transaction';
+import { runCmIdentityRead, runCmIdentityWrite, withSerializationRetry,
+  type CmIdentityTransaction } from './cm-transaction';
 
 export class CmWorkspaceMembershipPolicyError extends Error {
   constructor(message: string, readonly responseKey: 'message' | 'error' = 'message') { super(message); }
@@ -37,7 +38,11 @@ type MemberAction = { kind: 'add'; email: string; role: WorkspaceRole }
   | { kind: 'set_role'; userId: string; role: WorkspaceRole }
   | { kind: 'remove'; userId: string };
 export const changeCmWorkspaceMember = (command: { actorId: string; workspaceId: string; action: MemberAction }) =>
-  runCmIdentityWrite(async tx => {
+  // Parallel specs add isolated members while other workers hold the same
+  // subject/workspace rows; the serializable loser aborts with 40001 and the
+  // route fail-closes with 503. Retrying the whole attempt is safe: an
+  // aborted attempt commits nothing, and only 40001/40P01 abort retries.
+  withSerializationRetry(() => runCmIdentityWrite(async tx => {
     const { actorId, workspaceId, action } = command;
     // Authorize before revealing whether the requested target exists.
     await requireMember(actorId, workspaceId, true, tx);
@@ -71,4 +76,4 @@ export const changeCmWorkspaceMember = (command: { actorId: string; workspaceId:
     else await domain.addWorkspaceMember({ ...input, role: action.role });
     await tx.advanceSubjectRevision(target.userId, new Date().toISOString(), false);
     return { userId: target.userId, changed: true };
-  });
+  }));
