@@ -26,7 +26,7 @@ export const createSentropicOAuthIngress = (publicPath: string): Hono => {
     ...createSentropicOAuthOptions(c.req.raw),
     ports: binding.ports,
     routePrefix: publicPath,
-  }));
+  }), undefined, { readOnly: c.req.method === 'GET' && c.req.path.endsWith('/consent') });
 
   for (const [method, path] of OAUTH_ROUTES) ingress.on(method, path, forward);
   return ingress;

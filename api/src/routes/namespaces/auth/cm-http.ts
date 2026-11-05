@@ -5,6 +5,8 @@ import { withAppCmAuth } from '../../../services/identity/cm-auth-runtime';
 import type { CmIdentityTransaction } from '../../../services/identity/cm-transaction';
 import type { CmRegistrationPresentation } from '../../../services/identity/cm-auth-binding';
 import { assertCmHostHealthy } from '../../../services/identity/cm-host-scope';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { logger } from '../../../logger';
 
 interface StagedResponse {
   readonly status: number;
@@ -74,15 +76,21 @@ const rollbackResponse = (response: StagedResponse): StagedResponse => {
 /** Execute an unchanged handler on a private context; publish only a committed copy. */
 export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlowV1 | null,
   router: (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction) => Hono,
-  presentation?: CmRegistrationPresentation | ((body: ArrayBuffer | undefined) => CmRegistrationPresentation | undefined)): Promise<Response> {
+  presentation?: CmRegistrationPresentation | ((body: ArrayBuffer | undefined) => CmRegistrationPresentation | undefined),
+  options?: { readonly readOnly?: boolean }): Promise<Response> {
   const request = c.req.raw;
+  const readOnly = flow === null && options?.readOnly === true;
   try {
     const body = await captureBody(request);
     const registration = typeof presentation === 'function' ? presentation(body) : presentation;
     return await withAppCmAuth(async runner => {
       const work = async (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction): Promise<StagedResponse> => {
         // Each retry gets fresh headers/context/body. No failed-attempt cookie survives.
-        const stagedRouter = router(binding, tx);
+        // A read-only protocol probe validates current authority without making
+        // availability depend on a conflicting session-activity write.
+        const stagedRouter = router(readOnly ? { ...binding, ports: { ...binding.ports,
+          sessions: { ...binding.ports.sessions, touch: async () => undefined },
+        } } : binding, tx);
         stagedRouter.onError(error => { throw error; });
         const response = await stagedRouter.fetch(new Request(request.url, {
           method: request.method, headers: new Headers(request.headers), body: body?.slice(0),
@@ -95,12 +103,19 @@ export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlow
         return copy;
       };
       const trusted = registration ? (tx: CmIdentityTransaction) => runner.registrationContext(registration, tx) : null;
-      if (flow === null) return publish(await runner.request(work, trusted));
+      if (flow === null) return publish(await (readOnly
+        ? runner.authenticate(work, trusted) : runner.request(work, trusted)));
       const outcome = await runner.complete(flow, work, trusted);
       return outcome.committed ? publish(outcome.value) : refusalResponse(outcome.refusal);
     });
   } catch (error) {
     if (error instanceof HttpRefusal) return publish(error.response);
+    const cause = error && typeof error === 'object' && 'cause' in error ? error.cause : error;
+    const databaseCode = cause && typeof cause === 'object' && 'code' in cause ? String(cause.code) : '';
+    logger.warn({ path: c.req.path, method: c.req.method,
+      code: error instanceof IdentityCustodyErrorV1 ? error.code : 'identity_http_attempt_failed',
+      ...(/^[A-Z0-9]{5}$/.test(databaseCode) ? { databaseCode } : {}),
+    }, 'CM HTTP attempt unavailable');
     // Never expose a frozen-domain error message, SQL parameters or credential material.
     return Response.json({ error: { code: 'identity_unavailable', message: 'Identity service unavailable.' } }, { status: 503 });
   }
