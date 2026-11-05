@@ -119,6 +119,16 @@ export const withSerializationRetry = async <T>(operation: () => Promise<T>, att
     } catch (error) {
       failure = error;
       if (!isSerializationFailure(error)) throw error;
+      // Jittered backoff between attempts: a serialization loser must wait out
+      // the winner's commit instead of re-colliding immediately. Without it the
+      // per-request session touch (same login row on every authenticated call)
+      // aborts parallel losers faster than immediate retries converge (e2e
+      // parallelism, 27 auth 500s on run 42024251267). Attempts stay bounded;
+      // only 40001/40P01 aborts retry, so fail-closed semantics are unchanged.
+      if (attempt + 1 < attempts) {
+        const delayMs = 20 * (attempt + 1) + Math.floor(Math.random() * 30);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
     }
   }
   throw failure;

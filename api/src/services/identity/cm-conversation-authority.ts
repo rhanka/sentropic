@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createConversationAuthority, IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import type { AuthUser } from '../../middleware/auth';
 import { getCmIdentity } from './cm-identity';
-import { runCmIdentityWrite } from './cm-transaction';
+import { runCmIdentityWrite, withSerializationRetry } from './cm-transaction';
 
 type VerifiedCaller = Readonly<Pick<AuthUser, 'userId' | 'workspaceId' | 'sessionId'>>;
 const caller = new AsyncLocalStorage<VerifiedCaller>();
@@ -21,7 +21,11 @@ export async function admitCmBusinessConversation(chatSessionId: string): Promis
   if (!verified?.userId || !verified.workspaceId || !verified.sessionId) return false;
   const prospectiveId = randomUUID(); // An id hint only; stable across callback retries.
   try {
-    return await runCmIdentityWrite(async tx => {
+    // Concurrent admissions abort with 40001 (same-tick chat creation on
+    // overlapping subjects/workspaces); retry in a fresh transaction. Safe:
+    // a serialization abort discards the whole attempt, so the retried
+    // openSession + chat-row update observe a clean slate.
+    return await withSerializationRetry(() => runCmIdentityWrite(async tx => {
       await tx.lockSubject(verified.userId);
       await tx.lockWorkspace(verified.workspaceId);
       const result = await tx.hostTransaction.query<{
@@ -45,7 +49,7 @@ export async function admitCmBusinessConversation(chatSessionId: string): Promis
         WHERE id = $2 AND cm_conversation_session_id IS NULL`, [prospectiveId, chatSessionId]);
       if (updated.rowCount !== 1) throw new IdentityCustodyErrorV1('identity_record_conflict');
       return true;
-    });
+    }));
   } catch (error) {
     if (error instanceof IdentityCustodyErrorV1 && error.code === 'identity_transaction_indeterminate') {
       throw new IdentityCustodyErrorV1('identity_transaction_indeterminate');
