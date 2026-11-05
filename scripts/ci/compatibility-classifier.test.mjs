@@ -74,3 +74,59 @@ test('should classify a minor bump as additive and a major bump as breaking', ()
   assert.equal(major.kind, 'breaking');
   assert.match(major.reasons.join('\n'), /major/);
 });
+
+test('should classify a removed dependency or a tightened floor as breaking', () => {
+  const removed = classifyPackageChange({
+    slug: 'comments', scope: 'library', files: ['packages/comments/src/a.ts', 'packages/comments/package.json'],
+    published: lib('comments', '0.3.1', { hono: '^4.10.7', zod: '^3.25.76' }),
+    candidate: lib('comments', '0.3.2', { hono: '^4.10.7' }),
+  });
+  assert.equal(removed.kind, 'breaking');
+  assert.match(removed.reasons.join('\n'), /removed dependency: zod/);
+  const tightened = classifyPackageChange({
+    slug: 'comments', scope: 'library', files: ['packages/comments/src/a.ts', 'packages/comments/package.json'],
+    published: lib('comments', '0.3.1', { hono: '^4.10.7' }),
+    candidate: lib('comments', '0.3.2', { hono: '^4.13.0' }),
+  });
+  assert.equal(tightened.kind, 'breaking');
+  assert.match(tightened.reasons.join('\n'), /tightened floor/);
+});
+
+test('should classify an added dependency as additive', () => {
+  const verdict = classifyPackageChange({
+    slug: 'comments', scope: 'library', files: ['packages/comments/src/a.ts', 'packages/comments/package.json'],
+    published: lib('comments', '0.3.1', { hono: '^4.10.7' }),
+    candidate: lib('comments', '0.4.0', { hono: '^4.10.7', zod: '^3.25.76' }),
+  });
+  assert.equal(verdict.kind, 'additive');
+  assert.match(verdict.reasons.join('\n'), /added dependency: zod/);
+});
+
+test('should reject a file: dependency value as unknown because workspaces resolve source', () => {
+  const verdict = classifyPackageChange({
+    slug: 'comments', scope: 'library', files: ['packages/comments/src/a.ts', 'packages/comments/package.json'],
+    published: lib('comments', '0.3.1', {}),
+    candidate: lib('comments', '0.3.2', { '@sentropic/contracts': 'file:../contracts' }),
+  });
+  assert.equal(verdict.kind, 'unknown');
+  assert.match(verdict.reasons.join('\n'), /not registry evidence/);
+});
+
+test('should reject missing manifest evidence as unknown', () => {
+  for (const entry of [
+    { slug: 'comments', scope: 'library', files: ['packages/comments/src/a.ts'], published: null, candidate: lib('comments', '0.3.2') },
+    { slug: 'comments', scope: 'library', files: ['packages/comments/src/a.ts'], published: lib('comments', '0.3.1'), candidate: null },
+  ]) {
+    assert.equal(classifyPackageChange(entry).kind, 'unknown', JSON.stringify(entry.published));
+  }
+});
+
+test('should classify an application adopting a new library range as explicit adoption', () => {
+  const verdict = classifyPackageChange({
+    slug: 'api', scope: 'application', files: ['api/package.json'],
+    published: app('api', '0.0.0', { '@sentropic/comments': 'file:../packages/comments' }),
+    candidate: app('api', '0.0.0', { '@sentropic/comments': '0.4.0' }),
+  });
+  assert.equal(verdict.kind, 'explicit-adoption');
+  assert.match(verdict.reasons.join('\n'), /adopts @sentropic\/comments/);
+});
