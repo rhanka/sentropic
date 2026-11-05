@@ -3,6 +3,7 @@ import { AccountTransitionError, AdminUserProtectedError, IdentityNotFoundError,
   SelfActionForbiddenError, type PersonDeletionReceiptV2 } from '@sentropic/cluster-mesh';
 import type { Context } from 'hono';
 import { CmIdentityForbiddenError } from '../../../services/identity/cm-deletion-authorization';
+import { logger } from '../../../logger';
 
 /** The operation id is an idempotency key, never a permission to read another operation. */
 export async function runCmAccountDeletionHttp(c: Context,
@@ -13,8 +14,10 @@ export async function runCmAccountDeletionHttp(c: Context,
   c.header('identity-operation-id', operationId);
   try {
     const receipt = await operation(operationId);
-    if (receipt.transaction === 'rolled_back') return c.json({ success: false,
-      complete: false, operationId, resultCode: receipt.resultCode }, 503);
+    if (receipt.transaction === 'rolled_back') {
+      logger.warn({ operationId, resultCode: receipt.resultCode, steps: receipt.steps }, 'CM account deletion rolled back');
+      return c.json({ success: false, complete: false, operationId, resultCode: receipt.resultCode }, 503);
+    }
     return c.json({ success: true, complete: receipt.complete, operationId,
       status: receipt.complete ? 'complete' : 'delivery_pending', receipt }, receipt.complete ? 200 : 202);
   } catch (error) {
@@ -27,6 +30,10 @@ export async function runCmAccountDeletionHttp(c: Context,
     if (error instanceof AdminUserProtectedError || error instanceof SelfActionForbiddenError
       || error instanceof CmIdentityForbiddenError) return c.json({ error: 'Identity action is forbidden' }, 403);
     // Unknown commit outcomes retain the same operation id for trusted recovery.
+    logger.warn({ operationId, errorType: error instanceof Error ? error.name : 'unknown',
+      code: error && typeof error === 'object' && 'code' in error
+        && /^identity_[a-z_]+$/.test(String(error.code)) ? String(error.code) : 'identity_deletion_failure',
+    }, 'CM account deletion unavailable');
     return c.json({ error: 'Identity deletion unavailable', operationId, complete: false }, 503);
   }
 }

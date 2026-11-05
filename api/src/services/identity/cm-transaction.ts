@@ -8,6 +8,7 @@ import { createPostgresIdentityUnitOfWorkV1, IdentityCustodyErrorV1, PostgresCus
   type PostgresIdentityHostV1 } from '@sentropic/cluster-mesh';
 import { pool, type db } from '../../db/client';
 import { aliasCmHostScope, createCmScopedHostClient } from './cm-host-scope';
+import { logger } from '../../logger';
 
 /** Request host: the pooled connection plus the custody stores/journal the CM V2 flows require. */
 export type AppCustodyHost = PoolClient & CustodyOpHost;
@@ -65,6 +66,13 @@ const host: PostgresIdentityHostV1<AppCustodyHost> = {
       failure = error instanceof Error ? error : new Error('Identity transaction failed');
       try { await client.query('ROLLBACK'); } catch { /* Destroy the failed connection below. */ }
       const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+      const cause = error && typeof error === 'object' && 'cause' in error ? error.cause : undefined;
+      const diagnosticCode = code || (cause && typeof cause === 'object' && 'code' in cause ? String(cause.code) : '');
+      logger.warn({ readOnly: options.readOnly, committing,
+        code: error instanceof IdentityCustodyErrorV1 ? error.code
+          : /^[A-Z0-9]{5}$/.test(diagnosticCode) ? diagnosticCode : 'identity_host_failure',
+        errorType: error instanceof Error ? error.name : 'unknown',
+      }, 'CM host transaction rolled back');
       // A lost COMMIT acknowledgement cannot be retried as a confirmed rollback.
       if (committing && !/^(23|40)[A-Z0-9]{3}$/.test(code)) {
         throw new IdentityCustodyErrorV1('identity_transaction_indeterminate');
