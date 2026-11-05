@@ -43,6 +43,7 @@ Ship @sentropic/artifacts 0.2.17 with a host-configured application content mode
   - `api/tests/api/artifacts-reader-consent.test.ts`
   - `api/tests/api/artifacts-reader-grant.test.ts`
   - `api/tests/api/root-mount-fence-completeness.test.ts` (immutable artifact route list only)
+  - `api/tests/api/cluster-mesh-resources.test.ts` (declared artifact path list only)
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
   - `api/src/services/mcp/cluster-registry.ts`
