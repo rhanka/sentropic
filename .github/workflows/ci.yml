@@ -2315,7 +2315,7 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
@@ -2327,6 +2327,7 @@ jobs:
       (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.build-ui-static.result == 'success' || (needs.build-ui-static.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       needs.test-api-unit-integration.result == 'success' &&
+      (needs.test-api-ai.result == 'success' || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.ai != 'true' && needs.changes.outputs.global != 'true')) &&
       needs.test-e2e.result == 'success' &&
       needs.e2e-vscode.result == 'success' &&
       needs.smoke-idp-screens.result == 'success' &&
@@ -2375,6 +2376,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Download the qualified package candidates
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Dry-run package publication
         if: inputs.capacity_publish_dry_run == true
         env:
@@ -2385,6 +2391,7 @@ jobs:
       - name: Publish LLM Mesh
         if: inputs.capacity_publish_dry_run != true
         env:
+          CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
           CLOUD_CODE_OAUTH_CLIENT_SECRET: ${{ secrets.LLM_MESH_CLOUD_CODE_OAUTH_CLIENT_SECRET }}
         run: |
           set -eu
@@ -2425,8 +2432,15 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=llm-gateway ENV=test-ci-capacity
+      - name: Download the qualified package candidates
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Publish LLM Gateway
         if: inputs.capacity_publish_dry_run != true
+        env:
+          CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
         run: make publish-llm-gateway
 
   publish-chat-ui:
@@ -2931,8 +2945,15 @@ jobs:
         id: cluster_mesh_publish_decision
         if: inputs.capacity_publish_dry_run != true
         run: make cluster-mesh-publish-decision
+      - name: Download the qualified package candidates
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Publish Cluster Mesh
         if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
+        env:
+          CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
         run: make publish-cluster-mesh
       - name: Qualify published Cluster Mesh from the registry
         if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
