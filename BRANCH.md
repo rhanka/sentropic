@@ -25,6 +25,7 @@ Ship @sentropic/artifacts 0.2.17 with a host-configured application content mode
   - `packages/artifacts/src/content/handler.ts`
   - `packages/artifacts/src/content/routing.ts`
   - `packages/artifacts/src/server/mime.ts`
+  - `packages/artifacts/src/server/upload-page.ts`
   - `packages/artifacts/src/server/consent.ts`
   - `packages/artifacts/src/server/reader-consent-screen.ts`
   - `packages/artifacts/src/mcp-core.ts`
@@ -36,6 +37,7 @@ Ship @sentropic/artifacts 0.2.17 with a host-configured application content mode
   - `packages/artifacts/package.json`
   - `api/src/services/artifacts/reader-consent.ts`
   - `api/src/services/artifacts/reader-consent-screen.ts`
+  - `api/src/services/artifacts/instance.ts` (product readerConsent port only)
   - `api/src/routes/namespaces/artifacts.ts`
   - `api/tests/api/artifacts-reader-consent.test.ts`
   - `api/tests/api/artifacts-reader-grant.test.ts`
@@ -84,20 +86,20 @@ Ship @sentropic/artifacts 0.2.17 with a host-configured application content mode
   - [ ] Copy .env into the worktree for compose runs (gitignored, never committed).
   - [ ] Confirm environment mapping: ENV=test-art0217 always last; API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098.
   - [ ] Confirm scope boundaries and no BRxx-EXn needed unless a CI gate demands tools/memory-mcp-l5.
-- [ ] **Lot 1 — Tests first for application mode**
-  - [ ] Add failing-first tests in packages/artifacts/tests for the application CSP constant (every directive locked), safe-mode snapshot unchanged, reference SPA zero-violation shape, 404 for missing asset vs history fallback for extensionless HTML navigation, service worker refusal.
-  - [ ] Add failing-first tests in apps/artifact-content/tests for application mode (no unconditional worker-src none) and safe-mode bit-for-bit headers.
-  - [ ] Add MIME tests for .geojson .mjs .woff2 plus .wasm .pbf presence with no wasm-unsafe-eval.
-  - [ ] Lot gate: new tests fail on current code for the right reason; make typecheck-artifacts + make lint-artifacts clean.
-- [ ] **Lot 2 — Wagon 1 application mode implementation**
-  - [ ] Implement host-configured safe/application content mode (safe default bit-for-bit); application mode serves the binding J1.0 CSP constant; remove unconditional worker-src none for application only.
-  - [ ] Implement history fallback to index.html for HTML navigations without extension in application mode only; missing asset stays 404; service worker stays refused in both modes.
-  - [ ] Extend MIME map per packet (.geojson .mjs .woff2; keep .wasm .pbf; no wasm-unsafe-eval).
-  - [ ] Lot gate: scoped make test-artifacts green; safe snapshot unchanged; no tool definition bytes changed.
-- [ ] **Lot 3 — Wagon 2 generic grant contract**
-  - [ ] Wire grantWithFreshRights to a first-party HTTP grant route in api/src/routes/namespaces/artifacts.ts with host-declared scopes and versions.
-  - [ ] Add neutral host-parameterizable consent screen; single prescribed navigation from typed 403 code scopeId retryable false.
-  - [ ] Add fake non-immo tenant test: reader without consent reaches the screen in one click from the typed 403 with no loop.
+- [x] **Lot 1 — Tests first for application mode**
+  - [x] Add failing-first tests in packages/artifacts/tests for the application CSP constant (every directive locked), safe-mode snapshot unchanged, reference SPA zero-violation shape, 404 for missing asset vs history fallback for extensionless HTML navigation, service worker refusal.
+  - [x] Add failing-first tests in apps/artifact-content/tests for application mode (no unconditional worker-src none) and safe-mode bit-for-bit headers.
+  - [x] Add MIME tests for .geojson .mjs .woff2 plus .wasm .pbf presence with no wasm-unsafe-eval.
+  - [x] Lot gate: new tests fail on current code for the right reason (22 failed on content-application-mode, ceiling rejection on mime-map); make typecheck-artifacts + make lint-artifacts clean.
+- [x] **Lot 2 — Wagon 1 application mode implementation**
+  - [x] Implement host-configured safe/application content mode (safe default bit-for-bit); application mode serves the binding J1.0 CSP constant; remove unconditional worker-src none for application only.
+  - [x] Implement history fallback to index.html for HTML navigations without extension in application mode only; missing asset stays 404; service worker stays refused in both modes.
+  - [x] Extend MIME map per packet (.geojson .mjs .woff2; keep .wasm .pbf; no wasm-unsafe-eval).
+  - [x] Lot gate: scoped make test-artifacts green (28/28 content-application-mode); safe snapshot unchanged; no tool definition bytes changed.
+- [x] **Lot 3 — Wagon 2 generic grant contract**
+  - [x] Wire grantWithFreshRights to a first-party HTTP grant route in api/src/routes/namespaces/artifacts.ts with host-declared scopes and versions.
+  - [x] Add neutral host-parameterizable consent screen; single prescribed navigation from typed 403 code scopeId retryable false.
+  - [x] Add fake non-immo tenant test: reader without consent reaches the screen in one click from the typed 403 with no loop.
   - [ ] Lot gate: scoped api consent/grant tests green; no loop; scopes and versions host-declared.
 - [ ] **Lot 4 — Version 0.2.17 and pins**
   - [ ] Bump packages/artifacts/package.json to 0.2.17 and ARTIFACTS_PROVIDER_VERSION; add CHANGELOG entry.
