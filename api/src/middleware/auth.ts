@@ -85,8 +85,8 @@ export async function requireAuth(c: Context, next: Next) {
       authenticatedAt: validated.sessionRecord.createdAt.toISOString(),
       role: session.role,
       workspaceId: workspaceId ?? '',
-      email: validated.session.email ?? null,
-      displayName: validated.session.displayName ?? null,
+      email: validated.user.email ?? null,
+      displayName: validated.user.displayName ?? null,
     });
     
     await next();
@@ -114,8 +114,8 @@ export async function optionalAuth(c: Context, next: Next) {
           authenticatedAt: validated.sessionRecord.createdAt.toISOString(),
           role: validated.role,
           workspaceId,
-          email: validated.session.email ?? null,
-          displayName: validated.session.displayName ?? null,
+          email: validated.user.email ?? null,
+          displayName: validated.user.displayName ?? null,
         });
       }
     }
