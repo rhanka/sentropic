@@ -5,6 +5,7 @@ import { chatSessions } from '../../../src/db/schema';
 import { setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
 import { PLATFORM_TENANT_ID } from '../../../src/services/workspace-service';
 import { cmDeleteTenantMembershipsForUser } from '../../utils/cm-identity-test-store';
+import { createAdmittedChatMessage } from '../../utils/cm-chat-fixture';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../../utils/auth-helper';
 
 vi.mock('../../../src/services/llm-runtime', () => ({ callLLMStream: vi.fn() }));
@@ -40,9 +41,14 @@ describe('compiled host registry in real chat model discovery', () => {
       yield { type: 'content_delta', data: { delta: 'Catalog-qualified reply.' } };
       yield { type: 'done', data: {} };
     });
-    const run = async (actor: TestUser) => {
-      const turn = await chatService.createUserMessageWithAssistantPlaceholder({ userId: actor.id,
-        workspaceId: actor.workspaceId!, content: 'Show artifact tools', model: 'gpt-4.1-nano' });
+    // Same creation/admission split as chat-turn: the post-revocation run
+    // creates without admission so generation (not creation) fail-closes.
+    const run = async (actor: TestUser, admitted = true) => {
+      const input = { userId: actor.id,
+        workspaceId: actor.workspaceId!, content: 'Show artifact tools', model: 'gpt-4.1-nano' };
+      const turn = admitted
+        ? await createAdmittedChatMessage(input)
+        : await chatService.createUserMessageWithAssistantPlaceholder(input);
       await db.update(chatSessions).set({ title: 'Host catalog test' }).where(eq(chatSessions.id, turn.sessionId));
       await chatService.runAssistantGeneration({ userId: actor.id, ...turn });
     };
@@ -50,7 +56,7 @@ describe('compiled host registry in real chat model discovery', () => {
     expect(seen.get(user.id)).toEqual(expect.arrayContaining(names));
     expect(seen.get(other.id)?.filter(name => names.includes(name))).toEqual(['artifacts_get', 'artifacts_list']);
     await cmDeleteTenantMembershipsForUser(other.id);
-    await run(other);
+    await run(other, false);
     expect(seen.get(other.id)).toEqual([]);
     vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '0');
     await run(user);
