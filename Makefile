@@ -2972,7 +2972,9 @@ up-api-test-ci: ci-test-env ## Start source API from the cached toolbox; no inst
 up-api-sut: ci-test-env ## Start the shipped API as-is; boot owns migrations
 	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
 	# The app treats any nonempty value as disabled; the runner expects literal false.
-	DISABLE_RATE_LIMIT=$(if $(filter false 0,$(DISABLE_RATE_LIMIT)),,$(or $(DISABLE_RATE_LIMIT),true)) $(CI_COMPOSE) up --no-build -d --wait api-sut
+	# CI_SUT_OVERLAY optionally points at an extra compose file (e.g. the restore
+	# rehearsal checkpoint env); empty in every other flow.
+	DISABLE_RATE_LIMIT=$(if $(filter false 0,$(DISABLE_RATE_LIMIT)),,$(or $(DISABLE_RATE_LIMIT),true)) $(CI_COMPOSE) $(if $(CI_SUT_OVERLAY),-f $(CI_SUT_OVERLAY)) up --no-build -d --wait api-sut
 down-api-ci: ## Stop the isolated CI source/SUT stack
 	$(CI_COMPOSE) down
 logs-api-ci: ## Print source and production SUT logs
@@ -2992,8 +2994,16 @@ restore-api-sut: ci-test-env ## Restore a dump before the first production boot;
 	$(CI_COMPOSE) stop api api-sut auth-idp
 	$(CI_COMPOSE) up -d --wait postgres
 	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
-	@set -eu; before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
-	$(MAKE) up-api-sut ENV=$(ENV); \
+	@set -eu; overlay="$$(mktemp)"; trap 'rm -f "$$overlay"' EXIT; \
+	printf '%s\n' 'services:' '  api-sut:' '    environment:' \
+		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' > "$$overlay"; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace/api \
+		-e WEBAUTHN_RP_ID=localhost \
+		-e WEBAUTHN_ORIGIN=http://localhost:$(or $(UI_PORT),5173) \
+		-e CANDIDATE_COMMIT="$$(git rev-parse HEAD 2>/dev/null || printf '%040d' 0)" \
+		api npx --no-install tsx src/scripts/cm-restore-checkpoint.ts; \
+	before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
+	$(MAKE) up-api-sut ENV=$(ENV) CI_SUT_OVERLAY="$$overlay"; \
 	after="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
 	test "$$before" = "$$after"; echo "Restored business data preserved across production boot: $$after"
 
