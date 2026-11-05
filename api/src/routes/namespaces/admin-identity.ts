@@ -42,4 +42,4 @@ cmAdminIdentityRouter.post('/users/:id/reactivate', async c => {
 });
 cmAdminIdentityRouter.delete('/users/:id', c => runCmAccountDeletionHttp(c, operationId => deleteCmAccountAsAdmin({
   actorId: c.get('user').userId, userId: c.req.param('id'),
-}, operationId)));
+}, operationId), { activeRefusalStatus: 400 }));
