@@ -7,19 +7,18 @@
 // points at the BR-80 qualified archive, the packed manifest must expose the
 // same surface the host imports.
 import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import { createGatewayNamespaceModule } from '@sentropic/cluster-mesh/compose/gateway';
 import { createHostApp } from '../src/app';
 import { fixtureDependencies, testConfig } from './fixtures';
-import { readPackedManifest } from '../../../scripts/ci/publishable-manifests.mjs';
 
 const packedManifest = async () => {
   const tarball = process.env.CLUSTER_CANDIDATE_TARBALL;
   if (!tarball) return null;
-  return readPackedManifest(await readFile(tarball));
+  return JSON.parse(execFileSync('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' }));
 };
 
 describe('cluster-mesh candidate through the gateway host', () => {
