@@ -1,14 +1,14 @@
-# Feature: release-receipt skipped publishers hotfix
+# Feature: oauth-register-client Job command path fix
 
 ## Objective
-Unblock main deploys: `release-receipts` must pass when a selected package publisher ran green but explicitly published nothing (dev-line skip, already-published equal-integrity).
+Fix the versioned one-off Job so `node` resolves the compiled registration script in the production api image; unblock the PROD `immo-mcp` refresh-eligibility update (`refresh_token` + `offline_access`).
 
 ## Scope / Guardrails
-- Scope limited to release receipt assessment and the CI record outputs feeding it.
+- Scope limited to the Job yaml command path and the sanctioned prod registration run.
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/release-receipt-hotfix`.
-- Automated tests run on dedicated environment (`ENV=test-ci-receipt`), never on root `dev`.
+- Branch development happens in isolated worktree `tmp/oauth-register-job-cwd`.
+- No test-env services needed (no code change; validation is the live Job run plus public discovery).
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
@@ -16,9 +16,7 @@ Unblock main deploys: `release-receipts` must pass when a selected package publi
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/release-receipt.mjs`
-  - `scripts/ci/release-receipt.test.mjs`
-  - `.tmp/rv/hotfix-release-receipt.md`
+  - `deploy/k8s/base/36-oauth-register-client-job.yaml`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -28,14 +26,8 @@ Unblock main deploys: `release-receipts` must pass when a selected package publi
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `<none>`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `attention`: BR82-EX2 — `.github/workflows/ci.yml` record steps touched (conditional path). Reason: the cluster-mesh decision-skip path emits no `record` outputs today, so the receipt sees job `success` with no `pack` and fails a publisher that never published; the equal-integrity conflict is also not forwarded. Impact: three `record` steps only (llm-mesh, llm-gateway, cluster-mesh) gain an explicit `status=skipped` branch and a forwarded `conflict` output; no job `if` conditions change. Rollback: revert the `record` step blocks; the `.mjs` fix alone already passes already-published mesh/gateway receipts.
-- `acknowledge`: main is RED at `843efe3a1` (run 42036741718, `release-receipt: FAIL (1): repacked publication: @sentropic/cluster-mesh (pack=missing, expected candidate)`); this branch is the urgent hotfix lane, no merge until the PR CI is green.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -48,30 +40,28 @@ Unblock main deploys: `release-receipts` must pass when a selected package publi
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single orthogonal hotfix, one final test cycle on the PR CI.
+- Rationale: single one-line manifest fix plus one sanctioned prod run; no sub-workstreams.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this branch; no UAT required.
+- No UI changes; no UAT. Prod verification is the public discovery document.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Create isolated worktree `tmp/worktrees/release-receipt-hotfix` on branch `fix/release-receipt-skipped-publishers` from `origin/main` (`843efe3a1`); harness branch check PASS C1.
-  - [x] Confirm scope boundaries and declare BR82-EX2 for `.github/workflows/ci.yml`.
-  - [x] Confirm command style: `make ... ENV=test-ci-receipt` with `ENV` last.
-- [x] **Lot 1 — Tests-first receipt fix**
-  - [x] Added red tests to `scripts/ci/release-receipt.test.mjs` (5 failed pre-fix, 2 fail-closed locks passed pre-fix).
-  - [x] Fixed `scripts/ci/release-receipt.mjs` (`assessChain` reads `publication_*` outputs + explicit status; `publicationProblems` passes explicit skipped/already-published, keeps pack FAIL-closed for real publications).
-  - [x] Fixed `ci.yml` record steps (explicit `status=skipped` on the cluster-mesh decision-skip path, forward `conflict`).
-  - [x] Lot gate:
-    - [x] `make test-publishable-manifests SCOPE=scripts/ci/release-receipt.test.mjs ENV=test-ci-receipt` green (40/40); full manifest suite 119/119 green.
-    - [x] `make scope-check` clean before every commit; commits via `make commit` only.
-- [ ] **Lot 2 — PR + CI to green**
-  - [x] Opened READY PR #920 from `fix/release-receipt-skipped-publishers`, pushed head `5dde70c77`.
-  - [ ] Watch PR CI to green (no `[skip ci]`, no `gh run rerun`).
-  - [ ] Run 42043369956: only `test-e2e (2)` failed (single `08-chat-workspace-switch` visibility assertion; no app code touched by this branch); main run 41981165023 failed `test-e2e (2)` + `(4)` without this change — unrelated e2e instability, retriggered via fresh head per CI budget.
-  - [ ] Run 42046499747: `test-e2e (2)` PASSED (run-1 e2e failure proven transient); `build-desktop` failed on `pkg` download `504 Gateway Time-out` + `spawnSync patch ENOENT` (runner infra, no input from this branch) cascading to `build-ui`/`security-container-ui` skipped and the `security-container` join red; run 1 had `build-desktop` green with the same tree — unrelated infra flake, retriggering via fresh head per CI budget.
-- [ ] **Lot 3 — Report, no merge**
-  - [ ] Write `.tmp/rv/hotfix-release-receipt.md`.
-  - [ ] Do NOT merge; hand control back.
+  - [x] Isolated worktree `tmp/oauth-register-job-cwd` on `fix/oauth-register-job-cwd` from `origin/main`.
+  - [x] Harness branch check PASS.
+  - [x] Root cause: Job `workingDir: /workspace` + `command: node dist/scripts/oauth-register-client.js` resolves to `/workspace/dist/...`, but the production image ships the script at `/workspace/api/dist/scripts/oauth-register-client.js` (`api/Dockerfile` `COPY --from=build /workspace/api/dist`, final `WORKDIR /workspace/api`). Live prod evidence: `Cannot find module '/workspace/dist/scripts/oauth-register-client.js'`.
+  - [x] Fix convention: mirror `35-auth-idp.yaml` (same image, `workingDir: /workspace`, repo-relative command `apps/auth-idp/dist/index.js`) → command becomes `api/dist/scripts/oauth-register-client.js`.
+  - [x] No maintained test covers this yaml (checked CI/test layout); per proportionality the live Job run is the check. No new test added.
+- [ ] **Lot 1 — Fix and prod registration**
+  - [ ] Edit the Job yaml command path.
+  - [ ] `make scope-check` + `harness check scope` before commit; commit via `make commit`.
+  - [ ] Push branch; open PR (merge waits for freeze lift and review).
+  - [ ] Re-run `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=prod` from this worktree with preserved `immo-mcp` values + `refresh_token` / `offline_access`.
+  - [ ] Verify prod row and public discovery `?client_id=immo-mcp` advertises both.
+  - [ ] Delete SECRET_FILE and temp kubeconfigs; update `.tmp/rv/prod-oauth-immo-mcp.md`.
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint (not applicable: yaml-only change; CI runs on PR).
+  - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body.
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Merge only after owner freeze lift + review (not by this lane until approved).
