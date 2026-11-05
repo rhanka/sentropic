@@ -33,6 +33,7 @@
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR82-EX1
   - [ ] `Makefile` under BR82-EX2
+  - [ ] `scripts/ci/ci-dag.test.mjs` under BR82-EX4 (test-only barrier exemption for the EX1 join)
   - [ ] `deploy/k8s/overlays/preprod/kustomization.yaml`, `deploy/k8s/overlays/preprod/patch-api-config.yaml`, and `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml` under BR82-EX3
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
@@ -42,6 +43,7 @@
 - [ ] BR82-EX1 — Planned workflow exception: join `publish-api-image`, `publish-ui-image`, every selected package publisher, `verify-train-lock-integrity`, and `deploy-preprod` to complete qualification and release-receipt results. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR82-EX2 — Planned Makefile exception: promote image metadata without rebuilding/reloading layers, publish prequalified tarballs, and instrument `k8s-deploy-preprod`; add release-receipt tests. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [ ] BR82-EX3 — Change only preproduction digest pins/readiness configuration justified by measured startup spans; impact: preproduction rollout; rollback: previous qualified immutable tuple and prior health settings. Production overlays remain forbidden.
+- [ ] BR82-EX4 — Test-only exception: `scripts/ci/ci-dag.test.mjs` gains the `test-api-ai` barrier exemption for unselected ai/global, mirroring the existing `test-ui`/`build-ui-static` pattern. Reason: BR82-EX1 joins `test-api-ai` into `publish-api-image` needs with the same skip-tolerance the workflow already uses for unselected UI lanes; the dag test's blanket barrier rule predates the join. Impact: one test expectation. Rollback: revert the exemption line (CI then fails on the new join, as observed in run `42007978636`).
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [ ] Baseline receipts: main merge run `41939652646` attempt 1 (head `4d7517d94`, pre-BR-81): wall 1049s; `publish-api-image` 93s, `publish-ui-image` 76s, `deploy-preprod` 71s, `publish-artifacts` 47s, `ci-gate` 19s. Post-BR-81 merge run `41981165023` attempt 1 (head `c3d5b2f17`, 2026-11-05): wall 815s, FAILED — `test-e2e` shards 2+4 failed, `deploy-preprod` registry-assert failed with both publish jobs skipped, `ci-gate` failed. Post-merge "after" measurement for BR-82 (promotion ≤40s, npm train ≤195s, preprod ≤75s) is BR-83/train handoff work.
 ## AI Flaky tests
