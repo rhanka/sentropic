@@ -184,11 +184,6 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
   const workspaceId = c.req.param('id')!;
-  try {
-    await requireWorkspaceAdmin(user.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
 
   const [ws] = await db
     .select({ hiddenAt: workspaces.hiddenAt })
@@ -197,6 +192,12 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     .limit(1);
 
   if (!ws) return c.json({ message: 'Not found' }, 404);
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
   if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
 
   // Recipients of the post-commit deletion notice, captured before deletion.
