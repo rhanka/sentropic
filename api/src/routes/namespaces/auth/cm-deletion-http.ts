@@ -6,7 +6,8 @@ import { CmIdentityForbiddenError } from '../../../services/identity/cm-deletion
 
 /** The operation id is an idempotency key, never a permission to read another operation. */
 export async function runCmAccountDeletionHttp(c: Context,
-  operation: (operationId: string) => Promise<PersonDeletionReceiptV2>): Promise<Response> {
+  operation: (operationId: string) => Promise<PersonDeletionReceiptV2>,
+  options?: { readonly activeRefusalStatus?: 400 | 409 }): Promise<Response> {
   const operationId = c.req.header('idempotency-key') ?? randomUUID();
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(operationId)) return c.json({ error: 'Invalid operation id' }, 400);
   c.header('identity-operation-id', operationId);
@@ -18,7 +19,11 @@ export async function runCmAccountDeletionHttp(c: Context,
       status: receipt.complete ? 'complete' : 'delivery_pending', receipt }, receipt.complete ? 200 : 202);
   } catch (error) {
     if (error instanceof IdentityNotFoundError) return c.json({ error: 'User not found' }, 404);
-    if (error instanceof AccountTransitionError) return c.json({ error: 'User must be disabled before deletion' }, 409);
+    // The refusal status is a route contract, not a property of the shared transition
+    // error: the admin API refuses with 400 (validation-style), self-service with 409.
+    if (error instanceof AccountTransitionError) {
+      return c.json({ error: 'User must be disabled before deletion' }, options?.activeRefusalStatus ?? 409);
+    }
     if (error instanceof AdminUserProtectedError || error instanceof SelfActionForbiddenError
       || error instanceof CmIdentityForbiddenError) return c.json({ error: 'Identity action is forbidden' }, 403);
     // Unknown commit outcomes retain the same operation id for trusted recovery.

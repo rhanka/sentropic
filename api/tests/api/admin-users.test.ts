@@ -134,7 +134,12 @@ describe('Admin users API (approval + disable/reactivate + delete)', () => {
     await updateCmUser(delUser.id, { accountStatus: 'disabled_by_admin', disabledAt: new Date(), disabledReason: 'test', updatedAt: new Date() });
 
     const deleteRes = await authenticatedRequest(app, 'DELETE', `/api/v1/admin/users/${delUser.id}`, admin.sessionToken!);
-    expect(deleteRes.status).toBe(200);
+    // Person deletion always queues the remote-projection delivery, so a committed
+    // delete reports delivery_pending (202), never synchronous 200: the account and
+    // business rows below are still removed at commit time.
+    expect(deleteRes.status).toBe(202);
+    expect(await deleteRes.json()).toMatchObject({ success: true, complete: false,
+      status: 'delivery_pending', receipt: { transaction: 'committed', userId: delUser.id } });
 
     // User + workspace deleted
     expect(await findCmUserById(delUser.id)).toBeNull();
