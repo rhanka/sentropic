@@ -63,15 +63,10 @@ function handlersFor(binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdenti
         } else {
           const ticket = await tx.custody.emailTickets.findByTokenHash(hash);
           if (!ticket || ticket.email !== email) return refuseCmRegistration();
-          try {
-            await tx.custody.emailTickets.consume({ tokenHash: hash, email, expectedRevision: ticket.revision,
-              bindUserId: userId, at: ports.clock.now().toISOString() });
-          } catch (error) {
-            if (error instanceof IdentityCustodyErrorV1 && ['proof_state_conflict', 'proof_binding_mismatch'].includes(error.code)) {
-              return refuseCmRegistration();
-            }
-            throw error;
-          }
+          // The CM evidence guard consumed and bound this ticket during attestation
+          // verification immediately before this hook; consuming twice always fails
+          // closed, so the app layer only attests the binding.
+          if (ticket.state !== 'consumed' || ticket.userId !== userId) return refuseCmRegistration();
         }
       };
     },
