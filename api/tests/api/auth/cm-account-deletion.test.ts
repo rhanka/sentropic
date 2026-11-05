@@ -63,6 +63,14 @@ describe('A4 account deletion with the real CM V2 coordinator', () => {
     return rows;
   };
 
+  it('lets an authorized admin delete a pending account without prior approval', async () => {
+    await updateCmUser(subject, { accountStatus: 'pending_admin_approval' });
+    const receipt = await deleteCmAccountAsAdmin({ actorId: actor, userId: subject }, randomUUID());
+    expect(receipt).toMatchObject({ transaction: 'committed', complete: true });
+    expect(await cmQuery(`SELECT user_id FROM ${cmTable('identity_user_accounts')} WHERE user_id = $1`, [subject]))
+      .toEqual([]);
+  });
+
   it('records one rolled-back receipt and preserves all rows when the final account delete fails', async () => {
     const before = await snapshot(), operationId = randomUUID();
     // Sequence advancement is nontransactional: prove the final delete was reached, not an earlier guard.
