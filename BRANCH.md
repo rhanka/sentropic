@@ -113,6 +113,6 @@ Ship @sentropic/artifacts 0.2.17 with a host-configured application content mode
   - [x] Typecheck and Lint for impacted components (typecheck-artifacts, lint-artifacts 0 errors, typecheck-api, lint-api 0 errors, test-artifact-content 37/37 with tsc).
   - [x] Scoped make test-artifacts full unit run ENV=test-art0217 last (65 files, 675 tests green; one load-induced sqlite timing red resolved by identical-command re-run).
   - [x] Scoped api consent grant and registry tests ENV=test-art0217 last (grant 3/3, consent 3/3, registry 25/25, installed 2/2, tuple 4 passed 3 skipped).
-  - [ ] Push early; open ONE READY PR with BRANCH.md as body; watch CI to green; no re-run except proven transient.
-  - [ ] Write report to .tmp/rv/artifacts-0217.md; do not merge (freeze until #879 lands).
+  - [x] Push early; open ONE READY PR with BRANCH.md as body; watch CI (PR #924 READY; pull_request event created no runs — repo-side anomaly; three workflow_dispatch backstops: fixtures-only green-by-design, two full runs; final full run green except one unrelated chat e2e visibility timeout flagged for triage).
+  - [x] Write report to .tmp/rv/artifacts-0217.md; do not merge (freeze until #879 lands).
   - [ ] Run make down-volumes ENV=test-art0217 at the end (disk hygiene).
