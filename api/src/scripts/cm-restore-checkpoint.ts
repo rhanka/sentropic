@@ -86,6 +86,11 @@ if (!/^[a-f0-9]{40}$/.test(candidateCommit)) {
       await loadCmCutoverCheckpoint(checkpointPath, expected);
       await loadA4RemoteSnapshot(remoteSnapshotPath);
       console.log(`CHECKPOINT_FILE=${checkpointPath}`);
+      // Non-secret observability: the SUT recomputes these digests from its
+      // own code + env. Any mismatch fail-closes without detail by design, so
+      // a mismatch is debugged from this line (generator side).
+      console.log(`CHECKPOINT_VERIFIER rpId=${verifier.rpId} origins=${verifier.origins.join(',')}`);
+      console.log(`CHECKPOINT_DIGESTS mapping=${expected.mappingSha256} identity=${expected.identityAssetSha256} connector=${expected.connectorAssetSha256}`);
     } finally {
       client.release();
     }
