@@ -101,15 +101,15 @@ Ship @sentropic/artifacts 0.2.17 with a host-configured application content mode
   - [x] Add neutral host-parameterizable consent screen; single prescribed navigation from typed 403 code scopeId retryable false.
   - [x] Add fake non-immo tenant test: reader without consent reaches the screen in one click from the typed 403 with no loop.
   - [ ] Lot gate: scoped api consent/grant tests green; no loop; scopes and versions host-declared.
-- [ ] **Lot 4 — Version 0.2.17 and pins**
-  - [ ] Bump packages/artifacts/package.json to 0.2.17 and ARTIFACTS_PROVIDER_VERSION; add CHANGELOG entry.
-  - [ ] Regenerate locks/pins and APP-P1 digest once through make; update cluster-mesh selected fixture only if required by tests.
-  - [ ] Verify npm view @sentropic/artifacts version is below 0.2.17 after any rebase.
-  - [ ] Lot gate: make scope-check before every commit; commits under 150 lines via make commit.
+- [x] **Lot 4 — Version 0.2.17 and pins**
+  - [x] Bump packages/artifacts/package.json to 0.2.17 and ARTIFACTS_PROVIDER_VERSION; add CHANGELOG entry.
+  - [x] Regenerate locks/pins and APP-P1 digest once through make (digest 0725ef30 computed in the api container from the manifest definition, corroborated by registry tests); cluster-mesh selected fixture re-pinned to the verified packed 0.2.17 archive.
+  - [x] Verify npm view @sentropic/artifacts version is below 0.2.17 after any rebase.
+  - [x] Lot gate: make scope-check before every commit; commits under 150 lines via make commit.
 - [ ] **Lot 5 — Final validation**
-  - [ ] Typecheck and Lint for impacted components.
-  - [ ] Scoped make test-artifacts full unit run ENV=test-art0217 last.
-  - [ ] Scoped api consent grant and registry tests ENV=test-art0217 last.
+  - [x] Typecheck and Lint for impacted components (typecheck-artifacts, lint-artifacts 0 errors, typecheck-api, lint-api 0 errors, test-artifact-content 37/37 with tsc).
+  - [x] Scoped make test-artifacts full unit run ENV=test-art0217 last (65 files, 675 tests green; one load-induced sqlite timing red resolved by identical-command re-run).
+  - [x] Scoped api consent grant and registry tests ENV=test-art0217 last (grant 3/3, consent 3/3, registry 25/25, installed 2/2, tuple 4 passed 3 skipped).
   - [ ] Push early; open ONE READY PR with BRANCH.md as body; watch CI to green; no re-run except proven transient.
   - [ ] Write report to .tmp/rv/artifacts-0217.md; do not merge (freeze until #879 lands).
   - [ ] Run make down-volumes ENV=test-art0217 at the end (disk hygiene).
