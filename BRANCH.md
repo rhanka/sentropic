@@ -70,7 +70,8 @@ Unblock main deploys: `release-receipts` must pass when a selected package publi
 - [ ] **Lot 2 — PR + CI to green**
   - [x] Opened READY PR #920 from `fix/release-receipt-skipped-publishers`, pushed head `5dde70c77`.
   - [ ] Watch PR CI to green (no `[skip ci]`, no `gh run rerun`).
-  - [ ] Run 42043369956: only `test-e2e (2)` failed (single `08-chat-workspace-switch` visibility assertion; no app code touched by this branch); main run 41981165023 failed `test-e2e (2)` + `(4)` without this change — unrelated e2e instability, retriggering via fresh head per CI budget.
+  - [ ] Run 42043369956: only `test-e2e (2)` failed (single `08-chat-workspace-switch` visibility assertion; no app code touched by this branch); main run 41981165023 failed `test-e2e (2)` + `(4)` without this change — unrelated e2e instability, retriggered via fresh head per CI budget.
+  - [ ] Run 42046499747: `test-e2e (2)` PASSED (run-1 e2e failure proven transient); `build-desktop` failed on `pkg` download `504 Gateway Time-out` + `spawnSync patch ENOENT` (runner infra, no input from this branch) cascading to `build-ui`/`security-container-ui` skipped and the `security-container` join red; run 1 had `build-desktop` green with the same tree — unrelated infra flake, retriggering via fresh head per CI budget.
 - [ ] **Lot 3 — Report, no merge**
   - [ ] Write `.tmp/rv/hotfix-release-receipt.md`.
   - [ ] Do NOT merge; hand control back.
