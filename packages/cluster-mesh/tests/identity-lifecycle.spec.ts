@@ -116,6 +116,20 @@ describe('user accounts and lifecycle', () => {
     expect(await accounts.listUsers()).toHaveLength(2);
   });
 
+  it('should let an admin disable a pending account before approval', async () => {
+    const { accounts } = setup();
+    await accounts.register({ userId: 'pending', email: 'pending@example.com' });
+    expect(await accounts.disableAccount('pending', 'admin')).toMatchObject({ accountStatus: 'disabled' });
+    await expect(accounts.disableAccount('pending', 'admin')).rejects.toBeInstanceOf(AccountTransitionError);
+  });
+
+  it('should let an admin delete a pending account before approval', async () => {
+    const { accounts } = setup();
+    await accounts.register({ userId: 'pending', email: 'pending@example.com' });
+    await accounts.deleteAccount('pending', 'admin');
+    await expect(accounts.getAccount('pending')).rejects.toBeInstanceOf(IdentityNotFoundError);
+  });
+
   it('should expose the self-service get, disable and delete path for the own account', async () => {
     const { accounts } = setup();
     await accounts.register({ userId: 'user-1', email: 'a@example.com' }, { firstAdmin: true });

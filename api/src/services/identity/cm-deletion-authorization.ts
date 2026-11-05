@@ -23,6 +23,9 @@ export const cmAccountDeletionAuthorization = (handlerId: BusinessDeletionHandle
       if (!await tx.custody.profiles.find(command.actorId)) throw new IdentityCustodyErrorV1('identity_material_missing');
       if (target.globalRole === 'admin_app' || target.globalRole === 'admin_org') throw new AdminUserProtectedError('delete');
     }
-    if (target.accountStatus !== 'disabled') throw new AccountTransitionError('User must be disabled before deletion');
+    if (target.accountStatus !== 'disabled'
+      && !(handlerId !== 'self_account' && target.accountStatus === 'pending_admin_approval')) {
+      throw new AccountTransitionError('User must be disabled before deletion');
+    }
   },
 });

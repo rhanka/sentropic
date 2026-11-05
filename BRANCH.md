@@ -15,6 +15,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `packages/cluster-mesh/src/identity-contracts/accounts.ts` (BRxx-EX15)
+  - `packages/cluster-mesh/tests/identity-lifecycle.spec.ts` (BRxx-EX15)
   - `api/src/**`
   - `api/tests/**`
   - `api/vitest.config.ts`
@@ -54,6 +56,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BRxx-EX15 — Owner 2026-11-05 closing packet: allow `packages/cluster-mesh/src/identity-contracts/accounts.ts`, `packages/cluster-mesh/tests/identity-lifecycle.spec.ts` and the app deletion authorizer/tests to restore admin disable/delete of pending accounts. Rationale: main permits moderation before approval; A4 introduced an incompatible state guard. Impact: pending non-admin accounts can be disabled or deleted by an authorized admin; self-action, protected-admin and active-delete refusals remain. Rollback: revert these guard/test hunks together. Existing branch package bump covers the changed CM source.
+- [ ] A4-CLOSE — Owner 2026-11-05: invalidate every inventoried ephemeral identity proof and open login at import in both rehearsal and real cutover, record per-type counts, preserve all other fail-closed checks; restore workspace member UI and presence parity; resolve fresh-workspace comment failures; local ENV=test-a4-fix2, API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; push and watch PR #879 until green; do not merge. Mergeable Track source for the designated conductor writer.
 - [x] A4-TEST-POLICY — Declare the API Vitest configuration for synthetic fixture policy only; production Q-K remains required. The first C2 check flagged this previously undeclared path but exited zero, and commit 3f587bf61 proceeded. The declaration is corrected here; subsequent gates must inspect PASS text as well as the exit status. Rollback: revert the test env entry; no production configuration changes.
 - [x] BRxx-EX1 — Approved r2 F11 requires CM-owned screens. Allow only `packages/cluster-mesh/ui/**`, `tests/ui/**`, its browser exports/optional peer metadata, and root/UI lock/dependency entries needed to mount them. Backend CM source/tests stay excluded. Impact: one shared screen behavior across root projections; publication/version validation is required after rebase. Rollback: revert the UI projection/package commits together before activation; no data or A2.0b branch changes.
 - [x] A4-STACK — delivered by the A2.0b merge (#882) and the G1–G5 train (#912, `a1d0a815a`, carried on `main` through train #914 `b9cdb2d33`): UOW, auth-hono binding/runner, importer, V2 planes and all P1–P6 contracts are on `main`.
