@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { authenticateCmHttpRequest } from '../../../src/services/identity/cm-http-principal';
 import { createAuthenticatedUser, cleanupAuthData } from '../../utils/auth-helper';
 import { cmQuery } from '../../utils/cm-identity-test-store';
+import { Hono } from 'hono';
+import { requireAuth } from '../../../src/middleware/auth';
 
 /**
  * A4 e2e residue (run 42032530355): every authenticated page load fans out
@@ -15,6 +17,16 @@ import { cmQuery } from '../../utils/cm-identity-test-store';
 describe('CM per-request authentication under same-session fan-out', () => {
   afterEach(async () => {
     await cleanupAuthData();
+  });
+
+  it('projects presence identity from the validated CM user rather than JWT claims', async () => {
+    const user = await createAuthenticatedUser('editor');
+    const app = new Hono();
+    app.use('/presence-principal', requireAuth);
+    app.get('/presence-principal', context => context.json(context.get('user')));
+    const response = await app.request('/presence-principal', { headers: { cookie: `session=${user.sessionToken}` } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ userId: user.id, email: user.email, displayName: user.displayName });
   });
 
   it('accepts concurrent same-session authentications without throwing', async () => {
