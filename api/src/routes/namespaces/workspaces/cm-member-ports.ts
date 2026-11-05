@@ -23,6 +23,7 @@ const handle = (operation: Handler): [Handler] => [async (c, next) => {
     if (error instanceof IdentityNotFoundError) return c.json({ message: error.entity === 'user' ? 'User not found' : 'Not found' }, 404);
     if (error instanceof IdentityConflictError) return c.json({ error: 'Membership conflict' }, 409);
     if (error instanceof CmWorkspaceMembershipPolicyError) return c.json({ [error.responseKey]: error.message }, 400);
+    logger.error({ err: error, path: c.req.path }, 'Workspace membership operation failed');
     return c.json({ error: 'Identity service unavailable' }, 503);
   }
 }];

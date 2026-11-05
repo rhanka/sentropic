@@ -74,4 +74,23 @@ describe('CM workspace membership authorization and atomicity', () => {
       .rejects.toThrow('Neutral workspaces do not support memberships');
     expect(await findCmWorkspaceMember(workspaceId, target.id)).toBeNull();
   });
+
+  it('absorbs concurrent member additions without serialization failures', async () => {
+    // A4 e2e residue (run 42032530355 shard 6): parallel specs add isolated
+    // members to their workspaces while other workers hold the same subject
+    // rows, so the serializable member transaction aborted with 40001 and the
+    // route fail-closed with 503 'Identity service unavailable'.
+    const targets: TestUser[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      targets.push(await createTestUser({ role: 'guest', withWorkspace: false }));
+    }
+    const outcomes = await Promise.all(targets.map((member) =>
+      changeCmWorkspaceMember({ actorId: admin.id, workspaceId,
+        action: { kind: 'add', email: member.email, role: 'viewer' } }),
+    ));
+    expect(outcomes.every((outcome) => outcome.changed)).toBe(true);
+    for (const member of targets) {
+      expect(await findCmWorkspaceMember(workspaceId, member.id)).toMatchObject({ role: 'viewer' });
+    }
+  });
 });
