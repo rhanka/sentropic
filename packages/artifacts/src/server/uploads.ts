@@ -8,17 +8,19 @@
  * `commit_upload` re-reads the staged object once and verifies the declared
  * size and SHA-256 digest before anything is pinned.
  *
- * SigV4 note (review finding 3): a presigned PUT cannot carry a
- * content-length RANGE (that exists only in POST policies), so the signature
- * binds an EXACT Content-Length (the declared size) plus the checksum header
- * (`x-amz-checksum-sha256`) whenever the digest is known at signing time;
- * S3 itself rejects a PUT whose signed headers do not match. The digest is
- * declared at commit, so the create-time signature binds content-type +
- * exact content-length, the PUT must carry `x-amz-checksum-sha256` (S3
- * validates it against the body, BadDigest on mismatch), and commit
- * re-verifies size and digest server-side before pinning. Residual exposure
- * of a leaked URL is bounded by the declared size (≤ 16 MiB), the
- * per-principal open-session quota and the enforced sweeper (gc.ts).
+ * SigV4 note (review finding 3, hardened 0.2.16): a presigned PUT cannot
+ * carry a content-length RANGE (that exists only in POST policies), so the
+ * signature binds an EXACT Content-Length (the declared size) plus
+ * content-type — and nothing else. The digest is declared at commit, so no
+ * checksum header can be signed at create time; announcing one anyway makes
+ * strict S3 implementations (OVH) refuse the PUT with 403 because the header
+ * is present but not signed. The client therefore sends exactly the announced
+ * headers, and commit re-reads the staged object once and re-verifies size,
+ * SHA-256 digest and MIME server-side before pinning (fail-closed: any
+ * mismatch refuses with a typed error, deletes the staged object, closes the
+ * session, and creates no release). Residual exposure of a leaked URL is
+ * bounded by the declared size (≤ 16 MiB), the per-principal open-session
+ * quota and the enforced sweeper (gc.ts).
  *
  * Sessions are durable rows (migration 0007 ALTERs `artifacts.uploads`);
  * the byte store, session store and signer are injected ports — the memory
@@ -111,17 +113,18 @@ export interface StagingStore {
 }
 
 /**
- * Presigner port. The signature binds content-type, the EXACT content-length
- * (declared size) and, when known at signing time, x-amz-checksum-sha256;
- * no content-length range exists in a SigV4 presigned PUT (review finding 3).
+ * Presigner port. The signature binds content-type and the EXACT
+ * content-length (declared size); no content-length range exists in a SigV4
+ * presigned PUT (review finding 3). No checksum header is signed: the digest
+ * is declared at commit, and announcing an unsigned `x-amz-*` header makes
+ * strict S3 implementations refuse the PUT. The returned headers are the
+ * whole contract: the client sends exactly these headers, nothing more.
  */
 export interface UploadSignerPort {
   signPut(input: {
     key: string;
     contentType: string;
     contentLength: number;
-    /** Canonical `sha256:<hex>` digest, when known at signing time. */
-    checksumSha256?: string;
     expiresInSeconds: number;
   }): Promise<{
     url: string;
@@ -130,6 +133,31 @@ export interface UploadSignerPort {
     headers: Record<string, string>;
     expiresAt: string;
   }>;
+}
+
+/**
+ * Typed verification failure for the upload channel (fail-closed commit).
+ * Hosts map this to `verification_failed` without trusting the message text.
+ */
+export type UploadVerificationReason =
+  | 'unknown_upload'
+  | 'session_not_open'
+  | 'session_expired'
+  | 'staged_missing'
+  | 'size_mismatch'
+  | 'digest_mismatch'
+  | 'mime_mismatch'
+  | 'cas_readback_mismatch';
+
+export class UploadVerificationError extends Error {
+  readonly reason: UploadVerificationReason;
+  readonly uploadId: string;
+  constructor(reason: UploadVerificationReason, uploadId: string, message: string) {
+    super(message);
+    this.name = 'UploadVerificationError';
+    this.reason = reason;
+    this.uploadId = uploadId;
+  }
 }
 
 export const STAGING_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/staging\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -142,16 +170,6 @@ export function stagingKey(storageScopeId: string, uploadId: string): string {
 /** Staging prefix of one scope (LOT 2 §D.1 orphan pass enumerates it). */
 export function stagingPrefix(storageScopeId: string): string {
   return `artifacts/${storageScopeId}/staging/`;
-}
-
-/**
- * Value of the `x-amz-checksum-sha256` header for a canonical `sha256:<hex>`
- * digest: S3 expects the base64 of the raw digest bytes (no `sha256:` prefix).
- */
-export function checksumHeaderValue(digest: string): string {
-  const match = /^sha256:([0-9a-f]{64})$/.exec(digest);
-  if (match === null) throw new Error(`invalid sha256 digest: ${digest}`);
-  return Buffer.from(match[1], 'hex').toString('base64');
 }
 
 /** Reject anything but a staging key, before any I/O. */
@@ -294,7 +312,7 @@ export function createMemoryUploadSessionStore(now: () => Date = () => new Date(
 export function createMemoryUploadSigner() {
   const signed: {
     key: string; contentType: string; contentLength: number;
-    checksumSha256?: string; expiresAt: string; url: string;
+    expiresAt: string; url: string;
   }[] = [];
   const signer: UploadSignerPort = {
     signPut(input) {
@@ -304,9 +322,7 @@ export function createMemoryUploadSigner() {
       }
       const expiresAt = new Date(Date.now() + input.expiresInSeconds * 1000).toISOString();
       const url = `https://s3.test/${input.key}?X-Amz-Signature=mem-${signed.length}`;
-      const checksumHeader = input.checksumSha256 === undefined ? undefined : checksumHeaderValue(input.checksumSha256);
       signed.push({ key: input.key, contentType: input.contentType, contentLength: input.contentLength,
-        ...(checksumHeader === undefined ? {} : { checksumSha256: checksumHeader }),
         expiresAt, url });
       return Promise.resolve({
         url,
@@ -314,7 +330,6 @@ export function createMemoryUploadSigner() {
         headers: {
           'content-type': input.contentType,
           'content-length': String(input.contentLength),
-          ...(checksumHeader === undefined ? {} : { 'x-amz-checksum-sha256': checksumHeader }),
         },
         expiresAt,
       });
@@ -323,8 +338,13 @@ export function createMemoryUploadSigner() {
   return {
     signer,
     signed,
-    /** Simulate the client PUT against "S3": signed headers are enforced exactly. */
-    put(signedPut: { key: string; contentType: string; contentLength: number; checksumSha256?: string },
+    /**
+     * Simulate the client PUT against a strict "S3": the signed headers are
+     * enforced exactly, and any `x-amz-*` header outside the signed set is
+     * refused — mirroring OVH S3, which rejects a presigned PUT carrying an
+     * unsigned `x-amz-checksum-sha256` with 403 AccessDenied.
+     */
+    put(signedPut: { key: string; contentType: string; contentLength: number },
       bytes: Uint8Array, headers: Record<string, string>): void {
       if (String(bytes.length) !== headers['content-length'] || bytes.length !== signedPut.contentLength) {
         throw new Error(`content-length mismatch: signed ${signedPut.contentLength}, body ${bytes.length}`);
@@ -332,12 +352,10 @@ export function createMemoryUploadSigner() {
       if (headers['content-type'] !== signedPut.contentType) {
         throw new Error('content-type mismatch with the signed header');
       }
-      if (signedPut.checksumSha256 !== undefined && headers['x-amz-checksum-sha256'] !== signedPut.checksumSha256) {
-        throw new Error('x-amz-checksum-sha256 mismatch with the signed header');
-      }
-      if (headers['x-amz-checksum-sha256'] !== undefined &&
-        createHash('sha256').update(bytes).digest('base64') !== headers['x-amz-checksum-sha256']) {
-        throw new Error('BadDigest: body does not match x-amz-checksum-sha256');
+      for (const key of Object.keys(headers)) {
+        if (key.startsWith('x-amz-')) {
+          throw new Error(`x-amz header present but not signed: ${key}`);
+        }
       }
     },
   };
@@ -373,14 +391,13 @@ export interface CreateUploadResult {
   /** Presigned-URL expiry (≤ 10 minutes). */
   expiresAt: string;
   maxSize: number;
-  /** Headers the client must send with exactly these values (bound by the signature). */
-  requiredHeaders: Record<string, string>;
   /**
-   * The PUT must also carry this header with the base64 SHA-256 of the body;
-   * S3 validates it against the body (BadDigest on mismatch) and commit
-   * re-verifies size and digest server-side.
+   * Exactly the signed header set (`content-type` + `content-length`): the
+   * client sends these headers with exactly these values and nothing else.
+   * No `x-amz-*` header is announced, because no `x-amz-*` header is signed
+   * and strict S3 implementations refuse unsigned ones.
    */
-  checksumHeader: 'x-amz-checksum-sha256';
+  requiredHeaders: Record<string, string>;
   stagingKey: string;
 }
 
@@ -497,14 +514,14 @@ export function createUploadService(deps: {
         emit({ name: 'upload_sessions_created' });
       // The signature binds content-type and the EXACT declared Content-Length
       // (a presigned PUT cannot carry a content-length range). The digest is
-      // declared at commit, so the PUT must also carry x-amz-checksum-sha256,
-      // which S3 validates against the body; commit re-verifies both.
+      // declared at commit, so no checksum header is signed or announced;
+      // commit re-verifies size, digest and MIME server-side, fail-closed.
       const signed = await deps.signer.signPut({
         key, contentType: input.mimeType, contentLength: maxSize, expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
       });
         return {
           uploadId, uploadUrl: signed.url, method: signed.method, expiresAt: signed.expiresAt, maxSize,
-          requiredHeaders: signed.headers, checksumHeader: 'x-amz-checksum-sha256',
+          requiredHeaders: signed.headers,
           stagingKey: key,
         };
       });
@@ -513,27 +530,40 @@ export function createUploadService(deps: {
       return deps.sessions.get(input.uploadId).then((session) => {
         if (session === undefined || session.artifactId !== input.artifactId ||
           session.storageScopeId !== input.storageScopeId || session.ownerId !== input.ownerId) {
-          throw new Error(`unknown upload for this artifact/owner/scope: ${input.uploadId}`);
+          throw new UploadVerificationError('unknown_upload', input.uploadId,
+            `unknown upload for this artifact/owner/scope: ${input.uploadId}`);
         }
-        if (session.state !== 'open') throw new Error(`upload not open (${session.state}): ${input.uploadId}`);
+        if (session.state !== 'open') {
+          throw new UploadVerificationError('session_not_open', input.uploadId,
+            `upload not open (${session.state}): ${input.uploadId}`);
+        }
         if (new Date(session.expiresAt).getTime() <= now().getTime()) {
-          throw new Error(`upload session expired: ${input.uploadId}`);
+          throw new UploadVerificationError('session_expired', input.uploadId,
+            `upload session expired: ${input.uploadId}`);
         }
         return session;
       });
     },
     verifyStaged(session, bytes, expected) {
       if (bytes.length !== expected.size) {
-        throw new Error(`upload size mismatch for ${session.uploadId}: staged ${bytes.length}, declared ${expected.size}`);
+        throw new UploadVerificationError('size_mismatch', session.uploadId,
+          `upload size mismatch for ${session.uploadId}: staged ${bytes.length}, declared ${expected.size}`);
       }
       const actual = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
       if (actual !== expected.digest) {
-        throw new Error(`upload digest mismatch for ${session.uploadId}: staged ${actual}`);
+        throw new UploadVerificationError('digest_mismatch', session.uploadId,
+          `upload digest mismatch for ${session.uploadId}: staged ${actual}`);
       }
       if (expected.mimeType !== session.mimeType) {
-        throw new Error(`upload MIME mismatch for ${session.uploadId}: session ${session.mimeType}, declared ${expected.mimeType}`);
+        throw new UploadVerificationError('mime_mismatch', session.uploadId,
+          `upload MIME mismatch for ${session.uploadId}: session ${session.mimeType}, declared ${expected.mimeType}`);
       }
-      validateFileBytes(expected.mimeType, bytes);
+      try {
+        validateFileBytes(expected.mimeType, bytes);
+      } catch (error) {
+        throw new UploadVerificationError('mime_mismatch', session.uploadId,
+          `upload content mismatch for ${session.uploadId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     },
     async completeCommit(session, record) {
       const staged: StagedFileRecord = {
@@ -574,18 +604,43 @@ export async function commitStagedUpload(service: UploadService, deps: CommitSta
       labels: { channel, ...(event.labels ?? {}) } });
   };
   const fail = (error: unknown): never => {
-    if (!(error instanceof Error) || !/budget exceeded/.test(error.message)) {
+    if (error instanceof UploadVerificationError ||
+      !(error instanceof Error) || !/budget exceeded/.test(error.message)) {
       emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
     }
     throw error;
   };
+  // Fail-closed cleanup: a verification failure deletes the staged object and
+  // closes the session, so a poisoned upload can never be retried into a
+  // release and no declaration oracle survives. Best-effort: the refusal is
+  // what matters; cleanup failures never mask it.
+  const quarantine = async (uploadId: string, stagingKeyToDelete: string | undefined): Promise<void> => {
+    if (stagingKeyToDelete !== undefined) {
+      await deps.staging.delete(stagingKeyToDelete).catch(() => undefined);
+    }
+    await deps.sessions.markExpired(uploadId).catch(() => undefined);
+  };
   const session = await service.sessionForCommit(input).catch((error) => fail(error));
   const key = stagingKey(input.storageScopeId, input.uploadId);
-  const bytes = await deps.staging.get(key) ??
-    fail(new Error(`staged object missing for ${input.uploadId}`));
+  const bytes = await deps.staging.get(key);
+  if (bytes === undefined) {
+    const error = new UploadVerificationError('staged_missing', input.uploadId,
+      `staged object missing for ${input.uploadId}`);
+    emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
+    await quarantine(input.uploadId, undefined);
+    throw error;
+  }
   try {
     service.verifyStaged(session, bytes, { digest: input.digest, size: input.size, mimeType: input.mimeType });
-  } catch (error) { fail(error); }
+  } catch (error) {
+    if (error instanceof UploadVerificationError) {
+      emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
+      await quarantine(input.uploadId, key);
+    } else {
+      fail(error);
+    }
+    throw error;
+  }
   // LOT 2 §D.2: per-artifact staged caps, checked at commit for both channels.
   const existing = await deps.sessions.listStagedFiles(input.artifactId);
   const stagedBytes = existing.reduce((total, record) => total + record.size, 0);
@@ -599,7 +654,12 @@ export async function commitStagedUpload(service: UploadService, deps: CommitSta
   const readBack = await deps.blobs.getBlob(casKey);
   if (readBack === undefined || readBack.byteLength !== input.size ||
     `sha256:${createHash('sha256').update(readBack).digest('hex')}` !== input.digest) {
-    fail(new Error(`CAS read-back mismatch for ${input.uploadId}`));
+    const error = new UploadVerificationError('cas_readback_mismatch', input.uploadId,
+      `CAS read-back mismatch for ${input.uploadId}`);
+    emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
+    await deps.blobs.deleteBlob(casKey).catch(() => undefined);
+    await quarantine(input.uploadId, key);
+    throw error;
   }
   const pinReason = `upload:${input.uploadId}`;
   await deps.refs.pin(input.digest, pinReason);
