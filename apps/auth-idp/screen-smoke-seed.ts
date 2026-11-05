@@ -11,11 +11,7 @@
 // session token to the browser step (e2e/playwright image) — no WebAuthn, no
 // maildev, fully deterministic.
 
-import { randomUUID } from 'node:crypto';
-
-import { sql } from 'drizzle-orm';
-
-import { db } from '../../api/src/db/client';
+import { createCmUser } from '../../api/src/services/identity/cm-users';
 import { createSession } from '../../api/src/services/session-manager';
 
 const TEST_EMAIL = process.env.SCREEN_SMOKE_EMAIL ?? 'idp-screen-smoke@example.com';
@@ -26,22 +22,12 @@ const failSeed = (msg: string): never => {
 };
 
 const main = async (): Promise<void> => {
-  const now = new Date().toISOString();
-  const userId = `idp-screen-${randomUUID()}`;
-  await db.execute(sql`INSERT INTO cm_identity.identity_user_accounts
-    (user_id, email, account_status, global_role, created_at, updated_at)
-    VALUES (${userId}, ${TEST_EMAIL}, 'active', 'editor', ${now}, ${now})
-    ON CONFLICT (email) DO UPDATE SET account_status = 'active', updated_at = ${now}`);
-  const found = await db.execute(
-    sql`SELECT user_id FROM cm_identity.identity_user_accounts WHERE email = ${TEST_EMAIL} LIMIT 1`);
-  const row = found.rows[0] as { user_id?: unknown } | undefined;
-  const seededUserId: string =
-    typeof row?.user_id === 'string' && row.user_id.length > 0
-      ? row.user_id
-      : failSeed('seeded user id missing after upsert');
-  await db.execute(sql`INSERT INTO cm_identity.identity_account_profiles
-    (user_id, email_verified, legacy_account_status) VALUES (${seededUserId}, true, 'active')
-    ON CONFLICT (user_id) DO UPDATE SET email_verified = true, legacy_account_status = 'active'`);
+  // CM-native user creation: the raw account/profile upserts used before left
+  // no identity_subject_fences row, so session minting failed closed
+  // (identity_material_missing). createCmUser enrolls the full material.
+  const created = await createCmUser({ email: TEST_EMAIL, displayName: 'IdP Screen Smoke',
+    role: 'editor', emailVerified: true, accountStatus: 'active' });
+  const seededUserId = created.id;
 
   const session = await createSession(seededUserId, 'editor', { name: 'idp-screen-smoke' });
   // Machine-readable lines for the Playwright step to capture.
