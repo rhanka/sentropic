@@ -58,7 +58,7 @@ describe('Chat AI - Tool Calls Integration', () => {
 
     let attempts = 0;
     while (attempts < maxAttempts) {
-      await sleep(1000); // 1 second between checks
+      if (attempts > 0) await sleep(1000);
       
       const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
       expect(job).toBeDefined();

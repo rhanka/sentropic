@@ -96,7 +96,7 @@ describe('Executive Summary Generation - AI', () => {
       const maxAttempts = 30; // 5 minutes max
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(10000); // Wait 10 seconds between checks
+        if (attempts > 0) await sleep(10000);
 
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, data.jobId)).limit(1);
         expect(job).toBeDefined();
@@ -177,7 +177,6 @@ describe('Executive Summary Generation - AI', () => {
       expect(data.status).toBe('generating');
 
       // Vérifier que les seuils personnalisés sont passés au job
-      await sleep(1000); // Attendre que le job soit créé
       const [job0] = await db.select().from(jobQueue).where(eq(jobQueue.id, data.jobId)).limit(1);
       expect(job0).toBeDefined();
       const jobData = parseJobData(job0!.data);
@@ -191,7 +190,7 @@ describe('Executive Summary Generation - AI', () => {
       const maxAttempts = 30; // 5 minutes max
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(10000); // Wait 10 seconds between checks
+        if (attempts > 0) await sleep(10000);
 
         const [job2] = await db.select().from(jobQueue).where(eq(jobQueue.id, data.jobId)).limit(1);
         expect(job2).toBeDefined();
