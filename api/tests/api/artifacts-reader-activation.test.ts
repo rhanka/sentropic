@@ -151,9 +151,12 @@ beforeEach(async () => {
   await pool.query('DROP SCHEMA IF EXISTS artifact_host CASCADE');
   await pool.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id IS NOT NULL');
   await installArtifactPackageAssets(pool);
-  await pool.query(`TRUNCATE artifact_host.activation_namespaces, artifacts.storage_scopes,
-    control.artifact_host_kv, workspaces, cm_identity.identity_user_accounts, cm_identity.identity_account_profiles,
-    cm_identity.identity_login_sessions, cm_identity.identity_login_token_bindings, cm_identity.cm_tenants,
+  // Both package schemas were just dropped and reinstalled above, so they are
+  // already empty: truncating them (with CASCADE) would trip the G1 append-only
+  // guard on artifacts.artifact_access_events. Reset only the live stores here.
+  await pool.query(`TRUNCATE control.artifact_host_kv, workspaces, cm_identity.identity_user_accounts,
+    cm_identity.identity_account_profiles, cm_identity.identity_login_sessions,
+    cm_identity.identity_login_token_bindings, cm_identity.cm_tenants,
     cm_identity.cm_tenant_memberships, cm_identity.cm_workspace_members, cm_identity.cm_workspaces CASCADE;`);
   await seedCmArtifactIdentity(pool, { userId: 'reader', otherUsers: ['other'], tenantId: 'tenant',
     workspaceId: 'workspace', role: 'viewer', sessionIds: ['session', 'new-session'] });
@@ -184,7 +187,10 @@ describe('trusted app reader activation', () => {
     const issued = await reader({ flowTtlSeconds: reason === 'expiry' ? 1 : 30 }).issue(session, target);
     if (reason === 'expiry') await pool.query('SELECT pg_sleep(1.05)');
     if (reason === 'generation') await pool.query(`UPDATE artifact_host.activation_namespaces SET generation=generation+1`);
-    if (reason === 'session') await pool.query(`DELETE FROM cm_identity.identity_login_sessions WHERE session_id='session'`);
+    if (reason === 'session') {
+      await pool.query(`DELETE FROM cm_identity.identity_login_token_bindings WHERE session_id='session'`);
+      await pool.query(`DELETE FROM cm_identity.identity_login_sessions WHERE session_id='session'`);
+    }
     expect(await reader().consumeForContentOrigin(input(issued))).toBeUndefined();
     expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(1);
   });
@@ -241,6 +247,11 @@ describe('trusted app reader activation', () => {
       `DELETE FROM cm_identity.cm_workspace_members WHERE user_id = 'reader'`,
       `DELETE FROM control.artifact_host_kv WHERE storage_scope_id = 'app-artifact-scopes/v1'`,
     ])('should block revocation after authorization until transaction end: %s', async sql => {
+      // Bindings restrict session deletes: clear the child rows up front (committed)
+      // so the fenced revocation below blocks on the session-row lock, not the FK.
+      if (sql.includes('identity_login_sessions')) {
+        await pool.query(`DELETE FROM cm_identity.identity_login_token_bindings WHERE session_id = 'session'`);
+      }
       await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest)
         VALUES ($1,$2,'b','{}')`, [randomUUID(), artifactId]);
       const issued = await reader().issue(session, target);
@@ -280,7 +291,7 @@ describe('trusted app reader activation', () => {
   });
 
   it.each([
-    `DELETE FROM cm_identity.identity_login_sessions WHERE session_id = 'session'`,
+    `DELETE FROM cm_identity.identity_login_token_bindings WHERE session_id = 'session'; DELETE FROM cm_identity.identity_login_sessions WHERE session_id = 'session'`,
     `UPDATE cm_identity.identity_login_sessions SET expires_at = clock_timestamp() WHERE session_id = 'session'`,
     `UPDATE cm_identity.identity_account_profiles SET disabled_at = clock_timestamp() WHERE user_id = 'reader'`,
     `DELETE FROM cm_identity.cm_workspace_members WHERE user_id = 'reader'`,

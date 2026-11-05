@@ -27,6 +27,19 @@ export async function prepareCmFixtureCutover(pool: Pool, excludePriorTags: read
     await writeFile(join(temporary, 'meta/_journal.json'), JSON.stringify(journal));
     for (const entry of journal.entries) await copyFile(`${controlFolder}/${entry.tag}.sql`, join(temporary, `${entry.tag}.sql`));
     await runControlMigrations(db, temporary, client);
+    // Control migration 0015 drops the legacy identity tables. A second prepare on the
+    // same database (idempotent re-migration) therefore finds no public.users: the
+    // fixture's purpose is already fulfilled, so return a no-op dispose instead of
+    // failing on the dropped table. A missing table without an applied 0015 is a
+    // corrupt source and still throws.
+    if ((await client.query(`SELECT to_regclass('public.users') AS relation`)).rows[0].relation === null) {
+      const journal = await client.query(`SELECT to_regclass('public.__drizzle_control_migrations') AS relation`);
+      const applied = journal.rows[0].relation === null ? { rowCount: 0 } : await client.query(
+        `SELECT 1 FROM public.__drizzle_control_migrations WHERE created_at = $1`,
+        [A4_CONTROL_MIGRATION_TIMESTAMP]);
+      if ((applied.rowCount ?? 0) !== 0) return async () => {};
+      throw new Error('Fresh-database fixture cannot migrate existing identities');
+    }
     if ((await client.query('SELECT 1 FROM public.users LIMIT 1')).rowCount !== 0) {
       throw new Error('Fresh-database fixture cannot migrate existing identities');
     }
