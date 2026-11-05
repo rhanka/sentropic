@@ -1500,7 +1500,6 @@ jobs:
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-artifact-content-image ENV=test-ci-api
       - name: Save API image as artifact
-        id: application
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
       - name: Upload API image artifact
@@ -1515,14 +1514,6 @@ jobs:
             .tmp/ci-prod-image/api-image-id
           include-hidden-files: true
           compression-level: 0
-      - name: Retain qualified API identity for daily providers
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.application.outcome == 'success'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: live-provider-api-identity
-          path: api-image.json
-          retention-days: 30
-          if-no-files-found: error
 
   build-api-tool-image:
     runs-on: ubuntu-latest
@@ -1760,12 +1751,36 @@ jobs:
             ui-image.tar.zst
             ui-image.json
           compression-level: 0
+  # BR-81: retain the qualified image identities for the daily live-provider
+  # qualification (llm-live-daily.yml selects recent main tuples with these
+  # artifacts). Main-only so an unmerged PR can never publish identities.
+  retain-daily-identities:
+    runs-on: ubuntu-latest
+    needs: [build-api-image, build-ui]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download API image artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: api-image
+          path: daily-identities/
+      - name: Download UI image artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ui-image
+          path: daily-identities/
+      - name: Retain qualified API identity for daily providers
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: live-provider-api-identity
+          path: daily-identities/api-image.json
+          retention-days: 30
+          if-no-files-found: error
       - name: Retain qualified UI identity for daily providers
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.application.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: live-provider-ui-identity
-          path: ui-image.json
+          path: daily-identities/ui-image.json
           retention-days: 30
           if-no-files-found: error
 
@@ -3224,6 +3239,7 @@ jobs:
       - test-smoke-restore
       - ci-capacity-receipts
       - validate-ci-capacity-metrics
+      - retain-daily-identities
     steps:
       - name: Reject fixture-only merge evidence
         if: inputs.decision_fixtures_only == true
