@@ -1,6 +1,4 @@
-import { createHash } from 'node:crypto';
-import type { DigestInvitationV1, EmailRegistrationTicketV1, IdentityEmailTicketTokenPortV1,
-  SocialIdentityV1 } from '@sentropic/cluster-mesh';
+import type { DigestInvitationV1, SocialIdentityV1 } from '@sentropic/cluster-mesh';
 import { invalidA4Import, sourceBoolean as bool, sourceDigest as digest, sourceNullableText as nullable,
   sourceNullableTime as nullableTime, sourceText as text, sourceTime as time, type A4SourceRow } from './cm-import-values';
 
@@ -12,17 +10,16 @@ export const mapA4Invitation = (row: A4SourceRow): DigestInvitationV1 => ({
   consumedByUserId: nullable(row.consumed_by_user_id), revision: 0,
 });
 
-export async function mapA4EmailTicket(row: A4SourceRow, verifier: IdentityEmailTicketTokenPortV1): Promise<EmailRegistrationTicketV1 | null> {
-  if (row.verification_token === null) return null;
-  if (!bool(row.used)) return invalidA4Import();
-  const bytes = new TextEncoder().encode(text(row.verification_token));
-  try {
-    const claims = await verifier.verifyForImport(bytes);
-    if (claims.codeProofId !== row.id || claims.email !== text(row.email).trim().toLowerCase()) return invalidA4Import();
-    return { codeProofId: text(row.id), email: claims.email,
-      tokenHash: createHash('sha256').update(bytes).digest('hex'), userId: null, state: 'pending', revision: 0,
-      createdAt: claims.issuedAt, expiresAt: claims.expiresAt, consumedAt: null, revokedAt: null };
-  } finally { bytes.fill(0); }
+/** Counts only, never source tokens or fingerprints. The protected checkpoint
+ * retains history; users request a fresh code and log in after every cutover. */
+export function a4InvalidatedProofCounts(rows: ReadonlyMap<string, readonly A4SourceRow[]>) {
+  const each = (table: string) => rows.get(table) ?? invalidA4Import();
+  return { webauthn_challenge: each('webauthn_challenges').length,
+    email_code: each('email_verification_codes').length,
+    email_ticket: each('email_verification_codes').filter(row => nullable(row.verification_token) !== null).length,
+    magic_link: each('magic_links').length,
+    login_session: each('user_sessions').length,
+    login_refresh_token: each('user_sessions').filter(row => nullable(row.refresh_token_hash) !== null).length };
 }
 
 export function mapA4Social(row: A4SourceRow): SocialIdentityV1 {

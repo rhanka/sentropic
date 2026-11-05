@@ -12,6 +12,7 @@ import { a4CheckpointHistoricalFields } from './cm-import-manifest';
 import { importLegacyRemoteIntents } from './cm-import-remote';
 import { reconcileA4RemoteSnapshot } from './cm-import-remote-snapshot';
 import { mapA4IdentitySource, readA4IdentitySource } from './cm-import-source';
+import { a4InvalidatedProofCounts } from './cm-import-continuations';
 import { invalidA4Import } from './cm-import-values';
 import { cmIdentityUnitOfWork, createAppCustodyHost, type AppCustodyHost } from './cm-transaction';
 import { createCmScopedHostClient } from './cm-host-scope';
@@ -23,6 +24,7 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
   if (state.rows[0]?.transaction_isolation !== 'serializable') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   await client.query("SELECT set_config('statement_timeout', '30000', true)");
   const source = await readA4IdentitySource(client);
+  const invalidatedProofCounts = a4InvalidatedProofCounts(source.rows);
   const importedAt = new Date().toISOString();
   const remote = reconcileA4RemoteSnapshot(source.rows.get('user_sessions') ?? invalidA4Import(), config.remoteSnapshot, importedAt);
   await client.query(`CREATE TABLE IF NOT EXISTS control.app_cm_identity_cutover (
@@ -31,6 +33,7 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
     VALUES ('a4-identity-cutover', 'pre-deletion-checkpoint', $1::jsonb)`, [JSON.stringify({
     ...cmCutoverCheckpointReceipt(config.checkpoint), sourceInventory: source.inventory,
     historicalFields: a4CheckpointHistoricalFields, remoteInventory: remote.inventory, sourceKeyState: config.sourceKeyState,
+    invalidatedProofCounts,
   })]);
   const scoped = createCmScopedHostClient(client).client;
   const session: PostgresIdentityBindingV1<AppCustodyHost>['session'] = { async execute(statement) {
@@ -55,11 +58,10 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
   const oldInvitations = await readA4MetadataInvitations(tx);
   const pendingRemote = await importLegacyRemoteIntents(tx, importedAt, async sessionId =>
     remote.ownersBySessionId.get(sessionId) ?? (await tx.stores.sessions.findSession(sessionId))?.userId ?? null);
-  const rows = [...await mapA4IdentitySource(source, { ...config.verifier, importedAt,
-    ticketTokens: config.tokens.ticketTokens, remotelyRevokedSessionIds: remote.revokedSessionIds }),
+  const rows = [...await mapA4IdentitySource(source, { ...config.verifier, importedAt }),
   ...oldInvitations, ...pendingRemote.rows, ...connectors.rows];
   const manifestDigest = createHash('sha256').update(JSON.stringify({ mappingSha256: config.mappingSha256,
-    sourceInventory: source.inventory, remoteInventory: remote.inventory, connectorInventory: connectors.counts,
+    sourceInventory: source.inventory, remoteInventory: remote.inventory, connectorInventory: connectors.counts, invalidatedProofCounts,
     // Protected aggregate comparison only; no per-row fingerprint is published.
     rows: rows.map(row => JSON.stringify(row)).sort(), legacyRemoteKeys: pendingRemote.sourceKeys,
   })).digest('hex');
@@ -77,8 +79,9 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
   if (receipt.migrationId !== batch.migrationId || receipt.sourceSnapshotDigest !== batch.sourceSnapshotDigest
     || receipt.manifestDigest !== manifestDigest) return invalidA4Import();
   await client.query(`UPDATE control.app_cm_identity_cutover SET detail = detail || $1::jsonb
-    WHERE cutover_id = 'a4-identity-cutover'`, [JSON.stringify({ importReceipt: receipt, manifestDigest,
-    legacyRemoteIntentCount: pendingRemote.sourceKeys.length, legacyConnectorInventory: connectors.counts })]);
+    WHERE cutover_id = 'a4-identity-cutover'`, [JSON.stringify({ importReceipt: { ...receipt, invalidatedProofCounts }, manifestDigest,
+    legacyRemoteIntentCount: pendingRemote.sourceKeys.length, legacyConnectorInventory: connectors.counts,
+    invalidatedProofCounts })]);
   const invitationIds = oldInvitations.map(row => row.entity === 'invitation' ? row.record.invitationId : invalidA4Import());
   await client.query('DELETE FROM cm_identity.identity_invitations WHERE invitation_id = ANY($1::text[])', [invitationIds]);
   await client.query('DELETE FROM public.settings WHERE key = ANY($1::text[]) AND user_id IS NULL', [pendingRemote.sourceKeys]);
