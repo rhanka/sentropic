@@ -612,18 +612,43 @@ export async function commitStagedUpload(service: UploadService, deps: CommitSta
       labels: { channel, ...(event.labels ?? {}) } });
   };
   const fail = (error: unknown): never => {
-    if (!(error instanceof Error) || !/budget exceeded/.test(error.message)) {
+    if (error instanceof UploadVerificationError ||
+      !(error instanceof Error) || !/budget exceeded/.test(error.message)) {
       emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
     }
     throw error;
   };
+  // Fail-closed cleanup: a verification failure deletes the staged object and
+  // closes the session, so a poisoned upload can never be retried into a
+  // release and no declaration oracle survives. Best-effort: the refusal is
+  // what matters; cleanup failures never mask it.
+  const quarantine = async (uploadId: string, stagingKeyToDelete: string | undefined): Promise<void> => {
+    if (stagingKeyToDelete !== undefined) {
+      await deps.staging.delete(stagingKeyToDelete).catch(() => undefined);
+    }
+    await deps.sessions.markExpired(uploadId).catch(() => undefined);
+  };
   const session = await service.sessionForCommit(input).catch((error) => fail(error));
   const key = stagingKey(input.storageScopeId, input.uploadId);
-  const bytes = await deps.staging.get(key) ??
-    fail(new Error(`staged object missing for ${input.uploadId}`));
+  const bytes = await deps.staging.get(key);
+  if (bytes === undefined) {
+    const error = new UploadVerificationError('staged_missing', input.uploadId,
+      `staged object missing for ${input.uploadId}`);
+    emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
+    await quarantine(input.uploadId, undefined);
+    throw error;
+  }
   try {
     service.verifyStaged(session, bytes, { digest: input.digest, size: input.size, mimeType: input.mimeType });
-  } catch (error) { fail(error); }
+  } catch (error) {
+    if (error instanceof UploadVerificationError) {
+      emit({ name: 'upload_commits', labels: { result: 'verification_failed' } });
+      await quarantine(input.uploadId, key);
+    } else {
+      fail(error);
+    }
+    throw error;
+  }
   // LOT 2 §D.2: per-artifact staged caps, checked at commit for both channels.
   const existing = await deps.sessions.listStagedFiles(input.artifactId);
   const stagedBytes = existing.reduce((total, record) => total + record.size, 0);
