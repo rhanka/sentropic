@@ -233,8 +233,11 @@ test.describe('Cluster Mesh module and cutover qualification', () => {
 });
 
 test.describe('Cluster Mesh final LOST qualification', () => {
-  test('kills the dedicated target last and marks its registration lost', async () => {
-    test.skip(!qualificationAvailable, 'live target qualification is not configured');
+  // Declaration-level skip: deterministic shard membership collects this test
+  // as skipped when live targets are unavailable, instead of failing the
+  // expected/actual membership reconciliation with a runtime skip.
+  const liveOnly = qualificationAvailable ? test : test.skip;
+  liveOnly('kills the dedicated target last and marks its registration lost', async () => {
     const api = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     const qualifier = await request.newContext();
     try {
