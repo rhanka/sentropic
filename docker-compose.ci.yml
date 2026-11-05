@@ -9,6 +9,9 @@ services:
       - NODE_ENV=development
       - JWT_SECRET=dev-secret-key-change-in-production-please
       - OAUTH_SIGNING_KEK=ci-disposable-signing-kek-never-production
+      # A4 cutover (BRxx-EX12): synthetic CM email-code policy for the toolbox API runs (same values as the Makefile seed targets; test-only, never production).
+      - CM_IDENTITY_EMAIL_CODE_POLICY=sha256
+      - CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only
 
   api-sut:
     extends:
@@ -32,6 +35,9 @@ services:
       - DOC_STORAGE_BUCKET=sentropic-docs-test
       - DOC_STORAGE_ACCESS_KEY=minioadmin
       - DOC_STORAGE_SECRET_KEY=minioadmin
+      # A4 cutover (BRxx-EX12): synthetic CM email-code policy for the shipped API SUT (same values as the Makefile seed targets; test-only, never production).
+      - CM_IDENTITY_EMAIL_CODE_POLICY=sha256
+      - CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only
 
   auth-idp:
     image: ${API_IMAGE_REF:-${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION}}
@@ -50,6 +56,9 @@ services:
       - DISABLE_RATE_LIMIT=true
       - SCW_TEM_SECRET_KEY=ci-inert-email-key
       - SCW_TEM_API_BASE_URL=http://127.0.0.1:7700
+      # A4 cutover (BRxx-EX12): synthetic CM email-code policy for the standalone IdP SUT (same values as the Makefile seed targets; test-only, never production).
+      - CM_IDENTITY_EMAIL_CODE_POLICY=sha256
+      - CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only
     depends_on:
       api-sut:
         condition: service_healthy
