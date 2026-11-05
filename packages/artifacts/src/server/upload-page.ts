@@ -224,7 +224,6 @@ const chunked = (bytes, f) => {
   for (let i = 0; i < view.length; i += 0x8000) out += f(view.subarray(i, i + 0x8000)));
   return out;
 };
-const b64 = (bytes) => btoa(chunked(bytes, (part) => String.fromCharCode(...part)));
 const hex = (bytes) => chunked(bytes, (part) => [...part].map((b) => b.toString(16).padStart(2, '0')).join(''));
 const row = (path) => {
   const li = document.createElement('li');
@@ -240,8 +239,7 @@ async function stage(file, relPath) {
   setStatus('uploading');
   const buffer = await file.arrayBuffer();
   const put = async (upload) => fetch(upload.uploadUrl, { method: 'PUT', body: file,
-    headers: { 'content-type': upload.requiredHeaders['content-type'],
-      'x-amz-checksum-sha256': b64(await crypto.subtle.digest('SHA-256', buffer)) } });
+    headers: { 'content-type': upload.requiredHeaders['content-type'] } });
   let upload = created;
   let response = await put(upload);
   if (!response.ok) {
@@ -381,7 +379,7 @@ export interface UploadPageService {
   exchange(input: { pageSessionId: string; token: string; origin: string }): Promise<UploadPageExchange>;
   createFile(input: PageFileInput): Promise<{ uploadId: string; uploadUrl: string; method: 'PUT';
     expiresAt: string; maxSize: number; requiredHeaders: Record<string, string>;
-    checksumHeader: 'x-amz-checksum-sha256'; stagingKey: string }>;
+    stagingKey: string }>;
   commitFile(input: PageCommitInput): Promise<StagedFileRecord>;
   listStaged(input: { cookie: string; origin: string; customHeader: boolean;
     artifactId: string }): Promise<StagedFileRecord[]>;

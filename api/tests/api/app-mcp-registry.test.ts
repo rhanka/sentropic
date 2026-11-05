@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: 'bb75197ab5101938bebe8637f0abd5a03a5a1a848563b6a7e72249c84c1eddd1' },
+      'sentropic.artifacts': { manifestDigest: 'cb3a79689f201309594e52731c107acdfca45002af3b2589908d964604ef39d0' },
     } };
 }
 
@@ -55,6 +55,8 @@ describe('app MCP registry compilation', () => {
       .toBe('8e80ebf4648deb663d9924099345f6cf9413a03e8b5051a182db769693d3c618');
     expect(computeManifestDigest({ ...manifest, version: '0.2.15' }))
       .toBe('bb75197ab5101938bebe8637f0abd5a03a5a1a848563b6a7e72249c84c1eddd1');
+    expect(computeManifestDigest({ ...manifest, version: '0.2.16' }))
+      .toBe('cb3a79689f201309594e52731c107acdfca45002af3b2589908d964604ef39d0');
     const result = await compileAppMcpRegistry(input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
