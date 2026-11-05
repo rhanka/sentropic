@@ -2362,6 +2362,7 @@ jobs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
       publication_pack: ${{ steps.record.outputs.pack }}
+      publication_conflict: ${{ steps.record.outputs.conflict }}
       publication_name: ${{ steps.record.outputs.name }}
       publication_version: ${{ steps.record.outputs.version }}
     if: >-
@@ -2414,7 +2415,7 @@ jobs:
         if: inputs.capacity_publish_dry_run != true
         run: |
           set -eu
-          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/llm-mesh.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/llm-mesh.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",conflict:r.conflict??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
 
   publish-llm-gateway:
     runs-on: ubuntu-latest
@@ -2423,6 +2424,7 @@ jobs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
       publication_pack: ${{ steps.record.outputs.pack }}
+      publication_conflict: ${{ steps.record.outputs.conflict }}
       publication_name: ${{ steps.record.outputs.name }}
       publication_version: ${{ steps.record.outputs.version }}
     if: >-
@@ -2467,7 +2469,7 @@ jobs:
         if: inputs.capacity_publish_dry_run != true
         run: |
           set -eu
-          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/llm-gateway.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/llm-gateway.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",conflict:r.conflict??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
 
   publish-chat-ui:
     runs-on: ubuntu-latest
@@ -2937,6 +2939,7 @@ jobs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
       publication_pack: ${{ steps.record.outputs.pack }}
+      publication_conflict: ${{ steps.record.outputs.conflict }}
       publication_name: ${{ steps.record.outputs.name }}
       publication_version: ${{ steps.record.outputs.version }}
     if: >-
@@ -3026,12 +3029,27 @@ jobs:
           path: tmp/ci-manifest-guard/qualify-cluster-mesh/**
           retention-days: 7
           if-no-files-found: ignore
+      # BR82-EX2: the record always runs (no publish run on a decision skip),
+      # so the receipt carries an explicit publisher status even when nothing
+      # was published. An equal-integrity conflict forwards as-is so the
+      # receipt can tell an already-published registry from a fresh publish.
       - name: Record the tested-bytes publication receipt
         id: record
-        if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
+        if: inputs.capacity_publish_dry_run != true
         run: |
           set -eu
-          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/cluster-mesh.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
+          if [ "${{ steps.cluster_mesh_publish_decision.outputs.decision }}" = "publish" ]; then
+            node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("tmp/ci-manifest-guard/publish/cluster-mesh.json","utf8"));for(const [k,v] of Object.entries({status:r.status,sha256:r.sha256??"",pack:r.pack??"",conflict:r.conflict??"",name:r.name??"",version:r.version??""}))fs.appendFileSync(process.env.GITHUB_OUTPUT,`${k}=${v}\n`);'
+          else
+            {
+              echo "status=skipped"
+              echo "sha256="
+              echo "pack="
+              echo "conflict="
+              echo "name=@sentropic/cluster-mesh"
+              echo "version=${{ steps.cluster_mesh_publish_decision.outputs.version }}"
+            } >> "$GITHUB_OUTPUT"
+          fi
 
   # Release train (BRDP-EX10): after llm-mesh/llm-gateway publication, the registry dist.integrity of the
   # bytes actually published must equal the committed cluster-mesh `selected` fixture lock. A separate job,
