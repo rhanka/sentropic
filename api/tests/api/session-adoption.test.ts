@@ -191,7 +191,7 @@ describe('session adoption workspace binding', () => {
 
   it('should enforce workspace role on attach and refuse unauthorized member', async () => {
     const service = new SessionWorkspaceService();
-    const viewer = await createAuthenticatedUser('viewer');
+    const viewer = await createAuthenticatedUser('guest');
     await setCmMembershipState(viewer.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: viewer.id });
     await expect(service.adopt({
       sessionId: 'sess-adopt-7', tenantId: TENANT_A, principalId: viewer.id, workspaceId,
