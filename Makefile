@@ -3008,6 +3008,8 @@ worktrees-prune-merged: ## Remove merged tmp/worktrees (skips root-owned/dirty; 
 	for wt in "$$base"/*/; do \
 	  [ -d "$$wt" ] || continue; \
 	  wt="$${wt%/}"; \
+	  name="$${wt##*/}"; \
+	  if [ "$$name" = "main-ro" ]; then skipped="$$skipped\n$$wt (skip: protected main-ro)"; continue; fi; \
 	  if ! printf '%s\n' "$$registered" | grep -qx "$$PWD/$$wt"; then \
 	    skipped="$$skipped\n$$wt (skip: not a registered git worktree)"; \
 	    continue; \
@@ -3017,7 +3019,7 @@ worktrees-prune-merged: ## Remove merged tmp/worktrees (skips root-owned/dirty; 
 	    skipped="$$skipped\n$$wt (skip: HEAD not merged into origin/main)"; \
 	    continue; \
 	  fi; \
-	  if [ -n "$$(find "$$wt" -maxdepth 4 -user root -print -quit 2>/dev/null)" ]; then \
+	  if [ -n "$$(find "$$wt" -user root -print -quit 2>/dev/null)" ]; then \
 	    skipped="$$skipped\n$$wt (skip: root-owned files present)"; \
 	    continue; \
 	  fi; \
