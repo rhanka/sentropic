@@ -35,6 +35,7 @@
   - [ ] `e2e/tests/10-cluster-mesh-control-plane.spec.ts` (declaration-level skip for the live-target LOST test only; deterministic shard membership rejects runtime skips)
   - [ ] `e2e/tests/08-document-summary-formats.spec.ts` (pin browser workspace scope to the draft's workspace; unscoped draft creation + scoped folder fetch 404s)
   - [ ] `e2e/tests/08-documents-summary.spec.ts` (same workspace pin for the draft folder flow)
+  - [ ] `e2e/tests/05-executive-summary.spec.ts` (retry-safety: reset seeded titles in beforeAll so a retry never doubles the annex count)
   - [ ] `e2e/tests/vscode/01-vscode-chat-streaming.spec.ts`
   - [ ] `e2e/scripts/check-spec-lanes.sh`
   - [ ] `e2e/fixtures/provider-server.mjs`
