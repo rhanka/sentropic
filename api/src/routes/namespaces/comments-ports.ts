@@ -1,6 +1,7 @@
 import type { TenantContext } from '@sentropic/contracts';
 import type { CreateCommentsRouterOptions } from '@sentropic/comments/hono';
 import { and, eq } from 'drizzle-orm';
+import { HTTPException } from 'hono/http-exception';
 
 import { db } from '../../db/client';
 import {
@@ -12,7 +13,7 @@ import { findCmUserById } from '../../services/identity/cm-users';
 import { findCmWorkspaceMember } from '../../services/identity/cm-tenancy';
 import type { AuthUser } from '../../middleware/auth';
 import { commentEventSink, commentStore } from '../../services/comments/instance';
-import { reconcileCmTenantId } from '../../services/identity/cm-tenancy';
+import { CmTenantResolutionError, reconcileCmTenantId } from '../../services/identity/cm-tenancy';
 import {
   requireWorkspaceAccess,
   requireWorkspaceAdmin,
@@ -79,6 +80,13 @@ export const createProductCommentsRouterOptions = (): CreateCommentsRouterOption
         workspaceId: principal.workspaceId,
         userId: principal.userId,
         path: 'comments',
+      }).catch(error => {
+        // Workspace membership and tenant approval are independent. A missing
+        // or concurrently withdrawn tenant grant is a refusal, never a 500.
+        if (error instanceof CmTenantResolutionError) {
+          throw new HTTPException(403, { res: Response.json({ error: 'Tenant access required' }, { status: 403 }) });
+        }
+        throw error;
       });
       return {
         tenantId,
