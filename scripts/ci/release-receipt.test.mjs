@@ -110,6 +110,38 @@ test('rejects a failed publication', () => {
   assert.match(verdict.problems.join('\n'), /publication failed: sentropic-api/);
 });
 
+test('rejects an expected package publication repacked instead of candidate-sourced', () => {
+  const evidence = base();
+  evidence.publications.push({
+    kind: 'package', name: '@sentropic/llm-mesh', ref: '0.33.0', expected: true,
+    source: sha, digest, expectedDigest: digest, status: 'published', remoteDigest: digest, pack: 'fresh',
+  });
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /repacked publication: @sentropic\/llm-mesh/);
+});
+
+test('rejects an expected package publication with no recorded pack source', () => {
+  const evidence = base();
+  evidence.publications.push({
+    kind: 'package', name: '@sentropic/llm-mesh', ref: '0.33.0', expected: true,
+    source: sha, digest, expectedDigest: digest, status: 'published', remoteDigest: digest,
+  });
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /repacked publication: @sentropic\/llm-mesh/);
+});
+
+test('accepts an expected package publication sourced from the candidate', () => {
+  const evidence = base();
+  evidence.publications.push({
+    kind: 'package', name: '@sentropic/llm-mesh', ref: '0.33.0', expected: true,
+    source: sha, digest, expectedDigest: digest, status: 'published', remoteDigest: digest, pack: 'candidate',
+  });
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+});
+
 test('rejects mismatched registry integrity', () => {
   const evidence = base();
   evidence.publications[0].integrity = 'sha512-AAA';
@@ -196,6 +228,8 @@ test('chain accepts a complete delivery of tested bytes', () => {
       'publish-llm-mesh': 'success', 'publish-llm-gateway': 'success',
       'publish-cluster-mesh': 'success', 'verify-train-lock-integrity': 'success',
     }, {
+      'publish-llm-mesh': { name: '@sentropic/llm-mesh', version: '0.33.0', status: 'published', sha256: 'b'.repeat(64), pack: 'candidate' },
+      'publish-llm-gateway': { name: '@sentropic/llm-gateway', version: '0.22.4', status: 'published', sha256: 'b'.repeat(64), pack: 'candidate' },
       'publish-cluster-mesh': { name: '@sentropic/cluster-mesh', version: '0.2.9', status: 'published', sha256: 'c'.repeat(64), pack: 'candidate' },
     }),
     selections: chainSelections({ api: true, ui: true, meshPublish: true, gatewayPublish: true, clusterPublish: true }),
@@ -218,6 +252,66 @@ test('chain accepts an overlay-only run with every delivery job skipped', () => 
     source: chainSource(),
   });
   assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+});
+
+test('chain rejects a repacked package publication even when the publisher succeeded', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'success',
+    }, {
+      'publish-llm-mesh': { name: '@sentropic/llm-mesh', version: '0.33.0', status: 'published', sha256: 'b'.repeat(64), pack: 'fresh' },
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /repacked publication: @sentropic\/llm-mesh/);
+});
+
+test('chain reads the production publication_pack output key', () => {
+  const accepted = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'success',
+    }, {
+      'publish-llm-mesh': { publication_pack: 'candidate' },
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(accepted.ok, true, JSON.stringify(accepted.problems));
+  const rejected = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'success',
+    }, {
+      'publish-llm-mesh': { publication_pack: 'fresh' },
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.problems.join('\n'), /repacked publication: @sentropic\/llm-mesh/);
+});
+
+test('chain rejects a selected package publication with no recorded pack source', () => {
+  const verdict = assessChain({
+    needs: chainNeeds({
+      'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
+      'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
+      'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'success',
+    }, {
+      'publish-llm-mesh': { name: '@sentropic/llm-mesh', version: '0.33.0', status: 'published', sha256: 'b'.repeat(64) },
+    }),
+    selections: chainSelections({ meshPublish: true }),
+    source: chainSource(),
+  });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /repacked publication: @sentropic\/llm-mesh/);
 });
 
 test('chain rejects a selected image publication that stayed skipped', () => {
@@ -254,6 +348,8 @@ test('chain never blocks on a missing train-lock entry (BRDP-EX10 pin)', () => {
       'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
       'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
       'publish-cluster-mesh': 'skipped',
+    }, {
+      'publish-llm-mesh': { name: '@sentropic/llm-mesh', version: '0.33.0', status: 'published', sha256: 'b'.repeat(64), pack: 'candidate' },
     }),
     selections: chainSelections({ meshPublish: true }),
     source: chainSource(),
@@ -267,6 +363,8 @@ test('chain rejects a supplied failing train-lock check while the train publishe
       'publish-api-image': 'skipped', 'publish-ui-image': 'skipped',
       'publish-llm-mesh': 'success', 'publish-llm-gateway': 'skipped',
       'publish-cluster-mesh': 'skipped', 'verify-train-lock-integrity': 'failure',
+    }, {
+      'publish-llm-mesh': { name: '@sentropic/llm-mesh', version: '0.33.0', status: 'published', sha256: 'b'.repeat(64), pack: 'candidate' },
     }),
     selections: chainSelections({ meshPublish: true }),
     source: chainSource(),
