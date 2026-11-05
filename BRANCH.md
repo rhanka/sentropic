@@ -100,6 +100,7 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
   - [ ] Typecheck & Lint for impacted components.
   - [ ] Scoped `make test-artifacts` full unit run with `ENV=test-upload-cksum` last.
   - [ ] Scoped api registry tests for the re-pin with `ENV=test-upload-cksum` last.
+  - [ ] Scoped `make test-artifacts-integration SCOPE=tests/s3-upload-presign.integration.test.ts` with `ENV=test-upload-cksum` last (presigned PUT 200 + commit on the minio double).
   - [ ] `make down-volumes ENV=test-upload-cksum` at the end (disk hygiene).
   - [ ] Bumped `packages/artifacts/package.json` version verified (CI `enforce-package-bump` gate).
   - [ ] Final gate step 1: create PR with `BRANCH.md` text as PR body, state READY.
