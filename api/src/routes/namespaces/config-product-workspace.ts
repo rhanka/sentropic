@@ -17,15 +17,18 @@ export const createProductWorkspaceConfigRouter = (): Hono => {
   router.patch('/', zValidator('json', patchMeSchema), async (context) => {
     const { userId, workspaceId } = context.get('user');
     const { workspaceName } = context.req.valid('json');
-    // Lot A4: ownership is a CM workspace-admin membership, not workspaces.owner_user_id.
+    // Rename is a business-owner capability (the deletion plane likewise authorizes
+    // destruction via owner_user_id); CM admin membership additionally qualifies.
     const [workspace, membership] = await Promise.all([
-      db.select({ id: workspaces.id })
+      db.select({ id: workspaces.id, ownerUserId: workspaces.ownerUserId })
         .from(workspaces)
         .where(eq(workspaces.id, workspaceId))
         .limit(1),
       findCmWorkspaceMember(workspaceId, userId),
     ]);
-    if (!workspace[0] || membership?.role !== 'admin') return context.json({ error: 'Workspace not found' }, 404);
+    if (!workspace[0] || (workspace[0].ownerUserId !== userId && membership?.role !== 'admin')) {
+      return context.json({ error: 'Workspace not found' }, 404);
+    }
 
     await db.update(workspaces).set({
       ...(workspaceName === undefined ? {} : { name: workspaceName }),
