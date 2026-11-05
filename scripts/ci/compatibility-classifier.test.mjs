@@ -24,9 +24,9 @@ test('should reject an empty or missing file list as unknown', () => {
 });
 
 test('should reject an unrecognized path as unknown', () => {
-  const verdict = classifyCompatibility({ files: ['tools/secret-mystery/x.ts'], packages: [] });
+  const verdict = classifyCompatibility({ files: ['vendor/secret-mystery/x.ts'], packages: [] });
   assert.equal(verdict.kind, 'unknown');
-  assert.match(verdict.reasons.join('\n'), /tools\/secret-mystery\/x\.ts/);
+  assert.match(verdict.reasons.join('\n'), /vendor\/secret-mystery\/x\.ts/);
 });
 
 test('should classify docs and test-only edits as internal fix', () => {
