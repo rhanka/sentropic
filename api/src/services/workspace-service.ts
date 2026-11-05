@@ -1,5 +1,5 @@
 import { workspaces, ADMIN_WORKSPACE_ID } from '../db/schema';
-import { and, desc, isNull, sql } from 'drizzle-orm';
+import { and, desc, inArray, isNull } from 'drizzle-orm';
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { findCmUserById } from './identity/cm-users';
 import { listCmWorkspaceMembershipsForUser } from './identity/cm-tenancy';
@@ -30,7 +30,7 @@ const findExistingWorkspace = (userId: string): Promise<{ workspaceId: string | 
     const [active] = await db
       .select({ id: workspaces.id })
       .from(workspaces)
-      .where(and(sql`${workspaces.id} = ANY(${ids})`, isNull(workspaces.hiddenAt)))
+      .where(and(inArray(workspaces.id, ids), isNull(workspaces.hiddenAt)))
       .orderBy(desc(workspaces.createdAt))
       .limit(1);
     if (active) return { workspaceId: active.id };
@@ -39,7 +39,7 @@ const findExistingWorkspace = (userId: string): Promise<{ workspaceId: string | 
     const [anyWs] = await db
       .select({ id: workspaces.id })
       .from(workspaces)
-      .where(sql`${workspaces.id} = ANY(${ids})`)
+      .where(inArray(workspaces.id, ids))
       .orderBy(desc(workspaces.createdAt))
       .limit(1);
     if (anyWs) return { workspaceId: anyWs.id };

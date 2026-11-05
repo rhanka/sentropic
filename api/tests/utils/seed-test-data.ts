@@ -31,6 +31,7 @@ import { createJwksAdapter } from '../../src/services/auth/jwks-adapter.js';
 import { seedOAuthClients, seedServiceClients } from '../../src/services/auth/oauth-client-seed.js';
 import { createCmUser } from '../../src/services/identity/cm-users.js';
 import { enrolCmWorkspace, putCmWorkspaceMember, setCmMembershipState } from '../../src/services/identity/cm-tenancy.js';
+import { IdentityConflictError } from '@sentropic/cluster-mesh';
 import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service.js';
 import { cmPurgeAllIdentity } from './cm-identity-test-store.js';
 import { testMatrix } from './test-data.js';
@@ -194,8 +195,14 @@ export async function seedTestData() {
     }
 
     // Workspace enrolment + membership live in the CM workspace directory (lot A4).
+    // The purge restores the seed workspace enrolment (cutover import parity), so
+    // re-enrolment is ensure-semantics: keep an existing directory edge, fail on anything else.
     for (const ws of [E2E_WS_ADMIN, E2E_WS_A, E2E_WS_B, E2E_WS_VICTIM]) {
-      await enrolCmWorkspace({ workspaceId: ws, tenantId: PLATFORM_TENANT_ID });
+      try {
+        await enrolCmWorkspace({ workspaceId: ws, tenantId: PLATFORM_TENANT_ID });
+      } catch (error) {
+        if (!(error instanceof IdentityConflictError) || error.conflict !== 'duplicate') throw error;
+      }
     }
     await putCmWorkspaceMember(E2E_WS_ADMIN, E2E_ADMIN_ID, 'admin');
     await putCmWorkspaceMember(E2E_WS_A, E2E_USER_A_ID, 'admin');
