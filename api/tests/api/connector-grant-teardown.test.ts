@@ -9,6 +9,7 @@ import {
 } from '../../src/db/schema';
 import { createCmConnectorFixture as storeConnectedAccount, captureConnectorRevocations, findConnectorFixture } from '../utils/cm-connector-fixture';
 import { cmQuery, cmTable } from '../utils/cm-identity-test-store';
+import { drainCmRevocations } from '../../src/services/identity/cm-revocation-worker';
 import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import {
   authenticatedRequest,
@@ -64,6 +65,18 @@ describe('Connector grant teardown — no deletion path destroys a grant unrevok
 
     expect(await findConnectorFixture(ownerAccount.accountId)).toEqual([]);
     expect(await findConnectorFixture(memberAccount.accountId)).toEqual([]);
+
+    // Upstream revocation is the delivery worker's job, not the request's: drain
+    // this workspace's outbox the way the worker does, then assert the calls.
+    const accountIds = [ownerAccount.accountId, memberAccount.accountId];
+    for (let i = 0; i < 10; i++) {
+      const pending = await cmQuery<{ delivery_id: string }>(
+        `SELECT delivery_id FROM ${cmTable('identity_revocation_outbox')} WHERE state = 'pending' AND target_ref = ANY($1)`,
+        [accountIds],
+      );
+      if (pending.length === 0) break;
+      await drainCmRevocations();
+    }
 
     expect(revokedTokens).toContain(ownerAccount.refreshToken);
     expect(revokedTokens).toContain(memberAccount.refreshToken);
