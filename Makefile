@@ -1182,6 +1182,7 @@ publish-cluster-mesh: engram-e2-stable-publish-guard build-cluster-mesh ## Publi
 		-u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp \
 		-e npm_config_cache=/tmp/npm-cache \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" \
 		-e GITHUB_ACTIONS \
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
@@ -1317,6 +1318,7 @@ publish-llm-gateway: check-llm-model-equivalences wait-llm-gateway-mesh-dependen
 		-u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp \
 		-e npm_config_cache=/tmp/npm-cache \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" \
 		-e GITHUB_ACTIONS \
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
@@ -1423,6 +1425,7 @@ publish-llm-mesh: check-llm-model-equivalences verify-llm-mesh-cloud-code-oauth 
 		-u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp \
 		-e npm_config_cache=/tmp/npm-cache \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" \
 		-e GITHUB_ACTIONS \
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
