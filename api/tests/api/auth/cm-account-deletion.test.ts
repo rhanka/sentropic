@@ -4,9 +4,11 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
 import { settings, workspaces } from '../../../src/db/schema';
 import { deleteCmAccountAsAdmin } from '../../../src/services/identity/cm-account-deletion';
-import { createCmUser, updateCmUser } from '../../../src/services/identity/cm-users';
+import { changeCmAccountAsAdmin } from '../../../src/services/identity/cm-account-administration';
+import { createCmUser, findCmUserByEmail, updateCmUser } from '../../../src/services/identity/cm-users';
 import { createCmSession } from '../../../src/services/identity/cm-sessions';
-import { sha256Hex } from '../../../src/services/identity/cm-proofs';
+import { createCmMagicLink, sha256Hex } from '../../../src/services/identity/cm-proofs';
+import { app } from '../../../src/app';
 import { createCmTenant, enrolCmWorkspace, putCmWorkspaceMember, setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
 import { cmDeleteForEmails, cmDeleteForUsers, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 
@@ -75,6 +77,43 @@ describe('A4 account deletion with the real CM V2 coordinator', () => {
       .toEqual([{ step: 'remote_reader_sessions', subject_id: subject, state: 'pending' }]);
     expect(await cmQuery(`SELECT user_id FROM ${cmTable('identity_user_accounts')} WHERE user_id = $1`, [subject]))
       .toEqual([]);
+  });
+
+  it('deletes an account after disable, reactivate and disable with outstanding session revocations', async () => {
+    await updateCmUser(subject, { accountStatus: 'pending_admin_approval' });
+    for (const kind of ['disable', 'reactivate', 'disable'] as const) {
+      await changeCmAccountAsAdmin({ actorId: actor, userId: subject, action: { kind } });
+    }
+    const receipt = await deleteCmAccountAsAdmin({ actorId: actor, userId: subject }, randomUUID());
+    expect(receipt).toMatchObject({ transaction: 'committed', resultCode: 'identity_deleted' });
+    expect(await cmQuery(`SELECT user_id FROM ${cmTable('identity_user_accounts')} WHERE user_id = $1`, [subject]))
+      .toEqual([]);
+  });
+
+  it('deletes a newly registered magic-link account after the admin lifecycle', async () => {
+    const email = `magic-${randomUUID()}@example.test`, token = randomUUID();
+    let registeredId: string | undefined;
+    try {
+      await createCmMagicLink({ email, tokenHash: sha256Hex(token), now: new Date(),
+        expiresAt: new Date(Date.now() + 60_000) });
+      const verified = await app.request('/api/v1/auth/magic-link/verify', { method: 'POST',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) });
+      expect(verified.status).toBe(200);
+      registeredId = (await findCmUserByEmail(email))!.id;
+      for (const kind of ['disable', 'reactivate', 'disable'] as const) {
+        await changeCmAccountAsAdmin({ actorId: actor, userId: registeredId, action: { kind } });
+      }
+      const receipt = await deleteCmAccountAsAdmin({ actorId: actor, userId: registeredId }, randomUUID());
+      expect(receipt.transaction, JSON.stringify({ code: receipt.resultCode, steps: receipt.steps })).toBe('committed');
+      expect(await findCmUserByEmail(email)).toBeNull();
+    } finally {
+      if (registeredId) {
+        const owned = await db.delete(workspaces).where(eq(workspaces.ownerUserId, registeredId)).returning({ id: workspaces.id });
+        await cmDeleteForUsers([registeredId]);
+        await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = ANY($1::text[])`, [owned.map(row => row.id)]);
+      }
+      await cmDeleteForEmails([email]);
+    }
   });
 
   it('records one rolled-back receipt and preserves all rows when the final account delete fails', async () => {
