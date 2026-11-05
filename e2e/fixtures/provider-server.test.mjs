@@ -310,6 +310,15 @@ test('should emit patch args when the offered organization_update schema require
   assert.equal(args.patch.technologies.includes('Kubernetes'), true);
 });
 
+test('should fail closed on validation when the request carries no tool schemas', () => {
+  // Tool-less requests that match journey prompts must raise the journey
+  // validation error, not a TypeError reading schemas off an absent tools
+  // array (CI: TypeError reading 'find' failed the multitool chat run).
+  assert.throws(() => journeyResponse({ messages: [{ role: 'user',
+    content: 'Use organization_update to update the technologies field to exactly: X.' }] }),
+  /requires unavailable tool: organization_update/);
+});
+
 test('should skip the unavailable documents tool and consult via web_search', () => {
   // Journeys that do not offer the documents tool must not be asked for it:
   // fall back to an offered web_search instead of throwing.
@@ -343,6 +352,7 @@ test('should stream long generations slowly to keep in-flight steering observabl
   const lines = String(response.content).split('\n').filter(line => /^Ligne \d+ :/.test(line));
   assert.equal(lines.length, 180);
   assert.ok(response.delay > 0);
+  assert.ok(response.initialDelayMs > 0);
 });
 
 test('should prefer the use-case detail journey when the prompt embeds the matrix JSON', () => {
