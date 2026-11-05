@@ -242,9 +242,15 @@ test('should request a real PPTX generation tool and preserve explicit reply tok
   const response = journeyResponse({ messages: [{ role: 'system', content: "Tu travailles sur l'organisation org_1234567890." },
     { role: 'user', content: 'Use the document_generate tool with format "pptx" to create a presentation titled "Organization".' }],
   tools: [{ function: { name: 'document_generate', parameters: { required: ['action'] } } }] });
+  // System-text ids are not forwarded: only a user-stated entity id travels,
+  // otherwise the org-page chat resolves the entity from primary context.
   assert.deepEqual(JSON.parse(response.tool_calls[0].function.arguments), {
-    action: 'generate', format: 'pptx', title: 'Organization', entityType: 'organization', entityId: 'org_1234567890',
+    action: 'generate', format: 'pptx', title: 'Organization', entityType: 'organization',
   });
+  const explicit = journeyResponse({ messages: [{ role: 'user',
+    content: 'Use the document_generate tool with format "pptx" to create a presentation titled "Organization" for organization org_1234567890.' }],
+  tools: [{ function: { name: 'document_generate', parameters: { required: ['action'] } } }] });
+  assert.equal(JSON.parse(explicit.tool_calls[0].function.arguments).entityId, 'org_1234567890');
   assert.equal(journeyResponse({ messages: [{ role: 'user', content: 'Réponds uniquement "OK_SKILLS_OK" sans rien d’autre.' }] }).content, 'OK_SKILLS_OK');
 });
 
@@ -288,6 +294,55 @@ test('should use instruction and user schemas without treating assistant replies
     { role: 'user', content: 'Web research results' },
   ] }).content);
   assert.ok(detail.valueScores.length > 0);
+});
+
+test('should emit patch args when the offered organization_update schema requires patch', () => {
+  // Skills-registry journeys (e.g. mistral chat runs) offer organization_update
+  // with required [organizationId, patch]; the chat-services variant requires
+  // [organizationId, updates]. The fixture must satisfy the presented schema.
+  const skillsTool = { function: { name: 'organization_update',
+    parameters: { required: ['organizationId', 'patch'] } } };
+  const prompt = 'Use organization_update to update the technologies field of organization 2a9162d2-62ef-4439-8990-195746c984eb (Acme) to exactly: Kubernetes, Terraform, GitOps. Apply the tool with the tool before replying; do not ask for confirmation and do not preview the change.';
+  const response = journeyResponse({ messages: [{ role: 'user', content: prompt }], tools: [skillsTool] });
+  assert.ok(response.tool_calls);
+  const args = JSON.parse(response.tool_calls[0].function.arguments);
+  assert.ok(args.patch);
+  assert.equal(args.patch.technologies.includes('Kubernetes'), true);
+});
+
+test('should skip the unavailable documents tool and consult via web_search', () => {
+  // Journeys that do not offer the documents tool must not be asked for it:
+  // fall back to an offered web_search instead of throwing.
+  const tools = [
+    { function: { name: 'organization_update', parameters: { required: ['organizationId', 'updates'] } } },
+    { function: { name: 'web_search', parameters: { required: ['query'] } } },
+  ];
+  const response = journeyResponse({ messages: [{ role: 'user',
+    content: 'Consulte le document attaché à cette organisation et fais UNE seule recherche web sur les technologies.' }],
+  tools });
+  assert.ok(response.tool_calls);
+  assert.equal(response.tool_calls[0].function.name, 'web_search');
+});
+
+test('should omit entityId from document_generate so primary context resolves the org', () => {
+  // A wrong explicit entityId defeats automatic primary-context resolution and
+  // leaves the pptx_generate job uncompleted. System text often carries
+  // unrelated ids that the extractor must not forward.
+  const response = journeyResponse({ messages: [
+    { role: 'system', content: 'Workspace context {"id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}.' },
+    { role: 'user', content: 'Use the document_generate tool with format "pptx" to create a one-slide presentation titled "Acme".' },
+  ], tools: [{ function: { name: 'document_generate', parameters: { required: ['action'] } } }] });
+  assert.ok(response.tool_calls);
+  const args = JSON.parse(response.tool_calls[0].function.arguments);
+  assert.equal('entityId' in args, false);
+});
+
+test('should stream long generations slowly to keep in-flight steering observable', () => {
+  const response = journeyResponse({ messages: [{ role: 'user',
+    content: 'Rédige 180 lignes sur la maintenance prédictive ferroviaire.' }] });
+  const lines = String(response.content).split('\n').filter(line => /^Ligne \d+ :/.test(line));
+  assert.equal(lines.length, 180);
+  assert.ok(response.delay > 0);
 });
 
 test('should prefer the use-case detail journey when the prompt embeds the matrix JSON', () => {
