@@ -39,6 +39,3 @@ services:
 configs:
   ci-provider-marker:
     content: sentropic-ci-provider-v1
-networks:
-  default:
-    internal: ${CI_PROVIDER_INTERNAL:-true}
