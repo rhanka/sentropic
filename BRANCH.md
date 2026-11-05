@@ -71,7 +71,7 @@
 - [ ] **Lot 0 — Baseline and constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the study, and `plan/BRANCH_TEMPLATE.md`.
   - [x] Create isolated worktree `tmp/worktrees/ci-consumer-contracts` on `feat/ci-consumer-contracts` from `origin/main` (`e4328ae5c`, BR-82 merged); verify with `git branch --show-current`.
-  - [ ] Rebase onto current `origin/main` (`843efe3a1`, PR #919) after the gateway suite and installed-tuple gates go green; main moved during the build (see triage below).
+  - [x] Rebased onto current `origin/main` (`1115dd372`, PR #920, release-receipt skipped-publishers hotfix) after the gateway/IdP suites and installed-tuple gates went green; `BRANCH.md` kept branch content at the replay conflict, `ci.yml` auto-merged (disjoint regions).
   - [x] Capture Makefile targets needed for debug/testing (`test-publishable-manifests`, `test-ci-release-receipts`, `check-ci-version-filters`, `test-ci-package-candidate`, `test-ci-dag`, `test-ci-expected-results`).
   - [x] Define environment mapping (`test-ci-consumer-contracts`, `e2e-ci-consumer-contracts`) and ports (9415/5615/1515) for this branch.
   - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last; Docker via `docker-slot.sh`, one slot per command, never nested.
