@@ -48,6 +48,18 @@ test('should resolve linked sources as comparable but unqualified without candid
   assert.ok(verdict.differences.some((row) => row.includes('unqualified workspace source')));
 });
 
+test('should prefer the app-nested lock entry over the hoisted root copy', () => {
+  const nested = {
+    ...lockPackages,
+    'node_modules/jose': { version: '5.10.0', integrity: integrity('jose-5') },
+    'api/node_modules/jose': { version: '6.2.4', integrity: integrity('jose-6') },
+  };
+  const apiManifest = { name: 'api', version: '0.0.0', dependencies: { jose: '^6.1.0' } };
+  const resolved = resolveInstalledTuple({ manifest: apiManifest, lockPackages: nested, appDir: 'api' });
+  assert.equal(resolved.closure.jose.version, '6.2.4');
+  assert.equal(resolved.closure.jose.integrity, integrity('jose-6'));
+});
+
 test('should resolve the same digest for identical inputs regardless of key order', () => {
   const reordered = resolveInstalledTuple({
     manifest: { ...manifest, dependencies: { zod: '^3.25.76', hono: '^4.10.7', '@sentropic/comments': 'file:../packages/comments' } },

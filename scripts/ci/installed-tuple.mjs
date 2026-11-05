@@ -17,13 +17,23 @@ const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArr
 const LINKED = /^(?:file|link|workspace|portal):/;
 
 export function resolveInstalledTuple({ manifest = null, lockPackages = null, candidates = [],
-  dockerfiles = {}, workspaceVersions = {}, semver = loadSemver() } = {}) {
+  dockerfiles = {}, workspaceVersions = {}, appDir = null, semver = loadSemver() } = {}) {
   if (!isPlainObject(manifest) || !isPlainObject(manifest.dependencies)) {
     throw new GuardError('installed tuple requires an application manifest with dependencies');
   }
   if (!isPlainObject(lockPackages)) throw new GuardError('installed tuple requires lockfile packages');
   if (!Array.isArray(candidates)) throw new GuardError('installed tuple requires a candidate list');
   const byName = new Map(candidates.map((row) => [row?.name, row]));
+  // npm workspaces nest the app copy first: <app>/node_modules/<name> wins
+  // over the hoisted root copy, which may satisfy another workspace instead.
+  const prefixes = appDir ? [`${appDir}/node_modules/`, 'node_modules/'] : ['node_modules/'];
+  const lockedEntry = (name) => {
+    for (const prefix of prefixes) {
+      const entry = lockPackages[`${prefix}${name}`];
+      if (isPlainObject(entry)) return entry;
+    }
+    return undefined;
+  };
   const closure = {};
   for (const [name, spec] of Object.entries(manifest.dependencies).sort(([a], [b]) => (a < b ? -1 : 1))) {
     if (typeof spec !== 'string' || spec.length === 0) throw new GuardError(`invalid dependency spec: ${name}`);
@@ -47,7 +57,7 @@ export function resolveInstalledTuple({ manifest = null, lockPackages = null, ca
       closure[name] = { version: workspaceVersion, qualified: false };
       continue;
     }
-    const locked = lockPackages[`node_modules/${name}`];
+    const locked = lockedEntry(name);
     if (!isPlainObject(locked)) throw new GuardError(`missing lock entry: ${name}`);
     if (typeof locked.version !== 'string' || semver.valid(locked.version) === null) {
       throw new GuardError(`lock entry ${name} is not an exact locked version: ${locked.version}`);
@@ -106,7 +116,7 @@ export function tupleForApp({ root = process.cwd(), appDir = 'api', candidates =
     }
   }
   return resolveInstalledTuple({ manifest, lockPackages: lock.packages ?? {}, candidates,
-    dockerfiles: inputs, workspaceVersions, semver });
+    dockerfiles: inputs, workspaceVersions, appDir, semver });
 }
 
 if (process.argv[1] && import.meta.url.endsWith('/installed-tuple.mjs') && process.argv.includes('--tuple')) {
@@ -118,7 +128,7 @@ if (process.argv[1] && import.meta.url.endsWith('/installed-tuple.mjs') && proce
     const appDir = read('--app') ?? 'api';
     const candidates = JSON.parse(read('--candidates') ?? '[]');
     const resolved = tupleForApp({ root: read('--root') ?? process.cwd(), appDir, candidates });
-    process.stdout.write(`${JSON.stringify(resolved, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(resolved, null, 2)}\n`);
   } catch (error) {
     process.stderr.write(`::error::installed-tuple: ${error?.message ?? error}\n`);
     process.exitCode = error instanceof GuardError ? 1 : 2;
