@@ -211,13 +211,34 @@ export function journeyResponse(body) {
   const results = messages.slice(lastUser + 1).filter(m => m.role === 'tool');
   const callsById = new Map(messages.flatMap(m => m.tool_calls ?? []).map(call => [call.id, call.function]));
   const used = new Set(results.map(m => callsById.get(m.tool_call_id)?.name ?? m.name));
-  const id = kind => String(user).match(new RegExp(`${kind}Id[=\\s:\\"']+([\\w-]+)`, 'i'))?.[1]
-    ?? text.match(new RegExp(`(?:${kind}Id|${kind}_id)[=\\s:\\"']+([\\w-]+)`, 'i'))?.[1]
-    ?? text.match(new RegExp(`${kind} (?:with id )?([a-z0-9_-]{10,})`, 'i'))?.[1]
-    ?? text.match(new RegExp(`${({ organization: 'organisation', folder: 'dossier' })[kind] ?? kind} ([a-z0-9_-]{10,})`, 'i'))?.[1]
-    ?? text.match(/"(?:contextId|id)"\s*:\s*"([\w-]+)"/)?.[1];
+  // Entity ids the user states explicitly win over ids harvested from
+  // surrounding system text: the system prompt names context ids in prose
+  // ("Si un contexte organizationId est présent" yields "est") that must
+  // never shadow the entity the user actually named. The {10,} guards reject
+  // prose fragments on the loose `Id=` shapes the same way.
+  const id = kind => {
+    const frenchKind = ({ organization: 'organisation', folder: 'dossier' })[kind] ?? kind;
+    return String(user).match(new RegExp(`${kind}Id[=\\s:\\"']+([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? String(user).match(new RegExp(`${kind} (?:with id )?([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? String(user).match(new RegExp(`${frenchKind} ([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(new RegExp(`(?:${kind}Id|${kind}_id)[=\\s:\\"']+([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(new RegExp(`${kind} (?:with id )?([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(new RegExp(`${frenchKind} ([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(/"(?:contextId|id)"\s*:\s*"([\w-]+)"/)?.[1];
+  };
+  // Terminal text shared by the answering paths below.
+  const terminalText = () => (text.includes('Bob') ? 'Bonjour Bob, voici la réponse.' : 'CI provider response: opération terminée.');
   const call = (name, args) => {
-    if (!tools.includes(name)) throw new Error(`Journey requires unavailable tool: ${name}`);
+    // The chat runtime's finalization pass disables execution tools by design
+    // and asks for the final answer with no tools offered (its synthesis
+    // prompt ends with "Rédige maintenant la réponse finale."). A live model
+    // answers with text there, so the fixture does the same instead of
+    // failing the run. Any other tool-less journey prompt still throws: that
+    // is a genuine journey mismatch, not the by-design answering mode.
+    if (!tools.includes(name)) {
+      if (tools.length === 0 && /Rédige maintenant la réponse finale/.test(user)) return { content: terminalText() };
+      throw new Error(`Journey requires unavailable tool: ${name}`);
+    }
     const schema = body.tools.find(tool => tool.function?.name === name).function.parameters;
     for (const key of schema?.required ?? []) if (args[key] == null) throw new Error(`Missing journey tool argument: ${name}.${key}`);
     return { tool_calls: [{ id: `ci_tool_${results.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] };
@@ -279,7 +300,7 @@ export function journeyResponse(body) {
     const lines = Array.from({ length: total }, (_, i) => `Ligne ${i + 1} : point d'analyse maintenance prédictive ${i + 1}.`);
     return { content: lines.join('\n'), delay: 50, initialDelayMs: 3000 };
   }
-  return { content: text.includes('Bob') ? 'Bonjour Bob, voici la réponse.' : 'CI provider response: opération terminée.' };
+  return { content: terminalText() };
 }
 
 const overlayImport = import.meta.url === 'file:///run/ci-provider/provider-server.mjs';
