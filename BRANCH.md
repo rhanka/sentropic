@@ -93,7 +93,7 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
   - [x] Bump `ARTIFACTS_PROVIDER_VERSION` in `packages/artifacts/src/mcp-core.ts`.
   - [x] Add `CHANGELOG.md` entry for `0.2.16` with the fix and the header-contract choice plus OVH/minio justification.
   - [x] Refresh locks/pins: root and `api` lock workspace entries, `APP-P1` manifest digest re-pin in `api/src/services/mcp/cluster-registry.ts` (digest computed in the api container via `make exec-api`, corroborated by the registry tests), api registry tests updated.
-  - [x] Cluster-mesh selected fixture left at `0.2.15`: its integrity pin comes from the verified release archive (sanctioned `refresh-lazy-package-lock` flow, post-publish), and the packaging harness installs the selected fixture from the registry, which has no `0.2.16` yet. Precedent: `f11eca02e` shipped the release without the fixture; `b6631c4b5`/`530ed7aff` re-pinned after publication.
+  - [x] Cluster-mesh selected fixture re-pinned to `0.2.16` in-branch (required by `prepare-artifacts.spec.ts`): `pack-artifacts` with receipts, `publishable-sibling-collect`, then `refresh-lazy-package-lock` with the sibling receipts, all through make. The sibling archive replaces the registry pre-publication by design; `prepare.sh` installs those exact sibling bytes.
   - [x] Verify `npm view @sentropic/artifacts version` is below `0.2.16` (Post-Rebase Gate after any rebase): registry reports `0.2.15`.
   - [x] Lot gate: `make scope-check` before every commit; commits under 150 lines via `make commit`.
 - [x] **Lot 4 — Final validation**
