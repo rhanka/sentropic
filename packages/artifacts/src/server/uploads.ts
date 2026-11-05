@@ -132,6 +132,31 @@ export interface UploadSignerPort {
   }>;
 }
 
+/**
+ * Typed verification failure for the upload channel (fail-closed commit).
+ * Hosts map this to `verification_failed` without trusting the message text.
+ */
+export type UploadVerificationReason =
+  | 'unknown_upload'
+  | 'session_not_open'
+  | 'session_expired'
+  | 'staged_missing'
+  | 'size_mismatch'
+  | 'digest_mismatch'
+  | 'mime_mismatch'
+  | 'cas_readback_mismatch';
+
+export class UploadVerificationError extends Error {
+  readonly reason: UploadVerificationReason;
+  readonly uploadId: string;
+  constructor(reason: UploadVerificationReason, uploadId: string, message: string) {
+    super(message);
+    this.name = 'UploadVerificationError';
+    this.reason = reason;
+    this.uploadId = uploadId;
+  }
+}
+
 export const STAGING_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/staging\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Staging key of one upload session. */
@@ -513,27 +538,40 @@ export function createUploadService(deps: {
       return deps.sessions.get(input.uploadId).then((session) => {
         if (session === undefined || session.artifactId !== input.artifactId ||
           session.storageScopeId !== input.storageScopeId || session.ownerId !== input.ownerId) {
-          throw new Error(`unknown upload for this artifact/owner/scope: ${input.uploadId}`);
+          throw new UploadVerificationError('unknown_upload', input.uploadId,
+            `unknown upload for this artifact/owner/scope: ${input.uploadId}`);
         }
-        if (session.state !== 'open') throw new Error(`upload not open (${session.state}): ${input.uploadId}`);
+        if (session.state !== 'open') {
+          throw new UploadVerificationError('session_not_open', input.uploadId,
+            `upload not open (${session.state}): ${input.uploadId}`);
+        }
         if (new Date(session.expiresAt).getTime() <= now().getTime()) {
-          throw new Error(`upload session expired: ${input.uploadId}`);
+          throw new UploadVerificationError('session_expired', input.uploadId,
+            `upload session expired: ${input.uploadId}`);
         }
         return session;
       });
     },
     verifyStaged(session, bytes, expected) {
       if (bytes.length !== expected.size) {
-        throw new Error(`upload size mismatch for ${session.uploadId}: staged ${bytes.length}, declared ${expected.size}`);
+        throw new UploadVerificationError('size_mismatch', session.uploadId,
+          `upload size mismatch for ${session.uploadId}: staged ${bytes.length}, declared ${expected.size}`);
       }
       const actual = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
       if (actual !== expected.digest) {
-        throw new Error(`upload digest mismatch for ${session.uploadId}: staged ${actual}`);
+        throw new UploadVerificationError('digest_mismatch', session.uploadId,
+          `upload digest mismatch for ${session.uploadId}: staged ${actual}`);
       }
       if (expected.mimeType !== session.mimeType) {
-        throw new Error(`upload MIME mismatch for ${session.uploadId}: session ${session.mimeType}, declared ${expected.mimeType}`);
+        throw new UploadVerificationError('mime_mismatch', session.uploadId,
+          `upload MIME mismatch for ${session.uploadId}: session ${session.mimeType}, declared ${expected.mimeType}`);
       }
-      validateFileBytes(expected.mimeType, bytes);
+      try {
+        validateFileBytes(expected.mimeType, bytes);
+      } catch (error) {
+        throw new UploadVerificationError('mime_mismatch', session.uploadId,
+          `upload content mismatch for ${session.uploadId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     },
     async completeCommit(session, record) {
       const staged: StagedFileRecord = {
