@@ -872,7 +872,7 @@ fixture unit checks cannot establish their budget acceptance.
 
 The test-only overlay redirects provider HTTP/SSE at the transport boundary,
 keeps the application image, auth, database, queue, tools and persistence,
-and requires an internal test network plus an unexpected-egress journal.
+records networkInternal as evidence only plus an unexpected-egress journal; the overlay requests no isolated network.
 Environment configuration alone cannot enable the production fixture guard.
 Selected chat-completion, vision, Tavily and OpenAI Responses reasoning-evaluator
 protocols have deterministic responses; other remote hosts fail closed. Real credentials are confined to
