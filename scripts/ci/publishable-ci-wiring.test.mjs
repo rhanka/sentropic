@@ -734,6 +734,73 @@ test('gateway mesh wait resolves a union range to an exact dependency floor', ()
   assert.equal(result.stdout, '0.28.0');
 });
 
+test('consumer contracts (BR-83): change filters select every boundary consumer lane', () => {
+  const filterStep = jobs.changes.steps.find((step) => step.uses?.startsWith('dorny/paths-filter'));
+  assert.ok(filterStep, 'changes uses dorny paths-filter');
+  const filters = YAML.parse(filterStep.with.filters);
+  const covers = (filter, pattern) => assert.ok(filters[filter].includes(pattern),
+    `${filter} must cover ${pattern}`);
+  // Shared AuthProviderGlyph: auth-ui changes select the UI lane (plus the
+  // API lane through the api filter) with both images and preproduction.
+  covers('ui', 'packages/auth-ui/**');
+  covers('api', 'packages/auth-ui/**');
+  // Comments is a cluster peer: comments changes retain peer qualification.
+  covers('cluster_mesh', 'packages/comments/**');
+  // The gateway host consumes cluster-mesh: cluster-mesh changes select it.
+  covers('llm_gateway', 'packages/cluster-mesh/**');
+  // Boundary packages keep their own selections.
+  covers('comments', 'packages/comments/**');
+  covers('cluster_mesh', 'packages/cluster-mesh/**');
+});
+
+test('consumer contracts (BR-83): candidate contract lanes are wired into CI', () => {
+  // The API contracts run in the new contracts suite of the API integration job.
+  const matrix = jobs['test-api-unit-integration'].strategy.matrix.include.map((row) => row.suite);
+  assert.ok(matrix.includes('contracts'), 'api integration must run the contracts suite');
+  const apiScripts = JSON.parse(fs.readFileSync(path.join(root, 'api', 'package.json'), 'utf8')).scripts;
+  assert.ok(apiScripts['test:contracts'].includes('tests/contracts'),
+    'test:contracts must cover api/tests/contracts');
+  for (const file of ['api/tests/contracts/comments-candidate.test.ts',
+    'api/tests/contracts/cluster-candidate.test.ts',
+    'apps/auth-idp/tests/cluster-candidate.test.ts',
+    'apps/llm-gateway/tests/cluster-candidate.test.ts']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist: delegation is not passing evidence`);
+  }
+  const boundaries = JSON.parse(fs.readFileSync(path.join(root, 'scripts', 'ci', 'consumer-boundaries.json'), 'utf8'));
+  const workflowText = fs.readFileSync(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8');
+  for (const [file, via] of Object.entries(boundaries.contractLanes)) {
+    assert.ok(fs.existsSync(path.join(root, file)), `contract ${file} must exist`);
+    assert.ok(workflowText.includes(via), `contract ${file} must be wired through ${via}`);
+  }
+  // The gateway host suite runs inside its consumer validation.
+  const gatewaySteps = jobs['validate-llm-gateway'].steps.map((step) => step.run ?? '');
+  assert.ok(gatewaySteps.some((run) => run.includes('make test-llm-gateway-process')),
+    'validate-llm-gateway must run the gateway host process suite');
+});
+
+test('consumer contracts (BR-83): verifier job joins the complete verdict', () => {
+  const job = jobs['consumer-contracts'];
+  assert.ok(job, 'consumer-contracts job must exist');
+  assert.deepEqual(job.needs, ['changes', 'package-candidates']);
+  const runs = job.steps.map((step) => step.run ?? '').join('\n');
+  assert.ok(runs.includes('test-ci-compatibility'), 'classifier gate must run');
+  assert.ok(runs.includes('test-ci-consumer-contracts'), 'contract selection gate must run');
+  assert.ok(runs.includes('test-ci-installed-tuple'), 'installed tuple gate must run');
+  assert.ok(runs.includes('make consumer-contracts-verify'), 'live dispatch verify must run');
+  assert.ok(needsOf('ci-gate').includes('consumer-contracts'), 'ci-gate must require the verifier');
+  const bumpSteps = jobs['enforce-package-bump'].steps.map((step) => step.run ?? '').join('\n');
+  assert.ok(bumpSteps.includes('consumer-boundaries.json'), 'package bump gate must check boundary inventory');
+});
+
+test('consumer contracts (BR-83): IdP consumer checks stay selected on api changes', () => {
+  const smoke = jobs['smoke-idp-screens'];
+  assert.equal(evaluateSelection(smoke.if, (key) => key === 'needs.changes.outputs.api' ? 'true'
+    : key === 'needs.changes.outputs.global' ? 'false' : ''), true);
+  const ui = jobs['test-ui'];
+  assert.equal(evaluateSelection(ui.if, (key) => key === 'needs.changes.outputs.ui' ? 'true'
+    : key === 'needs.changes.outputs.global' ? 'false' : ''), true);
+});
+
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_ATTEMPTS \?= 18$/m);
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_SECONDS \?= 10$/m);
