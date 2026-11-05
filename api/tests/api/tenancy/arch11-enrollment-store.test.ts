@@ -1,20 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { createServicePrincipalTidIssuerV1, oauthTenantStoreV1 } from '@sentropic/cluster-mesh';
+
 import { db } from '../../../src/db/client';
 import { connectorTenantEnrollments } from '../../../src/db/control-schema';
 import { serviceClients } from '../../../src/db/schema';
 import { createCmTenant } from '../../../src/services/identity/cm-tenancy';
-import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
+import { runCmIdentityRead, runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 import { cmDeleteTenants, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 import {
-  activeEnrollmentTenantsForPrincipal,
   authorizedTenants,
+  createServiceTenantEnrollmentSource,
 } from '../../../src/services/tenancy/enrollment-store';
 
 // ARCH-11 G1c — DB-backed authorized-tenant-set resolver (spec §2.1). Proves: a single-org client
 // resolves its FIXED service_clients.tenant_id WITHOUT an enrollment row (§1.6 fix); active rows are
 // included and suspended rows excluded; a NON-VACUOUS ≥2-org set; and per-connector scoping.
+// Client-level (cross-connector) enrollment views go through the CM-owned S2S OBO selector
+// (`createServicePrincipalTidIssuerV1`) fed by the attempt-scoped enrollment source — the app-side
+// `activeEnrollmentTenantsForPrincipal` selector is deleted (a4-cm-gaps-r2 §10.7 series 3).
 
 const ORG_A = 'arch11g1c-es-org-a';
 const ORG_B = 'arch11g1c-es-org-b';
@@ -27,6 +32,18 @@ const TEST_CLIENTS = [SINGLE_ORG_CLIENT, MULTI_ORG_CLIENT];
 
 const CONNECTOR_1 = 'arch11g1c-es-connector-1';
 const CONNECTOR_2 = 'arch11g1c-es-connector-2';
+
+/** Client-level enrollment ids through the attempt-scoped CM-owned source (registry ids, all connectors). */
+const enrolledTenantIdsForClient = (clientId: string): Promise<readonly string[]> =>
+  runCmIdentityRead(async tx => createServiceTenantEnrollmentSource(tx).listEnrolledTenantIds(clientId));
+
+/** Mint view through the CM-owned S2S OBO selector (fixed leg + enrollment leg, CM re-reads activity). */
+const mintForClient = (clientId: string, requestedTenant: string | null) =>
+  runCmIdentityRead(async tx => createServicePrincipalTidIssuerV1({
+    tenants: tx.stores.tenants,
+    oauth: oauthTenantStoreV1(tx),
+    enrollments: createServiceTenantEnrollmentSource(tx),
+  }).issueServiceTid({ clientId, requestedTenant }));
 
 async function seedOrg(id: string): Promise<void> {
   await createCmTenant({ tenantId: id, slug: id, status: 'active' }).catch(() => {});
@@ -98,8 +115,14 @@ describe('ARCH-11 G1c — enrollment-store authorizedTenants resolver', () => {
     expect(set).toEqual(new Set([ORG_A, ORG_B]));
     expect(set.has(ORG_C)).toBe(false);
 
-    // Client-level (all connectors) mint view: A (fixed) is NOT here (enrollment-only), B is.
-    expect(await activeEnrollmentTenantsForPrincipal(MULTI_ORG_CLIENT)).toEqual([ORG_B]);
+    // Client-level (all connectors) enrollment view: A (fixed) is NOT here (enrollment-only), B is.
+    expect([...await enrolledTenantIdsForClient(MULTI_ORG_CLIENT)].sort()).toEqual([ORG_B]);
+    // The CM-owned mint over the same legs issues B from the enrollment leg, and refuses
+    // the implicit (selector-less) mint on the 2-tenant set.
+    expect(await mintForClient(MULTI_ORG_CLIENT, ORG_B)).toMatchObject({ issued: true,
+      claim: { tid: ORG_B, tenantId: ORG_B, clientId: MULTI_ORG_CLIENT, source: 'connector_enrollment' } });
+    expect(await mintForClient(MULTI_ORG_CLIENT, null)).toEqual({ issued: false,
+      reason: 'tenant_selector_required' });
   });
 
   it('per-connector scoping: an enrollment on connector-1 is not seen on connector-2', async () => {
@@ -120,7 +143,7 @@ describe('ARCH-11 G1c — enrollment-store authorizedTenants resolver', () => {
     expect(await authorizedTenants(SINGLE_ORG_CLIENT, CONNECTOR_1)).toEqual([]);
   });
 
-  it('activeEnrollmentTenantsForPrincipal spans connectors and excludes suspended', async () => {
+  it('service-tenant enrollment source spans connectors and excludes suspended', async () => {
     await seedServiceClient(MULTI_ORG_CLIENT, ORG_A);
     await seedEnrollment(MULTI_ORG_CLIENT, CONNECTOR_1, ORG_B, 'active');
     await seedEnrollment(MULTI_ORG_CLIENT, CONNECTOR_2, ORG_C, 'active');
@@ -135,7 +158,7 @@ describe('ARCH-11 G1c — enrollment-store authorizedTenants resolver', () => {
       })
       .onConflictDoNothing();
 
-    const set = new Set(await activeEnrollmentTenantsForPrincipal(MULTI_ORG_CLIENT));
+    const set = new Set(await enrolledTenantIdsForClient(MULTI_ORG_CLIENT));
     expect(set).toEqual(new Set([ORG_B, ORG_C]));
 
     // Sanity: the suspended (connector-2, ORG_B) row exists but is filtered out.

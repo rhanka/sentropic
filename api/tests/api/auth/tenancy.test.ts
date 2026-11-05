@@ -12,9 +12,9 @@ import { createTestUser, cleanupAuthData } from '../../utils/auth-helper';
 import { cmDeleteTenantMembershipsForTenant, cmDeleteTenants } from '../../utils/cm-identity-test-store';
 
 // BR-39e Lot 1 — tenancy core, now on the cluster-mesh custody store. Verifies the
-// 0014 migration backfill (public.tenants -> cm_tenants) and the tenant-isolation
+// 0015 migration backfill (public.tenants -> cm_tenants) and the tenant-isolation
 // invariant (negative A->B). The legacy public.tenants/tenant_memberships tables are
-// dropped by control migration 0014; these assert the CM stores directly.
+// dropped by control migration 0015; these assert the CM stores directly.
 const TENANT_A = 'tenant-a-test';
 const TENANT_B = 'tenant-b-test';
 
@@ -30,7 +30,7 @@ describe('BR-39e tenancy core (Lot 1, CM store)', () => {
 
   it('seeds the default `sentropic` tenant via the migration backfill', async () => {
     // cleanupAuthData purges cm_tenants between suites; re-create the platform row
-    // exactly as control migration 0014 backfills it from public.tenants.
+    // exactly as control migration 0015 backfills it from public.tenants.
     await createCmTenant({ tenantId: 'sentropic', slug: 'sentropic', status: 'active' }).catch(() => {});
     const row = await findCmTenant('sentropic');
     expect(row).toBeDefined();
