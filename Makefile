@@ -993,6 +993,32 @@ test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR
 test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-dag.test.mjs'
 
+# BR83-EX2 — consumer contract entry points (plan/69-BRANCH_feat-ci-consumer-contracts.md).
+# Classify change kinds, select consumer validations, and verify installed tuples
+# in the manifest guard image; retain the version-bump and image hash/filter guards.
+.PHONY: test-ci-compatibility test-ci-consumer-contracts test-ci-installed-tuple
+test-ci-compatibility: ## Qualify change-kind classification for consumer selection (BR83-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/compatibility-classifier.test.mjs)'
+test-ci-consumer-contracts: ## Qualify consumer-boundary selection over qualified candidates (BR83-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		node --test $(or $(SCOPE),scripts/ci/consumer-contracts.test.mjs)
+test-ci-installed-tuple: ## Qualify immutable installed tuples and Docker inputs (BR83-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/installed-tuple.test.mjs)'
+.PHONY: test-idp-candidate
+test-idp-candidate: prepare-node-workspace ## Run the IdP cluster-candidate contract on the isolated workspace (BR83-EX2)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CANDIDATE_TARBALL="$(CANDIDATE_TARBALL)" -e CLUSTER_CANDIDATE_TARBALL="$(CLUSTER_CANDIDATE_TARBALL)" -w /workspace api sh -lc 'npx --no-install vitest run $(or $(SCOPE),apps/auth-idp/tests/cluster-candidate.test.ts) --environment node --root /workspace'
+.PHONY: consumer-contracts-verify
+consumer-contracts-verify: ## Verify the live workflow selects every required consumer for VERIFY_BASE..VERIFY_HEAD (BR83-EX2)
+	@test -n "$(VERIFY_BASE)" && test -n "$(VERIFY_HEAD)"
+	@rm -rf tmp/consumer-verify && mkdir -p tmp/consumer-verify/base
+	@git archive $(VERIFY_BASE) `git ls-tree -r --name-only $(VERIFY_BASE) -- 'api/package.json' 'ui/package.json' 'apps/auth-idp/package.json' 'apps/llm-gateway/package.json' 'package-lock.json' 'api/Dockerfile' 'ui/Dockerfile' 'packages/*/package.json'` | tar -x -C tmp/consumer-verify/base
+	@git diff --name-only $(VERIFY_BASE) $(VERIFY_HEAD) | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.stringify(s.split("\n").map((l)=>l.trim()).filter(Boolean))))' > tmp/consumer-verify/files.json
+	@node -e 'const fs=require("node:fs");const base="tmp/consumer-verify/base";const read=(f)=>{try{return JSON.parse(fs.readFileSync(f,"utf8"))}catch{return null}};const boundaries=read("scripts/ci/consumer-boundaries.json");const entries=[];for(const c of boundaries.components){const dir=c.kind==="app"?({"api":"api","ui":"ui","auth-idp":"apps/auth-idp","llm-gateway":"apps/llm-gateway"}[c.slug]):`packages/${c.slug}`;if(!dir)continue;entries.push({slug:c.slug,scope:c.kind,published:read(`${base}/${dir}/package.json`),candidate:read(`${dir}/package.json`)});}console.log(JSON.stringify(entries));' > tmp/consumer-verify/packages.json
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -e VERIFY_CHANGES_JSON='$(VERIFY_CHANGES_JSON)' -e VERIFY_EVENT='$(or $(VERIFY_EVENT),pull_request)' -e VERIFY_REF='$(VERIFY_REF)' -e VERIFY_EXPECT_OMISSION='$(or $(VERIFY_EXPECT_OMISSION),false)' -e VERIFY_CANDIDATES_JSON='$(VERIFY_CANDIDATES_JSON)' -v "$(CURDIR):/workspace:ro" -v "$(CURDIR)/tmp/consumer-verify:/verify" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir" CI_EXPECTED_TOOL_DIR="$$tool_dir"; node scripts/ci/installed-tuple.mjs --tuple --root /workspace --app api --candidates "$${VERIFY_CANDIDATES_JSON:-[]}" > /verify/head-api.json; node scripts/ci/installed-tuple.mjs --tuple --root /workspace --app ui --candidates "$${VERIFY_CANDIDATES_JSON:-[]}" > /verify/head-ui.json; node scripts/ci/installed-tuple.mjs --tuple --root /verify/base --app api --candidates "$${VERIFY_CANDIDATES_JSON:-[]}" > /verify/base-api.json; node scripts/ci/installed-tuple.mjs --tuple --root /verify/base --app ui --candidates "$${VERIFY_CANDIDATES_JSON:-[]}" > /verify/base-ui.json; node -e '\''const fs=require("node:fs");const j=(f)=>JSON.parse(fs.readFileSync(f,"utf8"));console.log(JSON.stringify({before:{api:j("/verify/base-api.json"),ui:j("/verify/base-ui.json")},after:{api:j("/verify/head-api.json"),ui:j("/verify/head-ui.json")}}))'\'' > /verify/tuples.json; node scripts/ci/consumer-contracts.mjs --verify --files-file /verify/files.json --packages-file /verify/packages.json --tuples-file /verify/tuples.json'
+
 .PHONY: ci-security-join
 ci-security-join: ## Reject missing, failed or unexpectedly skipped scan lanes
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e CI_SECURITY_NEEDS -e CI_SECURITY_CATEGORY -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --security-join
