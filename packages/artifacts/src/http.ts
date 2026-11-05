@@ -16,7 +16,7 @@ import { SERVER_MAX_FILE_BYTES, SERVER_MAX_SOURCE_FILES, SERVER_MAX_SOURCE_INLIN
 import { releaseBudget } from './profile/validation.js';
 import { commitStagedUpload, createUploadService, STAGED_FILE_TTL_MS, stagedFileExpired,
   type CommitStagedUploadDeps, type StagedFileRecord, type StagingStore, type UploadSessionStore,
-  type UploadSignerPort } from './server/uploads.js';
+  type UploadSignerPort, type UploadVerificationReason, UploadVerificationError } from './server/uploads.js';
 import { createHmacUploadPageCookieSigner, createMemoryUploadPageStore, createUploadPageService } from './server/upload-page.js';
 import type { ArtifactsMetrics } from './server/metrics.js';
 import type { UploadPageStore } from './server/upload-page.js';
@@ -899,8 +899,24 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
                 throw new ArtifactOperationError('limit_exceeded', { cause,
                   publicDetails: { upload: { reason: 'staged_budget' } } });
               }
+              if (cause instanceof UploadVerificationError) {
+                const sessionReasons: UploadVerificationReason[] =
+                  ['unknown_upload', 'session_not_open', 'session_expired'];
+                if (sessionReasons.includes(cause.reason)) {
+                  // One response for unknown, foreign-bound, closed or expired sessions (no oracle).
+                  throw new ArtifactOperationError('verification_failed', { cause,
+                    publicDetails: { upload: { reason: 'session unknown, bound elsewhere, closed or expired' } } });
+                }
+                if (cause.reason === 'staged_missing') {
+                  throw new ArtifactOperationError('verification_failed',
+                    { publicDetails: { upload: { reason: 'staged object missing' } } });
+                }
+                throw new ArtifactOperationError('verification_failed', { cause,
+                  publicDetails: { upload: { reason: 'size/digest/MIME mismatch' } } });
+              }
+              // Legacy plain-error fallback (e.g. a session store racing a
+              // delete between commit steps): same public reasons as before.
               if (cause instanceof Error && (/unknown upload/.test(cause.message) || /closed/.test(cause.message))) {
-                // One response for unknown, foreign-bound, closed or expired sessions (no oracle).
                 throw new ArtifactOperationError('verification_failed', { cause,
                   publicDetails: { upload: { reason: 'session unknown, bound elsewhere, closed or expired' } } });
               }
