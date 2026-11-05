@@ -35,7 +35,7 @@ export async function seedCmArtifactIdentity(pool: Pool, options: {
       VALUES ($1, $2, 'active', 'none', $3, $4, 0)`, [id, userId, now, expires]);
     await pool.query(`INSERT INTO cm_identity.identity_login_token_bindings
       (session_id, session_token_hash, mfa_verified, auth_time, session_version, rotation_version)
-      VALUES ($1, $2, 0, $3, $4, 1)`, [id, createHash('sha256').update(id).digest('hex'),
+      VALUES ($1, $2, false, $3, $4, 1)`, [id, createHash('sha256').update(id).digest('hex'),
     Math.floor(Date.parse(now) / 1000), Date.parse(now)]);
   }
 }
