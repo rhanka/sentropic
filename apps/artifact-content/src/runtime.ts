@@ -33,12 +33,16 @@ export function createContentRuntime(options: {
     return { tenantId: value[0] as string, workspaceId: value[1] as string };
   }
   // G1 owner Q2: live account approval, re-checked on every content read (fail-closed).
+  // Lot A4: approval reads the CM identity stores; the legacy users/tenants/
+  // memberships tables are dropped by control migration 0015 (same predicate
+  // as reader-activation.ts, across every tenant the account belongs to).
   async function isApprovedAccount(principalId: string) {
     const { rows } = await pool.query<{ approved: boolean }>(
-      `SELECT EXISTS (SELECT 1 FROM users u
-         JOIN tenant_memberships tm ON tm.user_id = u.id
-         JOIN tenants t ON t.id = tm.tenant_id
-         WHERE u.id = $1 AND u.account_status = 'active' AND u.disabled_at IS NULL
+      `SELECT EXISTS (SELECT 1 FROM cm_identity.identity_user_accounts u
+         JOIN cm_identity.identity_account_profiles p ON p.user_id = u.user_id
+         JOIN cm_identity.cm_tenant_memberships tm ON tm.user_id = u.user_id
+         JOIN cm_identity.cm_tenants t ON t.tenant_id = tm.tenant_id
+         WHERE u.user_id = $1 AND u.account_status = 'active' AND p.disabled_at IS NULL
            AND t.status = 'active' AND tm.status = 'approved') AS approved`,
       [principalId]);
     return rows[0]?.approved === true;
