@@ -3029,7 +3029,7 @@ up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrate
 smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2E browser against compiled IdP
 	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
 	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
-	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" -e CM_IDENTITY_EMAIL_CODE_POLICY=sha256 -e CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" -e CM_IDENTITY_EMAIL_CODE_POLICY=sha256 -e CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only api npx --no-install tsx --tsconfig apps/auth-idp/tsconfig.json apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
 	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
 	test -n "$$user_id"; test -n "$$session_token"; \
 	idp_container="$$( $(CI_COMPOSE) ps -q auth-idp )"; test -n "$$idp_container"; \
@@ -3176,7 +3176,7 @@ smoke-idp-screens: ## Screen-driven SSO smoke: drives the IdP-SERVED login+conse
 		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
 		-e CM_IDENTITY_EMAIL_CODE_POLICY=sha256 \
 		-e CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only \
-		-w /workspace api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
+		-w /workspace api npx --no-install tsx --tsconfig apps/auth-idp/tsconfig.json apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
 	USER_ID=$$(grep '^USER_ID=' .tmp-idp-seed.env | cut -d= -f2-); \
 	SESSION_TOKEN=$$(grep '^SESSION_TOKEN=' .tmp-idp-seed.env | cut -d= -f2-); \
 	rm -f .tmp-idp-seed.env; \
