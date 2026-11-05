@@ -19,6 +19,7 @@ import {
   type TestUser,
 } from '../utils/auth-helper';
 import { createTestId } from '../utils/test-helpers';
+import { findCmWorkspace, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
 
 describe('cluster mesh comments cutover', () => {
   let user: TestUser;
@@ -82,6 +83,33 @@ describe('cluster mesh comments cutover', () => {
       user.sessionToken!,
     );
     expect(doubled.status).toBe(404);
+  });
+
+  it('denies a tenant membership lost after workspace authorization without a server error', async () => {
+    const workspace = await findCmWorkspace(user.workspaceId!);
+    expect(workspace).not.toBeNull();
+    await setCmMembershipState(user.id, workspace!.tenantId, { status: 'suspended', decidedBy: user.id });
+    const response = await authenticatedRequest(productApp, 'GET',
+      `/api/v1/comments?context_type=organization&context_id=${organizationId}&workspace_id=${user.workspaceId}`,
+      user.sessionToken!);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Tenant access required' });
+    expect(await db.select().from(comments).where(eq(comments.workspaceId, user.workspaceId!))).toEqual([]);
+  });
+
+  it('resolves comments immediately after a workspace is provisioned', async () => {
+    const created = await authenticatedRequest(productApp, 'POST', '/api/v1/workspaces', user.sessionToken!,
+      { name: `Fresh comments ${createTestId()}` });
+    expect(created.status).toBe(201);
+    const { id: workspaceId } = await created.json() as { id: string };
+    const organization = await authenticatedRequest(productApp, 'POST',
+      `/api/v1/organizations?workspace_id=${workspaceId}`, user.sessionToken!, { name: 'Fresh organization' });
+    expect(organization.status).toBe(201);
+    const { id } = await organization.json() as { id: string };
+    const responses = await Promise.all(Array.from({ length: 4 }, () => authenticatedRequest(productApp, 'GET',
+      `/api/v1/comments?context_type=organization&context_id=${id}&workspace_id=${workspaceId}`, user.sessionToken!)));
+    expect(responses.map(response => response.status)).toEqual([200, 200, 200, 200]);
+    await db.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
   });
 
   it('selects one author and fails closed after verified rollback', async () => {
