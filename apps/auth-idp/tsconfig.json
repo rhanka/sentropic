@@ -1,5 +1,15 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    // tsx-only source mapping (dev/test runtime): the tsx seed runs outside
+    // the vitest workspace alias, and the published oauth-verify entry has no
+    // require/default export condition, so a bare require() of the package
+    // root fails under tsx. Mapping to source bypasses the manifest without
+    // touching the published package (packaging/lock integrity untouched).
+    // Production builds (esbuild bundle) and node runtime ignore tsconfig paths.
+    "paths": {
+      "@sentropic/oauth-verify": ["../../packages/oauth-verify/src/index.ts"]
+    },
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ES2022"],
