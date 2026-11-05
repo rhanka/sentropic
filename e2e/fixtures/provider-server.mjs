@@ -1,0 +1,334 @@
+import { createServer } from 'node:http';
+import { readFileSync, appendFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+
+export const fixtureKey = 'ci-provider-fixture-no-live-credential';
+export const boundaryKey = Symbol.for('sentropic.ci.provider-boundary');
+const upstreams = new Set(['api.mistral.ai', 'api.openai.com', 'chatgpt.com',
+  'api.anthropic.com', 'generativelanguage.googleapis.com', 'api.tavily.com']);
+const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', 'api', 'api-sut',
+  'ui', 'postgres', 'minio', 'scw-tem-mock', 'provider-fixture', 'openvscode', 'auth-idp']);
+
+// Loaded only from the read-only test overlay, never packaged in the application.
+export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch, onUnexpected = () => {} } = {}) {
+  const originalFetch = globalThis.fetch;
+  const target = new URL(endpoint);
+  if (target.protocol !== 'http:' || !['provider-fixture', '127.0.0.1'].includes(target.hostname)
+    || target.username || target.password || target.pathname !== '/') throw new Error('Invalid fixture endpoint');
+  const guardedFetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    if (localHosts.has(url.hostname)) return fetchImpl(request);
+    if (!upstreams.has(url.hostname)) {
+      onUnexpected({ host: url.hostname });
+      throw new Error(`Unexpected CI egress: ${url.hostname}`);
+    }
+    if (url.search) {
+      onUnexpected({ host: url.hostname, reason: 'provider-query' });
+      throw new Error('Unexpected CI provider query parameters');
+    }
+    const headers = new Headers(request.headers);
+    for (const name of ['authorization', 'x-api-key', 'x-goog-api-key', 'api-key', 'cookie', 'proxy-authorization']) {
+      headers.delete(name);
+    }
+    headers.set('authorization', `Bearer ${fixtureKey}`);
+    headers.set('x-ci-upstream', url.hostname);
+    return fetchImpl(new Request(new URL(url.pathname, target), new Request(request, { headers, redirect: 'error' })));
+  };
+  globalThis.fetch = guardedFetch;
+  globalThis[boundaryKey] = true;
+  return () => { globalThis.fetch = originalFetch; delete globalThis[boundaryKey]; };
+}
+
+export function createProviderServer({ respond = journeyResponse } = {}) {
+  const receipt = { calls: 0, failedRequests: 0, cancelled: 0, models: {}, requests: [] };
+  const server = createServer(async (req, res) => {
+    if (req.url === '/health') return res.end('ok');
+    if (req.url === '/receipt') {
+      res.setHeader('content-type', 'application/json');
+      return res.end(JSON.stringify(receipt));
+    }
+    try {
+      if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${fixtureKey}`) throw new Error('Invalid fixture request');
+      let raw = '';
+      for await (const chunk of req) {
+        raw += chunk;
+        if (raw.length > 8_000_000) throw new Error('Fixture request too large');
+      }
+      const body = JSON.parse(raw);
+      if (req.headers['x-ci-upstream'] === 'api.tavily.com') {
+        if (!['/search', '/extract'].includes(req.url)) throw new Error('Unexpected web tool endpoint');
+        const extract = req.url === '/extract';
+        if (extract ? !Array.isArray(body.urls) || !body.urls.length : typeof body.query !== 'string' || !body.query.trim()) {
+          throw new Error('Unexpected web tool request shape');
+        }
+        receipt.calls++;
+        receipt.requests.push({ tool: extract ? 'web_extract' : 'web_search' });
+        res.setHeader('content-type', 'application/json');
+        return res.end(JSON.stringify({ results: extract
+          ? body.urls.map(url => ({ url, raw_content: 'Verified cloud-native Kubernetes platform evidence.' }))
+          : [{ title: 'Cloud-native platforms', url: 'https://example.com/reference', content: 'Kubernetes, containers and infrastructure-as-code.' }],
+        failed_results: [], response_time: 0.001 }));
+      }
+      if (req.url === '/v1/responses') {
+        const input = body.input;
+        const text = Array.isArray(input) && input.length === 1 && input[0].role === 'user'
+          ? typeof input[0].content === 'string' ? input[0].content
+            : Array.isArray(input[0].content) && input[0].content.every(part => part.type === 'input_text' && typeof part.text === 'string')
+              ? input[0].content.map(part => part.text).join('\n') : ''
+          : '';
+        if (body.model !== 'gpt-5.4-nano' || body.stream !== true || body.tools?.length
+          || !text.startsWith('Tu es un classificateur.') || !text.includes('EXACTEMENT UN SEUL TOKEN')) {
+          throw new Error('Unexpected Responses evaluator request');
+        }
+        receipt.calls++;
+        receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
+        receipt.requests.push({ protocol: 'responses', model: body.model, stream: true, roles: ['user'] });
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+        let sequence_number = 0;
+        const event = (type, fields) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, sequence_number: sequence_number++, ...fields })}\n\n`);
+        const response = { id: 'ci-response', object: 'response', created_at: 1, model: body.model,
+          status: 'completed', output: [{ id: 'ci-message', type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: 'medium', annotations: [] }] }],
+          usage: { input_tokens: 20, output_tokens: 10, total_tokens: 30 } };
+        event('response.created', { response: { ...response, status: 'in_progress', output: [], usage: null } });
+        event('response.output_text.delta', { item_id: 'ci-message', output_index: 0, content_index: 0, delta: 'medium' });
+        event('response.output_text.done', { item_id: 'ci-message', output_index: 0, content_index: 0, text: 'medium' });
+        event('response.completed', { response });
+        return res.end();
+      }
+      if (req.url !== '/v1/chat/completions') throw new Error('Unexpected provider endpoint');
+      if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) throw new Error('Expected model and messages');
+      if (!['mistral-small-2603', 'mistral-medium-3.5', 'gpt-5.4-nano'].includes(body.model)) throw new Error('Unexpected model route');
+      const outcome = await respond(body);
+      receipt.calls++;
+      receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
+      receipt.requests.push({ model: body.model, stream: body.stream === true,
+        roles: body.messages.map(m => m.role), tools: (body.tools ?? []).map(t => t.function?.name) });
+      if (outcome.status) {
+        res.writeHead(outcome.status, { 'content-type': 'application/json', 'retry-after': '0' });
+        return res.end(JSON.stringify({ error: { message: 'Fixture provider failure', code: 'fixture_error' } }));
+      }
+      const message = { role: 'assistant', content: outcome.content ?? null,
+        ...(outcome.tool_calls ? { tool_calls: outcome.tool_calls } : {}) };
+      const finish = outcome.tool_calls ? 'tool_calls' : 'stop';
+      const envelope = { id: 'ci-completion', created: 1, model: body.model };
+      const usage = { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 };
+      if (!body.stream) {
+        res.setHeader('content-type', 'application/json');
+        return res.end(JSON.stringify({ ...envelope, usage, object: 'chat.completion', choices: [{ index: 0, message, finish_reason: finish }] }));
+      }
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+      let ended = false;
+      res.on('close', () => { if (!ended) receipt.cancelled++; });
+      const event = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ ...envelope,
+        ...(finish_reason ? { usage } : {}), object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+      if (outcome.malformed) { ended = true; return res.end('data: {invalid}\n\n'); }
+      if (message.tool_calls) event({ tool_calls: message.tool_calls.map((tool, index) => ({ index, ...tool })) });
+      else {
+        // Pacing keeps paced journeys in-flight: hold the first byte so the
+        // steering flow can interrupt before any assistant row commits, then
+        // pace chunks so the run stays active through the interruption.
+        if (outcome.delay) await new Promise(resolve => setTimeout(resolve, outcome.initialDelayMs ?? outcome.delay));
+        const parts = String(message.content ?? '').match(/.{1,80}/gsu) ?? [''];
+        for (const content of parts) {
+          if (res.destroyed) return;
+          event({ content });
+          if (outcome.delay) await new Promise(resolve => setTimeout(resolve, outcome.delay));
+        }
+      }
+      event({}, finish);
+      ended = true;
+      res.end('data: [DONE]\n\n');
+    } catch (error) {
+      receipt.failedRequests++;
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: { message: error.message } }));
+    }
+  });
+  return { server, receipt };
+}
+
+export function journeyResponse(body) {
+  const messages = body.messages;
+  const messageText = content => Array.isArray(content) ? content.map(part => part.text ?? '').join('\n') : String(content ?? '');
+  const text = messages.map(m => messageText(m.content)).join('\n');
+  const user = messageText(messages.findLast(m => m.role === 'user')?.content);
+  // Web-search follow-ups append results after the schema prompt. Preserve instruction/user
+  // schemas without letting generated assistant or tool replies choose the response shape.
+  const promptText = messages.filter(m => ['system', 'developer', 'user'].includes(m.role))
+    .map(m => messageText(m.content)).join('\n');
+  const json = value => ({ content: JSON.stringify(value) });
+  const references = [{ title: 'Provider protocol reference', url: 'https://example.com/reference', excerpt: 'Local qualification evidence.' }];
+  if (user.includes('Produire une contraction (résumé détaillé)')) {
+    const source = user.match(/<source>([\s\S]*?)<\/source>/)?.[1] ?? '';
+    return { content: source.trim().split(/\s+/).slice(0, 4500).join(' ') };
+  }
+  if (user.includes('Texte du document:\n---')) return { content: `## Summary\n${user.split('Texte du document:\n---')[1].trim().split(/\s+/).slice(0, 500).join(' ')}` };
+  if (/dominant color of the attached image/i.test(user)) {
+    if (!messages.some(m => Array.isArray(m.content) && m.content.some(part => part.type === 'image_url' && part.image_url))) {
+      throw new Error('Vision journey must include the image on the provider request');
+    }
+    return { content: 'red' };
+  }
+  if (/"dossier"/.test(promptText) && /"initiatives"/.test(promptText)) {
+    const count = Number(text.match(/(?:exactement|à générer:|a generer:)\s*(\d+)/i)?.[1] ?? 3);
+    if (count < 1 || count > 50) throw new Error('Unexpected initiative count');
+    const domains = ['operations', 'service', 'data', 'compliance', 'sales'].map(id => ({ id, label: id }));
+    return json({ dossier: 'AI opportunities', domains,
+      initiatives: Array.from({ length: count }, (_, i) => ({ titre: `AI initiative ${i + 1}`,
+        description: 'Improve operational quality using verified data [1].', ref: references[0].url, domainId: 'operations' })) });
+  }
+  if (/"synthese_executive"/.test(promptText)) return json({
+    introduction: 'Portfolio overview', analyse: 'Value and complexity analysis',
+    recommandation: 'Validate the selected initiatives', synthese_executive: 'Operational improvements', references });
+  // The use-case detail prompt embeds the matrix JSON ("valueAxes" + "levelDescriptions")
+  // alongside its response schema ("valueScores" + "complexityScores"), so the detail branch
+  // must be tested first; the matrix-adaptation prompt only carries the former.
+  if (/"valueScores"/.test(promptText) && /"complexityScores"/.test(promptText)) {
+    const name = promptText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] ?? 'AI initiative';
+    const result = { name, description: 'Improve operational quality using verified data [1].',
+      problem: 'Operational data needs consistent validation.', solution: 'Apply a repeatable validation process.',
+      leadtime: 'Pilot validation', prerequisites: 'Validated data access', contact: 'Product owner', references,
+      valueScores: [{ axisId: 'business_value', rating: 55, description: 'Measured business benefit' }],
+      complexityScores: [{ axisId: 'implementation_effort', rating: 21, description: 'Bounded integration' }] };
+    for (const key of ['technologies', 'benefits', 'metrics', 'risks', 'constraints', 'nextSteps', 'dataSources', 'dataObjects']) result[key] = ['Verified operational evidence'];
+    return json(result);
+  }
+  if (/"valueAxes"/.test(promptText) && /"levelDescriptions"/.test(promptText)) {
+    const axes = ids => ids.map(axisId => ({ axisId,
+      levelDescriptions: Array.from({ length: 5 }, (_, i) => ({ level: i + 1, description: `Observable qualification level ${i + 1}` })) }));
+    return json({ valueAxes: axes(['business_value', 'time_criticality', 'risk_reduction_opportunity']),
+      complexityAxes: axes(['implementation_effort', 'data_compliance', 'data_availability', 'change_management']) });
+  }
+  if (/"industry"/.test(promptText) && /"products"/.test(promptText) && !body.tools?.some(t => t.function?.name === 'organization_update')) {
+    return json({ industry: 'Manufacturing', size: 'Enterprise', products: 'Industrial products', processes: 'Quality control',
+      kpis: 'Quality and adoption', challenges: 'Data integration', objectives: 'Improve operations', technologies: 'Cloud platforms', references });
+  }
+  const tools = (body.tools ?? []).map(t => t.function?.name);
+  const lastUser = messages.findLastIndex(m => m.role === 'user');
+  const results = messages.slice(lastUser + 1).filter(m => m.role === 'tool');
+  const callsById = new Map(messages.flatMap(m => m.tool_calls ?? []).map(call => [call.id, call.function]));
+  const used = new Set(results.map(m => callsById.get(m.tool_call_id)?.name ?? m.name));
+  // Entity ids the user states explicitly win over ids harvested from
+  // surrounding system text: the system prompt names context ids in prose
+  // ("Si un contexte organizationId est présent" yields "est") that must
+  // never shadow the entity the user actually named. The {10,} guards reject
+  // prose fragments on the loose `Id=` shapes the same way.
+  const id = kind => {
+    const frenchKind = ({ organization: 'organisation', folder: 'dossier' })[kind] ?? kind;
+    return String(user).match(new RegExp(`${kind}Id[=\\s:\\"']+([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? String(user).match(new RegExp(`${kind} (?:with id )?([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? String(user).match(new RegExp(`${frenchKind} ([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(new RegExp(`(?:${kind}Id|${kind}_id)[=\\s:\\"']+([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(new RegExp(`${kind} (?:with id )?([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(new RegExp(`${frenchKind} ([a-z0-9_-]{10,})`, 'i'))?.[1]
+      ?? text.match(/"(?:contextId|id)"\s*:\s*"([\w-]+)"/)?.[1];
+  };
+  // Terminal text shared by the answering paths below.
+  const terminalText = () => (text.includes('Bob') ? 'Bonjour Bob, voici la réponse.' : 'CI provider response: opération terminée.');
+  const call = (name, args) => {
+    // The chat runtime's finalization pass disables execution tools by design
+    // and asks for the final answer with no tools offered (its synthesis
+    // prompt ends with "Rédige maintenant la réponse finale."). A live model
+    // answers with text there, so the fixture does the same instead of
+    // failing the run. Any other tool-less journey prompt still throws: that
+    // is a genuine journey mismatch, not the by-design answering mode.
+    if (!tools.includes(name)) {
+      if (tools.length === 0 && /Rédige maintenant la réponse finale/.test(user)) return { content: terminalText() };
+      throw new Error(`Journey requires unavailable tool: ${name}`);
+    }
+    const schema = body.tools.find(tool => tool.function?.name === name).function.parameters;
+    for (const key of schema?.required ?? []) if (args[key] == null) throw new Error(`Missing journey tool argument: ${name}.${key}`);
+    return { tool_calls: [{ id: `ci_tool_${results.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] };
+  };
+  if (results.length === 0) {
+    if (/document_generate/.test(user) && /pptx/.test(user)) return call('document_generate', {
+      // Forward an entityId only when the user message states it explicitly:
+      // ids harvested from surrounding system text (workspace, session) defeat
+      // automatic primary-context resolution and leave the pptx_generate job
+      // uncompleted. The org-page chat resolves the entity automatically.
+      action: 'generate', format: 'pptx', title: user.match(/titled "([^"]+)"/)?.[1] ?? 'Organization summary',
+      entityType: 'organization',
+      ...(() => {
+        const explicit = String(user).match(/(?:organizationId|organization_id)[=\s:"']+([\w-]+)/i)?.[1]
+          ?? String(user).match(/organization (?:with id )?([a-z0-9_-]{10,})/i)?.[1];
+        return explicit ? { entityId: explicit } : {};
+      })(),
+    });
+    if (/Liste les documents de la session/.test(user)) return call('documents', {
+      action: 'list', contextType: 'chat_session', contextId: text.match(/Session de chat \(([^)]+)\)/)?.[1],
+    });
+    if (/matrix_get/.test(user)) return call('matrix_get', { folderId: id('folder') });
+    if (/web_extract/.test(user)) return call('web_extract', { urls: [...new Set(String(user).match(/https?:\/\/[^\s"\],]+/g) ?? [])] });
+    if (/update_initiative|update the description|Ajoute.*Test E2E/i.test(user)) return call('update_initiative', {
+      initiativeId: id('initiative'),
+      patch: { description: /Test E2E/.test(user) ? 'Test E2E: Updated description' : 'Updated description for testing' } });
+    if (/read.*initiative/i.test(user)) return call('read_initiative', { initiativeId: id('initiative') });
+  }
+  if (/Consulte le document/.test(user)) {
+    // Only call tools the journey actually offers; journeys without the
+    // documents tool consult via web_search instead of failing validation.
+    const offered = new Set((body.tools ?? []).map(t => t.function?.name));
+    if (offered.has('documents') && !used.has('documents')) return call('documents', { action: 'list', contextType: 'organization', contextId: id('organization') });
+    if (offered.has('web_search') && !used.has('web_search')) return call('web_search', { query: 'cloud-native Kubernetes platforms' });
+  }
+  if (/organization_update|technologies.*exactly/i.test(user) && !used.has('organization_update')) {
+    // Chat-services journeys require [organizationId, updates]; skills-registry
+    // journeys require [organizationId, patch]. Shape the args to the schema the
+    // journey actually offered so the call validates either way.
+    const required = new Set(body.tools?.find(t => t.function?.name === 'organization_update')?.function?.parameters?.required ?? []);
+    const organizationId = id('organization');
+    const technologies = 'Kubernetes, containers, CI/CD and infrastructure-as-code';
+    if (required.has('patch')) return call('organization_update', { organizationId, patch: { technologies } });
+    return call('organization_update', { organizationId, updates: [{ field: 'technologies', value: technologies }] });
+  }
+  if (/Liste les documents de la session/.test(user) && used.has('documents')) {
+    const names = results.flatMap(result => JSON.parse(result.content).items ?? []).map(item => item.filename);
+    if (!names.length) throw new Error('Document journey returned no files');
+    return { content: names.join(', ') };
+  }
+  const requestedWord = user.match(/Réponds uniquement(?: avec(?: le mot)?)?\s*["']?([A-Z][A-Z0-9_]+)/)?.[1];
+  if (requestedWord) return { content: requestedWord };
+  // Long-form generation (in-flight steering): stream numbered lines slowly so
+  // the composer observes an active generation window instead of an instant
+  // completion. Only the explicit long-form phrasing matches here.
+  const longForm = user.match(/Rédige (\d+) lignes/i);
+  if (results.length === 0 && longForm) {
+    const total = Math.min(Number(longForm[1]), 200);
+    const lines = Array.from({ length: total }, (_, i) => `Ligne ${i + 1} : point d'analyse maintenance prédictive ${i + 1}.`);
+    return { content: lines.join('\n'), delay: 50, initialDelayMs: 3000 };
+  }
+  return { content: terminalText() };
+}
+
+const overlayImport = import.meta.url === 'file:///run/ci-provider/provider-server.mjs';
+if (overlayImport && process.env.CI_PROVIDER_FIXTURE === '1') {
+  if (readFileSync('/run/ci-provider/marker', 'utf8').trim() !== 'sentropic-ci-provider-v1') throw new Error('Missing fixture marker');
+  installProviderBoundary({ endpoint: 'http://provider-fixture:7777/', onUnexpected: row =>
+    appendFileSync('/run/ci-live/unexpected-egress.jsonl', `${JSON.stringify(row)}\n`) });
+}
+if (overlayImport && process.env.CI_PROVIDER_MODE === 'live') {
+  if (!/^(test|e2e)-/.test(process.env.CI_PROVIDER_ENV ?? '')) throw new Error('Live observation requires a test environment');
+  const transport = globalThis.fetch;
+  const record = row => appendFileSync('/run/ci-live/calls.jsonl', `${JSON.stringify({ ...row, at: new Date().toISOString() })}\n`);
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const host = new URL(request.url).hostname;
+    if (!upstreams.has(host)) return transport(request);
+    const requestId = randomUUID();
+    record({ type: 'request', requestId, host });
+    try {
+      const response = await transport(request);
+      record({ type: 'response', requestId, host, status: response.status });
+      return response;
+    } catch (error) {
+      record({ type: error?.name === 'AbortError' ? 'cancelled' : 'error', requestId, host });
+      throw error;
+    }
+  };
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  createProviderServer().server.listen(Number(process.env.PORT ?? 7777), '0.0.0.0');
+}

@@ -84,6 +84,7 @@ api/src/services/llm-runtime/index.ts
 api/src/services/llm-identity/directory.ts
 api/src/services/llm-metering/index.ts
 api/src/services/llm-account-transports.ts
+api/src/services/provider-runtime.ts
 api/src/routes/namespaces/business/initiatives.ts
 api/src/routes/namespaces/workflows-queue.ts
 api/src/routes/namespaces/config-product-ai.ts

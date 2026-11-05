@@ -29,7 +29,20 @@ CM_RUN_IMAGE = qualification
 endif
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
-CI_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml
+CI_PROVIDER_MODE ?= fixture
+export CI_PROVIDER_MODE
+export CI_PROVIDER_REQUIRE_CALLS ?= 0
+export CI_PROVIDER_FIXTURE = $(if $(filter fixture,$(CI_PROVIDER_MODE)),1,0)
+export CI_PROVIDER_OPENAI_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(OPENAI_API_KEY),ci-provider-fixture-no-live-credential)
+export CI_PROVIDER_MISTRAL_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(MISTRAL_API_KEY),ci-provider-fixture-no-live-credential)
+export CI_PROVIDER_TAVILY_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(TAVILY_API_KEY),ci-provider-fixture-no-live-credential)
+export CI_PROVIDER_GEMINI_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(GEMINI_API_KEY),)
+export CI_PROVIDER_ANTHROPIC_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(ANTHROPIC_API_KEY),)
+export CI_PROVIDER_COHERE_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(COHERE_API_KEY),)
+export CI_PROVIDER_MUSE_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(MUSE_API_KEY),)
+CI_PROVIDER_OVERLAY = -f docker-compose.ci-provider.yml
+E2E_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY)
+CI_COMPOSE = $(E2E_COMPOSE) -f docker-compose.ci.yml
 API_TEST_CI ?= 0
 API_TEST_SUT ?= 0
 API_TEST_RUN = $(if $(filter 1,$(API_TEST_CI)),$(CI_COMPOSE) run --rm --no-deps,$(DOCKER_COMPOSE) exec -T)
@@ -2717,6 +2730,60 @@ QUEUE_CONCURRENCY ?= 30
 E2E_GROUPS ?= 00 01 02 03 04 05 06 07 08 09 10
 
 .PHONY: check-e2e-inventory
+test-ci-provider-fixtures: ## Qualify local HTTP/SSE provider boundary without live credentials
+	node --test e2e/fixtures/provider-server.test.mjs
+
+test-ci-browser-shards: ## Verify exact browser membership and measured balancing
+	node --test scripts/ci/browser-shards.test.mjs
+
+test-ci-live-provider-receipt: ## Reject incomplete live tuple and missing daily schedule evidence
+	node --test scripts/ci/live-provider-receipt.test.mjs
+
+test-ci-dev-image-pin: ## Prove dev-stack startup clears the production image pin
+	node --test scripts/ci/dev-image-pin.test.mjs
+
+ci-live-provider-select: ## Select a complete main application qualification before live dispatch
+	node scripts/ci/live-provider-receipt.mjs select
+
+ci-live-provider-health: ## Monitor the daily provider schedule without making provider calls
+	node scripts/ci/live-provider-receipt.mjs health
+
+ci-live-provider-prepare: ci-test-env ## Verify the published qualified tuple; build tooling from the same source
+	@test "$(CI_PROVIDER_MODE)" = live
+	@$(if $(strip $(MISTRAL_API_KEY)),true,false) || { echo 'Daily MISTRAL_API_KEY is missing'; exit 1; }
+	@$(if $(strip $(TAVILY_API_KEY)),true,false) || { echo 'Daily TAVILY_API_KEY is missing'; exit 1; }
+	@mkdir -p .tmp/live-provider
+	@run="$$(node -p 'JSON.parse(require("fs").readFileSync(".tmp/live-provider/selection.json")).run')"; \
+	gh run download "$$run" --name live-provider-api-identity --dir . && \
+	gh run download "$$run" --name live-provider-ui-identity --dir . && \
+	$(MAKE) ci-live-provider-pull GITHUB_RUN_ID="$$run" ENV=$(ENV)
+	@$(MAKE) build-api-tool-image build-e2e ENV=$(ENV)
+	docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/live-provider/api.json
+	docker image inspect $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) > .tmp/live-provider/ui.json
+	@docker run --rm --entrypoint node $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -e 'const fs=require("fs"), dir="/workspace/node_modules/@sentropic", out={}; for(const name of fs.readdirSync(dir)) { const p=JSON.parse(fs.readFileSync(dir+"/"+name+"/package.json","utf8")); out[p.name]=p.version; } console.log(JSON.stringify(out));' > .tmp/live-provider/installed-packages.json
+	node scripts/ci/live-provider-receipt.mjs tuple
+
+ci-live-provider-pull: docker-login ## Fail closed if registry images differ from the tested identities
+	docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+	docker pull $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)
+	node scripts/ci/image-receipt.mjs loaded api $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) unused api-image.json
+	node scripts/ci/image-receipt.mjs loaded ui $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) unused ui-image.json
+	@$(MAKE) record-api-image ENV=$(ENV)
+
+ci-live-provider-run: ci-test-env ## Preserve every selected API, browser and VSCode assertion on the live tuple
+	@test "$(CI_PROVIDER_MODE)" = live
+	node scripts/ci/live-provider-receipt.mjs run
+
+ci-live-provider-finish: ## Retain failures, actual wire calls and schedule-health gaps
+	node scripts/ci/live-provider-receipt.mjs finish
+
+ci-provider-receipt: ci-test-env ## Verify fixture redirect with fail-closed egress and retain actual fixture traffic
+	@test "$(CI_PROVIDER_MODE)" = fixture
+	@mkdir -p .tmp/ci-provider
+	@docker network inspect $(COMPOSE_PROJECT_NAME)_default --format '{{.Internal}}' > .tmp/ci-provider/network-internal.txt
+	@$(E2E_COMPOSE) exec -T provider-fixture node -e 'fetch("http://localhost:7777/receipt").then(r=>r.text()).then(console.log)' > .tmp/ci-provider/traffic.json
+	node scripts/ci/live-provider-receipt.mjs fixture .tmp/ci-provider
+
 check-e2e-inventory: ## Fail when a numbered E2E spec has no default group or CI lane
 	@./e2e/scripts/check-spec-lanes.sh "$(E2E_GROUPS)"
 
@@ -2729,32 +2796,30 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	# - QUEUE_CONCURRENCY (default: 30) -> upsert settings.ai_concurrency before running tests
 	# - QUEUE_PROCESSING_INTERVAL (optional) -> upsert settings.queue_processing_interval (ms)
 	# - E2E_GROUPS (default: "00 01 02 03 04 05 06 07 08 09 10") -> list of groups to run
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps \
-	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
+	@$(E2E_COMPOSE) run --rm --no-deps \
+	  -v "$(CURDIR)/scripts/ci/browser-shards.mjs:/app/browser-shards.mjs:ro" \
+	  -e CI_PROVIDER_MODE -e E2E_SPEC -e E2E_SHARD="$(E2E_SHARD)" -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
 	  e2e sh -lc ' \
+	    set -eu; mkdir -p test-results; \
 	    workers="$${WORKERS:-4}"; \
-	    retries="$${RETRIES:-2}"; \
+	    retries="$${RETRIES:-0}"; \
 	    max_fail="$${MAX_FAILURES:-}"; \
 	    extra=""; \
-	    status=0; summary=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
-	    if [ -n "$$E2E_SPEC" ]; then \
-	      spec_path="$$E2E_SPEC"; \
-	      spec_path="$${spec_path#e2e/}"; \
-	      echo "▶ Running scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	      code=0; npx --no-install playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
-	      summary="$$spec_path: exit $$code"; status=$$code; \
+	    if [ -n "$$E2E_SHARD" ]; then \
+	      files="$$(node /app/browser-shards.mjs files "$$E2E_SHARD")" || exit 1; \
+	      test -n "$$files"; set -- $$files; \
+	    elif [ -n "$$E2E_SPEC" ]; then \
+	      set -- $${E2E_SPEC#e2e/}; \
 	    else \
-	      echo "▶ Running Playwright by groups: $$E2E_GROUPS (workers=$$workers retries=$$retries $${extra:-})"; \
-	      for g in $$E2E_GROUPS; do \
-	        pattern="tests/$${g}[-_].*\\.spec\\.ts$$"; \
-	        echo "▶ Running group $$g: $$pattern"; \
-	        code=0; npx --no-install playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
-	        summary="$${summary}$${summary:+; }$$g: exit $$code"; \
-	        if [ "$$code" -ne 0 ]; then status=1; fi; \
-	      done; \
+	      groups="$$(printf "%s" "$$E2E_GROUPS" | tr " " "|")"; \
+	      set -- "tests/($$groups)[-_].*\\.spec\\.ts$$"; \
 	    fi; \
-	    echo "Playwright invocation summary: $$summary"; \
+	    receipt="test-results/browser-$${E2E_SHARD:-scoped}"; \
+	    rm -f "$$receipt.expected.json" "$$receipt.actual.json"; \
+	    status=0; CI_BROWSER_EXPECTED_FILE="$$receipt.expected.json" PLAYWRIGHT_JSON_OUTPUT_FILE="$$receipt.actual.json" npx --no-install playwright test "$$@" \
+	      --project=chromium --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	    node /app/browser-shards.mjs reconcile "$$receipt.expected.json" "$$receipt.actual.json" || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping services..."
 	# @$(DOCKER_COMPOSE) down
@@ -2765,17 +2830,23 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 	  echo "❌ E2E_SPEC is required (example: tests/vscode/01-vscode-chat-streaming.spec.ts)"; \
 	  exit 2; \
 	fi
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml run --rm --no-deps \
-	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e OPENVSCODE_BASE_URL="http://localhost:$${OPENVSCODE_PORT:-3115}" \
+	@$(E2E_COMPOSE) -f docker-compose.e2e-vscode.yml run --rm --no-deps \
+	  -v "$(CURDIR)/scripts/ci/browser-shards.mjs:/app/browser-shards.mjs:ro" \
+	  -e CI_PROVIDER_MODE -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e OPENVSCODE_BASE_URL="http://localhost:$${OPENVSCODE_PORT:-3115}" \
 	  e2e-vscode sh -lc ' \
+	    set -eu; mkdir -p test-results; \
 	    workers="$${WORKERS:-2}"; \
-	    retries="$${RETRIES:-1}"; \
+	    retries="$${RETRIES:-0}"; \
 	    max_fail="$${MAX_FAILURES:-}"; \
 	    extra=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
 	    spec_path="$${E2E_SPEC#e2e/}"; \
 	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	    npx --no-install playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra'
+	    rm -f test-results/vscode.expected.json test-results/vscode.actual.json; \
+	    status=0; CI_BROWSER_EXPECTED_FILE=test-results/vscode.expected.json PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/vscode.actual.json npx --no-install playwright test "$$spec_path" \
+	      --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	    node /app/browser-shards.mjs reconcile test-results/vscode.expected.json test-results/vscode.actual.json || status=1; \
+	    exit "$$status"'
 	@echo "🛑 Stopping VSCode E2E services..."
 	# @$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml down
 
@@ -2857,12 +2928,12 @@ up: prepare-node-workspace ## Start the full stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
 
 .PHONY: up-e2e
-up-e2e: ## Start stack with test overrides (UI env for API URL)
-	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+up-e2e: ci-test-env ## Start stack with test overrides (UI env for API URL)
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(E2E_COMPOSE) up -d
 
 .PHONY: up-e2e-vscode
-up-e2e-vscode: ## Start VSCode E2E stack (api/ui/e2e/openvscode)
-	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml up -d
+up-e2e-vscode: ci-test-env ## Start VSCode E2E stack (api/ui/e2e/openvscode)
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(E2E_COMPOSE) -f docker-compose.e2e-vscode.yml up -d
 
 .PHONY: down-e2e-vscode
 down-e2e-vscode: ## Stop VSCode E2E stack
@@ -2881,8 +2952,8 @@ up-api: prepare-node-workspace ## Start the api stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test
-up-api-test: prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
+up-api-test: ci-test-env prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml $(CI_PROVIDER_OVERLAY) up --build -d api --wait api
 
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
@@ -2905,6 +2976,7 @@ latest-prod-backup: ## Print the latest production dump basename for the restore
 	@find data/backup -maxdepth 1 -name 'prod-*.dump' -printf '%T@ %f\n' | sort -nr | head -n 1 | cut -d' ' -f2-
 ci-test-env:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
+	@mkdir -p .tmp/live-provider && chmod 777 .tmp/live-provider
 
 CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,data) ORDER BY id)::text,'[]')) FROM initiatives
 CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
@@ -2959,7 +3031,7 @@ down: ## Stop and remove containers, networks, volumes
 ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge test-memory-mcp),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY) down --remove-orphans
 endif
 
 # BRDV-EX1 (owner-approved 2026-11-02 « Cible make + nettoyage »): down-volumes removes the

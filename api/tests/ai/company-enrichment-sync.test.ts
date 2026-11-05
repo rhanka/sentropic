@@ -118,7 +118,7 @@ describe('Organization Enrichment - Sync', () => {
 
     while (!jobCompleted && attempts < maxAttempts) {
       await queueManager.processJobsForWorkspace(workspaceId);
-      await sleep(1000);
+      if (attempts > 0) await sleep(1000);
 
       const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, enrichResult.jobId)).limit(1);
       expect(job).toBeDefined();

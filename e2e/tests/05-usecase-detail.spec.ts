@@ -509,11 +509,14 @@ test.describe('Détail des cas d\'usage', () => {
           
           if (problemEditorVisible) {
             await problemEditor.click();
-            await page.waitForTimeout(500);
             
             // Remplir avec un texte de test (TipTap utilise contenteditable)
-            await problemEditor.fill('Test problème E2E');
-            await page.waitForTimeout(6000); // Attendre la sauvegarde automatique (buffer 5s)
+            await Promise.all([
+              page.waitForResponse(response => response.request().method() === 'PUT'
+                && /\/api\/v1\/initiatives\//.test(response.url()) && response.ok()
+                && (response.request().postData() ?? '').includes('Test problème E2E'), { timeout: 6000 }),
+              problemEditor.fill('Test problème E2E'),
+            ]);
             
             // Recharger la page pour vérifier la sauvegarde
             await page.reload();
@@ -538,11 +541,14 @@ test.describe('Détail des cas d\'usage', () => {
           
           if (solutionEditorVisible) {
             await solutionEditor.click();
-            await page.waitForTimeout(500);
             
             // Remplir avec un texte de test
-            await solutionEditor.fill('Test solution E2E');
-            await page.waitForTimeout(6000); // Attendre la sauvegarde automatique
+            await Promise.all([
+              page.waitForResponse(response => response.request().method() === 'PUT'
+                && /\/api\/v1\/initiatives\//.test(response.url()) && response.ok()
+                && (response.request().postData() ?? '').includes('Test solution E2E'), { timeout: 6000 }),
+              solutionEditor.fill('Test solution E2E'),
+            ]);
             
             // Recharger la page pour vérifier la sauvegarde
             await page.reload();
