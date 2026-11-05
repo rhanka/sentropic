@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
 import { candidateTuple } from './package-candidate.mjs';
-import { GuardError, TRANSIENT_HINT, commandInventory, commandPack, commandPublish, commandWait, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, snapshotPackage, waitBudget, withManifestTransform } from './publishable-manifests.mjs';
+import { GuardError, TRANSIENT_HINT, commandInventory, commandPack, commandPublish, commandWait, createRegistry, diffDependencyMaps, findVerifiedCandidate, isTransientError, runNpmPack, sha256File, snapshotPackage, waitBudget, withManifestTransform } from './publishable-manifests.mjs';
 
 const sink = () => {
   const chunks = [];
@@ -465,4 +465,92 @@ test('GuardError wrapping a transient cause carries the re-run hint once', () =>
   const outer = new GuardError(`cannot resolve packed identity of x: ${inner.message}`, { transient: true });
   assert.equal(outer.message.split(TRANSIENT_HINT).length, 2);
   assert.equal(outer.transient, true);
+});
+
+// ---- tested-bytes publication: reuse the verified candidate tarball, never repack it
+const HEAD_SHA = 'head-sha-br82';
+function candidateRoot(slug, manifest, { headSha = HEAD_SHA, tamper = false, receiptOverrides = {}, omit = false, files = {} } = {}) {
+  const dir = fixture(slug, manifest, files);
+  const packDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cand-pack-'));
+  const { archive } = runNpmPack(dir, packDir);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'candidates-'));
+  const slugDir = path.join(root, slug);
+  fs.mkdirSync(slugDir, { recursive: true });
+  const file = path.join(slugDir, path.basename(archive));
+  fs.copyFileSync(archive, file);
+  const sha256 = sha256File(file);
+  if (tamper) {
+    const bytes = fs.readFileSync(file);
+    bytes[bytes.length - 1] ^= 1;
+    fs.writeFileSync(file, bytes);
+  }
+  if (!omit) {
+    fs.writeFileSync(path.join(root, 'candidates.json'), JSON.stringify({ schema: 1,
+      receipts: [{ slug, name: `@fx/${slug}`, version: '1.0.0', sha256, file: `${slug}/${path.basename(file)}`,
+        guard: 'pass', manifest_mode: 'block', evidence: 'release-candidate', head_sha: headSha, ...receiptOverrides }] }));
+  }
+  return { dir, root, sha256 };
+}
+const candidateEnv = (root) => ({ CI_PACKAGE_CANDIDATES: root, MANIFEST_HEAD_SHA: HEAD_SHA });
+
+test('publishes the verified candidate tarball without repacking', async () => {
+  const { dir, root, sha256 } = candidateRoot('events', { scripts: { prepack: 'node hook.cjs' } }, { files: { 'hook.cjs': marker } });
+  fs.rmSync(path.join(dir, 'prepack-ran'), { force: true });
+  const npm = npmStub();
+  const receiptDir = path.join(dir, '..', 'r');
+  const out = sink();
+  const code = await commandPublish({ slug: 'events', passthrough: ['--access', 'public'], 'receipt-dir': receiptDir },
+    { env: candidateEnv(root), cwd: dir, registry: absentRegistry, out, npm: npm.stub });
+  assert.equal(code, 0, out.text());
+  assert.equal(fs.existsSync(path.join(dir, 'prepack-ran')), false, 'reuse must not run the pack lifecycle again');
+  assert.equal(npm.called(), true, 'the candidate must reach npm publish');
+  assert.match(npm.call().args[1], /fx-events-1\.0\.0\.tgz$/, 'npm publishes a tarball for the slug');
+  assert.equal(npm.call().sha256, sha256, 'published bytes are the qualified candidate bytes');
+  const receipt = JSON.parse(fs.readFileSync(path.join(receiptDir, 'events.json'), 'utf8'));
+  assert.equal(receipt.status, 'published');
+  assert.equal(receipt.sha256, sha256);
+  assert.equal(receipt.pack, 'candidate');
+});
+
+test('packs fresh when no candidate receipt names the slug', async () => {
+  const { dir, root } = candidateRoot('other', {}, { omit: true });
+  fs.writeFileSync(path.join(root, 'candidates.json'), JSON.stringify({ schema: 1, receipts: [] }));
+  const source = fixture('events', {});
+  const npm = npmStub();
+  const receiptDir = path.join(source, '..', 'r');
+  const code = await commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': receiptDir },
+    { env: candidateEnv(root), cwd: source, registry: absentRegistry, out: sink(), npm: npm.stub });
+  assert.equal(code, 0);
+  assert.equal(npm.called(), true);
+  const receipt = JSON.parse(fs.readFileSync(path.join(receiptDir, 'events.json'), 'utf8'));
+  assert.equal(receipt.status, 'published');
+  assert.equal(receipt.pack, 'fresh');
+});
+
+test('refuses a candidate receipt that names another version', async () => {
+  const { dir, root } = candidateRoot('events', {}, { receiptOverrides: { version: '9.9.9' } });
+  const npm = npmStub();
+  await assert.rejects(commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r') },
+    { env: candidateEnv(root), cwd: dir, registry: absentRegistry, out: sink(), npm: npm.stub }), /candidate identity mismatch/);
+  assert.equal(npm.called(), false, 'a mismatched candidate must never publish');
+});
+
+test('refuses a tampered candidate archive', async () => {
+  const { dir, root } = candidateRoot('events', {}, { tamper: true });
+  const npm = npmStub();
+  await assert.rejects(commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r') },
+    { env: candidateEnv(root), cwd: dir, registry: absentRegistry, out: sink(), npm: npm.stub }), /candidate hash mismatch/);
+  assert.equal(npm.called(), false, 'a tampered candidate must never publish');
+});
+
+test('refuses a candidate packed from another head', async () => {
+  const { dir, root } = candidateRoot('events', {}, { headSha: 'another-head' });
+  const npm = npmStub();
+  await assert.rejects(commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r') },
+    { env: candidateEnv(root), cwd: dir, registry: absentRegistry, out: sink(), npm: npm.stub }), /candidate head mismatch/);
+  assert.equal(npm.called(), false, 'a foreign-head candidate must never publish');
+});
+
+test('findVerifiedCandidate returns null without a candidate index', () => {
+  assert.equal(findVerifiedCandidate(path.join(os.tmpdir(), 'no-such-dir'), { slug: 'events', name: '@fx/events', version: '1.0.0', headSha: HEAD_SHA }), null);
 });
