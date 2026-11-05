@@ -91,3 +91,92 @@ test('rejects a tag collision with different remote bytes', () => {
   assert.equal(verdict.ok, false);
   assert.match(verdict.problems.join('\n'), /tag collision for sentropic-api/);
 });
+
+for (const status of ['skipped', 'absent']) {
+  test(`rejects an expected publication concluded ${status}`, () => {
+    const evidence = base();
+    evidence.publications[0].status = status;
+    const verdict = assessReleaseReceipt(evidence);
+    assert.equal(verdict.ok, false);
+    assert.match(verdict.problems.join('\n'), /missing publication: sentropic-api/);
+  });
+}
+
+test('rejects a failed publication', () => {
+  const evidence = base();
+  evidence.publications[0].status = 'failed';
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /publication failed: sentropic-api/);
+});
+
+test('rejects mismatched registry integrity', () => {
+  const evidence = base();
+  evidence.publications[0].integrity = 'sha512-AAA';
+  evidence.publications[0].registryIntegrity = 'sha512-BBB';
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /mismatched registry integrity for sentropic-api/);
+});
+
+test('rejects provenance naming another source commit', () => {
+  const evidence = base();
+  evidence.publications[0].provenance = { sourceCommits: ['e'.repeat(40)], runId: '4242' };
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /mismatched provenance source for sentropic-api/);
+});
+
+test('rejects provenance from a stale run', () => {
+  const evidence = base();
+  evidence.publications[0].provenance = { sourceCommits: [sha], runId: '9999' };
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /stale provenance run for sentropic-api/);
+});
+
+test('rejects a reused receipt from another run', () => {
+  const evidence = base();
+  evidence.prior = { sourceSha: sha, runId: '9999', attempt: '1' };
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /stale receipt reuse/);
+});
+
+test('rejects a reused receipt from another source', () => {
+  const evidence = base();
+  evidence.prior = { sourceSha: 'd'.repeat(40), runId: '4242', attempt: '1' };
+  const verdict = assessReleaseReceipt(evidence);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.problems.join('\n'), /stale receipt reuse/);
+});
+
+const cli = fileURLToPath(new URL('./release-receipt.mjs', import.meta.url));
+function runCli(evidence, extra = []) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'release-receipt-'));
+  const file = path.join(dir, 'evidence.json');
+  fs.writeFileSync(file, JSON.stringify(evidence));
+  try {
+    const output = execFileSync(process.execPath, [cli, 'assess', '--evidence', file, '--out', path.join(dir, 'receipt.json'), ...extra],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return { status: 0, output, receipt: JSON.parse(fs.readFileSync(path.join(dir, 'receipt.json'), 'utf8')) };
+  } catch (error) {
+    return { status: error.status ?? 1, output: `${error.stdout ?? ''}${error.stderr ?? ''}`, receipt: null };
+  }
+}
+
+test('CLI assesses valid evidence with exit 0 and writes the receipt', () => {
+  const result = runCli(base());
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.ok, true);
+  assert.match(result.output, /release-receipt: PASS/);
+});
+
+test('CLI fails closed with ::error lines on a broken release', () => {
+  const evidence = base();
+  evidence.checks.find((row) => row.job === 'publish-api-image').conclusion = 'failure';
+  const result = runCli(evidence);
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /::error::/);
+  assert.match(result.output, /required check publish-api-image concluded failure/);
+});
