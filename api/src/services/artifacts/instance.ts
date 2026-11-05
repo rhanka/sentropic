@@ -12,6 +12,7 @@ import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdent
 import { createArtifactTransport } from './transport';
 import { createArtifactReaderActivation } from './reader-activation';
 import { createPostgresReaderConsentStore } from '@sentropic/artifacts/adapters/postgres-reader-consent';
+import { assertConsentScopeId, assertConsentScopeVersion } from '@sentropic/artifacts/server/consent';
 import { createReaderConsentService } from './reader-consent';
 import type { ArtifactHttpPorts } from '../../routes/namespaces/artifacts';
 
@@ -57,11 +58,38 @@ export function getProductArtifactReader() {
   return reader ??= createArtifactReaderActivation({ pool, baseDomain,
     profileDigest: productArtifactHost.profile.profileDigest });
 }
+/**
+ * J1.3b — host-declared consent scopes for the generic grant contract, from
+ * `APP_ARTIFACT_CONSENT_SCOPES` as `scopeId@scopeVersion` entries. Empty until
+ * the host declares scopes: the grant route stays fail-closed.
+ */
+function declaredConsentScopes(): { scopeId: string; scopeVersion: string }[] {
+  const raw = process.env.APP_ARTIFACT_CONSENT_SCOPES;
+  if (!raw) return [];
+  return raw.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0).map((entry) => {
+    const at = entry.indexOf('@');
+    const scopeId = at === -1 ? '' : entry.slice(0, at);
+    const scopeVersion = at === -1 ? '' : entry.slice(at + 1);
+    assertConsentScopeId(scopeId);
+    assertConsentScopeVersion(scopeVersion);
+    return { scopeId, scopeVersion };
+  });
+}
+
 export const productArtifactReaderConsentPort: NonNullable<ArtifactHttpPorts['readerConsent']> = {
   enabled: artifactReaderEnabled,
   get controlOrigin() {
     if (!process.env.UI_BASE_URL) throw new Error('Approved reader control origin required');
     return new URL(process.env.UI_BASE_URL).origin;
+  },
+  get declaredScopes() {
+    return declaredConsentScopes();
+  },
+  get consentScreen() {
+    return { brand: process.env.APP_ARTIFACT_CONSENT_BRAND ?? 'Artifacts',
+      title: process.env.APP_ARTIFACT_CONSENT_TITLE ?? 'Allow reader access',
+      ...(process.env.APP_ARTIFACT_CONSENT_SUPPORT_URL === undefined
+        ? {} : { supportUrl: process.env.APP_ARTIFACT_CONSENT_SUPPORT_URL }) };
   },
   /** One service per bound session: scope, readability and titles resolve under that session. */
   async service({ identity, workspaceId }, admin) {
