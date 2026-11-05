@@ -834,21 +834,24 @@ export async function commandInventory(opts, { env = process.env, root = process
 export const PUBLISH_CONFLICT = /EPUBLISHCONFLICT|cannot publish over (?:the )?previously published version/i;
 
 // Tested-bytes publication (BR-82): reuse the verified shared release-candidate
-// tarball instead of repacking when CI_PACKAGE_CANDIDATES verifies a receipt for
-// the slug. An absent index or receipt falls back to a fresh pack (unchanged
-// behavior); a receipt that names this slug but fails verification fails closed
-// and never publishes.
+// tarball instead of repacking when CI_PACKAGE_CANDIDATES names a candidate dir.
+// Fail closed: a set dir with an unreadable index, a non-array receipts index,
+// or no receipt for the slug throws instead of falling back to a fresh pack.
+// `null` is returned only when no dir is set (non-CI runs); a receipt that
+// names this slug but fails verification throws and never publishes.
 export function findVerifiedCandidate(dir, { slug, name, version, headSha }) {
   if (!dir) return null;
   let index;
   try {
     index = JSON.parse(fs.readFileSync(path.join(dir, 'candidates.json'), 'utf8'));
-  } catch {
-    return null;
+  } catch (error) {
+    throw new GuardError(`unreadable candidate index in ${dir}: ${error.message}`);
   }
-  if (!Array.isArray(index?.receipts)) return null;
+  if (!Array.isArray(index?.receipts)) {
+    throw new GuardError(`invalid candidate index in ${dir}: receipts is not an array`);
+  }
   const receipt = index.receipts.find((row) => row?.slug === slug);
-  if (!receipt) return null;
+  if (!receipt) throw new GuardError(`no candidate receipt for ${slug} in ${dir}`);
   if (receipt.guard !== 'pass' || receipt.evidence !== 'release-candidate') {
     throw new GuardError(`candidate receipt for ${slug} is not a passing release-candidate guard receipt`);
   }

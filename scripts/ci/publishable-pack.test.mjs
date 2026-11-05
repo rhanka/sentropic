@@ -512,19 +512,27 @@ test('publishes the verified candidate tarball without repacking', async () => {
   assert.equal(receipt.pack, 'candidate');
 });
 
-test('packs fresh when no candidate receipt names the slug', async () => {
-  const { dir, root } = candidateRoot('other', {}, { omit: true });
-  fs.writeFileSync(path.join(root, 'candidates.json'), JSON.stringify({ schema: 1, receipts: [] }));
+test('packs fresh when no candidate dir is set (non-CI run)', async () => {
   const source = fixture('events', {});
   const npm = npmStub();
   const receiptDir = path.join(source, '..', 'r');
   const code = await commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': receiptDir },
-    { env: candidateEnv(root), cwd: source, registry: absentRegistry, out: sink(), npm: npm.stub });
+    { env: { MANIFEST_HEAD_SHA: HEAD_SHA }, cwd: source, registry: absentRegistry, out: sink(), npm: npm.stub });
   assert.equal(code, 0);
   assert.equal(npm.called(), true);
   const receipt = JSON.parse(fs.readFileSync(path.join(receiptDir, 'events.json'), 'utf8'));
   assert.equal(receipt.status, 'published');
   assert.equal(receipt.pack, 'fresh');
+});
+
+test('refuses to publish when no candidate receipt names the slug', async () => {
+  const { root } = candidateRoot('other', {}, { omit: true });
+  fs.writeFileSync(path.join(root, 'candidates.json'), JSON.stringify({ schema: 1, receipts: [] }));
+  const source = fixture('events', {});
+  const npm = npmStub();
+  await assert.rejects(commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(source, '..', 'r') },
+    { env: candidateEnv(root), cwd: source, registry: absentRegistry, out: sink(), npm: npm.stub }), /no candidate receipt for events/);
+  assert.equal(npm.called(), false, 'a missing slug receipt must never publish');
 });
 
 test('refuses a candidate receipt that names another version', async () => {
@@ -551,6 +559,42 @@ test('refuses a candidate packed from another head', async () => {
   assert.equal(npm.called(), false, 'a foreign-head candidate must never publish');
 });
 
-test('findVerifiedCandidate returns null without a candidate index', () => {
-  assert.equal(findVerifiedCandidate(path.join(os.tmpdir(), 'no-such-dir'), { slug: 'events', name: '@fx/events', version: '1.0.0', headSha: HEAD_SHA }), null);
+test('findVerifiedCandidate returns null only when no candidate dir is set', () => {
+  const query = { slug: 'events', name: '@fx/events', version: '1.0.0', headSha: HEAD_SHA };
+  assert.equal(findVerifiedCandidate(undefined, query), null);
+  assert.equal(findVerifiedCandidate('', query), null);
+});
+
+test('findVerifiedCandidate throws on an unreadable candidate index', () => {
+  const query = { slug: 'events', name: '@fx/events', version: '1.0.0', headSha: HEAD_SHA };
+  assert.throws(() => findVerifiedCandidate(path.join(os.tmpdir(), 'no-such-dir'), query), GuardError);
+  const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'candidates-broken-'));
+  fs.writeFileSync(path.join(broken, 'candidates.json'), 'not json{{{');
+  assert.throws(() => findVerifiedCandidate(broken, query), GuardError);
+});
+
+test('findVerifiedCandidate throws on a non-array receipts index', () => {
+  const query = { slug: 'events', name: '@fx/events', version: '1.0.0', headSha: HEAD_SHA };
+  for (const index of [{ schema: 1 }, { schema: 1, receipts: {} }, { schema: 1, receipts: 'yes' }]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'candidates-shape-'));
+    fs.writeFileSync(path.join(dir, 'candidates.json'), JSON.stringify(index));
+    assert.throws(() => findVerifiedCandidate(dir, query), GuardError, JSON.stringify(index));
+  }
+});
+
+test('findVerifiedCandidate throws when no receipt names the slug', () => {
+  const query = { slug: 'events', name: '@fx/events', version: '1.0.0', headSha: HEAD_SHA };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'candidates-noslug-'));
+  fs.writeFileSync(path.join(dir, 'candidates.json'), JSON.stringify({ schema: 1,
+    receipts: [{ slug: 'other', name: '@fx/other', version: '1.0.0', sha256: '0'.repeat(64),
+      file: 'other/fx-other-1.0.0.tgz', guard: 'pass', evidence: 'release-candidate', head_sha: HEAD_SHA }] }));
+  assert.throws(() => findVerifiedCandidate(dir, query), /no candidate receipt for events/);
+});
+
+test('refuses to publish when the candidate index is missing', async () => {
+  const { dir, root } = candidateRoot('events', {}, { omit: true });
+  const npm = npmStub();
+  await assert.rejects(commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r') },
+    { env: candidateEnv(root), cwd: dir, registry: absentRegistry, out: sink(), npm: npm.stub }), GuardError);
+  assert.equal(npm.called(), false, 'a missing candidate index must never publish');
 });
