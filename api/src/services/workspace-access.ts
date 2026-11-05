@@ -1,4 +1,4 @@
-import { desc, eq, isNull, or, and, sql } from 'drizzle-orm';
+import { desc, eq, inArray, isNull, or, and, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { workspaces } from '../db/schema';
 import { findCmWorkspaceMember, listCmWorkspaceMembershipsForUser } from './identity/cm-tenancy';
@@ -88,7 +88,7 @@ export async function resolveDefaultWorkspaceId(userId: string): Promise<string 
   const rows = await db
     .select({ id: workspaces.id })
     .from(workspaces)
-    .where(and(isNull(workspaces.hiddenAt), sql`${workspaces.id} = ANY(${ids})`))
+    .where(and(isNull(workspaces.hiddenAt), inArray(workspaces.id, ids)))
     .orderBy(desc(workspaces.createdAt))
     .limit(1);
 
@@ -142,7 +142,7 @@ export async function getUserWorkspaces(userId: string): Promise<
       createdAt: workspaces.createdAt,
     })
     .from(workspaces)
-    .where(and(sql`${workspaces.id} = ANY(${ids})`, or(isNull(workspaces.hiddenAt), sql`${workspaces.id} = ANY(${ids.filter((id) => byId.get(id) === 'admin')})`)))
+    .where(and(inArray(workspaces.id, ids), or(isNull(workspaces.hiddenAt), inArray(workspaces.id, ids.filter((id) => byId.get(id) === 'admin')))))
     .orderBy(desc(workspaces.createdAt));
 
   return rows.map((r) => ({
