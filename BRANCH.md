@@ -59,18 +59,18 @@
 - [ ] **Lot 0 — Baseline and constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the study, and `plan/BRANCH_TEMPLATE.md`.
   - [x] Create isolated worktree `tmp/worktrees/cd-tested-artifacts` on `perf/cd-tested-artifacts` from `origin/main` (`c3d5b2f17`, BR-81 merged).
-  - [ ] Capture Makefile targets needed for debug/testing (`make help` scoped to CD lots).
-  - [ ] Define environment mapping (`test-cd-tested-artifacts`, `e2e-cd-tested-artifacts`) and ports (9410/5610/1510) for this branch.
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last; Docker via `docker-slot.sh`, one slot per command, never nested.
-  - [ ] Confirm scope and guardrails.
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare BR82-EX1/EX2/EX3 before touching conditional paths.
-  - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities (main merge run `41939652646` attempt 1, head `4d7517d94`: wall 1049s; `publish-api-image` 93s, `publish-ui-image` 76s, `deploy-preprod` 71s, `ci-gate` 19s).
+  - [x] Capture Makefile targets needed for debug/testing (`make help` scoped to CD lots).
+  - [x] Define environment mapping (`test-cd-tested-artifacts`, `e2e-cd-tested-artifacts`) and ports (9410/5610/1510) for this branch.
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last; Docker via `docker-slot.sh`, one slot per command, never nested.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare BR82-EX1/EX2/EX3 before touching conditional paths.
+  - [x] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities (main merge run `41939652646` attempt 1, head `4d7517d94`: wall 1049s; `publish-api-image` 93s, `publish-ui-image` 76s, `deploy-preprod` 71s, `ci-gate` 19s).
 - [ ] **Lot 1 — Qualified candidate promotion and package train**
-  - [ ] Write `scripts/ci/release-receipt.test.mjs` first: reject missing/failed/cancelled/skipped required checks, wrong source/digest, missing publication, tag collision, mismatched registry integrity/provenance, stale receipt reuse.
-  - [ ] Add `scripts/ci/release-receipt.mjs` to satisfy the tests.
-  - [ ] Main builds upload non-deployment candidate layers inside BR-78 image budgets; all consumers verify the same digest; PRs retain artifact transport without registry credentials.
-  - [ ] Update the named image/manifest/qualification scripts and tests; every publisher waits for the complete verdict, publishes exact tested bytes, and retains clean registry qualification.
-  - [ ] Preserve new-version mesh → gateway → cluster ordering; run unrelated publishers and train-lock verification concurrently only after their actual prerequisites. Record version-visible receipts rather than repacking or repeating registry checks.
+  - [x] Write `scripts/ci/release-receipt.test.mjs` first: reject missing/failed/cancelled/skipped required checks, wrong source/digest, missing publication, tag collision, mismatched registry integrity/provenance, stale receipt reuse.
+  - [x] Add `scripts/ci/release-receipt.mjs` to satisfy the tests.
+  - [x] Main builds upload non-deployment candidate layers inside BR-78 image budgets; all consumers verify the same digest; PRs retain artifact transport without registry credentials (verified on main: transport artifacts + image-receipt verify; no change needed).
+  - [x] Update the named image/manifest/qualification scripts and tests; every publisher waits for the complete verdict, publishes exact tested bytes, and retains clean registry qualification (`publish-api-image` now joins `test-api-ai`; train publishers reuse verified candidates with `pack: candidate|fresh` receipts; npm non-train publishers keep pinned validator wiring, joined at the chain level by the Lot 2 release-receipts gate).
+  - [x] Preserve new-version mesh → gateway → cluster ordering; run unrelated publishers and train-lock verification concurrently only after their actual prerequisites. Record version-visible receipts rather than repacking or repeating registry checks (train ordering and concurrency unchanged; publish receipts now record the pack source).
   - [ ] Lot gate:
     - [ ] New `make test-ci-release-receipts ENV=test-cd-tested-artifacts`.
     - [ ] `make test-ci-api-tag-guard test-publishable-manifests test-qualify-published-install ENV=test-cd-tested-artifacts`.
