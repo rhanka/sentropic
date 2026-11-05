@@ -147,3 +147,70 @@ const fullSelection = (boundaries, reason) => {
   ];
   return { selection: 'full', required, fastPath: false, reasons: [reason] };
 };
+
+export function selectConsumers({ kind, slugs = [], boundaries = null } = {}) {
+  if (!isPlainObject(boundaries)) throw new Error('consumer boundaries are required');
+  const policy = boundaries.policies?.[kind];
+  if (!policy) throw new Error(`unknown change kind: ${kind}`);
+  if (policy.selection === 'full') {
+    return fullSelection(boundaries, `${kind}: ${policy.note}`);
+  }
+  if (policy.selection === 'adopted') {
+    const edges = boundaries.boundaries.filter((row) => slugs.includes(row.package));
+    const required = [
+      ...edges.flatMap((row) => (row.contracts ?? []).map((identity) => ({ kind: 'test', identity }))),
+      ...boundaryValidations(slugs, boundaries),
+      ...edges.flatMap((row) => row.consumers.flatMap((consumer) => CONSUMER_LANES[consumer] ?? [])),
+    ];
+    return { selection: 'adopted', required, fastPath: false,
+      reasons: [`${kind}: ${policy.note}`, `adopted packages: ${slugs.join(', ') || 'none'}`] };
+  }
+  if (policy.selection === 'boundary') {
+    const contracts = slugs.flatMap((slug) => contractTestsFor(slug, boundaries));
+    if (slugs.length === 0 || contracts.length === 0) {
+      return fullSelection(boundaries, `${kind}: no contract covers ${slugs.join(', ') || 'no packages'}; fail closed to full integration`);
+    }
+    const lanes = boundaries.contractLanes ?? {};
+    const peerQualifications = boundaries.boundaries
+      .filter((row) => slugs.includes(row.package) && row.peerQualification)
+      .map((row) => ({ kind: 'job', identity: row.peerQualification }));
+    return { selection: 'boundary',
+      required: [
+        ...contracts.map((identity) => ({ kind: 'test', identity, via: lanes[identity] ?? identity })),
+        ...boundaryValidations(slugs, boundaries),
+        ...peerQualifications,
+      ],
+      fastPath: 'tuple-gated', reasons: [`${kind}: ${policy.note}`] };
+  }
+  if (policy.selection === 'ui') {
+    return { selection: 'ui',
+      required: ['test-ui', 'build-ui', 'smoke-idp-screens', 'build-ui-image', 'deploy-preprod']
+        .map((identity) => ({ kind: 'job', identity })),
+      fastPath: false,
+      reasons: [`${kind}: ${policy.note}`, 'API digest unchanged proven by installed-tuple comparison'] };
+  }
+  if (policy.selection === 'shared') {
+    return { selection: 'shared',
+      required: ['validate-auth-ui', 'test-ui', 'smoke-idp-screens', 'build-api-image', 'build-ui-image', 'deploy-preprod']
+        .map((identity) => ({ kind: 'job', identity })),
+      fastPath: false, reasons: [`${kind}: ${policy.note}`] };
+  }
+  throw new Error(`unsupported selection: ${policy.selection}`);
+}
+
+if (process.argv[1] && import.meta.url.endsWith('/consumer-contracts.mjs') && process.argv.includes('--select')) {
+  const read = (flag) => {
+    const at = process.argv.indexOf(flag);
+    return at >= 0 ? process.argv[at + 1] : undefined;
+  };
+  try {
+    const boundaries = loadBoundaries(read('--boundaries') ?? 'scripts/ci/consumer-boundaries.json');
+    const verdict = selectConsumers({ kind: read('--kind'), slugs: JSON.parse(read('--slugs') ?? '[]'), boundaries });
+    process.stdout.write(`${JSON.stringify(verdict, null, 2)}\n`);
+    if (verdict.selection === 'full') process.exitCode = 1;
+  } catch (error) {
+    process.stderr.write(`::error::consumer-contracts: ${error?.message ?? error}\n`);
+    process.exitCode = 2;
+  }
+}
+
