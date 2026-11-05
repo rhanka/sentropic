@@ -9,7 +9,9 @@ import { db } from '../../../src/db/client';
 import { connectorTenantEnrollments } from '../../../src/db/control-schema';
 import { serviceClients } from '../../../src/db/schema';
 import { createCmTenant, setCmTenantStatus } from '../../../src/services/identity/cm-tenancy';
-import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
+import { bindCmServiceClientTenant } from '../../../src/services/identity/cm-service-clients';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
+import { cmDeleteTenants, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 
 // ARCH-11 G1c — S2S OBO mint end-to-end via the real token endpoint (spec §2.2). Proves the
@@ -46,14 +48,16 @@ const seedServiceClient = async (clientId: string, secret: string, tenantId: str
       allowedScopes: ['service:ping'],
       resourceIndicators: [RESOURCE],
       dpopBoundAccessTokens: false,
-      tenantId,
       createdAt: now,
       revokedAt: null,
     })
     .onConflictDoUpdate({
-      set: { clientSecretHash: createHash('sha256').update(secret).digest('hex'), tenantId, revokedAt: null },
+      set: { clientSecretHash: createHash('sha256').update(secret).digest('hex'), revokedAt: null },
       target: serviceClients.clientId,
     });
+  // Fixed service-client authority lives exclusively in the CM tenant registry
+  // (the legacy `service_clients.tenant_id` column is dropped by migration 0015).
+  await runCmIdentityWrite((tx) => bindCmServiceClientTenant(tx, clientId, tenantId));
 };
 
 const ensureActiveSigningKey = async (): Promise<void> => {
@@ -102,6 +106,7 @@ describe('ARCH-11 G1c — S2S OBO mint (token endpoint)', () => {
   afterEach(async () => {
     await db.delete(connectorTenantEnrollments).where(inArray(connectorTenantEnrollments.principalSub, TEST_CLIENTS));
     await db.delete(serviceClients).where(inArray(serviceClients.clientId, TEST_CLIENTS));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = ANY($1)`, [TEST_CLIENTS]);
     await cmDeleteTenants(TEST_ORGS);
   });
 
