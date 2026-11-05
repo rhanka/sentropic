@@ -55,18 +55,18 @@ Unblock main deploys: `release-receipts` must pass when a selected package publi
 - No UI changes in this branch; no UAT required.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
   - [x] Create isolated worktree `tmp/worktrees/release-receipt-hotfix` on branch `fix/release-receipt-skipped-publishers` from `origin/main` (`843efe3a1`); harness branch check PASS C1.
   - [x] Confirm scope boundaries and declare BR82-EX2 for `.github/workflows/ci.yml`.
   - [x] Confirm command style: `make ... ENV=test-ci-receipt` with `ENV` last.
-- [ ] **Lot 1 — Tests-first receipt fix**
-  - [ ] Add red tests to `scripts/ci/release-receipt.test.mjs`: skipped publisher passes, already-published passes, published with `pack=candidate` passes, published with `pack=fresh` or missing fails.
-  - [ ] Fix `scripts/ci/release-receipt.mjs` (`assessChain` reads `publication_*` outputs + explicit status; `publicationProblems` passes explicit skipped/already-published, keeps pack FAIL-closed for real publications).
-  - [ ] Fix `ci.yml` record steps (explicit `status=skipped` on the cluster-mesh decision-skip path, forward `conflict`).
-  - [ ] Lot gate:
-    - [ ] `make test-publishable-manifests SCOPE=scripts/ci/release-receipt.test.mjs ENV=test-ci-receipt` green.
-    - [ ] `make scope-check` clean before each commit; commits via `make commit` only.
+- [x] **Lot 1 — Tests-first receipt fix**
+  - [x] Added red tests to `scripts/ci/release-receipt.test.mjs` (5 failed pre-fix, 2 fail-closed locks passed pre-fix).
+  - [x] Fixed `scripts/ci/release-receipt.mjs` (`assessChain` reads `publication_*` outputs + explicit status; `publicationProblems` passes explicit skipped/already-published, keeps pack FAIL-closed for real publications).
+  - [x] Fixed `ci.yml` record steps (explicit `status=skipped` on the cluster-mesh decision-skip path, forward `conflict`).
+  - [x] Lot gate:
+    - [x] `make test-publishable-manifests SCOPE=scripts/ci/release-receipt.test.mjs ENV=test-ci-receipt` green (40/40); full manifest suite 119/119 green.
+    - [x] `make scope-check` clean before every commit; commits via `make commit` only.
 - [ ] **Lot 2 — PR + CI to green**
   - [ ] Open READY PR from `fix/release-receipt-skipped-publishers`, push head.
   - [ ] Watch PR CI to green (no `[skip ci]`, no `gh run rerun`).
