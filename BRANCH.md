@@ -96,11 +96,11 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
   - [x] Cluster-mesh selected fixture left at `0.2.15`: its integrity pin comes from the verified release archive (sanctioned `refresh-lazy-package-lock` flow, post-publish), and the packaging harness installs the selected fixture from the registry, which has no `0.2.16` yet. Precedent: `f11eca02e` shipped the release without the fixture; `b6631c4b5`/`530ed7aff` re-pinned after publication.
   - [x] Verify `npm view @sentropic/artifacts version` is below `0.2.16` (Post-Rebase Gate after any rebase): registry reports `0.2.15`.
   - [x] Lot gate: `make scope-check` before every commit; commits under 150 lines via `make commit`.
-- [ ] **Lot 4 — Final validation**
-  - [ ] Typecheck & Lint for impacted components.
-  - [ ] Scoped `make test-artifacts` full unit run with `ENV=test-upload-cksum` last.
-  - [ ] Scoped api registry tests for the re-pin with `ENV=test-upload-cksum` last.
-  - [ ] Scoped `make test-artifacts-integration SCOPE=tests/s3-upload-presign.integration.test.ts` with `ENV=test-upload-cksum` last (presigned PUT 200 + commit on the minio double).
+- [x] **Lot 4 — Final validation**
+  - [x] Typecheck & Lint for impacted components (`typecheck-artifacts` clean; `lint-artifacts` 0 errors, 3 pre-existing warnings in `files-parity-lot2.test.ts` left untouched).
+  - [x] Scoped `make test-artifacts` full unit run with `ENV=test-upload-cksum` last: 62 files, 635 tests, all passed.
+  - [x] Scoped api registry tests for the re-pin with `ENV=test-upload-cksum` last: `app-mcp-registry.test.ts` + `app-mcp-installed.test.ts`, 27 tests passed (digest `cb3a7968…` corroborated by probe + tests).
+  - [x] Scoped `make test-artifacts-integration SCOPE=tests/s3-upload-presign.integration.test.ts` with `ENV=test-upload-cksum` last: 2/2 passed (presigned PUT 200 with exactly the announced headers + verified commit on the minio double; corrupted declaration refused with S3 staging deleted).
   - [ ] `make down-volumes ENV=test-upload-cksum` at the end (disk hygiene).
   - [ ] Bumped `packages/artifacts/package.json` version verified (CI `enforce-package-bump` gate).
   - [ ] Final gate step 1: create PR with `BRANCH.md` text as PR body, state READY.
