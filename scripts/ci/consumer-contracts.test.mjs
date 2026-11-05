@@ -143,6 +143,24 @@ test('should prove dispatch on a synthetic workflow when every required consumer
   assert.ok(unwired.problems.some((row) => row.includes('not wired')));
 });
 
+test('should match matrix members by bare job identity', () => {
+  const workflow = { jobs: {
+    changes: {},
+    'ci-gate': { needs: ['validate-comments', 'validate-cluster-mesh'] },
+    'validate-comments': { if: "needs.changes.outputs.comments == 'true'",
+      strategy: { matrix: { include: [{ lane: 'unit' }, { lane: 'postgres' }] } } },
+    'validate-cluster-mesh': { if: "needs.changes.outputs.cluster_mesh == 'true'" },
+  } };
+  const text = 'run suite: contracts for api/tests/contracts/comments-candidate.test.ts';
+  const good = verifyDispatch({ kind: 'additive', slugs: ['comments'], boundaries,
+    workflow, workflowText: text, changes: { comments: 'true', cluster_mesh: 'true' } });
+  assert.equal(good.ok, true, JSON.stringify(good.problems));
+  const unselected = verifyDispatch({ kind: 'additive', slugs: ['comments'], boundaries,
+    workflow, workflowText: text, changes: { comments: 'true', cluster_mesh: 'false' } });
+  assert.equal(unselected.ok, false);
+  assert.ok(unselected.problems.some((row) => row.includes('validate-cluster-mesh')));
+});
+
 test('should fail tuple proof only for selections that omit consumer work', () => {
   const workflow = { jobs: {
     changes: {},

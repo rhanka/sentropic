@@ -38,7 +38,10 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
       problems.push(`workflow selection is unreadable: ${error.message}`);
     }
   }
-  const selected = new Map(expected.map((row) => [row.job, row]));
+  // Matrix jobs expand to `name (member)` rows; a bare identity matches the
+  // job and every member, like the DAG conformance check.
+  const membersOf = (identity) => expected.filter((row) => row.job === identity
+    || row.job.startsWith(`${identity} (`));
   const text = workflowText ?? '';
   // Full integration omits nothing, so it requires everything the change
   // selects — but every affected component must still own a validation or a
@@ -47,7 +50,7 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
     for (const slug of slugs) {
       const component = boundaries.components.find((row) => row.slug === slug);
       const hasValidation = component?.validation !== null && component?.validation !== undefined
-        && selected.get(component.validation)?.selected !== false;
+        && membersOf(component.validation).length > 0;
       const hasContract = contractTestsFor(slug, boundaries).length > 0;
       if (!hasValidation && !hasContract) {
         problems.push(`no owning validation for ${slug}: full integration cannot prove it`);
@@ -56,14 +59,15 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
   }
   if (verdict.selection === 'full') {
     verdict.required = verdict.required.filter((item) => item.kind !== 'job'
-      || selected.get(item.identity)?.selected !== false);
+      || membersOf(item.identity).some((row) => row.required !== false && row.selected !== false));
   }
   for (const item of verdict.required) {
     if (item.kind === 'job') {
-      const row = selected.get(item.identity);
-      if (!row) problems.push(`required consumer ${item.identity} has no workflow job`);
-      else if (row.required === false) problems.push(`required consumer ${item.identity} is not a required check`);
-      else if (row.selected === false) problems.push(`required consumer ${item.identity} is not selected for this change`);
+      const members = membersOf(item.identity).filter((row) => row.required !== false);
+      if (members.length === 0) problems.push(`required consumer ${item.identity} has no workflow job`);
+      else if (members.every((row) => row.selected === false)) {
+        problems.push(`required consumer ${item.identity} is not selected for this change`);
+      }
     } else if (!text.includes(item.via ?? item.identity)) {
       problems.push(`required consumer ${item.kind} ${item.identity} is not wired in the workflow`);
     }
