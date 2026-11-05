@@ -27,13 +27,20 @@ const PING_URL = `${ISSUER}/api/v1/oauth/s2s/ping`;
 const TOKEN_URL = `${ISSUER}/api/v1/oauth/token`;
 
 describe('S2S createRequireServiceAuth host route', () => {
+  const TENANT = 'test-service-rp-tenant';
+
   beforeEach(async () => {
     await ensureActiveSigningKey('test-s2s-kid');
     await seedServiceClient();
+    // Fixed service-client authority lives exclusively in the CM tenant registry.
+    await createCmTenant({ tenantId: TENANT, slug: TENANT, status: 'active' }).catch(() => {});
+    await runCmIdentityWrite((tx) => bindCmServiceClientTenant(tx, CLIENT_ID, TENANT));
   });
 
   afterEach(async () => {
     await db.delete(serviceClients).where(eq(serviceClients.clientId, CLIENT_ID));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT_ID]);
+    await cmDeleteTenants([TENANT]);
   });
 
   it('mints a token via client_credentials and calls the protected route (200)', async () => {

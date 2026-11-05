@@ -80,7 +80,7 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
   });
 
   it('anti-enumeration: a request for a non-existent tenant returns pending but creates no row', async () => {
-    const user = await createTestUser({ email: `noenum-${crypto.randomUUID()}@example.com`, displayName: 'U' });
+    const user = await createTestUser({ email: `noenum-${crypto.randomUUID()}@example.com`, displayName: 'U', withWorkspace: false });
     const res = await requestMembership(user.id, 'tenant-does-not-exist');
     expect(res).toEqual({ status: 'pending' });
     const rows = await listCmMembershipsForUser(user.id);
