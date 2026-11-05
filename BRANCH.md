@@ -14,45 +14,26 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**:
-  - [ ] `BRANCH.md`; `plan/67-BRANCH_test-ci-deterministic-journeys.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
-  - [ ] `api/src/services/provider-runtime.ts`
-  - [ ] `api/src/services/llm-account-transports.ts`
-  - [ ] `api/tests/ai/initiative-generation-async.test.ts`
-  - [ ] `api/tests/ai/initiative-generation-sync.test.ts`
-  - [ ] `api/tests/ai/executive-summary-sync.test.ts`
-  - [ ] `api/tests/ai/executive-summary-auto.test.ts`
-  - [ ] `api/tests/ai/company-enrichment-sync.test.ts`
-  - [ ] `api/tests/ai/chat-tools.test.ts`
-  - [ ] `api/tests/ai/chat-sync.test.ts`
-  - [ ] `api/tests/ai/documents-tool.test.ts`
-  - [ ] `api/tests/ai/comment-assistant.test.ts`
-  - [ ] `api/tests/ai/gw-native-qualification.test.ts`
-  - [ ] `e2e/global.setup.ts`
-  - [ ] `e2e/playwright.config.ts`
-  - [ ] `e2e/tests/05-usecase-detail.spec.ts`
-  - [ ] `e2e/tests/07-matrix.spec.ts`
-  - [ ] `e2e/tests/06-settings-codex-provider.spec.ts`
-  - [ ] `e2e/tests/10-cluster-mesh-control-plane.spec.ts` (declaration-level skip for the live-target LOST test only; deterministic shard membership rejects runtime skips)
-  - [ ] `e2e/tests/08-document-summary-formats.spec.ts` (pin browser workspace scope to the draft's workspace; unscoped draft creation + scoped folder fetch 404s)
-  - [ ] `e2e/tests/08-documents-summary.spec.ts` (same workspace pin for the draft folder flow)
-  - [ ] `e2e/tests/05-executive-summary.spec.ts` (retry-safety: reset seeded titles in beforeAll so a retry never doubles the annex count)
-  - [ ] `e2e/tests/vscode/01-vscode-chat-streaming.spec.ts`
-  - [ ] `e2e/scripts/check-spec-lanes.sh`
-  - [ ] `e2e/fixtures/provider-server.mjs`
-  - [ ] `e2e/fixtures/provider-server.test.mjs`
-  - [ ] `scripts/check-ci-ai-filters.sh`
-  - [ ] `scripts/ci/browser-shards.mjs`
-  - [ ] `scripts/ci/browser-shards.test.mjs`
-  - [ ] `scripts/ci/live-provider-receipt.mjs`
-  - [ ] `scripts/ci/live-provider-receipt.test.mjs`
-  - [ ] `scripts/ci/dev-image-pin.test.mjs`
+  - [ ] `BRANCH.md`; `plan/68-BRANCH_perf-cd-tested-artifacts.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
+  - [ ] `scripts/publish-api-image.sh`
+  - [ ] `scripts/test-api-tag-guard.sh`
+  - [ ] `scripts/ci/publishable-manifests.mjs`
+  - [ ] `scripts/ci/publishable-pack.test.mjs`
+  - [ ] `scripts/ci/qualify-published-install.mjs`
+  - [ ] `scripts/ci/qualify-published-install.test.mjs`
+  - [ ] `scripts/ci/release-receipt.mjs` (new deliverable)
+  - [ ] `scripts/ci/release-receipt.test.mjs` (new deliverable)
+  - [ ] `packages/cluster-mesh/packaging.mk`
+  - [ ] `packages/cluster-mesh/tests/packaging/check-lock-integrity.mjs`
+  - [ ] `packages/cluster-mesh/tests/packaging/lock-integrity.spec.ts`
+  - [ ] `packages/cluster-mesh/tests/packaging/lock-integrity-registry.spec.ts`
 - [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR81-EX1; `Makefile` under BR81-EX2.
-  - [ ] `.github/workflows/llm-live-daily.yml` under BR81-EX3; `docker-compose.ci-provider.yml` under BR81-EX4 (both new).
-  - [ ] `docker-compose.dev.yml` under BR81-EX5 (one `api` image line).
+  - [ ] `.github/workflows/ci.yml` under BR82-EX1
+  - [ ] `Makefile` under BR82-EX2
+  - [ ] `deploy/k8s/overlays/preprod/kustomization.yaml`, `deploy/k8s/overlays/preprod/patch-api-config.yaml`, and `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml` under BR82-EX3
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
