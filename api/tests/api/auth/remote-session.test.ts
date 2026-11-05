@@ -8,6 +8,7 @@ import { createCmUser } from '../../../src/services/identity/cm-users';
 import { findCmSessionById } from '../../../src/services/identity/cm-sessions';
 import { cmCountActiveSessionsForUser, cmDeleteForUsers, cmQuery, cmReinsertSession, cmTable } from '../../utils/cm-identity-test-store';
 import { createSession, refreshSession, revokeAllSessions, revokeSession, validateSession } from '../../../src/services/session-manager';
+import { withAppCmAuth } from '../../../src/services/identity/cm-auth-runtime';
 import { commitRemoteEvidence, resolveRemoteLogin, reserveRemoteEvidence } from '../../../src/services/auth/remote-session';
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
@@ -29,8 +30,14 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   rmSync(directory, { recursive: true, force: true });
 });
+// Post-cutover the session facade refuses self-asserted MFA; MFA sessions are
+// minted through the binding, the same issuance call the verified ceremony makes.
 async function setup() {
-  const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+  const tokens = await withAppCmAuth(runner => runner.request(async binding => {
+    const user = await binding.ports.users.findById(userId);
+    if (!user) throw new Error('missing remote-session fixture user');
+    return binding.sessions.createSession({ user, mfaVerified: true });
+  }));
   const login = (await resolveRemoteLogin(tokens.sessionToken))!;
   const issue = createRemoteEvidenceIssuer({ issuer: 'idp', kid: 'idp-1', key: keys.privateKey,
     now: Date.now, session: resolveRemoteLogin, reserve: reserveRemoteEvidence, commit: commitRemoteEvidence,
