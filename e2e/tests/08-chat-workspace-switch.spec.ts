@@ -64,6 +64,10 @@ test.describe('Chat session/workspace switch', () => {
       .filter({ hasText: marker })
       .first();
     await expect(sessionRow).toBeVisible({ timeout: 10_000 });
+    // Visible rows can precede the design system's value registration. A
+    // focused row becomes the roving tab stop only after registration.
+    await sessionRow.focus();
+    await expect(sessionRow).toHaveAttribute('tabindex', '0', { timeout: 2_000 });
     await sessionRow.click();
   }
 
