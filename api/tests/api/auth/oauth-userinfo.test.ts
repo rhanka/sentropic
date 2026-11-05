@@ -14,6 +14,7 @@ import {
 } from '../../../src/db/schema';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
 
 const CLIENT_ID = 'example-mock-rp-userinfo';
@@ -80,7 +81,7 @@ const issueStoredAccessToken = async () => {
     },
   );
 
-  await createOauthStateStoreAdapter({ now: () => now }).saveTokenMeta(
+  await runCmIdentityWrite(async (transaction) => createOauthStateStoreAdapter({ now: () => now, transaction }).saveTokenMeta(
     jti,
     {
       audience: `${ISSUER}/api/v1/oauth/userinfo`,
@@ -95,7 +96,7 @@ const issueStoredAccessToken = async () => {
       userId: user.id,
     },
     3600,
-  );
+  ));
 
   return { accessToken, user };
 };
