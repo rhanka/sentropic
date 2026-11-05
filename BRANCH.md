@@ -57,10 +57,14 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline and constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the execution `PLAN.md`, the study, and `plan/BRANCH_TEMPLATE.md`.
-  - [ ] Verify branch mechanically with harness; confirm prerequisite receipts and conductor registration/import before implementation; inventory the actual files and existing assertions at the new base.
-  - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
-  - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the study, and `plan/BRANCH_TEMPLATE.md`.
+  - [x] Create isolated worktree `tmp/worktrees/cd-tested-artifacts` on `perf/cd-tested-artifacts` from `origin/main` (`c3d5b2f17`, BR-81 merged).
+  - [ ] Capture Makefile targets needed for debug/testing (`make help` scoped to CD lots).
+  - [ ] Define environment mapping (`test-cd-tested-artifacts`, `e2e-cd-tested-artifacts`) and ports (9410/5610/1510) for this branch.
+  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last; Docker via `docker-slot.sh`, one slot per command, never nested.
+  - [ ] Confirm scope and guardrails.
+  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare BR82-EX1/EX2/EX3 before touching conditional paths.
+  - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities (main merge run `41939652646` attempt 1, head `4d7517d94`: wall 1049s; `publish-api-image` 93s, `publish-ui-image` 76s, `deploy-preprod` 71s, `ci-gate` 19s).
 - [ ] **Lot 1 — Provider-boundary protocol fixtures**
   - [x] Offline protocol gate: 15/15 HTTP/SSE, tools, errors/retries, cancellation/reconnection, egress, vision, document and PPTX request-shape tests pass; application qualification remains pending.
   - [ ] Add the named HTTP/SSE fixture and tests; cover streaming, tool requests/results, malformed output, errors/rate limits, cancellation, reconnection, model routing, and retries; assert outbound request shape and forbid unexpected real egress.
