@@ -8,6 +8,13 @@ import { readConnectorCapability, sealConnectorCapability } from '../../../src/s
 
 const tuple = { custodyRef: 'custody', deliveryId: 'delivery', connectorAccountId: 'connector',
   provider: 'google_drive', keyRef: 'secret-crypto:v1' };
+// Custody errors carry the machine code on `.code` (human text on `.message`,
+// which never contains the code) — assert the code per the repo convention.
+const expectCustodyInvalid = (operation: () => unknown) => {
+  let thrown: unknown;
+  try { operation(); } catch (error) { thrown = error; }
+  expect(thrown).toMatchObject({ code: 'identity_revocation_custody_invalid' });
+};
 beforeEach(() => { configuration.SECRET_ENCRYPTION_KEY = undefined; });
 
 describe('A4 production connector custody envelope', () => {
@@ -29,11 +36,9 @@ describe('A4 production connector custody envelope', () => {
     try {
       const envelope = sealConnectorCapability(tuple, plaintext, '2026-11-01T00:00:00.000Z');
       for (const key of ['custodyRef', 'deliveryId', 'connectorAccountId', 'provider', 'keyRef'] as const) {
-        expect(() => readConnectorCapability({ ...envelope, [key]: 'changed' }, () => undefined))
-          .toThrow('identity_revocation_custody_invalid');
+        expectCustodyInvalid(() => readConnectorCapability({ ...envelope, [key]: 'changed' }, () => undefined));
       }
-      expect(() => readConnectorCapability({ ...envelope, ciphertext: 'AA' }, () => undefined))
-        .toThrow('identity_revocation_custody_invalid');
+      expectCustodyInvalid(() => readConnectorCapability({ ...envelope, ciphertext: 'AA' }, () => undefined));
       expect(sealConnectorCapability(tuple, plaintext, envelope.createdAt).nonce).not.toBe(envelope.nonce);
     } finally { plaintext.fill(0); }
   });
@@ -43,8 +48,7 @@ describe('A4 production connector custody envelope', () => {
     let borrowed: Buffer | undefined, derived: Buffer | undefined;
     try {
       const envelope = sealConnectorCapability(tuple, plaintext, '2026-11-01T00:00:00.000Z');
-      expect(() => readConnectorCapability(envelope, bytes => { borrowed = bytes; throw new Error('synthetic failure'); }))
-        .toThrow('identity_revocation_custody_invalid');
+      expectCustodyInvalid(() => readConnectorCapability(envelope, bytes => { borrowed = bytes; throw new Error('synthetic failure'); }));
       withConnectorRevocationKey(tuple.keyRef, key => { derived = key; });
       expect(borrowed?.every(byte => byte === 0)).toBe(true);
       expect(derived?.every(byte => byte === 0)).toBe(true);
