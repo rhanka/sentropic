@@ -192,7 +192,7 @@ export async function cmReinsertSession(record: CmSessionRecord): Promise<void> 
       record.id,
       record.sessionTokenHash,
       record.refreshTokenHash,
-      record.mfaVerified ? 1 : 0,
+      record.mfaVerified,
       record.authTime,
       record.sessionVersion,
       1,
