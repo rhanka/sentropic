@@ -1,41 +1,52 @@
-# Feature: artifacts upload checksum fail-closed (OVH 403 + commit integrity)
+# Feature: artifacts 0.2.17 application mode (safe unchanged) + generic grant contract
 
 ## Objective
-Fix the presigned upload checksum mismatch and close the commit integrity hole in @sentropic/artifacts, shipping as patch 0.2.16.
+Ship @sentropic/artifacts 0.2.17 with a host-configured application content mode (safe stays bit-for-bit default) plus the generic J1.3b grant contract, in one PR without merging until #879 lands.
 
 ## Scope / Guardrails
-- Scope limited to @sentropic/artifacts upload channel (adapters/s3-uploads, server/uploads, upload-page, templates), the 0.2.16 version bump with CHANGELOG, and lock/pin refresh through make.
+- Scope limited to application CSP mode (safe default untouched), generic grant route + neutral consent screen, MIME map additions, 0.2.17 bump with CHANGELOG, and lock/pin refresh through make.
 - One migration max in `api/drizzle/*.sql` (none expected; no migration planned).
 - Make-only workflow, no direct Docker commands; every Docker-using make command goes through `.tmp/packets/docker-slot.sh`, one slot per command, never nested.
 - Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/artifacts-upload-checksum`.
-- Automated test campaigns run on dedicated environment (`ENV=test-upload-cksum`), never on root `dev`.
+- Branch development happens in isolated worktree `tmp/worktrees/artifacts-0217`.
+- Automated test campaigns run on dedicated environment (`ENV=test-art0217`), never on root `dev`.
 - UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Merge freeze: no merge to main until PR #879 lands; this lane reports and opens a READY PR only.
+- Tool definitions stay byte-stable; add a new tool version only if a definition must change.
+- Ports: API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098 ENV=test-art0217.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/adapters/s3-uploads.ts`
-  - `packages/artifacts/src/server/uploads.ts`
-  - `packages/artifacts/src/server/upload-page.ts`
-  - `packages/artifacts/src/server/templates.ts`
-  - `packages/artifacts/src/mcp-core.ts` (provider version constant only)
-  - `packages/artifacts/src/http.ts` (create_upload response shape only)
+  - `packages/artifacts/src/content/headers.ts`
+  - `packages/artifacts/src/content/handler.ts`
+  - `packages/artifacts/src/content/routing.ts`
+  - `packages/artifacts/src/server/mime.ts`
+  - `packages/artifacts/src/server/consent.ts`
+  - `packages/artifacts/src/server/reader-consent-screen.ts`
+  - `packages/artifacts/src/mcp-core.ts`
+  - `packages/artifacts/src/http.ts`
+  - `apps/artifact-content/src/host.ts`
+  - `apps/artifact-content/tests/**`
   - `packages/artifacts/tests/**`
   - `packages/artifacts/CHANGELOG.md`
   - `packages/artifacts/package.json`
-  - `packages/artifacts/README.md` (upload channel docs only)
-  - `package-lock.json` (workspace version entry only)
-  - `api/package-lock.json` (workspace version entry only)
-  - `api/src/services/mcp/cluster-registry.ts` (APP-P1 digest re-pin only)
+  - `api/src/services/artifacts/reader-consent.ts`
+  - `api/src/services/artifacts/reader-consent-screen.ts`
+  - `api/src/routes/namespaces/artifacts.ts`
+  - `api/tests/api/artifacts-reader-consent.test.ts`
+  - `api/tests/api/artifacts-reader-grant.test.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `package-lock.json`
+  - `api/package-lock.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (integrity pin only)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -44,11 +55,7 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `tools/memory-mcp-l5/**` (L5 P1 manifest regen only if a CI gate demands it)
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - `tools/memory-mcp-l5/**`
 
 ## Feedback Loop
 - No exceptions declared.
@@ -64,45 +71,43 @@ Fix the presigned upload checksum mismatch and close the commit integrity hole i
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: Single orthogonal fix in one package plus its version pins; one final test cycle and one CI run.
+- Rationale: Two wagons in one PR on one branch, one integration lane, one CI run.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this branch; no UAT lot. Preprod verification by immo happens after merge (out of scope; this lane does not merge).
+- No UI changes in this branch; no UAT lot. No merge until #879 lands.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md` constraints (done: make-only, docker-slot.sh, no skip ci, never ENV=dev, no clean-all, make commit without AI trailer).
-  - [ ] Confirm worktree `tmp/worktrees/artifacts-upload-checksum` on branch `fix/artifacts-upload-checksum` tracking `origin/main`.
-  - [ ] Copy `.env` into the worktree for compose runs (gitignored, never committed).
-  - [ ] Confirm environment mapping: `ENV=test-upload-cksum` always last; `API_PORT=8797`, `UI_PORT=5197`, `MAILDEV_UI_PORT=1097`.
-  - [ ] Confirm scope boundaries and no `BRxx-EXn` needed unless a CI gate demands `tools/memory-mcp-l5/**`.
-- [x] **Lot 1 — Failing tests first (no implementation edits)**
-  - [x] Add `packages/artifacts/tests/uploads-commit-integrity.test.ts` with three tests: corrupted upload refused at commit (typed error, staging object deleted, no release, session not committable); correct upload with exactly the announced headers commits; announced header set equals the signed header set (no `x-amz-*` beyond the signature, no `checksumHeader` field).
-  - [x] Run the new file scoped: `SCOPE=tests/uploads-commit-integrity.test.ts` via `test-artifacts`; observe failures as the repro baseline (4/4 red with the expected failure modes: untyped refusal, announced `checksumHeader`).
-  - [x] Sub-lot gate: `make typecheck-artifacts` + `make lint-artifacts` with `ENV=test-upload-cksum` last (0 errors; 3 pre-existing warnings in `files-parity-lot2.test.ts`, untouched).
-- [ ] **Lot 2 — Fail-closed fix**
-  - [x] `packages/artifacts/src/server/uploads.ts`: stop announcing `checksumHeader`; `requiredHeaders` is exactly the signer output; typed verification error; delete/quarantine the staging object on size/digest mismatch; no release on mismatch (3 commits: typed errors, quarantine, header removal).
-  - [x] `packages/artifacts/src/adapters/s3-uploads.ts`: sign content-type plus exact content-length only; remove the unsigned checksum announcement path.
-  - [x] `packages/artifacts/src/server/upload-page.ts`: PUT carries exactly the announced headers.
-  - [x] `packages/artifacts/src/server/templates.ts`: guide text matches the fixed channel (no checksum header).
-  - [x] Update existing tests that assert the old announced header (`uploads.test.ts`, `files-parity-lot1.test.ts`, `files-parity-lot2.test.ts`) to the new contract without weakening refusal coverage (refusals kept; retry tail strengthened to refusal).
-  - [x] Lot gate: new tests green (4/4); `make typecheck-artifacts` + `make lint-artifacts` (0 errors); scoped `make test-artifacts` green for `uploads.test.ts` (6/6), `files-parity-lot1.test.ts` (7/7), `files-parity-lot2.test.ts` (20/20), `http-uploads-templates.test.ts` (15/15), `http-mcp-service-parity.test.ts` (9/9) with `ENV=test-upload-cksum` last.
-- [x] **Lot 3 — Patch release 0.2.16**
-  - [x] Bump `packages/artifacts/package.json` to `0.2.16` (stays in `0.2.x` per the cluster-mesh `>=0.2.0 <0.3.0` allocation).
-  - [x] Bump `ARTIFACTS_PROVIDER_VERSION` in `packages/artifacts/src/mcp-core.ts`.
-  - [x] Add `CHANGELOG.md` entry for `0.2.16` with the fix and the header-contract choice plus OVH/minio justification.
-  - [x] Refresh locks/pins: root and `api` lock workspace entries, `APP-P1` manifest digest re-pin in `api/src/services/mcp/cluster-registry.ts` (digest computed in the api container via `make exec-api`, corroborated by the registry tests), api registry tests updated.
-  - [x] Cluster-mesh selected fixture re-pinned to `0.2.16` in-branch (required by `prepare-artifacts.spec.ts`): `pack-artifacts` with receipts, `publishable-sibling-collect`, then `refresh-lazy-package-lock` with the sibling receipts, all through make. The sibling archive replaces the registry pre-publication by design; `prepare.sh` installs those exact sibling bytes.
-  - [x] Verify `npm view @sentropic/artifacts version` is below `0.2.16` (Post-Rebase Gate after any rebase): registry reports `0.2.15`.
-  - [x] Lot gate: `make scope-check` before every commit; commits under 150 lines via `make commit`.
-- [x] **Lot 4 — Final validation**
-  - [x] Typecheck & Lint for impacted components (`typecheck-artifacts` clean; `lint-artifacts` 0 errors, 3 pre-existing warnings in `files-parity-lot2.test.ts` left untouched).
-  - [x] Scoped `make test-artifacts` full unit run with `ENV=test-upload-cksum` last: 62 files, 635 tests, all passed.
-  - [x] Scoped api registry tests for the re-pin with `ENV=test-upload-cksum` last: `app-mcp-registry.test.ts` + `app-mcp-installed.test.ts`, 27 tests passed (digest `cb3a7968…` corroborated by probe + tests).
-  - [x] Scoped `make test-artifacts-integration SCOPE=tests/s3-upload-presign.integration.test.ts` with `ENV=test-upload-cksum` last: 2/2 passed (presigned PUT 200 with exactly the announced headers + verified commit on the minio double; corrupted declaration refused with S3 staging deleted).
-  - [ ] `make down-volumes ENV=test-upload-cksum` at the end (disk hygiene).
-  - [ ] Bumped `packages/artifacts/package.json` version verified (CI `enforce-package-bump` gate).
-  - [ ] Final gate step 1: create PR with `BRANCH.md` text as PR body, state READY.
-  - [ ] Final gate step 2: run/verify one branch CI on that head and resolve remaining blockers (no re-runs except proven transient; never `gh run rerun --failed`).
-  - [ ] No merge (packet: report only); no `BRANCH.md` deletion commit.
+- [ ] **Lot 0 — Baseline and constraints**
+  - [ ] Read rules/MASTER.md, rules/workflow.md, .tmp/packets/COMMON-RULES.md, converged-r2 rows J1.1a J1.1b J1.3b and section 3, pass-sentropic-runtime-spark.md G-R1 G-R4, j1-0-report.md section 6.
+  - [ ] Confirm worktree tmp/worktrees/artifacts-0217 on branch feat/artifacts-0.2.17-app-mode tracking origin/main at 843efe3a1.
+  - [ ] Copy .env into the worktree for compose runs (gitignored, never committed).
+  - [ ] Confirm environment mapping: ENV=test-art0217 always last; API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098.
+  - [ ] Confirm scope boundaries and no BRxx-EXn needed unless a CI gate demands tools/memory-mcp-l5.
+- [ ] **Lot 1 — Tests first for application mode**
+  - [ ] Add failing-first tests in packages/artifacts/tests for the application CSP constant (every directive locked), safe-mode snapshot unchanged, reference SPA zero-violation shape, 404 for missing asset vs history fallback for extensionless HTML navigation, service worker refusal.
+  - [ ] Add failing-first tests in apps/artifact-content/tests for application mode (no unconditional worker-src none) and safe-mode bit-for-bit headers.
+  - [ ] Add MIME tests for .geojson .mjs .woff2 plus .wasm .pbf presence with no wasm-unsafe-eval.
+  - [ ] Lot gate: new tests fail on current code for the right reason; make typecheck-artifacts + make lint-artifacts clean.
+- [ ] **Lot 2 — Wagon 1 application mode implementation**
+  - [ ] Implement host-configured safe/application content mode (safe default bit-for-bit); application mode serves the binding J1.0 CSP constant; remove unconditional worker-src none for application only.
+  - [ ] Implement history fallback to index.html for HTML navigations without extension in application mode only; missing asset stays 404; service worker stays refused in both modes.
+  - [ ] Extend MIME map per packet (.geojson .mjs .woff2; keep .wasm .pbf; no wasm-unsafe-eval).
+  - [ ] Lot gate: scoped make test-artifacts green; safe snapshot unchanged; no tool definition bytes changed.
+- [ ] **Lot 3 — Wagon 2 generic grant contract**
+  - [ ] Wire grantWithFreshRights to a first-party HTTP grant route in api/src/routes/namespaces/artifacts.ts with host-declared scopes and versions.
+  - [ ] Add neutral host-parameterizable consent screen; single prescribed navigation from typed 403 code scopeId retryable false.
+  - [ ] Add fake non-immo tenant test: reader without consent reaches the screen in one click from the typed 403 with no loop.
+  - [ ] Lot gate: scoped api consent/grant tests green; no loop; scopes and versions host-declared.
+- [ ] **Lot 4 — Version 0.2.17 and pins**
+  - [ ] Bump packages/artifacts/package.json to 0.2.17 and ARTIFACTS_PROVIDER_VERSION; add CHANGELOG entry.
+  - [ ] Regenerate locks/pins and APP-P1 digest once through make; update cluster-mesh selected fixture only if required by tests.
+  - [ ] Verify npm view @sentropic/artifacts version is below 0.2.17 after any rebase.
+  - [ ] Lot gate: make scope-check before every commit; commits under 150 lines via make commit.
+- [ ] **Lot 5 — Final validation**
+  - [ ] Typecheck and Lint for impacted components.
+  - [ ] Scoped make test-artifacts full unit run ENV=test-art0217 last.
+  - [ ] Scoped api consent grant and registry tests ENV=test-art0217 last.
+  - [ ] Push early; open ONE READY PR with BRANCH.md as body; watch CI to green; no re-run except proven transient.
+  - [ ] Write report to .tmp/rv/artifacts-0217.md; do not merge (freeze until #879 lands).
+  - [ ] Run make down-volumes ENV=test-art0217 at the end (disk hygiene).
