@@ -1,14 +1,14 @@
-# Feature: BR-81 — Deterministic journeys and daily live providers
+# Feature: BR-82 — Complete delivery on the tested bytes
 
 ## Objective
-- [ ] Keep complete application journeys blocking on PR/merge without live provider variability, and preserve live qualification once daily.
-- [ ] Branch `test/ci-deterministic-journeys`, step 6 of nine; train order BR-81 → BR-82; dependencies: BR-80 merged for train order; BR-78 image identity and BR-79 scheduling.
+- [ ] Publish tested image digests and package archives, then prove preproduction readiness and all selected release receipts.
+- [ ] Branch `perf/cd-tested-artifacts`, step 7 of nine; train order BR-82 → BR-83; dependencies: BR-78 image receipts, BR-79 complete join, BR-80 candidates, BR-81 deterministic qualification merged (main `c3d5b2f17`).
 
 ## Scope / Guardrails
-- [x] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
-- [x] Owner packet override: worktree `tmp/worktrees/ci-br81`, branch `test/ci-deterministic-journeys` from `origin/main`; rebase only when updating the base.
-- [x] Owner packet override: `ENV=test-ci-br81` last for every Make invocation; Docker only after #869 merges or 18:00 Europe/Paris, under the shared flock, followed by `make down`.
-- [ ] Slot 0 owner: branch author; API_PORT=9405, UI_PORT=5605, MAILDEV_UI_PORT=1505; verify availability before starting services and pass all three ports to service commands.
+- [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
+- [ ] Work only in `tmp/worktrees/cd-tested-artifacts`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
+- [ ] Make entry points only; `ENV` last; Docker through `.tmp/packets/docker-slot.sh` (3 parallel slots, one slot per command, never nested); tests on `ENV=test-cd-tested-artifacts` or `ENV=e2e-cd-tested-artifacts`, never `dev`; no secrets in evidence.
+- [ ] Slot 0 owner: branch author; API_PORT=9410, UI_PORT=5610, MAILDEV_UI_PORT=1510; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
