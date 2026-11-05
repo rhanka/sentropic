@@ -428,6 +428,7 @@ jobs:
               - 'api/src/services/llm-identity/**'
               - 'api/src/services/llm-metering/**'
               - 'api/src/services/llm-account-transports.ts'
+              - 'api/src/services/provider-runtime.ts'
               - 'api/src/routes/namespaces/business/**'
               - 'api/src/routes/namespaces/workflows-queue.ts'
               - 'api/src/routes/namespaces/config-product-ai.ts'
@@ -1630,28 +1631,19 @@ jobs:
       - name: Show API logs on failure
         if: failure()
         run: make logs-api-ci ENV=test-ci-api
-      - name: Require local deterministic provider traffic
-        if: always() && matrix.suite == 'ai'
-        run: make ci-provider-receipt CI_PROVIDER_REQUIRE_CALLS=1 ENV=test-ci-api
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        if: always() && matrix.suite == 'ai'
-        with:
-          name: provider-api-${{ strategy.job-index }}
-          path: .tmp/ci-provider/
-          include-hidden-files: true
-          if-no-files-found: error
       - name: Tear down API test stack
         if: always()
         run: make down-api-ci ENV=test-ci-api
 
   # Owner request 2026-11-03: AI shards run only when AI-relevant paths change
-  # (changes.ai), so non-AI PRs are not blocked by provider-latency-bound AI
-  # tests. Whenever the shards run, ci-gate still requires them green.
+  # (changes.ai). BR-81: the shards run fixture-backed deterministic journeys
+  # (no live provider credentials); they are required whenever selected, and
+  # live provider qualification moved to llm-live-daily.yml. Whenever the
+  # shards run, ci-gate still requires them green.
   test-api-ai:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image, build-api-tool-image]
     if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && (needs.changes.outputs.ai == 'true' || needs.changes.outputs.global == 'true')
-    continue-on-error: true
     env:
       API_TEST_CI: '1'
       API_TEST_SUT: '0'
@@ -1680,29 +1672,23 @@ jobs:
         run: make load-api-tool ENV=test-ci-api
       - name: Start API test stack
         run: make up-api-test-ci ENV=test-ci-api
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          MUSE_API_KEY: ${{ secrets.MUSE_API_KEY }} # BR75-EX4
       - name: Test API (ai)
         run: |
           SPECS=$(echo "${{ matrix.ai_specs }}" | tr ',' ' ' | xargs -I{} echo "tests/ai/{}.test.ts" | tr '\n' ' ')
           make test-api-ai SCOPE="$SPECS" API_TEST_WORKERS=1 ENV=test-ci-api
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          MUSE_API_KEY: ${{ secrets.MUSE_API_KEY }} # BR75-EX4
       - name: Show API logs on failure
         if: failure()
         run: make logs-api-ci ENV=test-ci-api
+      - name: Require local deterministic provider traffic
+        if: always()
+        run: make ci-provider-receipt CI_PROVIDER_REQUIRE_CALLS=1 ENV=test-ci-api
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: provider-api-${{ strategy.job-index }}
+          path: .tmp/ci-provider/
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Tear down API test stack
         if: always()
         run: make down-api-ci ENV=test-ci-api

@@ -10,6 +10,7 @@
 - [x] Owner packet override: `ENV=test-ci-br81` last for every Make invocation; Docker only after #869 merges or 18:00 Europe/Paris, under the shared flock, followed by `make down`.
 - [ ] Slot 0 owner: branch author; API_PORT=9405, UI_PORT=5605, MAILDEV_UI_PORT=1505; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**:
@@ -35,6 +36,7 @@
   - [ ] `e2e/scripts/check-spec-lanes.sh`
   - [ ] `e2e/fixtures/provider-server.mjs`
   - [ ] `e2e/fixtures/provider-server.test.mjs`
+  - [ ] `scripts/check-ci-ai-filters.sh`
   - [ ] `scripts/ci/browser-shards.mjs`
   - [ ] `scripts/ci/browser-shards.test.mjs`
   - [ ] `scripts/ci/live-provider-receipt.mjs`
@@ -75,6 +77,7 @@
 - [x] Protocol review cycle 2 correction: abort before Playwright if shard-file generation fails or returns no files; allow the local `auth-idp` service without admitting external egress. Docker proof is pending.
 - [x] Daily main selection searches workflow pages lazily until a complete published tuple with retained identities is found; API and artifact errors still fail qualification. Schedule monitoring examines the latest 100 scheduled runs, which cover more than its 26-hour freshness window at the declared 25-per-day cadence.
 - [x] Browser membership snapshots are emitted by the execution process before hooks run; remove the separate Playwright list process while retaining runtime-skip rejection and expected/actual receipts.
+- [x] Union rebase onto origin/main 4d7517d94 (43 commits replayed, one BRANCH.md init conflict resolved with branch content; backup branch backup/br81-r3-7885e1e1f): adopted main's scoped test-api-ai job shape and ai path filter (plus scripts/check-ci-ai-filters.sh in scope), removed branch-dead matrix.suite==ai steps, made the fixture-backed AI shards required with no live secrets plus receipt/upload steps, and covered api/src/services/provider-runtime.ts in the ai filter and self-test. Local gates on the rebased head: typecheck-api PASS, lint-api PASS (0 errors), provider/shard/live-receipt/dev-pin node suites 24+6+11+2 PASS, check-ci-ai-filters PASS, check-e2e-inventory 56 files PASS, all three AI shards PASS on the fixture stack (shard1 10 tests, shard3 18 tests), ci-provider-receipt liveProviderCalls=0.
 - [x] AI/VSCode fixture receipts require actual provider-boundary requests; non-provider browser shards retain their complete journeys. Live qualification requires at least one successful provider response and preserves expected cancellations separately. VSCode uploads its isolation receipt.
 
 ## AI Flaky tests
