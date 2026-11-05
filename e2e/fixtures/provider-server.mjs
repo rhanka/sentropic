@@ -220,8 +220,17 @@ export function journeyResponse(body) {
   };
   if (results.length === 0) {
     if (/document_generate/.test(user) && /pptx/.test(user)) return call('document_generate', {
+      // Forward an entityId only when the user message states it explicitly:
+      // ids harvested from surrounding system text (workspace, session) defeat
+      // automatic primary-context resolution and leave the pptx_generate job
+      // uncompleted. The org-page chat resolves the entity automatically.
       action: 'generate', format: 'pptx', title: user.match(/titled "([^"]+)"/)?.[1] ?? 'Organization summary',
-      entityType: 'organization', entityId: id('organization'),
+      entityType: 'organization',
+      ...(() => {
+        const explicit = String(user).match(/(?:organizationId|organization_id)[=\s:"']+([\w-]+)/i)?.[1]
+          ?? String(user).match(/organization (?:with id )?([a-z0-9_-]{10,})/i)?.[1];
+        return explicit ? { entityId: explicit } : {};
+      })(),
     });
     if (/Liste les documents de la session/.test(user)) return call('documents', {
       action: 'list', contextType: 'chat_session', contextId: text.match(/Session de chat \(([^)]+)\)/)?.[1],
@@ -234,11 +243,22 @@ export function journeyResponse(body) {
     if (/read.*initiative/i.test(user)) return call('read_initiative', { initiativeId: id('initiative') });
   }
   if (/Consulte le document/.test(user)) {
-    if (!used.has('documents')) return call('documents', { action: 'list', contextType: 'organization', contextId: id('organization') });
-    if (!used.has('web_search')) return call('web_search', { query: 'cloud-native Kubernetes platforms' });
+    // Only call tools the journey actually offers; journeys without the
+    // documents tool consult via web_search instead of failing validation.
+    const offered = new Set((body.tools ?? []).map(t => t.function?.name));
+    if (offered.has('documents') && !used.has('documents')) return call('documents', { action: 'list', contextType: 'organization', contextId: id('organization') });
+    if (offered.has('web_search') && !used.has('web_search')) return call('web_search', { query: 'cloud-native Kubernetes platforms' });
   }
-  if (/organization_update|technologies.*exactly/i.test(user) && !used.has('organization_update')) return call('organization_update', {
-    organizationId: id('organization'), updates: [{ field: 'technologies', value: 'Kubernetes, containers, CI/CD and infrastructure-as-code' }] });
+  if (/organization_update|technologies.*exactly/i.test(user) && !used.has('organization_update')) {
+    // Chat-services journeys require [organizationId, updates]; skills-registry
+    // journeys require [organizationId, patch]. Shape the args to the schema the
+    // journey actually offered so the call validates either way.
+    const required = new Set(body.tools.find(t => t.function?.name === 'organization_update')?.function?.parameters?.required ?? []);
+    const organizationId = id('organization');
+    const technologies = 'Kubernetes, containers, CI/CD and infrastructure-as-code';
+    if (required.has('patch')) return call('organization_update', { organizationId, patch: { technologies } });
+    return call('organization_update', { organizationId, updates: [{ field: 'technologies', value: technologies }] });
+  }
   if (/Liste les documents de la session/.test(user) && used.has('documents')) {
     const names = results.flatMap(result => JSON.parse(result.content).items ?? []).map(item => item.filename);
     if (!names.length) throw new Error('Document journey returned no files');
@@ -246,6 +266,15 @@ export function journeyResponse(body) {
   }
   const requestedWord = user.match(/Réponds uniquement(?: avec(?: le mot)?)?\s*["']?([A-Z][A-Z0-9_]+)/)?.[1];
   if (requestedWord) return { content: requestedWord };
+  // Long-form generation (in-flight steering): stream numbered lines slowly so
+  // the composer observes an active generation window instead of an instant
+  // completion. Only the explicit long-form phrasing matches here.
+  const longForm = user.match(/Rédige (\d+) lignes/i);
+  if (results.length === 0 && longForm) {
+    const total = Math.min(Number(longForm[1]), 200);
+    const lines = Array.from({ length: total }, (_, i) => `Ligne ${i + 1} : point d'analyse maintenance prédictive ${i + 1}.`);
+    return { content: lines.join('\n'), delay: 50 };
+  }
   return { content: text.includes('Bob') ? 'Bonjour Bob, voici la réponse.' : 'CI provider response: opération terminée.' };
 }
 
