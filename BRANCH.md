@@ -54,7 +54,7 @@ Fix the versioned one-off Job so `node` resolves the compiled registration scrip
   - [x] Fix convention: mirror `35-auth-idp.yaml` (same image, `workingDir: /workspace`, repo-relative command `apps/auth-idp/dist/index.js`) → command becomes `api/dist/scripts/oauth-register-client.js`.
   - [x] No maintained test covers this yaml (checked CI/test layout); per proportionality the live Job run is the check. No new test added.
 - [ ] **Lot 1 — Fix and prod registration**
-  - [ ] Edit the Job yaml command path.
+  - [x] Edit the Job yaml command path.
   - [ ] `make scope-check` + `harness check scope` before commit; commit via `make commit`.
   - [ ] Push branch; open PR (merge waits for freeze lift and review).
   - [ ] Re-run `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=prod` from this worktree with preserved `immo-mcp` values + `refresh_token` / `offline_access`.
