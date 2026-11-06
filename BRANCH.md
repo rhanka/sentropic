@@ -62,6 +62,7 @@
 - [ ] Lot 4: clean idle build, B2 eligibility, wake/finalization serialization and crash recovery.
   - [x] Build a clean last head after strictly 600 seconds; atomically consume B2 eligibility with publication.
   - [x] Fence route epochs and advance clean drafts only through a verified empty-overlay CAS.
+  - [x] Implement wake cancellation, narrow revoked-owner stop, heartbeat exclusion and crash/lifetime reaping.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
 - [ ] Lot 6: scoped fake Kubernetes/forge/cache/publication race tests and content proxy tests.
 - [ ] Lot 7: record evidence in `.tmp/rv/live-pod.md`, push without PR and remove test volumes.
