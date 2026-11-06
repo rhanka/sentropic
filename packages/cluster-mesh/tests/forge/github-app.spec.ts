@@ -105,6 +105,8 @@ describe('GitHub App enrollment', () => {
     const entry = await f.ready();
     const lease = await f.service.acquire({ ...owner, ...entry });
     await f.service.revoke(owner, entry.installationRef, reason);
+    expect(f.invalidations.at(-1)?.repoId).toBe(owner.repoId);
+    expect(f.invalidations.at(-1)?.credentialVersion).not.toBe(lease.credentialVersion);
     expect(f.revoked).toContain(lease.token);
     await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
     expect((await f.service.status(owner, entry.installationRef)).state).toBe('revoked');

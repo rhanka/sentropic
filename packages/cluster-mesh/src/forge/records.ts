@@ -1,4 +1,4 @@
-import type { GitAppOwnerRepository } from './contracts.js';
+import type { GitAppOwnerRepository, GitCredentialInvalidation } from './contracts.js';
 
 /** Internal custody material. Never export from the public package entry. */
 export interface AppCredential {
@@ -39,6 +39,7 @@ export interface EnrollmentRecord {
   previousWebhook?: { secret: string; version: string; until: number };
   webhookVersion: string;
   webhookRotationPending?: boolean;
+  invalidationPending?: boolean;
   /** Encrypted revocation cache, never an audit journal; expired entries are erased. */
   leases: { token: string; expiresAt: string }[];
 }
@@ -50,4 +51,10 @@ export interface GitAppEnvelopeStore {
 export interface GitAppCustodian {
   create(record: EnrollmentRecord): Promise<void>;
   withRecord<T>(ref: string, action: (record: EnrollmentRecord) => Promise<T>): Promise<T>;
+}
+export interface GitAppLifecycleInput {
+  custody: GitAppCustodian;
+  github: GitHubAppApi;
+  now: () => number;
+  onCredentialsChanged(event: GitCredentialInvalidation): Promise<void>;
 }
