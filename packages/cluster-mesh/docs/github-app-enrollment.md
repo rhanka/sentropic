@@ -103,8 +103,12 @@ Open `/github-app/<installationRef>/rotation` as the current repository owner.
 For an App key, use GitHub App settings to generate the next private key. Upload
 the downloaded PEM file through **Verify and switch App key**; do not paste it into
 a terminal, report or environment. Cluster-mesh verifies RS256 authentication against
-the same App id, switches custody, changes the credential epoch, invalidates host
-caches/jobs and revokes issued leases. Verify a fresh repository lease through the
+the same App id, switches custody, invalidates the superseded lease epoch in host
+caches/jobs and revokes issued leases. Only a successful rotation advances the
+credential epoch and returns the enrollment to ready. Failed invalidation or
+revocation leaves it revoked and retains the old epoch for retry. The
+`onCredentialsChanged` callback names that superseded epoch, never the replacement.
+Verify a fresh repository lease through the
 trusted host. Then delete the previous key in GitHub App settings and remove the
 downloaded replacement file from the owner device. Erasing the old local custody
 copy alone does not retire the old forge key. P2 must witness GitHub key provisioning
