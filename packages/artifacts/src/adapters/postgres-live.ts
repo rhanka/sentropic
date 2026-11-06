@@ -77,6 +77,7 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
       };
       const result = await action(tx);
       if (tx.record) {
+        tx.record.rowVersion = (before.rows[0]?.record?.rowVersion ?? 0) + 1;
         if (liveIdentityKey(tx.record) !== liveIdentityKey(identity)) throw new ArtifactOperationError('access_denied');
         await client.query(`INSERT INTO artifacts.live_drafts(storage_scope_id,artifact_id,binding_generation,record)
           VALUES ($1,$2,$3,$4) ON CONFLICT (storage_scope_id,artifact_id,binding_generation)

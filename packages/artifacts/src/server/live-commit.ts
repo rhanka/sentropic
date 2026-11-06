@@ -30,7 +30,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     }
     if (record.pendingCommit && (record.pendingCommit.hash !== command.hash || record.pendingCommit.key !== command.key ||
       record.pendingCommit.actorId !== invocation.actorId)) liveBusy('commit_indeterminate');
-    if (!record.pendingCommit && !['DORMANT', 'RUNNING', 'REVIVING'].includes(record.runtime?.phase ?? 'DORMANT')) liveBusy('invalid_phase');
+    if (!record.pendingCommit && !['DORMANT', 'LIVE', 'REVIVING'].includes(record.runtime?.phase ?? 'DORMANT')) liveBusy('invalid_phase');
     const overlay = await readLiveOverlay(tx, deps.keys);
     if (record.pendingCommit) return { intent: record.pendingCommit, overlay };
     if (!record.changedPaths) throw new ArtifactOperationError('git_live_no_changes');
@@ -94,7 +94,8 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     Object.assign(record, { revision: randomUUID(), baseHeadSha: committed.commitSha, baseTreeSha: committed.treeSha,
       liveTreeSha: committed.treeSha, objectRef: null, keyVersion: null, digest: null, expiresAt: null,
       changedPaths: 0, draftBytes: 0, tombstone: null, pendingCommit: null,
-      latestVerifiedHeadSha: committed.commitSha, progressSeq: record.progressSeq + (record.latestVerifiedHeadSha === committed.commitSha ? 0 : 1) });
+      latestVerifiedHeadSha: committed.commitSha, progressSeq: record.progressSeq + (record.latestVerifiedHeadSha === committed.commitSha ? 0 : 1),
+      lastProgressEventId: 'commit:' + intent.invocationId, updatedAt: new Date(now).toISOString() });
     const result = { ...liveResponse(record, committed.commitSha), revision: record.revision,
       commitSha: committed.commitSha, treeSha: committed.treeSha, parentSha: intent.expectedHeadSha,
       publicationIntent: authority.binding.autoPublish ? 'deferred' : null, replayed: false };

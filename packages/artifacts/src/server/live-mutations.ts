@@ -18,11 +18,11 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
   let action: 'project' | 'stop' | null = null;
   if (operation === 'live_control' && args.action === 'stop') {
     if (args.liveSessionId !== record.runtime?.liveSessionId) liveBusy('stale_session');
-    record.runtime!.phase = 'DECOMMISSIONING'; record.runtime!.routeEpoch++;
+    record.runtime!.phase = 'QUIESCING'; record.runtime!.routeEpoch++;
     action = 'stop';
   } else {
     if (record.pendingCommit) liveBusy('commit_indeterminate');
-    if (!['DORMANT', 'RUNNING', 'REVIVING'].includes(phase)) liveBusy('invalid_phase');
+    if (!['DORMANT', 'LIVE', 'REVIVING'].includes(phase)) liveBusy('invalid_phase');
     if (operation !== 'live_reset' && record.baseHeadSha !== currentHeadSha && record.changedPaths) {
       throw new ArtifactOperationError('git_live_draft_conflict');
     }
@@ -56,7 +56,13 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
       if (!record.runtime || phase === 'DORMANT') record.runtime = { liveSessionId: randomUUID(), phase: 'REVIVING',
         leaseEpoch: (record.runtime?.leaseEpoch ?? 0) + 1, routeEpoch: (record.runtime?.routeEpoch ?? 0) + 1,
         appliedRevision: null, lastAccessAt: new Date(now).toISOString(), pendingWake: false,
-        origin: operation === 'live_control' ? 'explicit' : 'implicit' };
+        origin: operation === 'live_control' ? 'explicit' : 'implicit', rowVersion: 1,
+        ownerId: authority.ownerId, podUid: null, sourceRevision: record.revision,
+        baseHeadSha: record.baseHeadSha, liveTreeSha: record.liveTreeSha,
+        idleDeadline: new Date(now + 600000).toISOString(), maximumLifetimeAt: new Date(now + 3600000).toISOString(),
+        activeAttemptId: null, stateDetail: null };
+      Object.assign(record.runtime, { sourceRevision: record.revision, baseHeadSha: record.baseHeadSha,
+        liveTreeSha: record.liveTreeSha, rowVersion: record.runtime.rowVersion + 1 });
       if (operation === 'live_control') record.runtime.renewOnReady = true;
       if (operation === 'live_write') record.runtime.lastAccessAt = new Date(now).toISOString();
     }
