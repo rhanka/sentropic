@@ -1,3 +1,4 @@
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { app } from "../../src/app";
@@ -6,7 +7,6 @@ import {
   agentDefinitions,
   workflowDefinitionTasks,
   workflowDefinitions,
-  workspaceMemberships,
   workspaceTypeWorkflows,
 } from "../../src/db/schema";
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
@@ -30,7 +30,7 @@ describe("Workspace type registry through the root-mounted workflows namespace",
         await db.delete(workflowDefinitionTasks).where(eq(workflowDefinitionTasks.workspaceId, user.workspaceId));
         await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, user.workspaceId));
         await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, user.workspaceId));
-        await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, user.workspaceId));
+        await cmDeleteWorkspaceMembers(user.workspaceId);
       }
     }
     await cleanupAuthData();

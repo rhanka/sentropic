@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { app } from '../../../src/app';
 import { cleanupAuthData, createTestUser, generateTestVerificationToken } from '../../utils/auth-helper';
-import { db } from '../../../src/db/client';
-import { authInviteTokens, users } from '../../../src/db/schema';
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { consumeCmInvitationByTokenHash, createCmInvitation } from '../../../src/services/identity/cm-proofs';
 import { hashInviteToken } from '../../../src/services/auth/invite-store-adapter';
 
 const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -94,24 +94,25 @@ describe('Registration API Routes', () => {
       expect(data.error.code).toBe('email_verification_required');
     });
 
-    it('should reuse legacy user without email when local part matches displayName', async () => {
+    it('should reuse the exact existing CM account id for a verified email', async () => {
       const legacyId = randomUUID();
       const localPart = `legacy-${randomUUID().slice(0, 8)}`;
-      await db.insert(users).values({
-        id: legacyId,
-        email: null,
+      // Null source emails refuse import; this fixture has an explicit existing email.
+      const migratedEmail = uniqueEmail('existing-id');
+      await createCmUser({
+        userId: legacyId,
+        email: migratedEmail,
         displayName: localPart,
         role: 'guest',
-        emailVerified: true, // Legacy users are considered verified
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        emailVerified: true,
+        accountStatus: 'active',
       });
 
       const res = await app.request('/api/v1/auth/register/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: `${localPart}@example.com`,
+          email: migratedEmail,
         }),
       });
 
@@ -250,20 +251,28 @@ describe('Registration API — invitation tokens (BR-39r L4, C3 no-enum)', () =>
     expiresAt: Date;
     consumedAt?: Date | null;
   }): Promise<void> => {
-    await db.insert(authInviteTokens).values({
-      id: randomUUID(),
-      tokenHash: hashInviteToken(input.token),
+    await createCmInvitation({
       email: input.email,
       clientId: null,
+      token: input.token,
       expiresAt: input.expiresAt,
-      consumedAt: input.consumedAt ?? null,
-      consumedByUserId: null,
-      createdAt: new Date(),
+      now: new Date(),
     });
+    if (input.consumedAt) {
+      const consumer = await createCmUser({
+        email: uniqueEmail('consumer'), displayName: 'Consumer', role: 'guest', emailVerified: true,
+      });
+      const consumed = await consumeCmInvitationByTokenHash(
+        hashInviteToken(input.token),
+        input.email,
+        consumer.id,
+        input.consumedAt,
+      );
+      if (!consumed) throw new Error('Failed to seed consumed invite.');
+    }
   };
 
   afterEach(async () => {
-    await db.delete(authInviteTokens);
     await cleanupAuthData();
   });
 

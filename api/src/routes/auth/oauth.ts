@@ -1,29 +1,23 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import {
   createOAuthHmacStateCodec,
-  type AuthHonoAccountStatus,
   type AuthHonoPorts,
-  type AuthHonoSessionRecord,
-  type AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
-import { and, eq, sql } from 'drizzle-orm';
-import { jwtVerify, SignJWT } from 'jose';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
-import { emailVerificationCodes, magicLinks, tenantMemberships, userSessions, users } from '../../db/schema';
-import { logger } from '../../logger';
+import { bindCmAppDatabase, withAppDatabaseMethods, type CmIdentityTransaction } from '../../services/identity/cm-transaction';
 import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
 import { createFederationAdapter } from '../../services/auth/federation-adapter';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
 import { createOAuthRefreshAdapter } from '../../services/auth/oauth-refresh-adapter';
-import { createServiceTenantAdapter } from '../../services/auth/service-tenant-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
-import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
-import { deleteAndQueueRemoteSessions } from '../../services/auth/remote-revocation-outbox';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
+import { countCmUsersWithRole } from '../../services/identity/cm-users';
+import { createCmOAuthTenantPort } from '../../services/identity/cm-oauth-tenancy';
 
 /**
  * HS256 key for the session and verification tokens this host signs and verifies.
@@ -41,8 +35,6 @@ import { deriveDisplayNameFromEmail } from '../../utils/display-name';
  */
 export const resolveSessionTokenSecret = (): string =>
   env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
-
-const JWT_SECRET = new TextEncoder().encode(resolveSessionTokenSecret());
 
 const unsupportedOAuthPort = async (): Promise<never> => {
   throw new Error('This AuthHono port is not used by the Sentropic OAuth host routes.');
@@ -95,8 +87,10 @@ export const createSentropicOAuthOptions = (request?: Request) => ({
   registerUrl: `${resolveOAuthUiBaseUrl(request)}/auth/register`,
   ports: getSentropicOAuthPorts(),
   serviceAccessTokenTtlSeconds: env.OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC,
-  stateCodec: createOAuthHmacStateCodec({ secret: resolveOAuthStateSecret() }),
+  stateCodec: createSentropicOAuthStateCodec(),
 });
+
+export const createSentropicOAuthStateCodec = () => createOAuthHmacStateCodec({ secret: resolveOAuthStateSecret() });
 
 export const resolveOAuthServiceResource = (request?: Request): string =>
   env.OAUTH_SERVICE_RESOURCE_URI
@@ -104,51 +98,28 @@ export const resolveOAuthServiceResource = (request?: Request): string =>
     : resolveOAuthIssuer(request);
 
 const rootDb = db;
-const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
+export const createSentropicOAuthHostPorts = (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts): AuthHonoPorts =>
+  createSentropicOAuthPorts(bindCmAppDatabase(tx), boundPorts, tx);
+const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?: () => AuthHonoPorts,
+  transaction?: CmIdentityTransaction): AuthHonoPorts => {
+  const db = withAppDatabaseMethods(source);
+  return ({
   oauthRefresh: createOAuthRefreshAdapter({
     database: db,
-    portsForDatabase: (tx) => createSentropicOAuthPorts(tx as unknown as typeof db),
+    portsForDatabase: (tx) => boundPorts ? boundPorts() : createSentropicOAuthPorts(tx),
+    transactionBound: Boolean(boundPorts),
   }),
   accountPolicy: {
-    canAuthenticate(user, now) {
-      if (!user.emailVerified) {
-        return {
-          allowed: false,
-          code: 'email_verification_required',
-          message: 'User email must be verified.',
-          status: 401,
-        };
-      }
-      if (user.accountStatus === 'disabled_by_user' || user.accountStatus === 'disabled_by_admin') {
-        return {
-          allowed: false,
-          code: 'account_disabled',
-          message: 'User account is disabled.',
-          status: 403,
-        };
-      }
-      if (user.accountStatus === 'pending_admin_approval' && user.approvalDueAt && now > user.approvalDueAt) {
-        return { allowed: true };
-      }
-      return { allowed: true };
-    },
+    canAuthenticate: unsupportedOAuthPort,
     deriveDisplayName: deriveDisplayNameFromEmail,
     normalizeEmail: (email) => email.trim().toLowerCase(),
-    resolveSessionRole(user, now) {
-      if (user.accountStatus === 'approval_expired_readonly') return 'guest';
-      if (user.accountStatus === 'pending_admin_approval' && user.approvalDueAt && now > user.approvalDueAt) {
-        return 'guest';
-      }
-      return user.role;
-    },
+    resolveSessionRole: unsupportedOAuthPort,
     roleForNewUser: async ({ email }) => {
       const normalizedEmail = email.trim().toLowerCase();
       if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
-        const [{ count }] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(users)
-          .where(eq(users.role, 'admin_app'));
-        return Number(count) === 0 ? 'admin_app' : 'guest';
+        // Lot A4: admin count reads the CM account store (public.users is dropped).
+        const count = await countCmUsersWithRole('admin_app');
+        return count === 0 ? 'admin_app' : 'guest';
       }
       return 'editor';
     },
@@ -163,11 +134,7 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
       };
     },
   },
-  auditLog: {
-    record(level, event, fields) {
-      logger[level]({ ...fields }, event);
-    },
-  },
+  auditLog: { record: unsupportedOAuthPort },
   challenges: {
     create: unsupportedOAuthPort,
     findValid: unsupportedOAuthPort,
@@ -180,7 +147,7 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
   },
   // Consent persistence: lets the IdP skip the consent screen when a stored grant for the
   // exact (user, client) covers the requested scopes; re-consents on any uncovered scope.
-  consentStore: createConsentStoreAdapter({ database: db }),
+  consentStore: createConsentStoreAdapter({ transaction }),
   cookies: authHonoCookiePort,
   credentials: {
     create: unsupportedOAuthPort,
@@ -198,63 +165,26 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
   // BR-39e Lot 0: social/enterprise federation substrate (identities link table + one-time
   // server-side flow-state). Inert for the OAuth-server handlers; wired here so the (Lot 1)
   // federation router consumes the port through the same host ports bag.
-  federation: createFederationAdapter(),
+  federation: createFederationAdapter({ database: db }),
   emailVerification: {
-    async countRecent(email, since) {
-      const [{ count }] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(emailVerificationCodes)
-        .where(and(eq(emailVerificationCodes.email, email), sql`${emailVerificationCodes.createdAt} >= ${since}`));
-      return Number(count);
-    },
+    countRecent: unsupportedOAuthPort,
     createCode: unsupportedOAuthPort,
     findLatestValidCode: unsupportedOAuthPort,
     markUsedWithVerificationToken: unsupportedOAuthPort,
     verifyToken: unsupportedOAuthPort,
   },
-  jwks: createJwksAdapter(),
+  jwks: createJwksAdapter({ database: db }),
   magicLinks: {
     create: unsupportedOAuthPort,
-    async findValidByTokenHash(tokenHash, now) {
-      const [row] = await db
-        .select()
-        .from(magicLinks)
-        .where(and(eq(magicLinks.tokenHash, tokenHash), eq(magicLinks.used, false), sql`${magicLinks.expiresAt} > ${now}`))
-        .limit(1);
-      return row ?? null;
-    },
+    findValidByTokenHash: unsupportedOAuthPort,
     markUsed: unsupportedOAuthPort,
   },
-  oauthStateStore: createOauthStateStoreAdapter({ database: db }),
-  // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint. Mode-gated
-  // on TENANT_RESOLUTION_MODE — no `tid`, no rejection in alias/shadow (byte-identical); strict
-  // validates the `tenant` selector against the client's authorized set (fixed ∪ enrollments).
-  serviceTenant: createServiceTenantAdapter(),
-  // BR-39e: tenancy spine. The tenant claim (`tid`) is derived from an `approved` membership
-  // and re-validated at token time; both reads are tenant-scoped to the calling user.
-  tenant: {
-    async listApprovedTenantIds(userId: string) {
-      const rows = await db
-        .select({ tenantId: tenantMemberships.tenantId })
-        .from(tenantMemberships)
-        .where(and(eq(tenantMemberships.userId, userId), eq(tenantMemberships.status, 'approved')));
-      return rows.map((row) => row.tenantId);
-    },
-    async isApprovedMember(userId: string, tenantId: string) {
-      const [row] = await db
-        .select({ userId: tenantMemberships.userId })
-        .from(tenantMemberships)
-        .where(
-          and(
-            eq(tenantMemberships.userId, userId),
-            eq(tenantMemberships.tenantId, tenantId),
-            eq(tenantMemberships.status, 'approved'),
-          ),
-        )
-        .limit(1);
-      return Boolean(row);
-    },
-  },
+  oauthStateStore: createOauthStateStoreAdapter({ transaction }),
+  // Cutover (P3): the S2S on-behalf-of (OBO) tenant selector is owned by the
+  // cluster mesh (binding `serviceTenancy`, CM issuer over tx.stores). No app
+  // selector survives here: the binding constructs ports.serviceTenant itself
+  // and refuses a hostPorts.serviceTenant entry outright.
+  tenant: createCmOAuthTenantPort(transaction),
   random: {
     bytes: (length) => new Uint8Array(randomBytes(length)),
     numericCode: (length) =>
@@ -263,188 +193,22 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
     uuid: randomUUID,
   },
   sessions: {
-    async create(input) {
-      await db.insert(userSessions).values({
-        createdAt: input.now,
-        deviceName: input.deviceInfo?.name ?? null,
-        expiresAt: input.expiresAt,
-        id: input.id,
-        ipAddress: input.deviceInfo?.ipAddress ?? null,
-        lastActivityAt: input.now,
-        mfaVerified: input.mfaVerified ?? false,
-        refreshTokenHash: input.refreshTokenHash ?? null,
-        sessionTokenHash: input.sessionTokenHash,
-        userAgent: input.deviceInfo?.userAgent ?? null,
-        userId: input.userId,
-      });
-      const created = await findSessionById(input.id);
-      if (!created) throw new Error('Failed to create session.');
-      return created;
-    },
-    findById: findSessionById,
-    findByRefreshTokenHash: (refreshTokenHash) => findSessionByHash('refresh', refreshTokenHash),
-    findByTokenHash: (sessionTokenHash) => findSessionByHash('session', sessionTokenHash),
-    listForUser: async (userId) => {
-      const rows = await db.select().from(userSessions).where(eq(userSessions.userId, userId));
-      return rows.map(toAuthHonoSessionRecord);
-    },
-    async revoke(sessionId) {
-      const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ sessionId });
-      await tombstoneRemoteSessions(input, key);
-      return deleted.length > 0;
-    },
-    async revokeAllForUser(userId) {
-      const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ userId });
-      await tombstoneRemoteSessions(input, key);
-      return deleted.length;
-    },
-    async touch(sessionId, now) {
-      await db.update(userSessions).set({ lastActivityAt: now }).where(eq(userSessions.id, sessionId));
-    },
-    async updateTokens(input) {
-      const [row] = await db
-        .update(userSessions)
-        .set({
-          expiresAt: input.expiresAt,
-          lastActivityAt: new Date(),
-          refreshTokenHash: input.refreshTokenHash,
-          sessionTokenHash: input.sessionTokenHash,
-        })
-        .where(eq(userSessions.id, input.sessionId))
-        .returning();
-      return row ? toAuthHonoSessionRecord(row) : null;
-    },
+    // Only the CM binding supplies session authority; this host bag is protocol configuration.
+    create: unsupportedOAuthPort, findById: unsupportedOAuthPort,
+    findByRefreshTokenHash: unsupportedOAuthPort, findByTokenHash: unsupportedOAuthPort,
+    listForUser: unsupportedOAuthPort, revoke: unsupportedOAuthPort,
+    revokeAllForUser: unsupportedOAuthPort, touch: unsupportedOAuthPort, updateTokens: unsupportedOAuthPort,
   },
   tokens: {
-    hashSecret: (secret) => createHash('sha256').update(secret).digest('hex'),
-    async signSessionToken(claims, expiresAt) {
-      return new SignJWT({ ...claims })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setJti(randomUUID())
-        .setIssuedAt()
-        .setExpirationTime(expiresAt)
-        .sign(JWT_SECRET);
-    },
-    async signVerificationToken({ email, expiresAt }) {
-      return new SignJWT({ email })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setJti(randomUUID())
-        .setIssuedAt()
-        .setExpirationTime(expiresAt)
-        .sign(JWT_SECRET);
-    },
-    async verifySessionToken(token) {
-      try {
-        const { payload } = await jwtVerify(token, JWT_SECRET);
-        if (
-          typeof payload.userId !== 'string' ||
-          typeof payload.sessionId !== 'string' ||
-          typeof payload.role !== 'string'
-        ) {
-          return null;
-        }
-        return {
-          displayName: typeof payload.displayName === 'string' ? payload.displayName : null,
-          email: typeof payload.email === 'string' ? payload.email : null,
-          role: payload.role,
-          sessionId: payload.sessionId,
-          userId: payload.userId,
-        };
-      } catch {
-        return null;
-      }
-    },
+    hashSecret: unsupportedOAuthPort, signSessionToken: unsupportedOAuthPort,
+    signVerificationToken: unsupportedOAuthPort, verifySessionToken: unsupportedOAuthPort,
   },
   users: {
-    async count() {
-      const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
-      return Number(count);
-    },
-    async create(input) {
-      const now = new Date();
-      const id = randomUUID();
-      await db.insert(users).values({
-        accountStatus: input.accountStatus ?? 'active',
-        approvalDueAt: input.approvalDueAt ?? null,
-        createdAt: now,
-        displayName: input.displayName ?? null,
-        email: input.email,
-        emailVerified: input.emailVerified ?? false,
-        id,
-        role: input.role,
-        updatedAt: now,
-      });
-      const user = await findUserById(id);
-      if (!user) throw new Error('Failed to create user.');
-      return user;
-    },
-    findByEmail: async (email) => {
-      const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-      return row ? toAuthHonoUserRecord(row) : null;
-    },
-    findById: async (userId) => {
-      const [row] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-      return row ? toAuthHonoUserRecord(row) : null;
-    },
-    async update(userId, input) {
-      const [row] = await db
-        .update(users)
-        .set({
-          ...input,
-          updatedAt: input.updatedAt ?? new Date(),
-        })
-        .where(eq(users.id, userId))
-        .returning();
-      return row ? toAuthHonoUserRecord(row) : null;
-    },
+    count: unsupportedOAuthPort, create: unsupportedOAuthPort,
+    findByEmail: unsupportedOAuthPort, findById: unsupportedOAuthPort, update: unsupportedOAuthPort,
   },
-});
-
-const findUserById = async (userId: string): Promise<AuthHonoUserRecord | null> => {
-  const [row] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  return row ? toAuthHonoUserRecord(row) : null;
+  });
 };
-
-const findSessionById = async (sessionId: string): Promise<AuthHonoSessionRecord | null> => {
-  const [row] = await db.select().from(userSessions).where(eq(userSessions.id, sessionId)).limit(1);
-  return row ? toAuthHonoSessionRecord(row) : null;
-};
-
-const findSessionByHash = async (
-  hashType: 'refresh' | 'session',
-  tokenHash: string,
-): Promise<AuthHonoSessionRecord | null> => {
-  const column = hashType === 'refresh' ? userSessions.refreshTokenHash : userSessions.sessionTokenHash;
-  const [row] = await db.select().from(userSessions).where(eq(column, tokenHash)).limit(1);
-  return row ? toAuthHonoSessionRecord(row) : null;
-};
-
-const toAuthHonoUserRecord = (row: typeof users.$inferSelect): AuthHonoUserRecord => ({
-  accountStatus: row.accountStatus as AuthHonoAccountStatus,
-  approvalDueAt: row.approvalDueAt,
-  createdAt: row.createdAt,
-  displayName: row.displayName,
-  email: row.email,
-  emailVerified: row.emailVerified,
-  id: row.id,
-  role: row.role,
-  updatedAt: row.updatedAt ?? row.createdAt,
-});
-
-const toAuthHonoSessionRecord = (row: typeof userSessions.$inferSelect): AuthHonoSessionRecord => ({
-  createdAt: row.createdAt,
-  deviceName: row.deviceName,
-  expiresAt: row.expiresAt,
-  id: row.id,
-  ipAddress: row.ipAddress,
-  lastActivityAt: row.lastActivityAt ?? row.createdAt,
-  mfaVerified: row.mfaVerified,
-  refreshTokenHash: row.refreshTokenHash,
-  revokedAt: null,
-  sessionTokenHash: row.sessionTokenHash,
-  userAgent: row.userAgent,
-  userId: row.userId,
-});
 
 /**
  * OAuth state sealing secret. `OAUTH_SIGNING_KEK` takes precedence over `JWT_SECRET` so that

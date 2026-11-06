@@ -1,3 +1,4 @@
+import { AsyncResource } from 'node:async_hooks';
 import type { Notification } from 'pg';
 
 import { pool } from '../../db/client';
@@ -11,7 +12,9 @@ export const productStreamsNotificationsPort: StreamsNotificationsPort = {
       throw new Error('invalid stream notification channel');
     }
     const client = await pool.connect();
-    const listener = (notification: Notification) => onNotification(notification);
+    // A pooled socket can retain another request's expired identity scope.
+    // Dispatch in the subscriber's context so live reads open their own UOW.
+    const listener = AsyncResource.bind((notification: Notification) => onNotification(notification));
     client.on('notification', listener);
     try {
       for (const channel of channels) await client.query(`LISTEN ${channel}`);

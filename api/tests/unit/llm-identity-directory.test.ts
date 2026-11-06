@@ -2,7 +2,25 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, inArray, like } from 'drizzle-orm';
 
 import { db } from '../../src/db/client';
-import { serviceClients, tenantMemberships, tenants, users, workspaceMemberships, workspaces } from '../../src/db/schema';
+import { serviceClients, workspaces } from '../../src/db/schema';
+import { createCmUser } from '../../src/services/identity/cm-users';
+import { bindCmServiceClientTenant } from '../../src/services/identity/cm-service-clients';
+import { runCmIdentityWrite } from '../../src/services/identity/cm-transaction';
+import {
+  createCmTenant,
+  enrolCmWorkspace,
+  putCmWorkspaceMember,
+  removeCmWorkspaceMember,
+  setCmMembershipState,
+  setCmTenantStatus,
+} from '../../src/services/identity/cm-tenancy';
+import {
+  cmDeleteForUsers,
+  cmDeleteTenantMembershipsForTenant,
+  cmDeleteTenants,
+  cmDeleteWorkspaceMembersForUser,
+  cmQuery, cmTable,
+} from '../utils/cm-identity-test-store';
 import {
   createLlmCallerIdentity,
   createTrustedOwnerMapping,
@@ -41,28 +59,35 @@ const service = (overrides: Partial<ServiceCallerIdentity> = {}): ServiceCallerI
 const session = (userId = USER) => ({ kind: 'session' as const, userId, sessionId: `session-${userId}` });
 
 const seed = async () => {
-  await db.insert(tenants).values([
-    { id: TENANT, name: TENANT, status: 'active' },
-    { id: OTHER_TENANT, name: OTHER_TENANT, status: 'active' },
-  ]);
-  await db.insert(users).values({ id: USER, email: `${USER}@example.test` });
+  await createCmTenant({ tenantId: TENANT, slug: TENANT, status: 'active' });
+  await createCmTenant({ tenantId: OTHER_TENANT, slug: OTHER_TENANT, status: 'active' });
+  await createCmUser({ userId: USER, email: `${USER}@example.test`, role: 'editor', emailVerified: true, accountStatus: 'active' });
   await db.insert(workspaces).values([
-    { id: WS, name: WS, tenantId: TENANT },
-    { id: WS_2, name: WS_2, tenantId: TENANT },
-    { id: WS_OTHER, name: WS_OTHER, tenantId: OTHER_TENANT },
+    { id: WS, name: WS },
+    { id: WS_2, name: WS_2 },
+    { id: WS_OTHER, name: WS_OTHER },
   ]);
-  await db.insert(tenantMemberships).values({ tenantId: TENANT, userId: USER, status: 'approved' });
-  await db.insert(workspaceMemberships).values({ workspaceId: WS, userId: USER, role: 'editor' });
+  await enrolCmWorkspace({ workspaceId: WS, tenantId: TENANT });
+  await enrolCmWorkspace({ workspaceId: WS_2, tenantId: TENANT });
+  await enrolCmWorkspace({ workspaceId: WS_OTHER, tenantId: OTHER_TENANT });
+  await setCmMembershipState(USER, TENANT, { status: 'approved', decidedBy: 'llm-identity-test' });
+  await putCmWorkspaceMember(WS, USER, 'editor');
   await db.insert(serviceClients).values({
-    id: CLIENT, clientId: CLIENT, clientSecretHash: 'x', allowedScopes: ['gateway:invoke'], tenantId: TENANT,
+    id: CLIENT, clientId: CLIENT, clientSecretHash: 'x', allowedScopes: ['gateway:invoke'],
   });
+  await runCmIdentityWrite(tx => bindCmServiceClientTenant(tx, CLIENT, TENANT));
 };
 
 const cleanup = async () => {
   await db.delete(serviceClients).where(like(serviceClients.clientId, `llmid-${run}-%`));
+  await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT]);
+  await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = ANY($1)`, [[WS, WS_2, WS_OTHER]]);
   await db.delete(workspaces).where(inArray(workspaces.id, [WS, WS_2, WS_OTHER]));
-  await db.delete(users).where(eq(users.id, USER));
-  await db.delete(tenants).where(inArray(tenants.id, [TENANT, OTHER_TENANT]));
+  await cmDeleteWorkspaceMembersForUser(USER);
+  await cmDeleteForUsers([USER]);
+  await cmDeleteTenantMembershipsForTenant(TENANT);
+  await cmDeleteTenantMembershipsForTenant(OTHER_TENANT);
+  await cmDeleteTenants([TENANT, OTHER_TENANT]);
 };
 
 beforeEach(async () => {
@@ -80,31 +105,32 @@ describe('LLM identity directory — session users (existing memberships)', () =
   });
 
   it('refuses an ambiguous membership set without a trusted selection', async () => {
-    await db.insert(workspaceMemberships).values({ workspaceId: WS_2, userId: USER, role: 'viewer' });
+    await putCmWorkspaceMember(WS_2, USER, 'viewer');
     await expect(identity().resolveSessionPrincipal(session())).resolves.toBeUndefined();
   });
 
   it('observes a revoked tenant membership on the next admission (no cache)', async () => {
     const resolver = identity();
     await expect(resolver.resolveSessionPrincipal(session())).resolves.toBeDefined();
-    await db.update(tenantMemberships).set({ status: 'suspended' }).where(eq(tenantMemberships.userId, USER));
+    await setCmMembershipState(USER, TENANT, { status: 'suspended', decidedBy: 'llm-identity-test' });
     await expect(resolver.resolveSessionPrincipal(session())).resolves.toBeUndefined();
   });
 
   it('observes a removed workspace membership and refuses a user without memberships', async () => {
     const resolver = identity();
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.userId, USER));
+    await removeCmWorkspaceMember(WS, USER);
+    await cmDeleteWorkspaceMembersForUser(USER);
     await expect(resolver.resolveSessionPrincipal(session())).resolves.toBeUndefined();
     await expect(resolver.resolveSessionPrincipal(session(id('unknown')))).resolves.toBeUndefined();
   });
 
   it('ignores workspaces whose tenant the user is not an approved member of, hidden or suspended', async () => {
-    await db.insert(workspaceMemberships).values({ workspaceId: WS_OTHER, userId: USER, role: 'admin' });
+    await putCmWorkspaceMember(WS_OTHER, USER, 'admin');
     await expect(identity().resolveSessionPrincipal(session())).resolves.toMatchObject({ workspaceId: WS });
     await db.update(workspaces).set({ hiddenAt: new Date() }).where(eq(workspaces.id, WS));
     await expect(identity().resolveSessionPrincipal(session())).resolves.toBeUndefined();
     await db.update(workspaces).set({ hiddenAt: null }).where(eq(workspaces.id, WS));
-    await db.update(tenants).set({ status: 'suspended' }).where(eq(tenants.id, TENANT));
+    await setCmTenantStatus(TENANT, 'suspended');
     await expect(identity().resolveSessionPrincipal(session())).resolves.toBeUndefined();
   });
 
@@ -117,7 +143,7 @@ describe('LLM identity directory — session users (existing memberships)', () =
   });
 });
 
-describe('LLM identity directory — service clients (service_clients.tenant_id)', () => {
+describe('LLM identity directory — CM service-client tenant bindings', () => {
   it('attributes to the service identity, never to a user id', async () => {
     const principal = await identity().resolveServicePrincipal(service());
     expect(principal).toEqual({
@@ -130,9 +156,10 @@ describe('LLM identity directory — service clients (service_clients.tenant_id)
     const resolver = identity();
     await db.update(serviceClients).set({ revokedAt: new Date() }).where(eq(serviceClients.clientId, CLIENT));
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
-    await db.update(serviceClients).set({ revokedAt: null, tenantId: null }).where(eq(serviceClients.clientId, CLIENT));
+    await db.update(serviceClients).set({ revokedAt: null }).where(eq(serviceClients.clientId, CLIENT));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT]);
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
-    await db.update(serviceClients).set({ tenantId: OTHER_TENANT }).where(eq(serviceClients.clientId, CLIENT));
+    await runCmIdentityWrite(tx => bindCmServiceClientTenant(tx, CLIENT, OTHER_TENANT));
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
     await db.delete(serviceClients).where(eq(serviceClients.clientId, CLIENT));
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
@@ -165,7 +192,7 @@ describe('LLM identity directory — service clients (service_clients.tenant_id)
 
 describe('LLM identity directory — outage and configuration', () => {
   it('turns a database outage into a sanitized unavailable error, never an allow', async () => {
-    const broken = createLlmIdentityDirectory({ select: () => { throw new Error('ECONNREFUSED postgres://secret'); } } as never);
+    const broken = createLlmIdentityDirectory(() => ({ select: () => { throw new Error('ECONNREFUSED postgres://secret'); } } as never));
     const resolver = createLlmCallerIdentity({ directory: broken, config: config() });
     for (const attempt of [resolver.resolveServicePrincipal(service()), resolver.resolveSessionPrincipal(session())]) {
       const error = await attempt.catch((caught: unknown) => caught);

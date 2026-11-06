@@ -8,6 +8,7 @@ import { Pool } from 'pg';
 import { S3Client } from '@aws-sdk/client-s3';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
 import { runMigrations } from '../../../api/src/db/run-migrations';
+import { seedCmArtifactIdentity } from '../../../api/tests/utils/cm-artifact-fixture';
 import { createArtifactReaderActivation } from '../../../api/src/services/artifacts/reader-activation';
 import { createContentRuntime } from '../src/runtime';
 import { startContentServer } from '../src/index';
@@ -49,13 +50,10 @@ beforeAll(async () => {
   pool = new Pool({ connectionString: url.toString() });
   pool.on('connect', client => ends.push(new Promise<void>(resolve => client.once('end', resolve))));
   await runMigrations(pool);
-  await pool.query(`INSERT INTO users(id,role,account_status) VALUES ('reader','editor','active'),('owner','editor','active');
-    INSERT INTO tenants(id,name) VALUES ('tenant','Tenant');
-    INSERT INTO workspaces(id,name,tenant_id) VALUES ('workspace','Workspace','tenant');
-    INSERT INTO tenant_memberships(tenant_id,user_id,status) VALUES ('tenant','reader','approved');
-    INSERT INTO workspace_memberships(workspace_id,user_id,role) VALUES ('workspace','reader','viewer');
-    INSERT INTO user_sessions(id,user_id,session_token_hash,expires_at)
-      VALUES ('session','reader','session-hash',clock_timestamp()+interval '1 hour')`);
+  // Lot A4: identity lives in the cm_identity stores (control migration 0015 drops the
+  // legacy users/tenants/memberships/sessions tables); same fixture as the ported host suites.
+  await seedCmArtifactIdentity(pool, { userId: 'reader', otherUsers: ['owner'],
+    tenantId: 'tenant', workspaceId: 'workspace', role: 'viewer', sessionIds: ['session'] });
   await pool.query(`INSERT INTO control.artifact_host_kv(storage_scope_id,key,value) VALUES ($1,$2,$3)`,
     ['app-artifact-scopes/v1', JSON.stringify(['tenant','workspace']), scope]);
   await pool.query(`INSERT INTO artifacts.storage_scopes(id,org_id) VALUES ($1,'tenant')`, [scope]);
@@ -93,15 +91,15 @@ describe('durable app content composition', () => {
       await pool.query(`UPDATE artifacts.storage_scopes SET org_id='tenant' WHERE id=$1`, [scope]);
     }
     expect((await read()).status).toBe(200);
-    await pool.query(`DELETE FROM workspace_memberships WHERE user_id='reader'`);
+    await pool.query(`DELETE FROM cm_identity.cm_workspace_members WHERE workspace_id='workspace' AND user_id='reader'`);
     expect((await read()).status).toBe(404);
-    await pool.query(`INSERT INTO workspace_memberships(workspace_id,user_id,role) VALUES ('workspace','reader','viewer')`);
+    await pool.query(`INSERT INTO cm_identity.cm_workspace_members(workspace_id,user_id,role) VALUES ('workspace','reader','viewer')`);
     await pool.query(`DELETE FROM artifacts.artifact_access WHERE principal_id='reader'`);
     expect((await read()).status).toBe(404);
     await pool.query(`INSERT INTO artifacts.artifact_access(artifact_id,principal_id,permission) VALUES ($1,'reader','read')`, [artifactId]);
     for (const [deny, restore] of [
-      [`UPDATE users SET disabled_at=clock_timestamp() WHERE id='reader'`, `UPDATE users SET disabled_at=NULL WHERE id='reader'`],
-      [`UPDATE tenant_memberships SET status='pending' WHERE user_id='reader'`, `UPDATE tenant_memberships SET status='approved' WHERE user_id='reader'`],
+      [`UPDATE cm_identity.identity_account_profiles SET disabled_at=clock_timestamp() WHERE user_id='reader'`, `UPDATE cm_identity.identity_account_profiles SET disabled_at=NULL WHERE user_id='reader'`],
+      [`UPDATE cm_identity.cm_tenant_memberships SET status='pending' WHERE user_id='reader'`, `UPDATE cm_identity.cm_tenant_memberships SET status='approved' WHERE user_id='reader'`],
       [`UPDATE artifacts.artifacts SET lifecycle_state='withdrawn' WHERE id='${artifactId}'`, `UPDATE artifacts.artifacts SET lifecycle_state='active' WHERE id='${artifactId}'`],
       [`UPDATE artifacts.releases SET state='purged' WHERE id='${releaseId}'`, `UPDATE artifacts.releases SET state='ready' WHERE id='${releaseId}'`],
     ]) {

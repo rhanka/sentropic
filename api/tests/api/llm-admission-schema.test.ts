@@ -11,6 +11,7 @@ import { Pool } from 'pg';
 
 import { env } from '../../src/config/env';
 import { db } from '../../src/db/client';
+import { migrateCmFixtureDatabase } from '../utils/cm-fresh-database';
 
 // G1a (BRDP-EX5): migration 0008 is expand-first, its constraints hold, pricing non-overlap is
 // enforced by the B0-A4 single-writer protocol, and a disposable upgrade keeps historical rows.
@@ -274,7 +275,9 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
     return folder;
   };
   const upgradedState = async (pool: Pool) => ({
-    migrations: Number((await query(pool, 'SELECT count(*) AS n FROM public.__drizzle_control_migrations'))[0].n),
+    // The journal table also carries artifact-package asset receipts in the negative
+    // created_at namespace; count only real control migrations, like the app runner does.
+    migrations: Number((await query(pool, 'SELECT count(*) AS n FROM public.__drizzle_control_migrations WHERE created_at >= 0'))[0].n),
     tables: (await query(pool, `SELECT table_name FROM information_schema.tables WHERE table_schema = 'control'
       AND table_name IN ('${NEW_TABLES.join("','")}') ORDER BY table_name`)).map((row) => row.table_name),
     newRows: Number((await query(pool, `SELECT (SELECT count(*) FROM control.budgets) + (SELECT count(*) FROM control.model_pricing)
@@ -307,7 +310,11 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
     await db.execute(sql.raw(`CREATE DATABASE "${names.backup}" TEMPLATE "${names.upgrade}"`));
 
     pool = open(names.upgrade);
-    await migrate(drizzle(pool), control(CONTROL_DIR));
+    // The full control chain now crosses the A4 cutover migration, whose bound
+    // import checkpoint only the app runner provides: raw drizzle migrate would
+    // fail its gate. The fixture prepares that checkpoint, then the app runner
+    // applies the pending entries (0008..0015).
+    await migrateCmFixtureDatabase(pool);
     const upgraded = await upgradedState(pool);
     // The Decision host migration adds two native prices while preserving historical financial rows.
     expect(upgraded).toEqual({ migrations: journal.entries.length, tables: NEW_TABLES, newRows: 2, attributed: 0, ledger: history });
@@ -349,7 +356,7 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
     expect(Number((await query(backup, 'SELECT count(*) AS n FROM public.__drizzle_control_migrations'))[0].n)).toBe(8);
     expect(await query(backup, `SELECT to_regclass('control.budgets') AS t`)).toEqual([{ t: null }]);
     expect(await query(backup, LEDGER)).toEqual(history);
-    await migrate(drizzle(backup), control(CONTROL_DIR));
+    await migrateCmFixtureDatabase(backup);
     expect(await upgradedState(backup)).toEqual(upgraded);
     await close(backup);
 

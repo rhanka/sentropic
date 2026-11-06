@@ -1,18 +1,32 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import {
-  generateMagicLink,
-  sendMagicLinkEmail,
-  verifyMagicLink,
-} from '../../../src/services/magic-link';
-import { db } from '../../../src/db/client';
-import { magicLinks, users } from '../../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { withAppCmAuth } from '../../../src/services/identity/cm-auth-runtime';
+import { sendCmDeferredMail } from '../../../src/services/identity/cm-auth-mail';
+import { createCmUser, findCmUserById } from '../../../src/services/identity/cm-users';
+import { createCmMagicLink, findCmMagicLinkByTokenHash, sha256Hex } from '../../../src/services/identity/cm-proofs';
+import { cmPurgeAllIdentity } from '../../utils/cm-identity-test-store';
 
 const sendTransactionalEmailMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../../src/services/scw-tem-client', () => ({
   sendTransactionalEmail: sendTransactionalEmailMock,
 }));
+
+const generateMagicLink = async (input: { email: string; userId?: string }) => {
+  const outcome = await withAppCmAuth(runner => runner.complete('magic_link_issue', binding =>
+    binding.magicLink.requestMagicLink(input)));
+  if (!outcome.committed || !outcome.value.success) throw new Error('Magic-link fixture issuance failed');
+  const text = sendTransactionalEmailMock.mock.calls.at(-1)?.[0]?.text;
+  const url = typeof text === 'string' ? text.match(/https?:\/\/[^\s]+/)?.[0] : undefined;
+  const token = url ? new URL(url).searchParams.get('token') : null;
+  if (!token) throw new Error('Committed magic-link mail was not delivered');
+  return { token, expiresAt: outcome.value.expiresAt };
+};
+const verifyMagicLink = async (token: string) => {
+  const outcome = await withAppCmAuth(runner => runner.complete('magic_link', binding =>
+    binding.magicLink.verifyMagicLink({ token })));
+  if (!outcome.committed || !outcome.value.valid) return { valid: false as const, userId: undefined, email: undefined };
+  return { valid: true as const, userId: outcome.value.user.id, email: outcome.value.user.email };
+};
 
 describe('Magic Link Service', () => {
   beforeEach(() => {
@@ -21,8 +35,7 @@ describe('Magic Link Service', () => {
   });
 
   afterEach(async () => {
-    await db.delete(magicLinks);
-    await db.delete(users);
+    await cmPurgeAllIdentity();
   });
 
   describe('generateMagicLink', () => {
@@ -43,21 +56,20 @@ describe('Magic Link Service', () => {
       const { token } = await generateMagicLink({ email: 'test@example.com' });
       
       // Token should not be stored in plain text
-      const [record] = await db
-        .select()
-        .from(magicLinks)
-        .limit(1);
+      const record = await findCmMagicLinkByTokenHash(sha256Hex(token));
       
       expect(record).toBeDefined();
-      expect(record.tokenHash).not.toBe(token);
-      expect(record.email).toBe('test@example.com');
-      expect(record.used).toBe(false);
+      expect(record?.tokenHash).not.toBe(token);
+      expect(record?.email).toBe('test@example.com');
+      expect(record?.used).toBe(false);
     });
   });
 
   describe('sendMagicLinkEmail', () => {
     it('should brand the magic-link email as Sentropic', async () => {
-      await sendMagicLinkEmail('test@example.com', 'https://sentropic.sent-tech.ca/auth/magic-link/verify?token=abc');
+      await sendCmDeferredMail({ kind: 'magic_link', email: 'test@example.com', token: 'abc',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        url: 'https://sentropic.sent-tech.ca/auth/magic-link/verify?token=abc' });
 
       expect(sendTransactionalEmailMock).toHaveBeenCalledWith(expect.objectContaining({
         to: 'test@example.com',
@@ -80,33 +92,21 @@ describe('Magic Link Service', () => {
       expect(result.email).toBe('newuser@example.com');
       
       // User should be created
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, result.userId!))
-        .limit(1);
+      const user = await findCmUserById(result.userId!);
       
       expect(user).toBeDefined();
-      expect(user.email).toBe('newuser@example.com');
-      expect(user.emailVerified).toBe(true);
+      expect(user?.email).toBe('newuser@example.com');
+      expect(user?.emailVerified).toBe(true);
       // New users get immediate access (editor) but are pending admin approval
-      expect(user.role).toBe('editor');
-      expect(user.accountStatus).toBe('pending_admin_approval');
-      expect(user.approvalDueAt).toBeInstanceOf(Date);
+      expect(user?.role).toBe('editor');
+      expect(user?.accountStatus).toBe('pending_admin_approval');
+      expect(user?.approvalDueAt).toBeInstanceOf(Date);
     });
 
     it('should verify magic link for existing user', async () => {
       // Create user first
       const userId = crypto.randomUUID();
-      await db.insert(users).values({
-        id: userId,
-        email: 'existing@example.com',
-        displayName: 'Existing User',
-        role: 'editor',
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await createCmUser({ userId, email: 'existing@example.com', displayName: 'Existing User', role: 'editor', emailVerified: true, accountStatus: 'active' });
       
       const { token } = await generateMagicLink({ 
         email: 'existing@example.com',
@@ -125,8 +125,10 @@ describe('Magic Link Service', () => {
     });
 
     it('should reject expired magic link', async () => {
-      // This would require mocking time or waiting 15+ minutes
-      // Skipped for now - tested in integration tests
+      const token = 'expired-synthetic-magic-link';
+      await createCmMagicLink({ email: 'expired@example.test', tokenHash: sha256Hex(token),
+        now: new Date(Date.now() - 601_000), expiresAt: new Date(Date.now() - 1000) });
+      expect((await verifyMagicLink(token)).valid).toBe(false);
     });
 
     it('should reject used magic link', async () => {

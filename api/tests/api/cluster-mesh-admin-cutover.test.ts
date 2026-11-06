@@ -12,9 +12,7 @@ import {
 } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { users } from '../../src/db/schema';
-import { requireAuth } from '../../src/middleware/auth';
-import { requireAdmin, requireRole } from '../../src/middleware/rbac';
+import { findCmUserById, updateCmUser } from '../../src/services/identity/cm-users';
 import type { AdminCutoverControl } from '../../src/routes/namespaces/admin-cutover';
 import {
   ADMIN_APP_PATHS,
@@ -34,28 +32,11 @@ import {
   resetTenantResolutionMetrics,
 } from '../../src/services/tenancy/tenant-resolution-metrics';
 import {
-  adminRouter as historicalAdminRouter,
-  tenantResolutionMetricsRouter as historicalTenantMetricsRouter,
-} from '../fixtures/historical/admin-e338673c1/api/src/routes/api/admin';
-import {
   authenticatedRequest,
   cleanupAuthData,
   createAuthenticatedUser,
   type TestUser,
 } from '../utils/auth-helper';
-
-const historicalAdminApp = requireRole('admin_app');
-const historical = new Hono()
-  .on('GET', '/api/v1/admin/tenant-resolution-metrics', requireAuth, requireAdmin)
-  .route('/api/v1/admin/tenant-resolution-metrics', historicalTenantMetricsRouter)
-  .on('POST', '/api/v1/admin/reset', requireAuth, historicalAdminApp)
-  .on('GET', '/api/v1/admin/stats', requireAuth, historicalAdminApp)
-  .on('GET', '/api/v1/admin/users', requireAuth, historicalAdminApp)
-  .on('POST', '/api/v1/admin/users/:id/approve', requireAuth, historicalAdminApp)
-  .on('POST', '/api/v1/admin/users/:id/disable', requireAuth, historicalAdminApp)
-  .on('POST', '/api/v1/admin/users/:id/reactivate', requireAuth, historicalAdminApp)
-  .on('DELETE', '/api/v1/admin/users/:id', requireAuth, historicalAdminApp)
-  .route('/api/v1/admin', historicalAdminRouter);
 
 const key = { compositionRoot: 'product' as const, namespace: '/admin' as const };
 const cutovers = new PostgresClusterMeshCutoverStore();
@@ -105,7 +86,7 @@ describe('cluster mesh admin cutover', () => {
     vi.restoreAllMocks();
   });
 
-  it('pins the executable predecessor source and unchanged authority bridges', () => {
+  it('preserves the archived predecessor bytes after retiring its identity writer', () => {
     const source = readFileSync(new URL(`${fixtureRoot}/routes/api/admin.ts`, import.meta.url));
     expect(createHash('sha1').update(`blob ${source.byteLength}\0`).update(source).digest('hex'))
       .toBe('71ec3755c976b796fc12ffaaa7f6009ba1b24971');
@@ -113,12 +94,6 @@ describe('cluster mesh admin cutover', () => {
       const bridge = readFileSync(new URL(`${fixtureRoot}/${path}`, import.meta.url));
       expect(createHash('sha256').update(bridge).digest('hex'), path).toBe(digest);
     }
-    expect(historical.routes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ method: 'GET', path: '/api/v1/admin/stats' }),
-      expect.objectContaining({
-        method: 'GET', path: '/api/v1/admin/tenant-resolution-metrics', handler: requireAdmin,
-      }),
-    ]));
   });
 
   it('constructs only with every explicit product authority port', () => {
@@ -131,43 +106,37 @@ describe('cluster mesh admin cutover', () => {
 
   it('executes seeded authenticated admin and tenant safe reads over authoritative state', async () => {
     const pending = await createAuthenticatedUser('editor');
-    await db.update(users).set({
+    await updateCmUser(pending.id, {
       accountStatus: 'pending_admin_approval',
-      approvalDueAt: new Date('2026-09-04T00:00:00.000Z'),
-      updatedAt: new Date('2026-09-02T00:00:00.000Z'),
-    }).where(eq(users.id, pending.id));
+      approvalDueAt: new Date(Date.now() + 86_400_000),
+      updatedAt: new Date(),
+    });
     recordTenantResolution('d11-admin-safe-read');
 
-    const reads = [
-      {
-        path: '/api/v1/admin/users?status=pending_admin_approval',
-        token: appAdmin.sessionToken!,
-      },
-      {
-        path: '/api/v1/admin/tenant-resolution-metrics',
-        token: tenantAdmin.sessionToken!,
-      },
-    ];
-    for (const { path, token } of reads) {
-      const invoke = (app: Hono) => authenticatedRequest(app, 'GET', path, token);
-      const legacy = await invoke(historical);
-      const active = await invoke(candidate());
-      expect({ status: active.status, body: await active.text() }, path)
-        .toEqual({ status: legacy.status, body: await legacy.text() });
-    }
+    const listing = await authenticatedRequest(candidate(), 'GET',
+      '/api/v1/admin/users?status=pending_admin_approval', appAdmin.sessionToken!);
+    expect(listing.status).toBe(200);
+    const { items } = await listing.json();
+    expect(items).toEqual(expect.arrayContaining([expect.objectContaining({
+      id: pending.id, email: pending.email, role: 'editor', accountStatus: 'pending_admin_approval' })]));
+    expect(items.every((item: { accountStatus: string }) => item.accountStatus === 'pending_admin_approval')).toBe(true);
+    const metrics = await authenticatedRequest(candidate(), 'GET',
+      '/api/v1/admin/tenant-resolution-metrics', tenantAdmin.sessionToken!);
+    expect(metrics.status).toBe(200);
+    expect(await metrics.json()).toEqual({ total: { 'd11-admin-safe-read': 1 }, divergence: {} });
   });
 
-  it('performs isolated authoritative candidate and historical approval mutations', async () => {
+  it('approves through CM without changing another pending account', async () => {
     const candidateTarget = await createAuthenticatedUser('editor');
     const historicalTarget = await createAuthenticatedUser('editor');
     const pendingState = {
       accountStatus: 'pending_admin_approval' as const,
-      approvalDueAt: new Date('2026-09-04T00:00:00.000Z'),
+      approvalDueAt: new Date(Date.now() + 86_400_000),
       approvedAt: null,
       approvedByUserId: null,
     };
-    await db.update(users).set(pendingState).where(eq(users.id, candidateTarget.id));
-    await db.update(users).set(pendingState).where(eq(users.id, historicalTarget.id));
+    await updateCmUser(candidateTarget.id, pendingState);
+    await updateCmUser(historicalTarget.id, pendingState);
     const approve = (app: Hono, userId: string) => authenticatedRequest(
       app,
       'POST',
@@ -179,10 +148,8 @@ describe('cluster mesh admin cutover', () => {
     const active = await approve(candidate(), candidateTarget.id);
     expect({ status: active.status, body: await active.json() })
       .toEqual({ status: 200, body: { success: true } });
-    const [candidateRow] = await db.select().from(users)
-      .where(eq(users.id, candidateTarget.id)).limit(1);
-    const [untouchedHistoricalRow] = await db.select().from(users)
-      .where(eq(users.id, historicalTarget.id)).limit(1);
+    const candidateRow = await findCmUserById(candidateTarget.id);
+    const untouchedHistoricalRow = await findCmUserById(historicalTarget.id);
     expect(candidateRow).toMatchObject({
       role: 'guest', accountStatus: 'active', approvedByUserId: appAdmin.id,
     });
@@ -191,15 +158,6 @@ describe('cluster mesh admin cutover', () => {
       role: 'editor', accountStatus: 'pending_admin_approval', approvedByUserId: null,
     });
 
-    const legacy = await approve(historical, historicalTarget.id);
-    expect({ status: legacy.status, body: await legacy.json() })
-      .toEqual({ status: 200, body: { success: true } });
-    const [historicalRow] = await db.select().from(users)
-      .where(eq(users.id, historicalTarget.id)).limit(1);
-    expect(historicalRow).toMatchObject({
-      role: 'guest', accountStatus: 'active', approvedByUserId: appAdmin.id,
-    });
-    expect(historicalRow.approvedAt).toBeInstanceOf(Date);
   });
 
   it('selects one direct author and fails closed after the exact rollback checkpoint', async () => {

@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
+import { logger } from '../../../logger';
 
 import { createFederationBroker } from '../../../services/auth/federation/broker';
 import { pendingFederationStore } from '../../../services/auth/federation/pending-store';
@@ -15,9 +16,8 @@ import type {
   FederationCallbackProfile,
   FederationProvider,
 } from '../../../services/auth/federation/types';
-import { verifyValidationToken } from '../../../services/email-verification';
-import { createSession, validateSession } from '../../../services/session-manager';
-import { ensureWorkspaceForUser } from '../../../services/workspace-service';
+import { validateSession } from '../../../services/session-manager';
+import { createCmFederationCompletion } from '../../../services/identity/cm-federation-completion';
 import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } from '../../auth/oauth';
 
 /**
@@ -145,8 +145,11 @@ const brokerFor = (
   const uiBase = resolveOAuthUiBaseUrl(c.req.raw);
 
   return createFederationBroker({
-    accountPolicy: ports.accountPolicy,
-    audit: ports.auditLog,
+    complete: createCmFederationCompletion(getCookie(c, 'session') || c.req.header('authorization')?.replace('Bearer ', '') || null),
+    // Protocol start/refusal events occur outside replayable identity callbacks.
+    // Completion success events use only the attempt's CM ledger buffer.
+    audit: { record: (level, event, fields) => logger[level]({ event,
+      provider: fields?.provider, expected: fields?.expected }, 'Federation protocol event') },
     clock: ports.clock,
     config: {
       // D11: resume the sealed continuation via the authorize endpoint, else a FIXED internal page.
@@ -157,17 +160,12 @@ const brokerFor = (
     },
     // The federation port is optional on the ports bag; this host always wires it (Lot 0 adapter).
     federation: ports.federation!,
-    mintSession: (input) => createSession(input.user.id, input.user.role, input.deviceInfo),
     provider,
-    provisionWorkspace: async (userId: string) => {
-      await ensureWorkspaceForUser(userId);
-    },
     secrets: {
       codeVerifier: generateCodeVerifier,
       nonce: () => randomBytes(32).toString('base64url'),
       state: generateState,
     },
-    users: ports.users,
   });
 };
 
@@ -197,6 +195,9 @@ const resolveOrRespond = (c: Context): FederationProvider | Response => {
 
 export const createFederationRouter = (oauthAuthorizePath: string): Hono => {
 const federationRouter = new Hono();
+federationRouter.onError(() => new Response(JSON.stringify({ error: {
+  code: 'identity_service_unavailable', message: 'Identity service unavailable.' } }),
+  { status: 503, headers: { 'content-type': 'application/json' } }));
 
 federationRouter.get('/:provider/start', async (c) => {
   const provider = resolveOrRespond(c);
@@ -256,7 +257,7 @@ const callbackHandler = async (c: Context) => {
     // reference it by a bound cookie, and hand the browser to the local email-verification challenge
     // (which POSTs to the federation challenge endpoint once an email is proven).
     deleteCookie(c, FLOW_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
-    const expiresAt = new Date(Date.now() + CHALLENGE_TTL_SECONDS * 1000);
+    const expiresAt = new Date(Math.min(Date.now() + CHALLENGE_TTL_SECONDS * 1000, Date.parse(result.expiresAt)));
     const challengeId = pendingFederationStore.put(
       {
         continuation: result.continuation,
@@ -394,17 +395,8 @@ federationRouter.post('/challenge/complete', async (c) => {
   }
   const normalizedEmail = parsed.data.email.trim().toLowerCase();
 
-  // Proof-of-email: the verification token (issued by the email-code flow) must be valid AND match the
-  // submitted email. A caller cannot claim an arbitrary email without holding a real proof for it.
-  const proof = await verifyValidationToken(parsed.data.verificationToken);
-  if (!proof.valid || proof.email?.trim().toLowerCase() !== normalizedEmail) {
-    return c.json(
-      { error: { code: 'email_verification_required', message: 'Email ownership was not proven.' } },
-      400,
-    );
-  }
-
-  // Verify-and-DELETE the pending pointer (single-use + TTL) only AFTER the email proof succeeds.
+  // The protocol pointer is consumed once, outside retry. CM verifies and consumes the
+  // email ticket atomically with the user/link/session, inside every completion attempt.
   const pending = pendingFederationStore.consume(challengeId, new Date());
   deleteCookie(c, CHALLENGE_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
   if (!pending) {
@@ -431,6 +423,8 @@ federationRouter.post('/challenge/complete', async (c) => {
     providerSubject: pending.providerSubject,
     providerTenant: pending.providerTenant,
     verifiedEmail: normalizedEmail,
+    verificationToken: parsed.data.verificationToken,
+    expiresAt: pending.expiresAt.toISOString(),
   });
 
   if (result.kind === 'authenticated') {

@@ -16,6 +16,9 @@ import {
 const EXACT_PKG = /^((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)@([^@\s]+)$/;
 const RUNTIME_CONDITIONS = ['node', 'import', 'require', 'default'];
 const RUNTIME_EXT = /\.(?:m?js|cjs|json|node)$/;
+// Sources only a bundler can load (Svelte components, TypeScript sources): node can
+// never import them, so the node import probe records and skips them like types-only.
+const BUNDLER_ONLY_EXT = /\.(?:svelte|ts|tsx|vue)$/;
 
 export function parseExactSpec(spec, semver = loadSemver()) {
   const match = typeof spec === 'string' ? spec.match(EXACT_PKG) : null;
@@ -49,6 +52,7 @@ export function entryPoints(manifest) {
     if (subpath.includes('*')) entry.status = 'unsupported: wildcard export';
     else if (target === null) entry.status = 'blocked-export';
     else if (runtime.length === 0 && [...conditions].every((c) => c === 'types')) entry.status = 'types-only';
+    else if (runtime.length > 0 && runtime.every((t) => BUNDLER_ONLY_EXT.test(t.target))) entry.status = 'bundler-only';
     else if (runtime.length === 0) entry.status = `unsupported: no Node runtime condition (${[...conditions].join(', ')})`;
     else if (!runtime.every((t) => RUNTIME_EXT.test(t.target))) entry.status = `unsupported: non-JavaScript target ${runtime.map((t) => t.target).join(', ')}`;
     else entry.status = 'runtime';
@@ -444,6 +448,7 @@ export async function qualify(opts) {
       }
     }
     report.entrypointTypesOnly = entries.filter((e) => e.status === 'types-only').map((e) => e.specifier);
+    report.entrypointBundlerOnly = entries.filter((e) => e.status === 'bundler-only').map((e) => e.specifier);
     if (report.entrypoints.some((e) => !e.ok)) report.problems.push('one or more entry-point imports failed');
     return finish(report.problems.length ? 'fail' : 'pass');
   } catch (error) {

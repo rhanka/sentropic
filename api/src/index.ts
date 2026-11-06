@@ -5,8 +5,7 @@ import { ensureIndexes } from './db/ensure-indexes';
 import { db, pool } from './db/client';
 import { objectLocks } from './db/schema';
 import { purgeExpiredAuthData } from './services/challenge-purge';
-import { ensureAdminWorkspaceExists, claimAdminWorkspaceOwner } from './services/workspace-service';
-import { runAdminApprovalSweep } from './services/admin-approval-sweep';
+import { drainCmRevocations } from './services/identity/cm-revocation-worker';
 import { runChatTracePurge } from './services/chat-trace-sweep';
 import { runQueueReaperSweep } from './services/queue-reaper-sweep';
 import { loadReservationReaperConfig, runReservationReaperSweep, startReservationReaper } from './services/llm-metering/reservation-reaper';
@@ -72,6 +71,18 @@ async function purgeExpiredLocksSweep(): Promise<number> {
   return rows.length;
 }
 
+// A4 restore rehearsal: generate the cutover checkpoint fixture with THIS
+// bundle's own mapping implementation, then exit before migrations. The
+// mapping digest hashes Function.prototype.toString, which differs between
+// the tsx-interpreted source and the esbuild dist — only the bundle itself
+// can produce a checkpoint the booted SUT accepts. Boot path untouched:
+// active solely with the explicit argv flag (used by `make restore-api-sut`).
+if (process.argv.includes('--cm-restore-checkpoint')) {
+  const { runCmRestoreCheckpoint } = await import('./scripts/cm-restore-checkpoint');
+  await runCmRestoreCheckpoint();
+  process.exit(process.exitCode ?? 0);
+}
+
 // Run database migrations at boot (idempotent)
 try {
   logger.info('Running database migrations at startup...');
@@ -80,6 +91,18 @@ try {
 } catch (error) {
   logger.error({ err: error }, 'Database migration failed at startup');
   process.exit(1);
+}
+
+// First queue settings load, after migrations own the settings table. The
+// QueueManager constructor never queries (a fresh database has no settings
+// table yet); the dynamic import avoids the circular import the lazy reaper
+// import below documents. A load failure keeps warn-and-defaults.
+try {
+  const { queueManager } = await import('./services/queue-manager');
+  await queueManager.reloadSettings();
+  logger.info('Queue settings loaded.');
+} catch (error) {
+  logger.error({ err: error }, 'Queue settings initial load failed, using defaults');
 }
 
 // Ensure indexes exist at boot (idempotent)
@@ -124,14 +147,6 @@ try {
   // Non-critical: don't block startup if purge fails
 }
 
-// Ensure Admin Workspace exists (idempotent) and is claimed by admin_app if present
-try {
-  await ensureAdminWorkspaceExists();
-  await claimAdminWorkspaceOwner();
-} catch (error) {
-  logger.error({ err: error }, 'Failed to ensure admin workspace at startup, continuing anyway');
-}
-
 // Purge all locks at startup (safety: locks are session-scoped)
 try {
   await purgeAllLocksAtStartup();
@@ -139,21 +154,21 @@ try {
   logger.error({ err: error }, 'Failed to purge locks at startup, continuing anyway');
 }
 
-// Admin approval sweep (48h -> read-only). Run once at boot, then periodically.
+// CM computes effective approval roles on reads; this worker only delivers committed revocations.
 const reservationReaper = startReservationReaper(reservationReaperConfig,
   (limit) => runReservationReaperSweep({ database: db, limit }));
 process.once('exit', () => { void reservationReaper.stop(); });
 
 if (process.env.NODE_ENV !== 'test') {
   try {
-    await runAdminApprovalSweep();
+    await drainCmRevocations();
   } catch (error) {
-    logger.error({ err: error }, 'Admin approval sweep failed at startup, continuing anyway');
+    logger.error({ err: error }, 'Identity revocation delivery failed at startup');
   }
 
   setInterval(() => {
-    runAdminApprovalSweep().catch((error) => {
-      logger.error({ err: error }, 'Admin approval sweep failed');
+    drainCmRevocations().catch((error) => {
+      logger.error({ err: error }, 'Identity revocation delivery failed');
     });
   }, 15 * 60 * 1000); // every 15 minutes
 

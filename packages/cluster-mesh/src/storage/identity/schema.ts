@@ -408,6 +408,8 @@ export const identitySchemaStatements = (dialect: IdentitySchemaDialect, schema:
     index('identity_single_use_proofs_challenge_lookup', 'identity_single_use_proofs', '"challenge"', true, '"challenge" IS NOT NULL'),
     index('identity_single_use_proofs_magic_lookup', 'identity_single_use_proofs', '"secret_digest"', true, `"kind" = 'magic_link'`),
     index('identity_webauthn_credentials_user', 'identity_webauthn_credentials', '"user_id"', false),
+    index('identity_login_sessions_user', 'identity_login_sessions', '"user_id"', false),
+    index('identity_login_sessions_expires', 'identity_login_sessions', '"expires_at"', false),
     index('identity_single_use_proofs_user', 'identity_single_use_proofs', '"user_id"', false, '"user_id" IS NOT NULL'),
     index('identity_login_token_bindings_session', 'identity_login_token_bindings', '"session_token_hash"', false),
     index('identity_social_links_user', 'identity_social_links', '"user_id"', false),

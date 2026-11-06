@@ -1,59 +1,62 @@
 import type { AuthHonoConsentGrant, AuthHonoConsentStorePort } from '@sentropic/auth-hono';
+import { IdentityCustodyErrorV1, oauthTenantStoreV1 } from '@sentropic/cluster-mesh';
 import { randomUUID } from 'node:crypto';
 import { and, eq, type SQL } from 'drizzle-orm';
 
-import { env } from '../../config/env';
-import { db } from '../../db/client';
-import { oauthClients, oauthConsents, users } from '../../db/schema';
+import { oauthConsents } from '../../db/schema';
+import { bindCmAppDatabase, type CmIdentityTransaction } from '../identity/cm-transaction';
+import { issueCmOAuthTid, isCmTenantRefusal, requireCmOAuthTransaction } from '../identity/cm-oauth-tenancy';
+import { cmOAuthConsentId } from '../identity/cm-import-tenancy';
 
 interface CreateConsentStoreAdapterOptions {
-  database?: typeof db;
+  transaction?: CmIdentityTransaction;
   now?: () => Date;
 }
 
-/**
- * Drizzle/Postgres adapter for the auth-hono `consentStore` port (consent persistence).
- *
- * Refresh clients always use the exact tenant; other clients retain the configured tenant mode.
- * Offline approval replaces its explicit scope/resource set and creates a new local epoch.
- */
+/** CM owns consent authority; app protocol evidence joins the same transaction. */
 export const createConsentStoreAdapter = (
   options: CreateConsentStoreAdapterOptions = {}
 ): AuthHonoConsentStorePort => {
-  const database = options.database ?? db;
   const now = options.now ?? (() => new Date());
-
-  const grantTenant = async (query: Pick<typeof db, 'select'>, clientId: string,
-    tenantId: string | undefined, offline = false): Promise<string> => {
-    if (offline || env.TENANT_RESOLUTION_MODE === 'strict') return tenantId ?? 'sentropic';
-    const [client] = await query.select({ grantTypes: oauthClients.grantTypes }).from(oauthClients)
-      .where(eq(oauthClients.clientId, clientId)).limit(1);
-    return client?.grantTypes.includes('refresh_token') ? tenantId ?? 'sentropic' : 'sentropic';
+  /** CM consent authority through the P4 finder; a revoked row confers no authority. */
+  const hasAuthority = async (tx: CmIdentityTransaction, userId: string, clientId: string, tenantId: string) => {
+    const record = await oauthTenantStoreV1(tx).findConsent(cmOAuthConsentId(userId, clientId, tenantId));
+    return record?.revokedAt === undefined;
   };
 
-  const grantFilter = (userId: string, clientId: string, tenantId: string | undefined): SQL => {
+  const grantFilter = (userId: string, clientId: string, tenantId: string): SQL => {
     const conditions = [eq(oauthConsents.userId, userId), eq(oauthConsents.clientId, clientId)];
-    conditions.push(eq(oauthConsents.tenantId, tenantId ?? 'sentropic'));
+    conditions.push(eq(oauthConsents.tenantId, tenantId));
     return and(...conditions) as SQL;
   };
 
   return {
     async getGrant(userId, clientId, tenantId): Promise<AuthHonoConsentGrant | null> {
-      const tenant = await grantTenant(database, clientId, tenantId);
-      const [row] = await database
+      const tx = requireCmOAuthTransaction(options.transaction);
+      if (!tenantId) return null;
+      let claim;
+      try { claim = await issueCmOAuthTid(tx, userId, tenantId); }
+      catch (error) { if (isCmTenantRefusal(error)) return null; throw error; }
+      if (!await hasAuthority(tx, userId, clientId, claim.tenantId)) return null;
+      const [row] = await bindCmAppDatabase(tx)
         .select()
         .from(oauthConsents)
-        .where(grantFilter(userId, clientId, tenant))
+        .where(grantFilter(userId, clientId, claim.tid))
         .limit(1);
-      // A shadow alias can cover online scopes only, never another tenant's offline evidence.
-      if (!row) return null;
-      return tenant === (tenantId ?? 'sentropic') ? row : { scopes: row.scopes };
+      return row ?? null;
     },
 
     async saveGrant(userId, clientId, scopes, tenantId, offline): Promise<void> {
-      await database.transaction(async (tx) => {
-      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
-      const tenant = await grantTenant(tx, clientId, tenantId, !!offline);
+      const identity = requireCmOAuthTransaction(options.transaction);
+      if (identity.mode !== 'write') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+      // Tenant-less grants are unkeyable (`getGrant` returns null without a
+      // tenantId, so nothing persisted here could ever be found): login
+      // proceeds and consent is shown every time. No authority is conferred.
+      if (!tenantId) return;
+      await identity.lockSubject(userId);
+      const claim = await issueCmOAuthTid(identity, userId, tenantId);
+      const tenant = claim.tid;
+      const tx = bindCmAppDatabase(identity);
       const timestamp = now();
       // Concurrent approvals serialize on the user row before reading the generic scope union.
       const [existing] = await tx
@@ -61,13 +64,17 @@ export const createConsentStoreAdapter = (
         .from(oauthConsents)
         .where(grantFilter(userId, clientId, tenant))
         .limit(1);
-      const merged = Array.from(new Set([...(existing?.scopes ?? []), ...scopes]));
+      const live = await hasAuthority(identity, userId, clientId, claim.tenantId);
+      const merged = Array.from(new Set([...(live ? existing?.scopes ?? [] : []), ...scopes]));
       // A new approval replaces the offline set and epoch; online unions confer no offline authority.
       const evidence = offline ? {
         offlineGrantId: randomUUID(), offlineIssuer: offline.issuer, offlineScopes: scopes,
         approvedResources: offline.resource ? [offline.resource] : [],
         defaultAudienceApproved: offline.resource === null, offlineConsentedAt: timestamp,
-      } : {};
+      } : live ? {} : {
+        offlineGrantId: null, offlineIssuer: null, offlineScopes: [], approvedResources: [],
+        defaultAudienceApproved: false, offlineConsentedAt: null,
+      };
       await tx
         .insert(oauthConsents)
         .values({
@@ -83,7 +90,8 @@ export const createConsentStoreAdapter = (
           set: { scopes: merged, updatedAt: timestamp, ...evidence },
           target: [oauthConsents.userId, oauthConsents.clientId, oauthConsents.tenantId],
         });
-      });
+      await identity.stores.oauth.grantConsent({ consentId: cmOAuthConsentId(userId, clientId, claim.tenantId),
+        userId, clientId, tenantId: claim.tenantId, grantedAt: timestamp.toISOString() });
     },
   };
 };

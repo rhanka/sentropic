@@ -8,6 +8,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool, type PoolClient } from 'pg';
 import { runControlMigrations, runMigrations } from '../../src/db/run-migrations';
+import { prepareCmFixtureCutover } from '../utils/cm-fresh-database';
 import {
   artifactMigrationAssets,
   createArtifactHostKv,
@@ -19,6 +20,7 @@ let database: Pool;
 let databaseName: string;
 let connectionString: string;
 let connectionEnds: Promise<void>[];
+let disposeCutover: (() => Promise<void>) | undefined;
 
 function createTrackedPool() {
   const pool = new Pool({ connectionString });
@@ -36,9 +38,13 @@ beforeEach(async () => {
   connectionString = url.toString();
   connectionEnds = [];
   database = createTrackedPool();
+  // Keep the artifact host slot pending while preparing the identity source/checkpoint.
+  disposeCutover = await prepareCmFixtureCutover(database, ['0012_app_artifact_host']);
 });
 
 afterEach(async () => {
+  await disposeCutover?.();
+  disposeCutover = undefined;
   await database.end();
   await Promise.all(connectionEnds);
   await admin.query(`DROP DATABASE "${databaseName}"`);
@@ -89,9 +95,11 @@ describe('artifact host migrations', () => {
     try {
       mkdirSync(join(folder, 'meta'));
       const metadata = JSON.parse(readFileSync('drizzle/control/meta/_journal.json', 'utf8'));
-      metadata.entries = metadata.entries.filter((entry: { tag: string }) => entry.tag !== '0012_app_artifact_host');
+      const frontierAt = Math.max(...metadata.entries.map((entry: { when: number }) => entry.when)) + 1;
+      metadata.entries = metadata.entries.filter((entry: { tag: string }) =>
+        !['0012_app_artifact_host', '0015_app_cm_identity_cutover'].includes(entry.tag));
       for (const entry of metadata.entries) writeFileSync(join(folder, `${entry.tag}.sql`), readFileSync(`drizzle/control/${entry.tag}.sql`));
-      metadata.entries.push({ idx: 12, version: '7', when: 1793200000000, tag: '0019_frontier_witness', breakpoints: true });
+      metadata.entries.push({ idx: 12, version: '7', when: frontierAt, tag: '0019_frontier_witness', breakpoints: true });
       writeFileSync(join(folder, 'meta/_journal.json'), JSON.stringify(metadata));
       writeFileSync(join(folder, '0019_frontier_witness.sql'), 'CREATE TABLE control.frontier_witness (id text PRIMARY KEY);');
       await migrate(drizzle(database), { migrationsFolder: './drizzle' });

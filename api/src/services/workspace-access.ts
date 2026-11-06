@@ -1,24 +1,32 @@
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { desc, eq, inArray, isNull, or, and, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { workspaceMemberships, workspaces } from '../db/schema';
+import { workspaces } from '../db/schema';
+import { findCmWorkspaceMember, listCmWorkspaceMembershipsForUser } from './identity/cm-tenancy';
+import { bindCmAppDatabase, runCmIdentityRead } from './identity/cm-transaction';
+
+// Lot A4: workspace membership lives in the CM store
+// (cm_identity.cm_workspace_members); the legacy `workspace_memberships` table
+// is dropped by control migration 0015. `public.workspaces` keeps the business
+// columns only. No legacy fallback.
 
 export type WorkspaceType = 'neutral' | 'ai-priorities' | 'opportunity' | 'code';
 
 export type WorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
+/**
+ * @deprecated kept for call-site compatibility: CM membership reads go through
+ * the CM store, not a caller-supplied drizzle client.
+ */
 export type WorkspaceRoleClient = Pick<typeof db, 'select'>;
 
 export async function getWorkspaceRole(
-  userId: string, workspaceId: string, client: WorkspaceRoleClient = db,
+  userId: string,
+  workspaceId: string,
+  _client: WorkspaceRoleClient = db,
 ): Promise<WorkspaceRole | null> {
-  const [membership] = await client
-    .select({ role: workspaceMemberships.role })
-    .from(workspaceMemberships)
-    .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, userId)))
-    .limit(1);
-
-  if (!membership) return null;
-  return membership.role as WorkspaceRole;
+  const member = await findCmWorkspaceMember(workspaceId, userId);
+  if (!member) return null;
+  return member.role as WorkspaceRole;
 }
 
 export async function hasWorkspaceRole(
@@ -68,18 +76,24 @@ export async function isWorkspaceDeleted(workspaceId: string): Promise<boolean> 
 }
 
 /**
- * Default workspace: most recently created non-hidden workspace among memberships.
+ * Default workspace: most recently created non-hidden workspace among the
+ * user's CM workspace memberships.
  */
 export async function resolveDefaultWorkspaceId(userId: string): Promise<string | null> {
-  const [row] = await db
+  return runCmIdentityRead(async tx => {
+  const db = bindCmAppDatabase(tx);
+  const memberships = await listCmWorkspaceMembershipsForUser(userId);
+  if (memberships.length === 0) return null;
+  const ids = memberships.map((m) => m.workspaceId);
+  const rows = await db
     .select({ id: workspaces.id })
-    .from(workspaceMemberships)
-    .innerJoin(workspaces, eq(workspaceMemberships.workspaceId, workspaces.id))
-    .where(and(eq(workspaceMemberships.userId, userId), isNull(workspaces.hiddenAt)))
+    .from(workspaces)
+    .where(and(isNull(workspaces.hiddenAt), inArray(workspaces.id, ids)))
     .orderBy(desc(workspaces.createdAt))
     .limit(1);
 
-  return row?.id ?? null;
+  return rows[0]?.id ?? null;
+  });
 }
 
 export async function getUserWorkspaces(userId: string): Promise<
@@ -93,6 +107,8 @@ export async function getUserWorkspaces(userId: string): Promise<
     createdAt: Date;
   }>
 > {
+  return runCmIdentityRead(async tx => {
+  const db = bindCmAppDatabase(tx);
   const vscodeWorkspaceStateRow = (await db.get(
     sql`SELECT value FROM settings WHERE key = 'vscode_project_workspace_state_v1' AND user_id = ${userId}`,
   )) as { value?: string | null } | undefined;
@@ -112,6 +128,11 @@ export async function getUserWorkspaces(userId: string): Promise<
     codeWorkspaceIds = new Set();
   }
 
+  const memberships = await listCmWorkspaceMembershipsForUser(userId);
+  if (memberships.length === 0) return [];
+  const byId = new Map(memberships.map((m) => [m.workspaceId, m.role] as const));
+  const ids = [...byId.keys()];
+  // Hidden workspaces are only visible to workspace admins.
   const rows = await db
     .select({
       id: workspaces.id,
@@ -119,17 +140,9 @@ export async function getUserWorkspaces(userId: string): Promise<
       type: workspaces.type,
       hiddenAt: workspaces.hiddenAt,
       createdAt: workspaces.createdAt,
-      role: workspaceMemberships.role,
     })
-    .from(workspaceMemberships)
-    .innerJoin(workspaces, eq(workspaceMemberships.workspaceId, workspaces.id))
-    // Hidden workspaces are only visible to workspace admins.
-    .where(
-      and(
-        eq(workspaceMemberships.userId, userId),
-        or(isNull(workspaces.hiddenAt), eq(workspaceMemberships.role, 'admin'))
-      )
-    )
+    .from(workspaces)
+    .where(and(inArray(workspaces.id, ids), or(isNull(workspaces.hiddenAt), inArray(workspaces.id, ids.filter((id) => byId.get(id) === 'admin')))))
     .orderBy(desc(workspaces.createdAt));
 
   return rows.map((r) => ({
@@ -139,8 +152,9 @@ export async function getUserWorkspaces(userId: string): Promise<
     isCodeWorkspace: codeWorkspaceIds.has(r.id),
     hiddenAt: r.hiddenAt,
     createdAt: r.createdAt,
-    role: r.role as WorkspaceRole,
+    role: (byId.get(r.id) ?? 'viewer') as WorkspaceRole,
   }));
+  });
 }
 
 /**

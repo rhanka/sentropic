@@ -1,9 +1,10 @@
+import { seedCmArtifactIdentity, seedCmArtifactConversation } from '../utils/cm-artifact-fixture';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { Hono } from 'hono';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
-import { runMigrations } from '../../src/db/run-migrations';
+import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
 import { createArtifactCredentialReader, createCurrentArtifactIdentity, artifactCredential, artifactTurnCredential } from '../../src/services/artifacts/credentials';
 import { createArtifactTransport } from '../../src/services/artifacts/transport';
@@ -30,20 +31,16 @@ beforeEach(async () => {
     connectionEnds.push(new Promise<void>(resolve => client.once('end', resolve)));
   });
   await runMigrations(pool);
-  await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active');
-    INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A');
-    INSERT INTO workspaces (id, name, tenant_id) VALUES ('workspace-a', 'A', 'tenant-a');
-    INSERT INTO tenant_memberships (tenant_id, user_id, status) VALUES ('tenant-a', 'alice', 'approved');
-    INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ('workspace-a', 'alice', 'editor');
-    INSERT INTO user_sessions (id, user_id, session_token_hash, expires_at)
-      VALUES ('session-a', 'alice', 'hash-a', clock_timestamp() + interval '1 hour');
-    INSERT INTO oauth_clients (id, client_id, name, redirect_uris, allowed_scopes)
+  await seedCmArtifactIdentity(pool);
+  await pool.query(`INSERT INTO oauth_clients (id, client_id, name, redirect_uris, allowed_scopes)
       VALUES ('client-a', 'client-a', 'MCP', '{}', ARRAY['mcp:tools:invoke']);
     INSERT INTO oauth_consents (user_id, client_id, tenant_id, scopes)
       VALUES ('alice', 'client-a', 'tenant-a', ARRAY['mcp:tools:invoke']);`);
   await pool.query(`INSERT INTO oauth_tokens (jti, token_type, client_id, user_id, tenant_id, scope, audience, expires_at)
     VALUES ('token-a', 'access_token', 'client-a', 'alice', 'tenant-a', 'mcp:tools:invoke', $1,
       clock_timestamp() + interval '1 hour')`, [resource]);
+  await pool.query(`INSERT INTO cm_identity.cm_oauth_consents (consent_id, tenant_id, user_id, client_id, granted_at)
+    VALUES ('consent-a', 'tenant-a', 'alice', 'client-a', $1)`, [new Date().toISOString()]);
 });
 afterEach(async () => {
   await pool.end();
@@ -53,8 +50,7 @@ afterEach(async () => {
 afterAll(() => admin.end());
 
 it('should bind a conversation credential to its subject and workspace through the host effect guard', async () => {
-  await pool.query(`INSERT INTO chat_sessions (id, user_id, workspace_id)
-    VALUES ('turn-a', 'alice', 'workspace-a')`);
+  await seedCmArtifactConversation(pool);
   const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
     currentIdentity: createCurrentArtifactIdentity(resource) });
   const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'sentropic-turn',
@@ -85,8 +81,50 @@ it('should bind a conversation credential to its subject and workspace through t
   expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.operation_receipts')).rows).toEqual([{ n: 1 }]);
 });
 
+it('should refuse a turn from another workspace even when both memberships allow writes', async () => {
+  await seedCmArtifactConversation(pool);
+  await pool.query(`INSERT INTO public.workspaces (id, name) VALUES ('workspace-b', 'B');
+    INSERT INTO cm_identity.cm_workspaces (workspace_id, tenant_id, enrolled_at)
+      VALUES ('workspace-b', 'tenant-a', clock_timestamp());
+    INSERT INTO cm_identity.cm_workspace_members (workspace_id, user_id, role)
+      VALUES ('workspace-b', 'alice', 'editor')`);
+  const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
+    currentIdentity: createCurrentArtifactIdentity(resource) });
+  const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'sentropic-turn',
+    credentialId: artifactTurnCredential('turn-a', 'workspace-a') };
+  // The second workspace is independently accessible with the user's login credential.
+  const login = await host.bind({ ...identity, clientId: 'sentropic-session',
+    credentialId: artifactCredential('session', 'session-a') }, 'workspace-b');
+  expect((await login.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+  await expect(host.bind(identity, 'workspace-b')).rejects.toThrow();
+  const turn = await host.bind(identity, 'workspace-a');
+  expect((await turn.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+  expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.operation_receipts')).rows).toEqual([{ n: 0 }]);
+});
+
+it.each(['missing', 'revoked', 'expired', 'foreign-subject', 'foreign-workspace'])(
+  'refuses an existing business chat with %s CM conversation authority', async reason => {
+    await seedCmArtifactConversation(pool);
+    const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
+      currentIdentity: createCurrentArtifactIdentity(resource) });
+    const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'sentropic-turn',
+      credentialId: artifactTurnCredential('turn-a', 'workspace-a') };
+    const bound = await host.bind(identity, 'workspace-a');
+    expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+    if (reason === 'missing') await pool.query('UPDATE chat_sessions SET cm_conversation_session_id = NULL');
+    if (reason === 'revoked') await pool.query(`UPDATE cm_identity.cm_identity_conversation_sessions
+      SET status = 'revoked', revoked_at = $1`, [new Date().toISOString()]);
+    if (reason === 'expired') await pool.query(`UPDATE cm_identity.cm_identity_conversation_sessions
+      SET expires_at = $1`, [new Date(Date.now() - 1_000).toISOString()]);
+    if (reason === 'foreign-subject') await pool.query(`UPDATE cm_identity.cm_identity_conversation_sessions SET user_id = 'other'`);
+    if (reason === 'foreign-workspace') await pool.query(`UPDATE cm_identity.cm_identity_conversation_sessions SET workspace_id = 'other'`);
+    expect((await pool.query(`SELECT id FROM chat_sessions WHERE id = 'turn-a'`)).rowCount).toBe(1);
+    expect((await bound.mcp({ tool: 'artifacts_ensure', args: { bindingName: 'denied', idempotencyKey: 'denied' } })).status).toBe(403);
+    expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.operation_receipts')).rows).toEqual([{ n: 0 }]);
+  });
+
 it('should deny a conversation moved while publication waits without persisting another effect', async () => {
-  await pool.query(`INSERT INTO chat_sessions (id, user_id, workspace_id) VALUES ('turn-a', 'alice', 'workspace-a')`);
+  await seedCmArtifactConversation(pool);
   const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
     currentIdentity: createCurrentArtifactIdentity(resource) });
   const bound = await host.bind({ subject: 'alice', tenantId: 'tenant-a', clientId: 'sentropic-turn',
@@ -156,7 +194,7 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     return reader(jkt)({ query: async (sql, params) => {
       const result = await pool.query(sql, [...params]);
       return { rows: result.rows, rowCount: result.rowCount ?? 0 };
-    } }, { ...identity(), ...overrides });
+    } }, { ...identity(), ...overrides }, 'workspace-a');
   }
   it('should bind the exact current credential tuple and reject substitutions', async () => {
     expect(await authority()).toEqual({ readable: true, writable: true });
@@ -165,9 +203,12 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     }
   });
   it('should deny an expired or removed credential', async () => {
-    const table = kind === 'session' ? 'user_sessions' : 'oauth_tokens';
+    const table = kind === 'session' ? 'cm_identity.identity_login_sessions' : 'oauth_tokens';
     await pool.query(`UPDATE ${table} SET expires_at = clock_timestamp() - interval '1 second'`);
     expect(await authority()).toEqual({ readable: false, writable: false });
+    // Token bindings restrict session deletes: remove the child rows first so the
+    // "removed credential" case deletes the same session the product revokes.
+    if (kind === 'session') await pool.query('DELETE FROM cm_identity.identity_login_token_bindings');
     await pool.query(`DELETE FROM ${table}`);
     expect(await authority()).toEqual({ readable: false, writable: false });
   });
@@ -196,6 +237,8 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
       `UPDATE oauth_tokens SET scope = 'openid'`,
       `UPDATE oauth_tokens SET dpop_jkt = 'different-proof'`,
       `UPDATE oauth_consents SET scopes = '{}'`,
+      `UPDATE cm_identity.cm_oauth_consents SET revoked_at = clock_timestamp()`,
+      `DELETE FROM cm_identity.cm_oauth_consents`,
       `UPDATE oauth_clients SET allowed_scopes = '{}'`,
       `INSERT INTO revoked_tokens (jti, expires_at) VALUES ('token-a', clock_timestamp() + interval '1 hour')`,
     ])('should deny changed OAuth authority: %s', async (sql) => {
@@ -210,7 +253,7 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     });
   }
   it('should recheck DB-time expiry after waiting for the credential row itself', async () => {
-    const table = kind === 'session' ? 'user_sessions' : 'oauth_tokens';
+    const table = kind === 'session' ? 'cm_identity.identity_login_sessions' : 'oauth_tokens';
     await pool.query(`UPDATE ${table} SET expires_at = clock_timestamp() + interval '2 seconds'`);
     const blocker = await pool.connect();
     await blocker.query('BEGIN');
@@ -219,7 +262,7 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     try {
       await vi.waitFor(async () => expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
         AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0));
-      await blocker.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at - clock_timestamp()))) FROM ${table}`);
+      await blocker.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at::timestamptz - clock_timestamp()))) FROM ${table}`);
     } finally { await blocker.query('ROLLBACK'); blocker.release(); }
     expect(await pending).toEqual({ readable: false, writable: false });
   });
@@ -236,7 +279,8 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     try {
       await vi.waitFor(async () => expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
         AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0));
-      await pool.query(kind === 'session' ? 'DELETE FROM user_sessions'
+      if (kind === 'session') await pool.query('DELETE FROM cm_identity.identity_login_token_bindings');
+      await pool.query(kind === 'session' ? 'DELETE FROM cm_identity.identity_login_sessions'
         : `INSERT INTO revoked_tokens (jti, expires_at) VALUES ('token-a', clock_timestamp() + interval '1 hour')`);
     } finally { await blocker.query('ROLLBACK'); blocker.release(); }
     expect((await pending).status).toBe(403);
@@ -248,7 +292,7 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     const bound = await host.bind(identity(), 'workspace-a');
     const ensured = await bound.http({ method: 'POST', path: '/ensure', body: { bindingName: 'report', idempotencyKey: 'ensure' } });
     expect(ensured.status).toBe(201);
-    await pool.query(`UPDATE ${kind === 'session' ? 'user_sessions' : 'oauth_tokens'}
+    await pool.query(`UPDATE ${kind === 'session' ? 'cm_identity.identity_login_sessions' : 'oauth_tokens'}
       SET expires_at = clock_timestamp() + interval '2 seconds'`);
     const blocker = await pool.connect();
     await blocker.query('BEGIN');
@@ -261,8 +305,8 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     try {
       await vi.waitFor(async () => expect((await pool.query(`SELECT 1 FROM pg_stat_activity
         WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%quota/v1%'`)).rowCount).toBeGreaterThan(0));
-      await pool.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at - clock_timestamp())))
-        FROM ${kind === 'session' ? 'user_sessions' : 'oauth_tokens'}`);
+      await pool.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at::timestamptz - clock_timestamp())))
+        FROM ${kind === 'session' ? 'cm_identity.identity_login_sessions' : 'oauth_tokens'}`);
     } finally { await blocker.query('ROLLBACK'); blocker.release(); }
     expect((await pending).status).toBe(403);
     expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.releases')).rows).toEqual([{ n: 0 }]);

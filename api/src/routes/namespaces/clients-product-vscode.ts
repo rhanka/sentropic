@@ -1,12 +1,16 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../../db/client';
-import { workspaceMemberships, workspaces } from '../../db/schema';
+import { TenantNotActiveError } from '@sentropic/cluster-mesh';
 import { sql } from 'drizzle-orm';
 import { env } from '../../config/env';
 import { CHAT_SYSTEM_PROMPTS } from '../../config/default-chat-system';
 import { getUserWorkspaces } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
+import { bindCmAppDatabase, runCmIdentityWrite } from '../../services/identity/cm-transaction';
+import { requireEditor } from '../../middleware/rbac';
+import { CmIdentityForbiddenError } from '../../services/identity/cm-deletion-authorization';
+import { provisionWorkspace } from '../../services/workspace-provisioning';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/vscode-ext';
@@ -175,8 +179,9 @@ const normalizeWorkspaceNameCandidate = (value: unknown): string | null => {
 
 const readWorkspaceState = async (
   userId: string,
+  database = db,
 ): Promise<VsCodeProjectWorkspaceState> => {
-  const row = (await db.get(
+  const row = (await database.get(
     sql`SELECT value FROM settings WHERE key = ${VSCODE_PROJECT_WORKSPACE_STATE_KEY} AND user_id = ${userId}`,
   )) as { value?: string | null } | undefined;
   return parseWorkspaceState(row?.value ?? null);
@@ -185,8 +190,9 @@ const readWorkspaceState = async (
 const writeWorkspaceState = async (
   userId: string,
   state: VsCodeProjectWorkspaceState,
+  database = db,
 ): Promise<void> => {
-  await db.run(sql`
+  await database.run(sql`
     INSERT INTO settings (key, user_id, value, description, updated_at)
     VALUES (${VSCODE_PROJECT_WORKSPACE_STATE_KEY}, ${userId}, ${JSON.stringify(state)}, 'VSCode project/workspace mapping state', ${new Date().toISOString()})
     ON CONFLICT (user_id, key) WHERE user_id IS NOT NULL
@@ -415,6 +421,7 @@ vscodeExtensionRouter.put('/workspace-mapping', async (c) => {
 
 vscodeExtensionRouter.post(
   '/workspace-mapping/code-workspace',
+  requireEditor,
   async (c) => {
     const user = c.get('user') as { userId?: string } | undefined;
     if (!user?.userId) {
@@ -432,32 +439,18 @@ vscodeExtensionRouter.post(
     }
 
     const payload = parsedBody.data;
-    const now = new Date();
     const workspaceId = createId();
     const workspaceName =
       normalizeWorkspaceNameCandidate(payload.name) ||
       normalizeWorkspaceNameCandidate(payload.repositoryName) ||
       `Code workspace ${payload.projectFingerprint.slice(0, 8)}`;
 
-    await db.transaction(async (tx) => {
-      await tx.insert(workspaces).values({
-        id: workspaceId,
-        ownerUserId: user.userId!,
-        name: workspaceName,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      await tx.insert(workspaceMemberships).values({
-        workspaceId,
-        userId: user.userId!,
-        role: 'admin',
-        createdAt: now,
-      });
-    });
-
-    const codeWorkspaces = await listCodeWorkspacesForUser(user.userId);
-    const state = await readWorkspaceState(user.userId);
+    try {
+    const snapshot = await runCmIdentityWrite(async tx => {
+    await provisionWorkspace(tx, { workspaceId, ownerUserId: user.userId!, name: workspaceName, type: 'code' });
+    const database = bindCmAppDatabase(tx);
+    const codeWorkspaces = await listCodeWorkspacesForUser(user.userId!);
+    const state = await readWorkspaceState(user.userId!, database);
     const sanitized = sanitizeWorkspaceState(state, codeWorkspaces);
     const codeWorkspaceIds = sanitized.state.codeWorkspaceIds.includes(workspaceId)
       ? [...sanitized.state.codeWorkspaceIds]
@@ -472,16 +465,19 @@ vscodeExtensionRouter.post(
       lastWorkspaceId: workspaceId,
       updatedAt: new Date().toISOString(),
     };
-    await writeWorkspaceState(user.userId, nextState);
-
-    return c.json(
-      buildWorkspaceMappingSnapshot({
+    await writeWorkspaceState(user.userId!, nextState, database);
+    return buildWorkspaceMappingSnapshot({
         projectFingerprint: payload.projectFingerprint,
         state: nextState,
         workspaces: codeWorkspaces,
-      }),
-      201,
-    );
+      });
+    });
+    return c.json(snapshot, 201);
+    } catch (error) {
+      if (error instanceof CmIdentityForbiddenError) return c.json({ message: 'Insufficient permissions' }, 403);
+      if (error instanceof TenantNotActiveError) return c.json({ message: 'Tenant not active' }, 409);
+      return c.json({ message: 'Identity service unavailable' }, 503);
+    }
   },
 );
 

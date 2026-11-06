@@ -7,7 +7,9 @@ import {
   cleanupAuthData
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, initiatives, folders, jobQueue, tenantMemberships } from '../../src/db/schema';
+import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, initiatives, folders, jobQueue } from '../../src/db/schema';
+import { setCmMembershipState } from '../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
 import { eq, and } from 'drizzle-orm';
 import * as tools from '../../src/services/tools';
 import { queueManager } from '../../src/services/queue-manager';
@@ -19,7 +21,7 @@ describe('Chat AI - Tool Calls Integration', () => {
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(user.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
     
     // Créer un folder
     const folderResponse = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, {

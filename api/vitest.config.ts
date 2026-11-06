@@ -27,6 +27,7 @@ export default defineConfig({
       '@sentropic/chat-core': pkgSrc('chat-core'),
       '@sentropic/chat-server': pkgSrc('chat-server'),
       '@sentropic/cluster-mesh/compose/gateway': pkgSrc('cluster-mesh', 'compose/gateway.ts'),
+      '@sentropic/cluster-mesh/identity/auth-hono': pkgSrc('cluster-mesh', 'identity/auth-hono.ts'),
       '@sentropic/cluster-mesh/compose/llm-mesh': pkgSrc('cluster-mesh', 'compose/llm-mesh.ts'),
       '@sentropic/cluster-mesh/loaders/llm-mesh/transport/jev': pkgSrc('cluster-mesh', 'loaders/llm-mesh/transport/jev.ts'),
       '@sentropic/cluster-mesh/loaders/mcp': pkgSrc('cluster-mesh', 'loaders/mcp/index.ts'),
@@ -52,6 +53,25 @@ export default defineConfig({
   },
   test: {
     pool: 'forks',
+    // Synthetic test policy only; this is not a production Q-K approval or rehearsal receipt.
+    env: {
+      CM_IDENTITY_EMAIL_CODE_POLICY: 'sha256',
+      CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: 'synthetic-api-test-only',
+      // Synthetic deletion budgets for every api test process, so the workspace
+      // DELETE acceptance passes without per-file stubs (per-file stubs still
+      // override). Never a production receipt; per-file stubs stay authoritative.
+      CM_IDENTITY_DELETION_BUDGETS_JSON: JSON.stringify({
+        reservation: { deadlineMs: 10_000, maxAttempts: 1 },
+        deletion: { deadlineMs: 10_000, maxAttempts: 1 },
+        diagnostic: { deadlineMs: 10_000, maxAttempts: 1 },
+        read: { deadlineMs: 10_000, maxAttempts: 1 },
+        workspace: { deadlineMs: 10_000, maxAttempts: 1 },
+        replicaExport: { deadlineMs: 10_000, maxAttempts: 1 },
+        replicaValidation: { deadlineMs: 10_000, maxAttempts: 1 },
+        replicaSync: { deadlineMs: 10_000, maxAttempts: 1 },
+        qualificationReceiptRef: 'synthetic-test-only-not-a-rehearsal-receipt',
+      }),
+    },
     // Increase timeout for database operations and AI API calls
     testTimeout: 60000,
     hookTimeout: 60000,

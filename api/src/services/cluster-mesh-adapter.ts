@@ -1,9 +1,10 @@
 import {
-  createBoundaryDomain,
   createClusterMeshRuntime,
+  createIdentityBoundaryDomainV1,
   createLocalDeviceDomain,
   createRegistrationGate,
   createSingleNodeMembership,
+  createTenantBoundaryPortV1,
   type BoundaryDomain,
   type ClusterNodeDescriptor,
   type DeviceDomain,
@@ -19,7 +20,10 @@ import {
   type McpSupervisorStore,
   type PtyActuatorPort,
   type SessionTargetStatePort,
+  type TenantMembershipStore,
+  type TenantRegistryStore,
   type WorkstationId,
+  type WorkspaceDirectoryStore,
 } from '@sentropic/cluster-mesh';
 import type { VerifiedInvocationContextPort } from '@sentropic/contracts';
 import { timingSafeEqual } from 'node:crypto';
@@ -30,7 +34,7 @@ import {
   issueDeviceCode,
   pollDeviceCode,
 } from './device-code-store';
-import { resolveTenantAuthoritatively } from './tenancy/resolve-tenant';
+import { getCmIdentity } from './identity/cm-identity';
 import { PostgresClusterMeshCutoverStore } from './cluster-mesh/postgres-cutover-store';
 import { PostgresClusterMeshRuntimeStore } from './cluster-mesh/postgres-runtime-store';
 import { createClusterMeshInvocationVerifier } from './cluster-mesh/invocation-verifier';
@@ -82,10 +86,15 @@ export interface ClusterMeshAppDependencies {
     role: string,
     deviceName?: string | null,
   ): DeviceApprovalResult;
-  resolveTenant(input: {
-    workspaceId: string;
-    userId: string;
-  }): Promise<{ tenantId: string } | { error: 'unknown' | 'ambiguous_tenant' }>;
+  /**
+   * Tenancy stores behind the P2 boundary port. Defaults to the CM
+   * composition (standalone, ambient-attempt aware); tests inject doubles.
+   */
+  readonly tenancyStores?: {
+    readonly workspaces: WorkspaceDirectoryStore;
+    readonly tenants: TenantRegistryStore;
+    readonly memberships: TenantMembershipStore;
+  };
   createWorkstationId?(): WorkstationId;
   readonly sessionAdmission?: {
     readonly generationId: string;
@@ -110,15 +119,9 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
     approveDeviceCode: deps.approveDeviceCode,
     pollDeviceCode: deps.pollDeviceCode,
   });
-  const boundaries = createBoundaryDomain({
+  const boundaries = createIdentityBoundaryDomainV1({
     homeNodeId: deps.self.nodeId,
-    memberships: {
-      async resolveApproved(input) {
-        const result = await deps.resolveTenant(input);
-        if ('error' in result) return null;
-        return { tenantId: result.tenantId, userId: input.userId, status: 'approved' };
-      },
-    },
+    boundary: createTenantBoundaryPortV1(deps.tenancyStores ?? getCmIdentity().tenancy),
   });
   const control = deps.sessionControl;
   const sessionControl = control ? {
@@ -321,7 +324,6 @@ export const clusterMeshAdapter = createClusterMeshAppAdapter({
   issueDeviceCode,
   pollDeviceCode,
   approveDeviceCode,
-  resolveTenant: resolveTenantAuthoritatively,
   sessionAdmission: {
     generationId: sessionGenerationId,
     store: runtimeStore,

@@ -1,15 +1,16 @@
 import { pool } from '../db/client';
-import type { db } from '../db/client';
-import { workspaceMemberships, workspaces } from '../db/schema';
-import { createId } from '../utils/id';
+import { createWorkspaceDirectory, IdentityCustodyErrorV1, TenantNotActiveError } from '@sentropic/cluster-mesh';
+import { workspaces } from '../db/schema';
 import { getDefaultGateConfig } from './gate-service';
 import { todoOrchestrationService } from './todo-orchestration';
 import { viewTemplateService } from './view-template-service';
 import type { WorkspaceType } from './workspace-access';
-
-export type ProvisionWorkspaceClient = Pick<typeof db, 'insert'>;
+import { bindCmAppDatabase, type CmIdentityTransaction } from './identity/cm-transaction';
+import { CmIdentityForbiddenError } from './identity/cm-deletion-authorization';
+import { PLATFORM_TENANT_ID } from './workspace-service';
 
 export interface ProvisionWorkspaceInput {
+  readonly workspaceId: string;
   readonly ownerUserId: string;
   readonly name: string;
   readonly type: WorkspaceType;
@@ -17,32 +18,40 @@ export interface ProvisionWorkspaceInput {
 }
 
 /**
- * Canonical workspace rows: the workspace plus its creator-as-admin
- * membership. Runs inside the caller's transaction so a failed follow-up
- * step rolls the workspace back instead of orphaning it.
+ * CM directory, creator membership and business metadata share one transaction.
+ * The existing owner reference is business data used for destruction policy.
  */
 export const provisionWorkspace = async (
-  client: ProvisionWorkspaceClient,
+  tx: CmIdentityTransaction,
   input: ProvisionWorkspaceInput,
 ): Promise<string> => {
-  const id = createId();
+  const id = input.workspaceId;
+  await tx.lockSubject(input.ownerUserId);
+  const account = await tx.stores.accounts.findAccount(input.ownerUserId);
+  // Any active tenant member may provision: import creates a fresh workspace where the
+  // importer becomes admin, so guests are allowed here. Direct creation routes enforce
+  // editor+ with their own requireEditor middleware (workspaces, vscode mapping) or
+  // requireGlobalEditor (session adoption); this gate only rejects inactive accounts.
+  if (!account || account.accountStatus !== 'active') {
+    throw new CmIdentityForbiddenError();
+  }
+  if (!await tx.custody.profiles.find(input.ownerUserId)) throw new IdentityCustodyErrorV1('identity_material_missing');
+  const tenantId = input.tenantId ?? PLATFORM_TENANT_ID;
+  const tenant = await tx.stores.tenants.findTenant(tenantId);
+  if (!tenant || tenant.status !== 'active') throw new TenantNotActiveError(tenantId);
+  if (!await tx.stores.memberships.findApprovedMembership(input.ownerUserId, tenantId)) throw new CmIdentityForbiddenError();
+  await createWorkspaceDirectory({ workspaces: tx.stores.workspaces, members: tx.stores.workspaceMembers,
+    audit: tx.stores.audit }).enrolWorkspace({ workspaceId: id, tenantId, repoIdentity: null, creatorUserId: input.ownerUserId });
   const now = new Date();
   const gateConfig = getDefaultGateConfig(input.type);
-  await client.insert(workspaces).values({
+  await bindCmAppDatabase(tx).insert(workspaces).values({
     id,
     ownerUserId: input.ownerUserId,
     name: input.name,
     type: input.type,
     gateConfig: gateConfig ?? undefined,
-    ...(input.tenantId ? { tenantId: input.tenantId } : {}),
     createdAt: now,
     updatedAt: now,
-  });
-  await client.insert(workspaceMemberships).values({
-    workspaceId: id,
-    userId: input.ownerUserId,
-    role: 'admin',
-    createdAt: now,
   });
   return id;
 };

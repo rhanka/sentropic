@@ -6,7 +6,8 @@ import type { Hono } from 'hono';
 
 import { requireEditor } from '../../../middleware/rbac';
 import { neutralRouter } from './product-neutral';
-import { tenantsRouter } from './product-tenants';
+import { cmTenantPorts } from './cm-tenant-ports';
+import { cmMemberPorts } from './cm-member-ports';
 import { workspacesRouter } from './product-workspaces';
 
 const handlers = (router: Hono, method: string, path: string): WorkspaceHandlerChain => {
@@ -29,25 +30,8 @@ export const productWorkspacePorts: WorkspacesRouterPorts = {
     hide: handlers(workspacesRouter, 'POST', '/:id/hide'),
     unhide: handlers(workspacesRouter, 'POST', '/:id/unhide'),
     remove: handlers(workspacesRouter, 'DELETE', '/:id'),
-    listMembers: handlers(workspacesRouter, 'GET', '/:id/members'),
-    listMentions: handlers(workspacesRouter, 'GET', '/:id/members/mentions'),
-    addMember: handlers(workspacesRouter, 'POST', '/:id/members'),
-    updateMember: handlers(workspacesRouter, 'PATCH', '/:id/members/:userId'),
-    removeMember: handlers(workspacesRouter, 'DELETE', '/:id/members/:userId'),
+    ...cmMemberPorts,
   },
-  tenants: {
-    requestMembership: handlers(tenantsRouter, 'POST', '/:tenantId/memberships'),
-    listMemberships: handlers(tenantsRouter, 'GET', '/:tenantId/memberships'),
-    listClients: handlers(tenantsRouter, 'GET', '/:tenantId/clients'),
-    approveMembership: handlers(
-      tenantsRouter, 'POST', '/:tenantId/memberships/:userId/approve',
-    ),
-    rejectMembership: handlers(
-      tenantsRouter, 'POST', '/:tenantId/memberships/:userId/reject',
-    ),
-    suspendMembership: handlers(
-      tenantsRouter, 'POST', '/:tenantId/memberships/:userId/suspend',
-    ),
-  },
+  tenants: cmTenantPorts,
   neutral: { dashboard: handlers(neutralRouter, 'GET', '/dashboard') },
 };

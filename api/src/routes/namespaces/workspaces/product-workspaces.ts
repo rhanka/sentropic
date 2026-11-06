@@ -1,44 +1,24 @@
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
+import { IdentityCustodyErrorV1, IdentityNotFoundError, TenantNotActiveError } from '@sentropic/cluster-mesh';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { zValidator } from '../../../utils/zod-validator';
 import { db } from '../../../db/client';
-import {
-  chatGenerationTraces,
-  chatSessions,
-  contextDocuments,
-  jobQueue,
-  initiatives,
-  folders,
-  organizations,
-  users,
-  workspaceMemberships,
-  workspaces,
-  workflowDefinitionTasks,
-  workflowDefinitions,
-  agentDefinitions,
-  workspaceTypeWorkflows,
-  executionRuns,
-  executionEvents,
-  entityLinks,
-  guardrails,
-  viewTemplates,
-} from '../../../db/schema';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { workspaces } from '../../../db/schema';
+import { eq } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
-import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../../services/workspace-access';
+import { createId } from '../../../utils/id';
+import { runCmIdentityWrite } from '../../../services/identity/cm-transaction';
+import { CmIdentityForbiddenError } from '../../../services/identity/cm-deletion-authorization';
+import { getUserWorkspaces, requireWorkspaceAdmin } from '../../../services/workspace-access';
+import { listCmWorkspaceMembers } from '../../../services/identity/cm-tenancy';
+import { deleteCmWorkspace } from '../../../services/identity/cm-workspace-deletion';
 import {
-  notifyWorkspaceCreated, notifyWorkspaceEvent, notifyWorkspaceMembershipEvent,
+  notifyWorkspaceCreated, notifyWorkspaceEvent,
   provisionWorkspace, seedWorkspaceTypeResources,
 } from '../../../services/workspace-provisioning';
-import {
-  captureConnectorGrantsForTeardown,
-  recordConnectorGrantTombstones,
-  revokeCapturedConnectorGrants,
-} from '../../../services/connector-grant-teardown';
 
 export const workspacesRouter = new Hono();
-
-const roleSchema = z.enum(['viewer', 'commenter', 'editor', 'admin']);
 
 workspacesRouter.get('/', async (c) => {
   const user = c.get('user') as { userId: string };
@@ -67,13 +47,22 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
 
   // Canonical rows via the shared provisioning service (same gate config,
   // same creator-as-admin membership, same transaction atomicity).
-  const id = await db.transaction((tx) =>
+  const prospectiveId = createId();
+  let id: string;
+  try {
+  id = await runCmIdentityWrite((tx) =>
     provisionWorkspace(tx, {
+      workspaceId: prospectiveId,
       ownerUserId: user.userId,
       name,
       type: type as import('../../../services/workspace-access').WorkspaceType,
     }),
   );
+  } catch (error) {
+    if (error instanceof CmIdentityForbiddenError) return c.json({ error: 'Insufficient permissions' }, 403);
+    if (error instanceof TenantNotActiveError) return c.json({ error: 'Tenant not active' }, 409);
+    return c.json({ error: 'Identity service unavailable' }, 503);
+  }
 
   // Seed default workflows/agents (§7.6, §8.1) and view templates (§12.6)
   // via the shared provisioning path (same steps as session adoption).
@@ -195,11 +184,6 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
   const workspaceId = c.req.param('id')!;
-  try {
-    await requireWorkspaceAdmin(user.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
 
   const [ws] = await db
     .select({ hiddenAt: workspaces.hiddenAt })
@@ -208,224 +192,26 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     .limit(1);
 
   if (!ws) return c.json({ message: 'Not found' }, 404);
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
   if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
 
-  const members = await db
-    .select({ userId: workspaceMemberships.userId })
-    .from(workspaceMemberships)
-    .where(eq(workspaceMemberships.workspaceId, workspaceId));
-  const memberUserIds = members.map((m) => m.userId);
-
-  // Capture external grants BEFORE the deletion. This path deletes a workspace only, but connector
-  // rows cascade from `workspaces` too, and they belong to EVERY member — not just the caller — so
-  // the scope here is the workspace, not the acting user. See services/connector-grant-teardown.ts.
-  const capturedGrants = await captureConnectorGrantsForTeardown({ workspaceId });
-
-  await db.transaction(async (tx) => {
-    // Atomic with the destruction.
-    await recordConnectorGrantTombstones(tx, capturedGrants);
-
-    // Detach traces that use workspace FK (optional; keep history)
-    await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
-
-    // Delete chat sessions scoped to workspace (cascades to messages/contexts/events via FK)
-    await tx.delete(chatSessions).where(eq(chatSessions.workspaceId, workspaceId));
-
-    // Documents (versions cascade)
-    await tx.delete(contextDocuments).where(eq(contextDocuments.workspaceId, workspaceId));
-
-    // Jobs (history references are set null)
-    await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
-
-    // BR-04 tables: execution events/runs, entity links, guardrails
-    await tx.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
-    await tx.delete(executionRuns).where(eq(executionRuns.workspaceId, workspaceId));
-    await tx.delete(entityLinks).where(eq(entityLinks.workspaceId, workspaceId));
-    await tx.delete(guardrails).where(eq(guardrails.workspaceId, workspaceId));
-
-    // BR-04 tables: workflow tasks → workflow definitions → workspace type workflows, agent definitions
-    const wfIds = (await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId))).map(r => r.id);
-    if (wfIds.length > 0) {
-      await tx.delete(workflowDefinitionTasks).where(inArray(workflowDefinitionTasks.workflowDefinitionId, wfIds));
-      await tx.delete(workspaceTypeWorkflows).where(inArray(workspaceTypeWorkflows.workflowDefinitionId, wfIds));
+  // Recipients of the post-commit deletion notice, captured before deletion.
+  const members = await listCmWorkspaceMembers(workspaceId);
+  try {
+    await deleteCmWorkspace({ workspaceId, actorId: user.userId }, randomUUID());
+  } catch (error) {
+    if (error instanceof IdentityNotFoundError) return c.json({ message: 'Not found' }, 404);
+    if (error instanceof IdentityCustodyErrorV1 && error.code === 'identity_workspace_admin_required') {
+      return c.json({ error: 'Insufficient permissions' }, 403);
     }
-    await tx.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId));
-    await tx.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
-
-    // BR-04B: view templates
-    await tx.delete(viewTemplates).where(eq(viewTemplates.workspaceId, workspaceId));
-
-    // Core business tables
-    await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
-    await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
-    await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
-
-    // Memberships
-    await tx.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
-
-    // Finally delete workspace
-    await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
-  });
-
-  // Only after a successful commit.
-  await revokeCapturedConnectorGrants(capturedGrants);
-
-  await notifyWorkspaceEvent(workspaceId, { action: 'deleted' }, memberUserIds);
-
-  return c.body(null, 204);
-});
-
-// --- Members management (admin-only) ---
-
-workspacesRouter.get('/:id/members', async (c) => {
-  const user = c.get('user') as { userId: string };
-  const workspaceId = c.req.param('id')!;
-  try {
-    await requireWorkspaceAccess(user.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
+    throw error;
   }
-
-  const rows = await db
-    .select({
-      userId: users.id,
-      email: users.email,
-      displayName: users.displayName,
-      role: workspaceMemberships.role,
-      createdAt: workspaceMemberships.createdAt,
-    })
-    .from(workspaceMemberships)
-    .innerJoin(users, eq(workspaceMemberships.userId, users.id))
-    .where(eq(workspaceMemberships.workspaceId, workspaceId))
-    .orderBy(desc(workspaceMemberships.createdAt));
-
-  return c.json({ items: rows });
-});
-
-// Members list for @mentions (workspace access required)
-workspacesRouter.get('/:id/members/mentions', async (c) => {
-  const user = c.get('user') as { userId: string };
-  const workspaceId = c.req.param('id')!;
-
-  try {
-    await requireWorkspaceAccess(user.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  const rows = await db
-    .select({
-      userId: users.id,
-      email: users.email,
-      displayName: users.displayName,
-      role: workspaceMemberships.role,
-    })
-    .from(workspaceMemberships)
-    .innerJoin(users, eq(workspaceMemberships.userId, users.id))
-    .where(eq(workspaceMemberships.workspaceId, workspaceId))
-    .orderBy(desc(workspaceMemberships.createdAt));
-
-  return c.json({ items: rows });
-});
-
-const addMemberSchema = z.object({
-  email: z.string().email(),
-  role: roleSchema,
-});
-
-workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMemberSchema), async (c) => {
-  const actor = c.get('user') as { userId: string; role: string };
-
-  const workspaceId = c.req.param('id')!;
-
-  // Neutral workspaces are personal and non-delegable.
-  if (await isNeutralWorkspace(workspaceId)) {
-    return c.json({ error: 'Neutral workspaces do not support memberships' }, 400);
-  }
-
-  try {
-    await requireWorkspaceAdmin(actor.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  const body = c.req.valid('json');
-  const normalizedEmail = body.email.trim().toLowerCase();
-
-  const [target] = await db.select({ id: users.id }).from(users).where(eq(users.email, normalizedEmail)).limit(1);
-  if (!target) return c.json({ message: 'User not found' }, 404);
-
-  const now = new Date();
-  await db
-    .insert(workspaceMemberships)
-    .values({
-      workspaceId,
-      userId: target.id,
-      role: body.role,
-      createdAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [workspaceMemberships.workspaceId, workspaceMemberships.userId],
-      set: { role: body.role },
-    });
-
-  await notifyWorkspaceMembershipEvent(workspaceId, target.id, { action: 'added', role: body.role });
-  return c.json({ success: true });
-});
-
-const updateMemberSchema = z.object({
-  role: roleSchema,
-});
-
-async function updateMemberRoleHandler(c: Context) {
-  const actor = c.get('user') as { userId: string; role: string };
-
-  const workspaceId = c.req.param('id')!;
-  const targetUserId = c.req.param('userId')!;
-  if (targetUserId === actor.userId) return c.json({ message: 'Cannot change your own role' }, 400);
-
-  try {
-    await requireWorkspaceAdmin(actor.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  // Avoid relying on typed `c.req.valid()` here: this handler is shared between PATCH and PUT,
-  // and TypeScript cannot infer the validated type through the function boundary.
-  const raw = await c.req.json().catch(() => null);
-  const parsed = updateMemberSchema.safeParse(raw);
-  if (!parsed.success) return c.json({ message: 'Invalid body' }, 400);
-  const { role } = parsed.data;
-  await db
-    .update(workspaceMemberships)
-    .set({ role })
-    .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
-
-  await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'role_updated', role });
-  return c.json({ success: true });
-}
-
-// Support both PATCH and PUT for ergonomics/backward compatibility with UI callers.
-workspacesRouter.patch('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), updateMemberRoleHandler);
-workspacesRouter.put('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), updateMemberRoleHandler);
-
-workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
-  const actor = c.get('user') as { userId: string; role: string };
-
-  const workspaceId = c.req.param('id')!;
-  const targetUserId = c.req.param('userId')!;
-  if (targetUserId === actor.userId) return c.json({ message: 'Cannot remove yourself' }, 400);
-
-  try {
-    await requireWorkspaceAdmin(actor.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  await db
-    .delete(workspaceMemberships)
-    .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
-
-  await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'removed' });
+  await notifyWorkspaceEvent(workspaceId, { action: 'deleted' },
+    [...new Set(members.map(member => member.userId))]);
   return c.body(null, 204);
 });

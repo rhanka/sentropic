@@ -8,12 +8,11 @@ import {
   plans,
   tasks,
   todos,
-  users,
-  workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import { todoOrchestrationService } from '../../src/services/todo-orchestration';
 import { PostgresAgentTemplate } from '../../src/services/flow/postgres-agent-template';
 
@@ -23,16 +22,9 @@ describe('TodoOrchestrationService chat progression', () => {
 
   beforeEach(async () => {
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `todo-progression-${userId}@example.com`,
-      displayName: 'TODO Progression Tester',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    const actor = await createTestUser({ email: `todo-progression-${userId}@example.com`, displayName: 'TODO Progression Tester', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
   });
 
   afterEach(async () => {
@@ -42,9 +34,10 @@ describe('TodoOrchestrationService chat progression', () => {
     await db.delete(todos).where(eq(todos.workspaceId, workspaceId));
     await db.delete(plans).where(eq(plans.workspaceId, workspaceId));
     await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
   });
 
   it('reuses the canonical agent definition table through the Flow port', async () => {

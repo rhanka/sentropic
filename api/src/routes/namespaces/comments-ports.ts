@@ -1,18 +1,19 @@
 import type { TenantContext } from '@sentropic/contracts';
 import type { CreateCommentsRouterOptions } from '@sentropic/comments/hono';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { HTTPException } from 'hono/http-exception';
 
 import { db } from '../../db/client';
 import {
   folders,
   initiatives,
   organizations,
-  users,
-  workspaceMemberships,
 } from '../../db/schema';
+import { findCmUserById } from '../../services/identity/cm-users';
+import { findCmWorkspaceMember } from '../../services/identity/cm-tenancy';
 import type { AuthUser } from '../../middleware/auth';
 import { commentEventSink, commentStore } from '../../services/comments/instance';
-import { reconcileTenantId } from '../../services/tenancy/resolve-tenant';
+import { CmTenantResolutionError, reconcileCmTenantId } from '../../services/identity/cm-tenancy';
 import {
   requireWorkspaceAccess,
   requireWorkspaceAdmin,
@@ -75,10 +76,17 @@ export const createProductCommentsRouterOptions = (): CreateCommentsRouterOption
   },
   tenant: {
     async resolve(principal): Promise<TenantContext> {
-      const tenantId = await reconcileTenantId({
+      const tenantId = await reconcileCmTenantId({
         workspaceId: principal.workspaceId,
         userId: principal.userId,
         path: 'comments',
+      }).catch(error => {
+        // Workspace membership and tenant approval are independent. A missing
+        // or concurrently withdrawn tenant grant is a refusal, never a 500.
+        if (error instanceof CmTenantResolutionError) {
+          throw new HTTPException(403, { res: Response.json({ error: 'Tenant access required' }, { status: 403 }) });
+        }
+        throw error;
       });
       return {
         tenantId,
@@ -90,22 +98,15 @@ export const createProductCommentsRouterOptions = (): CreateCommentsRouterOption
       return contextExists(contextType, contextId, workspaceId);
     },
     async memberExists({ userId, workspaceId }) {
-      const [row] = await db.select({ userId: workspaceMemberships.userId })
-        .from(workspaceMemberships)
-        .where(and(
-          eq(workspaceMemberships.workspaceId, workspaceId),
-          eq(workspaceMemberships.userId, userId),
-        ))
-        .limit(1);
+      const row = await findCmWorkspaceMember(workspaceId, userId);
       return Boolean(row);
     },
     async resolveUsers({ userIds }) {
       if (userIds.length === 0) return [];
-      return db.select({
-        id: users.id,
-        email: users.email,
-        displayName: users.displayName,
-      }).from(users).where(inArray(users.id, [...userIds]));
+      const rows = await Promise.all([...userIds].map((id) => findCmUserById(id)));
+      return rows
+        .filter((u): u is NonNullable<typeof u> => u !== null)
+        .map((u) => ({ id: u.id, email: u.email, displayName: u.displayName }));
     },
   },
 });

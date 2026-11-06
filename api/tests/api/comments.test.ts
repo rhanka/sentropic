@@ -7,7 +7,9 @@ import {
   cleanupAuthData
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { comments, organizations, folders, initiatives, workspaceMemberships } from '../../src/db/schema';
+import { comments, organizations, folders, initiatives } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 
@@ -25,14 +27,8 @@ describe('Comments API', () => {
     admin = await createAuthenticatedUser('editor', `admin-${createTestId()}@example.com`);
 
     if (user.workspaceId) {
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: user.workspaceId, userId: editor.id, role: 'editor', createdAt: new Date() })
-        .onConflictDoNothing();
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: user.workspaceId, userId: admin.id, role: 'admin', createdAt: new Date() })
-        .onConflictDoNothing();
+      await putCmWorkspaceMember(user.workspaceId, editor.id, 'editor');
+      await putCmWorkspaceMember(user.workspaceId, admin.id, 'admin');
     }
 
     const orgRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations', user.sessionToken!, {
@@ -65,7 +61,7 @@ describe('Comments API', () => {
       await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
       await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
       await db.delete(organizations).where(eq(organizations.workspaceId, user.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, user.workspaceId));
+      await cmDeleteWorkspaceMembers(user.workspaceId);
     }
     await cleanupAuthData();
   });
