@@ -31,7 +31,7 @@ describe('live crash and wake fences', () => {
     await f.controller.start(key);
     const entered = deferred<void>(); const release = deferred<void>();
     const commit = f.ports.publication.commit;
-    f.ports.publication.commit = vi.fn(async (...args) => { entered.resolve(); await release.promise; return commit(...args); });
+    f.ports.publication.commit = vi.fn(async (...args: Parameters<typeof commit>) => { entered.resolve(); await release.promise; return commit(...args); });
     f.advance(600_001); const idle = f.controller.idle(key); await entered.promise;
     const wake = f.controller.wake(key); release.resolve(); await Promise.all([idle, wake]);
     expect(f.published).toEqual(['B']); expect((await f.state())?.runtime.phase).toBe('LIVE');

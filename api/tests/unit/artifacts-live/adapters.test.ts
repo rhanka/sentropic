@@ -35,7 +35,7 @@ describe('trusted live adapters', () => {
     const bytes = Buffer.from('tarball');
     const pin = { path: 'node_modules/pkg', version: '1.0.0', url: 'https://registry.npmjs.org/pkg/-/pkg.tgz',
       integrity: 'sha512-' + createHash('sha512').update(bytes).digest('base64') };
-    const transport = vi.fn(async () => new Response(bytes));
+    const transport = vi.fn<typeof fetch>(async () => new Response(bytes));
     expect(await fetchLockedTarball(pin, NPM_RELAY, transport)).toEqual(bytes);
     expect(String(transport.mock.calls[0][0])).toBe(NPM_RELAY + 'pkg/-/pkg.tgz');
     expect(transport.mock.calls[0][1]).toMatchObject({ redirect: 'error', headers: { 'accept-encoding': 'identity' } });

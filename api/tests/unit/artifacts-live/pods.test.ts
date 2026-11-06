@@ -17,7 +17,7 @@ describe('builder pod admission and recovery', () => {
   });
   it('should adopt the matching pod after a creation response is lost', async () => {
     const f = fixture(); const create = f.core.create;
-    f.core.create = vi.fn(async (resource, value) => { const result = await create(resource, value);
+    vi.spyOn(f.core, 'create').mockImplementation(async (resource, value) => { const result = await create(resource, value);
       if (resource === 'pods') throw new Error('response lost'); return result; });
     const runtime = await f.controller.start(key);
     expect(runtime.phase).toBe('LIVE'); expect(f.core.create).toHaveBeenCalledTimes(2); expect(f.objects.size).toBe(2);
