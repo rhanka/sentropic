@@ -65,6 +65,7 @@
   - [x] Added verified App-key replacement and staged webhook rotation with a separate sender switch; specified REST adapter tests first.
   - [x] Added HMAC-authenticated installation suspension, uninstall, repository-removal and permission-change handling.
   - [x] Added explicit secret retirement and ciphertext tamper/substitution and concurrent callback checks.
+  - [x] Required a sanitized host invalidation callback to discard adapter caches and fence dependent jobs on revocation/key rotation.
   - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
   - [ ] Document owner clicks and activation gates in `docs/github-app-enrollment.md`.
 - [ ] **Lot 4 — Final validation and handoff**

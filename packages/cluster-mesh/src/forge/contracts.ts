@@ -28,6 +28,14 @@ export interface GitAppOwnerRepository {
   locator: string;
 }
 
+/** Cluster-mesh host invalidates adapter caches and fences dependent jobs. */
+export interface GitCredentialInvalidation {
+  storageScopeId: string;
+  repoId: string;
+  installationRef: string;
+  credentialVersion: string;
+}
+
 export const GIT_APP_PERMISSIONS = Object.freeze({ contents: 'write', metadata: 'read' } as const);
 export type GitAppErrorCode = 'access_denied' | 'capability_unavailable' | 'invalid_request';
 export class GitAppError extends Error {
