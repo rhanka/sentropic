@@ -23,9 +23,9 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
           [namespace, rowKey(key)]);
         const unit = { state: rows[0] ? JSON.parse(rows[0].value) as LiveState : undefined,
           save(state: LiveState) { unit.state = state; }, client };
+        if (unit.state) unit.state.runtime.rowVersion++;
         const result = await work(unit);
         if (unit.state) {
-          unit.state.runtime.rowVersion++;
           await client.query(`INSERT INTO control.artifact_host_kv (storage_scope_id, key, value) VALUES ($1,$2,$3)
             ON CONFLICT (storage_scope_id,key) DO UPDATE SET value=EXCLUDED.value`,
           [namespace, rowKey(key), JSON.stringify(unit.state)]);
