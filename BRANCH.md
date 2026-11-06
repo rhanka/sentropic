@@ -52,5 +52,5 @@
   - [x] tests/live-drafts.test.ts and tests/live-drafts.integration.test.ts.
   - [x] tests/live-tools.test.ts, live-tools-races.test.ts, live-tools-pages.test.ts, live-tree.test.ts, live-body.test.ts and live-tools-transport.test.ts.
   - [x] tests/tools-list-snapshot.test.ts; deliberate 24 to 35 catalogue extension; all 24 original definitions unchanged.
-  - [x] Scoped memory/transport/profile/GitPort verification: 269 tests pass; Postgres 11 pass; typecheck and changed-file lint pass.
+  - [x] Scoped memory/transport/profile/GitPort verification: 269 tests plus five new path-denial cases; Postgres 11 pass; typecheck and changed-file lint pass.
   - [ ] Run make down-volumes ENV=test-live-tools and disk-hygiene when available.
