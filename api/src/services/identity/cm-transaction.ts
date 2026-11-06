@@ -34,16 +34,31 @@ export const cmRequestReadOptions = {
 } as const;
 
 /** r6 §6.4: every CM slice and app participant borrows this one connection. */
+const destructiveAttempt = new AsyncLocalStorage<boolean>();
+// Cascades inspect references across tables: unrelated CM writers can form
+// SSI predicate cycles even though their subject/workspace locks are disjoint.
+// A shared/exclusive gate admits ordinary writers together, but drains them
+// before a destructive snapshot. Acquire it outside BEGIN: waiting inside a
+// serializable transaction would retain the stale snapshot we must avoid.
+const writerGateKey = 'sentropic:cm_identity:destructive-writers';
 const host: PostgresIdentityHostV1<AppCustodyHost> = {
   async runSerializable(options, operation) {
+    const deadline = Date.now() + options.deadlineMs;
     const client = await pool.connect();
     const scoped = createCmScopedHostClient(client);
+    const gate = !options.readOnly ? (destructiveAttempt.getStore() ? '' : '_shared') : null;
     let committing = false;
     let failure: Error | undefined;
     try {
+      if (gate !== null) {
+        await client.query("SELECT set_config('statement_timeout', $1, false)", [String(Math.max(1, deadline - Date.now()))]);
+        await client.query(`SELECT pg_advisory_lock${gate}(hashtextextended($1, 0))`, [writerGateKey]);
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       await client.query(options.readOnly ? 'BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY'
         : 'BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
-      await client.query("SELECT set_config('statement_timeout', $1, true)", [String(options.deadlineMs)]);
+      await client.query("SELECT set_config('statement_timeout', $1, true)", [String(remaining)]);
       const session: PostgresIdentityBindingV1<AppCustodyHost>['session'] = { async execute(statement) {
         const result = await scoped.client.query(statement.text, [...statement.values ?? []]);
         return { rows: result.rows, rowCount: result.rowCount };
@@ -78,13 +93,27 @@ const host: PostgresIdentityHostV1<AppCustodyHost> = {
         throw new IdentityCustodyErrorV1('identity_transaction_indeterminate');
       }
       throw error;
-    } finally { scoped.expire(); client.release(failure); }
+    } finally {
+      scoped.expire();
+      if (gate !== null && !failure) {
+        try {
+          await client.query(`SELECT pg_advisory_unlock${gate}(hashtextextended($1, 0))`, [writerGateKey]);
+          await client.query('RESET statement_timeout');
+        } catch (error) { failure = error instanceof Error ? error : new Error('Identity writer gate release failed'); }
+      }
+      // Destroy failed connections: PostgreSQL releases their session locks.
+      client.release(failure);
+    }
   },
 };
 
 // Stack dependency: the approved r6 UOW implements run/options/combined stores.
 // No app implementation of that CM contract is supplied here.
-export const cmIdentityUnitOfWork = createPostgresIdentityUnitOfWorkV1({ schema: 'cm_identity', host });
+const unitOfWork = createPostgresIdentityUnitOfWorkV1({ schema: 'cm_identity', host });
+export const cmIdentityUnitOfWork: typeof unitOfWork = {
+  profile: unitOfWork.profile,
+  run: (options, operation) => destructiveAttempt.run(options.purpose === 'delete', () => unitOfWork.run(options, operation)),
+};
 
 const current = new AsyncLocalStorage<CmIdentityTransaction>();
 export const currentCmIdentityTransaction = () => current.getStore();
