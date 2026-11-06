@@ -296,6 +296,59 @@ test.describe('Détail des organisations', () => {
       await userBContext.close();
     });
 
+    test('presence: a newer event survives a delayed initial response', async ({ browser }) => {
+      const [memberA, memberB] = await Promise.all([isolatedMember('org-order-a'), isolatedMember('org-order-b')]);
+      const contextA = await browser.newContext({ storageState: memberA.storageState });
+      const contextB = await browser.newContext({ storageState: memberB.storageState });
+      let release!: () => void;
+      let captured!: () => void;
+      const delayed = new Promise<void>((resolve) => { release = resolve; });
+      const snapshotCaptured = new Promise<void>((resolve) => { captured = resolve; });
+      try {
+        const pageA = await contextA.newPage();
+        const pageB = await contextB.newPage();
+        // Prevent heartbeat replies from hiding the stale initial snapshot.
+        let held = false;
+        await pageA.route('**/api/v1/locks/presence*', async (route) => {
+          if (route.request().method() !== 'POST') return route.continue();
+          if (held) return route.abort();
+          held = true;
+          const response = await route.fetch();
+          expect((await response.json()).users.map((user: { userId: string }) => user.userId)).toEqual([memberA.userId]);
+          captured();
+          await delayed;
+          await route.fulfill({ response });
+        });
+        let joined = false;
+        await pageB.route('**/api/v1/locks/presence*', async (route) => {
+          if (route.request().method() !== 'POST') return route.continue();
+          if (joined) return route.abort();
+          joined = true;
+          await route.continue();
+        });
+        const subscribed = pageA.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return url.pathname === '/api/v1/streams/sse' && url.searchParams.get('workspace_id') === workspaceAId && response.ok();
+        }, { timeout: 2_000 });
+        await pageA.goto(`/organizations/${encodeURIComponent(organizationId)}`);
+        await snapshotCaptured;
+        await subscribed;
+        await pageB.goto(`/organizations/${encodeURIComponent(organizationId)}`);
+        const avatarBInA = pageA.locator(`[aria-label="Verrou du document"] [title="${memberB.displayName}"]`);
+        await expect(avatarBInA).toHaveCount(1, { timeout: 2_000 });
+        const responseFinished = pageA.waitForResponse((response) =>
+          new URL(response.url()).pathname === '/api/v1/locks/presence' && response.request().method() === 'POST');
+        release();
+        await (await responseFinished).finished();
+        await pageA.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        await expect(avatarBInA).toHaveCount(1, { timeout: 2_000 });
+      } finally {
+        release();
+        await contextA.close();
+        await contextB.close();
+      }
+    });
+
     test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
       test.setTimeout(60_000);
       const [memberA, memberB] = await Promise.all([isolatedMember('org-presence-a'), isolatedMember('org-presence-b')]);
