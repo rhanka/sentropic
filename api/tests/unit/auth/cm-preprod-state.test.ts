@@ -5,6 +5,10 @@ import { inspectPreprod } from '../../../src/scripts/cm-preprod-state';
 import { custody, sha256, type PreprodRequest } from '../../../src/scripts/cm-preprod-contract';
 import { a4SourceFieldManifest } from '../../../src/services/identity/cm-import-manifest';
 
+vi.mock('../../../src/scripts/cm-preprod-contract', async original => ({
+  ...await original<typeof import('../../../src/scripts/cm-preprod-contract')>(),
+  custody: `/tmp/sentropic-a4-state-${process.pid}-${process.env.VITEST_WORKER_ID}`,
+}));
 vi.mock('../../../src/services/webauthn-config', () => ({ getWebAuthnConfig: () => ({
   rpID: 'preprod.sentropic.sent-tech.ca', origin: 'https://preprod.sentropic.sent-tech.ca' }) }));
 const remote = '{"format":"remote-session-projection-snapshot/1","records":[]}';

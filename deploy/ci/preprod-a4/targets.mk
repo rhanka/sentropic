@@ -10,12 +10,15 @@ export A4_REHEARSAL_FILE
 export A4_BUDGETS_FILE
 .PHONY: k8s-preprod-a4-verify
 k8s-preprod-a4-verify: ## Read-only journal, CM receipt, D11, readiness and public HTTP verification
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
 	@node deploy/ci/preprod-a4/verify.mjs
 .PHONY: k8s-preprod-a4-custody
 k8s-preprod-a4-custody: ## Prepare the tenant custodian or stage protected inputs; dry-run by default
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
 	@node deploy/ci/preprod-a4/ops.mjs
 .PHONY: k8s-preprod-a4-prepare test-preprod-a4
 k8s-preprod-a4-prepare: ## Prepare the owner-authorized A4 evidence; dry-run by default (see runbook)
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
 	@node deploy/ci/preprod-a4/run.mjs
 
 test-preprod-a4: ## Scoped operator, secret-composition and bundle preparation tests; no cluster
