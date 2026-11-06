@@ -8,11 +8,13 @@
 - [x] Resolve official Node LTS digest and publish it first in .tmp/rv/gb4-probe.md.
 - [x] GB4-1: deploy/ci/gb4-probe/checks.mjs and server.mjs; dependency-free HTTP/self-tests and WebSocket echo.
 - [x] GB4-2: deploy/ci/gb4-probe/manifests.mjs; restricted Pod and ClusterIP Service; emptyDir volumes only.
-- [x] GB4-3: deploy/ci/gb4-probe/run.mjs and probe.mk; preprod-only access through KUBE_CONFIG_DATA_PREPROD_BASCULE, GO gate, cleanup and report.
+- [x] GB4-3: deploy/ci/gb4-probe/run.mjs and probe.mk; preprod-only access through K8S_TENANT_ADMIN_KUBECONFIG_B64, sentropic-app impersonation, GO gate, cleanup and report.
 - [x] GB4-4: deploy/k8s/base/artifact-content-networkpolicy.yaml; TCP 5173 only to builder namespace AND binding-labelled pods.
 - [x] GB4-5: scoped offline checks 3/3 PASS (GO gate, restricted manifest, split-frame WebSocket and read-only/non-root storage); mechanical harness scope checks before every commit; wagon pushed without PR.
 - [x] GB4-6: polled every 120 seconds from 2026-11-06 03:11:45 to 13:11:45 UTC; ten-hour window expired without GO; no cluster access or mutation.
-- [ ] GB4-7: NOT RUN because the conductor GO file remained absent; live self-tests and positive/negative WebSocket checks remain unassessed. Report: .tmp/rv/gb4-probe.md.
+- [x] GB4-7 (resumed 2026-11-06): live probe executed at c7431bd89 after GO. Network isolation, DNS, non-root UID, absent SA token, read-only root, all five emptyDirs, local WebSocket echo, negative clients through Service DNS and Pod IP, and cleanup PASS. Overall FAIL: /dev/termination-log is an unexpected writable storage mount. Artifact-content WebSocket is PENDING-EGRESS as instructed. Full manifests and table: .tmp/rv/gb4-probe.md.
+- [ ] GB4-STORAGE: owner k8s/builder runtime; inspect the kubelet termination-message mount and provide a configuration satisfying the existing emptyDir-only writable-storage requirement. Acceptance: no unexpected writable storage mount in the unchanged self-test on a fresh restricted probe; no implicit path exception. This is an observed qualification failure, not permission to widen policy.
+- [ ] GB4-EGRESS: owner train/k8s; integrate the prepared artifact-content egress rule, then qualify the positive WebSocket from an actual artifact-content Pod through an approved log-based path. Current owner instruction keeps this check PENDING-EGRESS; the probe lane applies no policy.
 - [x] GB4-GO-TIMEOUT — handoff owner: conductor/k8s; prerequisite: applied builder baseline and allowlisted reported digest, then the exact GO file. Acceptance: run the prepared preprod probe and record live checks plus verified cleanup; no PR or production run from this lane.
 - [ ] Track handoff: designated conductor imports this mergeable BRANCH.md; this lane never writes concurrent .track events.
 - [x] Test environment: test-gb4; no compose services; reserved ports API=9690, UI=5890, MAILDEV_UI=1790.
