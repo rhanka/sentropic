@@ -32,6 +32,13 @@ describe('live content proxy', () => {
     expect(await f.proxy.fetch(new Request(origin + '/'), 'artifact')).toBeUndefined();
     expect(f.ports.fetch).not.toHaveBeenCalled();
   });
+  it('should authorize the exact served Vite inline refresh preamble by hash', async () => {
+    const f = fixture(); f.ports.fetch = vi.fn(async () => new Response('<script type="module">import "/@react-refresh";</script>',
+      { headers: { 'content-type': 'text/html' } }));
+    const response = await f.proxy.fetch(new Request(origin), 'artifact');
+    const csp = response?.headers.get('content-security-policy');
+    expect(csp).toMatch(/script-src 'self' 'sha256-[A-Za-z0-9+/]+=*'/); expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+  });
   it.each(['/\.env', '/nested/.env.local', '/@fs/etc/passwd', '/api/secrets', '/.git/config', '/a%5Cb', '/a%252fb'])
     ('should reject forbidden source requests %s independently of repository Vite config', async path => {
       const f = fixture(); await f.proxy.fetch(new Request(origin + path), 'artifact'); expect(f.ports.fetch).not.toHaveBeenCalled();

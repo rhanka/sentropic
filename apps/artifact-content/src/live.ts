@@ -1,4 +1,5 @@
 import { contentHeaders } from '@sentropic/artifacts/content/headers';
+import { createHash } from 'node:crypto';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 import type { LiveKey } from '../../../api/src/services/artifacts/live/records';
 
@@ -18,11 +19,11 @@ export interface LiveProxyPorts {
   now?: () => number;
 }
 export const hmrPath = (sessionId: string) => `/_live/${encodeURIComponent(sessionId)}/hmr`;
-export function liveHeaders(mime: string, size: number, origin: string, sessionId: string) {
+export function liveHeaders(mime: string, size: number, origin: string, sessionId: string, scriptHashes: string[] = []) {
   const endpoint = new URL(hmrPath(sessionId), origin); endpoint.protocol = 'wss:';
   return { ...contentHeaders({ mimeType: mime, size, mode: 'application' }),
     'cache-control': 'private, no-store',
-    'content-security-policy': ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
+    'content-security-policy': ["default-src 'self'", `script-src 'self' ${scriptHashes.join(' ')}`.trim(), "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:", "font-src 'self'", "media-src 'self' blob:",
       `connect-src 'self' ${endpoint.href}`, "worker-src 'none'", "child-src 'none'", "frame-src 'none'",
       "frame-ancestors 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"].join('; '),
@@ -74,8 +75,12 @@ export function createLiveProxy(ports: LiveProxyPorts) {
       }
       if (!await valid(route)) return refused();
       const mime = response.headers.get('content-type')?.split(';')[0] ?? 'application/octet-stream';
-      return new Response(request.method === 'HEAD' ? null : Buffer.concat(chunks), {
-        status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId),
+      const bytes = Buffer.concat(chunks);
+      // Vite's React refresh preamble is inline. Hash exact served script text; never enable unsafe-inline/eval.
+      const hashes = mime === 'text/html' ? Array.from(bytes.toString('utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi),
+        match => `'sha256-${createHash('sha256').update(match[1].replace(/\r\n?/g, '\n')).digest('base64')}'`) : [];
+      return new Response(request.method === 'HEAD' ? null : bytes, {
+        status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId, hashes),
       });
     },
   };
