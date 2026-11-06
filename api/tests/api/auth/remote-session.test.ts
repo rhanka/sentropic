@@ -13,6 +13,7 @@ import { commitRemoteEvidence, resolveRemoteLogin, reserveRemoteEvidence } from 
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
 import { createRemoteIdpEvidencePorts } from '../../../src/services/auth/remote-idp';
+import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
 
 const keys = generateKeyPairSync('ed25519');
 let userId: string;
@@ -65,9 +66,7 @@ describe('RC1 current issuer session store', () => {
     if (failure === 'lock') mkdirSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json.lock`));
     if (failure === 'corrupt-foreign-file') writeFileSync(join(directory, `${'0'.repeat(64)}.json`), '{');
     if (failure === 'missing-pvc') rmSync(directory, { recursive: true });
-    // Post-cutover only the CM binding supplies session authority (the OAuth
-    // host bag keeps sessions unsupported by design); the oauth-* entries go
-    // through the binding session service, like the serving OAuth namespace does.
+    // Exercise the transaction-bound session service used by the serving OAuth namespace.
     const cmRevoke = (sessionId: string) => withAppCmAuth(runner =>
       runner.request(async binding => binding.sessions.revokeSession(sessionId)));
     const cmRevokeAll = (id: string) => withAppCmAuth(runner =>
@@ -80,15 +79,7 @@ describe('RC1 current issuer session store', () => {
     expect(await validateSession(tokens.sessionToken)).toBeNull();
     await expect(issue(request)).rejects.toMatchObject({ code: 'authentication_required' });
   });
-  // BLOCKED (a4-lane, re-enable when the owning lot lands): recovery of shared
-  // DB/files alone must not reopen authority in the issuer process, but the
-  // CM cutover keeps no revocation fence that survives a row reinsert
-  // (cmReinsertSession faithfully restores an active row + token bindings, and
-  // resolveRemoteLogin reads the row). The file sabotage above is legacy: the
-  // issuer authority no longer mints file records, so lock/corrupt/missing no
-  // longer drive the refusal codes. Owning lot: the RC1 revocation-fence
-  // design (durable fence consulted at issuance). Assertions unchanged.
-  describe.skip('shared-DB/file recovery must not reopen authority', () => {
+  describe('shared-DB/file recovery must not reopen authority', () => {
     it.each(['logout', 'revoke-all', 'oauth-logout', 'oauth-revoke-all'].flatMap(operation =>
       ['lock', 'corrupt-foreign-file', 'missing-pvc'].map(failure => ({ operation, failure }))))
     ('should keep refusing authority after shared-DB/file recovery ($operation/$failure)', async ({ operation, failure }) => {
@@ -110,9 +101,7 @@ describe('RC1 current issuer session store', () => {
       await expect(issue(request)).rejects.toMatchObject({ code });
     });
   });
-  // BLOCKED (a4-lane, same owning lot as above): needs the issuer-authority
-  // mint wiring (no file record exists post-mint) plus the revocation fence.
-  it.skip('should fence the late private creation of a session deleted by actual OAuth bulk revoke', async () => {
+  it('should fence the late private creation of a session deleted by actual OAuth bulk revoke', async () => {
     const { tokens } = await setup();
     const row = await findCmSessionById(tokens.sessionId);
     const store = getRemoteSessionAuthority()!;
@@ -120,8 +109,7 @@ describe('RC1 current issuer session store', () => {
     if (pending.revoked) throw new Error('Expected active test session');
     // Reproduce the committed DB insert while its private-create continuation is paused.
     unlinkSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json`));
-    expect(await withAppCmAuth(runner =>
-      runner.request(async binding => binding.sessions.revokeAllSessions(userId)))).toBe(1);
+    expect(await getSentropicOAuthPorts().sessions.revokeAllForUser(userId)).toBe(1);
     expect(() => store.create(pending)).toThrow();
     await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
@@ -135,9 +123,7 @@ describe('RC1 current issuer session store', () => {
     expect(result.status).toBe(200);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
-  // BLOCKED (a4-lane, same owning lot as above): the reinsert reopens a
-  // fence-less row (see above); assertions unchanged.
-  it.skip('should preserve OIDC end_session logout after shared-row restoration', async () => {
+  it('should preserve OIDC end_session logout after shared-row restoration', async () => {
     const { tokens } = await setup();
     const row = await findCmSessionById(tokens.sessionId);
     const { createIdpApp } = await import('../../../../apps/auth-idp/idp-app');
@@ -145,12 +131,11 @@ describe('RC1 current issuer session store', () => {
       headers: { cookie: `session=${tokens.sessionToken}`, 'sec-fetch-mode': 'navigate' },
     });
     expect(result.status).toBe(200);
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
     await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
-  // BLOCKED (a4-lane, same owning lot as above): the reinsert reopens a
-  // fence-less row (see above); assertions unchanged.
-  it.skip('should refuse restored shared-DB authority after issuer logout', async () => {
+  it('should refuse restored shared-DB authority after issuer logout', async () => {
     const { tokens, request, issue } = await setup();
     const row = await findCmSessionById(tokens.sessionId);
     await revokeSession(tokens.sessionId);

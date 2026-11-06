@@ -20,7 +20,7 @@ import type { LifecycleService } from '../server/lifecycle.js';
 import { combineSharingPolicy, resolveSharingPolicy, type SharingPolicyPort } from '../server/ports.js';
 import type { PublicationBlobStore, PublicationService } from '../server/publication.js';
 import { CONTENT_GRANT_TTL_SECONDS, type GrantSigner, type TicketService } from './grants.js';
-import { contentHeaders, grantCookie, parseGrantCookie } from './headers.js';
+import { contentHeaders, grantCookie, parseGrantCookie, type ContentMode } from './headers.js';
 import { isServiceWorkerPath, parseContentHost, resolveContentPath } from './routing.js';
 
 export interface ContentRequest {
@@ -33,6 +33,8 @@ export interface ContentRequest {
   ticket?: string;
   /** Raw HTTP Range header, mapped by the host; absent ⇒ whole file. */
   range?: string;
+  /** Raw HTTP Accept header, mapped by the host; absent ⇒ navigation fallback allowed. */
+  accept?: string;
 }
 
 export interface ContentResponse {
@@ -58,6 +60,23 @@ export interface ContentHandlerDeps {
   /** G1 lock 1 (deployment capability), absent ⇒ closed. */
   allowPublicSharing?: boolean;
   assetCacheSeconds?: number;
+  /** Host-configured mode (owner decision 05/11): `safe` default, `application` for real SPAs. */
+  contentMode?: ContentMode;
+  /** Per-release inline script hashes for the served HTML file, application mode only. */
+  getScriptHashes?: (filePath: string) => readonly string[] | undefined;
+}
+
+/**
+ * History fallback (application mode only): an extensionless HTML navigation
+ * serves the release entry instead of 404. Missing assets (extension
+ * present), reader protocol paths and non-HTML data fetches stay 404.
+ */
+function isHistoryFallback(filePath: string, accept: string | undefined): boolean {
+  if (filePath === '_reader' || filePath.startsWith('_reader/')) return false;
+  const last = filePath.split('/').pop() ?? '';
+  if (last.includes('.')) return false;
+  if (accept === undefined) return true;
+  return accept.split(',').some((part) => part.split(';')[0]?.trim() === 'text/html');
 }
 
 interface ManifestFile { path?: unknown; digest?: unknown; size?: unknown; mimeType?: unknown }
@@ -130,13 +149,22 @@ export function createContentHandler(deps: ContentHandlerDeps) {
     manifest: string,
     filePath: string,
     rangeHeader: string | undefined,
+    accept: string | undefined,
   ): Promise<ContentResponse> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (acl === undefined) return fail(404);
     if (acl.storageScopeId === undefined) return fail(500);
+    const mode = deps.contentMode ?? 'safe';
     const parsed = JSON.parse(manifest) as { files?: ManifestFile[] };
-    const file = (parsed.files ?? []).find((entry) => entry.path === filePath);
+    let file = (parsed.files ?? []).find((entry) => entry.path === filePath);
+    let servedPath = filePath;
+    if ((file === undefined || typeof file.digest !== 'string') &&
+      mode === 'application' && isHistoryFallback(filePath, accept)) {
+      file = (parsed.files ?? []).find((entry) => entry.path === 'index.html');
+      servedPath = 'index.html';
+    }
     if (file === undefined || typeof file.digest !== 'string') return fail(404);
+    const scriptHashes = mode === 'application' ? deps.getScriptHashes?.(servedPath) : undefined;
     const hex = file.digest.startsWith('sha256:') ? file.digest.slice(7) : file.digest;
     const key = `artifacts/${acl.storageScopeId}/blobs/sha256/${hex}`;
     const mimeType = typeof file.mimeType === 'string' ? file.mimeType : 'application/octet-stream';
@@ -160,7 +188,7 @@ export function createContentHandler(deps: ContentHandlerDeps) {
         return {
           status: 206,
           headers: { ...contentHeaders({ mimeType, size: bytes.length,
-            assetCacheSeconds: deps.assetCacheSeconds }),
+            assetCacheSeconds: deps.assetCacheSeconds, mode, scriptHashes }),
             'content-range': `bytes ${range.start}-${range.end}/${size}`,
             'accept-ranges': 'bytes' },
           bytes,
@@ -174,7 +202,7 @@ export function createContentHandler(deps: ContentHandlerDeps) {
     return {
       status: 200,
       headers: { ...contentHeaders({ mimeType, size: bytes.length,
-        assetCacheSeconds: deps.assetCacheSeconds }),
+        assetCacheSeconds: deps.assetCacheSeconds, mode, scriptHashes }),
         'accept-ranges': 'bytes' },
       bytes,
     };
@@ -240,7 +268,7 @@ export function createContentHandler(deps: ContentHandlerDeps) {
       if (!(await canReadNow(artifactId, claims.subjectId))) return fail(404);
       const filePath = resolveContentPath(request.path);
       if (filePath === undefined || isServiceWorkerPath(filePath)) return fail(404);
-      return serveFile(artifactId, release.manifest, filePath, request.range);
+      return serveFile(artifactId, release.manifest, filePath, request.range, request.accept);
   }
   return {
     async handle(request: ContentRequest): Promise<ContentResponse> {

@@ -22,12 +22,39 @@ check('no legacy AWS CLI image or apk installation in Kubernetes sources and Mak
     assert.doesNotMatch(readFileSync(file, 'utf8'), /amazon\/aws-cli|\bapk\s+add\b[^;&|]*\baws-cli\b/, file);
   }
 });
+const assertParentSyncObjects = (parent, children, images) => {
+  for (const child of children) {
+    const expected = structuredClone(child);
+    if (expected.kind === 'CronJob') {
+      const replica = expected.spec.jobTemplate.spec.template.spec.initContainers?.find(c => c.name === 'replica-sync');
+      const pin = images.find(image => replica?.image === `${image.name}:main`);
+      if (pin) {
+        assert.deepEqual(Object.keys(pin).sort(), ['name', 'newTag']);
+        assert.equal(typeof pin.newTag, 'string');
+        replica.image = `${pin.name}:${pin.newTag}`;
+      }
+    }
+    assert.deepEqual(parent.find(o => o.kind === child.kind && o.metadata.name === child.metadata.name), expected);
+  }
+};
 for (const tier of ['prod', 'preprod']) {
   bundles[tier] = load(`/rendered/${tier}.yaml`);
   check(`${tier} kustomize bundle safety`, () => checkBundle(bundles[tier], tier));
-  check(`${tier} parent overlay includes identical sync objects`, () => {
-    const parent = load(`/rendered/${tier}-parent.yaml`);
-    for (const child of bundles[tier]) assert.deepEqual(parent.find(o => o.kind === child.kind && o.metadata.name === child.metadata.name), child);
+  const parent = load(`/rendered/${tier}-parent.yaml`);
+  const images = load(`deploy/k8s/overlays/${tier}/kustomization.yaml`)[0].images ?? [];
+  check(`${tier} parent overlay includes exact sync objects with its declared image pin`,
+    () => assertParentSyncObjects(parent, bundles[tier], images));
+  check(`${tier} parent parity rejects sync activation`, () => {
+    const changed = structuredClone(parent);
+    const name = bundles[tier].find(o => o.kind === 'CronJob').metadata.name;
+    changed.find(o => o.kind === 'CronJob' && o.metadata.name === name).spec.suspend = false;
+    assert.throws(() => assertParentSyncObjects(changed, bundles[tier], images));
+  });
+  if (tier === 'preprod') check('preprod parent parity rejects an undeclared replica image', () => {
+    const changed = structuredClone(parent);
+    changed.find(o => o.kind === 'CronJob' && o.metadata.name === 'sentropic-idp-identity-sync')
+      .spec.jobTemplate.spec.template.spec.initContainers.find(c => c.name === 'replica-sync').image = 'unapproved:tag';
+    assert.throws(() => assertParentSyncObjects(changed, bundles[tier], images));
   });
   check(`${tier} parent overlay pgbackup uses approved pinned Postgres and s5cmd images`, () => {
     const backups = load(`/rendered/${tier}-parent.yaml`).filter(o => o.kind === 'CronJob' && o.metadata.name === 'pgbackup');

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.17
+
+- Application assets carry the worker's own same-origin/no-eval CSP; HTML inline hashes stay confined to HTML responses.
+- Application content mode (host-configured, owner decision 05/11): the
+  generic host offers `safe` (historic strict regime, default, bit-for-bit
+  unchanged) and `application` (binding J1.0 policy: same-origin workers,
+  runtime-injected styles, history fallback to `index.html` for
+  extensionless HTML navigations). Service workers stay refused in both
+  modes; a missing asset stays 404, never the fallback. The policy lives in
+  one constant so the conductor can relay adjustments.
+- Generic extension to MIME map: `.geojson` → `application/json`,
+  `.mjs` → `text/javascript`, `.woff2` → `font/woff2`; `.wasm` →
+  `application/wasm` and `.pbf` → `application/x-protobuf` stay mapped as
+  the owner asked. No `wasm-unsafe-eval` in any served policy.
+- Generic grant contract (J1.3b): first-party grant route wired to
+  `grantWithFreshRights`, neutral host-parameterizable consent screen,
+  typed 403 `{ code, scopeId, retryable: false }` with a single prescribed
+  screen navigation, scopes and versions host-declared.
+- No MCP tool definition changes (the 17 pre-existing definitions stay
+  byte-identical). Stays in `0.2.x` (cluster-mesh peer `>=0.2.0 <0.3.0`).
+
 ## 0.2.16
 
 - Upload channel integrity, fail-closed (immo preprod, OVH S3 403): the

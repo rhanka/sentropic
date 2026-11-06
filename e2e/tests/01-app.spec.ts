@@ -75,6 +75,8 @@ test.describe('Application principale', () => {
     // Tester la navigation vers les dossiers
     await page.getByRole('link', { name: 'Dossiers' }).click();
     await expect(page).toHaveURL('/folders');
+    // Folder loading selects the seeded folder and enables scoped navigation.
+    await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toBeEnabled({ timeout: 2_000 });
     
     // Tester la navigation vers les organisations
     await page.getByRole('link', { name: 'Organisations' }).click();

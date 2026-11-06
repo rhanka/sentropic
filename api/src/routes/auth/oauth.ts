@@ -18,6 +18,7 @@ import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { countCmUsersWithRole } from '../../services/identity/cm-users';
 import { createCmOAuthTenantPort } from '../../services/identity/cm-oauth-tenancy';
+import { cmAuthSessionService } from '../../services/identity/cm-session-facade';
 
 /**
  * HS256 key for the session and verification tokens this host signs and verifies.
@@ -193,11 +194,11 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
     uuid: randomUUID,
   },
   sessions: {
-    // Only the CM binding supplies session authority; this host bag is protocol configuration.
+    // Revocation enters the CM facade; other identity operations require a transaction binding.
     create: unsupportedOAuthPort, findById: unsupportedOAuthPort,
     findByRefreshTokenHash: unsupportedOAuthPort, findByTokenHash: unsupportedOAuthPort,
-    listForUser: unsupportedOAuthPort, revoke: unsupportedOAuthPort,
-    revokeAllForUser: unsupportedOAuthPort, touch: unsupportedOAuthPort, updateTokens: unsupportedOAuthPort,
+    listForUser: unsupportedOAuthPort, revoke: cmAuthSessionService.revokeSession,
+    revokeAllForUser: cmAuthSessionService.revokeAllSessions, touch: unsupportedOAuthPort, updateTokens: unsupportedOAuthPort,
   },
   tokens: {
     hashSecret: unsupportedOAuthPort, signSessionToken: unsupportedOAuthPort,
