@@ -625,7 +625,8 @@ test-artifact-content-image: ci-test-env ## Qualify the content role in the reco
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 .PHONY: test-ci-unit-shards
 test-ci-unit-shards: ci-test-env
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-unit-shards.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		sh -ec 'node scripts/ci/locked-tools.mjs --prefix /tmp/unit-tools --ignore-scripts --no-audit --no-fund @types/node@22 typescript@5.9.3 vitest@4.1.5 >/dev/null; export UNIT_VITEST_TOOL_DIR=/tmp/unit-tools; node --test scripts/ci/api-unit-shards.test.mjs scripts/ci/api-unit-shards-cli.test.mjs'
 
 .PHONY: test-ci-unit-graph
 test-ci-unit-graph: ci-test-env

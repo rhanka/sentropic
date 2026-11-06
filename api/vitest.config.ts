@@ -4,9 +4,9 @@ import { BaseSequencer } from 'vitest/node';
 import { unitShard } from './ci/unit-shards.mjs';
 
 class MeasuredUnitSequencer extends BaseSequencer {
-  override shard(...[files, shard]: Parameters<BaseSequencer['shard']>) {
+  override shard(files: Parameters<BaseSequencer['shard']>[0]) {
     return files.every(file => file.moduleId.replaceAll('\\', '/').includes('/tests/unit/'))
-      ? unitShard(files, shard, this.ctx.config.root) : super.shard(files, shard);
+      ? unitShard(files, this.ctx.config.shard!, this.ctx.config.root) : super.shard(files);
   }
 }
 
