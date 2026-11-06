@@ -47,6 +47,7 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review R3: runtime composes fingerprint-validated ACTIVE/PREVIOUS rings through rotation; preparation retains the exact initial-ring gate. No key rotated or custody writer changed.
 - [x] Lot 0: read common/master/workflow rules, rollout diagnosis, checkpoint/parser, tenant pgbackup, HMAC custody and budget contracts; mechanically check branch with harness.
 - [x] Lot 1: bundle-side read-only journal/schema/source inspection, immutable evidence binding, sanctioned backup readback and protected checkpoint generation.
   - [x] Shared boot parser, protected contracts, read-only inspection and streaming tenant backup validation.
