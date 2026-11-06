@@ -97,8 +97,9 @@ export function createMemoryLiveStore(): LiveStore {
       async reserveCommit(actor, invocation, now) {
         const scoped = quota.filter(q => q.scope === identity.storageScopeId && q.at > Date.parse(now) - 3600000);
         if (scoped.some(q => q.invocation === invocation && q.actor === actor)) return;
-        if (scoped.filter(q => q.actor === actor).length >= 30 ||
-          scoped.filter(q => q.artifact === identity.artifactId).length >= 60) throw new ArtifactOperationError('limit_exceeded');
+        const principalFull = scoped.filter(q => q.actor === actor).length >= 30;
+        if (principalFull || scoped.filter(q => q.artifact === identity.artifactId).length >= 60) throw new ArtifactOperationError('limit_exceeded',
+          { publicDetails: { quota: 'git_write', scope: principalFull ? 'principal' : 'artifact' } });
         pendingQuota.push({ scope: identity.storageScopeId, artifact: identity.artifactId, actor, invocation, at: Date.parse(now) });
       },
     };

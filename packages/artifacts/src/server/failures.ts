@@ -216,6 +216,9 @@ function operationProjection(error: ArtifactOperationError): Projection {
     default: {
       const base = { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind as keyof typeof DOMAIN_STATUS], publicCode: kind, retriable: false } as const;
       if (kind === 'precondition_required') return { ...base, details: error.details.publicDetails };
+      if (kind === 'limit_exceeded' && error.details.publicDetails?.quota === 'git_write' &&
+        ['principal', 'artifact'].includes(String(error.details.publicDetails.scope))) return { ...base,
+        details: { quota: 'git_write', scope: error.details.publicDetails.scope } };
       if (kind === 'release_unavailable' && error.details.release !== undefined) return { ...base, release: error.details.release };
       return kind === 'edit_mismatch' && error.details.edit !== undefined ? { ...base, edit: error.details.edit } : base;
     }
