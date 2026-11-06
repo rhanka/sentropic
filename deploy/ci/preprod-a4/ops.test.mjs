@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ops } from './ops.mjs';
 import { digest, privateInput } from './guards.mjs';
-import { commit, image, sha } from './fixtures.mjs';
+import { approvedRequest, commit, image, sha } from './fixtures.mjs';
 import { activeRef, approvalRef, compose } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
 
-const request = { namespace: 'sentropic-preprod', candidateCommit: commit, candidateImage: image,
+const request = { ...approvedRequest, namespace: 'sentropic-preprod', candidateCommit: commit, candidateImage: image,
   operationId: 'a4', backupTemplateSha256: sha, remoteSnapshotDigest: digest('{}') };
 const env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request', A4_DRY_RUN: '1' };
 test('should refuse malformed keys, unexpected previous slots and incorrect active fingerprints', () => {
