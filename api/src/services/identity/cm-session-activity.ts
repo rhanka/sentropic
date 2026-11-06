@@ -1,5 +1,6 @@
 import { pool } from '../../db/client';
 import { logger } from '../../logger';
+import { cmErrorCode } from './cm-error-code';
 
 /** Activity is best-effort and must not abort a validated authentication decision. */
 export const touchCmSessionActivity = async (id: string, at: Date): Promise<void> => {
@@ -9,6 +10,6 @@ export const touchCmSessionActivity = async (id: string, at: Date): Promise<void
       [id, at.toISOString()],
     );
   } catch (error) {
-    logger.warn({ err: error, sessionId: id }, 'CM session activity touch unavailable');
+    logger.warn({ code: cmErrorCode(error), sessionId: id }, 'CM session activity touch unavailable');
   }
 };
