@@ -21,6 +21,7 @@ export function fixture() {
       object.metadata.uid = `uid-${++sequence}`; objects.set(kind + object.metadata.name, object); return object as never;
     }),
     delete: vi.fn(async (kind, name, uid) => {
+      if (!objects.has(kind + name)) return;
       if (objects.get(kind + name)?.metadata.uid !== uid) throw new Error('UID mismatch');
       objects.delete(kind + name);
     }),

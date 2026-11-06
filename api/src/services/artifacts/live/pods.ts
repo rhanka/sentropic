@@ -54,6 +54,7 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string) {
       const expected = labels(key, runtime);
       let pod = await core.get<Pod>('pods', runtime.podName);
       if (!pod) {
+        if (runtime.podUid !== null) throw new LiveError('builder_unavailable');
         try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap)); }
         catch (error) {
           // Creation may have committed before a timeout/response loss. Discover before retrying.

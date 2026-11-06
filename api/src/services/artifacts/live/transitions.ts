@@ -28,7 +28,7 @@ export async function transition(ports: LivePorts, key: LiveKey, runtime: LiveRu
   });
 }
 export async function checkpoint(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) {
-  const draft = await ports.drafts.current(key);
+  const draft = await ports.drafts.current(key, runtime.generation);
   if (draft.generation !== runtime.generation) conflict('stale_fence');
   await ports.drafts.checkpoint(key, draft);
   return draft;

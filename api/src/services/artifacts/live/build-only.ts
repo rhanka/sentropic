@@ -9,7 +9,7 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
   const binding = await currentBinding(ports, key);
   const job = await ports.publication.job(key, jobId);
   if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
-  const draft = await ports.drafts.current(key);
+  const draft = await ports.drafts.current(key, binding.generation);
   if (draft.generation !== binding.generation) conflict('stale_fence');
   let runtime = await ports.store.transaction(key, async unit => {
     if (unit.state && unit.state.runtime.phase !== 'DORMANT') conflict('pending_publication');

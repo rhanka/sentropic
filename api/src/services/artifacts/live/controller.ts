@@ -10,6 +10,24 @@ import { currentBinding, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
   return {
+    /** Host scheduler calls this for active bindings; source grants never keep revoked pods alive. */
+    async reconcile(key: LiveKey) {
+      const state = await ports.store.read(key);
+      if (!state || state.runtime.phase === 'DORMANT') return;
+      const runtime = state.runtime;
+      let binding;
+      try { binding = await ports.binding(key); }
+      catch (error) { await failed(ports, key, runtime, error); return; }
+      if (!binding.healthy || binding.generation !== runtime.generation || ports.now() >= runtime.maximumLifetimeAt) {
+        return teardown(ports, key, runtime, 'authority_or_lifetime');
+      }
+      if (runtime.phase === 'LIVE') {
+        try { await ports.pods.ensure(key, runtime); }
+        catch (error) { await failed(ports, key, runtime, error); return; }
+        return idleBuild(ports, key);
+      }
+      // Recovery of an in-flight operation belongs to startup after its old API executor is fenced.
+    },
     start: (key: LiveKey) => revive(ports, key),
     idle: (key: LiveKey) => idleBuild(ports, key),
     buildOnly: (key: LiveKey, admittedJobId: string) => buildOnly(ports, key, admittedJobId),

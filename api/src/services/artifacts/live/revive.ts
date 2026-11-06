@@ -7,7 +7,7 @@ import { withinPhase } from './deadline';
 
 export async function revive(ports: LivePorts, key: LiveKey) {
   const binding = await currentBinding(ports, key);
-  const draft = await ports.drafts.current(key);
+  const draft = await ports.drafts.current(key, binding.generation);
   if (draft.generation !== binding.generation) conflict('stale_fence');
   const runtime = await ports.store.transaction(key, async unit => {
     const previous = unit.state;
