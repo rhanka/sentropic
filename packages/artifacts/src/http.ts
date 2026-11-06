@@ -31,6 +31,7 @@ import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, 
 import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 import { readArtifactSource } from './server/source-read.js';
 import { artifactSummary } from './server/summary.js';
+import { projectGitBinding, type GitProjectionPorts } from './server/git-projection.js';
 import { artifactVersions } from './server/versions.js';
 import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } from './server/management.js';
 import { createPostgresManagementUnit } from './adapters/postgres-management.js';
@@ -58,6 +59,8 @@ export function errorBody(status: number): { error: string } {
     500: 'internal_error', 503: 'capability_unavailable' } as Record<number, string>)[status] ?? 'internal_error' };
 }
 export interface HttpAppDeps {
+  /** SG1: host repository code access, independent of page/source grants. */
+  git?: GitProjectionPorts;
   /** Trusted mapping of host wrapper errors; causes remain private. Also bind on the coordinator. */
   mapHostError?: ArtifactHostFailureMapper;
   profile: CompiledArtifactsProfile;
@@ -1079,6 +1082,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             result: { status: 200, body: { ...await projectSummary(artifactSummary({ artifactId, acl, state, current,
               actorId: invocation.actorId, urls: deps.publicationUrls, approved: deps.isApprovedAccount,
               policy: await sharingPolicyContext(invocation.storageScopeId) }), invocation.storageScopeId),
+              ...await projectGitBinding(deps.git, { artifactId, storageScopeId: invocation.storageScopeId,
+                actorId: invocation.actorId, ownerId: acl.ownerId }),
               ...(acl.metadata !== undefined ? { metadata: acl.metadata } : {}),
               ...(acl.ownerId === invocation.actorId
                 ? { grants: await projectGrants(acl.grants, invocation.storageScopeId) } : {}) } } };

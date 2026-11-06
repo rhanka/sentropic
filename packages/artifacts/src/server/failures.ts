@@ -6,7 +6,8 @@ export type ArtifactErrorKind =
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
   | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed'
-  | 'edit_mismatch' | 'precondition_required';
+  | 'edit_mismatch' | 'precondition_required'
+  | 'git_binding_conflict' | 'git_repo_not_registered' | 'git_ref_not_allowed';
 
 /** Optimistic-concurrency payload: the caller re-reads and merges against this. */
 export interface ArtifactConflictDetails {
@@ -160,6 +161,10 @@ function operationProjection(error: ArtifactOperationError): Projection {
   const { kind } = error;
   switch (kind) {
     case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
+    case 'git_binding_conflict': return { ...conflict(kind), publicCode: kind, details: error.details.publicDetails };
+    case 'git_repo_not_registered': case 'git_ref_not_allowed': return {
+      kind: 'ordinary', category: 'unprocessable', httpStatus: 422, publicCode: kind, retriable: false,
+    };
     case 'command_conflict': case 'pointer_conflict': {
       const base = conflict(kind);
       return error.details.conflict === undefined ? base : { ...base, conflict: error.details.conflict };
