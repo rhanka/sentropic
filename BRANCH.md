@@ -46,7 +46,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read common/master/workflow rules, rollout diagnosis, checkpoint/parser, tenant pgbackup, HMAC custody and budget contracts; mechanically check branch with harness.
-- [ ] Lot 1: bundle-side read-only journal/schema/source inspection, immutable evidence binding, sanctioned backup readback and protected checkpoint generation.
+- [x] Lot 1: bundle-side read-only journal/schema/source inspection, immutable evidence binding, sanctioned backup readback and protected checkpoint generation.
   - [x] Shared boot parser, protected contracts, read-only inspection and streaming tenant backup validation.
 - [ ] Lot 2: Node/kubectl preparation target, write-free dry-run, protected PVC custody and preprod HMAC/budget wiring.
 - [ ] Lot 3: tests in api/tests/unit/auth/cm-preprod-*.test.ts and deploy/ci/preprod-a4/*.test.mjs, including refusal, redaction, backup corruption, permissions, receipts and dry-run side effects.
