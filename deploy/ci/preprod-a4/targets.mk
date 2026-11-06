@@ -27,3 +27,14 @@ A4_TEST_IMAGE ?= $(API_TOOL_IMAGE)
 test-preprod-a4-api: ## Run preparation tests in a cached API toolbox with container-only source overlay
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
 	@docker run --rm -e NODE_ENV=test -e SCW_TEM_SECRET_KEY=a4-isolated-synthetic -v "$(CURDIR):/input:ro" -w /workspace/api $(A4_TEST_IMAGE) sh -ec 'cp -R /input/api/src/. /workspace/api/src/; cp /input/api/tests/unit/auth/cm-preprod-*.test.ts /workspace/api/tests/unit/auth/; /workspace/node_modules/.bin/vitest run tests/unit/auth/cm-preprod-*.test.ts tests/unit/auth/cm-cutover-checkpoint.test.ts --no-file-parallelism'
+
+.PHONY: test-preprod-a4-manifests check-preprod-a4-api
+test-preprod-a4-manifests: ## Render the real prod/preprod overlays and check custody without a cluster
+	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
+	@set -eu; rendered="$$(mktemp -d)"; trap 'rm -rf "$$rendered"' EXIT; \
+	for tier in prod preprod; do kubectl kustomize deploy/k8s/overlays/$$tier > "$$rendered/$$tier.yaml"; done; \
+	docker run --rm -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" -v "$$rendered:/rendered:ro" $(A4_TEST_IMAGE) node /tests/bundle.selftest.mjs
+
+check-preprod-a4-api: ## Typecheck, lint and build the candidate API, then check the bundle CLI without DB access
+	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
+	@docker run --rm -e NODE_ENV=test -e SCW_TEM_SECRET_KEY=a4-isolated-synthetic -v "$(CURDIR):/input:ro" -w /workspace/api $(A4_TEST_IMAGE) sh -ec 'cp -R /input/api/src/. /workspace/api/src/; npm run typecheck; /workspace/node_modules/.bin/eslint src/scripts/cm-preprod-*.ts src/services/identity/cm-cutover-checkpoint.ts src/services/identity/cm-import-source.ts; npm run build; node /input/deploy/ci/preprod-a4/check-bundle.mjs'

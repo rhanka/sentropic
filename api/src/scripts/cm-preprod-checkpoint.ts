@@ -100,13 +100,13 @@ export async function runCmPreprodCheckpoint() {
       try {
         const result = await preparePreprod(client, command);
         for (const [key, digest] of Object.entries(result)) {
-          if (typeof digest === 'string' && /^[a-f0-9]{64}$/.test(digest)) console.log(`${key}=${digest}`);
+          if (typeof digest === 'string' && /^[a-f0-9]{64}$/.test(digest)) process.stdout.write(`${key}=${digest}\n`);
         }
       } finally { client.release(); }
     } finally { await pool.end(); }
   } catch {
     // SQL/parser/S3 errors can embed credentials or rows. Never forward them.
-    console.error(`failureSha256=${sha256('preprod-a4-preparation-failed')}`);
+    process.stderr.write(`failureSha256=${sha256('preprod-a4-preparation-failed')}\n`);
     process.exitCode = 1;
   }
 }
