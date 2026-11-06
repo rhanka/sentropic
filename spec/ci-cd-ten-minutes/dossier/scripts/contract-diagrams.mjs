@@ -34,13 +34,9 @@ export function sceneFor(run, group = 'critical-path', step = 9) {
       optimization: steps.filter(([, pattern]) => pattern.test(name)).map(([title]) => title).join(', ') || 'Retain required gate; measure before optimizing',
       modified: steps[step - 1][1].test(name), heat: heat(seconds) } };
   });
-  // Actual critical paths carry exact dependency edges. Retain those edges in
-  // all views; additional selected groups do not invent new relationships.
-  const edges = [];
-  for (const path of Object.values(run.criticalPaths)) for (let i = 1; i < path.jobs.length; i++) {
-    const source = path.jobs[i - 1].name.split(' (')[0], target = path.jobs[i].name.split(' (')[0];
-    if (names.includes(source) && names.includes(target) && !edges.some(edge => edge.id === `${source}:${target}`)) edges.push({ id: `${source}:${target}`, source, target });
-  }
+  const edges = Object.entries(run.dependencies ?? {}).flatMap(([target, parents]) => parents
+    .filter(source => names.includes(source) && names.includes(target))
+    .map(source => ({ id: `${source}:${target}`, source, target })));
   return { id: 'ci', nodes, edges };
 }
 

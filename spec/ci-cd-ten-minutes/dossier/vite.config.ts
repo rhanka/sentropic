@@ -6,5 +6,5 @@ export default defineConfig({
   base: './', plugins: [svelte()],
   resolve: { alias: { '@sentropic/diagram-core': diagram('diagram-core'), '@sentropic/diagram-canvas': diagram('diagram-canvas') },
     dedupe: ['svelte', '@sentropic/design-system-svelte', '@sentropic/design-system-themes'] },
-  build: { target: 'es2022' },
+  build: { target: 'es2022', modulePreload: false, rollupOptions: { output: { inlineDynamicImports: true } } },
 });
