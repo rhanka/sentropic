@@ -6,6 +6,7 @@ export interface LiveOverlayEntry { path: string; text: string | null; mode: str
 export interface LiveRuntimeState {
   liveSessionId: string; phase: string; leaseEpoch: number; routeEpoch: number;
   appliedRevision: string | null; lastAccessAt: string; pendingWake: boolean;
+  origin?: 'implicit' | 'explicit'; renewOnReady?: boolean;
 }
 export interface LiveCommitIntent {
   actorId: string; key: string; hash: string; invocationId: string; createdAt: string;
@@ -20,6 +21,7 @@ export interface LiveDraftRecord extends LiveIdentity {
   progressSeq: number; latestVerifiedHeadSha: string; publicationBaselineSeq: number;
   publicationBaselineHeadSha: string; lastSuccessfulReleaseId: string | null;
   initialUnpublishedBranchEligible: boolean;
+  snapshots?: Record<string, import('./live-contracts.js').LiveSnapshot>;
 }
 export interface LiveEnvelope { nonce: string; ciphertext: string; tag: string }
 export interface LiveCommand { actorId: string; key: string; hash: string; operation: string }
