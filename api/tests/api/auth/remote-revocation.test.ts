@@ -46,6 +46,14 @@ const mintMfaSession = () => withAppCmAuth(runner => runner.request(async bindin
   return binding.sessions.createSession({ user, mfaVerified: true });
 }));
 
+// Refusal tests start with CM authority only, so a rejected request must leave
+// the issuer directory empty. Issuer-minted fixtures exercise the private fence.
+const mintWithoutPrivateAuthority = async () => {
+  vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+  try { return await mintMfaSession(); }
+  finally { vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp'); }
+};
+
 // Replacement for the deleted `pendingRemoteRevocations`: undelivered intents
 // live in the CM revocation outbox ledger (one row per target, `pending` until
 // the sweep acknowledges delivery).
@@ -285,7 +293,7 @@ describe('RC1 product to issuer revocation', () => {
   });
   it.each(['missing-mac', 'altered-body', 'stale-stamp', 'wrong-key', 'forged-forwarded-proto'])
   ('should refuse %s on the plain HTTP final hop', async failure => {
-    const tokens = await mintMfaSession();
+    const tokens = await mintWithoutPrivateAuthority();
     const authorization = `Bearer ${await bearer()}`;
     let body = JSON.stringify({ sessionIds: [tokens.sessionId] });
     const signed = signRevocation(body, authorization);
@@ -326,20 +334,28 @@ describe('RC1 product to issuer revocation', () => {
       await next();
     }).route('/account', accountRouter).route('/admin', adminRouter);
   }
-  // BLOCKED (a4-lane, re-enable when the owning lot lands): account deletion
-  // through the V2 cascade rolls back for these fixtures — the branch lots
-  // A4-SELF-DELETE (BRANCH.md:81) and the V2 cascade (BRANCH.md:269,
-  // execution awaits A2.0b) are incomplete, and the branch's own
-  // cm-account-deletion rollback test fails the same way.
+  async function snapshotSharedAccount() {
+    const tables = ['identity_subject_fences', 'identity_user_accounts', 'identity_account_profiles'];
+    const snapshots = await Promise.all(tables.map(table => cmQuery<Record<string, unknown>>(
+      `SELECT * FROM ${cmTable(table)} WHERE user_id = $1`, [userId])));
+    return async () => {
+      for (const [index, table] of tables.entries()) {
+        const row = snapshots[index][0];
+        const assignments = Object.keys(row).map(key => `"${key}" = EXCLUDED."${key}"`).join(', ');
+        await cmQuery(`INSERT INTO ${cmTable(table)} SELECT * FROM jsonb_populate_record(NULL::${cmTable(table)}, $1::jsonb)
+          ON CONFLICT (user_id) DO UPDATE SET ${assignments}`, [JSON.stringify(row)]);
+      }
+    };
+  }
   for (const operation of ['self-deactivate', 'self-delete', 'admin-disable', 'admin-delete']) {
-  (operation.endsWith('delete') ? it.skip : it)
+  it
   (`should tombstone issuer authority through the actual ${operation} lifecycle`, async () => {
     const workspaceId = crypto.randomUUID();
-    await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 lifecycle' });
+    await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 lifecycle', ownerUserId: userId });
     await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
     await putCmWorkspaceMember(workspaceId, userId, 'admin');
     const tokens = await mintMfaSession();
-    const user = await findCmUserById(userId);
+    const restoreSharedAccount = await snapshotSharedAccount();
     const session = await findCmSessionById(tokens.sessionId);
     expect(await resolveRemoteLogin(tokens.sessionToken)).not.toBeNull();
     await bridge();
@@ -367,7 +383,9 @@ describe('RC1 product to issuer revocation', () => {
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
     expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(true);
     if (operation.endsWith('delete')) {
-      await createCmUser({ userId: user!.id, email: user!.email ?? `${user!.id}.test`, role: user!.role, emailVerified: user!.emailVerified, accountStatus: user!.accountStatus, approvalDueAt: user!.approvalDueAt });
+      // Simulate a privileged shared-DB restore, including its old subject fence.
+      // Normal account creation correctly refuses a retired subject id.
+      await restoreSharedAccount();
     } else {
       // Deactivation/disabling keeps the account row: restore it to active.
       await updateCmUser(userId, { accountStatus: 'active' });
@@ -378,13 +396,11 @@ describe('RC1 product to issuer revocation', () => {
     expect(getRemoteSessionAuthority()!.find(tokens.sessionId)).toMatchObject({ revoked: true });
   });
   }
-  // BLOCKED (a4-lane, re-enable with the tombstone lifecycle above): same
-  // V2 cascade rollback as the tombstone test (BRANCH.md:81, :269).
   for (const operation of ['self-deactivate', 'self-delete', 'admin-disable', 'admin-delete']) {
-  (operation.endsWith('delete') ? it.skip : it)
+  it
   (`should commit ${operation} destruction even when issuer delivery fails`, async () => {
     const workspaceId = crypto.randomUUID();
-    await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 failed delivery' });
+    await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 failed delivery', ownerUserId: userId });
     await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
     await putCmWorkspaceMember(workspaceId, userId, 'admin');
     await mintMfaSession();
@@ -457,7 +473,7 @@ describe('RC1 product to issuer revocation', () => {
   it.each([{ scope: 'remote.evidence.issue' }, { aud: 'other' }, { client_id: 'other' },
     { sub: 'user' }, { cnf: { jkt: 'bound-token' } }, { exp: 1 }, { exp: undefined }, {}])
   ('should enforce revocation token claims with an authenticated body %j', async change => {
-    const tokens = await mintMfaSession();
+    const tokens = await mintWithoutPrivateAuthority();
     const authorization = `Bearer ${await bearer(change)}`;
     const body = JSON.stringify({ sessionIds: [tokens.sessionId] });
     const result = await createIdpApp().request(`${issuer}${path}`, { method: 'POST',
@@ -540,7 +556,7 @@ describe('RC1 product to issuer revocation', () => {
   });
   it.each(['browser', 'cookie', 'http', 'extra-field', 'duplicate', 'oversize', 'empty', 'anonymous'])
   ('should refuse %s revocation requests without writing authority', async failure => {
-    const tokens = await mintMfaSession();
+    const tokens = await mintWithoutPrivateAuthority();
     const headers: Record<string, string> = { authorization: `Bearer ${await bearer()}` };
     if (failure === 'browser') headers.origin = 'https://product.example.test';
     if (failure === 'cookie') headers.cookie = 'session=browser';
