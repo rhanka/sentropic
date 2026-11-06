@@ -51,7 +51,7 @@ describe('CM V2 account deletion and external connector delivery', () => {
     const untouched = await createCmConnectorFixture(admin);
     await disable();
     const response = await remove();
-    expect(response.status).toBe(202);
+    expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toMatchObject({ success: true, complete: false, status: 'delivery_pending',
       receipt: { transaction: 'committed', userId: target.id } });

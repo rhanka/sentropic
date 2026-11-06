@@ -115,6 +115,20 @@ describe('AgentsList', () => {
     expect(container.querySelectorAll('.st-statusDot__dot--pulse')).toHaveLength(1);
   });
 
+  it('should keep every row activatable when a fresh feed updates display data', async () => {
+    const onSelect = vi.fn();
+    const { rerender } = renderList({ onSelect });
+    await rerender({ rows: ROWS.map(row => ({
+      ...row, entry: { ...row.entry, title: `Refreshed ${row.entry.id}` },
+    })) });
+
+    for (const [index, row] of ROWS.entries()) {
+      await fireEvent.click(screen.getByRole('option', { name: new RegExp(`Refreshed ${row.entry.id}`) }));
+      expect(onSelect).toHaveBeenNthCalledWith(index + 1, row.entry.id);
+    }
+    expect(onSelect).toHaveBeenCalledTimes(ROWS.length);
+  });
+
   it('should render a session terminal status as neutral active rather than done', () => {
     const { container } = renderList();
     const session = container.querySelector('[data-agent-entry-id="resumeable"]');

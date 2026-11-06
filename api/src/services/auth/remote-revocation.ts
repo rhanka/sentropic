@@ -34,6 +34,7 @@ export async function tombstoneRemoteSessions(input: RemoteSessionRevocation, _p
   }
   try {
     const configured = process.env.REMOTE_ACTION_REVOCATION_ISSUER;
+    if (!configured && process.env.REMOTE_ACTION_ROLE !== 'product') return;
     if (!configured) throw new Error();
     const issuer = new URL(configured);
     const clientId = process.env.REMOTE_ACTION_REVOCATION_CLIENT_ID;

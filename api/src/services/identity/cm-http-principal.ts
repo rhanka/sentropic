@@ -5,6 +5,7 @@ import { withAppCmAuth } from './cm-auth-runtime';
 import { assertCmHostHealthy } from './cm-host-scope';
 import { pool } from '../../db/client';
 import { logger } from '../../logger';
+import { cmErrorCode } from './cm-error-code';
 
 export type CmHttpPrincipal = Omit<AuthHonoAuthContext, 'token'>;
 type PrincipalResult =
@@ -31,7 +32,7 @@ export const authenticateCmHttpRequest = (request: Request, required: boolean): 
           [id, at.toISOString()],
         );
       } catch (error) {
-        logger.warn({ err: error, sessionId: id }, 'CM session activity touch unavailable');
+        logger.warn({ code: cmErrorCode(error), sessionId: id }, 'CM session activity touch unavailable');
       }
     };
     const router = new Hono<AuthHonoMiddlewareEnv>();
