@@ -62,7 +62,10 @@ export async function preparePreprod(client: PoolClient, command: PreprodCommand
   if (canonical(local) !== canonical(stored) || local.backupSha256 !== evidence.backupSha256
     || local.backupBytes !== evidence.backupBytes) throw new Error('backup_changed');
   const receipt = rehearsalSchema.parse(await protectedJson(`${custody}/rehearsal.json`));
-  if (receipt.evidenceSha256 !== sha256(evidenceBytes) || receipt.restoredBackupSha256 !== evidence.backupSha256) {
+  // D11 qualification can predate the final rollback backup. Compare the candidate,
+  // verifier-bound mapping and logical census, not operation or physical dump bytes.
+  if (receipt.candidateCommit !== request.candidateCommit || receipt.candidateImage !== request.candidateImage
+    || Object.entries(state).some(([key, value]) => receipt[key as keyof typeof receipt] !== value)) {
     throw new Error('rehearsal_mismatch');
   }
   const checkpoint = parseCmCutoverCheckpoint({ format: 'app-cm-identity-cutover/1', purpose: 'cutover',

@@ -36,8 +36,9 @@ const backup = { backupSha256: sha256(compressed), backupBytes: compressed.lengt
 const evidence = { format: 'preprod-a4-snapshot/1', operationId: request.operationId, candidateCommit: candidate,
   candidateImage: request.candidateImage, writerFenceRef: request.writerFenceRef, requestSha256,
   ...state, ...backup, backupKey: 'pg/20261106T150000Z.sql.gz' };
-const receipt = { format: 'preprod-a4-rehearsal/1', receiptRef: 'track:exact-rehearsal', evidenceSha256: sha256(JSON.stringify(evidence)),
-  restoredBackupSha256: backup.backupSha256, candidateBootPassed: true, functionalAuthPassed: true,
+const receipt = { format: 'preprod-a4-rehearsal/2', receiptRef: 'track:isolated-rehearsal', ...state,
+  candidateCommit: candidate, candidateImage: request.candidateImage, applicabilityReviewRef: 'track:census-coverage-review',
+  restoredBackupSha256: 'e'.repeat(64), candidateBootPassed: true, functionalAuthPassed: true,
   d11Passed: true, isolatedRestoreRef: 'tenant:isolated-restore-record' };
 const client = {} as PoolClient;
 const write = (name: string, bytes: string | Uint8Array) => writeFile(`${custody}/${name}`, bytes, { mode: 0o600 });
@@ -52,6 +53,27 @@ beforeEach(async () => {
 afterEach(async () => { await rm(custody, { recursive: true, force: true }); delete process.env.A4_CANDIDATE_COMMIT; });
 
 describe('real cutover checkpoint preparation', () => {
+  it('should reuse reviewed isolated qualification without restoring the final rollback dump', async () => {
+    expect(receipt.restoredBackupSha256).not.toBe(evidence.backupSha256);
+    await expect(preparePreprod(client, { phase: 'checkpoint', dryRun: false, requestSha256 })).resolves.toHaveProperty('checkpointSha256');
+  });
+  for (const field of ['candidateCommit', 'candidateImage', ...Object.keys(state)]) {
+    it(`should refuse qualification drift in ${field}`, async () => {
+      await write('rehearsal.json', JSON.stringify({ ...receipt, [field]: field === 'candidateCommit' ? 'c'.repeat(40)
+        : field === 'candidateImage' ? request.candidateImage.replace(hash, 'c'.repeat(64)) : 'c'.repeat(64) }));
+      await expect(preparePreprod(client, { phase: 'checkpoint', dryRun: false, requestSha256 })).rejects.toThrow('rehearsal_mismatch');
+      expect(await readdir(custody)).not.toContain('checkpoint.json');
+    });
+  }
+  for (const field of ['receiptRef', 'applicabilityReviewRef', 'restoredBackupSha256', 'isolatedRestoreRef',
+    'candidateBootPassed', 'functionalAuthPassed', 'd11Passed']) {
+    it(`should refuse absent isolated qualification evidence ${field}`, async () => {
+      const incomplete: Record<string, unknown> = { ...receipt }; delete incomplete[field];
+      await write('rehearsal.json', JSON.stringify(incomplete));
+      await expect(preparePreprod(client, { phase: 'checkpoint', dryRun: false, requestSha256 })).rejects.toThrow();
+      expect(await readdir(custody)).not.toContain('checkpoint.json');
+    });
+  }
   it('should validate every receipt and snapshot without writing in checkpoint dry-run', async () => {
     const names = await readdir(custody);
     const result = await preparePreprod(client, { phase: 'checkpoint', dryRun: true, requestSha256 });
@@ -69,7 +91,7 @@ describe('real cutover checkpoint preparation', () => {
   });
   for (const failure of ['receipt', 'source', 'candidate', 'request', 'permissions', 'object']) {
     it(`should refuse ${failure} mismatch before creating the checkpoint`, async () => {
-      if (failure === 'receipt') await write('rehearsal.json', JSON.stringify({ ...receipt, restoredBackupSha256: hash }));
+      if (failure === 'receipt') await write('rehearsal.json', JSON.stringify({ ...receipt, sourceContentSha256: 'f'.repeat(64) }));
       if (failure === 'source') vi.mocked(inspectPreprod).mockResolvedValue({ ...state, sourceContentSha256: 'c'.repeat(64) });
       if (failure === 'candidate') process.env.A4_CANDIDATE_COMMIT = 'c'.repeat(40);
       if (failure === 'request') await write('request.json', JSON.stringify({ ...request, writerFenceRef: 'track:changed' }));
