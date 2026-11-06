@@ -7,7 +7,9 @@ export type ArtifactErrorKind =
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
   | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed'
   | 'edit_mismatch' | 'precondition_required'
-  | 'git_binding_conflict' | 'git_repo_not_registered' | 'git_ref_not_allowed';
+  | 'git_binding_conflict' | 'git_repo_not_registered' | 'git_ref_not_allowed'
+  | 'build_descriptor_invalid' | 'build_script_missing' | 'lock_missing'
+  | 'dep_outside_lock' | 'install_script_not_allowlisted';
 
 /** Optimistic-concurrency payload: the caller re-reads and merges against this. */
 export interface ArtifactConflictDetails {
@@ -56,7 +58,10 @@ export interface ArtifactOperationalFailure extends ArtifactFailureFields {
 
 export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
   readonly kind: 'ordinary';
-  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required';
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded'
+  | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required'
+  | 'build_descriptor_invalid' | 'build_script_missing' | 'lock_missing'
+  | 'dep_outside_lock' | 'install_script_not_allowlisted';
   readonly retriable: false;
 }
 
@@ -127,6 +132,8 @@ const DOMAIN_STATUS = {
   invalid_request: 400, anonymous: 401, access_denied: 403,
   not_found: 404, gone: 410, release_unavailable: 410, limit_exceeded: 413, unprocessable: 422, verification_failed: 422, edit_mismatch: 422,
   precondition_required: 428,
+  build_descriptor_invalid: 422, build_script_missing: 422, lock_missing: 422,
+  dep_outside_lock: 422, install_script_not_allowlisted: 422,
 } as const;
 
 function field(value: unknown, name: string): unknown {
