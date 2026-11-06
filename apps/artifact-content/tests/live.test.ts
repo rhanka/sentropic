@@ -47,7 +47,7 @@ describe('live content proxy', () => {
     const f = fixture(); const headers = { origin };
     expect(await f.proxy.authorize(new Request(origin + hmrPath('session'), { headers }), 'artifact', true)).toBeDefined();
     expect(await f.proxy.authorize(new Request(origin + hmrPath('session') + '?token=viteToken', { headers }), 'artifact', true))
-      .toMatchObject({ path: '/?token=viteToken' });
+      .toMatchObject({ path: hmrPath('session') + '?token=viteToken' });
     for (const path of ['/', hmrPath('another'), hmrPath('session') + '?other=1', hmrPath('session') + '?token=a&token=b']) {
       expect(await f.proxy.authorize(new Request(origin + path, { headers }), 'artifact', true)).toBeUndefined();
     }

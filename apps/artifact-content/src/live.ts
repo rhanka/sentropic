@@ -55,7 +55,7 @@ export function createLiveProxy(ports: LiveProxyPorts) {
       if (websocket ? url.pathname !== hmrPath(route.sessionId) || !viteToken
         || request.headers.get('origin') !== url.origin : !await ports.admittedPath(route, url.pathname, url.searchParams)) return;
       return { route, upstream: `http://${route.podName}.sentropic-artifact-builders.svc.cluster.local:5173`,
-        path: websocket ? '/' + url.search : url.pathname + url.search };
+        path: url.pathname + url.search };
     },
     valid, watch: ports.watch,
     async fetch(request: Request, artifactId: string): Promise<Response | undefined> {
