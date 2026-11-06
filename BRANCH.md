@@ -49,6 +49,7 @@
   - [x] Read common rules, MASTER, workflow, testing, approved contract and template; harness C1 passed.
 - [ ] **Lot 1 — Tests first**
   - [x] Added fake GitHub and manifest/install, callback replay/expiry and scope/repo denial tests before production code.
+  - [x] Initial scoped run fails because the forge domain is absent; added permission, dual-repo, rotation and revocation cases before implementation.
   - [ ] `tests/forge/github-app.spec.ts`: fake manifest/install, scoped mint, escalation refusal, state replay/scope refusal, expiry, rotation and revocation.
   - [ ] `tests/forge/github-app-http.spec.ts`: owner prompt, callback sanitization and broker authentication.
 - [ ] **Lot 2 — Enrollment and custody**
