@@ -42,10 +42,12 @@
   - `api/tests/api/app-mcp-registry.test.ts` (BR0218-EX3)
   - `api/tests/api/app-mcp-installed.test.ts` (BR0218-EX3)
   - `tools/memory-mcp-l5/artifacts/**` (BR0218-EX4)
+  - `e2e/Dockerfile` (BR0218-EX5)
 - **Exception process**:
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] BR0218-EX5 / TRAIN0218-CI2: fix HIGH CVE-2026-85091 by pinning zlib 1.3.2-r1 in the E2E image; impact limited to the fixed Alpine library, rollback restores the previous package list. Built final image scans with zero HIGH/CRITICAL and both Chromium modes pass. Independent Astra xhigh review GO; conductor lifted the single-push limit on 2026-11-06. Ordinary full CI remains required; merge freeze remains active.
 - [x] TRAIN0218-CI1: reproduce job `127733036865` EINTEGRITY with its verified archive; restore the existing no-integrity candidate policy, preserving all 175 sibling/dependency integrity pins. The committed-fixture regression fails before correction; full lazy replay passes 136/136 afterward. Independent Astra xhigh closure GO; replacement-head CI remains required under Lot 4.
 - [x] TRAIN0218-R1: notify the superseded epoch and advance it only when rotation returns ready; retry preserves the old fence. Three regressions failed before and pass after, forge 31/31 and build/typecheck/lints pass; independent closure GO at `0af93d063`.
 - [x] BR-TRAIN0218-EX1: conductor REFUSED the previous CI gate proposal; branch-only wagons resolve the gate requirement normally on the bumped train.
