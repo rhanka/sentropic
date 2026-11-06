@@ -39,7 +39,7 @@ function treeDigest(files: readonly DependencyFile[]) {
   let total = 0;
   const paths = new Set<string>();
   const manifest = files.map(file => {
-    if (file.type !== 'file' || !safeDependencyPath(file.path) || paths.has(file.path)
+    if (!file || file.type !== 'file' || !safeDependencyPath(file.path) || paths.has(file.path)
       || ![292, 365].includes(file.mode) || typeof file.bytes !== 'string') invalid();
     paths.add(file.path);
     const bytes = Buffer.from(file.bytes, 'base64');
@@ -67,13 +67,15 @@ export function createDependencyCache(ports: CachePorts) {
     return createHmac('sha256', key).update(JSON.stringify(receipt)).digest('hex');
   }
   function verify(object: CacheObject, identity: CacheIdentity) {
+    try {
     const { seal: signature, ...receipt } = object.receipt;
     const expected = Buffer.from(seal(receipt));
     const actual = Buffer.from(signature);
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)
       || receipt.key !== cacheKey(identity) || cacheKey(receipt.identity) !== cacheKey(identity)
       || treeDigest(object.files) !== receipt.treeSha256) invalid();
-    return object.receipt;
+      return object.receipt;
+    } catch { return invalid(); }
   }
   return {
     async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string }, runtime?: LiveRuntime) {

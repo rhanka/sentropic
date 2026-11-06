@@ -29,6 +29,11 @@ function cacheFixture() {
   return { lock, ports, source, cache: createDependencyCache(ports), stored: () => stored! };
 }
 describe('locked dependency cache', () => {
+  it('should quarantine malformed stored receipts with the closed cache error', async () => {
+    const f = cacheFixture(); await f.cache.acquire(f.source()); f.stored().receipt = null as never;
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    expect(f.ports.storage.quarantine).toHaveBeenCalledOnce();
+  });
   it('should admit only a clean verified install and rehash every warm mount', async () => {
     const f = cacheFixture(); const receipt = await f.cache.acquire(f.source());
     expect(f.ports.fetch).toHaveBeenCalledWith(expect.objectContaining({ path: 'node_modules/pkg' }), NPM_RELAY);
