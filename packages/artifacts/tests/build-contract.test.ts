@@ -30,6 +30,10 @@ function refusal(snapshot: Parameters<typeof validateArtifactBuild>[0], code: st
 }
 
 describe('GB1 frozen build contract', () => {
+  it('should expose validation through the built public package subpath', async () => {
+    const api = await import('@sentropic/artifacts/server/build-contract');
+    expect(api.validateArtifactBuild(fixture()).install.args).toEqual(['ci', '--ignore-scripts']);
+  });
   it('should accept the real Immo descriptor with an empty allowlist and scripts disabled', () => {
     const snapshot = fixture();
     snapshot.files['sentropic.artifact.json'] = immo;
@@ -137,5 +141,23 @@ describe('GB1 frozen build contract', () => {
   });
   it('should refuse root lifecycle scripts rather than execute them', () => {
     refusal(fixture({ manifest: { scripts: { 'build:artifact': 'exit 99', postinstall: 'exit 99' } } }), 'install_script_not_allowlisted');
+  });
+  it('should install beside a nested lockfile and accept npm v2 locked aliases', () => {
+    const snapshot = fixture({
+      descriptor: { ...descriptor, lockfilePath: 'app/package-lock.json' },
+      manifest: { dependencies: { alias: 'npm:example@^1.2.3' } },
+      packages: { 'node_modules/alias': dependency },
+    });
+    const original = { ...snapshot.files };
+    snapshot.subPath = 'app';
+    snapshot.files = Object.fromEntries(Object.entries(original).map(([path, text]) => [`app/${path}`, text]));
+    const lock = JSON.parse(snapshot.files['app/package-lock.json']);
+    lock.lockfileVersion = 2;
+    snapshot.files['app/package-lock.json'] = JSON.stringify(lock);
+    expect(validateArtifactBuild(snapshot)).toMatchObject({ installDirectory: 'app', scriptDirectory: 'app' });
+    snapshot.subPath = '';
+    snapshot.files['sentropic.artifact.json'] = original['sentropic.artifact.json'];
+    snapshot.files['package.json'] = original['package.json'];
+    refusal(snapshot, 'build_descriptor_invalid');
   });
 });

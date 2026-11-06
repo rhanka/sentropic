@@ -76,9 +76,9 @@ export function validateArtifactBuild(snapshot: ArtifactBuildSnapshot) {
         || name.trim() !== name)))) invalid();
   const descriptor = value as unknown as ArtifactBuildDescriptor;
   const manifest = buildJson(snapshot.files[join(snapshot.subPath, 'package.json')]);
-  if (!buildRecord(manifest.scripts) || !Object.hasOwn(manifest.scripts, descriptor.buildScript)
-    || typeof manifest.scripts[descriptor.buildScript] !== 'string'
-    || !manifest.scripts[descriptor.buildScript].trim()) throw new ArtifactOperationError('build_script_missing');
+  const script = buildRecord(manifest.scripts) && Object.hasOwn(manifest.scripts, descriptor.buildScript)
+    ? manifest.scripts[descriptor.buildScript] : undefined;
+  if (typeof script !== 'string' || !script.trim()) throw new ArtifactOperationError('build_script_missing');
   if (!Object.hasOwn(snapshot.files, descriptor.lockfilePath)) throw new ArtifactOperationError('lock_missing');
   const lock = buildJson(snapshot.files[descriptor.lockfilePath]);
   const installDirectory = descriptor.lockfilePath.includes('/')
