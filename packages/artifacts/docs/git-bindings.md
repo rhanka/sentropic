@@ -16,6 +16,38 @@ provides `createPostgresGitBindingStore` and `createPostgresGitReleaseIndexStore
 Construction performs no I/O or DDL. The host applies migrations through
 `0010_git_bindings.sql` using its migration journal before injecting the ports.
 
+## Migration 0010 rollback
+
+The supported rollback restores the previous application while **retaining the
+additive schema**. It does not reverse migration 0010. Before rollback:
+
+1. Stop admission of Git binding mutations, inbound deliveries and publication
+   jobs. Drain or fence in-flight work; retain the currently served release.
+2. Back up the database and host migration journal. Retain bindings, replay
+   receipts, append-only binding events, release-index rows and `releases.git_commit`.
+3. Restore the previously qualified application and its non-Git composition,
+   without injecting Git ports or running down migrations. Keep 0010 marked
+   applied in the host journal; a later upgrade must not replay its DDL.
+4. Verify existing release reads and current pointers, then qualify a normal
+   non-Git publication and its current-release CAS. Keep Git admission disabled
+   until the forward application is restored and its workers are requalified.
+
+The pre-0010 release adapter uses named INSERT columns, tolerates the extra
+nullable `git_commit` column and reads releases without consulting Git tables.
+`tests/git-bindings-rollback.integration.test.ts` seeds a release before 0010,
+applies 0010, retains detached bindings/events and indexed provenance, then
+uses those unchanged release methods to read and publish across the rollback
+boundary without DDL. It also checks journal/data retention and both immutable
+record triggers. This qualifies the package storage path; the deploying host
+must still qualify its own restored application, composition and journal.
+
+Schema reversal is unsupported: do not drop tables, columns, indexes, the
+`reject_git_record_mutation` function or its dependent triggers, or rewind the
+journal. Retained events and index data remain authoritative history. Any future
+schema reversal needs a separately qualified export/restore and dependency plan.
+
+## Host projection and registry
+
 `HttpAppDeps.git = { bindings, codeRights }` enables the `artifacts_get.git`
 projection after ordinary artifact visibility. Code access is resolved for
 the current principal, scope and repository on every read. Page ownership,

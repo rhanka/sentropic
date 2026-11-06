@@ -60,6 +60,7 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] Review #931 R4: supported rollback restores the previous application and retains additive 0010 schema, journal and immutable history. Postgres qualification passes: a pre-0010 release remains readable, unchanged legacy publication/CAS works after rollback, binding rows/receipts/events and indexed provenance remain unchanged, and append-only triggers still refuse mutation. Host deployment qualification remains host-owned.
 - [x] Review #931 R3: both enrollment-runbook passages use the exact owner wording "one click to approve, plus the password confirmation if GitHub asks"; removed both alternate challenge references and retained the unverified P2 prompt/forge receipt. Scoped runbook check passes.
 - [x] Review #931 R2: active repository, branch and subpath target conflicts include only the scoped artifactId. Shared conformance checks public HTTP 409 projection, unchanged row/audit and absence of a refused-write replay receipt: memory 13/13 and Postgres 15/15 pass; three regressions failed before correction.
 - [x] Review #931 R1: encrypted enrollment now retains recoverable unavailable status after transient inspection, mint or webhook inspection failure; authoritative access loss still revokes and fences the epoch. Regression reproduced 11 failures before the fix; forge suite passes 45/45 afterward.
