@@ -21,6 +21,7 @@
   - `deploy/ci/**`
   - `scripts/ci/**`
   - `scripts/publish-*-image.sh`
+  - `scripts/test-api-tag-guard.sh`
   - `scripts/security/daily/*.test.mjs`
   - `api/src/scripts/cm-preprod-contract.ts`
   - `api/tests/unit/auth/cm-preprod-*.test.ts`
@@ -41,6 +42,8 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-PINS — Recovery f2313a/434fe5 and three distinct prod digests are preserved remotely; manifests pin their exact GHCR digests. Preprod verifies the rendered images anonymously. Prod adoption requires a separate owner GO and operator apply; no prod workflow exists.
+- [x] GHCR-TAG-TEST — Reproduced fixture refusal before collision inspection: the old dummy registry violates GHCR-only login. Retain every case/assertion, use the real namespace plus dummy credentials, and keep API guard qualification separate from the CI receipt promotion.
 - [x] GHCR-BYTES — Always publish the transported tested UI artifact, refuse config-digest collisions for all three images, promote aliases from the loaded image ID, and retain registry manifest/config receipts. The original API collision guard remains active.
 - [x] GHCR-DELIVERY — CI registry is explicit, publishers alone receive GITHUB_TOKEN packages:write, all steady-state private-registry credentials and pull-secret creation are removed; public pulls are anonymous.
 - [x] GHCR-REF3 — Security qualification evidence, operator runbook, infrastructure fixture and archived registry URLs now name GHCR.

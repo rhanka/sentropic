@@ -29,9 +29,9 @@ const assertParentSyncObjects = (parent, children, images) => {
       const replica = expected.spec.jobTemplate.spec.template.spec.initContainers?.find(c => c.name === 'replica-sync');
       const pin = images.find(image => replica?.image === `${image.name}:main`);
       if (pin) {
-        assert.deepEqual(Object.keys(pin).sort(), ['name', 'newTag']);
-        assert.equal(typeof pin.newTag, 'string');
-        replica.image = `${pin.name}:${pin.newTag}`;
+        assert.deepEqual(Object.keys(pin).sort(), ['digest', 'name']);
+        assert.match(pin.digest, /^sha256:[a-f0-9]{64}$/);
+        replica.image = `${pin.name}@${pin.digest}`;
       }
     }
     assert.deepEqual(parent.find(o => o.kind === child.kind && o.metadata.name === child.metadata.name), expected);
