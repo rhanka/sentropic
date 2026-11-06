@@ -4,18 +4,18 @@ import type { PoolClient } from 'pg';
 import { loadCmCutoverCheckpoint, parseCmCutoverCheckpoint } from '../services/identity/cm-cutover-checkpoint';
 import { loadCmEmailCodePolicy } from '../services/identity/cm-email-policy';
 import { loadCmDeletionOptions, loadCmWorkspaceDeletionOptions, loadReplicaRunOptions } from '../services/identity/cm-deletion-options';
-import { canonical, custody, evidenceSchema, protectedBytes, protectedJson, rehearsalSchema,
+import { assertAbsent, canonical, custody, evidenceSchema, protectedBytes, protectedJson, rehearsalSchema,
   requestSchema, sha256, writeExclusive } from './cm-preprod-contract';
 import { downloadTenantBackup, validateBackup } from './cm-preprod-backup';
 import { inspectPreprod } from './cm-preprod-state';
 
 export interface PreprodCommand {
-  phase: 'snapshot' | 'checkpoint'; dryRun: boolean; requestSha256: string; backupKey?: string;
+  phase: 'snapshot' | 'checkpoint'; dryRun: boolean; requestSha256: string; backupKey?: string; stateSha256?: string;
 }
 
 export async function preparePreprod(client: PoolClient, command: PreprodCommand) {
   const directory = await lstat(custody);
-  if (!directory.isDirectory() || (directory.mode & 0o077) !== 0 || directory.uid !== process.getuid?.()
+  if (!directory.isDirectory() || (directory.mode & 0o777) !== 0o700 || directory.uid !== process.getuid?.()
     || await realpath(custody) !== custody) throw new Error('custody_invalid');
   const requestBytes = await protectedBytes(`${custody}/request.json`);
   if (sha256(requestBytes) !== command.requestSha256) throw new Error('request_changed');
@@ -29,8 +29,11 @@ export async function preparePreprod(client: PoolClient, command: PreprodCommand
   } finally { policy.dispose(); }
   loadCmDeletionOptions(); loadCmWorkspaceDeletionOptions(); loadReplicaRunOptions();
   const state = await inspectPreprod(client, request);
+  await assertAbsent(`${custody}/checkpoint.json`);
   if (command.phase === 'snapshot') {
+    await assertAbsent(`${custody}/source.sql.gz`); await assertAbsent(`${custody}/snapshot.json`);
     if (command.dryRun) return state;
+    if (command.stateSha256 !== sha256(canonical(state))) throw new Error('pre_backup_state_changed');
     if (!command.backupKey) throw new Error('backup_missing');
     const backup = await downloadTenantBackup(command.backupKey, true);
     if (canonical(await inspectPreprod(client, request)) !== canonical(state)) throw new Error('source_changed');

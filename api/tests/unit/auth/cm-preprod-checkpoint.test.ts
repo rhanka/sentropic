@@ -2,7 +2,7 @@ import { chmod, lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/p
 import { gzipSync } from 'node:zlib';
 import type { PoolClient } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { custody, sha256 } from '../../../src/scripts/cm-preprod-contract';
+import { canonical, custody, sha256 } from '../../../src/scripts/cm-preprod-contract';
 import { preparePreprod } from '../../../src/scripts/cm-preprod-checkpoint';
 import { inspectPreprod } from '../../../src/scripts/cm-preprod-state';
 import { downloadTenantBackup } from '../../../src/scripts/cm-preprod-backup';
@@ -76,8 +76,32 @@ describe('real cutover checkpoint preparation', () => {
     });
   }
   it('should perform no object download or write in snapshot preflight', async () => {
+    await rm(`${custody}/source.sql.gz`); await rm(`${custody}/snapshot.json`);
     const names = await readdir(custody);
     await preparePreprod(client, { phase: 'snapshot', dryRun: true, requestSha256 });
     expect(downloadTenantBackup).not.toHaveBeenCalled(); expect(await readdir(custody)).toEqual(names);
+  });
+  it('should refuse an existing output even during dry-run', async () => {
+    await write('checkpoint.json', '{}');
+    await expect(preparePreprod(client, { phase: 'checkpoint', dryRun: true, requestSha256 })).rejects.toThrow('output_already_exists');
+    expect(downloadTenantBackup).not.toHaveBeenCalled();
+  });
+  it('should refuse a source change between preflight and the tenant backup', async () => {
+    await rm(`${custody}/source.sql.gz`); await rm(`${custody}/snapshot.json`);
+    await expect(preparePreprod(client, { phase: 'snapshot', dryRun: false, requestSha256,
+      stateSha256: 'd'.repeat(64), backupKey: evidence.backupKey })).rejects.toThrow('pre_backup_state_changed');
+    expect(downloadTenantBackup).not.toHaveBeenCalled();
+  });
+  it('should save backup evidence only after matching the census from before the backup Job', async () => {
+    await rm(`${custody}/source.sql.gz`); await rm(`${custody}/snapshot.json`);
+    vi.mocked(downloadTenantBackup).mockImplementation(async (_key, copy) => {
+      if (copy) await write('source.sql.gz', compressed);
+      return backup;
+    });
+    const result = await preparePreprod(client, { phase: 'snapshot', dryRun: false, requestSha256,
+      stateSha256: sha256(canonical(state)), backupKey: evidence.backupKey });
+    expect(result).toHaveProperty('snapshotSha256');
+    expect(JSON.parse(await readFile(`${custody}/snapshot.json`, 'utf8'))).toEqual(evidence);
+    expect(await readdir(custody)).not.toContain('checkpoint.json');
   });
 });

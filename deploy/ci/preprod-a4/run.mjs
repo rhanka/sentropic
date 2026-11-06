@@ -18,14 +18,16 @@ export function run(env = process.env, call = kubectl, read = privateInput) {
   if (request.backupTemplateSha256 !== backupTemplateSha256) throw new Error('backup_template_changed');
   const fence = () => assertFence(json(['get', 'deployments,statefulsets,daemonsets,cronjobs,jobs', '-o', 'json']).items,
     json(['get', 'pods', '-o', 'json']).items, request.candidateImage);
-  const worker = (workerPhase, workerDryRun, backupKey) => assertDigestOutput(k(['exec', '-i', podName, '-c', 'custodian', '--',
+  const worker = (workerPhase, workerDryRun, backupKey, stateSha256) => assertDigestOutput(k(['exec', '-i', podName, '-c', 'custodian', '--',
     'node', '/run/cm-runtime/launch.mjs', '--cm-preprod-checkpoint'], JSON.stringify({
-    phase: workerPhase, dryRun: workerDryRun, requestSha256: digest(requestBytes), ...(backupKey ? { backupKey } : {}) })));
+    phase: workerPhase, dryRun: workerDryRun, requestSha256: digest(requestBytes),
+    ...(backupKey ? { backupKey, stateSha256 } : {}) })));
   fence();
   // Full bundle-side preflight precedes every permitted Kubernetes write.
   let output = worker(phase, true);
   if (dryRun === '1') { fence(); return output; }
   if (phase === 'snapshot') {
+    const stateSha256 = digest(canonical(Object.fromEntries(output.trim().split('\n').map(line => line.split('=')))));
     const name = `pgbackup-a4-${request.operationId}`;
     // Clone the reviewed tenant template exactly. No custom dump/upload path or credential.
     k(['create', '-f', '-'], JSON.stringify({ apiVersion: 'batch/v1', kind: 'Job',
@@ -38,7 +40,7 @@ export function run(env = process.env, call = kubectl, read = privateInput) {
     const timestamps = [...log.matchAll(/^dumping app DB at ([0-9]{8}T[0-9]{6}Z)\s*$/gm)];
     if (timestamps.length !== 1) throw new Error('backup_key_unresolved');
     fence();
-    output = worker('snapshot', false, `pg/${timestamps[0][1]}.sql.gz`);
+    output = worker('snapshot', false, `pg/${timestamps[0][1]}.sql.gz`, stateSha256);
   } else {
     output = worker('checkpoint', false);
   }

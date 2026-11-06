@@ -3,9 +3,9 @@ import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { run } from './run.mjs';
 import { assertDigestOutput, assertFence, canonical, digest } from './guards.mjs';
-import { commit, cron, fixture, image, sha } from './fixtures.mjs';
+import { approvedRequest, commit, cron, fixture, image, sha } from './fixtures.mjs';
 
-const request = { namespace: 'sentropic-preprod', operationId: 'approved-cutover', candidateCommit: commit,
+const request = { ...approvedRequest, namespace: 'sentropic-preprod', operationId: 'approved-cutover', candidateCommit: commit,
   candidateImage: image, backupTemplateSha256: digest(canonical(cron.spec.jobTemplate.spec)) };
 const env = { A4_KUBECONFIG_FILE: '/private/kubeconfig', A4_REQUEST_FILE: '/private/request', A4_DRY_RUN: '1' };
 const read = path => path.endsWith('request') ? JSON.stringify(request) : 'PRIVATE-KUBECONFIG-SENTINEL';
@@ -33,6 +33,12 @@ test('should clone only the reviewed tenant backup template and suppress backup 
 test('should reject a changed backup template before creating any Job', () => {
   const fake = fixture(); fake.data.cron.spec.jobTemplate.spec.backoffLimit = 7;
   assert.throws(() => run({ ...env, A4_DRY_RUN: '0' }, fake.call, read));
+  assert(fake.calls.every(({ args }) => args[0] === 'get'));
+});
+test('should reject missing owner authorization before any worker or resource creation', () => {
+  const fake = fixture();
+  assert.throws(() => run({ ...env, A4_DRY_RUN: '0' }, fake.call,
+    path => path.endsWith('request') ? JSON.stringify({ ...request, authorizationRef: 'pending' }) : 'private'));
   assert(fake.calls.every(({ args }) => args[0] === 'get'));
 });
 for (const failure of ['replica', 'pod', 'cron', 'job', 'image', 'volume']) {
