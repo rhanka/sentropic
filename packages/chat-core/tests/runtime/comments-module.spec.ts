@@ -202,6 +202,31 @@ describe('comments module — FakeCommentHost harness (CommentHost interface)', 
 // ---------------------------------------------------------------------------
 
 describe('comments module — createCommentState factory', () => {
+  it.each([
+    { input: '@', expectedIds: ['alice', 'bob'] },
+    { input: '@bob', expectedIds: ['bob'] },
+    { input: 'no mention', expectedIds: [] },
+  ])('refreshes pending mention results for the latest input $input', async ({ input, expectedIds }) => {
+    const host = new FakeCommentHost();
+    let resolveMembers!: (value: { items: MentionMember[] }) => void;
+    host.listMentionMembers = () => new Promise(resolve => { resolveMembers = resolve; });
+    const state = createCommentState(host, presentation);
+    let snapshot!: import('../../src/runtime/comments/state.js').CommentStateSnapshot;
+    const unsubscribe = state.subscribe(value => { snapshot = value; });
+    const loading = state.actions.loadMentionMembers();
+    state.actions.setCommentInput('@');
+    state.actions.setCommentInput(input);
+    resolveMembers({ items: [
+      { userId: 'alice', email: 'alice@example.com', displayName: 'Alice' },
+      { userId: 'bob', email: 'bob@example.com', displayName: 'Bob' },
+    ] });
+    await loading;
+    expect(snapshot.mentionLoading).toBe(false);
+    expect(snapshot.mentionMatches.map(member => member.userId)).toEqual(expectedIds);
+    expect(snapshot.showMentionMenu).toBe(input !== 'no mention');
+    unsubscribe();
+  });
+
   it('should create a state object with subscribe + actions', () => {
     const host = new FakeCommentHost();
     const state = createCommentState(host, presentation);
