@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Branch `train/artifacts-0.2.18`; isolated worktree `tmp/worktrees/train-artifacts-0218`.
-- [x] Base exactly `origin/train/2026-11-06` at `30b808cf5b118ad9b91db6c651f74912cef1fad5`, carrying artifacts 0.2.17.
+- [x] Base is dated-train fix checkpoint `b9505f1197e394e29dfad3fd26b1be09dbe839c6`, carrying artifacts 0.2.17; advanced from initial `30b808cf5` under BR0218-EX7.
 - [ ] After the dated train merges, rebase onto `origin/main` and recheck registry versions.
 - [x] Make only; Docker commands through `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command.
 - [x] Dedicated ports `API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218`; ENV always last; tear down volumes after tests.
@@ -48,10 +48,17 @@
   - `api/src/services/identity/cm-http-principal.ts` (BR0218-EX6)
   - `api/src/services/identity/cm-session-activity.ts` (BR0218-EX6)
   - `api/tests/api/auth/cm-session-read-concurrency.test.ts` (BR0218-EX6)
+  - `api/src/services/identity/cm-transaction.ts` (BR0218-EX7)
+  - `api/tests/api/auth/cm-auth-request-concurrency.test.ts` (BR0218-EX7)
+  - `e2e/tests/03-dashboard.spec.ts` (BR0218-EX7)
+  - `e2e/tests/07-matrix.spec.ts` (BR0218-EX7)
+  - `e2e/tests/08-chat-checkpoint-restore.spec.ts` (BR0218-EX7)
+  - `packages/auth-ui/tests/oauth-consent-rendering.test.ts` (BR0218-EX7)
 - **Exception process**:
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] BR0218-EX7 / TRAIN0218-CI4: run 42238689292 reproduces upstream dashboard lock replacement and new-account magic-link 503; advanced the dated-train base to verified fix b9505f119 by rebase with merge history preserved. Inherited its auth-ui/matrix/checkpoint fixes without copying commits; unioned exclusive account admission with read-only session validation. Root/API locks and package evidence remain byte-identical; rollback ref refs/backup/train0218-before-ci4. Post-rebase versions, API typecheck/scoped lint/build and L5 verification pass; auth regressions 6/6, full browser shard 4 has 43 pass/six existing skips, presence 8/8, zero retries. Independent Astra xhigh integration review GO at 7971cd5ba; matrix loading was not reproduced or claimed fixed. Fresh full CI remains required; no merge to main.
 - [x] BR0218-EX6 / TRAIN0218-CI3: local shard-4 qualification reproduces two login redirects caused by HTTP 500 session reads; logs prove SERIALIZABLE touchActivity conflicts exhaust unchanged retries with code 40001. Native completion now uses its supported read mode for session_validate; preserve refusal mapping and best-effort activity outside the snapshot. Regression: 64 concurrent real reads, identity/activity and invalid/revoked refusals; before 1 failed/4 passed, after 5/5. API typecheck, scoped lint and build pass; independent Astra xhigh review GO. Browser auth failures disappear; local shard has 42 pass/six unchanged skips/one separate unchanged chat-geometry failure. Impact limited to app identity adapters/tests; rollback restores them. No budget, retry, timeout or refusal is relaxed; fresh full CI remains required.
 - [x] BR0218-EX5 / TRAIN0218-CI2: fix HIGH CVE-2026-85091 by pinning zlib 1.3.2-r1 in the E2E image; impact limited to the fixed Alpine library, rollback restores the previous package list. Built final image scans with zero HIGH/CRITICAL and both Chromium modes pass. Independent Astra xhigh review GO; conductor lifted the single-push limit on 2026-11-06. Ordinary full CI remains required; merge freeze remains active.
 - [x] TRAIN0218-CI1: reproduce job `127733036865` EINTEGRITY with its verified archive; restore the existing no-integrity candidate policy, preserving all 175 sibling/dependency integrity pins. The committed-fixture regression fails before correction; full lazy replay passes 136/136 afterward. Independent Astra xhigh closure GO; replacement-head CI remains required under Lot 4.
