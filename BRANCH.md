@@ -47,6 +47,7 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review R5 restriction regression: namespace middleware creation uses the approved exact spec, attaches both Ingresses, and refuses replacing any existing middleware before writes.
 - [x] Review R5 annex: exact make fence/delete/scale/rehearsal/recovery invocations, immutable procedure/command bindings, separate restore allocation/identity, original/target pins/states, tenant backup ownership, rollback loss policy and 2026-11-05 fresh-auth acceptance required before signature.
 - [x] Reviews R1/R5 procedure: explicit internal -> restricted UI -> public HTTP -> limited IdP -> fresh-auth sequence, excluded-source proof, preserved general fence and refence on failure.
 - [x] Reviews R2–R4 documentation: both runtime consumers, rotation-compatible composition, pre-fence D11 qualification and separate fresh tenant rollback evidence documented without imposing a final-dump restore.
@@ -64,11 +65,12 @@
   - [x] Node/kubectl operator guard and digest-only transport; Makefile exception explicitly allowed after scope-check detected the inherited forbidden entry.
   - [x] Overlay keeps runtime assets inside deploy/k8s for existing isolated kustomize renderers; custodian and staging commands never boot migrations.
 - [x] Lot 3: tests in api/tests/unit/auth/cm-preprod-*.test.ts and deploy/ci/preprod-a4/*.test.mjs, including refusal, redaction, backup corruption, permissions, receipts and dry-run side effects.
-  - [x] 36 API checks and 18 operator checks passed in isolated containers; read-only SQL census, exact restore binding, corruption/refusal, pre-backup drift and dry-run output collisions covered.
+  - [x] Pre-review baseline: 36 API checks and 18 operator checks passed in isolated containers; read-only SQL census, corruption/refusal, pre-backup drift and dry-run output collisions covered. Reviewed qualification now binds candidate/logical census independently of final dump bytes.
   - [x] Full API typecheck, scoped lint, production bundle build/CLI smoke, and actual prod/preprod kustomize assertions passed with reused API toolbox local/sentropic-api:387528; no image build or cluster access.
 - [x] Lot 4: docs/runbooks/preprod-a4-cutover.md and owner report .tmp/rv/preprod-a4-procedure.md with exact authorization text, Kubernetes actions, abort/rollback and verification.
 - [x] Lot 5: scoped tests, harness scope checks before make commit, push review-ready wagon, leave preprod untouched.
   - [x] Unit custody is private per test file/worker, avoiding cross-file collisions in the train CI; local Docker resources cleaned with down-volumes.
+- [x] Review-fix validation: all original 54 tests retained, now 58 API/checkpoint + 27 operator tests pass; actual prod/preprod render and ordered ingress simulation pass; full API typecheck, targeted lint, production bundle and safe CLI smoke pass. Independent final review/CI remain train-owned; owner execution and genuine tenant qualification remain withheld.
 
 <!-- Retained base plan for Track event continuity. -->
 # Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
