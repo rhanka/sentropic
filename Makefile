@@ -746,6 +746,7 @@ pack-immo-exchange-issuer-fixture: ## Build the checkpoint-pinned real-issuer fi
 
 docker-login:
 	@echo "▶ Logging in to registry"
+	@test -n "$(REGISTRY)" || { echo "REGISTRY is not set" >&2; exit 1; }
 	@test "$(REGISTRY)" = ghcr.io/rhanka || { echo "Publication requires the public GHCR namespace" >&2; exit 1; }
 	@printf '%s' "${DOCKER_PASSWORD:?missing GITHUB_TOKEN}" | docker login ghcr.io -u "${DOCKER_USERNAME:?missing GitHub actor}" --password-stdin
 
@@ -761,6 +762,9 @@ publish-api-image: docker-login
 	@echo "▶ Pushing api image to registry"
 	@$(MAKE) verify-api-image ENV=$(ENV)
 	@bash scripts/publish-api-image.sh
+
+.PHONY: ci-publish-api-image
+ci-publish-api-image: publish-api-image
 	@node scripts/ci/publish-image.mjs api
 
 .PHONY: publish-api-main-image
@@ -4757,3 +4761,10 @@ include .security/ci-lockfile-installs.mk
 .PHONY: check-image-registry
 check-image-registry: ## Reject the retired registry anywhere in tracked files
 	@node scripts/ci/check-image-registry.mjs
+
+.PHONY: check-preprod-images test-ghcr-images
+check-preprod-images: ## Check the actual rendered recovery pins by anonymous digest
+	@node scripts/ci/check-preprod-images.mjs
+
+test-ghcr-images: ci-test-env ## Reject registry collisions and private or altered manifests
+	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs

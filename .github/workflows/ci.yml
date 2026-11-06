@@ -1552,7 +1552,7 @@ jobs:
         run: make ci-build-api ENV=test-ci-images
       - name: Test image receipt integrity and input guards
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-image-receipts ENV=test-ci-images
+        run: make test-ci-image-receipts test-ghcr-images ENV=test-ci-images
       - name: Verify npm CLI and cache are absent from the production runtime
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-runtime ENV=test-ci-api
@@ -2402,7 +2402,7 @@ jobs:
       - name: Load API image from artifact
         run: make load-api
       - name: Publish API image
-        run: make publish-api-image ENV=test-ci-publish
+        run: make ci-publish-api-image ENV=test-ci-publish
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: e2e-image
@@ -3342,20 +3342,11 @@ jobs:
           fi
           printf '%s' "${KUBE_CONFIG_DATA_PREPROD}" | base64 -d > kubeconfig-preprod.yaml
           chmod 600 kubeconfig-preprod.yaml
-      - name: Assert both images exist at the registry before deploy (fail loud, never ImagePullBackOff)
-        run: |
-          set -eu
-          # k8s-deploy-preprod (next step) pins the immutable content-hash tags
-          # sentropic-api:$(API_VERSION) + sentropic-ui:$(UI_VERSION) into overlays/preprod.
-          # If either tag was never pushed (publish skipped/failed, or a tag mismatch), a
-          # kubectl apply would leave preprod in ImagePullBackOff and the cluster is the
-          # first to notice. This is a control that PREVENTS: assert both manifests exist
-          # in the registry first (docker manifest inspect via check-{api,ui}-image) and
-          # fail this job with a clear error, rather than deploying an unverified reference.
-          make check-api-image check-ui-image
       - uses: azure/setup-kubectl@v4
         with:
           version: 'v1.35.0'
+      - name: Verify the actual rendered recovery digests are anonymously pullable
+        run: make check-preprod-images ENV=test-ci-deploy
       - name: Deploy to the sentropic-preprod namespace (immutable image pin)
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-preprod.yaml
