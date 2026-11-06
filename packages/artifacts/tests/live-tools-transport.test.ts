@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { createTransportWorld } from './fixtures/transport-world.js';
 import { RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
-import { liveWitness } from './live-tools.test.js';
+import { liveWitness } from './fixtures/live-world.js';
 import { LIVE_FAILURE_STATUS } from '../src/server/live-errors.js';
 import { ArtifactOperationError, classifyArtifactFailure } from '../src/server/failures.js';
 
