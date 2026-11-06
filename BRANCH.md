@@ -77,9 +77,9 @@
 - [x] **Lot 4 — A4-LANE-BLOCKED-SERIALIZE**
   - [x] Intercept live refresh transaction after subject/refresh locks; revoke CM consent, protocol evidence and subject revision atomically.
   - [x] All 12 refresh integration tests pass with assertions unchanged; writer uses the real CM request runner and its unchanged attempt budget. Both consent-plane rollback/restoration regressions pass.
-- [ ] **Lot 5 — Optional authentication and logging**
-  - [ ] Invalid/expired public credentials continue anonymously; infrastructure failures return 503; add both regressions; requireAuth unchanged.
-  - [ ] Typed codes only for activity-touch and workspace-member catch-all logging.
+- [x] **Lot 5 — Optional authentication and logging**
+  - [x] Invalid/expired public credentials continue anonymously; infrastructure failures return 503; all three focused regressions pass; requireAuth unchanged.
+  - [x] Activity-touch and workspace-member catch-all log only known custody codes or validated SQLSTATEs, with a fixed generic code otherwise.
 - [ ] **Lot 6 — Docs consolidation and final validation**
   - [ ] Scoped API tests, API typecheck/lint; no requested test remains skipped.
   - [ ] Review final diff, resolve findings, push early, open one ready PR with BRANCH.md body, monitor CI until green; do not merge.
