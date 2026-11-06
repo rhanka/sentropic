@@ -68,7 +68,11 @@ export const createGitAppLifecycle = (input: GitAppLifecycleInput) => {
       if (installed.suspended) throw new GitAppError('capability_unavailable');
       const minted = await github.mint(record.app, record.installationId, record.repositoryId, GIT_APP_PERMISSIONS);
       record.leases = record.leases.filter((lease) => Date.parse(lease.expiresAt) > now());
-      record.leases.push({ token: minted.token, expiresAt: minted.expiresAt });
+      // An invalid expiry is not evidence that the minted bearer is unusable.
+      // Retain it for revocation even when the forge claims it already expired.
+      const expiresAt = Date.parse(minted.expiresAt);
+      record.leases.push({ token: minted.token, expiresAt: Number.isFinite(expiresAt) && expiresAt > now()
+        ? minted.expiresAt : new Date(now() + 3600000).toISOString() });
       assertGitAppPermissions(minted.permissions);
       if (!minted.token || minted.repositoryIds.length !== 1 || minted.repositoryIds[0] !== record.repositoryId ||
           !Number.isFinite(Date.parse(minted.expiresAt)) || Date.parse(minted.expiresAt) <= now() + 30000 ||

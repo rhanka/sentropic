@@ -66,6 +66,7 @@
   - [x] Added HMAC-authenticated installation suspension, uninstall, repository-removal and permission-change handling.
   - [x] Added explicit secret retirement and ciphertext tamper/substitution and concurrent callback checks.
   - [x] Required a sanitized host invalidation callback to discard adapter caches and fence dependent jobs on revocation/key rotation.
+  - [x] Added renewal/lifetime and host-notification failure checks; retain rejected minted bearers for revocation and conversion credentials through verification failures.
   - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
   - [ ] Document owner clicks and activation gates in `docs/github-app-enrollment.md`.
   - [x] Wrote the host-composition and owner-click runbook, including rotation, custody boundaries and unverified live P2 gates.

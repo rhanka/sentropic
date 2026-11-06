@@ -61,8 +61,8 @@ export const createGitHubAppEnrollment = (input: Omit<GitAppLifecycleInput, 'now
         consume(record, callback.state, 'manifest', now());
         if (!callback.code || callback.code.length > 1024) throw new GitAppError('invalid_request');
         const app = await input.github.exchange(callback.code);
-        await input.github.verifyKey(app);
         record.app = app;
+        await input.github.verifyKey(app);
         record.state = 'install';
         const state = randomUUID();
         record.callbackState = digest(state);

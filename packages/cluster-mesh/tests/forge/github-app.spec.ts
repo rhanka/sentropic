@@ -166,4 +166,37 @@ describe('GitHub App enrollment', () => {
     await f.service.retirePreviousWebhook(owner, entry.installationRef);
     expect((await f.service.status(owner, entry.installationRef)).webhookOverlapEndsAt).toBeNull();
   });
+
+  it.each([-1, 3600001])('should revoke rather than lease a token with invalid lifetime %s', async (lifetime) => {
+    const f = fixture();
+    const entry = await f.ready();
+    f.lifetime(lifetime);
+    await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
+    expect(f.revoked).toContain('fake-token-1');
+  });
+
+  it('should renew an expired lease without reusing its bearer token', async () => {
+    const f = fixture();
+    const entry = await f.ready();
+    const first = await f.service.acquire({ ...owner, ...entry });
+    f.advance(3600001);
+    const next = await f.service.acquire({ ...owner, ...entry });
+    expect(next.token).not.toBe(first.token);
+    expect(Date.parse(next.expiresAt)).toBeGreaterThan(Date.parse(first.expiresAt));
+    expect(next.credentialVersion).toBe(first.credentialVersion);
+  });
+
+  it('should retain the revocation fence when the host notification fails', async () => {
+    const f = fixture();
+    const entry = await f.ready();
+    const lease = await f.service.acquire({ ...owner, ...entry });
+    f.failInvalidation(true);
+    await expect(f.service.revoke(owner, entry.installationRef, 'owner_revoked')).rejects.toThrow('capability_unavailable');
+    expect(f.revoked).toContain(lease.token);
+    expect((await f.service.status(owner, entry.installationRef)).state).toBe('revoked');
+    f.failInvalidation(false);
+    await f.service.revoke(owner, entry.installationRef, 'owner_revoked');
+    expect(f.invalidations.at(-1)?.repoId).toBe(owner.repoId);
+    await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
+  });
 });
