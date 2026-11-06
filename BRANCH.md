@@ -73,9 +73,9 @@
 - [x] **Lot 3 — A4-ADOPTION-INTERLEAVE**
   - [x] Request-scoped service interception occurs between the lock-free rights read and mutation transaction; current row authorization and CAS stay mandatory.
   - [x] Re-enabled stale-end test; all 38 tests in `api/tests/api/session-adoption.test.ts` pass with assertions unchanged.
-- [ ] **Lot 4 — A4-LANE-BLOCKED-SERIALIZE**
-  - [ ] Intercept live refresh transaction; bind consent revocation to current CM authority.
-  - [ ] Re-enable 3 variants and qualify `api/tests/api/auth/oauth-refresh.integration.test.ts`.
+- [x] **Lot 4 — A4-LANE-BLOCKED-SERIALIZE**
+  - [x] Intercept live refresh transaction after subject/refresh locks; revoke CM consent, protocol evidence and subject revision atomically.
+  - [x] All 12 refresh integration tests pass with assertions unchanged; writer uses the real CM request runner and its unchanged attempt budget. Both consent-plane rollback/restoration regressions pass.
 - [ ] **Lot 5 — Optional authentication and logging**
   - [ ] Invalid/expired public credentials continue anonymously; infrastructure failures return 503; add both regressions; requireAuth unchanged.
   - [ ] Typed codes only for activity-touch and workspace-member catch-all logging.

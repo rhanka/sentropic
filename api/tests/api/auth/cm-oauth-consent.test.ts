@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
 import { oauthClients, oauthConsents, oauthDpopProofs } from '../../../src/db/schema';
-import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
+import { createConsentStoreAdapter, revokeCmOAuthConsent } from '../../../src/services/auth/consent-store-adapter';
 import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
 import { createCmUser } from '../../../src/services/identity/cm-users';
 import { createCmTenant, setCmMembershipState, setCmTenantStatus } from '../../../src/services/identity/cm-tenancy';
@@ -107,5 +107,28 @@ describe('CM OAuth consent authority and protocol participant', () => {
     expect(await list()).not.toContain(tenantId);
     expect(await runCmIdentityWrite(transaction => createCmOAuthTenantPort(transaction)
       .isApprovedMember(userId, tenantId))).toBe(false);
+  });
+
+  it('revokes CM authority and protocol evidence atomically and refuses a restored evidence row', async () => {
+    await runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
+      .saveGrant(userId, clientId, ['read'], tenantId));
+    const before = await protocol();
+    expect(await revokeCmOAuthConsent({ userId, clientId, tenantId })).toBe(true);
+    expect(await protocol()).toEqual([]);
+    expect((await authority())[0].revoked_at).toBeTruthy();
+    await db.insert(oauthConsents).values(before);
+    expect(await runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
+      .getGrant(userId, clientId, tenantId))).toBeNull();
+  });
+
+  it('rolls back both consent planes when revocation fails before commit', async () => {
+    await runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
+      .saveGrant(userId, clientId, ['read'], tenantId));
+    const before = { authority: await authority(), protocol: await protocol() };
+    await expect(runCmIdentityWrite(async () => {
+      await revokeCmOAuthConsent({ userId, clientId, tenantId });
+      throw new Error('injected_after_revocation');
+    })).rejects.toThrow('injected_after_revocation');
+    expect({ authority: await authority(), protocol: await protocol() }).toEqual(before);
   });
 });
