@@ -53,6 +53,7 @@
   - [x] Add atomic memory store, principal-scoped replay receipts and transition/CAS invariants.
   - [x] Extend both backend suites with ref refusal, branch reclamation and missing-branch pause fencing.
   - [x] Red test exposed inbound resume bypass; restrict inbound transitions to the contract state machine.
+  - [x] Add same-target configuration and retained pause-condition acceptance; check page-only MCP readers.
 - [ ] Lot 3: additive migration 0010, append-only audit/index and Postgres adapter; shared conformance suite.
   - [x] Add 0010 records, release column, scoped foreign keys and partial active uniqueness indexes.
   - [x] Add Postgres binding/receipt/event transaction and cross-process replay locking.

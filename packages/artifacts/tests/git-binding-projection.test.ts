@@ -18,6 +18,8 @@ describe('artifacts_get repository code right projection', () => {
       args: { bindingName: 'git-demo', idempotencyKey: 'ensure' } });
     const artifactId = (ensured.body as { artifactId: string }).artifactId;
     expect(ensured.status).toBe(201);
+    const acl = (await w.acls.getArtifactAcl(artifactId))!;
+    await w.acls.putArtifactAcl(artifactId, { ...acl, grants: [{ principalId: 'bob', grant: 'read' }] });
     const read = () => w.mcp.invoke({ tool: 'artifacts_get', invocation: w.invocation(), args: { artifactId } });
     let binding = gitBinding(artifactId);
     await bindings.write(gitWrite(binding));
@@ -34,6 +36,9 @@ describe('artifacts_get repository code right projection', () => {
       const denied = await read();
       expect(denied.status).toBe(200);
       expect(denied.body).not.toHaveProperty('git');
+      const reader = await w.mcp.invoke({ tool: 'artifacts_get', invocation: w.invocation('bob'), args: { artifactId } });
+      expect(reader.status).toBe(200);
+      expect(reader.body).not.toHaveProperty('git');
       codeRight = true;
     }
   });
