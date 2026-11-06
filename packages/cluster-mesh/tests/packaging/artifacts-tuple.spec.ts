@@ -67,6 +67,14 @@ describe('artifacts source tuple coherence', () => {
       integrity: 'sha512-+4Tswq47k+U280k3N9kiUhMtM/U2iCw8C1mpURZKrQKMvbf7iz1xCQbMaA5jHPJyNH7081hJbxBztogL730aWQ==',
     });
   });
+
+  it('should accept a rebuilt cluster-mesh candidate without pinning local archive bytes', () => {
+    const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
+    const candidate = lock.packages['node_modules/@sentropic/cluster-mesh'];
+    expect(candidate.version).toBe(sourceManifest.version);
+    expect(candidate.resolved).toBe(`file:../sentropic-cluster-mesh-${sourceManifest.version}.tgz`);
+    expect(candidate).not.toHaveProperty('integrity');
+  });
 });
 
 describe.skipIf(!enabled || !artifactsCompatible)('installed compatible artifacts tuple', () => {
