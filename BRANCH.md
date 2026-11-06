@@ -18,6 +18,7 @@
   - `api/vitest.config.ts`
   - `api/ci/unit-shards*`
   - `scripts/ci/api-unit-shards.test.mjs`
+  - `scripts/ci/api-unit-shards-cli.test.mjs`
   - `scripts/ci/api-tool-cache*`
   - `scripts/ci/ci-unit-graph.test.mjs`
   - `scripts/ci/consumer-contracts.mjs`
@@ -63,5 +64,6 @@
 - [x] Cache validators reject source, lock, architecture and archive corruption; scoped cache, graph and 40 publishable-wiring checks passed.
 - [x] Real Vitest 4.1.5 collection and configured sequencer: all 186 unit files assigned exactly once across four shards (34/51/51/50 files).
 - [x] The former 254s app qualification runs as two file shards with the complete content-process checks retained on each isolated runner.
+- [x] CI 42308475249 exposed the Vitest 4 shard hook signature; read shard configuration from context and add four real CLI fixture executions with exact membership and zero pending tests.
 - [x] Lot 3: scoped Make sharding, cache, graph, static, consumer, expected-results, DAG, proof and publishable-wiring checks on existing Node container; full suites in PR CI.
 - [ ] Lot 4: scope-check before atomic make commits; push wagon; capture draft timing run; report and test-volume cleanup.
