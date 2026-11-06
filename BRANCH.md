@@ -61,7 +61,7 @@
 - [ ] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
   - [x] Author MCP transition projection and frozen access-definition tests before wiring.
   - [x] Wire code-right-only artifacts_get projection; unavailable rights omit git entirely.
-- [ ] Lot 5: written SQLite decision and adapter/host integration documentation.
+- [x] Lot 5: written SQLite decision and adapter/host integration documentation.
 - [ ] Lot 6: scoped local tests, typecheck/lint, scope check, one ready PR and green CI.
 
 ## Deferred to SG1-sqlite
