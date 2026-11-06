@@ -39,6 +39,13 @@ export function createGitPort(options: GitPortOptions): GitPort & Pick<ReturnTyp
       return result.sha;
     }),
     read: (target, input) => safe(async () => reader(await sessions.admit(target, false), target, input)),
+    inspectCommit: (target, commitSha) => safe(async () => {
+      const repo = await sessions.admit(target, false); assertGitSha(commitSha);
+      const session = await sessions.open(repo);
+      const result = await session.call((forge, context) => forge.resolve(context, commitSha));
+      if (result.sha !== commitSha) throw new ArtifactOperationError('provider_unavailable');
+      return result;
+    }),
     commit: input => safe(() => writer(input)),
     isAncestor: (target, ancestor, descendant) => safe(async () => {
       const repo = await sessions.admit(target, false);

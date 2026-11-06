@@ -32,18 +32,24 @@ export interface GitSourcePage {
 export interface GitCommitInput {
   target: GitPortTarget; expectedHeadSha: string;
   artifactId: string; invocationId: string;
+  /** Persisted with SG3's durable intent, reused verbatim for object replay. */
+  createdAt: string;
   message: string;
   /** Fully materialized changes after SG3's exactly-once edit application; null deletes. */
   files: { path: string; text: string | null }[];
 }
 export interface GitPort {
   resolveRef(target: GitPortTarget, ref: string): Promise<string>;
+  inspectCommit(target: GitPortTarget, commitSha: string): Promise<GitResolvedCommit>;
   read(target: GitPortTarget, input: { commitSha: string; paths?: string[]; cursor?: string }): Promise<GitSourcePage>;
   commit(input: GitCommitInput): Promise<{ commitSha: string; treeSha: string }>;
   isAncestor(target: GitPortTarget, ancestorSha: string, descendantSha: string): Promise<boolean>;
   createBranch(target: GitPortTarget, baseCommitSha: string): Promise<void>;
 }
 export interface GitForgeContext { locator: string; token: string }
+export interface GitResolvedCommit {
+  sha: string; treeSha: string; parents: string[]; message: string; author: GitIdentity; committer: GitIdentity;
+}
 export interface GitTreeEntry {
   path: string; sha: string; type: 'tree' | 'blob' | 'commit'; mode: string; size?: number;
 }
@@ -53,13 +59,13 @@ export class GitForgeError extends Error {
 }
 export interface GitForge {
   repositoryId(context: GitForgeContext): Promise<string>;
-  resolve(context: GitForgeContext, ref: string): Promise<{ sha: string; treeSha: string }>;
+  resolve(context: GitForgeContext, ref: string): Promise<GitResolvedCommit>;
   tree(context: GitForgeContext, treeSha: string): Promise<GitTreeEntry[]>;
   blob(context: GitForgeContext, sha: string): Promise<Uint8Array>;
   createTree(context: GitForgeContext, baseTreeSha: string,
     changes: { path: string; text: string | null; mode: string }[]): Promise<string>;
   createCommit(context: GitForgeContext, input: {
-    parentSha: string; treeSha: string; message: string; author: GitIdentity; committer: GitIdentity;
+    parentSha: string; treeSha: string; message: string; author: GitIdentity; committer: GitIdentity; createdAt: string;
   }): Promise<string>;
   /** Must compare the old SHA atomically. REST update-ref(force=false) alone is insufficient. */
   advance(context: GitForgeContext, branch: string, expectedSha: string, commitSha: string): Promise<void>;
