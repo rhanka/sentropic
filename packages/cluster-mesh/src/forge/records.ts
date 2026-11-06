@@ -29,7 +29,7 @@ export interface EnrollmentRecord {
   target: GitAppOwnerRepository;
   installationRef: string;
   webhookSecretRef: string;
-  state: 'manifest' | 'install' | 'ready' | 'revoked';
+  state: 'manifest' | 'install' | 'ready' | 'unavailable' | 'revoked';
   callbackState: string;
   callbackExpiresAt: number;
   credentialVersion: string;

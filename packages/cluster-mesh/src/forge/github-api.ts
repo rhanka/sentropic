@@ -1,5 +1,5 @@
 import { createSign } from 'node:crypto';
-import { assertGitAppPermissions, GIT_APP_PERMISSIONS, GitAppError } from './contracts.js';
+import { assertGitAppPermissions, GIT_APP_PERMISSIONS, GitAppError, GitAppAccessLostError } from './contracts.js';
 import type { AppCredential, GitHubAppApi, MintedToken } from './records.js';
 
 export const createGitHubAppApi = (input: {
@@ -25,10 +25,18 @@ export const createGitHubAppApi = (input: {
           ...(body ? { 'content-type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
-      if (!response.ok) throw unavailable();
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 404) throw new GitAppAccessLostError();
+        if (response.status === 403 && !response.headers.has('retry-after') &&
+            response.headers.get('x-ratelimit-remaining') !== '0') {
+          const data = await response.json().catch(() => null);
+          if (data?.message === 'Resource not accessible by integration') throw new GitAppAccessLostError();
+        }
+        throw unavailable();
+      }
       if (response.status === 204) return null;
       return await response.json();
-    } catch { throw unavailable(); }
+    } catch (error) { throw error instanceof GitAppAccessLostError ? error : unavailable(); }
   };
   const numericId = (id: string) => {
     if (!/^[1-9][0-9]*$/.test(id) || !Number.isSafeInteger(Number(id))) throw unavailable();
@@ -50,9 +58,9 @@ export const createGitHubAppApi = (input: {
       if (typeof repository.full_name !== 'string') throw unavailable();
       return { token: response.token, expiresAt: response.expires_at, permissions: response.permissions,
         repositoryIds: [id], locator: repository.full_name };
-    } catch {
+    } catch (error) {
       try { await revokeToken(response.token); } catch { /* Remains unleased and never leaves custody. */ }
-      throw unavailable();
+      throw error instanceof GitAppAccessLostError ? error : unavailable();
     }
   };
   return {
