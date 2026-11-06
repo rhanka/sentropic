@@ -29,7 +29,7 @@ export interface CachePorts {
     quarantine(key: string): Promise<void>;
   };
 }
-const invalid = (): never => { throw new LiveError('dependency_cache_invalid'); };
+function invalid(): never { throw new LiveError('dependency_cache_invalid'); }
 const cacheKey = (id: CacheIdentity) => `${id.lockSha256}/${sha256(JSON.stringify([
   id.storageScopeId, id.repoId, id.platform, id.nodeVersion, id.npmVersion, id.image,
   id.policyRevision, id.workspaceTopology, id.integrityDigest,

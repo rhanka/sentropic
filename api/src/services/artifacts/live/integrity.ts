@@ -9,7 +9,7 @@ export interface IntegrityEvidence {
   approved: readonly IntegrityPin[];
   disabledHooks: readonly { path: string; version: string; integrity: string }[];
 }
-const fail = (code = 'dependency_integrity_missing'): never => { throw new LiveError(code); };
+function fail(code = 'dependency_integrity_missing'): never { throw new LiveError(code); }
 const safe = (path: string) => path.length <= 1024 && !path.startsWith('/') && !path.includes('\\')
   && !path.includes('\0') && path.split('/').every(p => p && p !== '.' && p !== '..');
 export function verifySri(bytes: Uint8Array, sri: string) {

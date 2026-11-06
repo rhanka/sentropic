@@ -72,4 +72,5 @@
   - [x] Exercise wake/build/finalization races, uncertain termination, interrupted work and store failures.
   - [x] Test cold/warm cache verification, integrity gaps, tampering, path escapes and R1 environment.
   - [x] Test live grant separation, credential stripping, CSP, source exclusions, HMR Origin/path and revocation.
+  - [x] Use explicit non-returning guards so strict TypeScript retains refusal-path narrowing.
 - [ ] Lot 7: record evidence in `.tmp/rv/live-pod.md`, push without PR and remove test volumes.
