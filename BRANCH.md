@@ -74,4 +74,5 @@
   - [x] Test cold/warm cache verification, integrity gaps, tampering, path escapes and R1 environment.
   - [x] Test live grant separation, credential stripping, CSP, source exclusions, HMR Origin/path and revocation.
   - [x] Use explicit non-returning guards so strict TypeScript retains refusal-path narrowing.
+  - [x] Test VAP manifests, provision-response loss, foreign-generation denial and historical build-only entry.
 - [ ] Lot 7: record evidence in `.tmp/rv/live-pod.md`, push without PR and remove test volumes.
