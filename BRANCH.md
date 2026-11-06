@@ -55,6 +55,7 @@
   - [x] Implement canonical path admission, secret exclusions and A1 allow/deny matching before transport.
 - [ ] Lot 2: fake forge tests in `tests/git-port.test.ts`, `tests/git-port-policy.test.ts`, `tests/fixtures/git-port-fake.ts`.
   - [x] Add traversal, secret-file, A1 denial precedence and repository-relative glob acceptance cases.
+  - [x] Add an in-memory forge with atomic old-SHA comparison and immutable source snapshots.
 - [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
   - [x] Add bounded nonrecursive tree traversal with fixed-SHA resolution and symlink/gitlink refusal.
   - [x] Add MAC-bound caller/scope/SHA pagination, UTF-8/base64 reads and explicit omission reasons across the total budget.
