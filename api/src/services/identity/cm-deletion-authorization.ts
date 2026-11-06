@@ -13,9 +13,12 @@ export const cmAccountDeletionAuthorization = (handlerId: BusinessDeletionHandle
   async assertAllowed(command, tx) {
     const target = await tx.stores.accounts.findAccount(command.userId);
     if (!target) throw new IdentityNotFoundError('user', command.userId);
-    if (!await tx.custody.profiles.find(command.userId)) throw new IdentityCustodyErrorV1('identity_material_missing');
+    const profile = await tx.custody.profiles.find(command.userId);
+    if (!profile) throw new IdentityCustodyErrorV1('identity_material_missing');
     if (handlerId === 'self_account') {
       if (command.actorId !== command.userId) throw new SelfActionForbiddenError('delete');
+      if (target.accountStatus === 'disabled' && (profile.legacyAccountStatus !== 'disabled_by_user'
+        || profile.disabledReason !== 'user_deactivated')) throw new CmIdentityForbiddenError();
     } else {
       if (command.actorId === command.userId) throw new SelfActionForbiddenError('delete');
       const actor = await tx.stores.accounts.findAccount(command.actorId);
