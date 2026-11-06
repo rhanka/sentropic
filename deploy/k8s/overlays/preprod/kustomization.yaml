@@ -17,7 +17,7 @@ resources:
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
 #   images:
-#     - name: rg.fr-par.scw.cloud/nc-reg/sentropic-api
+#     - name: ghcr.io/rhanka/sentropic-api
 #       newTag: vYYYY.MM.DD.N
 # Per-tier host + isolated WebAuthn RP ID overrides (D4 nested hosts, D11R isolated
 # identity). Strategic-merge patches override only the listed ConfigMap keys; the
@@ -30,7 +30,7 @@ patches:
 
 # Temporary recovery pin: remove at the A4 preprod cutover execution.
 images:
-  - name: rg.fr-par.scw.cloud/nc-reg/sentropic-api
+  - name: ghcr.io/rhanka/sentropic-api
     newTag: "f2313a"
-  - name: rg.fr-par.scw.cloud/nc-reg/sentropic-ui
+  - name: ghcr.io/rhanka/sentropic-ui
     newTag: "434fe5"
