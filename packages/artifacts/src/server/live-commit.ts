@@ -73,12 +73,13 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     });
     if (committed.treeSha !== intent.liveTreeSha) liveBusy('commit_indeterminate');
   } catch (cause) {
-    if (cause instanceof ArtifactOperationError && !['provider_unavailable', 'git_live_conflict'].includes(cause.kind)) {
+    if (cause instanceof ArtifactOperationError && !['provider_unavailable', 'git_head_moved', 'git_live_conflict'].includes(cause.kind)) {
       await deps.store.transaction(identity, async tx => {
         if (tx.record?.pendingCommit?.invocationId === intent.invocationId) tx.record.pendingCommit = null;
       });
     }
-    if (cause instanceof ArtifactOperationError && (cause.kind === 'provider_unavailable' ||
+    // A concurrent execution of this intent may have won the forge CAS. Preserve it for reconciliation.
+    if (cause instanceof ArtifactOperationError && (cause.kind === 'provider_unavailable' || cause.kind === 'git_head_moved' ||
       cause.kind === 'git_live_conflict' && cause.details.publicDetails?.reason === 'commit_indeterminate')) throw new LiveCommitUnknownError(cause);
     throw cause;
   }
