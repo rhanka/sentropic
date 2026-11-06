@@ -384,7 +384,8 @@ test('every validation pack step receives the CI context and an explicit ENV', (
   let count = 0;
   for (const [name, job] of Object.entries(jobs)) {
     for (const step of job.steps ?? []) {
-      if (!/\bpack-[a-z-]+/.test(step.run ?? '') || !name.startsWith('validate-') || /pack-candidate-siblings/.test(step.run)) continue;
+      const validation = name.startsWith('validate-') || name === 'artifacts-qualification';
+      if (!/\bpack-[a-z-]+/.test(step.run ?? '') || !validation || /pack-candidate-siblings/.test(step.run)) continue;
       for (const [k, v] of Object.entries(CTX)) assert.equal(step.env?.[k], v, `${name}: ${k}`);
       assert.match(step.run, / ENV=test-ci-[a-z-]+$/);
       // The installed-pair core pack duplicates validate-chat-core's own pack for the
