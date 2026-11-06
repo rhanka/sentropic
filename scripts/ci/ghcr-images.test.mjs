@@ -65,10 +65,13 @@ test('should reject a retired registry in hidden tracked files without printing 
       env: { ...process.env, PATH: `${dir}/bin:${process.env.PATH}` }, encoding: 'utf8' });
     writeFileSync(file, 'image: ghcr.io/rhanka/sentropic-api:main\n');
     assert.equal(run().status, 0);
-    writeFileSync(file, `private-content ${['rg', 'fr-par', 'scw', 'cloud'].join('.')}/old\n`);
-    const denied = run();
-    assert.equal(denied.status, 1);
-    assert.match(denied.stderr, /\.github\/fixture.yaml/);
-    assert.doesNotMatch(denied.stderr, /private-content/);
+    const host = ['rg', 'fr-par', 'scw', 'cloud'].join('.');
+    for (const reference of [host, host.replaceAll('.', '\\.'), host.replaceAll('.', '\\\\.')]) {
+      writeFileSync(file, `private-content ${reference}/old\n`);
+      const denied = run();
+      assert.equal(denied.status, 1);
+      assert.match(denied.stderr, /\.github\/fixture.yaml/);
+      assert.doesNotMatch(denied.stderr, /private-content/);
+    }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
