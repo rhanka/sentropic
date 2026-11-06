@@ -68,7 +68,7 @@
   - [x] Required a sanitized host invalidation callback to discard adapter caches and fence dependent jobs on revocation/key rotation.
   - [x] Added renewal/lifetime and host-notification failure checks; retain rejected minted bearers for revocation and conversion credentials through verification failures.
   - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
-  - [ ] Document owner clicks and activation gates in `docs/github-app-enrollment.md`.
+  - [x] Document owner clicks and activation gates in `docs/github-app-enrollment.md`.
   - [x] Wrote the host-composition and owner-click runbook, including rotation, custody boundaries and unverified live P2 gates.
 - [ ] **Lot 4 — Final validation and handoff**
   - [ ] Scoped `make test-cluster-mesh SCOPE=tests/forge ENV=test-sg0-app`; typecheck and lint.

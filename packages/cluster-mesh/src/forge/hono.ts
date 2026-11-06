@@ -68,7 +68,15 @@ export const createGitHubAppRouter = (input: {
   app.get('/github-app/:ref/rotation', async (c) => {
     const status = await input.service.status(await owner(c.req.raw), c.req.param('ref'));
     const path = `/github-app/${escapeHtml(status.installationRef)}`;
-    return c.html(`<html><body><form method="post" action="${path}/key" enctype="multipart/form-data"><input type="file" name="privateKey" accept=".pem" required><button>Verify and switch App key</button></form><form method="post" action="${path}/webhook-stage"><button>Stage webhook secret (10 minute overlap)</button></form><form method="post" action="${path}/webhook-switch"><button>Switch GitHub webhook sender</button></form><form method="post" action="${path}/revoke"><button>Revoke enrollment</button></form></body></html>`);
+    return c.html([
+      '<html><body>',
+      `<form method="post" action="${path}/key" enctype="multipart/form-data"><input type="file" name="privateKey" accept=".pem" required><button>Verify and switch App key</button></form>`,
+      `<form method="post" action="${path}/webhook-stage"><button>Stage webhook secret (10 minute overlap)</button></form>`,
+      `<form method="post" action="${path}/webhook-switch"><button>Switch GitHub webhook sender</button></form>`,
+      `<form method="post" action="${path}/webhook-retire"><button>Retire previous webhook secret</button></form>`,
+      `<form method="post" action="${path}/revoke"><button>Revoke enrollment</button></form>`,
+      '</body></html>',
+    ].join(''));
   });
   app.post('/github-app/:ref/key', async (c) => {
     csrf(c.req.raw);
