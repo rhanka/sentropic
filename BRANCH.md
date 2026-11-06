@@ -1,91 +1,51 @@
-# train 2026-11-06: oauth job workdir + CI consumer contracts (BR-83) + artifacts 0.2.17 application mode
+# Feature: artifacts 0.2.18 train — GitHub enrollment, bindings, forge and builds
 
 ## Objective
-- [ ] Integrate three wagons on current origin/main, refresh integration artifacts once, qualify one READY PR; do not merge.
-- [ ] Supersedes [#923](https://github.com/rhanka/sentropic/pull/923), [#921](https://github.com/rhanka/sentropic/pull/921), [#924](https://github.com/rhanka/sentropic/pull/924); the conductor closes them after this train merges.
+- [ ] Integrate the approved git-artifact wagons after artifacts 0.2.17, release artifacts 0.2.18 with one ordinary train PR, and keep the train open for subsequent wagons.
 
 ## Scope / Guardrails
-- [x] Merge order: `origin/fix/oauth-register-job-workdir`, `origin/feat/ci-consumer-contracts`, `origin/feat/artifacts-0.2.17-app-mode`.
-- [x] Base `c107f6abd70e47e0aba33ab4afad01f8dafe4534`; branch `train/2026-11-06`; worktree `tmp/worktrees/train-2026-11-06`.
-- [x] Preserve wagon histories and the inherited #921 conversation-row readiness fix; resolve conflicts at the train root.
-- [x] Make-only; no Python, CI reruns, CI-skip markers or attribution trailers; selective staging and `make commit`.
-- [x] Docker via `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command; cleanup with `make down-volumes`.
-- [x] ENV=test-train-1106; API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570; ENV always last; no root UAT services.
-- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [x] Branch `train/artifacts-0.2.18`; isolated worktree `tmp/worktrees/train-artifacts-0218`.
+- [x] Base exactly `origin/train/2026-11-06` at `30b808cf5b118ad9b91db6c651f74912cef1fad5`, carrying artifacts 0.2.17.
+- [ ] After the dated train merges, rebase onto `origin/main` and recheck registry versions.
+- [x] Make only; Docker commands through `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command.
+- [x] Dedicated ports `API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218`; ENV always last; tear down volumes after tests.
+- [x] Wagons push branches and scoped checks; integration owns versions, locks, fixture pins, APP-P1 digest and L5 once per integrated release head.
+- [x] One READY train PR to main; ordinary full CI and package-bump enforcement; no CI gate exception; no merge to main by this lane.
+- [x] No skip markers, run reruns, Python, attribution trailers, secret output or live enrollment.
+- [x] Selective staging and `make commit` only; newly authored commits stay below 150 changed lines; two-parent wagon merges retain existing history and immutable generated L5 snapshots retain exact bytes under BR0218-EX4.
+- [x] G0 FROZEN v3 contract SHA-256 `4c405c8f49e9d242d65eebe35a14a45e4826afc0007e9f94a7fe21d7404e21ba` remains binding.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/compatibility-classifier*.mjs`
-  - `scripts/ci/consumer-contracts*.mjs`
-  - `scripts/ci/consumer-boundaries.json`
-  - `scripts/ci/installed-tuple*.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `scripts/ci/publishable-classification.test.mjs`
-  - `api/package.json`
-  - `api/tests/contracts/*-candidate.test.ts`
-  - `apps/auth-idp/tests/cluster-candidate.test.ts`
-  - `apps/llm-gateway/tests/cluster-candidate.test.ts`
-  - `packages/artifacts/src/**`
-  - `packages/artifacts/tests/**`
-  - `packages/artifacts/package.json`
-  - `packages/artifacts/CHANGELOG.md`
-  - `apps/artifact-content/src/host.ts`
-  - `apps/artifact-content/tests/application-mode.test.ts`
-  - `api/src/services/artifacts/**`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/src/routes/namespaces/artifacts.ts`
-  - `api/src/routes/namespaces/resources.ts`
-  - `api/tests/api/artifacts-reader*.test.ts`
-  - `api/tests/api/app-mcp-*.test.ts`
-  - `api/tests/api/root-mount-fence-completeness.test.ts`
-  - `api/tests/api/cluster-mesh-resources.test.ts`
-  - `package-lock.json`
-  - `api/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
-  - `e2e/tests/03-dashboard.spec.ts`
-  - `e2e/tests/08-chat-checkpoint-restore.spec.ts`
-  - `packages/auth-ui/tests/oauth-consent-rendering.test.ts`
-  - `e2e/Dockerfile`
-  - `e2e/tests/07-matrix.spec.ts`
-  - `api/tests/api/auth/cm-auth-request-concurrency.test.ts`
-  - `api/src/services/identity/cm-auth-binding.ts`
-  - `api/src/services/identity/cm-transaction.ts`
-  - `packages/cluster-mesh/tests/packaging/prepare.sh`
-  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
-  - `packages/chat-core/src/runtime/comments/state.ts`
-  - `packages/chat-core/tests/runtime/comments-module.spec.ts`
-  - `packages/chat-core/tests/runtime/chat-core-host.spec.ts`
-  - `packages/chat-core/package.json`
-  - `ui/package-lock.json`
+  - `packages/artifacts/**`
+  - `packages/cluster-mesh/src/forge/**`
+  - `packages/cluster-mesh/src/index.ts`
+  - `packages/cluster-mesh/tests/forge/**`
+  - `packages/cluster-mesh/docs/github-app-enrollment.md`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/drizzle/*.sql`
+  - `.github/workflows/**`
   - `.track/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/ci.yml` under BR83-EX1
-  - `Makefile` under BR83-EX2
-  - `apps/auth-idp/tsconfig.json` under BR83-EX3
-  - `e2e/tests/08-chat-workspace-switch.spec.ts` under BR83-EX4
-  - `deploy/k8s/base/36-oauth-register-client-job.yaml` under BROJ-EX1
-  - `plan/69-BRANCH_feat-ci-consumer-contracts.md` under BRTRAIN-EX1
-  - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
+  - `package-lock.json` (BR0218-EX1)
+  - `api/package-lock.json` (BR0218-EX1)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**` (BR0218-EX2)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR0218-EX2)
+  - `api/src/services/mcp/cluster-registry.ts` (BR0218-EX3)
+  - `api/tests/api/app-mcp-registry.test.ts` (BR0218-EX3)
+  - `api/tests/api/app-mcp-installed.test.ts` (BR0218-EX3)
+  - `tools/memory-mcp-l5/artifacts/**` (BR0218-EX4)
+- **Exception process**:
+  - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
-- [x] TRAIN-CI8 / BR83-EX1 — Run 42241084291 chat-core 695/695 PASS, chat-ui DOM 206/206 PASS; installed pair still names the old core 0.3.1 archive. Feed the guarded packer's tarball output into pair qualification so it validates the actual candidate. Scope: producer output/wiring only; no qualification or dispatch gate relaxed. Wiring 39/39 PASS; real installed UI 1.0.0/core 0.3.2 contracts, Svelte typecheck, Vite build and runtime/remount/permission matrix PASS.
-- [x] TRAIN-CI7 — Run 42240457717 validate-chat-core: 694/695 PASS; only the durable-port release test still expects 0.3.1 after the required patch bump. Align its exact equality to 0.3.2, retaining the release identity assertion.
-- [x] TRAIN-CI6 — Run 42237216892 shard 4 fails the unchanged workspace-B mention assertion at 04-tenancy-workspaces.spec.ts:183. Members arrive after @ input, but the comment state never refreshes mentionMatches. Deterministic delayed-response regressions fail for @ and a changed @bob query, then pass after recomputing matches on member arrival; a dismissed menu stays closed. Module suite: 32/32 PASS. Patch chat-core 0.3.2 exceeds published 0.3.1; root/UI workspace version records only, with no dependency re-resolution. Retained P1 manifest verification remains PASS (30 files, 54 edges); no new manifest generation needed.
-- [x] TRAIN-CI5c — Selected/latest preparation prefers the guarded auth-ui receipt; selected consumer installs that peer and tuple alignment requires its exact manifest/lock contract. Unchanged strict sibling-integrity gates and full packed suite PASS (135/135, zero skips); publish the completed repair after the two prerequisite lock commits.
-- [x] TRAIN-CI5b — Pin auth-ui 0.9.0 and its renderer peers in the selected consumer; verified published archive SHA-256 0ce478a6c2bf07e9a6edd972e70e8e18ec899cd403509fee30a3bb2b90ee42f7. Existing tuple pins unchanged; real packed qualification 135/135 PASS.
-- [x] TRAIN-CI5a — Freeze the selected auth-ui compiler prerequisites from the committed dependency universe; preserve every existing version, URL and integrity. Complete local packed-consumer qualification: 135/135 PASS, zero skips; source/tuple regression: 20/20 PASS. Commit generated records in bounded parts before publishing the complete fix.
-- [x] Owner continuation: push each verified fix and iterate until the entire train CI is green; no rerun, CI-skip marker, relaxed assertion, timeout/retry increase or merge.
-- [x] TRAIN-CI4 — Reproduced five HTTP 503 responses among 16 concurrent new-account magic-link completions, with PostgreSQL SSI pivot errors (40001). Account creation reads the account-wide first-user predicate. Admit registration/magic-link/social completions through the existing exclusive writer gate before BEGIN, matching direct account creation; serializable isolation and all retry/deadline limits stay unchanged. Regression: 16/16 HTTP 200 with session tokens, accounts and admin workspace memberships; replay HTTP 400. Existing concurrency cases also PASS (4/4 tests total). Full CI/shard 6 confirmation pending.
-- [x] TRAIN-CI3 — Shard 3 export readiness correction: retain the two-second dialog and ZIP assertions, require enabled state before a normal actionable click. Combined dashboard/matrix/checkpoint specs on the corrected image: 21/21 PASS, zero retries.
-- [x] BRTRAIN-EX3 — Fix CVE-2026-85091: pin E2E zlib 1.3.2-r1, the Alpine fixed version. Impact: E2E runtime library only; rollback: restore prior pin while retaining the blocking security gate. Image build/browser/video probes PASS; Trivy zero HIGH/CRITICAL findings; no suppression or register exception.
-- [x] TRAIN-CI2 — Share the auth-ui compiled-renderer fixture; preserve both resource cases and every assertion, without changing timeout/retry settings. make test-auth-ui: 56/56 PASS.
-- [x] TRAIN-CI1 — Fix shard 4 on run 42157650191: observe the dashboard lock across presence replacement while retaining the fallback print-hidden requirement and requiring a disabled presence lock; await the post-restore response before checking the unchanged route-handler flag. Scope: the two named E2E specs only, authorized by the train fix request; no timeout/retry increases or assertion weakening. Deterministic Chromium probe reproduces both races and rejects missing print-hidden/enabled presence locks. Local specs 4/4 PASS; complete shard 4: 43 PASS, six existing declared skips, zero retries. Full PR CI remains pending the single fix push.
 - [x] TRAIN-R1 — Missing worker-script CSP reproduced in four MIME vectors and Chromium 148; corrected application responses block external fetch/eval/Wasm while same-origin reads work. CSP 26/26 and content 79/79 PASS; safe mode and SVG/PDF sandbox preserved.
 - [x] TRAIN-R2 — Bind JSON/form grants to the displayed scope version and reject missing/stale versions without granting a widened scope; regression 5/5 PASS after reproducing missing version binding.
 - [x] TRAIN-R3 — Retain all core integration jobs and affected owners even when missing/unselected; broaden UI validation for API runtime changes under BR83-EX1. Two regression cases failed before the fix; consumer-contract fixtures 23/23 PASS.
