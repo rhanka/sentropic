@@ -1637,13 +1637,32 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Test toolbox image references, cache fallback and hash inputs
         run: make test-ci-api-tooling ENV=test-ci-api
+      - name: Qualify measured unit membership, dependency gates and archive validation
+        run: make test-ci-unit-shards test-ci-unit-graph test-ci-api-tool-cache ENV=test-ci-api
+      - name: Compute complete toolbox cache identity
+        id: toolbox-key
+        run: make -s api-tool-cache-key ENV=test-ci-api >> "$GITHUB_OUTPUT"
+      - name: Restore exact toolbox bytes
+        id: toolbox-cache
+        if: env.CI_IMAGE_CACHE == '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: .tmp/api-tool-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-api-tool-v1-${{ steps.toolbox-key.outputs.key }}
+      - name: Verify and load cached toolbox
+        if: steps.toolbox-cache.outputs.cache-hit == 'true'
+        run: make load-api-tool-cache ENV=test-ci-api
       - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - name: Build CI toolbox
+        if: steps.toolbox-cache.outputs.cache-hit != 'true'
         run: make ci-build-api-tool ENV=test-ci-images
       - name: Verify toolbox runner and compiler interfaces
         run: make test-ci-api-tool-runtime ENV=test-ci-api
       - name: Save CI toolbox
         run: make save-api-tool ENV=test-ci-api
+      - name: Prepare verified toolbox cache
+        if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
+        run: make save-api-tool-cache ENV=test-ci-api
       - uses: actions/upload-artifact@v7
         with:
           name: api-tool-image
@@ -1652,6 +1671,13 @@ jobs:
             api-tool-image.tar.zst
             api-tool-image.json
           compression-level: 0
+
+      - name: Save exact toolbox bytes
+        if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .tmp/api-tool-cache
+          key: ${{ steps.toolbox-cache.outputs.cache-primary-key }}
 
   test-api-unit-integration:
     runs-on: ubuntu-latest
@@ -1679,6 +1705,9 @@ jobs:
             unit_shard: 4
           # Retain the app/content qualification in a separate isolated lane.
           - suite: app-cluster-mesh
+            app_shard: 1
+          - suite: app-cluster-mesh
+            app_shard: 2
           - suite: queue
           - suite: security
           # BR70-CI1: the foundation data-spine test dirs (BR-52 artifact-store /
@@ -1727,7 +1756,7 @@ jobs:
         run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
       - name: Qualify app cluster-mesh host, reader, catalog and content
         if: matrix.suite == 'app-cluster-mesh'
-        run: make test-app-cluster-mesh ENV=test-ci-api
+        run: make test-app-cluster-mesh APP_CLUSTER_MESH_ARGS="--no-file-parallelism --shard=${{ matrix.app_shard }}/2" ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
         if: matrix.suite != 'app-cluster-mesh'
         run: |

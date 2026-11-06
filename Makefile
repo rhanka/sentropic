@@ -625,7 +625,7 @@ test-artifact-content-image: ci-test-env ## Qualify the content role in the reco
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 .PHONY: test-ci-unit-shards
 test-ci-unit-shards: ci-test-env
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test api/ci/unit-shards.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-unit-shards.test.mjs
 
 .PHONY: test-ci-unit-graph
 test-ci-unit-graph: ci-test-env
@@ -2183,8 +2183,9 @@ test-artifact-content: ## Qualify content process behavior, types and lint on th
 	@$(API_TEST_RUN) api sh -lc 'npx --no-install tsc --project ../apps/artifact-content/tsconfig.json && cd /workspace/apps/artifact-content && npx --no-install eslint src tests'
 
 .PHONY: test-app-cluster-mesh
+APP_CLUSTER_MESH_ARGS ?= --no-file-parallelism
 test-app-cluster-mesh: test-artifact-content ## Retain the app topic host, reader and catalogue receiving gates
-	@$(MAKE) test-api-endpoints SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/artifacts-host-migrations.test.ts tests/api/artifacts-host-recovery.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts" API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism" ENV=$(ENV)
+	@$(MAKE) test-api-endpoints SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/artifacts-host-migrations.test.ts tests/api/artifacts-host-recovery.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts" API_TEST_WORKERS=1 API_TEST_ARGS="$(APP_CLUSTER_MESH_ARGS)" ENV=$(ENV)
 .PHONY: test-idp-sync-selftest
 test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without cluster access (BR45-EX1)
 	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
