@@ -103,7 +103,10 @@ export async function requireAuth(c: Context, next: Next) {
 export async function optionalAuth(c: Context, next: Next) {
   try {
     const result = await authenticateCmHttpRequest(c.req.raw, false);
-    if (!result.accepted) return publishCmAuthenticationRefusal(result);
+    if (!result.accepted) {
+      if (result.status === 401) return next();
+      return publishCmAuthenticationRefusal(result);
+    }
     const validated = result.principal;
     if (validated) {
       const { workspaceId } = await ensureWorkspaceForUser(validated.session.userId, { createIfMissing: false });
