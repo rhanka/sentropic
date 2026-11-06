@@ -49,6 +49,7 @@
   let suppressAutoLock = false;
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
+  let presenceRevision = 0;
   let commentCounts: Record<string, number> = {};
   let hasDocuments = false;
   let organizationFolderCount = 0;
@@ -214,6 +215,7 @@
       if (evt?.type === 'presence_update') {
         if (evt.objectType !== 'organization') return;
         if (evt.objectId !== organizationId) return;
+        presenceRevision += 1;
         presenceTotal = Number(evt?.data?.total ?? 0);
         presenceUsers = Array.isArray(evt?.data?.users)
           ? evt.data.users.filter((u: PresenceUser) => u.userId !== $session.user?.id)
@@ -318,6 +320,7 @@
       void releaseCurrentLock();
     }
     lock = null;
+    presenceRevision += 1;
     presenceUsers = [];
     presenceTotal = 0;
     activeLockScopeKey = readyLockScopeKey;
@@ -494,8 +497,10 @@
 
   const hydratePresence = async () => {
     if (!lockTargetId) return;
+    const revision = presenceRevision;
     try {
       const res = await fetchPresence('organization', lockTargetId);
+      if (revision !== presenceRevision) return;
       presenceTotal = res.total;
       presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
     } catch {
@@ -505,8 +510,10 @@
 
   const updatePresence = async () => {
     if (!lockTargetId) return;
+    const revision = presenceRevision;
     try {
       const res = await sendPresence('organization', lockTargetId);
+      if (revision !== presenceRevision) return;
       presenceTotal = res.total;
       presenceUsers = res.users.filter((u) => u.userId !== $session.user?.id);
     } catch {
