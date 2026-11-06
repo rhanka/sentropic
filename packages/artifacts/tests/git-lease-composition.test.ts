@@ -5,13 +5,12 @@ import { commitInput, fakeGit, repo, target } from './fixtures/git-port-fake.js'
 
 async function composition() {
   const forge = fakeGit();
-  let port: ReturnType<typeof createGitPort>;
   const app = fixture({ onCredentialsChanged: async event => { port.invalidate(event); } });
   const entry = await app.ready();
   const scopedTarget = { ...target, storageScopeId: owner.storageScopeId, repoId: owner.repoId };
   const repository = { ...repo, ...scopedTarget, locator: owner.locator, installationRef: entry.installationRef };
   vi.mocked(forge.forge.repositoryId).mockResolvedValue('101');
-  port = createGitPort({ ...forge.options, registry: { get: async () => repository }, leases: app.service,
+  const port = createGitPort({ ...forge.options, registry: { get: async () => repository }, leases: app.service,
     now: () => Date.parse('2026-11-05T12:00:00Z') });
   return { ...forge, app, entry, port, target: scopedTarget };
 }
