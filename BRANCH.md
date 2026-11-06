@@ -55,7 +55,7 @@
 - [x] SG1 scope exceptions: none; merge binding records, registry, Postgres migration 0010, projection and conformance tests.
 - [x] GB1 scope exceptions: none; merge build validation, public export and inert fixture/tests; no executor activation.
 - [x] SG2 scope exceptions: none; merge GitPort and GitHub adapters, scoped tests and documentation; preserve typed failure unions from all wagons.
-- [ ] Conductor confirms the reserved cluster-mesh dev.N above dev.10 before its release bump.
+- [x] Cluster-mesh allocation: dev.14, the next number beyond documented dev.11–dev.13 reservations; no newer allocation was supplied in this lane.
 - [ ] Conductor imports this source and the owner decision into Track as designated single writer; this concurrent lane does not write `.track`.
 - [ ] Live forge probes and enrollment acceptance remain activation gates; local fake tests cannot certify them.
 
@@ -82,7 +82,7 @@
   - [x] SG2 `origin/feat/git-artifact-sg2` — injected leases, GitPort and atomic forge commits.
   - [x] Resolve source conflicts as the union of all typed categories/exports and retained upstream behavior; verify every wagon tip is an ancestor.
 - [ ] **Lot 2 — Single release regeneration**
-  - [ ] Verify registry versions through make; bump artifacts to 0.2.18 and cluster-mesh to reserved dev.N with CHANGELOG entries.
+  - [x] Registry verified through make after rebase/conflict resolution; bump artifacts to 0.2.18 and cluster-mesh to dev.14 with CHANGELOG entries.
   - [ ] Regenerate root/API lock metadata and selected-fixture versions/integrity through make.
   - [ ] Recompute APP-P1 digest through make; assert the frozen four-tool profile selection and historical digest coverage.
   - [ ] Commit final lock before L5 packing; retain upstream manifest/sidecar, regenerate and verify P1 once through make.
