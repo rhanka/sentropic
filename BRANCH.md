@@ -20,6 +20,7 @@
   - `scripts/ci/consumer-contracts.mjs`
   - `scripts/ci/consumer-contracts.test.mjs`
   - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `scripts/ci/ci-performance-report.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -51,5 +52,6 @@
 - [x] Retain measured durations of all 186 unit files from baseline 42300540682/1; no projected duration is a receipt.
 - [x] Lot 1: measured sequencer assigns every discovered unit file exactly once and includes additions; make test-ci-unit-shards passed (3 checks, zero skips).
 - [ ] Lot 2: detach units from production image; cache verified toolbox by lock and complete source identity; remove unused consumer candidate dependency.
+- [x] Source/production split: consumer, graph, expected-results, DAG and BR-84 proof checks passed; both production suites remain mandatory for publication and ci-gate.
 - [ ] Lot 3: scoped Make sharding, graph, consumer, expected-results and wiring checks on existing Node container; full suites in PR CI.
 - [ ] Lot 4: scope-check before atomic make commits; push wagon; capture draft timing run; report and test-volume cleanup.

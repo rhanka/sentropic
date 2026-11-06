@@ -262,7 +262,7 @@ test('should keep owning validations for chat-core, the gateway host, and ubo-co
 });
 
 test('should reject omitted or missing full-integration consumers even without changed package slugs', () => {
-  const names = ['test-api-unit-integration', 'test-ui', 'test-e2e', 'e2e-vscode', 'smoke-idp-screens'];
+  const names = ['test-api-unit-integration', 'test-api-sut', 'test-ui', 'test-e2e', 'e2e-vscode', 'smoke-idp-screens'];
   const workflow = { jobs: { changes: {}, 'ci-gate': { needs: names },
     ...Object.fromEntries(names.map(name => [name, { if: "needs.changes.outputs.global == 'true'" }])) } };
   for (const kind of ['unknown', 'breaking', 'runtime-security', 'root-lock-toolchain']) {
@@ -278,7 +278,7 @@ test('should reject omitted or missing full-integration consumers even without c
 });
 
 test('should reject an unselected owning validation on the full path', () => {
-  const names = ['test-api-unit-integration', 'test-ui', 'test-e2e', 'e2e-vscode', 'smoke-idp-screens'];
+  const names = ['test-api-unit-integration', 'test-api-sut', 'test-ui', 'test-e2e', 'e2e-vscode', 'smoke-idp-screens'];
   const workflow = { jobs: { changes: {}, 'ci-gate': { needs: [...names, 'validate-comments'] },
     ...Object.fromEntries(names.map(name => [name, {}])),
     'validate-comments': { if: "needs.changes.outputs.comments == 'true'" } } };

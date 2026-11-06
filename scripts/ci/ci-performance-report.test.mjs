@@ -83,12 +83,12 @@ test('should retain every API shard and all artifact lanes in the actual workflo
   const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
   const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
   const matrix = workflow.jobs['test-api-unit-integration'].strategy.matrix.include;
-  assert.deepEqual(matrix.filter(row => row.suite === 'unit').map(row => row.unit_shard), [1, 2]);
+  assert.deepEqual(matrix.filter(row => row.suite === 'unit').map(row => row.unit_shard), [1, 2, 3, 4]);
   assert.deepEqual(matrix.filter(row => row.suite === 'endpoints').map(row => row.endpoints_shard), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(matrix.filter(row => row.suite === 'app-cluster-mesh').length, 1);
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
   const executed = expected.filter(row => row.selected).map(row => ({ job: row.job, conclusion: 'success' }));
-  for (const row of expected.filter(row => /^(test-api-unit-integration|artifacts-qualification) \(/.test(row.job))) {
+  for (const row of expected.filter(row => /^(test-api-unit-integration|test-api-sut|artifacts-qualification) \(/.test(row.job))) {
     assert.equal(row.selected, true);
     assert.equal(evaluateExpected({ expected, executed: executed.filter(item => item.job !== row.job) }).ok, false);
   }
