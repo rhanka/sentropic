@@ -161,6 +161,10 @@ function operationProjection(error: ArtifactOperationError): Projection {
   const { kind } = error;
   switch (kind) {
     case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
+    case 'git_binding_conflict': return { ...conflict(kind), publicCode: kind, details: error.details.publicDetails };
+    case 'git_repo_not_registered': case 'git_ref_not_allowed': return {
+      kind: 'ordinary', category: 'unprocessable', httpStatus: 422, publicCode: kind, retriable: false,
+    };
     case 'command_conflict': case 'pointer_conflict': {
       const base = conflict(kind);
       return error.details.conflict === undefined ? base : { ...base, conflict: error.details.conflict };
