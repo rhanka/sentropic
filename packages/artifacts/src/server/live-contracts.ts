@@ -26,12 +26,13 @@ export interface LiveServiceDeps {
 export interface LiveService {
   execute(operation: string, args: Record<string, unknown>, invocation: LiveInvocation): Promise<Record<string, any>>;
 }
-export function liveResponse(record: LiveDraftRecord, currentHeadSha: string): Record<string, unknown> {
+export function liveResponse(record: LiveDraftRecord, currentHeadSha: string, now = Date.now()): Record<string, unknown> {
   return { artifactId: record.artifactId, bindingGeneration: record.bindingGeneration,
     liveRevision: record.revision, revision: record.revision, baseHeadSha: record.baseHeadSha, currentHeadSha,
     liveTreeSha: record.liveTreeSha, durableRevision: record.revision,
     appliedRevision: record.runtime?.appliedRevision ?? null, draftExpiresAt: record.expiresAt,
-    runtimeState: record.runtime?.phase ?? 'DORMANT', liveSessionId: record.runtime?.liveSessionId ?? null };
+    runtimeState: record.runtime?.phase ?? 'DORMANT', liveSessionId: record.runtime?.liveSessionId ?? null,
+    retentionWarning: record.expiresAt && Date.parse(record.expiresAt) - now < 86400000 ? 'expires_within_24_hours' : null };
 }
 export type LiveSessionTransaction = LiveTransaction;
 export type LiveSnapshot = { actorId: string; revision: string; baseHeadSha: string;
