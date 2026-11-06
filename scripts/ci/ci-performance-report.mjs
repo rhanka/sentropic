@@ -137,13 +137,13 @@ const formatSeconds = seconds => seconds === null ? 'to measure' : `${Math.floor
 export function markdown(report) {
   const lines = ['# BR-84 CI performance evidence', '',
     `Acceptance: **${report.accepted ? 'PASS' : 'OPEN'}**. Budget: 600 seconds including queue and cleanup.`, '',
-    `${report.count} attempts; ${report.successful} complete successful attempts; ${report.fullProduct} full-product samples.`, '',
+    `${report.count} attempts; ${report.successful} complete successful attempts; ${report.fullProduct} qualified after full-product samples.`, '',
     '| Event | n | Median | p90 | p95 | Maximum |', '| --- | ---: | --- | --- | --- | --- |'];
   for (const [name, values] of [['PR', report.pr], ['main', report.main]]) {
     lines.push(`| ${name} | ${values.n} | ${formatSeconds(values.median)} | ${formatSeconds(values.p90)} | ${formatSeconds(values.p95)} | ${formatSeconds(values.maximum)} |`);
   }
   lines.push('', '| Run / attempt | Event | Result | Wall | Qualification | Gap to 600s |', '| --- | --- | --- | --- | --- | --- |');
-  for (const run of report.runs) lines.push(`| [${run.runId}/${run.attempt}](${run.url}) | ${run.event} | ${run.conclusion ?? run.status} | ${formatSeconds(run.wallSeconds)} | ${formatSeconds(run.qualificationSeconds)} | ${formatSeconds(run.gapSeconds)} |`);
+  for (const run of report.runs) lines.push(`| [${run.runId}/${run.attempt}](${run.url}) | ${run.event} | ${run.conclusion ?? run.status} | ${run.wallSeconds === null ? '≥' : ''}${formatSeconds(run.wallSeconds ?? run.elapsedLowerBoundSeconds)} | ${formatSeconds(run.qualificationSeconds)} | ${run.gapSeconds === null ? '≥' : ''}${formatSeconds(run.gapSeconds ?? run.gapLowerBoundSeconds)} |`);
   lines.push('', '## Missing acceptance evidence', '', ...report.missing.map(item => `- ${item}`), '',
     `Runner minutes: ${report.runnerMinutes.toFixed(2)}. Provider cost: to measure.`, '',
     'Failed, cancelled and incomplete runs remain listed. A failed gate is never a successful latency sample. Workflow age is never substituted for a missing job queue timestamp.');
