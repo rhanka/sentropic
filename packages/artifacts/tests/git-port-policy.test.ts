@@ -10,7 +10,8 @@ const repo: GitPortRepository = { ...target, locator: 'owner/repo', installation
 describe('GitPort path admission', () => {
   it.each(['../ui/a.ts', 'ui/../a.ts', '/ui/a', 'ui//a', './ui/a', 'ui/./a', 'ui\\a',
     'ui/%2e%2e/a', 'ui/a\0', '.git/config', '.env', 'ui/.env.local', 'ui/server.key',
-    'ui/private.pem', 'ui/id_ed25519', '.github/workflows/a.yml'])('should refuse unsafe reads before transport: %s', (path) => {
+    'ui/private.pem', 'ui/id_ed25519', '.github/workflows/a.yml', 'ui/\ud800.ts', '.npmrc',
+    'ui/.yarnrc.yml', 'ui/a?b', 'ui/a#b'])('should refuse unsafe reads before transport: %s', (path) => {
     expect(() => gitPath(repo, target, path, false)).toThrowError('git_path_refused');
   });
   it.each(['ui/a.ts', 'packages/widgets/src/a.ts', 'ui/sub/app.ts'])('should admit A1 source writes: %s', path => {
