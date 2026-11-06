@@ -627,8 +627,26 @@ test-artifact-content-image: ci-test-env ## Qualify the content role in the reco
 test-ci-unit-shards: ci-test-env
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test api/ci/unit-shards.test.mjs
 
+.PHONY: test-ci-unit-graph
+test-ci-unit-graph: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-unit-graph.test.mjs'
+
 api-tool-version: ## Print the content-addressed CI toolbox tag
 	@echo $(API_TOOL_VERSION)
+
+# Reuse exact toolbox bytes across runs; current-run transport receipts stay fresh.
+API_TOOL_CACHE_DIR ?= .tmp/api-tool-cache
+.PHONY: api-tool-cache-key save-api-tool-cache load-api-tool-cache test-ci-api-tool-cache
+api-tool-cache-key:
+	@printf 'key=%s-%s\n' "$$(sha256sum package-lock.json | cut -d' ' -f1)" '$(API_TOOL_VERSION)'
+save-api-tool-cache:
+	@node scripts/ci/api-tool-cache.mjs write $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
+load-api-tool-cache:
+	@node scripts/ci/api-tool-cache.mjs verify $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
+	@set -o pipefail; zstd -dc $(API_TOOL_CACHE_DIR)/image.tar.zst | docker load
+	@node scripts/ci/api-tool-cache.mjs loaded $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
+test-ci-api-tool-cache: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
