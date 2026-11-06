@@ -4,7 +4,7 @@
 - [x] Baseline: origin/main c107f6abd; branch feat/gb4-isolation-probe; worktree tmp/worktrees/gb4-probe.
 - [x] Owner scope: preprod probe only; next dated train wagon, no PR, version bump or lock regeneration.
 - [x] Resolve official Node LTS digest and publish it first in .tmp/rv/gb4-probe.md.
-- [ ] GB4-1: deploy/ci/gb4-probe/checks.mjs and server.mjs; dependency-free HTTP/self-tests and WebSocket echo.
+- [x] GB4-1: deploy/ci/gb4-probe/checks.mjs and server.mjs; dependency-free HTTP/self-tests and WebSocket echo.
 - [ ] GB4-2: deploy/ci/gb4-probe/manifests.mjs; restricted Pod and ClusterIP Service; emptyDir volumes only.
 - [ ] GB4-3: deploy/ci/gb4-probe/run.mjs and probe.mk; preprod-only access through KUBE_CONFIG_DATA_PREPROD_BASCULE, GO gate, cleanup and report.
 - [ ] GB4-4: deploy/k8s/base/artifact-content-networkpolicy.yaml; TCP 5173 only to builder namespace AND binding-labelled pods.
