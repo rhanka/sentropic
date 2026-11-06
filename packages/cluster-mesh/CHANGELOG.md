@@ -9,8 +9,10 @@
   revocation fencing and host invalidation callbacks. Keys and webhook
   secrets remain in cluster-mesh custody; hosts compose their durable store
   and authenticated routes before enrollment and real-forge qualification.
-- Reserve this train's development version after the documented dev.11–dev.13
-  allocations; stable publication and deployment retain their existing gates.
+- Invalidation identifies the superseded lease epoch, including retry after a
+  notification or token-revocation failure. App-key rotation advances to a new
+  epoch only after invalidation and revocation succeed, preserving both fresh
+  leases and the immediate local fence on outstanding operations.
 
 ## 0.26.0-dev.5
 
