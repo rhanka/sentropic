@@ -51,6 +51,7 @@
   - [x] Shared boot parser, protected contracts, read-only inspection and streaming tenant backup validation.
 - [ ] Lot 2: Node/kubectl preparation target, write-free dry-run, protected PVC custody and preprod HMAC/budget wiring.
   - [x] Node/kubectl operator guard and digest-only transport; Makefile exception explicitly allowed after scope-check detected the inherited forbidden entry.
+  - [x] Overlay keeps runtime assets inside deploy/k8s for existing isolated kustomize renderers; custodian and staging commands never boot migrations.
 - [ ] Lot 3: tests in api/tests/unit/auth/cm-preprod-*.test.ts and deploy/ci/preprod-a4/*.test.mjs, including refusal, redaction, backup corruption, permissions, receipts and dry-run side effects.
 - [ ] Lot 4: docs/runbooks/preprod-a4-cutover.md and owner report .tmp/rv/preprod-a4-procedure.md with exact authorization text, Kubernetes actions, abort/rollback and verification.
 - [ ] Lot 5: scoped tests, harness scope checks before make commit, push review-ready wagon, leave preprod untouched.
