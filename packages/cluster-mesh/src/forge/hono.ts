@@ -64,6 +64,12 @@ export const createGitHubAppRouter = (input: {
   });
   app.get('/github-app/:ref/status', async (c) =>
     c.json(await input.service.status(await owner(c.req.raw), c.req.param('ref'))));
+  app.post('/github-app/:ref/events', async (c) => {
+    const rawBody = new Uint8Array(await c.req.arrayBuffer());
+    if (!c.req.header('x-github-delivery')) throw new GitAppError('invalid_request');
+    return c.json(await input.service.installationEvent(c.req.param('ref'), rawBody,
+      c.req.header('x-hub-signature-256') ?? '', c.req.header('x-github-event') ?? ''));
+  });
   app.post('/github-app/broker/lease', async (c) => {
     const principal = await input.authenticateBroker(c.req.raw);
     if (!principal) throw new GitAppError('access_denied');
