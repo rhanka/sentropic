@@ -7,6 +7,9 @@ import { requireAuth } from '../../../src/middleware/auth';
 import { randomUUID } from 'node:crypto';
 import { createCmUser, findCmUserById } from '../../../src/services/identity/cm-users';
 import { cmDeleteForEmails, cmDeleteForUsers } from '../../utils/cm-identity-test-store';
+import { cmMagicLinkHandlers } from '../../../src/routes/namespaces/auth/cm-magic-link';
+import { createCmMagicLink, sha256Hex } from '../../../src/services/identity/cm-proofs';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 
 /**
  * A4 e2e residue (run 42032530355): every authenticated page load fans out
@@ -20,6 +23,46 @@ import { cmDeleteForEmails, cmDeleteForUsers } from '../../utils/cm-identity-tes
 describe('CM per-request authentication under same-session fan-out', () => {
   afterEach(async () => {
     await cleanupAuthData();
+  });
+
+  it('completes concurrent new-account magic links without exhausting transaction attempts', async () => {
+    const app = new Hono();
+    app.post('/api/v1/auth/magic-link/verify', cmMagicLinkHandlers.verifyMagicLink!);
+    const links = Array.from({ length: 16 }, () => {
+      const token = randomUUID();
+      return { token, email: `${randomUUID()}@example.test` };
+    });
+    try {
+      for (const link of links) {
+        await runCmIdentityWrite(() => createCmMagicLink({ email: link.email,
+          tokenHash: sha256Hex(link.token), now: new Date(), expiresAt: new Date(Date.now() + 600_000) }));
+      }
+      const verify = (token: string) => app.request('/api/v1/auth/magic-link/verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', origin: 'http://localhost:5670' },
+        body: JSON.stringify({ token }),
+      });
+      const responses = await Promise.all(links.map(link => verify(link.token)));
+      expect(responses.map(response => response.status)).toEqual(links.map(() => 200));
+      for (const response of responses) expect((await response.json()).sessionToken).toBeTruthy();
+      const accounts = await cmQuery<{ user_id: string }>(
+        'SELECT user_id FROM cm_identity.identity_user_accounts WHERE email = ANY($1)',
+        [links.map(link => link.email)],
+      );
+      expect(accounts).toHaveLength(links.length);
+      const members = await cmQuery<{ user_id: string }>(
+        "SELECT user_id FROM cm_identity.cm_workspace_members WHERE user_id = ANY($1) AND role = 'admin'",
+        [accounts.map(account => account.user_id)],
+      );
+      expect(members).toHaveLength(links.length);
+      expect((await verify(links[0].token)).status).toBe(400);
+    } finally {
+      const accounts = await cmQuery<{ user_id: string }>(
+        'SELECT user_id FROM cm_identity.identity_user_accounts WHERE email = ANY($1)',
+        [links.map(link => link.email)],
+      );
+      await cmDeleteForEmails(links.map(link => link.email));
+      await cmDeleteForUsers(accounts.map(account => account.user_id));
+    }
   });
 
   it('registers distinct accounts concurrently without exhausting transaction attempts', async () => {

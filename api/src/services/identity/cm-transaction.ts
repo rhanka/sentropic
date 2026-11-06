@@ -35,6 +35,8 @@ export const cmRequestReadOptions = {
 
 /** r6 §6.4: every CM slice and app participant borrows this one connection. */
 const exclusiveWriter = new AsyncLocalStorage<boolean>();
+export const withExclusiveCmIdentityWriter = <T>(operation: () => Promise<T>): Promise<T> =>
+  exclusiveWriter.run(true, operation);
 // Cascades inspect references across tables: unrelated CM writers can form
 // SSI predicate cycles even though their subject/workspace locks are disjoint.
 // A shared/exclusive gate admits ordinary writers together, but drains them
