@@ -47,6 +47,7 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review R4: separate genuine isolated D11 qualification from final rollback dump bytes; require reviewed candidate/assets/verifier/census applicability and refuse every drift or absent evidence. No qualifying current-candidate receipt found locally; execution remains blocked pending tenant qualification.
 - [x] Review R2: wire API and IdP policy/HMAC/budgets at zero replicas; preserve IdP cwd, entrypoint, signing Secret and session volume; rendered-consumer and refusal regressions added.
 - [x] Review R3: runtime composes fingerprint-validated ACTIVE/PREVIOUS rings through rotation; preparation retains the exact initial-ring gate. No key rotated or custody writer changed.
 - [x] Lot 0: read common/master/workflow rules, rollout diagnosis, checkpoint/parser, tenant pgbackup, HMAC custody and budget contracts; mechanically check branch with harness.
