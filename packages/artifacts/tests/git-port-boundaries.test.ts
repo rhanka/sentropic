@@ -5,6 +5,18 @@ import { createEnrolledWitnessGitPort } from './fixtures/git-port-witness.js';
 import { commitInput, fakeGit, target } from './fixtures/git-port-fake.js';
 
 describe('GitPort source and policy boundaries', () => {
+  it('should distinguish missing branches from unavailable forge responses', async () => {
+    const f = fakeGit(); f.refs.delete(target.branch);
+    await expect(f.port.commit(commitInput(f.initial))).rejects.toMatchObject({ kind: 'git_branch_missing',
+      details: { publicDetails: { branch: target.branch } } });
+    await expect(f.port.resolveRef(target, 'unknown-tag')).rejects.toThrow('not_found');
+  });
+  it('should retain a definite refusal when the lease expires before ref submission', async () => {
+    const f = fakeGit(); const create = f.forge.createCommit;
+    f.forge.createCommit = async (...args) => { const id = await create(...args); f.lease.expiresAt = '2000-01-01T00:00:00Z'; return id; };
+    await expect(f.port.commit(commitInput(f.initial))).rejects.toMatchObject({ kind: 'provider_unavailable', commitState: undefined });
+    expect(f.forge.advance).not.toHaveBeenCalled(); expect(f.refs.get(target.branch)).toBe(f.initial);
+  });
   it('should read registered source refs outside the writable artifact namespace', async () => {
     const f = fakeGit(); f.refs.set('main', f.initial);
     expect(await f.port.resolveRef({ ...target, branch: 'main' }, 'main')).toBe(f.initial);

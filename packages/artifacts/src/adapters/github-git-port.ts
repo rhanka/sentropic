@@ -21,7 +21,7 @@ export function createGitPort(options: GitPortOptions): GitPort & Pick<ReturnTyp
     try { return await action(); }
     catch (error) {
       if (error instanceof ArtifactOperationError) throw error;
-      if (error instanceof GitForgeError && error.code === 'missing') throw new ArtifactOperationError('git_branch_missing');
+      if (error instanceof GitForgeError && error.code === 'missing') throw new ArtifactOperationError('not_found');
       if (error instanceof GitForgeError && error.code === 'conflict') throw new ArtifactOperationError('git_ref_not_allowed');
       throw new ArtifactOperationError('provider_unavailable');
     }
@@ -32,7 +32,14 @@ export function createGitPort(options: GitPortOptions): GitPort & Pick<ReturnTyp
       const repo = await sessions.admit(target, false);
       assertGitReadRef(ref);
       const session = await sessions.open(repo);
-      const result = await session.call((forge, context) => forge.resolve(context, ref));
+      let result;
+      try { result = await session.call((forge, context) => forge.resolve(context, ref)); }
+      catch (error) {
+        if (ref === target.branch && error instanceof GitForgeError && error.code === 'missing') {
+          throw new ArtifactOperationError('git_branch_missing', { publicDetails: { branch: target.branch } });
+        }
+        throw error;
+      }
       assertGitSha(result.sha);
       return result.sha;
     }),

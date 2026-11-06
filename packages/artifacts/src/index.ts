@@ -33,6 +33,7 @@ export * from './server/source-read.js';
 export * from './server/management.js';
 export * from './adapters/postgres-management.js';
 export * from './server/git-port.js';
-export * from './server/git-port-session.js';
+export type { GitPortOptions } from './server/git-port-session.js';
+export { GitPortAdvanceUnknown } from './server/git-port-session.js';
 export * from './adapters/github-git-port.js';
 export * from './adapters/github-forge.js';
