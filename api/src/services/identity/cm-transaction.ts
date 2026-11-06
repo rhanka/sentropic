@@ -34,7 +34,7 @@ export const cmRequestReadOptions = {
 } as const;
 
 /** r6 §6.4: every CM slice and app participant borrows this one connection. */
-const destructiveAttempt = new AsyncLocalStorage<boolean>();
+const exclusiveWriter = new AsyncLocalStorage<boolean>();
 // Cascades inspect references across tables: unrelated CM writers can form
 // SSI predicate cycles even though their subject/workspace locks are disjoint.
 // A shared/exclusive gate admits ordinary writers together, but drains them
@@ -46,7 +46,7 @@ const host: PostgresIdentityHostV1<AppCustodyHost> = {
     const deadline = Date.now() + options.deadlineMs;
     const client = await pool.connect();
     const scoped = createCmScopedHostClient(client);
-    const gate = !options.readOnly ? (destructiveAttempt.getStore() ? '' : '_shared') : null;
+    const gate = !options.readOnly ? (exclusiveWriter.getStore() ? '' : '_shared') : null;
     let committing = false;
     let failure: Error | undefined;
     try {
@@ -112,7 +112,8 @@ const host: PostgresIdentityHostV1<AppCustodyHost> = {
 const unitOfWork = createPostgresIdentityUnitOfWorkV1({ schema: 'cm_identity', host });
 export const cmIdentityUnitOfWork: typeof unitOfWork = {
   profile: unitOfWork.profile,
-  run: (options, operation) => destructiveAttempt.run(options.purpose === 'delete', () => unitOfWork.run(options, operation)),
+  run: (options, operation) => exclusiveWriter.run(options.purpose === 'delete' || exclusiveWriter.getStore() === true,
+    () => unitOfWork.run(options, operation)),
 };
 
 const current = new AsyncLocalStorage<CmIdentityTransaction>();
@@ -120,13 +121,15 @@ export const currentCmIdentityTransaction = () => current.getStore();
 export const withCmIdentityTransaction = <T>(tx: CmIdentityTransaction, operation: () => Promise<T>): Promise<T> =>
   current.run(tx, operation);
 
-export const runCmIdentityWrite = <T>(operation: (tx: CmIdentityTransaction) => Promise<T>): Promise<T> => {
+export const runCmIdentityWrite = <T>(operation: (tx: CmIdentityTransaction) => Promise<T>,
+  options?: { readonly exclusive?: boolean }): Promise<T> => {
   const bound = current.getStore();
   if (bound) {
     if (bound.mode !== 'write') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
     return operation(bound);
   }
-  return cmIdentityUnitOfWork.run(cmRequestWriteOptions, tx => current.run(tx, () => operation(tx)));
+  const run = () => cmIdentityUnitOfWork.run(cmRequestWriteOptions, tx => current.run(tx, () => operation(tx)));
+  return options?.exclusive ? exclusiveWriter.run(true, run) : run();
 };
 export const runCmIdentityRead = <T>(operation: (tx: CmIdentityTransaction) => Promise<T>): Promise<T> => {
   const bound = current.getStore();
