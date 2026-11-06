@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Svelte chat views, normalized snapshot/command ports, renderer registry and presentation helpers. Client execution lives in @sentropic/chat-core/runtime.",
   "type": "module",
   "license": "MIT",
