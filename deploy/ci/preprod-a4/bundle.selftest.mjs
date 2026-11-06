@@ -24,6 +24,18 @@ for (const name of ['EMAIL_CODE_HMAC_KEY_ACTIVE', 'EMAIL_CODE_HMAC_KEY_ACTIVE_RE
 assert.equal(container.env.find(env => env.name === 'CM_IDENTITY_DELETION_BUDGETS_JSON').valueFrom.secretKeyRef.name, 'sentropic-identity-budgets');
 assert(!container.env.some(env => env.name === 'CM_IDENTITY_EMAIL_CODE_KEYS_JSON'));
 const runtime = object(preprod, 'ConfigMap', 'sentropic-a4-runtime');
+const idp = object(preprod, 'Deployment', 'auth-idp').spec.template.spec.containers[0];
+assert.deepEqual(idp.command, ['node', '/run/cm-runtime/launch.mjs', '--idp']);
+assert.equal(idp.workingDir, '/workspace');
+assert.equal(idp.env.find(env => env.name === 'JWT_SECRET').valueFrom.secretKeyRef.name, 'auth-idp-session-signing');
+assert.equal(idp.env.find(env => env.name === 'REMOTE_ACTION_ROLE').value, 'auth-idp');
+for (const name of ['EMAIL_CODE_HMAC_KEY_ACTIVE', 'EMAIL_CODE_HMAC_KEY_ACTIVE_REF', 'CM_IDENTITY_DELETION_BUDGETS_JSON']) {
+  assert.deepEqual(idp.env.find(env => env.name === name), container.env.find(env => env.name === name));
+}
+for (const name of ['CM_IDENTITY_EMAIL_CODE_POLICY', 'CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF']) {
+  assert.equal(object(preprod, 'ConfigMap', 'auth-idp').data[name], config[name]);
+}
+assert.equal(object(prod, 'Deployment', 'auth-idp').spec.template.spec.containers[0].command[1], 'apps/auth-idp/dist/index.js');
 assert.match(runtime.data['launch.mjs'], /key\.toString\('base64url'\)/);
 assert.match(runtime.data['stage.mjs'], /'wx', 0o600/);
 assert(!preprod.some(object => object.kind === 'Secret' && ['email-code-hmac', 'sentropic-identity-budgets'].includes(object.metadata.name)));

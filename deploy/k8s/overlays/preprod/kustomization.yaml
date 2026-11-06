@@ -28,4 +28,5 @@ patches:
   - path: patch-api-config.yaml
   - path: patch-api-a4.yaml
   - path: patch-auth-idp-config.yaml
+  - path: patch-auth-idp-a4.yaml
   - path: patch-postgres-storageclass.yaml
