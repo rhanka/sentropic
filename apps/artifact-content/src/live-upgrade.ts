@@ -37,6 +37,7 @@ export function createLiveUpgrade(options: { live: LiveProxy; baseDomain: string
       }, 1000);
       timer.unref();
       cleanup = () => { clearInterval(timer); unwatch(); };
+      if (socket.destroyed) { cleanup(); upstream.destroy(); return; }
       socket.once('close', close); socket.once('error', close);
       upstream.once('timeout', close); upstream.once('error', close);
       upstream.once('response', response => { response.resume(); close(); });
