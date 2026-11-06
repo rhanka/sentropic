@@ -35,8 +35,6 @@ kind: ConfigMap
 metadata:
   name: auth-idp
 data:
-  CM_IDENTITY_EMAIL_CODE_POLICY: "hmac-sha256"
-  CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: "qk-secret-custody-r2:Q-K=A:2026-11-02"
   OAUTH_ISSUER_URL: "https://preprod.auth.sent-tech.ca"
   UI_BASE_URL: "https://preprod.auth.sent-tech.ca"
   AUTH_CALLBACK_BASE_URL: "https://preprod.auth.sent-tech.ca"

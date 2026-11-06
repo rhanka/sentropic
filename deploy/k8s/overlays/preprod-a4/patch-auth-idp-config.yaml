@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-idp
+data:
+  CM_IDENTITY_EMAIL_CODE_POLICY: "hmac-sha256"
+  CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: "qk-secret-custody-r2:Q-K=A:2026-11-02"

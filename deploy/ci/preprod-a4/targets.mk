@@ -44,7 +44,7 @@ test-preprod-a4-api: ## Run preparation tests in a cached API toolbox with conta
 test-preprod-a4-manifests: ## Render the real prod/preprod overlays and check custody without a cluster
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
 	@set -eu; rendered="$$(mktemp -d)"; trap 'rm -rf "$$rendered"' EXIT; \
-	for tier in prod preprod; do kubectl kustomize deploy/k8s/overlays/$$tier > "$$rendered/$$tier.yaml"; done; \
+	for tier in prod preprod preprod-a4; do kubectl kustomize deploy/k8s/overlays/$$tier > "$$rendered/$$tier.yaml"; done; \
 	docker run --rm -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" -v "$$rendered:/rendered:ro" $(A4_TEST_IMAGE) node /tests/bundle.selftest.mjs
 
 check-preprod-a4-api: ## Typecheck, lint and build the candidate API, then check the bundle CLI without DB access
