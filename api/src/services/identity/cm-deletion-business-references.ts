@@ -38,6 +38,9 @@ export async function deleteCmBusinessSubjectReferences(userId: string, tx: CmId
   const jobs = await tx.hostTransaction.query(`DELETE FROM public.job_queue
     WHERE data::jsonb->>'userId' = $1 OR data::jsonb->>'initiatedByUserId' = $1`, [userId]);
   deletedByTable.job_queue = jobs.rowCount ?? 0;
+  const continuations = await tx.hostTransaction.query(
+    "DELETE FROM public.oauth_dpop_proofs WHERE split_part(jti, ':', 1) = 'self-delete' AND split_part(jti, ':', 2) = $1", [userId]);
+  deletedByTable.oauth_dpop_proofs = continuations.rowCount ?? 0;
   for (const [table, column] of deleted) {
     const personalScope = table === 'llm_provider_accounts' ? " AND scope = 'user'" : '';
     const result = await tx.hostTransaction.query(`DELETE FROM public."${table}" WHERE "${column}" = $1${personalScope}`, [userId]);

@@ -63,10 +63,10 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read common rules, master, workflow, testing, template and #879 closure review; harness C1 PASS; ports free before startup.
-- [ ] **Lot 1 — A4-SELF-DELETE and V2 cascade**
-  - [ ] Authorize deletion-only re-entry after self-deactivation; preserve ordinary auth refusals and atomic cascade rollback.
-  - [ ] Re-enable `api/tests/api/me.test.ts` (2) and `api/tests/api/auth/remote-revocation.test.ts` (4 lifecycle variants).
-  - [ ] Qualify `api/tests/api/auth/cm-account-deletion.test.ts` and active self-deletion rejection.
+- [x] **Lot 1 — A4-SELF-DELETE and V2 cascade**
+  - [x] Five-minute deletion-only continuation binds the initiating credential to self-deactivation; ordinary auth stays revoked; V2 rechecks self-disable status under lock.
+  - [x] Re-enabled `me.test.ts` (2) and `remote-revocation.test.ts` (4 lifecycle variants); all 56 deletion/lifecycle tests pass. Ownership and privileged restore fixtures match CM invariants.
+  - [x] V2 cascade and injected atomic rollback pass; committed HTTP deletion returns 200 with explicit delivery_pending/complete=false until outbox delivery; four negative continuation tests pass.
 - [x] **Lot 2 — RC1 revocation fence**
   - [x] Restored issuer private authority mint/rotation after acknowledged CM commit, local revocation closure and private signing fence.
   - [x] All 35 remote-session tests pass; private-session and integrity units pass. Refused-revocation fixtures must explicitly start without private authority.

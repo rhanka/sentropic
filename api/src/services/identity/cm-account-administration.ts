@@ -2,6 +2,7 @@ import { createUserAccounts, IdentityCustodyErrorV1, IdentityNotFoundError,
   type GlobalRole } from '@sentropic/cluster-mesh';
 import { withAppCmAuth } from './cm-auth-runtime';
 import { CmIdentityForbiddenError } from './cm-deletion-authorization';
+import { recordCmSelfDeletion } from './cm-self-deletion';
 
 type AdminAction = { readonly kind: 'approve'; readonly role?: GlobalRole }
   | { readonly kind: 'disable'; readonly reason?: string } | { readonly kind: 'reactivate' };
@@ -37,7 +38,7 @@ export const changeCmAccountAsAdmin = (input: {
   await tx.advanceSubjectRevision(input.userId, at, false);
 }));
 
-export const deactivateOwnCmAccount = (userId: string): Promise<void> =>
+export const deactivateOwnCmAccount = (userId: string, sessionId?: string): Promise<void> =>
   withAppCmAuth(runner => runner.request(async (binding, tx) => {
     await tx.lockSubject(userId);
     const profile = await tx.custody.profiles.find(userId);
@@ -46,5 +47,6 @@ export const deactivateOwnCmAccount = (userId: string): Promise<void> =>
     await createUserAccounts({ accounts: tx.stores.accounts, audit: tx.stores.audit, clock: () => at }).disableSelf(userId);
     await tx.custody.profiles.put({ ...profile, disabledAt: at, disabledReason: 'user_deactivated', legacyAccountStatus: 'disabled_by_user' });
     await binding.sessions.revokeAllSessions(userId);
+    if (sessionId) await recordCmSelfDeletion(tx, userId, sessionId, at);
     await tx.advanceSubjectRevision(userId, at, false);
   }));
