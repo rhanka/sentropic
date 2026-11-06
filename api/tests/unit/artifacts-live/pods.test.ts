@@ -16,7 +16,7 @@ describe('builder pod admission and recovery', () => {
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
   });
   it('should adopt the matching pod after a creation response is lost', async () => {
-    const f = fixture(); const create = f.core.create;
+    const f = fixture(); const create = vi.mocked(f.core.create).getMockImplementation()!;
     vi.spyOn(f.core, 'create').mockImplementation(async (resource, value) => { const result = await create(resource, value);
       if (resource === 'pods') throw new Error('response lost'); return result; });
     const runtime = await f.controller.start(key);
