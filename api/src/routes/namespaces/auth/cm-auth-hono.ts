@@ -40,8 +40,8 @@ accountRouter.get('/', async (c) => {
 });
 
 accountRouter.post('/deactivate', async (c) => {
-  const { userId } = c.get('user');
-  await deactivateOwnCmAccount(userId);
+  const { userId, sessionId } = c.get('user');
+  await deactivateOwnCmAccount(userId, sessionId);
 
   return c.json({ success: true });
 });

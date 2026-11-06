@@ -19,7 +19,7 @@ export async function runCmAccountDeletionHttp(c: Context,
       return c.json({ success: false, complete: false, operationId, resultCode: receipt.resultCode }, 503);
     }
     return c.json({ success: true, complete: receipt.complete, operationId,
-      status: receipt.complete ? 'complete' : 'delivery_pending', receipt }, receipt.complete ? 200 : 202);
+      status: receipt.complete ? 'complete' : 'delivery_pending', receipt }, 200);
   } catch (error) {
     if (error instanceof IdentityNotFoundError) return c.json({ error: 'User not found' }, 404);
     // The refusal status is a route contract, not a property of the shared transition
