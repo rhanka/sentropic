@@ -44,6 +44,8 @@
   - `api/package-lock.json`
   - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
+  - `e2e/tests/03-dashboard.spec.ts`
+  - `e2e/tests/08-chat-checkpoint-restore.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -59,6 +61,7 @@
   - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
 
 ## Feedback Loop
+- [x] TRAIN-CI1 — Fix shard 4 on run 42157650191: observe the dashboard lock across presence replacement while retaining the fallback print-hidden requirement and requiring a disabled presence lock; await the post-restore response before checking the unchanged route-handler flag. Scope: the two named E2E specs only, authorized by the train fix request; no timeout/retry increases or assertion weakening. Deterministic Chromium probe reproduces both races and rejects missing print-hidden/enabled presence locks. Local specs 4/4 PASS; complete shard 4: 43 PASS, six existing declared skips, zero retries. Full PR CI remains pending the single fix push.
 - [x] TRAIN-R1 — Missing worker-script CSP reproduced in four MIME vectors and Chromium 148; corrected application responses block external fetch/eval/Wasm while same-origin reads work. CSP 26/26 and content 79/79 PASS; safe mode and SVG/PDF sandbox preserved.
 - [x] TRAIN-R2 — Bind JSON/form grants to the displayed scope version and reject missing/stale versions without granting a widened scope; regression 5/5 PASS after reproducing missing version binding.
 - [x] TRAIN-R3 — Retain all core integration jobs and affected owners even when missing/unselected; broaden UI validation for API runtime changes under BR83-EX1. Two regression cases failed before the fix; consumer-contract fixtures 23/23 PASS.
