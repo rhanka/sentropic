@@ -12,7 +12,7 @@ import { validateTarget } from './trivy.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sourceSha = '2ea238790fe992cdbb8e0202b1a73a937b6a1793';
-const registry = 'registry.example/nc-reg';
+const registry = 'ghcr.io/rhanka';
 const workflowBytes = Buffer.from('protected ci workflow bytes');
 const imageNames = { 'api-production': 'sentropic-api', 'api-toolbox': 'sentropic-api-tools', 'ui-production': 'sentropic-ui' };
 
