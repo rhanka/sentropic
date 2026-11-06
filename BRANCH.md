@@ -46,6 +46,7 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] TRAIN0218-CI1: reproduce job `127733036865` EINTEGRITY with its verified archive; restore the existing no-integrity candidate policy, preserving all 175 sibling/dependency integrity pins. The committed-fixture regression fails before correction; full lazy replay passes 136/136 afterward. Independent Astra xhigh closure GO; replacement-head CI remains required under Lot 4.
 - [x] TRAIN0218-R1: notify the superseded epoch and advance it only when rotation returns ready; retry preserves the old fence. Three regressions failed before and pass after, forge 31/31 and build/typecheck/lints pass; independent closure GO at `0af93d063`.
 - [x] BR-TRAIN0218-EX1: conductor REFUSED the previous CI gate proposal; branch-only wagons resolve the gate requirement normally on the bumped train.
 - [x] BR0218-EX1: regenerate root workspace and API file-dependency lock metadata through make after final union; impact limited to train manifests; rollback restores upstream locks.
@@ -98,7 +99,7 @@
   - [x] `make down-volumes API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218` completed after scoped checks and remediation.
 - [ ] **Lot 4 — One train PR and CI watch**
   - [x] Close only wagon PRs #925/#926 with `superseded by train/artifacts-0.2.18`; preserve their branches.
-  - [ ] Push one review-ready head and open one READY PR `train/artifacts-0.2.18` to main using this plan as body.
+  - [x] Push one review-ready head and open one READY PR `train/artifacts-0.2.18` to main using this plan as body.
   - [ ] Observe and fix full CI; no reruns or gate changes; never merge to main from this lane.
   - [ ] After the dated train merges, rebase onto origin/main and recheck published versions and generated evidence.
 
