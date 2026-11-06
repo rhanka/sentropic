@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { assertGitAppPermissions, GIT_APP_PERMISSIONS, GitAppError } from './contracts.js';
 import type { GitAppOwnerRepository, GitInstallationLeasePort, GitWebhookVerificationPort } from './contracts.js';
-import type { EnrollmentRecord, GitAppCustodian, GitHubAppApi, RevocationReason } from './records.js';
+import type { EnrollmentRecord, GitAppLifecycleInput, GitHubAppApi, RevocationReason } from './records.js';
 import { createGitAppRotation } from './rotation.js';
 
 export const assertTuple = (record: EnrollmentRecord, input: { storageScopeId: string; repoId: string }) => {
@@ -31,6 +31,16 @@ export const revokeLeases = async (record: EnrollmentRecord, github: GitHubAppAp
   record.leases = pending;
   if (pending.length) throw new GitAppError('capability_unavailable');
 };
+export const invalidateCredentials = async (record: EnrollmentRecord, input: GitAppLifecycleInput) => {
+  if (record.state !== 'revoked') record.credentialVersion = randomUUID();
+  record.state = 'revoked';
+  record.invalidationPending = true;
+  try {
+    await input.onCredentialsChanged({ storageScopeId: record.target.storageScopeId, repoId: record.target.repoId,
+      installationRef: record.installationRef, credentialVersion: record.credentialVersion });
+    record.invalidationPending = false;
+  } finally { await revokeLeases(record, input.github, input.now()); }
+};
 export const webhookMatch = (record: EnrollmentRecord, rawBody: Uint8Array, signature: string, now: number) => {
   if (!record.app || !/^sha256=[a-f0-9]{64}$/.test(signature)) return { valid: false };
   if (record.previousWebhook && now >= record.previousWebhook.until) delete record.previousWebhook;
@@ -44,12 +54,12 @@ export const webhookMatch = (record: EnrollmentRecord, rawBody: Uint8Array, sign
   return { valid: false };
 };
 
-export const createGitAppLifecycle = (input: { custody: GitAppCustodian; github: GitHubAppApi; now: () => number }) => {
+export const createGitAppLifecycle = (input: GitAppLifecycleInput) => {
   const { custody, github, now } = input;
   const acquire: GitInstallationLeasePort['acquire'] = (request) => custody.withRecord(request.installationRef, async (record) => {
     assertTuple(record, request);
     if (record.state !== 'ready' || !record.app || !record.installationId || !record.repositoryId) {
-      await revokeLeases(record, github, now());
+      if (record.state === 'revoked') await invalidateCredentials(record, input);
       throw new GitAppError('capability_unavailable');
     }
     try {
@@ -66,9 +76,7 @@ export const createGitAppLifecycle = (input: { custody: GitAppCustodian; github:
       return { token: minted.token, expiresAt: minted.expiresAt, repositoryId: record.repositoryId,
         permissions: { ...GIT_APP_PERMISSIONS }, credentialVersion: record.credentialVersion };
     } catch {
-      record.state = 'revoked';
-      record.credentialVersion = randomUUID();
-      await revokeLeases(record, github, now());
+      await invalidateCredentials(record, input);
       throw new GitAppError('capability_unavailable');
     }
   });
@@ -79,9 +87,7 @@ export const createGitAppLifecycle = (input: { custody: GitAppCustodian; github:
   });
   const revoke = (target: GitAppOwnerRepository, ref: string, _reason: RevocationReason) => custody.withRecord(ref, async (record) => {
     assertOwner(record, target);
-    record.state = 'revoked';
-    record.credentialVersion = randomUUID();
-    await revokeLeases(record, github, now());
+    await invalidateCredentials(record, input);
     return publicStatus(record);
   });
   const installationEvent = (ref: string, rawBody: Uint8Array, signature: string, event: string) => custody.withRecord(ref, async (record) => {
@@ -104,9 +110,7 @@ export const createGitAppLifecycle = (input: { custody: GitAppCustodian; github:
       } catch { invalidate = true; }
     }
     if (invalidate) {
-      record.state = 'revoked';
-      record.credentialVersion = randomUUID();
-      await revokeLeases(record, github, now());
+      await invalidateCredentials(record, input);
     }
     return { accepted: true };
   });

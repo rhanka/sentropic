@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { assertGitAppPermissions, GIT_APP_PERMISSIONS, GitAppError } from './contracts.js';
 import type { GitAppOwnerRepository } from './contracts.js';
-import type { EnrollmentRecord, GitAppCustodian, GitHubAppApi } from './records.js';
+import type { EnrollmentRecord, GitAppLifecycleInput } from './records.js';
 import { createGitAppLifecycle, assertOwner, publicStatus } from './lifecycle.js';
 
 const digest = (state: string) => createHash('sha256').update(state).digest('hex');
@@ -12,8 +12,8 @@ const consume = (record: EnrollmentRecord, state: string, phase: string, now: nu
   record.callbackState = '';
 };
 
-export const createGitHubAppEnrollment = (input: {
-  custody: GitAppCustodian; github: GitHubAppApi; publicBaseUrl: string; now?: () => number;
+export const createGitHubAppEnrollment = (input: Omit<GitAppLifecycleInput, 'now'> & {
+  publicBaseUrl: string; now?: () => number;
 }) => {
   const now = input.now ?? Date.now;
   const origin = new URL(input.publicBaseUrl);

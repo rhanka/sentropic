@@ -48,7 +48,9 @@ export const fixture = () => {
     updateWebhookSecret: async () => undefined,
     revokeToken: async (token: string) => { revoked.push(token); },
   };
-  const service = createGitHubAppEnrollment({ custody, github, publicBaseUrl: 'https://mesh.example', now: () => time });
+  const invalidations: { repoId: string; credentialVersion: string }[] = [];
+  const service = createGitHubAppEnrollment({ custody, github, publicBaseUrl: 'https://mesh.example', now: () => time,
+    onCredentialsChanged: async (event) => { invalidations.push(event); } });
   const ready = async (target = owner) => {
     const start = await service.begin(target);
     const manifest = await service.prompt(target, start.installationRef);
@@ -57,7 +59,7 @@ export const fixture = () => {
     await service.install(target, start.installationRef, { state, installationId: '500' });
     return start;
   };
-  return { service, ready, envelopes, minted, revoked, appKey,
+  return { service, ready, envelopes, minted, revoked, appKey, invalidations,
     advance: (ms: number) => { time += ms; },
     grant: (value: Record<string, string>) => { granted = value; },
     remove: () => { installed = false; },

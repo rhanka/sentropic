@@ -1,12 +1,12 @@
 import { createPrivateKey, randomUUID } from 'node:crypto';
 import { GitAppError } from './contracts.js';
 import type { GitAppOwnerRepository } from './contracts.js';
-import type { GitAppCustodian, GitHubAppApi } from './records.js';
-import { assertOwner, publicStatus, revokeLeases } from './lifecycle.js';
+import type { GitAppLifecycleInput } from './records.js';
+import { assertOwner, publicStatus, invalidateCredentials } from './lifecycle.js';
 
-export const createGitAppRotation = ({ custody, github, now }: {
-  custody: GitAppCustodian; github: GitHubAppApi; now: () => number;
-}) => ({
+export const createGitAppRotation = (input: GitAppLifecycleInput) => {
+  const { custody, github, now } = input;
+  return ({
   rotateAppKey: (target: GitAppOwnerRepository, ref: string, privateKey: string) => custody.withRecord(ref, async (record) => {
     assertOwner(record, target);
     if (!record.app || record.state !== 'ready') throw new GitAppError('capability_unavailable');
@@ -17,9 +17,7 @@ export const createGitAppRotation = ({ custody, github, now }: {
     const replacement = { ...record.app, privateKey };
     await github.verifyKey(replacement);
     record.app = replacement;
-    record.credentialVersion = randomUUID();
-    record.state = 'revoked';
-    await revokeLeases(record, github, now());
+    await invalidateCredentials(record, input);
     record.state = 'ready';
     return publicStatus(record);
   }),
@@ -47,10 +45,11 @@ export const createGitAppRotation = ({ custody, github, now }: {
   }),
   retirePreviousWebhook: (target: GitAppOwnerRepository, ref: string) => custody.withRecord(ref, async (record) => {
     assertOwner(record, target);
-    if (record.webhookRotationPending || !record.previousWebhook || now() < record.previousWebhook.until) {
+    if (record.webhookRotationPending || (record.previousWebhook && now() < record.previousWebhook.until)) {
       throw new GitAppError('invalid_request');
     }
     delete record.previousWebhook;
     return publicStatus(record);
   }),
-});
+  });
+};
