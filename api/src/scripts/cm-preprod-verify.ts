@@ -58,7 +58,7 @@ export async function runCmPreprodVerification() {
   const { pool } = await import('../db/client');
   try {
     const client = await pool.connect();
-    try { console.log(`verificationSha256=${await verifyPreprod(client)}`); } finally { client.release(); }
-  } catch { console.error(`failureSha256=${sha256('preprod-a4-verification-failed')}`); process.exitCode = 1; }
+    try { process.stdout.write(`verificationSha256=${await verifyPreprod(client)}\n`); } finally { client.release(); }
+  } catch { process.stderr.write(`failureSha256=${sha256('preprod-a4-verification-failed')}\n`); process.exitCode = 1; }
   finally { await pool.end(); }
 }
