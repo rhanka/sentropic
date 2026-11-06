@@ -53,7 +53,7 @@ permissions:
   actions: read
 
 env:
-  REGISTRY: ${{ inputs.decision_fixtures_only != true && secrets.REGISTRY || 'local' }}
+  REGISTRY: ${{ inputs.decision_fixtures_only != true && 'ghcr.io/rhanka' || 'local' }}
   ADMIN_EMAIL: ${{ inputs.decision_fixtures_only != true && secrets.ADMIN_EMAIL || 'decision-test@example.test' }}
   CI_IMAGE_CACHE: ${{ inputs.image_cache_mode == 'cold' && '0' || '1' }}
 
@@ -757,6 +757,8 @@ jobs:
         run: make check-eradicated-packages ENV=test-ci-manifests
       - name: Reject unlocked CI install paths
         run: make test-ci-lockfile-installs ENV=test-ci-manifests
+      - name: Reject retired image registry references throughout the repository
+        run: make check-image-registry ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
       - name: Test candidate identity and qualification DAG
@@ -776,9 +778,6 @@ jobs:
   build-e2e:
     runs-on: ubuntu-latest
     needs: [changes]
-    env:
-      DOCKER_USERNAME: nologin
-      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
@@ -1540,9 +1539,6 @@ jobs:
   build-api-image:
     runs-on: ubuntu-latest
     needs: [changes]
-    env:
-      DOCKER_USERNAME: nologin
-      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
@@ -1903,9 +1899,6 @@ jobs:
           - shard: 4
           - shard: 5
           - shard: 6
-    env:
-      DOCKER_USERNAME: nologin
-      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
@@ -1961,8 +1954,6 @@ jobs:
     needs: [changes, build-api-image, build-ui, build-e2e]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
-      DOCKER_USERNAME: nologin
-      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
       E2E_SPEC: tests/vscode/01-vscode-chat-streaming.spec.ts
       OPENVSCODE_PORT: 3115
     steps:
@@ -2023,8 +2014,6 @@ jobs:
     needs: [changes, build-api-image, build-api-tool-image, build-e2e]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
     env:
-      DOCKER_USERNAME: nologin
-      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
       DISABLE_RATE_LIMIT: 'true'
       API_PORT: '9491'
       UI_PORT: '5691'
@@ -2337,6 +2326,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: write
     needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
     if: >-
       !cancelled() &&
@@ -2353,8 +2343,8 @@ jobs:
       needs.security-container.result == 'success' &&
       (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
     env:
-      DOCKER_USERNAME: nologin
-      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+      DOCKER_USERNAME: ${{ github.actor }}
+      DOCKER_PASSWORD: ${{ github.token }}
       UI_IMAGE_NAME: sentropic-ui
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -2388,6 +2378,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: write
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
@@ -2411,8 +2402,8 @@ jobs:
       needs.security-container.result == 'success' &&
       (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
     env:
-      DOCKER_USERNAME: nologin
-      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+      DOCKER_USERNAME: ${{ github.actor }}
+      DOCKER_PASSWORD: ${{ github.token }}
       API_IMAGE_NAME: sentropic-api
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -3356,9 +3347,6 @@ jobs:
           printf '%s' "${KUBE_CONFIG_DATA_PREPROD}" | base64 -d > kubeconfig-preprod.yaml
           chmod 600 kubeconfig-preprod.yaml
       - name: Assert both images exist at the registry before deploy (fail loud, never ImagePullBackOff)
-        env:
-          DOCKER_USERNAME: nologin
-          DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
         run: |
           set -eu
           # k8s-deploy-preprod (next step) pins the immutable content-hash tags

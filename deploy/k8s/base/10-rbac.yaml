@@ -5,5 +5,3 @@ metadata:
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: app
-imagePullSecrets:
-  - name: sentropic-registry

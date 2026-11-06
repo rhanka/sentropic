@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 
 -include .env
+# Public image namespace is independent of legacy local/Actions configuration.
+export REGISTRY := ghcr.io/rhanka
 
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
@@ -744,13 +746,14 @@ pack-immo-exchange-issuer-fixture: ## Build the checkpoint-pinned real-issuer fi
 
 docker-login:
 	@echo "▶ Logging in to registry"
-	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
+	@test "$(REGISTRY)" = ghcr.io/rhanka || { echo "Publication requires the public GHCR namespace" >&2; exit 1; }
+	@printf '%s' "${DOCKER_PASSWORD:?missing GITHUB_TOKEN}" | docker login ghcr.io -u "${DOCKER_USERNAME:?missing GitHub actor}" --password-stdin
 
-check-api-image: docker-login
+check-api-image:
 	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
 	@docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
-pull-api-image: docker-login
+pull-api-image:
 	@echo "▶ Pulling image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	@docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) downloaded" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
@@ -764,11 +767,11 @@ publish-api-main-image: docker-login verify-api-image ## Promote the verified ar
 	docker tag $(API_IMAGE_REF) $(REGISTRY)/$(API_IMAGE_NAME):main
 	docker push $(REGISTRY)/$(API_IMAGE_NAME):main
 
-check-ui-image: docker-login
+check-ui-image:
 	@echo "▶ Checking if image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) exists"
 	@docker manifest inspect $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) does not exist" && exit 1)
 
-pull-ui-image: docker-login
+pull-ui-image:
 	@echo "▶ Pulling image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"
 	@docker pull $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) downloaded" || (echo "❌ Image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) does not exist" && exit 1)
 
@@ -776,11 +779,11 @@ publish-ui-image: docker-login
 	@echo "▶ Pushing ui image to registry"
 	@docker push $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)
 
-check-e2e-image: docker-login
+check-e2e-image:
 	@echo "▶ Checking if image $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) exists"
 	@docker manifest inspect $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) does not exist" && exit 1)
 
-pull-e2e-image: docker-login
+pull-e2e-image:
 	@echo "▶ Pulling image $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)"
 	@docker pull $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) downloaded" || (echo "❌ Image $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) does not exist" && exit 1)
 
@@ -2801,7 +2804,7 @@ ci-live-provider-prepare: ci-test-env ## Verify the published qualified tuple; b
 	@docker run --rm --entrypoint node $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -e 'const fs=require("fs"), dir="/workspace/node_modules/@sentropic", out={}; for(const name of fs.readdirSync(dir)) { const p=JSON.parse(fs.readFileSync(dir+"/"+name+"/package.json","utf8")); out[p.name]=p.version; } console.log(JSON.stringify(out));' > .tmp/live-provider/installed-packages.json
 	node scripts/ci/live-provider-receipt.mjs tuple
 
-ci-live-provider-pull: docker-login ## Fail closed if registry images differ from the tested identities
+ci-live-provider-pull: ## Fail closed if registry images differ from the tested identities
 	docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
 	docker pull $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)
 	node scripts/ci/image-receipt.mjs loaded api $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) unused api-image.json
@@ -3829,7 +3832,7 @@ up-maildev: ## Start MailDev service in detached mode
 down-maildev: ## Stop MailDev service
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml stop maildev
 
-# === Scaleway Kubernetes (poc-k8s tenant) =================================
+# === OVH Kubernetes (poc-k8s tenant) =================================
 # Tenant-scoped Make targets. The namespace + ResourceQuota + LimitRange +
 # NetworkPolicy baseline are NOT applied here; they live in
 # https://github.com/rhanka/poc-k8s/tree/main/tenants/sentropic — run
@@ -3839,7 +3842,6 @@ K8S_NAMESPACE ?= sentropic
 K8S_PREPROD_NAMESPACE ?= sentropic-preprod
 K8S_ENV_FILE  ?= .env
 KUBECONFIG    ?= $(HOME)/.kube/poc.yaml
-SCW_REGISTRY_SECRET ?= sentropic-registry
 K8S_LOG_SELECTOR ?= app.kubernetes.io/name=sentropic,app.kubernetes.io/component=api
 K8S_LOG_TAIL ?= 200
 K8S_LOG_PREVIOUS ?= 0
@@ -3854,7 +3856,7 @@ GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: k8s-deploy k8s-deploy-preprod k8s-db-restore-preprod k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
+.PHONY: k8s-deploy k8s-deploy-preprod k8s-db-restore-preprod k8s-undeploy k8s-bundle-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
 k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress is part of the overlay
 	# BR-55a: one kustomize apply (base + overlays/prod). The standalone IdP
@@ -4029,22 +4031,6 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
 	@echo "==> Secrets sentropic-postgres + sentropic-api + sentropic-pgbackup ready in $(K8S_NAMESPACE)."
 
-k8s-registry-secret: ## Create/update the SCW Registry pull secret from $(K8S_ENV_FILE)
-	@test -f $(K8S_ENV_FILE) || { echo "missing $(K8S_ENV_FILE)" >&2; exit 1; }
-	@set -eu ; \
-	set -a ; source "$(K8S_ENV_FILE)" ; set +a ; \
-	registry="$${REGISTRY:?missing REGISTRY in $(K8S_ENV_FILE)}" ; \
-	username="$${DOCKER_USERNAME:?missing DOCKER_USERNAME in $(K8S_ENV_FILE)}" ; \
-	password="$${SCW_REGISTRY_TOKEN:-$${DOCKER_PASSWORD:-}}" ; \
-	[ -n "$$password" ] || { echo "missing SCW_REGISTRY_TOKEN or DOCKER_PASSWORD in $(K8S_ENV_FILE)" >&2; exit 1; } ; \
-	registry="$${registry#https://}" ; registry="$${registry#http://}" ; registry="$${registry%%/*}" ; \
-	echo "Creating/updating image pull secret $(SCW_REGISTRY_SECRET) in $(K8S_NAMESPACE) for $$registry." ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret docker-registry $(SCW_REGISTRY_SECRET) \
-	  --docker-server="$$registry" \
-	  --docker-username="$$username" \
-	  --docker-password="$$password" \
-	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
-	echo "==> Image pull secret $(SCW_REGISTRY_SECRET) ready in $(K8S_NAMESPACE)."
 
 k8s-status: ## Snapshot of the sentropic tenant on the poc cluster
 	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get deploy,statefulset,svc,ingress 2>/dev/null || true
@@ -4766,3 +4752,7 @@ smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic
 
 -include packages/live-speech/verify.mk
 include .security/ci-lockfile-installs.mk
+
+.PHONY: check-image-registry
+check-image-registry: ## Reject the retired registry anywhere in tracked files
+	@node scripts/ci/check-image-registry.mjs
