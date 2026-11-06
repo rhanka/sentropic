@@ -76,7 +76,8 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
       // retry opens a fresh transaction and observes the winner (safe: an
       // aborted attempt commits nothing and publishes nothing).
       const complete = () => withSerializationRetry(() => runIdentityAuthCompletionV1({ flow, unitOfWork: cmIdentityUnitOfWork,
-        options: cmRequestWriteOptions, operation: tx => attempt(tx, work, trustedRegistration, entityPlan) }));
+        options: flow === 'session_validate' ? cmRequestReadOptions : cmRequestWriteOptions,
+        operation: tx => attempt(tx, work, trustedRegistration, entityPlan) }));
       // Account creation counts all accounts for first-user policy. Admit these
       // flows before BEGIN so concurrent registrations cannot share a stale
       // predicate snapshot, just as createCmUser already does.
