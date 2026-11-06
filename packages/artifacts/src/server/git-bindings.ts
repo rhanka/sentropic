@@ -28,7 +28,8 @@ export function validateGitBindingWrite(before: GitBinding | undefined, input: G
   if (input.expectedVersion !== (before?.version ?? null)) throw new ArtifactOperationError('pointer_conflict');
   if (next.version !== (before?.version ?? 0) + 1) throw new ArtifactOperationError('invalid_request');
   if (before && before.state !== 'detached' && (next.repoId !== before.repoId || next.branch !== before.branch ||
-    next.subPath !== before.subPath)) throw new ArtifactOperationError('git_binding_conflict');
+    next.subPath !== before.subPath)) throw new ArtifactOperationError('git_binding_conflict',
+      { publicDetails: { artifactId: next.artifactId } });
   const action = input.event.action;
   const active = before !== undefined && before.state !== 'detached';
   const configuring = action === 'attach' && active;
