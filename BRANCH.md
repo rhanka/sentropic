@@ -35,6 +35,8 @@
   - `docs/ci/registry-egress.md` (BR0218-EX14)
   - `deploy/ci/gb4-probe/**` (BR0218-EX15)
   - `deploy/k8s/base/artifact-content-networkpolicy.yaml` (BR0218-EX15)
+  - `deploy/ci/artifact-content/bundle.selftest.mjs` (BR0218-EX16)
+  - `deploy/ci/artifact-content/network.selftest.mjs` (BR0218-EX16)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -77,6 +79,7 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] BR0218-EX16 / TRAIN0218-MAIN-CI1: run `42307278002`, job `128200464943` rejects the requested GB4 egress rule because manifest qualification still asserts the former exact policy; unchanged local target reproduces the failure. Extend the exact expected policy and additive reachability checks to the reviewed namespace/Exists-label/TCP5173 destination; retain all old ingress/DNS/Postgres and denial assertions and correct positional PG selection. Exact Make target passes 62 policy checks, 31 A4 tests and preprod bundle checks, including label/namespace/port/protocol denials. Impact limited to manifest qualification; rollback restores the two test files. No runtime policy, preprod pin, release evidence or CI gate changes; fresh CI required.
 - [x] BR0218-EX13: owner requests the pushed disk-hygiene wagon; integrate its bounded Make prune/opt-in build guard and shell checks. Impact limited to local Docker hygiene; rollback reverts that wagon. Retain all main Make behavior.
 - [x] Disk wagon `cd0cbbf3e`: merged with train scope retained; `check-disk-hygiene` and `check-down-volumes` pass on the integration tree, including image reuse and 89/90/91 percent disk boundaries. No real image build ran.
 - [x] BR0218-EX14: owner requests the pushed registry-egress wagon; remove unused registry credentials from internal CI consumers and retain its DAG regressions/report. Impact limited to credential exposure and regression checks; rollback restores the wagon diff. No CI gate or artifact transport changes.
