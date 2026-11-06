@@ -1,4 +1,4 @@
-import type { BoundLoginSessionV1 } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1, type BoundLoginSessionV1 } from '@sentropic/cluster-mesh';
 import type { IdentityAuthHonoTransactionBindingV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { closeRemoteSessionAuthority, getRemoteSessionAuthority } from '../auth/remote-private-session';
 import type { CmIdentityTransaction } from './cm-transaction';
@@ -27,7 +27,7 @@ export function bindCmRemoteSessionAuthority(binding: IdentityAuthHonoTransactio
     async createSession(input) {
       const result = await binding.sessions.createSession(input);
       const record = await tx.custody.sessions.findById(result.sessionId);
-      if (!record) throw new Error('identity_material_missing');
+      if (!record) throw new IdentityCustodyErrorV1('identity_material_missing');
       const value = project(record);
       committed.push(() => { getRemoteSessionAuthority()?.create(value); });
       return result;
@@ -38,7 +38,7 @@ export function bindCmRemoteSessionAuthority(binding: IdentityAuthHonoTransactio
       const result = await binding.sessions.refreshSession(token);
       if (result && before) {
         const record = await tx.custody.sessions.findById(result.sessionId);
-        if (!record) throw new Error('identity_material_missing');
+        if (!record) throw new IdentityCustodyErrorV1('identity_material_missing');
         const value = project(record), expected = before.refreshTokenHash;
         committed.push(() => { getRemoteSessionAuthority()?.rotate(expected, value); });
       }
@@ -56,7 +56,7 @@ export function bindCmRemoteSessionAuthority(binding: IdentityAuthHonoTransactio
       return result;
     },
   };
-  return { ...binding, sessions, ports: { ...binding.ports, sessions: {
+  return { ...binding, get deferredMail() { return binding.deferredMail; }, sessions, ports: { ...binding.ports, sessions: {
     ...binding.ports.sessions, revoke: sessions.revokeSession, revokeAllForUser: sessions.revokeAllSessions,
   } } };
 }
