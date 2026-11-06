@@ -57,7 +57,7 @@
   - [x] 36 API checks and 18 operator checks passed in isolated containers; read-only SQL census, exact restore binding, corruption/refusal, pre-backup drift and dry-run output collisions covered.
   - [x] Full API typecheck, scoped lint, production bundle build/CLI smoke, and actual prod/preprod kustomize assertions passed with reused API toolbox local/sentropic-api:387528; no image build or cluster access.
 - [x] Lot 4: docs/runbooks/preprod-a4-cutover.md and owner report .tmp/rv/preprod-a4-procedure.md with exact authorization text, Kubernetes actions, abort/rollback and verification.
-- [ ] Lot 5: scoped tests, harness scope checks before make commit, push review-ready wagon, leave preprod untouched.
+- [x] Lot 5: scoped tests, harness scope checks before make commit, push review-ready wagon, leave preprod untouched.
   - [x] Unit custody is private per test file/worker, avoiding cross-file collisions in the train CI; local Docker resources cleaned with down-volumes.
 
 <!-- Retained base plan for Track event continuity. -->
