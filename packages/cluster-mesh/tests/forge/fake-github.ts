@@ -43,7 +43,7 @@ export const fixture = () => {
       return { token: `fake-token-${minted.length}`, expiresAt: new Date(time + 3600000).toISOString(),
         permissions: granted, repositoryIds: tokenRepos };
     },
-    resolveRepository: async (_app: unknown, locator: string) => locator === owner.locator ? '101' : '202',
+    resolveRepository: async (_app: unknown, _installationId: string, locator: string) => locator === owner.locator ? '101' : '202',
     verifyKey: async () => undefined,
     revokeToken: async (token: string) => { revoked.push(token); },
   };
