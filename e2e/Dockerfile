@@ -33,9 +33,11 @@ COPY global.setup.ts ./
 # flagged by Trivy on 2.9.0-r0 (FixedVersion 2.10.0-r0 in Alpine v3.24).
 # chromium pins refreshed to 156.0.8078.79-r0: 155.0.8059.84-r0 left the v3.24
 # repo, so any rebuild of this image (new E2E_VERSION) fails to resolve otherwise.
+# zlib 1.4-r0 replaces the removed 1.3.2-r1 security fix in the v3.24 repository.
+# musl 1.2.6-r3 fixes HIGH CVE-2026-107891 in the pinned base's libc and utilities.
 RUN npm ci --legacy-peer-deps --ignore-scripts && \
-    apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 chromium=156.0.8078.79-r0 \
-      chromium-headless-shell=156.0.8078.79-r0 ffmpeg=8.1.3-r0 libexpat=2.10.0-r0 zlib=1.3.2-r1 && \
+    apk add --no-cache musl=1.2.6-r3 musl-utils=1.2.6-r3 libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 chromium=156.0.8078.79-r0 \
+      chromium-headless-shell=156.0.8078.79-r0 ffmpeg=8.1.3-r0 libexpat=2.10.0-r0 zlib=1.4-r0 && \
     node -e 'const fs=require("node:fs"),path=require("node:path"); const {registry}=require("playwright-core/lib/coreBundle").registry; for(const [name,binary] of [["chromium","/usr/bin/chromium"],["chromium-headless-shell","/usr/bin/chromium-headless-shell"],["ffmpeg","/usr/bin/ffmpeg"]]){const executable=registry.findExecutable(name).executablePath(); fs.mkdirSync(path.dirname(executable),{recursive:true}); fs.symlinkSync(binary,executable); console.log(name,executable,"->",binary);}' && \
     node --input-type=module -e 'import {chromium} from "playwright"; import assert from "node:assert/strict"; import {stat} from "node:fs/promises"; for(const channel of [undefined,"chromium"]){const browser=await chromium.launch({channel}); console.log("Qualified Chromium:",channel??"headless shell",browser.version()); const context=await browser.newContext({recordVideo:{dir:"/tmp/browser-probe"}}); const page=await context.newPage(); await page.setContent("<title>BR78 browser probe</title><main style=\"background:#246;color:white;padding:40px\">BR78 browser probe</main>"); assert.equal(await page.title(),"BR78 browser probe"); await page.waitForFunction(()=>performance.getEntriesByName("first-contentful-paint").length>0,undefined,{timeout:2000}); const png=await page.screenshot({path:"/tmp/browser-probe.png"}); assert.equal(png.subarray(0,8).toString("hex"),"89504e470d0a1a0a"); const video=page.video(); await context.close(); assert.ok((await stat(await video.path())).size>0); await browser.close();}' && \
     rm -rf /root/.npm /tmp/*
