@@ -47,6 +47,7 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review r2 R5: fence uses separate prior A4_AUTHORIZATION_FILE bound to the immutable annex, without post-fence request or stopped-writer/snapshot claims; preparation retains strict request and observed fence checks. Three new synthetic regressions cover running writers, missing approval/annex drift and incomplete observed shutdown.
 - [x] Review R5 restriction regression: namespace middleware creation uses the approved exact spec, attaches both Ingresses, and refuses replacing any existing middleware before writes.
 - [x] Review R5 annex: exact make fence/delete/scale/rehearsal/recovery invocations, immutable procedure/command bindings, separate restore allocation/identity, original/target pins/states, tenant backup ownership, rollback loss policy and 2026-11-05 fresh-auth acceptance required before signature.
 - [x] Reviews R1/R5 procedure: explicit internal -> restricted UI -> public HTTP -> limited IdP -> fresh-auth sequence, excluded-source proof, preserved general fence and refence on failure.
