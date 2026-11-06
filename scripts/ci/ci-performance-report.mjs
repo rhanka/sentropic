@@ -42,7 +42,7 @@ export function measureRun(capture) {
   const fresh = run.run_attempt === 1 && records.every(row => row.conclusion === 'skipped'
     || row.attempt === 1 && row.dispatched === true && durationSeconds(run.created_at, row.startedAt) !== null);
   const complete = run.status === 'completed' && records.length > 0 && records.every(row => row.conclusion
-    && (row.conclusion === 'skipped' || executionSeconds(row) !== null));
+    && (row.conclusion === 'skipped' || row.dispatched === false || executionSeconds(row) !== null));
   const wallSeconds = complete ? durationSeconds(run.created_at, run.updated_at) : null;
   const allSelectedMeasured = selected.length > 0 && selected.every(item => records.some(row => row.name === item.job
     && row.conclusion === 'success' && row.dispatched === true && executionSeconds(row) !== null));
