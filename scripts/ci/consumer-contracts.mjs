@@ -164,6 +164,9 @@ export function selectConsumers({ kind, slugs = [], boundaries = null, ref = '' 
   if (!isPlainObject(boundaries)) throw new Error('consumer boundaries are required');
   const policy = boundaries.policies?.[kind];
   if (!policy) throw new Error(`unknown change kind: ${kind}`);
+  if (policy.selection === 'documentation') {
+    return { selection: 'documentation', required: [], fastPath: false, reasons: [`${kind}: ${policy.note}`] };
+  }
   if (policy.selection === 'full') {
     return fullSelection(boundaries, `${kind}: ${policy.note}`);
   }

@@ -846,6 +846,40 @@ test('consumer contracts: API runtime changes select the complete integration se
   assert.equal(result.ok, true, result.problems.join('; '));
 });
 
+test('consumer contracts: documentation-only PR agrees with real workflow dispatch', () => {
+  const boundaries = loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json'));
+  const workflowText = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  const filters = YAML.parse(jobs.changes.steps.find(step => step.id === 'filter').with.filters);
+  const packages = boundaries.components.map(component => {
+    const dir = component.kind === 'app' ? ({ api: 'api', ui: 'ui',
+      'auth-idp': 'apps/auth-idp', 'llm-gateway': 'apps/llm-gateway' })[component.slug]
+      : `packages/${component.slug}`;
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, dir, 'package.json'), 'utf8'));
+    return { slug: component.slug, scope: component.kind, published: manifest, candidate: manifest };
+  });
+  const installed = Object.fromEntries(['api', 'ui'].map(appDir =>
+    [appDir, tupleForApp({ root, appDir, candidates: [] })]));
+  for (const files of [['README.md'], ['docs/guide.md', 'BRANCH.md']]) {
+    const changes = Object.fromEntries(Object.entries(filters).map(([name, patterns]) =>
+      [name, String(files.some(file => patterns.some(pattern => path.matchesGlob(file, pattern))))]));
+    assert.ok(Object.values(changes).every(value => value === 'false'));
+    const { kind } = classifyCompatibility({ files, packages });
+    assert.equal(kind, 'documentation-only');
+    const result = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, changes,
+      tuples: { before: installed, after: installed }, event: 'pull_request', ref: 'refs/pull/1/merge' });
+    assert.equal(result.ok, true, result.problems.join('; '));
+    assert.deepEqual(result.required, []);
+    assert.equal(result.fastPath, false);
+  }
+  for (const file of ['vendor/uncovered.ts', 'docs/runtime.ts', 'spec/runtime.js']) {
+    const { kind } = classifyCompatibility({ files: ['README.md', file], packages });
+    assert.equal(kind, 'unknown');
+    const result = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, changes: {} });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some(problem => problem.includes('test-e2e') && problem.includes('not selected')));
+  }
+});
+
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_ATTEMPTS \?= 18$/m);
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_SECONDS \?= 10$/m);

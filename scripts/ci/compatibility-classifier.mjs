@@ -13,7 +13,7 @@ import {
 } from './publishable-manifests.mjs';
 
 export const CHANGE_KINDS = ['internal-fix', 'additive', 'breaking', 'explicit-adoption',
-  'root-lock-toolchain', 'runtime-security', 'ui-only', 'shared-asset', 'unknown'];
+  'root-lock-toolchain', 'runtime-security', 'ui-only', 'shared-asset', 'documentation-only', 'unknown'];
 
 // Higher rank is more conservative and wins when a change spans areas.
 const RANK = { 'internal-fix': 0, 'ui-only': 1, additive: 2, 'shared-asset': 3,
@@ -21,7 +21,7 @@ const RANK = { 'internal-fix': 0, 'ui-only': 1, additive: 2, 'shared-asset': 3,
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-const DOC = /^(?:README|CHANGELOG)(?:\.|$)|(?:^|\/)docs?\//i;
+const DOC = /^(?:README|CHANGELOG)(?:\.(?:md|txt|rst))?$/i;
 
 export function classifyFileArea(file) {
   if (typeof file !== 'string' || file.length === 0) return 'unknown';
@@ -30,8 +30,7 @@ export function classifyFileArea(file) {
     || file === '.dockerignore' || file.startsWith('.github/workflows/')
     || file.startsWith('scripts/') || file.startsWith('tools/')
     || file.startsWith('docker-compose')) return 'toolchain';
-  if (file.endsWith('.md') || file === '.track' || file.startsWith('docs/')
-    || file.startsWith('spec/') || file.startsWith('plan/') || file === 'LICENSE') return 'unrelated';
+  if (file.endsWith('.md') || file === 'LICENSE') return 'unrelated';
   if (file.startsWith('api/') || file.startsWith('deploy/') || file.startsWith('.security/')
     || file.startsWith('e2e/') || file.startsWith('apps/auth-idp/') || file.startsWith('apps/llm-gateway/')
     || file.startsWith('apps/artifact-content/')) return 'runtime-security';
@@ -135,6 +134,10 @@ export function classifyCompatibility({ files = [], packages = [], semver = load
     kinds.push({ kind: 'root-lock-toolchain', reasons: ['root lock, toolchain, image input, or workflow change'] });
   }
   for (const entry of packages) kinds.push(classifyPackageChange({ ...entry, files, semver }));
+  if (areas.every((area) => area === 'unrelated' || area === 'package-doc')
+    && kinds.every((entry) => entry.kind === 'internal-fix')) {
+    return { kind: 'documentation-only', reasons: ['changes confined to identified documentation'] };
+  }
   if (kinds.length === 0) {
     if (areas.every((area) => area === 'ui')) return { kind: 'ui-only', reasons: ['changes confined to ui/'] };
     return { kind: 'internal-fix', reasons: ['no functional change: tests, docs, or unrelated paths only'] };
