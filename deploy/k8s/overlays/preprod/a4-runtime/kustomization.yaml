@@ -4,5 +4,6 @@ configMapGenerator:
   - name: sentropic-a4-runtime
     files:
       - launch.mjs
+      - stage.mjs
 generatorOptions:
   disableNameSuffixHash: true
