@@ -39,12 +39,12 @@
 ## Plan / Todo (DISK-HYGIENE lots)
 - [x] **Lot DISK-HYGIENE-0 — Scope**
   - [x] Read common/project rules, inspect `check-down-volumes`, mechanically verify branch with host harness; reuse the clean existing worktree while retaining its old branch.
-- [ ] **Lot DISK-HYGIENE-1 — Safe host cleanup and build guard**
+- [x] **Lot DISK-HYGIENE-1 — Safe host cleanup and build guard**
   - [x] `Makefile`: builder prune with `--keep-storage 5G --force`, dangling prune, unused images older than 24h, reclaimed-space output; no volume operations.
   - [x] `scripts/check-disk-space.sh`, `scripts/resolve-api-image.sh`, `Makefile`: opt-in `DISK_HYGIENE_THRESHOLD=90`, Docker-root filesystem usage, refuse before actual builds, preserve image reuse.
 - [ ] **Lot DISK-HYGIENE-2 — Scoped self-test and handoff**
-  - [ ] `scripts/check-disk-hygiene.sh`: dry-run recipes for default/empty/dev/test ENV; stub-only cleanup and build boundary/failure tests, no real Docker cleanup.
-  - [ ] Gate: `make check-disk-hygiene check-down-volumes ENV=test-disk-hygiene`; host harness scope checks before each `make commit` (existing host-only scope ENV selector).
+  - [x] `scripts/check-disk-hygiene.sh`: dry-run recipes for default/empty/dev/test ENV; stub-only cleanup and build boundary/failure tests, no real Docker cleanup.
+  - [x] Gate: `make check-disk-hygiene check-down-volumes ENV=test-disk-hygiene`; host harness scope checks before each `make commit` (existing host-only scope ENV selector).
   - [ ] End: `make down-volumes ENV=test-disk-hygiene`, `make disk-hygiene ENV=test-disk-hygiene`; push verified wagon, report `.tmp/rv/disk-hygiene.md`, Track import handoff to conductor.
 
 ## Inherited main train feedback (reference)
