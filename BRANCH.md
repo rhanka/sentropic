@@ -29,6 +29,7 @@
   - `.github/workflows/**`
 
 ## Feedback Loop
+- [ ] BRSG1-CI1: required `enforce-package-bump` rejects unchanged versions for src changes; wagon instructions forbid bumps. Integration/CI conductor must resolve this gate; no bypass or manifest change in SG1.
 - [x] SG1-sqlite: named follow-up for SQLite binding parity; acceptance and resource scope in `packages/artifacts/docs/git-bindings.md`; conductor imports this source into Track as designated writer.
 - [x] SG2 owns forge adapter/probe-qualified GitPort; SG3 owns git tools and attach orchestration; SG4 owns release transaction writes.
 
@@ -39,15 +40,15 @@
 - [x] Mono-branch; one build lane; consolidated train review.
 
 ## UAT Management (in orchestration context)
-- [ ] Verify fake tenant and Postgres lifecycle, conflicts, namespace, CAS and scope isolation.
-- [ ] Verify MCP artifacts_get omits git entirely without current repository code right.
+- [x] Verify fake tenant and Postgres lifecycle, conflicts, namespace, CAS and scope isolation.
+- [x] Verify MCP artifacts_get omits git entirely without current repository code right.
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, contract and baseline; create isolated worktree; mechanical branch check.
-- [ ] Lot 1: tests first in `tests/git-bindings.test.ts`, `tests/fixtures/git-binding-conformance.ts`, `tests/git-bindings.integration.test.ts`, `tests/git-binding-projection.test.ts`.
+- [x] Lot 1: tests first in `tests/git-bindings.test.ts`, `tests/fixtures/git-binding-conformance.ts`, `tests/git-bindings.integration.test.ts`, `tests/git-binding-projection.test.ts`.
   - [x] Author shared lifecycle, uniqueness, isolation, replay, CAS and concurrency acceptance before implementation.
   - [x] Initial red: missing git binding module; add Postgres durability and registry refusal tests.
-- [ ] Lot 2: frozen record types, scope-bound host registry, binding store port, memory double and lifecycle CAS.
+- [x] Lot 2: frozen record types, scope-bound host registry, binding store port, memory double and lifecycle CAS.
   - [x] Define exact binding/live/index records and trusted storage/code-right ports.
   - [x] Add scope-bound registry with closed defaults and namespace validation.
   - [x] Add atomic memory store, principal-scoped replay receipts and transition/CAS invariants.
@@ -55,17 +56,24 @@
   - [x] Red test exposed inbound resume bypass; restrict inbound transitions to the contract state machine.
   - [x] Add same-target configuration and retained pause-condition acceptance; check page-only MCP readers.
   - [x] Resolve both red cases: same-target updates retain generation; repeated pause cannot clear a missing/diverged condition.
-- [ ] Lot 3: additive migration 0010, append-only audit/index and Postgres adapter; shared conformance suite.
+- [x] Lot 3: additive migration 0010, append-only audit/index and Postgres adapter; shared conformance suite.
   - [x] Add 0010 records, release column, scoped foreign keys and partial active uniqueness indexes.
   - [x] Add Postgres binding/receipt/event transaction and cross-process replay locking.
   - [x] Author `tests/git-release-index.integration.test.ts` for rebuild cardinality, isolation and immutability.
   - [x] Fix fixture SQL parameter types after first Postgres run; migrations applied successfully.
   - [x] Implement scope-filtered release-index readers through the existing Postgres package export.
-- [ ] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
+- [x] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
   - [x] Author MCP transition projection and frozen access-definition tests before wiring.
   - [x] Wire code-right-only artifacts_get projection; unavailable rights omit git entirely.
 - [x] Lot 5: written SQLite decision and adapter/host integration documentation.
 - [ ] Lot 6: scoped local tests, typecheck/lint, scope check, one ready PR and green CI.
+  - [x] `make test-artifacts SCOPE=tests/git-bindings.test.ts`: 10 passed; `SCOPE=tests/git-binding-`: 4 passed.
+  - [x] `make test-artifacts-integration SCOPE=tests/git-bindings.integration.test.ts`: 12 passed.
+  - [x] `make test-artifacts-integration SCOPE=tests/git-release-index.integration.test.ts`: 1 passed.
+  - [x] `make test-artifacts SCOPE=tests/tools-list-snapshot.test.ts`: 1 passed; catalogue unchanged.
+  - [x] `make lint-artifacts` and `make typecheck-artifacts`: passed; all commands use the recorded ports and `ENV=test-sg1` last, through docker-slot.sh.
+  - [ ] Open the single ready PR; watch CI and report the version-gate disposition.
+  - [ ] Run `make down-volumes API_PORT=8801 UI_PORT=5201 MAILDEV_UI_PORT=1101 ENV=test-sg1`.
 
 ## Deferred to SG1-sqlite
 - [ ] Add SQLite migration/adapter and run the same binding conformance suite on both SQL backends by 2026-11-10; no Immo dependency.
