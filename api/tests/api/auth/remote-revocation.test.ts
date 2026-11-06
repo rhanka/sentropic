@@ -26,6 +26,7 @@ import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { remoteRawHash } from '../../../src/services/auth/remote-contract';
 import { createIdpApp } from '../../../../apps/auth-idp/idp-app';
 import { accountRouter } from '../../../src/routes/namespaces/auth/cm-auth-hono';
+import { requireCmAccountAuth } from '../../../src/services/identity/cm-self-deletion';
 import { adminRouter } from '../../../src/routes/namespaces/admin-product-authority';
 import { acknowledgeIdentityRevocationV1 } from '@sentropic/cluster-mesh';
 import { deliverCmRevocation } from '../../../src/services/identity/cm-revocation-delivery';
@@ -37,14 +38,19 @@ import { sessionLifecycleHandlers } from '../../../src/routes/namespaces/session
 const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocation`;
 const clientId = 'test-product-revoker', path = '/api/v1/auth/session/remote-revocations';
 let userId: string, directory: string;
+let lifecycleCredential = '';
 
 // Post-cutover the session facade refuses self-asserted MFA; MFA sessions are
 // minted through the binding, the same issuance call the verified ceremony makes.
-const mintMfaSession = () => withAppCmAuth(runner => runner.request(async binding => {
-  const user = await binding.ports.users.findById(userId);
-  if (!user) throw new Error('missing revocation fixture user');
-  return binding.sessions.createSession({ user, mfaVerified: true });
-}));
+const mintMfaSession = async () => {
+  const tokens = await withAppCmAuth(runner => runner.request(async binding => {
+    const user = await binding.ports.users.findById(userId);
+    if (!user) throw new Error('missing revocation fixture user');
+    return binding.sessions.createSession({ user, mfaVerified: true });
+  }));
+  lifecycleCredential = tokens.sessionToken;
+  return tokens;
+};
 
 // Refusal tests start with CM authority only, so a rejected request must leave
 // the issuer directory empty. Issuer-minted fixtures exercise the private fence.
@@ -329,8 +335,11 @@ describe('RC1 product to issuer revocation', () => {
   });
   function lifecycleApp(workspaceId: string, admin = false) {
     return new Hono().use('*', async (c, next) => {
-      c.set('user', { userId: admin ? 'test-admin' : userId, workspaceId,
-        sessionId: 'test-session', role: admin ? 'admin_app' : 'editor' });
+      if (!admin) {
+        c.req.raw.headers.set('authorization', `Bearer ${lifecycleCredential}`);
+        return requireCmAccountAuth(c, next);
+      }
+      c.set('user', { userId: 'test-admin', workspaceId, sessionId: 'test-session', role: 'admin_app' });
       await next();
     }).route('/account', accountRouter).route('/admin', adminRouter);
   }
