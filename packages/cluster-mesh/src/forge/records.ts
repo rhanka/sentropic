@@ -18,7 +18,7 @@ export interface GitHubAppApi {
   inspectInstallation(app: AppCredential, installationId: string): Promise<{
     permissions: Record<string, string>; suspended: boolean;
   }>;
-  resolveRepository(app: AppCredential, locator: string): Promise<string>;
+  resolveRepository(app: AppCredential, installationId: string, locator: string): Promise<string>;
   mint(app: AppCredential, installationId: string, repositoryId: string, permissions: Record<string, string>): Promise<MintedToken>;
   verifyKey(app: AppCredential): Promise<void>;
   revokeToken(token: string): Promise<void>;
