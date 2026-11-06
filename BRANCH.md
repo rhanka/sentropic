@@ -42,6 +42,9 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-R2 — Run GHCR fixtures from always-scheduled manifest validation so a future scripts-only change cannot omit publication/anonymous-pull/login coverage.
+- [x] GHCR-RENDER — Real host Kustomize emits UI as a list item starting with '- image:'. Reproduce the missing UI pin, accept both canonical image layouts, and retain tagged/foreign/missing-pin refusals. Real anonymous preprod validation follows.
+- [x] GHCR-R1 — Both independent reviewers reproduced Make consuming single-dollar shell variables, leaving empty login credentials. Escape them correctly; exercise the actual Make recipe with a stdin-checking fixture, missing-token refusal and no credential output.
 - [x] GHCR-DOCS — Document public packages, secret-object custody and the exact manual prod adoption/approval boundary. Remove obsolete registry-key/pull-secret setup instructions and update historical URL fixtures.
 - [x] GHCR-CONTRACT — Retain the shared prod API/IdP/content image contract; preserve live prod digests as recovery copies. Digest-pinned recovery fixtures still exercise tagged-image refusal by explicitly using an unqualified tag, preserving every negative assertion.
 - [x] GHCR-PINS — Recovery f2313a/434fe5 and three distinct prod digests are preserved remotely; preprod pins exact recovery digests and verifies them anonymously. Retain the prod base image-equality contract and main aliases; the separately approved prod apply picks up the then-published GHCR main images. No prod workflow exists.

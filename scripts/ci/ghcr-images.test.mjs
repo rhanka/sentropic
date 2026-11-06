@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { assertConfig } from './publish-image.mjs';
 import { publicImage } from './public-image.mjs';
+import { deploymentImages } from './check-preprod-images.mjs';
 
 const config = `sha256:${'a'.repeat(64)}`;
 const body = JSON.stringify({ config: { digest: config } });
@@ -14,6 +15,14 @@ const digest = `sha256:${createHash('sha256').update(body).digest('hex')}`;
 const response = (text = body, header = digest) => new Response(text, { headers: { 'docker-content-digest': header } });
 const anonymous = manifest => async url => url.includes('/token?')
   ? Response.json({ token: 'anonymous-test-token' }) : manifest();
+
+test('should inspect both Kustomize image layouts and refuse missing, tagged or foreign pins', () => {
+  const yaml = `      containers:\n        - name: api\n          image: ghcr.io/rhanka/sentropic-api@${digest}\n      containers:\n      - image: ghcr.io/rhanka/sentropic-ui@${digest}\n        name: ui\n`;
+  assert.equal(deploymentImages(yaml).length, 2);
+  assert.throws(() => deploymentImages(yaml.replace(`sentropic-ui@${digest}`, 'sentropic-ui:abcdef')), /immutable GHCR/);
+  assert.throws(() => deploymentImages(yaml.replace('ghcr.io/rhanka/sentropic-ui', 'registry.example/sentropic-ui')), /immutable GHCR/);
+  assert.throws(() => deploymentImages(yaml.split('      - image:')[0]), /immutable GHCR/);
+});
 
 test('should accept the tested config and refuse an immutable tag collision or index', () => {
   assert.doesNotThrow(() => assertConfig(JSON.parse(body), config));
