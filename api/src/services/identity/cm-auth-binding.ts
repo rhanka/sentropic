@@ -5,7 +5,7 @@ import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1
   type IdentityAuthHonoTransactionBindingV1, type IdentityDeferredMailV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { IdentityCustodyErrorV1, type IdentityEmailCodeKeyRingV1 } from '@sentropic/cluster-mesh';
 import type { PoolClient } from 'pg';
-import { cmIdentityUnitOfWork, cmRequestReadOptions, cmRequestWriteOptions, withCmIdentityTransaction, withSerializationRetry,
+import { cmIdentityUnitOfWork, cmRequestReadOptions, cmRequestWriteOptions, withCmIdentityTransaction, withCmIdentityExclusiveWriter, withSerializationRetry,
   type CmIdentityTransaction } from './cm-transaction';
 import type { createCmTokenCustodian } from './cm-token-custodian';
 import { createServiceTenantEnrollmentSource } from '../tenancy/enrollment-store';
@@ -78,8 +78,13 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
       // Concurrent requests on the same custody rows abort with 40001; each
       // retry opens a fresh transaction and observes the winner (safe: an
       // aborted attempt commits nothing and publishes nothing).
-      const outcome = await withSerializationRetry(() => runIdentityAuthCompletionV1({ flow, unitOfWork: cmIdentityUnitOfWork,
-        options: cmRequestWriteOptions, operation: tx => attempt(tx, work, trustedRegistration, entityPlan) }));
+      const run = () => runIdentityAuthCompletionV1({ flow, unitOfWork: cmIdentityUnitOfWork,
+        options: flow === 'session_validate' ? cmRequestReadOptions : cmRequestWriteOptions,
+        operation: tx => attempt(tx, work, trustedRegistration, entityPlan) });
+      // Provisioning reads account-wide absence/first-user predicates. Drain
+      // unrelated writers before its snapshot, using the existing root-create gate.
+      const outcome = await withSerializationRetry(() => flow === 'registration' || flow === 'magic_link'
+        ? withCmIdentityExclusiveWriter(run) : run());
       if (!outcome.committed) return outcome;
       return { committed: true, value: await publish(outcome.value) };
     },
