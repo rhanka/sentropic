@@ -1,8 +1,8 @@
 # Feature: CI registry egress containment
 
 ## Objective
-- [ ] Confirm October Scaleway traffic from workflow history, GitHub run metadata and compressed registry layers; protect build-once artifact transport and BR-82 tested-image identity.
-- [ ] Report API layer growth and propose a separate slimming lot without implementing it.
+- [x] Confirm October Scaleway traffic from workflow history, GitHub run metadata and compressed registry layers; protect build-once artifact transport and BR-82 tested-image identity.
+- [x] Report API layer growth and propose a separate slimming lot without implementing it.
 
 ## Scope / Guardrails
 - [x] Wagon `perf/ci-registry-egress`, base `origin/main` at `c107f6abd70e47e0aba33ab4afad01f8dafe4534`; worktree `tmp/worktrees/ci-registry-egress`; no PR, release, version bump or lock regeneration.
@@ -57,11 +57,11 @@
   - [x] Regress unused registry credentials, remote pull fallback and missing receipt transport in `scripts/ci/ci-dag.test.mjs`.
   - [x] Remove unused producer/browser Scaleway credentials in `.github/workflows/ci.yml`.
   - [x] Run `make test-ci-dag test-ci-image-receipts test-ci-release-receipts ENV=test-ci-registry-egress`: 10 + 16 + 40 passed; BR-82 source, archive, loaded-image and deployed-digest refusals preserved.
-- [ ] **Lot 2 — Evidence and handoff**
-  - [ ] Commit findings/slimming proposal in `docs/ci/registry-egress.md`; write owner report `.tmp/rv/ci-registry-egress.md`.
-  - [ ] Report historical and current before/after GB per full run/month, with assumptions and marginal savings separated.
-  - [ ] Pass scope before each bounded `make commit`; push verified wagon without PR or CI dispatch.
-  - [ ] Run `make down-volumes ENV=test-ci-registry-egress`; hand off Track import, consolidated review and train CI.
+- [x] **Lot 2 — Evidence and handoff**
+  - [x] Commit findings/slimming proposal in `docs/ci/registry-egress.md`; write owner report `.tmp/rv/ci-registry-egress.md`.
+  - [x] Report historical and current before/after GB per full run/month: early October 8.902 GB/run; mid-October 4.443; current main and wagon both zero for internal API/E2E registry pulls. No marginal savings claimed for this wagon.
+  - [x] Pass scope before each bounded `make commit`; push verified wagon without PR or CI dispatch.
+  - [x] Run `make down-volumes ENV=test-ci-registry-egress`; hand off Track import, consolidated review and train CI.
 
 ## Deferred to train
 - [ ] **API-SLIM — Runtime file allowlist and registry retention proposal**: owner=CI/API maintainers; preserve API/IdP/content runtime assets and tested-image identity; measure compressed layers and qualify canonical production image before rollout. Registry deletion requires a separate retention policy protecting deployment references.
