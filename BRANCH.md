@@ -35,6 +35,7 @@
 - [x] BR85a-EX1 — Owner authorized CI caching/sharding requires Make entry points. Impact: additive CI recipes and host scope-check on constrained disk; rollback: revert added include/recipes together with workflow.
 - [ ] Conductor imports this mergeable plan and delivery evidence into Track as designated single writer.
 - [x] Rebased onto `origin/test/ci-ten-minute-proof` at `791150e53`; retained captures, campaign checks and all existing qualifications; no package source/version/lock changes, so post-rebase package publication gate is not triggered.
+- [x] CI10A-F1 — Run 42307150256 caught a validation naming mismatch: the pack-context guard inventories `validate-*` jobs. Preserve its exact pack count/context assertions by naming the shards `validate-artifacts-shards`; no guard assertion removed or reduced.
 
 ## AI Flaky tests
 - [x] No exception, increased timeout or retry authorized.
