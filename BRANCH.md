@@ -1,7 +1,7 @@
 # Feature: App CM A4 follow-ups
 
 ## Objective
-- [ ] Restore every test disabled in #879 with unchanged assertions, public optional authentication parity, and typed failure logging.
+- [x] Restore every test disabled in #879 with unchanged assertions, public optional authentication parity, and typed failure logging.
 
 ## Scope / Guardrails
 - [x] Owner mandate 2026-11-05: A4-SELF-DELETE, V2 cascade, RC1 revocation fence, A4-ADOPTION-INTERLEAVE and A4-LANE-BLOCKED-SERIALIZE.
@@ -66,7 +66,7 @@
 - [x] **Lot 1 — A4-SELF-DELETE and V2 cascade**
   - [x] Five-minute deletion-only continuation binds the initiating credential to self-deactivation; ordinary auth stays revoked; V2 rechecks self-disable status under lock.
   - [x] Re-enabled `me.test.ts` (2) and `remote-revocation.test.ts` (4 lifecycle variants); all 56 deletion/lifecycle tests pass. Ownership and privileged restore fixtures match CM invariants.
-  - [x] V2 cascade and injected atomic rollback pass; committed HTTP deletion returns 200 with explicit delivery_pending/complete=false until outbox delivery; four negative continuation tests pass.
+  - [x] V2 cascade and injected atomic rollback pass; committed HTTP deletion returns 200 with explicit delivery_pending/complete=false until outbox delivery; eight continuation regressions pass.
   - [x] `remote-revocation.test.ts` restores account/profile/fence snapshots through the privileged fixture path; normal account creation continues refusing retired ids. Refused-delivery cases retain an empty private starting state and unchanged assertions.
   - [x] Review P1/P2: pass the verified continuation into both V2 authorization phases, recheck credential/epoch/expiry under lock, and reject stale deactivation credentials before mutation; forced refresh and active-DELETE races qualified.
   - [x] Eight self-deletion regressions pass, including proof expiry after admission and after V2 reservation; original lifecycle assertions now exercise real account authentication.
@@ -87,5 +87,7 @@
   - [x] Activity-touch and workspace-member catch-all log only known custody codes or validated SQLSTATEs, with a fixed generic code otherwise.
 - [ ] **Lot 6 — Docs consolidation and final validation**
   - [x] Scoped API tests: 182/182 in 15 files; all requested tests enabled and original assertions unchanged. API typecheck/lint qualified separately.
-  - [ ] Review final diff, resolve findings, push early, open one ready PR with BRANCH.md body, monitor CI until green; do not merge.
-  - [ ] `make down-volumes`; report `.tmp/rv/a4-followups.md`.
+  - [x] Two independent Sol fallback reviews approve implementation `b9742ff4e`; credential-binding and V2 authorization races resolved. Vibe 402 and Argon 429 prevent complementary-model review; no such consensus claimed.
+  - [x] Early safety pushes made; final implementation and scoped validation committed.
+  - [ ] Open one ready PR with BRANCH.md body and monitor CI until green; do not merge.
+  - [x] `make down-volumes`; report `.tmp/rv/a4-followups.md` with validation and review evidence, CI handoff pending.
