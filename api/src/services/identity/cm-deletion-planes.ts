@@ -1,4 +1,4 @@
-import { IdentityCustodyErrorV1, type BusinessDeletionPlanV1, type PersonDeletionCommandV2,
+import { IdentityCustodyErrorV1, type BusinessDeletionPlanV1, type IdentityExternalRevocationDraftV1, type PersonDeletionCommandV2,
   type PersonDeletionPlanePortV2 } from '@sentropic/cluster-mesh';
 import type { AppCustodyHost, CmIdentityTransaction } from './cm-transaction';
 import { createCmDeletionConnectorPlane } from './cm-deletion-connectors';
@@ -8,14 +8,22 @@ const mismatch = (): never => { throw new IdentityCustodyErrorV1('proof_binding_
 
 const remote: Plane = {
   step: 'remote_reader_sessions', placement: 'present',
-  async apply(command) {
-    // CM is already the local authority; files are a non-authorizing projection.
-    return [{ step: 'remote_reader_sessions', subjectId: command.userId,
+  async apply(command, _plan, tx) {
+    // Fence unpublished private sessions as well as files the issuer can already scan.
+    const sessions = await tx.stores.sessions.listSessionsForUser(command.userId);
+    const drafts: IdentityExternalRevocationDraftV1[] = [{ step: 'remote_reader_sessions', subjectId: command.userId,
       targetKind: 'subject', targetRef: command.userId, custodyRef: null }];
+    for (const session of sessions) drafts.push({ step: 'remote_reader_sessions', subjectId: command.userId,
+      targetKind: 'login_session', targetRef: session.sessionId, custodyRef: null });
+    return drafts;
   },
-  async assertDeliveryInScope(command, _plan, draft) {
+  async assertDeliveryInScope(command, _plan, draft, tx) {
     if (draft.step !== 'remote_reader_sessions' || draft.subjectId !== command.userId
-      || draft.targetKind !== 'subject' || draft.targetRef !== command.userId || draft.custodyRef !== null) mismatch();
+      || draft.custodyRef !== null) mismatch();
+    if (draft.targetKind === 'subject' && draft.targetRef === command.userId) return;
+    if (draft.targetKind === 'login_session'
+      && (await tx.stores.sessions.findSession(draft.targetRef))?.userId === command.userId) return;
+    mismatch();
   },
   async assertAbsent(command, _plan, tx) {
     const sessions = await tx.stores.sessions.listSessionsForUser(command.userId);

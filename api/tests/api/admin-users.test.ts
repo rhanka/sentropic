@@ -5,6 +5,7 @@ import { db } from '../../src/db/client';
 import { chatGenerationTraces, chatMessages, chatSessions, workspaces } from '../../src/db/schema';
 import { findCmUserById, updateCmUser } from '../../src/services/identity/cm-users';
 import { listCmSessionsForUser } from '../../src/services/identity/cm-sessions';
+import { cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import { eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
@@ -134,12 +135,12 @@ describe('Admin users API (approval + disable/reactivate + delete)', () => {
     await updateCmUser(delUser.id, { accountStatus: 'disabled_by_admin', disabledAt: new Date(), disabledReason: 'test', updatedAt: new Date() });
 
     const deleteRes = await authenticatedRequest(app, 'DELETE', `/api/v1/admin/users/${delUser.id}`, admin.sessionToken!);
-    // Person deletion always queues the remote-projection delivery, so a committed
-    // delete reports delivery_pending (202), never synchronous 200: the account and
-    // business rows below are still removed at commit time.
-    expect(deleteRes.status).toBe(202);
-    expect(await deleteRes.json()).toMatchObject({ success: true, complete: false,
-      status: 'delivery_pending', receipt: { transaction: 'committed', userId: delUser.id } });
+    // HTTP success follows the committed cascade and acknowledged deliveries.
+    expect(deleteRes.status).toBe(200);
+    expect(await deleteRes.json()).toMatchObject({ success: true, complete: true,
+      status: 'complete', receipt: { transaction: 'committed', userId: delUser.id, complete: true } });
+    expect(await cmQuery(`SELECT delivery_id FROM ${cmTable('identity_revocation_outbox')}
+      WHERE subject_id = $1 AND state = 'pending'`, [delUser.id])).toEqual([]);
 
     // User + workspace deleted
     expect(await findCmUserById(delUser.id)).toBeNull();
