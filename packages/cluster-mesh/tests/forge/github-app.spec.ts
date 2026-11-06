@@ -115,4 +115,18 @@ describe('GitHub App enrollment', () => {
     await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
     expect((await f.service.status(owner, entry.installationRef)).state).toBe('revoked');
   });
+
+  it.each(['deleted', 'suspend', 'removed'])('should fence tokens on a verified %s webhook', async (action) => {
+    const f = fixture();
+    const entry = await f.ready();
+    const lease = await f.service.acquire({ ...owner, ...entry });
+    const rawBody = Buffer.from(JSON.stringify({ action, installation: { id: 500 }, repositories_removed: [{ id: 101 }] }));
+    const signature = `sha256=${createHmac('sha256', 'fake-webhook').update(rawBody).digest('hex')}`;
+    await expect(f.service.installationEvent(entry.installationRef, rawBody, 'sha256=bad', 'installation'))
+      .rejects.toThrow('access_denied');
+    await f.service.installationEvent(entry.installationRef, rawBody, signature,
+      action === 'removed' ? 'installation_repositories' : 'installation');
+    expect(f.revoked).toContain(lease.token);
+    expect((await f.service.status(owner, entry.installationRef)).state).toBe('revoked');
+  });
 });

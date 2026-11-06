@@ -82,5 +82,31 @@ export const createGitAppLifecycle = (input: { custody: GitAppCustodian; github:
     await revokeLeases(record, github, now());
     return publicStatus(record);
   });
-  return { acquire, verify, revoke, ...createGitAppRotation(input) };
+  const installationEvent = (ref: string, rawBody: Uint8Array, signature: string, event: string) => custody.withRecord(ref, async (record) => {
+    if (!webhookMatch(record, rawBody, signature, now()).valid) throw new GitAppError('access_denied');
+    if (event !== 'installation' && event !== 'installation_repositories') throw new GitAppError('invalid_request');
+    let payload;
+    try { payload = JSON.parse(Buffer.from(rawBody).toString('utf8')); }
+    catch { throw new GitAppError('invalid_request'); }
+    if (String(payload?.installation?.id) !== record.installationId) throw new GitAppError('access_denied');
+    let invalidate = event === 'installation' && ['deleted', 'suspend'].includes(payload.action);
+    if (event === 'installation_repositories' && payload.action === 'removed') {
+      invalidate = Array.isArray(payload.repositories_removed) &&
+        payload.repositories_removed.some((repository: { id: unknown }) => String(repository.id) === record.repositoryId);
+    }
+    if (event === 'installation' && payload.action === 'new_permissions_accepted') {
+      try {
+        const installed = await github.inspectInstallation(record.app!, record.installationId!);
+        assertGitAppPermissions(installed.permissions);
+        invalidate = installed.suspended;
+      } catch { invalidate = true; }
+    }
+    if (invalidate) {
+      record.state = 'revoked';
+      record.credentialVersion = randomUUID();
+      await revokeLeases(record, github, now());
+    }
+    return { accepted: true };
+  });
+  return { acquire, verify, revoke, installationEvent, ...createGitAppRotation(input) };
 };
