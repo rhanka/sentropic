@@ -28,10 +28,10 @@
   - `.track/**`
   - `package-lock.json`
 - **Conditional Paths (allowed with declared exception)**:
-  - `Makefile` under CI10A-EX1.
+  - `Makefile` under BR85a-EX1.
 
 ## Feedback Loop
-- [x] CI10A-EX1 — Owner authorized CI caching/sharding requires Make entry points. Impact: additive CI recipes and host scope-check on constrained disk; rollback: revert added include/recipes together with workflow.
+- [x] BR85a-EX1 — Owner authorized CI caching/sharding requires Make entry points. Impact: additive CI recipes and host scope-check on constrained disk; rollback: revert added include/recipes together with workflow.
 - [ ] Conductor imports this mergeable plan and delivery evidence into Track as designated single writer.
 - [ ] Coordinate through git with `origin/test/ci-ten-minute-proof` when published; preserve measurement and optimization changes on rebase.
 
