@@ -10,6 +10,17 @@ export const steps = [
   ['Deterministic journeys', /test-|smoke-|daily/], ['Delivery', /publish-|deploy-|release/],
   ['Consumers', /consumer|validate-|test-api/], ['Proof', /ci-gate|ci-capacity/],
 ];
+const actions = [
+  'Reserve ready-runner capacity and retain aggregate scheduling receipts',
+  'Reuse the exact qualified toolbox and prepare each closure once; preserve complete compiler/linter programs',
+  'Reuse keyed BuildKit layers and immutable candidate archives; include export and transfer in readiness',
+  'Fan out at artifact readiness and join every selected result before promotion',
+  'Build candidate archives once and qualify them on isolated parallel lanes',
+  'Keep deterministic provider fixtures and balanced complete shards; retain real-provider daily qualification',
+  'Promote tested digests and qualified tarball bytes; measure registry and preproduction readiness',
+  'Require consumer contracts and unchanged immutable tuples; retain full integration for unknown changes',
+  'Retain real endpoint distributions, maxima, missing receipts, costs and every failed attempt',
+];
 const groupPatterns = { build: /^build-/, static: /typecheck|lint/, validation: /^validate-|candidate|consumer/,
   runtime: /^test-|smoke-|e2e/, security: /^security-/, release: /^publish-|deploy-|release/ };
 export const heat = seconds => seconds === null ? 'missing' : seconds <= 15 ? 'short' : seconds <= 60 ? 'medium' : seconds <= 180 ? 'long' : 'slow';
@@ -31,7 +42,7 @@ export function sceneFor(run, group = 'critical-path', step = 9) {
     const members = byName.get(name);
     const seconds = members.every(job => job.seconds !== null) ? Math.max(...members.map(job => job.seconds)) : null;
     return { id: name, position: { x: 0, y: 0 }, data: { label: `${name}\n${seconds === null ? 'to measure' : `${seconds}s`}`, seconds, members,
-      optimization: steps.filter(([, pattern]) => pattern.test(name)).map(([title]) => title).join(', ') || 'Retain required gate; measure before optimizing',
+      optimization: steps.flatMap(([, pattern], index) => pattern.test(name) ? [actions[index]] : []).join('; ') || 'Retain required gate; measure before optimizing',
       modified: steps[step - 1][1].test(name), heat: heat(seconds) } };
   });
   const edges = Object.entries(run.dependencies ?? {}).flatMap(([target, parents]) => parents
