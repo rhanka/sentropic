@@ -46,7 +46,7 @@ export interface LivePorts {
     ensure(key: LiveKey, runtime: LiveRuntime): Promise<{ uid: string }>;
     remove(key: LiveKey, runtime: LiveRuntime): Promise<void>;
   };
-  cache: { acquire(source: SourceSnapshot): Promise<CacheReceipt> };
+  cache: { acquire(source: SourceSnapshot, runtime: LiveRuntime): Promise<CacheReceipt> };
   /** Trusted supervisor transport: monotonic routeEpoch fences every operation, including delayed requests.
    * Quiesce cancels all older commands and waits for full process-tree termination.
    * Prepare installs dependencies read-only, clears branch npm config and phase-fences relay access.

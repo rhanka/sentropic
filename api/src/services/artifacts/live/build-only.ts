@@ -2,6 +2,7 @@ import type { LivePorts } from './ports';
 import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey } from './records';
 import { podName } from './pods';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
+import { withinPhase } from './deadline';
 
 /** Explicit historical publication uses one clean pod; dormant drafts never enter this worker. */
 export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
@@ -40,9 +41,9 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
         expectedReleaseId: job.expectedReleaseId, progressSeq: state.progress.progressSeq,
         baselineSeq: state.progress.publicationBaselineSeq, initial: false };
     });
-    const cache = await ports.cache.acquire(source);
+    const cache = await ports.cache.acquire(source, runtime);
     await ports.worker.clean(runtime); await ports.worker.prepare(runtime, source, cache);
-    const candidate = await ports.worker.build(runtime, runtime.attempt!);
+    const candidate = await withinPhase(ports.worker.build(runtime, runtime.attempt!));
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.phase !== 'BUILDING' || state.runtime.pendingWake) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt!.candidateDigest = candidate.candidateDigest;

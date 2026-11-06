@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { integrityInventory, safeDependencyPath, sha256, verifySri, type IntegrityEvidence, type IntegrityPin } from './integrity';
-import { LiveError } from './records';
+import { LiveError, type LiveRuntime } from './records';
 import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY } from './recipes';
 
 export interface CacheIdentity {
@@ -21,7 +21,7 @@ export interface CachePorts {
   fetch(pin: IntegrityPin, relay: typeof NPM_RELAY): Promise<Uint8Array>;
   /** Fresh empty install directory, fixed npm config, verified tarballs, no branch .npmrc or hooks. */
   cleanInstall(input: { lockfile: Uint8Array; identity: CacheIdentity; recipe: typeof INSTALL_RECIPE;
-    tarballs: readonly { pin: IntegrityPin; bytes: Uint8Array }[] }): Promise<{ files: DependencyFile[]; runId: string }>;
+    runtime?: LiveRuntime; tarballs: readonly { pin: IntegrityPin; bytes: Uint8Array }[] }): Promise<{ files: DependencyFile[]; runId: string }>;
   storage: {
     read(key: string): Promise<CacheObject | undefined>;
     /** Atomic immutable create: partial entries are invisible; returns the winning complete object. */
@@ -69,7 +69,7 @@ export function createDependencyCache(ports: CachePorts) {
     return object.receipt;
   }
   return {
-    async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity }) {
+    async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity }, runtime?: LiveRuntime) {
       const identity = source.cacheIdentity;
       if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
       const evidence = await ports.evidence(identity.lockSha256);
@@ -87,7 +87,7 @@ export function createDependencyCache(ports: CachePorts) {
         verifySri(bytes, pin.integrity);
         tarballs.push({ pin, bytes });
       }
-      const installed = await ports.cleanInstall({ ...source, identity, recipe: INSTALL_RECIPE, tarballs });
+      const installed = await ports.cleanInstall({ ...source, identity, runtime, recipe: INSTALL_RECIPE, tarballs });
       if (!installed.runId) invalid();
       const receipt = { key, identity, treeSha256: treeDigest(installed.files), inventory,
         runId: installed.runId, installOptions: INSTALL_RECIPE };
