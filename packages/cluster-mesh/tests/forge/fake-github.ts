@@ -2,6 +2,8 @@ import { generateKeyPairSync } from 'node:crypto';
 import { createEncryptedGitAppCustodian } from '../../src/forge/custody.js';
 import { createGitHubAppEnrollment } from '../../src/forge/enrollment.js';
 import type { GitCredentialInvalidation } from '../../src/forge/contracts.js';
+import { GitAppAccessLostError } from '../../src/forge/contracts.js';
+import type { GitHubAppApi } from '../../src/forge/records.js';
 
 export const key = () => generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey
   .export({ type: 'pkcs8', format: 'pem' }).toString();
@@ -35,10 +37,10 @@ export const fixture = (options: { onCredentialsChanged?: (event: GitCredentialI
   let tokenLifetime = 3600000;
   let invalidationFails = false;
   let revocationFails = false;
-  const github = {
+  const github: GitHubAppApi = {
     exchange: async () => ({ appId: '42', slug: 'test-app', privateKey: appKey, webhookSecret: 'fake-webhook' }),
     inspectInstallation: async () => {
-      if (!installed) throw new Error('fake provider detail');
+      if (!installed) throw new GitAppAccessLostError();
       return { permissions: granted, suspended: false };
     },
     mint: async (_app: unknown, installationId: string, repositoryId: string, requested: Record<string, string>) => {
@@ -70,7 +72,7 @@ export const fixture = (options: { onCredentialsChanged?: (event: GitCredentialI
     await service.install(target, start.installationRef, { state, installationId: '500' });
     return start;
   };
-  return { service, ready, envelopes, minted, revoked, appKey, invalidations,
+  return { service, ready, envelopes, minted, revoked, appKey, invalidations, github,
     advance: (ms: number) => { time += ms; },
     grant: (value: Record<string, string>) => { granted = value; },
     remove: () => { installed = false; },
