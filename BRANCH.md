@@ -1,6 +1,7 @@
 # Feature: GB4 preprod artifact-builder isolation probe
 
 ## GB4 wagon execution (2026-11-05 owner GO)
+- [x] GB4-RESUME-2: runner now creates only Pods/Service through the observed controller identity, consumes typed pods/log records, checks negative WebSocket clients through Service DNS and Pod IP, and records artifact-content as PENDING-EGRESS. Cleanup tracks only attempted probe creates; no NetworkPolicy is applied.
 - [x] GB4-RESUME-1 (2026-11-06): applied GO confirmed; controller RBAC observed; emit startup self-test and loopback WebSocket results through pods/log, use only Pod/Service creates, and prepare a separate restricted negative-client Pod. Access now uses K8S_TENANT_ADMIN_KUBECONFIG_B64 for read-only preprod discovery and sentropic-app impersonation for builder operations; the former credential selected a different tenant and was rejected before network access.
 - [x] Baseline: origin/main c107f6abd; branch feat/gb4-isolation-probe; worktree tmp/worktrees/gb4-probe.
 - [x] Owner scope: preprod probe only; next dated train wagon, no PR, version bump or lock regeneration.
