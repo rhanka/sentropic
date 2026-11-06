@@ -1650,6 +1650,9 @@ jobs:
             unit_shard: 2
           # Retain the app/content qualification in a separate isolated lane.
           - suite: app-cluster-mesh
+            app_shard: 1
+          - suite: app-cluster-mesh
+            app_shard: 2
           - suite: queue
           - suite: security
           - suite: limit
@@ -1713,7 +1716,7 @@ jobs:
         run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
       - name: Qualify app cluster-mesh host, reader, catalog and content
         if: matrix.suite == 'app-cluster-mesh'
-        run: make test-app-cluster-mesh ENV=test-ci-api
+        run: make test-app-cluster-mesh APP_CLUSTER_SHARD=${{ matrix.app_shard }}/2 ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
         if: matrix.suite != 'app-cluster-mesh'
         run: |
