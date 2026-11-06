@@ -1021,6 +1021,8 @@ test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
 
 .PHONY: test-ci-dag
+include scripts/ci/ci-static.mk
+
 test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-dag.test.mjs'
 
