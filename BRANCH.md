@@ -21,6 +21,8 @@
   - `api/src/services/me.ts`
   - `api/src/middleware/auth.ts`
   - `api/src/routes/namespaces/auth/**`
+  - `api/src/routes/namespaces/auth.ts`
+  - `api/src/routes/auth/oauth.ts`
   - `api/src/routes/namespaces/users/**`
   - `api/src/routes/namespaces/workspaces/cm-member-ports.ts`
   - `api/tests/api/auth/**`
@@ -64,9 +66,9 @@
   - [ ] Authorize deletion-only re-entry after self-deactivation; preserve ordinary auth refusals and atomic cascade rollback.
   - [ ] Re-enable `api/tests/api/me.test.ts` (2) and `api/tests/api/auth/remote-revocation.test.ts` (4 lifecycle variants).
   - [ ] Qualify `api/tests/api/auth/cm-account-deletion.test.ts` and active self-deletion rejection.
-- [ ] **Lot 2 — RC1 revocation fence**
-  - [ ] Restore issuer private authority mint/revocation; restored CM rows cannot revive authority.
-  - [ ] Re-enable recovery, late-create and restored-row tests in `api/tests/api/auth/remote-session.test.ts`; qualify private-session and integrity units.
+- [x] **Lot 2 — RC1 revocation fence**
+  - [x] Restored issuer private authority mint/rotation after acknowledged CM commit, local revocation closure and private signing fence.
+  - [x] All 35 remote-session tests pass; private-session and integrity units pass. Refused-revocation fixtures must explicitly start without private authority.
 - [ ] **Lot 3 — A4-ADOPTION-INTERLEAVE**
   - [ ] Intercept concurrent writer outside mutation transaction; revalidate current binding rights.
   - [ ] Re-enable stale-end test; qualify `api/tests/api/session-adoption.test.ts`.
