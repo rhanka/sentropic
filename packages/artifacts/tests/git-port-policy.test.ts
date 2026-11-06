@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { gitPath, matchesGitGlob } from '../src/server/git-port-policy.js';
 import type { GitPortRepository, GitPortTarget } from '../src/server/git-port.js';
 
-const target: GitPortTarget = { storageScopeId: 'scope', repoId: 'repo', branch: 'artifact/p/human/app', subPath: '', outputDir: 'dist' };
+const target: GitPortTarget = { storageScopeId: 'scope', repoId: 'repo', principalId: 'human', branch: 'artifact/p/human/app', subPath: '', outputDir: 'dist' };
 const repo: GitPortRepository = { ...target, locator: 'owner/repo', installationRef: 'enrolled', branchPrefix: 'artifact/',
   canWrite: true, allowedSubPaths: [''], writablePaths: ['ui/**', 'packages/*/src/**'],
   refusedWritePaths: ['.github/**', 'deploy/**', 'api/**', '.track/**', 'package*.json'] };
