@@ -84,6 +84,8 @@
 
 ## Feedback Loop
 
+- [x] TRAIN0218-LIVE-R4: validate the resulting base-plus-overlay file hierarchy before persisting a revision. Four regressions fail before and pass after: same-batch and cross-write collisions in both orders; refusal retains the prior revision, encrypted object and complete file view. Scoped artifacts 108/108 including Postgres 11/11, build and lint pass. Rollback restores this validator/test change; no path-policy allowance is broadened.
+
 - [x] TRAIN0218-LIVE-R3: retain a durable commit intent when the same command's concurrent forge CAS loses, and return the existing indeterminate outcome for reconciliation. Deferred two-request regression fails before, passes after with winner finalization, clean draft and replay; source freeze/lost-response coverage retained. Scoped artifacts 108/108 including Postgres 11/11, build and lint pass (three unchanged warnings). Rollback restores this catch classification and regression.
 
 - [x] TRAIN0218-LIVE-R2: reject registry authority-like paths and assign the admitted pathname on a fixed relay URL, preventing relative-URL authority replacement. Matching-SRI transport-spy regression fails before and passes after with zero outbound calls; ordinary relay fetch/integrity checks retained. Live suite 61/61, strict types and scoped lint pass. Rollback restores these adapter/test lines.

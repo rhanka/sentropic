@@ -107,6 +107,18 @@ export async function applyLiveMutation(git: GitPort, target: GitPortTarget, bas
   for (const file of input.files ?? []) await put(file.path, file.text);
   for (const path of input.deletes ?? []) await put(path, null);
   const result = [...overlay.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  const paths = new Set(base.entries.filter(entry => entry.type !== 'tree').map(entry => entry.path));
+  for (const entry of result) {
+    const full = (target.subPath ? target.subPath + '/' : '') + entry.path;
+    if (entry.text === null) paths.delete(full); else paths.add(full);
+  }
+  for (const path of paths) {
+    const parents = path.split('/'); parents.pop();
+    while (parents.length) {
+      if (paths.has(parents.join('/'))) throw new ArtifactOperationError('git_path_refused');
+      parents.pop();
+    }
+  }
   overlayBytes(result);
   return result;
 }
