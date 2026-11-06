@@ -90,8 +90,8 @@
 - [ ] **Lot 3 — Scoped integrated checks and review**
   - [x] Scoped `make test-artifacts`: git-port 75, git-bindings 10, git-binding registry/projection 4, build-contract 36, provider-failures 100, tools-list snapshot 1; 226/226 pass on the union.
   - [x] `make test-artifacts-integration` per file: git-bindings 12/12 and release-index 1/1; separate runs preserve the shared-schema isolation used by the complete target.
-  - [ ] `make test-cluster-mesh SCOPE=tests/forge`; artifacts and cluster-mesh typecheck/lint.
-  - [ ] API `tests/api/app-mcp-registry.test.ts`, `tests/api/app-mcp-installed.test.ts` and packaging tuple/pin verification; full suites run in train CI.
+  - [x] `make test-cluster-mesh SCOPE=tests/forge` 31/31; artifacts and cluster-mesh build/typecheck/lint pass (three unchanged unused-disable warnings in artifacts tests).
+  - [x] API registry, physical installation, grant and consent 35/35; packaging tuple/preparation 24 pass, three installed-fixture-only cases belong to full CI. Total scoped checks: 329 passing tests.
   - [ ] One consolidated code review on the final train diff; resolve evidenced root causes and retain the receipt.
   - [ ] `make scope-check`, `git diff --check`, no conflict markers, ordinary package-bump verification.
   - [ ] `make down-volumes API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218`.
