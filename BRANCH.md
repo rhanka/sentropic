@@ -35,6 +35,11 @@
   - `e2e/tests/03-dashboard.spec.ts`
   - `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
   - `e2e/Dockerfile`
+  - `e2e/tests/08-chat-workspace-switch.spec.ts`
+  - `e2e/tests/02-organizations.spec.ts`
+  - `e2e/tests/01-organizations-detail.spec.ts`
+  - `ui/src/routes/organizations/new/+page.svelte`
+  - `ui/src/routes/organizations/[id]/+page.svelte`
   - `packages/cluster-mesh/src/identity/**`
   - `packages/cluster-mesh/src/storage/identity/**`
   - `packages/cluster-mesh/tests/identity/**`
@@ -54,6 +59,8 @@
   - [x] BR929-EX2: extend scope to the dashboard E2E spec after CI 42174483201 observed the static viewer lock disappear between its visibility/class assertions when initial presence replaced it. Serial local replay also inherited a previous case's completed DOCX job. Impact: await initial presence readiness and give each case its own workspace/folder; preserve all assertions, timeouts and retries. Rollback: remove the handshake or per-case fixture if those contracts change. Evidence: `.tmp/rv/a4-followups-ci2-shard4` and `.tmp/a4-followups-dashboard-after.log`.
   - [x] BR929-EX3: extend scope to the chat placement E2E spec after CI 42177231942 measured the right panel after a left drop. Controlled workspace hydration reproduced the exact 964.8125 coordinate: the drag wrote left under default, then hydration replaced that controller. Impact: await workspace identity before the gesture, keeping assertions, timeouts and retries unchanged. Rollback: remove the readiness wait if placement scoping changes. Evidence: `.tmp/rv/a4-followups-ci3-shard4` and `.tmp/a4-followups-chat-workspace-gate.log`.
   - [x] BR929-EX4: extend scope to the E2E Dockerfile after CI 42180070528 identified HIGH CVE-2026-85091 in zlib 1.3.2-r0, with Alpine fixed version 1.3.2-r1. Impact: install the exact patched package in the existing browser layer; scanner, policy, assertions and retries unchanged. Rollback: replace the pin when the maintained base includes the fix. Evidence: `.tmp/rv/a4-followups-ci4-security/container-e2e.json`.
+  - [x] BR929-EX5: extend scope to the three browser specs failing in CI 42180070528: session navigation remains on the list, organization deletion leaves a draft, and presence is visible in only one peer despite two server records. Impact: controlled diagnosis and narrowly scoped fixture/readiness corrections with original assertions, timeouts and retries preserved. Rollback: remove each handshake when its underlying initialization contract changes. Evidence: `.tmp/rv/a4-followups-ci4-shard2`, `a4-followups-ci4-shard5`, `a4-followups-ci4-shard6`.
+  - [x] BR929-EX6: extend scope to organization creation/detail routes for the actual races exposed by CI 42180070528. A held draft response reproduces the original deletion count failure; an in-flight draft must be awaited and reused. Detail presence HTTP snapshots need a fence against newer SSE state. Impact: bounded concurrency fixes with controlled browser regressions, no assertion/policy/budget changes. Rollback: replace these local fences if their upstream concurrency contracts change. Evidence: `.tmp/a4-followups-organizations-draft-red.log` and independent CI4 diagnosis reviews.
 
 ## Feedback Loop
 - [ ] Track source: designated conductor imports this BRANCH.md; concurrent lane does not write `.track`.
@@ -102,5 +109,10 @@
   - [x] CI browser-shard-4: await rendered initial presence before unchanged viewer-lock checks; independent workspace/folder per case removes inherited DOCX state. Full spec passes 3/3 with one worker and zero retries.
   - [x] CI browser-shard-4 chat drag: controlled late workspace hydration reproduced exact x=964.8125; await workspace identity before dragging. Probe removed; chat spec 12/12 and all three touched browser specs 16/16 pass with four workers, zero skips/retries, and original assertions unchanged.
   - [x] CI container security: pin zlib 1.3.2-r1 in the browser runner; both embedded browser/video probes pass, and the rebuilt image passes the unchanged Trivy gate with zero findings.
+  - [x] CI4 organization deletion: a held draft response reproduces the remaining-row failure; share the pending draft identity and remove the duplicate direct-create fallback. Original deletion assertion now runs after a positive loaded-list assertion in the owned fixture workspace.
+  - [x] CI4 organization presence: an old HTTP response reproduces the one-peer-only display after a newer SSE update; revision fencing preserves newer state. Controlled regression and all three CI4 specs pass together 20/20, four workers, zero skips/retries.
+  - [x] CI4 session-switch diagnosis: original spec passes alone and with the other CI4 specs; event probe removed. Exact CI cause remains unproven, so no speculative source or assertion change is retained.
+  - [x] UI typecheck passes with zero errors/six warnings; lint passes. Final 36-case qualification exposed a session-info 40001/HTTP 500 and concurrent magic-link provisioning 40001/HTTP 503; both original UI race regressions pass.
+  - [ ] Remove activity writes from session-validation completions and fence account-provisioning snapshots against unrelated writers; preserve the existing three attempts and deadlines, then repeat scoped API/browser qualification.
   - [ ] Open one ready PR with BRANCH.md body and monitor CI until green; do not merge.
   - [x] `make down-volumes`; report `.tmp/rv/a4-followups.md` with validation and review evidence, CI handoff pending.
