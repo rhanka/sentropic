@@ -55,10 +55,11 @@ export function gitTrees(session: GitPortSession) {
       if (!base || base.type !== 'tree') throw new ArtifactOperationError('not_found');
       treeSha = base.sha;
     }
-    const files: GitTreeEntry[] = [];
+    const files: GitTreeEntry[] = []; let traversed = 0;
     async function walk(sha: string, prefix: string, depth: number): Promise<void> {
       if (depth > 128) throw new ArtifactOperationError('limit_exceeded');
       for (const entry of await tree(sha)) {
+        if (++traversed > 1_000_000) throw new ArtifactOperationError('limit_exceeded');
         const path = `${prefix}${entry.path}`;
         try { gitPath(session.repo, target, path, false); }
         catch (error) { if (error instanceof ArtifactOperationError && error.kind === 'git_path_refused') continue; throw error; }
