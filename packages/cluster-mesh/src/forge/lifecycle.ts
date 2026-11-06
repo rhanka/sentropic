@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { assertGitAppPermissions, GIT_APP_PERMISSIONS, GitAppError } from './contracts.js';
 import type { GitAppOwnerRepository, GitInstallationLeasePort, GitWebhookVerificationPort } from './contracts.js';
 import type { EnrollmentRecord, GitAppLifecycleInput, GitHubAppApi, RevocationReason } from './records.js';
@@ -32,7 +32,6 @@ export const revokeLeases = async (record: EnrollmentRecord, github: GitHubAppAp
   if (pending.length) throw new GitAppError('capability_unavailable');
 };
 export const invalidateCredentials = async (record: EnrollmentRecord, input: GitAppLifecycleInput) => {
-  if (record.state !== 'revoked') record.credentialVersion = randomUUID();
   record.state = 'revoked';
   record.invalidationPending = true;
   try {

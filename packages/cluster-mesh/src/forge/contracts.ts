@@ -33,6 +33,7 @@ export interface GitCredentialInvalidation {
   storageScopeId: string;
   repoId: string;
   installationRef: string;
+  /** Superseded lease epoch to fence, retained unchanged while revocation is retried. */
   credentialVersion: string;
 }
 

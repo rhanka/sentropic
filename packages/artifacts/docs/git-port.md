@@ -42,6 +42,9 @@ the host registry locator. Each subsequent forge call checks expiry and local
 revocation fencing again. Wire the SG0-app invalidation callback to `git.invalidate`
 on every adapter replica, and fence dependent jobs through the host as specified
 by SG0-app. Pass its full scope/repo/installationRef/credentialVersion tuple.
+The event names the superseded lease epoch, which stays fenced across duplicate
+or reordered notifications. A successful App-key rotation mints replacement
+leases under a new epoch; that replacement epoch is not the invalidation target.
 
 ## Reads and writes
 
