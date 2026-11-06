@@ -1,7 +1,7 @@
 # Feature: GB1 build contract validation
 
 ## Objective
-- [ ] Validate the frozen G0 v3 descriptor from an exact-commit snapshot without executing code.
+- [x] Validate the frozen G0 v3 descriptor from an exact-commit snapshot without executing code.
 
 ## Scope / Guardrails
 - [x] Binding inputs: G0-FROZEN-v3.md §4, converged-r2 GB1, owner-decisions-2026-11-05-live.md.
@@ -55,6 +55,7 @@
 - [ ] **Lot 3 — Validation and handoff**
   - [x] Added Immo fixture and typed rejection vectors in `tests/build-contract.test.ts`.
   - [x] Tightened script names, pinned closure and receipt types; corrected compile-time failure mapping.
-  - [ ] `make test-artifacts SCOPE=tests/build-contract.test.ts ENV=test-gb1` (includes package compilation).
-  - [ ] `make lint-artifacts ENV=test-gb1`; frozen tools/list regression.
+  - [x] Scoped acceptance: 36 tests passed with package compilation; lint passed with zero errors.
+  - [x] `make test-artifacts SCOPE=tests/build-contract.test.ts ENV=test-gb1` (includes package compilation).
+  - [x] `make lint-artifacts ENV=test-gb1`; frozen tools/list regression.
   - [ ] Cleanup `make down-volumes ENV=test-gb1`; push; one READY PR; CI green; report `.tmp/rv/gb1.md`.
