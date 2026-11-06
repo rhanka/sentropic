@@ -83,11 +83,12 @@
   - [x] Resolve source conflicts as the union of all typed categories/exports and retained upstream behavior; verify every wagon tip is an ancestor.
 - [ ] **Lot 2 — Single release regeneration**
   - [x] Registry verified through make after rebase/conflict resolution; bump artifacts to 0.2.18 and cluster-mesh to dev.14 with CHANGELOG entries.
-  - [ ] Regenerate root/API lock metadata and selected-fixture versions/integrity through make.
-  - [ ] Recompute APP-P1 digest through make; assert the frozen four-tool profile selection and historical digest coverage.
+  - [x] Regenerate root/API lock metadata through make, retaining dependency resolutions; align existing file-package optional peer metadata.
+  - [ ] Regenerate selected-fixture versions/integrity through make.
+  - [x] Recompute APP-P1 digest through make: `d55df3ada3722b79274e52c650a12d6baccd2640c61e4d712fe1380bd03c4c86`; frozen profile retained, physical installation pin and digest history updated.
   - [ ] Commit final lock before L5 packing; retain upstream manifest/sidecar, regenerate and verify P1 once through make.
 - [ ] **Lot 3 — Scoped integrated checks and review**
-  - [ ] `make test-artifacts SCOPE=tests/git-`, `SCOPE=tests/build-contract.test.ts`, `SCOPE=tests/provider-failures.test.ts`, `SCOPE=tests/tools-list-snapshot.test.ts`.
+  - [x] Scoped `make test-artifacts`: git-port 75, git-bindings 10, git-binding registry/projection 4, build-contract 36, provider-failures 100, tools-list snapshot 1; 226/226 pass on the union.
   - [ ] `make test-artifacts-integration SCOPE="tests/git-bindings.integration.test.ts tests/git-release-index.integration.test.ts"`.
   - [ ] `make test-cluster-mesh SCOPE=tests/forge`; artifacts and cluster-mesh typecheck/lint.
   - [ ] API `tests/api/app-mcp-registry.test.ts`, `tests/api/app-mcp-installed.test.ts` and packaging tuple/pin verification; full suites run in train CI.
