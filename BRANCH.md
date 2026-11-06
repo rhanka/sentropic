@@ -47,6 +47,7 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review R1: internal verification never probes stopped UI; public HTTP follows the restricted, pinned UI proxy with other controllers fenced; IdP is the only separately authorized identity writer.
 - [x] Review R4: separate genuine isolated D11 qualification from final rollback dump bytes; require reviewed candidate/assets/verifier/census applicability and refuse every drift or absent evidence. No qualifying current-candidate receipt found locally; execution remains blocked pending tenant qualification.
 - [x] Review R2: wire API and IdP policy/HMAC/budgets at zero replicas; preserve IdP cwd, entrypoint, signing Secret and session volume; rendered-consumer and refusal regressions added.
 - [x] Review R3: runtime composes fingerprint-validated ACTIVE/PREVIOUS rings through rotation; preparation retains the exact initial-ring gate. No key rotated or custody writer changed.
