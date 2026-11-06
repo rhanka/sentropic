@@ -116,6 +116,16 @@ export function gitBindingConformance(name: string, fresh: () => Promise<GitBind
           .rejects.toMatchObject({ kind: 'invalid_request' });
       }
       expect(await store.get('scope-a', gitBinding().artifactId)).toEqual(paused);
+      await expect(store.write({ ...gitWrite({ ...paused, stateDetail: undefined, version: 4, generation: 4 }, 'clear-pause'),
+        expectedVersion: 3, event: { action: 'pause' } })).rejects.toMatchObject({ kind: 'invalid_request' });
+    });
+
+    it('should update the existing target with CAS without creating another binding epoch', async () => {
+      const store = await fresh();
+      await store.write(gitWrite());
+      const binding = { ...gitBinding(), autoPublish: true, version: 2 };
+      expect((await store.write({ ...gitWrite(binding, 'configure'), expectedVersion: 1 })).binding).toEqual(binding);
+      expect(await store.get('scope-a', binding.artifactId)).toEqual(binding);
     });
   });
 }
