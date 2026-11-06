@@ -49,7 +49,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: common/master/workflow/testing, baseline steps and unit durations read; harness branch check passed.
 - [x] Retain measured durations of all 186 unit files from baseline 42300540682/1; no projected duration is a receipt.
-- [ ] Lot 1: partition discovered unit files exactly once by measured duration; automatically include unmeasured additions; retain complete verdict.
+- [x] Lot 1: measured sequencer assigns every discovered unit file exactly once and includes additions; make test-ci-unit-shards passed (3 checks, zero skips).
 - [ ] Lot 2: detach units from production image; cache verified toolbox by lock and complete source identity; remove unused consumer candidate dependency.
 - [ ] Lot 3: scoped Make sharding, graph, consumer, expected-results and wiring checks on existing Node container; full suites in PR CI.
 - [ ] Lot 4: scope-check before atomic make commits; push wagon; capture draft timing run; report and test-volume cleanup.
