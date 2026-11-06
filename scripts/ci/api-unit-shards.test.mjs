@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
-import { balancedShards, baseline, unitShard } from './unit-shards.mjs';
+import { balancedShards, baseline, unitShard } from '../../api/ci/unit-shards.mjs';
 
 test('should retain every collected unit file exactly once, including unmeasured additions', () => {
   const files = Object.keys(baseline.durationsMs).concat('tests/unit/new-regression.test.ts');
