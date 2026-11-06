@@ -55,6 +55,7 @@
 - [ ] Lot 2: one-pod Kubernetes adapter and restricted manifest; safe revive/stop/recovery.
   - [x] Pin the VAP-compatible pod and adopt response-loss creations under UID/session fences.
   - [x] Fence revive readiness, retain draft conflicts and checkpoint before decommissioning.
+  - [x] Limit the in-cluster client to namespace pod/service CRUD with UID deletion preconditions.
 - [ ] Lot 3: locked integrity-verified cache; fixed R1 live/build recipes.
   - [x] Require complete pre-approved integrity inventory and literal lockfile script-package qualification.
   - [x] Admit only clean locked installs; authenticate cache receipts and rehash safe read-only trees on use.
