@@ -829,37 +829,35 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - name: Typecheck UI
+      - name: Typecheck and lint UI with one preparation
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-ui
-      - name: Lint UI
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make lint-ui
+        run: make typecheck-ui lint-ui ENV=test-ci-static-ui
 
   typecheck-lint-api:
     runs-on: ubuntu-latest
-    needs: [changes]
+    needs: [changes, build-api-tool-image]
+    if: always() && !cancelled() && inputs.decision_fixtures_only != true
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Setup Docker
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - name: Typecheck API
+      - name: Download the qualified toolbox
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-api
-      - name: Typecheck IdP
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load the qualified toolbox
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-idp
-      - name: Typecheck IdP screens front
+        run: make load-api-tool ENV=test-ci-static-api
+      - name: Complete API and IdP static checks without rebuilding the workspace
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-idp-web
-      - name: Build IdP screens front
+        run: make ci-static-api ENV=test-ci-static-api
+      - name: Typecheck and build IdP screens with one installation
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-idp-web
-      - name: Lint API
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make lint-api
+        run: make typecheck-idp-web build-idp-web ENV=test-ci-static-api
 
   validate-idp-sync:
     runs-on: ubuntu-latest
@@ -1478,14 +1476,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: dossier
+          - lane: package
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Check dossier artifact size budget
+        if: matrix.lane == 'dossier'
         run: make check-artifact-budget ENV=test-ci-artifact-budget
       - name: Upload dossier size and browser receipts
-        if: always()
+        if: always() && matrix.lane == 'dossier'
         uses: actions/upload-artifact@v7
         with:
           name: artifact-size-reports
@@ -1498,30 +1503,38 @@ jobs:
             docs/governance/kit/.cache/geometry-review.json
             docs/governance/kit/.cache/routing-budget.json
       - name: Remove artifact qualification stack
-        if: always()
+        if: always() && matrix.lane == 'dossier'
         run: make down ENV=test-ci-artifact-budget
       - name: Typecheck Artifacts
+        if: matrix.lane == 'package'
         run: make typecheck-artifacts
       - name: Build Artifacts
+        if: matrix.lane == 'package'
         run: make build-artifacts
       - name: Test Artifacts
+        if: matrix.lane == 'package'
         run: make test-artifacts
       - name: Test Artifacts integration
+        if: matrix.lane == 'package'
         run: make test-artifacts-integration ENV=test-ci-artifacts
       - name: Test installed activation conformance vectors
+        if: matrix.lane == 'package'
         run: make -f packages/cluster-mesh/packaging.mk test-lazy-package-activation ENV=test-ci-artifacts-activation
       - name: Remove activation qualification stack
-        if: always()
+        if: always() && matrix.lane == 'package'
         run: make down ENV=test-ci-artifacts-activation
       - name: Lint Artifacts
+        if: matrix.lane == 'package'
         run: make lint-artifacts
       - name: Pack Artifacts
+        if: matrix.lane == 'package'
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-artifacts ENV=test-ci-artifacts
       - name: Probe packed Artifacts consumer
+        if: matrix.lane == 'package'
         run: make probe-artifacts-packed-consumer ENV=test-ci-artifacts
 
   validate-harness:
@@ -1649,6 +1662,11 @@ jobs:
         include:
           - suite: smoke
           - suite: unit
+            unit_shard: 1
+          - suite: unit
+            unit_shard: 2
+          # Retain the app/content qualification in a separate isolated lane.
+          - suite: app-cluster-mesh
           - suite: queue
           - suite: security
           - suite: limit
@@ -1672,6 +1690,14 @@ jobs:
             endpoints_shard: 3
           - suite: endpoints
             endpoints_shard: 4
+          - suite: endpoints
+            endpoints_shard: 5
+          - suite: endpoints
+            endpoints_shard: 6
+          - suite: endpoints
+            endpoints_shard: 7
+          - suite: endpoints
+            endpoints_shard: 8
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1700,15 +1726,18 @@ jobs:
             make up-api-test-ci ENV=test-ci-api
           fi
       - name: Test API gateway package version evidence
-        if: matrix.suite == 'unit'
+        if: matrix.suite == 'unit' && matrix.unit_shard == 1
         run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
       - name: Qualify app cluster-mesh host, reader, catalog and content
-        if: matrix.suite == 'unit'
+        if: matrix.suite == 'app-cluster-mesh'
         run: make test-app-cluster-mesh ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
+        if: matrix.suite != 'app-cluster-mesh'
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then
-            make test-api-endpoints API_TEST_WORKERS=1 API_TEST_ARGS="--shard=${{ matrix.endpoints_shard }}/4" ENV=test-ci-api
+            make test-api-endpoints API_TEST_WORKERS=1 API_TEST_ARGS="--shard=${{ matrix.endpoints_shard }}/8" ENV=test-ci-api
+          elif [ "${{ matrix.suite }}" = "unit" ]; then
+            make test-api-unit API_TEST_ARGS="--shard=${{ matrix.unit_shard }}/2" ENV=test-ci-api
           else
             make test-api-${{ matrix.suite }} ENV=test-ci-api
           fi
@@ -3585,7 +3614,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report ENV=test-ci-capacity
       - name: Qualify provider boundary, browser membership and live receipts
         run: make test-ci-provider-fixtures test-ci-browser-shards test-ci-live-provider-receipt test-ci-dev-image-pin check-e2e-inventory ENV=test-ci-capacity
       - name: Qualify artifact dispatch and fail-closed scan joins
