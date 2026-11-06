@@ -15,6 +15,7 @@
   - `BRANCH.md`
   - `api/vitest.config.ts`
   - `api/ci/unit-shards*`
+  - `scripts/ci/api-unit-shards.test.mjs`
   - `scripts/ci/api-tool-cache*`
   - `scripts/ci/ci-unit-graph.test.mjs`
   - `scripts/ci/consumer-contracts.mjs`
@@ -51,9 +52,11 @@
 - [x] Lot 0: common/master/workflow/testing, baseline steps and unit durations read; harness branch check passed.
 - [x] Retain measured durations of all 186 unit files from baseline 42300540682/1; no projected duration is a receipt.
 - [x] Lot 1: measured sequencer assigns every discovered unit file exactly once and includes additions; make test-ci-unit-shards passed (3 checks, zero skips).
-- [ ] Lot 2: detach units from production image; cache verified toolbox by lock and complete source identity; remove unused consumer candidate dependency.
+- [x] Lot 2: source suites detached from production image; verified toolbox cache keyed by lock and full source identity; unused consumer candidate edge removed.
 - [x] Source/production split: consumer, graph, expected-results, DAG and BR-84 proof checks passed; both production suites remain mandatory for publication and ci-gate.
 - [x] Consumer checks no longer wait for unused candidate archives; graph regressions retain the necessary cluster-mesh candidate dependency.
 - [x] Cache validators reject source, lock, architecture and archive corruption; scoped cache, graph and 40 publishable-wiring checks passed.
+- [x] Real Vitest 4.1.5 collection and configured sequencer: all 186 unit files assigned exactly once across four shards (34/51/51/50 files).
+- [x] The former 254s app qualification runs as two file shards with the complete content-process checks retained on each isolated runner.
 - [ ] Lot 3: scoped Make sharding, graph, consumer, expected-results and wiring checks on existing Node container; full suites in PR CI.
 - [ ] Lot 4: scope-check before atomic make commits; push wagon; capture draft timing run; report and test-volume cleanup.
