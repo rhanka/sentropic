@@ -31,3 +31,12 @@ CREATE TABLE IF NOT EXISTS artifacts.live_commit_quota (
   PRIMARY KEY (storage_scope_id, actor_id, invocation_id)
 );
 CREATE INDEX IF NOT EXISTS live_commit_quota_window ON artifacts.live_commit_quota(storage_scope_id, created_at);
+
+CREATE OR REPLACE FUNCTION artifacts.reject_live_object_update() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'live draft objects are immutable';
+END;
+$$;
+DROP TRIGGER IF EXISTS live_object_immutable ON artifacts.live_draft_objects;
+CREATE TRIGGER live_object_immutable BEFORE UPDATE ON artifacts.live_draft_objects
+  FOR EACH STATEMENT EXECUTE FUNCTION artifacts.reject_live_object_update();

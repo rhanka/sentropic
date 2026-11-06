@@ -25,6 +25,12 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
             (storage_scope_id,artifact_id,binding_generation,object_ref,envelope) VALUES ($1,$2,$3,$4,$5)`,
           [...values, ref, JSON.stringify(envelope)]);
         },
+        async collectObjects() {
+          const result = await client.query(`DELETE FROM artifacts.live_draft_objects
+            WHERE storage_scope_id=$1 AND artifact_id=$2 AND binding_generation=$3
+            AND object_ref IS DISTINCT FROM $4::uuid`, [...values, tx.record?.objectRef ?? null]);
+          return result.rowCount ?? 0;
+        },
         async receipt(actor, key) {
           await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
             [JSON.stringify(['live-command', identity.storageScopeId, actor, key])]);

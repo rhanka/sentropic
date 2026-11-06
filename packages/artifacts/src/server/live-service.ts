@@ -25,6 +25,9 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
     const stop = operation === 'live_control' && args.action === 'stop';
     const authority = await deps.authorize(invocation, args.artifactId);
     const { binding } = authority;
+    if (authority.target.storageScopeId !== binding.storageScopeId || authority.target.repoId !== binding.repoId ||
+      authority.target.branch !== binding.branch || authority.target.subPath !== binding.subPath ||
+      authority.target.principalId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
     if (binding.storageScopeId !== invocation.storageScopeId || binding.artifactId !== args.artifactId ||
       (!authority.canReadCode && !stop) || (authority.ownerId !== invocation.actorId &&
         !(operation === 'live_read' && authority.invited && authority.canReadCode))) throw new ArtifactOperationError('access_denied');
@@ -67,6 +70,10 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       }
     }
     if (expired && !stop && operation !== 'live_reset') throw new ArtifactOperationError('git_live_draft_expired');
+    if (writer && !stop && !expired) await deps.store.transaction(identity, async tx => {
+      const overlay = await readLiveOverlay(tx, deps.keys);
+      if (overlay.length) validateLiveMutation(authority.repository, authority.target, { deletes: overlay.map(e => e.path) });
+    });
     if (operation === 'git_commit') return executeLiveCommit({ deps, identity, authority, invocation, args, command: command!, now: now() });
     const head = stop ? binding.headCommitSha! : await deps.git.resolveRef(authority.target, binding.branch);
     if (!stop && !isGitSha(head)) throw new ArtifactOperationError('invalid_request');
@@ -91,6 +98,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
         operation === 'live_reset' ? head : baseSha);
       if (!tx.record) tx.record = cleanLiveRecord(identity, head, base.treeSha);
       const record = tx.record;
+      if (!stop && operation !== 'live_reset' && record.expiresAt && Date.parse(record.expiresAt) <= now()) throw new ArtifactOperationError('git_live_draft_expired');
       if (!stop && record.baseHeadSha !== head && !record.changedPaths) {
         if (!await deps.git.isAncestor(authority.target, record.baseHeadSha, head)) throw new ArtifactOperationError('git_diverged');
         Object.assign(record, { revision: randomUUID(), baseHeadSha: head, baseTreeSha: base.treeSha, liveTreeSha: base.treeSha,

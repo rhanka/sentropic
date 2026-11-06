@@ -73,6 +73,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     const record = tx.record!;
     if (record.pendingCommit?.invocationId !== intent.invocationId || record.revision !== intent.revision) liveBusy('stale_fence');
     const current = await deps.authorize(invocation, identity.artifactId);
+    if (!current.canReadCode || !current.canWrite || !current.humanLinked || current.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
     if (current.binding.generation !== identity.bindingGeneration || current.binding.state !== 'attached') liveBusy('stale_fence');
     await tx.advanceBinding?.({ expectedHeadSha: intent.expectedHeadSha, commitSha: committed.commitSha,
       invocationId: intent.invocationId, actorId: invocation.actorId, now: new Date(now).toISOString() });
