@@ -58,5 +58,6 @@
   - [x] Add bounded nonrecursive tree traversal with fixed-SHA resolution and symlink/gitlink refusal.
   - [x] Add MAC-bound caller/scope/SHA pagination, UTF-8/base64 reads and explicit omission reasons across the total budget.
 - [ ] Lot 4: server-resolved authorship, short-lived lease checks, test-only enrolled witness adapter and host docs.
+  - [x] Materialize one multi-file child commit with human-directory author, App committer and frozen join trailers; preserve indeterminate ref outcomes.
   - [x] Add fail-closed lease admission, exact repository/permissions/expiry checks and host revocation fencing; no token cache.
 - [ ] Lot 5: scoped tests, typecheck/lint, harness scope, early push, one ready train PR, CI green and volume cleanup.
