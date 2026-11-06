@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.18
+
+- Add scope-bound Git bindings, a closed host repository registry, durable
+  Postgres lifecycle and replay records, and immutable release-index readers.
+  Git metadata is projected only with the caller's current repository code right.
+- Add the GitHub GitPort with injected cluster-mesh installation leases,
+  SHA-pinned reads, bounded source pagination and atomic multi-file commits.
+  Commits retain server-resolved human authorship and an App committer.
+- Export build descriptor and locked dependency validation through
+  `@sentropic/artifacts/server/build-contract`. Validation executes no build
+  or lifecycle script; executor and live activation keep their separate gates.
+- Integrate SG0-app, SG1, GB1 and SG2 on one release train after 0.2.17.
+  Existing MCP definitions and the APP-P1 four-tool selection are unchanged.
+  SQLite Git-binding parity and real forge qualification remain separate lots.
+
 ## 0.2.17
 
 - Application assets carry the worker's own same-origin/no-eval CSP; HTML inline hashes stay confined to HTML responses.
