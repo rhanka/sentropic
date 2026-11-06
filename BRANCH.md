@@ -113,6 +113,8 @@
   - [x] CI4 organization presence: an old HTTP response reproduces the one-peer-only display after a newer SSE update; revision fencing preserves newer state. Controlled regression and all three CI4 specs pass together 20/20, four workers, zero skips/retries; the exact-object gate also passes in the final 36-case qualification.
   - [x] CI4 session-switch diagnosis: original spec passes alone and with the other CI4 specs; event probe removed. Exact CI cause remains unproven, so no speculative source or assertion change is retained.
   - [x] UI typecheck passes with zero errors/six warnings; lint passes. Final 36-case qualification exposed a session-info 40001/HTTP 500 and concurrent magic-link provisioning 40001/HTTP 503; both original UI race regressions pass.
-  - [ ] Remove activity writes from session-validation completions and fence account-provisioning snapshots against unrelated writers; preserve the existing three attempts and deadlines, then repeat scoped API/browser qualification.
+  - [x] Read-only session-validation completion preserves its refusal contract and final remote signing fences; registration/magic-link provisioning selects the existing exclusive context before its single UOW. Both old failures reproduce; all five concurrency cases and consolidated 220 tests in 20 files pass, with attempts/deadlines unchanged.
+  - [x] Final API typecheck passes; lint has zero errors and 232 warnings. Cached development dependencies are reused; original assertion and retry/deadline settings remain unchanged.
+  - [ ] Qualify final API types/lint and all six browser specs against rebuilt production images; obtain exact-head supplement reviews before the next push.
   - [ ] Open one ready PR with BRANCH.md body and monitor CI until green; do not merge.
   - [x] `make down-volumes`; report `.tmp/rv/a4-followups.md` with validation and review evidence, CI handoff pending.
