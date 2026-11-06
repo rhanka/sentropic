@@ -767,11 +767,6 @@ publish-api-image: docker-login
 ci-publish-api-image: publish-api-image
 	@node scripts/ci/publish-image.mjs api
 
-.PHONY: publish-api-main-image
-publish-api-main-image: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
-	docker tag $(API_IMAGE_REF) $(REGISTRY)/$(API_IMAGE_NAME):main
-	docker push $(REGISTRY)/$(API_IMAGE_NAME):main
-
 check-ui-image:
 	@echo "▶ Checking if image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) exists"
 	@docker manifest inspect $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) does not exist" && exit 1)
@@ -4767,7 +4762,7 @@ check-preprod-images: ## Check the actual rendered recovery pins by anonymous di
 	@node scripts/ci/check-preprod-images.mjs
 
 test-ghcr-images: ci-test-env test-ghcr-login ## Reject registry collisions and private or altered manifests
-	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs
+	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs
 
 .PHONY: test-ghcr-login
 test-ghcr-login: ci-test-env ## Exercise the real Make login recipe with fixture credentials
