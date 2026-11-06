@@ -23,9 +23,9 @@ export function independentValidators(workflow) {
   // The producer itself must remain independent of every qualification lane.
   return ['package-candidates', ...consumers].every(name => workflow.jobs[name])
     && validators.every(([name, job]) => JSON.stringify(job.needs)
-      === JSON.stringify(name === 'validate-artifacts' ? ['changes', 'artifacts-qualification']
+      === JSON.stringify(name === 'validate-artifacts' ? ['changes', 'validate-artifacts-shards']
         : consumers.has(name) ? ['changes', 'package-candidates'] : ['changes']))
-    && JSON.stringify(workflow.jobs['artifacts-qualification']?.needs) === JSON.stringify(['changes']);
+    && JSON.stringify(workflow.jobs['validate-artifacts-shards']?.needs) === JSON.stringify(['changes']);
 }
 
 export function wallClockProof(captures, digest) {

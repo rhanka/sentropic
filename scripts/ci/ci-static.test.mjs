@@ -11,7 +11,7 @@ const workflow = yaml.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'))
 
 test('should reject each missing, failed, cancelled or skipped static and artifact member', () => {
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
-  const members = expected.filter(row => /^(api-static|artifacts-qualification) \(/.test(row.job)
+  const members = expected.filter(row => /^(api-static|validate-artifacts-shards) \(/.test(row.job)
     || row.job === 'idp-web-static');
   assert.equal(members.length, 8);
   const executed = expected.filter(row => row.selected).map(row => ({ job: row.job, conclusion: 'success' }));
@@ -27,16 +27,16 @@ test('should reject each missing, failed, cancelled or skipped static and artifa
 });
 
 test('should keep all five artifact obligations and parallel static tools selected by their owning paths', () => {
-  assert.deepEqual(workflow.jobs['artifacts-qualification'].strategy.matrix.include.map(row => row.lane),
+  assert.deepEqual(workflow.jobs['validate-artifacts-shards'].strategy.matrix.include.map(row => row.lane),
     ['budget', 'static-package', 'unit', 'integration', 'activation']);
   assert.deepEqual(workflow.jobs['api-static'].strategy.matrix.include.map(row => row.lane), ['typecheck', 'lint']);
   for (const owner of ['api', 'artifacts']) {
     const expected = workflowExpected(workflow, { changes: { [owner]: 'true' }, event: 'pull_request' });
-    const prefix = owner === 'api' ? 'api-static (' : 'artifacts-qualification (';
+    const prefix = owner === 'api' ? 'api-static (' : 'validate-artifacts-shards (';
     assert.ok(expected.filter(row => row.job.startsWith(prefix)).every(row => row.selected));
   }
   for (const join of ['ci-gate', 'ci-capacity-receipts']) {
-    for (const parent of ['api-static', 'idp-web-static', 'artifacts-qualification']) {
+    for (const parent of ['api-static', 'idp-web-static', 'validate-artifacts-shards']) {
       assert.ok(workflow.jobs[join].needs.includes(parent), `${join}: ${parent}`);
     }
   }

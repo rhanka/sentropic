@@ -58,11 +58,11 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 24);
+  assert.equal(validators.length, 25);
   assert.equal(independentValidators(workflow), true);
   for (const [name, job] of validators) {
     const consumers = ['validate-cluster-mesh', 'validate-llm-mesh', 'validate-llm-gateway'];
-    assert.deepEqual(job.needs, name === 'validate-artifacts' ? ['changes', 'artifacts-qualification']
+    assert.deepEqual(job.needs, name === 'validate-artifacts' ? ['changes', 'validate-artifacts-shards']
       : consumers.includes(name) ? ['changes', 'package-candidates'] : ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
   }
@@ -82,7 +82,7 @@ test('should reject validator serialization beyond the immutable candidate produ
     ['validate-publishable-manifests', ['changes', 'package-candidates', 'validate-llm-mesh']],
     ['validate-chat-core', ['changes', 'package-candidates']],
     ['memory-l5-qualification', ['changes', 'validate-mcp-platform']],
-    ['artifacts-qualification', ['changes', 'validate-chat-core']],
+    ['validate-artifacts-shards', ['changes', 'validate-chat-core']],
     ['validate-artifacts', ['changes']],
   ]) {
     const changed = structuredClone(workflow);
