@@ -97,6 +97,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
         !(operation === 'live_read' && current.invited && current.canReadCode) ||
         (!stop && !current.canReadCode)) throw new ArtifactOperationError('access_denied');
       if (writer && !stop && (!current.canWrite || !current.humanLinked || current.binding.state !== 'attached')) throw new ArtifactOperationError('access_denied');
+      if ((operation === 'live_write' || operation === 'live_control' && !stop) && !current.qualified) throw new ArtifactOperationError('builder_unavailable');
       authority = current;
       if (command) {
         const prior = await tx.receipt(command.actorId, command.key);

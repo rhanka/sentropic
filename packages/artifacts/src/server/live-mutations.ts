@@ -64,7 +64,8 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
       Object.assign(record.runtime, { sourceRevision: record.revision, baseHeadSha: record.baseHeadSha,
         liveTreeSha: record.liveTreeSha, rowVersion: record.runtime.rowVersion + 1 });
       if (operation === 'live_control') record.runtime.renewOnReady = true;
-      if (operation === 'live_write') record.runtime.lastAccessAt = new Date(now).toISOString();
+      record.runtime.lastAccessAt = new Date(now).toISOString();
+      record.runtime.idleDeadline = new Date(now + 600000).toISOString();
     }
   }
   return { action, result: { ...liveResponse(record, currentHeadSha), state: record.runtime?.phase ?? 'DORMANT',

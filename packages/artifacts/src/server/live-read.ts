@@ -66,6 +66,9 @@ export async function readLivePage(input: { git: GitPort; authority: LiveAuthori
     const retained = Object.entries(record.snapshots ?? {}).filter(([, value]) => value.expiresAt > now).slice(-31);
     record.snapshots = Object.fromEntries([...retained, [nextCursor, { ...snapshot, offset }]]);
   }
-  if (kind === 'read' && record.runtime) record.runtime.lastAccessAt = new Date(now).toISOString();
+  if (kind === 'read' && record.runtime) {
+    record.runtime.lastAccessAt = new Date(now).toISOString();
+    record.runtime.idleDeadline = new Date(now + 600000).toISOString();
+  }
   return kind === 'read' ? { files, nextCursor } : { diff, files: recipe, deletes, nextCursor };
 }

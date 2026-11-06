@@ -102,8 +102,9 @@ export function createMemoryLiveStore(): LiveStore {
         pendingQuota.push({ scope: identity.storageScopeId, artifact: identity.artifactId, actor, invocation, at: Date.parse(now) });
       },
     };
+    const original = JSON.stringify(tx.record);
     const result = await action(tx);
-    if (tx.record) {
+    if (tx.record && JSON.stringify(tx.record) !== original) {
       tx.record.rowVersion = (records.get(id)?.rowVersion ?? 0) + 1;
       records.set(id, structuredClone(tx.record));
     }
