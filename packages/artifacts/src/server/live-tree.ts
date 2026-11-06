@@ -45,22 +45,22 @@ export function liveTreeSha(base: LiveBaseTree, overlay: LiveOverlayEntry[], tar
   const algorithm = base.treeSha.length === 64 ? 'sha256' : 'sha1';
   const objectId = (kind: string, bytes: Buffer) => createHash(algorithm)
     .update(Buffer.from(`${kind} ${bytes.length}\0`)).update(bytes).digest('hex');
-  const files = new Map(base.entries.map(entry => [entry.path, { mode: entry.mode, sha: entry.sha }]));
+  const files = new Map(base.entries.map(entry => [entry.path, { mode: entry.mode, sha: entry.sha, type: entry.type }]));
   for (const entry of overlay) {
     const path = target.subPath ? target.subPath + '/' + entry.path : entry.path;
     if (entry.text === null) files.delete(path);
-    else files.set(path, { mode: entry.mode, sha: objectId('blob', Buffer.from(entry.text)) });
+    else files.set(path, { mode: entry.mode, sha: objectId('blob', Buffer.from(entry.text)), type: 'blob' });
   }
   type Node = { files: Map<string, { mode: string; sha: string }>; directories: Map<string, Node> };
   const node = (): Node => ({ files: new Map(), directories: new Map() });
   const root = node();
   for (const [path, file] of files) {
     const parts = path.split('/'); let current = root;
-    for (const part of parts.slice(0, -1)) {
+    for (const part of file.type === 'tree' ? parts : parts.slice(0, -1)) {
       if (!current.directories.has(part)) current.directories.set(part, node());
       current = current.directories.get(part)!;
     }
-    current.files.set(parts.at(-1)!, file);
+    if (file.type !== 'tree') current.files.set(parts.at(-1)!, file);
   }
   function hash(current: Node): string {
     const entries = [...current.files].map(([name, entry]) => ({ name, ...entry, directory: false }));

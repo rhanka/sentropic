@@ -44,6 +44,11 @@ export async function persistLiveOverlay(tx: LiveTransaction, keys: LiveKeyPort,
     liveTreeSha: input.liveTreeSha, objectRef: randomUUID(), digest: liveDigest(JSON.stringify(overlay)),
     changedPaths: overlay.length, draftBytes: size, tombstone: null,
     expiresAt: renew ? new Date(now + LIVE_RETENTION_MS).toISOString() : tx.record?.expiresAt ?? null } satisfies LiveDraftRecord;
+  if (!overlay.length) {
+    Object.assign(record, { objectRef: null, keyVersion: null, digest: null, expiresAt: null, draftBytes: 0 });
+    tx.record = record;
+    return record;
+  }
   try {
     await tx.putObject(record.objectRef!, await encryptLiveDraft(record, JSON.stringify(overlay), keys));
   } catch (cause) { throw new ArtifactOperationError('git_live_draft_unavailable', { cause }); }

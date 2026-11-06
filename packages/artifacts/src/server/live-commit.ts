@@ -80,7 +80,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     Object.assign(record, { revision: randomUUID(), baseHeadSha: committed.commitSha, baseTreeSha: committed.treeSha,
       liveTreeSha: committed.treeSha, objectRef: null, keyVersion: null, digest: null, expiresAt: null,
       changedPaths: 0, draftBytes: 0, tombstone: null, pendingCommit: null,
-      latestVerifiedHeadSha: committed.commitSha, progressSeq: record.progressSeq + 1 });
+      latestVerifiedHeadSha: committed.commitSha, progressSeq: record.progressSeq + (record.latestVerifiedHeadSha === committed.commitSha ? 0 : 1) });
     const result = { ...liveResponse(record, committed.commitSha), revision: record.revision,
       commitSha: committed.commitSha, treeSha: committed.treeSha, parentSha: intent.expectedHeadSha,
       publicationIntent: authority.binding.autoPublish ? 'deferred' : null, replayed: false };

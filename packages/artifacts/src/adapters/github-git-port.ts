@@ -38,7 +38,11 @@ export function createGitPort(options: GitPortOptions): GitPort & Pick<ReturnTyp
         if (depth > 128) throw new ArtifactOperationError('limit_exceeded');
         for (const entry of await trees.tree(sha)) {
           if (entries.length >= 1_000_000) throw new ArtifactOperationError('limit_exceeded');
-          if (entry.type === 'tree') await walk(entry.sha, prefix + entry.path + '/', depth + 1);
+          if (entry.type === 'tree') {
+            const children = await trees.tree(entry.sha);
+            if (!children.length) entries.push({ ...entry, path: prefix + entry.path });
+            else await walk(entry.sha, prefix + entry.path + '/', depth + 1);
+          }
           else entries.push({ ...entry, path: prefix + entry.path });
         }
       }
