@@ -25,7 +25,7 @@ const remote = JSON.stringify({ format: 'remote-session-projection-snapshot/1', 
 const compressed = gzipSync('-- PostgreSQL database dump\n-- PostgreSQL database dump complete\n');
 const candidate = 'a'.repeat(40), hash = 'b'.repeat(64);
 const request = { format: 'preprod-a4-request/1', namespace: 'sentropic-preprod', operationId: 'a4-qualification',
-  candidateCommit: candidate, candidateImage: `rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:${hash}`,
+  candidateCommit: candidate, candidateImage: `ghcr.io/rhanka/sentropic-api@sha256:${hash}`,
   backupTemplateSha256: hash, authorizationRef: 'track:cutover-approval', writerFenceRef: 'track:writer-fence',
   rollbackCheckpointRef: 'track:rollback', rollbackLimitsRef: 'track:limits', sourceMetadataDispositionRef: 'track:metadata',
   remoteSnapshotRef: 'custody:remote-export', remoteSnapshotDigest: sha256(remote), legacyWritersStopped: true, remoteFileWriterStopped: true };

@@ -7,7 +7,7 @@ test-artifact-content-manifests: ## Render and qualify closed content infrastruc
 		docker run --rm --network none -v "$(CURDIR)/deploy/k8s:/workspace:ro" \
 			$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/overlays/$$tier > "$$rendered/$$tier.yaml"; \
 		mkdir "$$rendered/k8s/overlays/$$tier-pinned"; \
-		printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - ../%s\nimages:\n  - name: rg.fr-par.scw.cloud/nc-reg/sentropic-api\n    digest: sha256:%s\n' \
+		printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - ../%s\nimages:\n  - name: ghcr.io/rhanka/sentropic-api\n    digest: sha256:%s\n' \
 			"$$tier" $$(printf 'a%.0s' $$(seq 1 64)) > "$$rendered/k8s/overlays/$$tier-pinned/kustomization.yaml"; \
 		docker run --rm --network none -v "$$rendered/k8s:/workspace:ro" \
 			$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/overlays/$$tier-pinned > "$$rendered/$$tier-pinned.yaml"; \

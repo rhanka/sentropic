@@ -29,7 +29,7 @@ export function assertAuthorization(authorization) {
     || authorization.authorizationRef.length > 512 || /placeholder|<|>|TODO|example|pending/i.test(authorization.authorizationRef)
     || !/^[a-z][a-z0-9-]{0,39}$/.test(authorization.operationId)
     || !/^[a-f0-9]{40}$/.test(authorization.candidateCommit) || authorization.candidateCommit === '0'.repeat(40)
-    || !/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-api@sha256:[a-f0-9]{64}$/.test(authorization.candidateImage)) {
+    || !/^ghcr\.io\/rhanka\/sentropic-api@sha256:[a-f0-9]{64}$/.test(authorization.candidateImage)) {
     throw new Error('authorization_invalid');
   }
 }
@@ -44,7 +44,7 @@ export function assertRequest(request) {
     || !/^[a-z][a-z0-9-]{0,39}$/.test(request.operationId)
     || !/^[a-f0-9]{40}$/.test(request.candidateCommit)
     || request.candidateCommit === '0'.repeat(40)
-    || !/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-api@sha256:[a-f0-9]{64}$/.test(request.candidateImage)
+    || !/^ghcr\.io\/rhanka\/sentropic-api@sha256:[a-f0-9]{64}$/.test(request.candidateImage)
     || !/^[a-f0-9]{64}$/.test(request.backupTemplateSha256)) throw new Error('request_invalid');
 }
 export function assertFence(objects, pods, candidateImage) {

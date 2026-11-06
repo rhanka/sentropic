@@ -158,8 +158,8 @@ is set, `MAIL_USERNAME` and `MAIL_PASSWORD` must also be set or recoverable;
 `MAIL_FROM` defaults to `no-reply@sent-tech.ca`.
 
 The api and ui manifests target the `main` alias tag on
-`rg.fr-par.scw.cloud/nc-reg/sentropic-api` and
-`rg.fr-par.scw.cloud/nc-reg/sentropic-ui`. The `publish-{api,ui}-image`
+`ghcr.io/rhanka/sentropic-api` and
+`ghcr.io/rhanka/sentropic-ui`. The `publish-{api,ui}-image`
 jobs in `.github/workflows/ci.yml` push two tags per image: a
 content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and the
 floating `main` alias. `imagePullPolicy: Always` plus the `deploy-k8s` CI job running
