@@ -41,6 +41,7 @@ export function fixture() {
   const ports: LivePorts = {
     store, now: () => now, id: () => `id-${++sequence}`, binding: vi.fn(async () => ({ ...binding })),
     forge: { head: vi.fn(async () => binding.headSha), fastForward: vi.fn(async (_key, before, after) => before < after),
+      reachable: vi.fn(async () => true),
       snapshot: vi.fn(async (_key, headSha) => ({ headSha, treeSha: `tree-${headSha}`, lockfile: new Uint8Array(),
         cacheIdentity: {} as never, stagingRef: `clean-${headSha}` })) },
     drafts: { current: vi.fn(async () => ({ ...draft })), checkpoint: vi.fn(async () => { events.push('checkpoint'); }),
@@ -57,7 +58,8 @@ export function fixture() {
       verify: vi.fn(async () => { events.push('verify'); }),
     },
     routes: { revoke: vi.fn(async () => { events.push('revoke'); }), ready: vi.fn(async () => { events.push('ready'); }) },
-    publication: { commit: vi.fn(async (_unit, _key, attempt) => {
+    publication: { job: vi.fn(async () => ({ headSha: 'A', expectedReleaseId: binding.releaseId })),
+      commit: vi.fn(async (_unit, _key, attempt) => {
       published.push(attempt.headSha); binding.releaseCommit = attempt.headSha; binding.releaseId = `release-${attempt.headSha}`;
       return { releaseId: binding.releaseId };
     }) },

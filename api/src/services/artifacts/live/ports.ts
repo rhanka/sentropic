@@ -32,6 +32,7 @@ export interface LivePorts {
   forge: {
     head(key: LiveKey): Promise<string>;
     fastForward(key: LiveKey, before: string, after: string): Promise<boolean>;
+    reachable(key: LiveKey, headSha: string): Promise<boolean>;
     snapshot(key: LiveKey, headSha: string): Promise<SourceSnapshot>;
   };
   drafts: {
@@ -62,6 +63,8 @@ export interface LivePorts {
   };
   routes: { revoke(key: LiveKey, runtime: LiveRuntime): Promise<void>; ready(key: LiveKey, runtime: LiveRuntime): Promise<void> };
   publication: {
+    /** Resolve and authorize the immutable admitted SG3/SG4 job, never a caller-supplied SHA or CAS. */
+    job(key: LiveKey, jobId: string): Promise<{ headSha: string; expectedReleaseId: string | null }>;
     /** Atomic SG4 release/index/receipt writes in the supplied store transaction; never network publication here. */
     commit(unit: { client?: PoolClient }, key: LiveKey, attempt: LiveAttempt): Promise<{ releaseId: string }>;
   };

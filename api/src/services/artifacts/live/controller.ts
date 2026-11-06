@@ -3,12 +3,14 @@ import { assertFence, conflict, type LiveKey, type LiveRuntime } from './records
 import { revive } from './revive';
 import { prepareLive } from './prepare-live';
 import { idleBuild } from './idle';
+import { buildOnly } from './build-only';
 import { currentBinding, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
   return {
     start: (key: LiveKey) => revive(ports, key),
     idle: (key: LiveKey) => idleBuild(ports, key),
+    buildOnly: (key: LiveKey, admittedJobId: string) => buildOnly(ports, key, admittedJobId),
     /** Only the authenticated host calls this after an admitted source operation or visible interaction. */
     async activity(key: LiveKey, sessionId: string, kind: 'edit' | 'read' | 'foreground' | 'heartbeat' | 'status') {
       if (kind === 'heartbeat' || kind === 'status') return;
@@ -26,7 +28,7 @@ export function createLiveController(ports: LivePorts) {
         const runtime = unit.state?.runtime;
         if (!runtime || runtime.phase === 'DORMANT') return;
         if (runtime.generation !== binding.generation) conflict('stale_fence');
-        if (!['QUIESCING', 'BUILDING', 'VERIFYING', 'PUBLISHING', 'SAVING'].includes(runtime.phase)) conflict('transition_busy');
+        if (!['BUILD_PROVISIONING', 'QUIESCING', 'BUILDING', 'VERIFYING', 'PUBLISHING', 'SAVING'].includes(runtime.phase)) conflict('transition_busy');
         runtime.pendingWake = true; runtime.routeEpoch++; runtime.phase = 'REVIVING';
         runtime.appliedRevision = null; runtime.lastAccessAt = ports.now();
         return structuredClone(runtime);
