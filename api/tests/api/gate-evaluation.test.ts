@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { workspaces, workspaceMemberships, initiatives, folders } from '../../src/db/schema';
+import { workspaces, initiatives, folders } from '../../src/db/schema';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { evaluateGate, getDefaultGateConfig, type GateConfig } from '../../src/services/gate-service';
@@ -37,7 +38,7 @@ describe('Gate evaluation system', () => {
     createdFolderIds.length = 0;
 
     for (const id of createdWorkspaceIds) {
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, id)).catch(() => {});
+      await cmDeleteWorkspaceMembers(id).catch(() => {});
       await db.delete(workspaces).where(eq(workspaces.id, id)).catch(() => {});
     }
     createdWorkspaceIds.length = 0;

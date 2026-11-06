@@ -1,3 +1,4 @@
+import { seedCmArtifactIdentity } from '../utils/cm-artifact-fixture';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
@@ -5,7 +6,7 @@ import { GetPublicAccessBlockCommand, ListObjectsV2Command, PutObjectCommand, ty
 import { blobDigestOfKey, createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createHmacGrantSigner } from '@sentropic/artifacts/content/grants';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
-import { runMigrations } from '../../src/db/run-migrations';
+import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
 import { createArtifactHostJobs, createPrivateArtifactStorage, type ArtifactBlobPage } from '../../src/services/artifacts/lifecycle';
 
@@ -190,23 +191,17 @@ describe('artifact host recovery', () => {
 
   it('should deny an expired host credential using DB time even when maintenance never runs', async () => {
     const { blobs } = fixture();
-    await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active');
-      INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A');
-      INSERT INTO workspaces (id, name, tenant_id) VALUES ('workspace-a', 'A', 'tenant-a');
-      INSERT INTO tenant_memberships (tenant_id, user_id, status) VALUES ('tenant-a', 'alice', 'approved');
-      INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ('workspace-a', 'alice', 'editor');
-      INSERT INTO user_sessions (id, user_id, session_token_hash, expires_at)
-        VALUES ('session-a', 'alice', 'hash', clock_timestamp() + interval '60 seconds');`);
+    await seedCmArtifactIdentity(pool);
     const host = createArtifactHost({ pool, blobs, quotaBytes: 262144,
       async currentIdentity(client, identity) {
-        const result = await client.query(`SELECT id FROM user_sessions WHERE id = $1 AND user_id = $2
-          AND expires_at > clock_timestamp() FOR SHARE`, [identity.credentialId, identity.subject]);
+        const result = await client.query(`SELECT session_id FROM cm_identity.identity_login_sessions WHERE session_id = $1 AND user_id = $2
+          AND expires_at::timestamptz > clock_timestamp() FOR SHARE`, [identity.credentialId, identity.subject]);
         return { readable: result.rowCount === 1, writable: result.rowCount === 1 };
       } });
     const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'app', credentialId: 'session-a' };
     const bound = await host.bind(identity, 'workspace-a');
     expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
-    await pool.query(`UPDATE user_sessions SET expires_at = clock_timestamp() WHERE id = 'session-a'`);
+    await pool.query(`UPDATE cm_identity.identity_login_sessions SET expires_at = clock_timestamp() WHERE session_id = 'session-a'`);
     expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(403);
     expect((await bound.http({ method: 'POST', path: '/ensure',
       body: { bindingName: 'expired', idempotencyKey: 'expired' } })).status).toBe(403);
@@ -263,11 +258,7 @@ describe('artifact host recovery', () => {
 
   it('should preserve a concurrent publication when collection already owns the digest', async () => {
     const { blobs, page, authorize } = fixture();
-    await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active');
-      INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A');
-      INSERT INTO workspaces (id, name, tenant_id) VALUES ('workspace-a', 'A', 'tenant-a');
-      INSERT INTO tenant_memberships (tenant_id, user_id, status) VALUES ('tenant-a', 'alice', 'approved');
-      INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ('workspace-a', 'alice', 'editor');`);
+    await seedCmArtifactIdentity(pool, { sessionIds: [] });
     const host = createArtifactHost({ pool, blobs, quotaBytes: 262144,
       currentIdentity: async () => ({ readable: true, writable: true }) });
     const bound = await host.bind({ subject: 'alice', tenantId: 'tenant-a', clientId: 'app', credentialId: 'session' }, 'workspace-a');

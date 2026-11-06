@@ -10,9 +10,8 @@ import {
 } from '@sentropic/auth-hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createFederationBroker } from '../../../src/services/auth/federation/broker';
+import { createFederationBroker, type FederationBrokerDeps } from '../../utils/federation-broker';
 import type {
-  FederationBrokerDeps,
   FederationProvider,
   FederationProviderIdentity,
 } from '../../../src/services/auth/federation/types';
@@ -362,6 +361,7 @@ describe('BR-39e Lot 2 — GitHub federation keystones', () => {
       providerSubject: 'gh-new',
       providerTenant: null,
       verifiedEmail: 'proven@example.com',
+      verificationToken: 'test-ticket', expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
     });
 
     expect(res.kind).toBe('authenticated');
@@ -384,6 +384,7 @@ describe('BR-39e Lot 2 — GitHub federation keystones', () => {
       providerSubject: 'gh-collide',
       providerTenant: null,
       verifiedEmail: 'taken@example.com',
+      verificationToken: 'test-ticket', expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
     });
 
     expect(res).toMatchObject({ kind: 'error', status: 409 });

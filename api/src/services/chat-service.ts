@@ -50,6 +50,7 @@ import {
 } from './skills/catalog';
 import { executeFoundationSkillTool } from './skills/foundation-executor';
 import { resolveTurnCatalogContext } from './catalog/request-authority';
+import { revalidateCatalogInvocation } from './catalog/request-context';
 import { toolService } from './tool-service';
 import { listTabs as listRegisteredTabs, isBrowserSource } from './tab-registry';
 import type { TabEntry } from './tab-registry';
@@ -2788,7 +2789,7 @@ export class ChatService {
           allowedTools: allowedSkillToolNames,
         }),
       );
-      if (allowedSkillToolNames.has('batch_create_organizations')) {
+      if (catalogContext.allowedTools.includes('batch_create_organizations') && !catalogContext.readOnly) {
         addResolvedTools([batchCreateOrganizationsTool]);
       }
       catalogAvailable = true;
@@ -2796,7 +2797,7 @@ export class ChatService {
       toolSet.clear();
       console.warn('[chat] catalog: unavailable');
     }
-    addResolvedTools(localTools);
+    if (catalogAvailable) addResolvedTools(localTools);
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : undefined;
 
     const localToolNames = new Set(
@@ -4925,7 +4926,10 @@ When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string l
         break;
       }
       case 'batch_create_organizations': {
-        if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
+        const authority = await resolveTurnCatalogContext({ userId: options.userId,
+          sessionId: options.sessionId, workspaceId: sessionWorkspaceId, readOnly,
+          allowedTools: (tools ?? []).flatMap(tool => tool.type === 'function' ? [tool.function.name] : []) });
+        await revalidateCatalogInvocation(authority, toolCall.name, args, true);
         const description = typeof args.description === 'string' ? args.description : '';
         const targetWorkspaceId = sessionWorkspaceId;
         if (!description) throw new Error('batch_create_organizations: description is required');

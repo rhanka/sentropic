@@ -7,9 +7,11 @@ import {
   listUserSessions,
   revokeAllSessions,
 } from '../../../src/services/session-manager';
-import { db } from '../../../src/db/client';
-import { userSessions, users } from '../../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { findCmSessionById } from '../../../src/services/identity/cm-sessions';
+import { cmPurgeAllIdentity } from '../../utils/cm-identity-test-store';
 
 describe('Session Manager Service', () => {
   let testUserId: string;
@@ -17,21 +19,12 @@ describe('Session Manager Service', () => {
   // Create test user
   beforeEach(async () => {
     testUserId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: testUserId,
-      email: `test-${testUserId}@example.com`,
-      displayName: 'Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await createCmUser({ userId: testUserId, email: `test-${testUserId}@example.com`, displayName: 'Test User', role: 'editor', emailVerified: true, accountStatus: 'active' });
   });
 
   // Clean up after each test
   afterEach(async () => {
-    await db.delete(userSessions);
-    await db.delete(users);
+    await cmPurgeAllIdentity();
   });
 
   describe('createSession', () => {
@@ -77,23 +70,16 @@ describe('Session Manager Service', () => {
     it('should default mfaVerified to false', async () => {
       const session = await createSession(testUserId, 'editor');
 
-      const [row] = await db
-        .select({ mfaVerified: userSessions.mfaVerified })
-        .from(userSessions)
-        .where(eq(userSessions.id, session.sessionId))
-        .limit(1);
-      expect(row.mfaVerified).toBe(false);
+      const row = await findCmSessionById(session.sessionId);
+      expect(row?.mfaVerified).toBe(false);
     });
 
-    it('should mint mfaVerified=true only when explicitly requested (B1 passkey+UV)', async () => {
-      const session = await createSession(testUserId, 'editor', undefined, { mfaVerified: true });
-
-      const [row] = await db
-        .select({ mfaVerified: userSessions.mfaVerified })
-        .from(userSessions)
-        .where(eq(userSessions.id, session.sessionId))
-        .limit(1);
-      expect(row.mfaVerified).toBe(true);
+    it('should refuse mfaVerified minting outside the verified assertion completion', async () => {
+      // Post-cutover, mfaVerified=true is minted only by the verified CM assertion
+      // completion (auth-hono binding); the facade refuses self-asserted MFA.
+      await expect(
+        createSession(testUserId, 'editor', undefined, { mfaVerified: true }),
+      ).rejects.toThrow(IdentityCustodyErrorV1);
     });
   });
 

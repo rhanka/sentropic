@@ -1,3 +1,4 @@
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
 import {
@@ -5,13 +6,12 @@ import {
   chatSessions,
   chatStreamEvents,
   folders,
-  users,
   workspaces,
-  workspaceMemberships,
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import {
   register as registerTab,
   clearAll as clearTabRegistry,
@@ -49,17 +49,9 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     clearTabRegistry();
 
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `tab-test-${userId}@example.com`,
-      displayName: 'Tab Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    const actor = await createTestUser({ email: `tab-test-${userId}@example.com`, displayName: 'Tab Test User', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
     folderId = createId();
     await db.insert(folders).values({
@@ -79,10 +71,11 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
     vi.clearAllMocks();
   });
 
@@ -108,7 +101,7 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'test tab injection',
@@ -151,7 +144,7 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'test with local tools',
@@ -212,7 +205,7 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'test desktop device',
@@ -260,7 +253,7 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'test mixed devices',
@@ -295,7 +288,7 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'test no tabs',

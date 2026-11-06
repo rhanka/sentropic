@@ -27,7 +27,7 @@ spec:
             - { name: work, emptyDir: { medium: Memory, sizeLimit: 32Mi } }
             - { name: sql, configMap: { name: sentropic-idp-identity-export-sql } }
           initContainers:
-            - name: export
+            - name: export-sql
               image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
               workingDir: /work
               command: ["sh", "/sql/export-prod.sh"]
@@ -39,6 +39,19 @@ spec:
               volumeMounts: [{ name: work, mountPath: /work }, { name: sql, mountPath: /sql, readOnly: true }]
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
               resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+            - name: export-replica
+              image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+              workingDir: /work
+              command: ["node", "/app/dist/scripts/identity-replica-export.js"]
+              env:
+                - { name: PGUSER, valueFrom: { secretKeyRef: { name: sentropic-idp-identity-reader, key: PGUSER } } }
+                - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-idp-identity-reader, key: PGPASSWORD } } }
+                - { name: DATABASE_URL, value: "postgres://$(PGUSER):$(PGPASSWORD)@postgres:5432/app" }
+                - { name: SOURCE_PLACEMENT, value: prod }
+                - { name: CM_IDENTITY_DELETION_BUDGETS_JSON, valueFrom: { secretKeyRef: { name: sentropic-identity-budgets, key: CM_IDENTITY_DELETION_BUDGETS_JSON } } }
+              volumeMounts: [{ name: work, mountPath: /work }]
+              securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+              resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
           containers:
             - name: upload
               image: peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a

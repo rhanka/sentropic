@@ -11,45 +11,27 @@
 // session token to the browser step (e2e/playwright image) — no WebAuthn, no
 // maildev, fully deterministic.
 
-import { randomUUID } from 'node:crypto';
-
-import { eq } from 'drizzle-orm';
-
-import { db } from '../../api/src/db/client';
-import { users } from '../../api/src/db/schema';
+import { createCmUser } from '../../api/src/services/identity/cm-users';
 import { createSession } from '../../api/src/services/session-manager';
 
 const TEST_EMAIL = process.env.SCREEN_SMOKE_EMAIL ?? 'idp-screen-smoke@example.com';
-const TEST_NAME = 'IdP Screen Smoke User';
+
+const failSeed = (msg: string): never => {
+  console.error(`SCREEN-SMOKE-SEED FAIL: ${msg}`);
+  process.exit(1);
+};
 
 const main = async (): Promise<void> => {
-  const now = new Date();
-  const userId = `idp-screen-${randomUUID()}`;
-  await db
-    .insert(users)
-    .values({
-      id: userId,
-      email: TEST_EMAIL,
-      displayName: TEST_NAME,
-      role: 'editor',
-      accountStatus: 'active',
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      set: { accountStatus: 'active', displayName: TEST_NAME, emailVerified: true, updatedAt: now },
-      target: users.email,
-    });
+  // CM-native user creation: the raw account/profile upserts used before left
+  // no identity_subject_fences row, so session minting failed closed
+  // (identity_material_missing). createCmUser enrolls the full material.
+  const created = await createCmUser({ email: TEST_EMAIL, displayName: 'IdP Screen Smoke',
+    role: 'editor', emailVerified: true, accountStatus: 'active' });
+  const seededUserId = created.id;
 
-  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.email, TEST_EMAIL)).limit(1);
-  if (!row) {
-    console.error('SCREEN-SMOKE-SEED FAIL: seeded user not found after upsert');
-    process.exit(1);
-  }
-  const session = await createSession(row.id, 'editor', { name: 'idp-screen-smoke' });
+  const session = await createSession(seededUserId, 'editor', { name: 'idp-screen-smoke' });
   // Machine-readable lines for the Playwright step to capture.
-  console.log(`USER_ID=${row.id}`);
+  console.log(`USER_ID=${seededUserId}`);
   console.log(`SESSION_TOKEN=${session.sessionToken}`);
   process.exit(0);
 };

@@ -39,7 +39,8 @@ const provider = createGoogleProvider({
 });
 
 const verifiedPayload = (nonce: string) => ({
-  payload: { email: 'user@example.com', email_verified: true, nonce, sub: 'google-sub-1' },
+  // OIDC id_tokens always carry exp: the provider fail-closes without it.
+  payload: { email: 'user@example.com', email_verified: true, nonce, sub: 'google-sub-1', exp: Math.floor(Date.now() / 1000) + 3600 },
 });
 
 describe('createGoogleProvider.verifyCallback — mandatory OIDC nonce', () => {
@@ -74,6 +75,9 @@ describe('createGoogleProvider.verifyCallback — mandatory OIDC nonce', () => {
       nonce: 'bound-nonce',
     });
 
-    expect(identity).toEqual({ email: 'user@example.com', emailVerified: true, subject: 'google-sub-1' });
+    expect(identity).toMatchObject({ email: 'user@example.com', emailVerified: true, subject: 'google-sub-1' });
+    // The provider propagates the assertion expiry fail-closed alongside the identity.
+    expect(typeof identity.assertionExpiresAt).toBe('string');
+    expect(new Date(identity.assertionExpiresAt as string).getTime()).toBeGreaterThan(Date.now());
   });
 });

@@ -7,7 +7,8 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatMessages, chatStreamEvents, jobQueue, tenantMemberships } from '../../src/db/schema';
+import { chatMessages, chatStreamEvents, jobQueue } from '../../src/db/schema';
+import { createCmTenant, findCmTenant, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
 import { eq } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
 
@@ -19,7 +20,8 @@ describe('Chat AI - Complete Integration', () => {
     user = await createAuthenticatedUser('editor');
     // Approved tenant membership so the turn catalog resolves (fail-closed otherwise) and
     // the deterministic provider fixture is offered the real application tools.
-    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
+    if (!(await findCmTenant('sentropic'))) await createCmTenant({ tenantId: 'sentropic', slug: 'sentropic' });
+    await setCmMembershipState(user.id, 'sentropic', { status: 'approved', role: 'member', decidedBy: user.id });
   });
 
   afterEach(async () => {

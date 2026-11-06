@@ -1,13 +1,12 @@
 import type {
-  AuthHonoAccountPolicyPort,
   AuthHonoAuditLogPort,
   AuthHonoClockPort,
   AuthHonoDeviceInfo,
   AuthHonoFederationPort,
   AuthHonoIdentityRecord,
   AuthHonoSessionTokens,
-  AuthHonoUserPort,
-  AuthHonoUserRecord,
+  FederationResolveInput,
+  FederationResolveOutcome,
 } from '@sentropic/auth-hono';
 
 /**
@@ -22,6 +21,8 @@ import type {
 
 /** The verified identity a provider extracts from the upstream callback. NEVER carries tokens (D1). */
 export interface FederationProviderIdentity {
+  /** Verified assertion expiry when the provider uses an expiring signed assertion. */
+  assertionExpiresAt?: string;
   /** Stable upstream subject (Google `sub`) — the single linking key (D6), NOT the email. */
   subject: string;
   /** Provider-asserted email (may be null for providers that omit it). */
@@ -34,6 +35,27 @@ export interface FederationProviderIdentity {
   emailScope?: 'global' | 'provider';
   /** MS `tid` (null for Google); audit + future subject policy. */
   providerTenant?: string | null;
+}
+
+/** Fresh capabilities supplied by the CM completion callback, never retained by the broker. */
+export interface FederationIdentityAttempt {
+  readonly now: Date;
+  readonly audit: AuthHonoAuditLogPort;
+  readonly federation: Pick<AuthHonoFederationPort,
+    'findIdentityBySubject' | 'linkIdentity' | 'touchLogin'>;
+  resolveFederatedUser(input: FederationResolveInput): Promise<FederationResolveOutcome>;
+  authenticate(userId: string, deviceInfo?: AuthHonoDeviceInfo): Promise<AuthHonoSessionTokens>;
+  requireLinkActor(expectedUserId: string): Promise<void>;
+  verifyEmailProof(email: string, token: string): Promise<void>;
+  consumeEmailProof(userId: string): Promise<void>;
+}
+
+/** A public refusal may be rendered only after the enclosing completion rolled back. */
+export class FederationCompletionRefusal extends Error {
+  constructor(readonly status: number, readonly code: string, message: string) {
+    super(message);
+    this.name = 'FederationCompletionRefusal';
+  }
 }
 
 export interface FederationProvider {
@@ -83,23 +105,13 @@ export interface FederationBrokerConfig {
 
 export interface FederationBrokerDeps {
   provider: FederationProvider;
-  federation: AuthHonoFederationPort;
-  users: Pick<AuthHonoUserPort, 'create' | 'findByEmail' | 'findById'>;
-  accountPolicy: Pick<
-    AuthHonoAccountPolicyPort,
-    'deriveDisplayName' | 'normalizeEmail' | 'resolveSessionRole' | 'roleForNewUser' | 'statusForNewUser'
-  >;
-  provisionWorkspace: (userId: string) => Promise<void>;
-  /** Mint a FRESH Sentropic session (session rotation / anti-fixation, D10). */
-  mintSession: (input: {
-    user: AuthHonoUserRecord;
-    deviceInfo?: AuthHonoDeviceInfo;
-  }) => Promise<AuthHonoSessionTokens>;
+  federation: Pick<AuthHonoFederationPort, 'createFlowState' | 'consumeFlowState'>;
+  /** Owns whole-callback rollback/retry and releases a copied result only after commit. */
+  complete<T>(operation: (attempt: FederationIdentityAttempt) => Promise<T>): Promise<T>;
   audit: AuthHonoAuditLogPort;
   clock: AuthHonoClockPort;
   secrets: FederationBrokerSecrets;
   config: FederationBrokerConfig;
-  isFirstUser?: () => Promise<boolean> | boolean;
 }
 
 export interface FederationStartRequest {
@@ -145,6 +157,9 @@ export interface FederationEmailChallengeCompletion {
   providerTenant?: string | null;
   /** The email the user just proved via the local challenge (treated as provider-verified, D9). */
   verifiedEmail: string;
+  verificationToken: string;
+  /** Deadline captured with the one-time pending identity before entering the UOW. */
+  expiresAt: string;
   /** The sealed OAuth continuation pointer captured at the original callback (D11), or null. */
   continuation: string | null;
   deviceInfo?: AuthHonoDeviceInfo;
@@ -175,6 +190,7 @@ export type FederationCallbackResult =
    */
   | {
       kind: 'email-challenge';
+      expiresAt: string;
       provider: string;
       providerSubject: string;
       providerTenant: string | null;

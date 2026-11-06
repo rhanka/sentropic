@@ -1,3 +1,4 @@
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
 import {
@@ -7,13 +8,12 @@ import {
   folders,
   jobQueue,
   organizations,
-  users,
   workspaces,
-  workspaceMemberships,
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 
 // Mock OpenAI streaming — must be declared before importing chatService.
 vi.mock('../../src/services/llm-runtime', () => {
@@ -70,19 +70,11 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     savedReasoningEffortEvalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval;
     CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `docgen-pptx-test-${userId}@example.com`,
-      displayName: 'DocGen PPTX Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const actor = await createTestUser({ email: `docgen-pptx-test-${userId}@example.com`, displayName: 'DocGen PPTX Test User', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
-
-    // Default workspace from ensureWorkspaceForUser is neutral; set to ai-priorities for tests
+    // Default fixture workspace is neutral; set to ai-priorities for tests
     await db.update(workspaces).set({ type: 'ai-priorities' }).where(eq(workspaces.id, workspaceId));
 
     folderId = createId();
@@ -103,11 +95,12 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
     await db.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
     if (savedReasoningEffortEvalTemplate !== undefined) {
       CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
       savedReasoningEffortEvalTemplate = undefined;
@@ -155,7 +148,7 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     );
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'generate a pptx',
@@ -249,7 +242,7 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     );
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'generate a pptx from the current folder',
@@ -336,7 +329,7 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     );
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'Use the document_generate tool with format "pptx"',
