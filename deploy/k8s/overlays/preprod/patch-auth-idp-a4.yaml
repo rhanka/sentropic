@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-idp
+spec:
+  template:
+    spec:
+      containers:
+        - name: auth-idp
+          command: ["node", "/run/cm-runtime/launch.mjs", "--idp"]
+          env:
+            - name: EMAIL_CODE_HMAC_KEY_ACTIVE
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_ACTIVE }
+            - name: EMAIL_CODE_HMAC_KEY_ACTIVE_REF
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_ACTIVE_REF }
+            - name: EMAIL_CODE_HMAC_KEY_PREVIOUS
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_PREVIOUS, optional: true }
+            - name: EMAIL_CODE_HMAC_KEY_PREVIOUS_REF
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_PREVIOUS_REF, optional: true }
+            - name: CM_IDENTITY_DELETION_BUDGETS_JSON
+              valueFrom:
+                secretKeyRef: { name: sentropic-identity-budgets, key: CM_IDENTITY_DELETION_BUDGETS_JSON }
+          volumeMounts:
+            - { name: cm-runtime, mountPath: /run/cm-runtime, readOnly: true }
+      volumes:
+        - name: cm-runtime
+          configMap: { name: sentropic-a4-runtime, defaultMode: 0444 }

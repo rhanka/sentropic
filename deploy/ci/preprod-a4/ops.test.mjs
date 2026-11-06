@@ -6,11 +6,30 @@ import { join } from 'node:path';
 import { ops } from './ops.mjs';
 import { digest, privateInput } from './guards.mjs';
 import { approvedRequest, commit, image, sha } from './fixtures.mjs';
-import { activeRef, approvalRef, compose } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
+import { activeRef, approvalRef, compose, entrypoint } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
 
 const request = { ...approvedRequest, namespace: 'sentropic-preprod', candidateCommit: commit, candidateImage: image,
   operationId: 'a4', backupTemplateSha256: sha, remoteSnapshotDigest: digest('{}') };
 const env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request', A4_DRY_RUN: '1' };
+test('should preserve the IdP entrypoint and wire both stopped consumers without scaling', () => {
+  assert.deepEqual(entrypoint(['--idp']), ['/workspace/apps/auth-idp/dist/index.js']);
+  assert.deepEqual(entrypoint(['--cm-preprod-verify']), ['/workspace/api/dist/index.js', '--cm-preprod-verify']);
+  const calls = [], read = path => path === env.A4_REQUEST_FILE ? JSON.stringify(request) : 'private';
+  const call = (_config, args) => {
+    calls.push(args);
+    return args[0] === 'get' ? JSON.stringify({ spec: { replicas: 0 } }) : 'runtime';
+  };
+  ops({ ...env, A4_OPERATION: 'wire', A4_DRY_RUN: '0' }, call, read);
+  for (const name of ['api', 'auth-idp']) {
+    assert(calls.some(args => args.slice(0, 3).join(' ') === `patch deployment ${name}`));
+    assert(calls.some(args => args.join(' ') === `set image deployment/${name} ${name}=${image}`));
+  }
+  assert(!calls.some(args => args[0] === 'scale'));
+  assert.throws(() => ops({ ...env, A4_OPERATION: 'wire', A4_DRY_RUN: '0' }, (_config, args) => {
+    assert.equal(args[0], 'get');
+    return JSON.stringify({ spec: { replicas: args[2] === 'auth-idp' ? 1 : 0 } });
+  }, read), /consumer_not_quiesced/);
+});
 test('should refuse malformed keys, unexpected previous slots and incorrect active fingerprints', () => {
   const base = { CM_IDENTITY_EMAIL_CODE_POLICY: 'hmac-sha256', CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: approvalRef,
     CM_IDENTITY_EMAIL_CODE_ACTIVE_KEY_REF: activeRef, EMAIL_CODE_HMAC_KEY_ACTIVE_REF: activeRef };

@@ -4,6 +4,8 @@ import { pathToFileURL } from 'node:url';
 
 export const activeRef = 'email-code-hmac:v1:preprod:15c2f8b66073655a';
 export const approvalRef = 'qk-secret-custody-r2:Q-K=A:2026-11-02';
+export const entrypoint = args => args[0] === '--idp'
+  ? ['/workspace/apps/auth-idp/dist/index.js', ...args.slice(1)] : ['/workspace/api/dist/index.js', ...args];
 export function compose(source) {
   const env = { ...source };
   if (env.CM_IDENTITY_EMAIL_CODE_POLICY !== 'hmac-sha256'
@@ -33,7 +35,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     if (process.argv[2] === '--custodian') {
       setInterval(() => {}, 60_000);
     } else {
-      const child = spawn(process.execPath, ['/workspace/api/dist/index.js', ...process.argv.slice(2)],
+      const child = spawn(process.execPath, entrypoint(process.argv.slice(2)),
         { env: compose(process.env), stdio: 'inherit' });
       for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => child.kill(signal));
       child.once('error', () => { process.exitCode = 1; });

@@ -27,8 +27,10 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     return `budgetsSha256=${digest(bytes)}\n`;
   }
   if (env.A4_OPERATION === 'wire') {
-    const api = JSON.parse(k(['get', 'deployment', 'api', '-o', 'json']));
-    if (api.spec.replicas !== 0 || (api.status?.replicas ?? 0) !== 0) throw new Error('api_not_quiesced');
+    for (const name of ['api', 'auth-idp']) {
+      const deployment = JSON.parse(k(['get', 'deployment', name, '-o', 'json']));
+      if (deployment.spec.replicas !== 0 || (deployment.status?.replicas ?? 0) !== 0) throw new Error('consumer_not_quiesced');
+    }
     const runtime = k(['kustomize', 'deploy/k8s/overlays/preprod/a4-runtime']);
     if (env.A4_DRY_RUN === '0') {
       k(['apply', '-f', 'deploy/ci/preprod-a4/custody-pvc.yaml']);
@@ -36,6 +38,9 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
       k(['patch', 'configmap', 'api', '--type=merge', '--patch-file=deploy/k8s/overlays/preprod/patch-api-config.yaml']);
       k(['patch', 'deployment', 'api', '--type=strategic', '--patch-file=deploy/k8s/overlays/preprod/patch-api-a4.yaml']);
       k(['set', 'image', 'deployment/api', `api=${request.candidateImage}`]);
+      k(['patch', 'configmap', 'auth-idp', '--type=merge', '--patch-file=deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml']);
+      k(['patch', 'deployment', 'auth-idp', '--type=strategic', '--patch-file=deploy/k8s/overlays/preprod/patch-auth-idp-a4.yaml']);
+      k(['set', 'image', 'deployment/auth-idp', `auth-idp=${request.candidateImage}`]);
     }
     return `runtimeManifestSha256=${digest(runtime)}\n`;
   }
