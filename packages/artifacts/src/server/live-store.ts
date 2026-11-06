@@ -11,6 +11,7 @@ export interface LiveRuntimeState {
 export interface LiveCommitIntent {
   actorId: string; key: string; hash: string; invocationId: string; createdAt: string;
   message: string; expectedHeadSha: string; revision: string; liveTreeSha: string;
+  policyDigest: string;
 }
 export interface LiveDraftRecord extends LiveIdentity {
   revision: string; baseHeadSha: string; baseTreeSha: string; liveTreeSha: string;

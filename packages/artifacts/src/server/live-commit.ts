@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { ArtifactOperationError } from './failures.js';
 import { readLiveOverlay } from './live-drafts.js';
-import { applyLiveMutation, liveTreeSha } from './live-tree.js';
+import { applyLiveMutation, liveTreeSha, validateLiveMutation } from './live-tree.js';
+import { orderedDigest } from '../profile/json.js';
 import { liveBusy } from './live-mutations.js';
 import { liveResponse, type LiveAuthority, type LiveInvocation, type LiveServiceDeps } from './live-contracts.js';
 import type { LiveCommand, LiveIdentity } from './live-store.js';
@@ -18,6 +19,10 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
   const prepared = await deps.store.transaction(identity, async tx => {
     const record = tx.record;
     if (!record) throw new ArtifactOperationError('git_live_no_changes');
+    const current = await deps.authorize(invocation, identity.artifactId);
+    if (!current.canReadCode || !current.canWrite || !current.humanLinked || current.ownerId !== invocation.actorId ||
+      current.binding.generation !== identity.bindingGeneration || current.binding.state !== 'attached') throw new ArtifactOperationError('access_denied');
+    validateLiveMutation(current.repository, current.target, args, 255, 8 * 1024 * 1024);
     const prior = await tx.receipt(command.actorId, command.key);
     if (prior) {
       if (prior.hash !== command.hash) throw new ArtifactOperationError('command_conflict');
@@ -43,7 +48,10 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     }
     record.pendingCommit = { actorId: command.actorId, key: command.key, hash: command.hash,
       invocationId: invocation.invocationId, createdAt: new Date(now).toISOString(), message: args.message,
-      expectedHeadSha: head, revision: record.revision, liveTreeSha: record.liveTreeSha };
+      expectedHeadSha: head, revision: record.revision, liveTreeSha: record.liveTreeSha,
+      policyDigest: orderedDigest({ ownerId: current.ownerId, repoId: current.binding.repoId,
+        generation: identity.bindingGeneration, writablePaths: current.repository.writablePaths,
+        refusedWritePaths: current.repository.refusedWritePaths }) };
     return { intent: record.pendingCommit, overlay };
   });
   if (prepared.result) return prepared.result;

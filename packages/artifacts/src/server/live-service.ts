@@ -93,7 +93,8 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
     let action: 'project' | 'stop' | null = null;
     const result = await deps.store.transaction(identity, async tx => {
       const current = await deps.authorize(invocation, args.artifactId);
-      if (!stop && current.binding.generation !== identity.bindingGeneration || current.ownerId !== invocation.actorId && !current.invited ||
+      if (!stop && current.binding.generation !== identity.bindingGeneration || current.ownerId !== invocation.actorId &&
+        !(operation === 'live_read' && current.invited && current.canReadCode) ||
         (!stop && !current.canReadCode)) throw new ArtifactOperationError('access_denied');
       if (writer && !stop && (!current.canWrite || !current.humanLinked || current.binding.state !== 'attached')) throw new ArtifactOperationError('access_denied');
       authority = current;
