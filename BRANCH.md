@@ -8,7 +8,7 @@
 - [x] GB4-2: deploy/ci/gb4-probe/manifests.mjs; restricted Pod and ClusterIP Service; emptyDir volumes only.
 - [x] GB4-3: deploy/ci/gb4-probe/run.mjs and probe.mk; preprod-only access through KUBE_CONFIG_DATA_PREPROD_BASCULE, GO gate, cleanup and report.
 - [x] GB4-4: deploy/k8s/base/artifact-content-networkpolicy.yaml; TCP 5173 only to builder namespace AND binding-labelled pods.
-- [ ] GB4-5: scoped offline checks, make scope-check before every commit, push wagon once ready.
+- [x] GB4-5: scoped offline checks 3/3 PASS (GO gate, restricted manifest, split-frame WebSocket and read-only/non-root storage); mechanical harness scope checks before every commit; wagon pushed without PR.
 - [ ] GB4-6: poll the conductor GO file every 120 seconds, at most 10 hours; execute only after it exists.
 - [ ] GB4-7: record every self-test, positive/negative WebSocket result and verified cleanup in the report.
 - [ ] Track handoff: designated conductor imports this mergeable BRANCH.md; this lane never writes concurrent .track events.
