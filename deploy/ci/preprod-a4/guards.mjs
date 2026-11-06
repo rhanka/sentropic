@@ -22,6 +22,17 @@ export function privateInput(path, max = 32768) {
     || metadata.uid !== process.getuid() || realpathSync(path) !== path) throw new Error('private_input_invalid');
   return readFileSync(path, 'utf8');
 }
+/** Prior approval binds the immutable annex without claiming any post-fence observation. */
+export function assertAuthorization(authorization) {
+  if (authorization.format !== 'preprod-a4-authorization/1' || authorization.namespace !== namespace
+    || typeof authorization.authorizationRef !== 'string' || !authorization.authorizationRef.trim()
+    || authorization.authorizationRef.length > 512 || /placeholder|<|>|TODO|example|pending/i.test(authorization.authorizationRef)
+    || !/^[a-z][a-z0-9-]{0,39}$/.test(authorization.operationId)
+    || !/^[a-f0-9]{40}$/.test(authorization.candidateCommit) || authorization.candidateCommit === '0'.repeat(40)
+    || !/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-api@sha256:[a-f0-9]{64}$/.test(authorization.candidateImage)) {
+    throw new Error('authorization_invalid');
+  }
+}
 export function assertRequest(request) {
   const refs = ['authorizationRef', 'writerFenceRef', 'rollbackCheckpointRef', 'rollbackLimitsRef',
     'sourceMetadataDispositionRef', 'remoteSnapshotRef'];

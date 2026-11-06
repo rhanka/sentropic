@@ -2,6 +2,7 @@
 export A4_PHASE ?= checkpoint
 export A4_DRY_RUN ?= 1
 export A4_KUBECONFIG_FILE
+export A4_AUTHORIZATION_FILE
 export A4_REQUEST_FILE
 export A4_OPERATION
 export A4_STAGE
