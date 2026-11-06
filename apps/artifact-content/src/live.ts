@@ -1,0 +1,83 @@
+import { contentHeaders } from '@sentropic/artifacts/content/headers';
+import { podName } from '../../../api/src/services/artifacts/live/pods';
+import type { LiveKey } from '../../../api/src/services/artifacts/live/records';
+
+export interface LiveRoute extends LiveKey {
+  sessionId: string; generation: number; routeEpoch: number; podUid: string; podName: string;
+  expiresAt: number; sourceRevision: number;
+}
+export interface LiveProxyPorts {
+  /** A separate session-bound source consent, current human/code rights and owner check. No release grants. */
+  authorize(request: Request, artifactId: string): Promise<LiveRoute | undefined>;
+  current(route: LiveRoute): Promise<boolean>;
+  /** Checks the host's source staging/dependency manifest, including virtual module identities. */
+  admittedPath(route: LiveRoute, path: string, query: URLSearchParams): Promise<boolean>;
+  /** Revoke active sockets immediately on generation/session/grant/route changes. */
+  watch(route: LiveRoute, revoke: () => void): () => void;
+  fetch?: typeof fetch;
+  now?: () => number;
+}
+export const hmrPath = (sessionId: string) => `/_live/${encodeURIComponent(sessionId)}/hmr`;
+export function liveHeaders(mime: string, size: number, origin: string, sessionId: string) {
+  const endpoint = new URL(hmrPath(sessionId), origin); endpoint.protocol = 'wss:';
+  return { ...contentHeaders({ mimeType: mime, size, mode: 'application' }),
+    'cache-control': 'private, no-store',
+    'content-security-policy': ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:", "font-src 'self'", "media-src 'self' blob:",
+      `connect-src 'self' ${endpoint.href}`, "worker-src 'none'", "child-src 'none'", "frame-src 'none'",
+      "frame-ancestors 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"].join('; '),
+  };
+}
+function safePath(url: URL) {
+  let path: string;
+  try { path = decodeURIComponent(url.pathname); } catch { return false; }
+  return !path.includes('\\') && !path.includes('\0') && !path.includes('%')
+    && !path.startsWith('/@fs') && !path.startsWith('/_reader') && !path.startsWith('/api')
+    && !path.split('/').some(part => part === '..' || part === '.' || part.startsWith('.env')
+      || ['.git', '.npmrc', '.yarnrc', '.track', 'deploy'].includes(part)
+      || /\.(?:pem|key|p12|pfx)$/.test(part));
+}
+export function createLiveProxy(ports: LiveProxyPorts) {
+  const now = ports.now ?? Date.now;
+  const valid = async (route: LiveRoute) => route.podName === podName(route)
+    && /^[A-Za-z0-9_-]{1,128}$/.test(route.sessionId) && route.expiresAt > now() && await ports.current(route);
+  const refused = () => new Response(null, { status: 404, headers: { 'cache-control': 'private, no-store' } });
+  return {
+    async authorize(request: Request, artifactId: string, websocket = false) {
+      const url = new URL(request.url);
+      if (url.protocol !== 'https:' || url.port || (request.headers.has('origin') && request.headers.get('origin') !== url.origin)
+        || request.headers.has('service-worker') || !safePath(url) || !['GET', 'HEAD'].includes(request.method)) return;
+      const route = await ports.authorize(request, artifactId);
+      if (!route || !await valid(route)) return;
+      if (websocket ? url.pathname !== hmrPath(route.sessionId) || !!url.search
+        || request.headers.get('origin') !== url.origin : !await ports.admittedPath(route, url.pathname, url.searchParams)) return;
+      return { route, upstream: `http://${route.podName}.sentropic-artifact-builders.svc.cluster.local:5173`,
+        path: websocket ? '/' : url.pathname + url.search };
+    },
+    valid, watch: ports.watch,
+    async fetch(request: Request, artifactId: string): Promise<Response | undefined> {
+      const admitted = await this.authorize(request, artifactId);
+      if (!admitted) return new URL(request.url).pathname.startsWith('/_live/') ? refused() : undefined;
+      const { route, upstream, path } = admitted;
+      const response = await (ports.fetch ?? fetch)(new URL(path, upstream), {
+        method: request.method, redirect: 'error', signal: AbortSignal.timeout(10_000),
+        // Build a new allowlist. Cookies, tokens, Authorization, Origin and forwarding credentials never reach Vite.
+        headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
+      });
+      if (response.status !== 200 || !await valid(route)) { await response.body?.cancel(); return refused(); }
+      const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let size = 0;
+      if (reader) for (;;) {
+        const chunk = await reader.read(); if (chunk.done) break;
+        size += chunk.value.length;
+        if (size > 16 * 1024 * 1024) { await reader.cancel(); return refused(); }
+        chunks.push(chunk.value);
+      }
+      if (!await valid(route)) return refused();
+      const mime = response.headers.get('content-type')?.split(';')[0] ?? 'application/octet-stream';
+      return new Response(request.method === 'HEAD' ? null : Buffer.concat(chunks), {
+        status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId),
+      });
+    },
+  };
+}
+export type LiveProxy = ReturnType<typeof createLiveProxy>;
