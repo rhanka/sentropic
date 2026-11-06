@@ -3,6 +3,8 @@
 ## Objective
 - [ ] Shorten the API unit path with measured balanced shards and a verified toolbox cache; start independent consumer checks after change selection.
 - [x] Retain BR-84 from origin/test/ci-ten-minute-proof (791150e53); no package version or lock changes in this wagon.
+- [x] Rebase onto lane A origin/perf/ci10-typecheck-artifacts (48da613bd); retain its complete static programs, caches, five artifact shards and promotion joins for combined timing.
+- [x] After rebase, extend the pack-context guard to the artifact shard job; retain the original count and all context/ENV assertions.
 
 ## Scope / Guardrails
 - [x] Branch perf/ci10-unit-graph; worktree tmp/worktrees/ci10-b; multi-branch wagon.
@@ -22,6 +24,9 @@
   - `scripts/ci/consumer-contracts.test.mjs`
   - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `scripts/ci/ci-performance-report.test.mjs`
+  - `scripts/ci/ci-performance-report.mjs`
+  - `scripts/ci/ci-expected-results*`
+  - `scripts/ci/ci-static*`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -58,5 +63,5 @@
 - [x] Cache validators reject source, lock, architecture and archive corruption; scoped cache, graph and 40 publishable-wiring checks passed.
 - [x] Real Vitest 4.1.5 collection and configured sequencer: all 186 unit files assigned exactly once across four shards (34/51/51/50 files).
 - [x] The former 254s app qualification runs as two file shards with the complete content-process checks retained on each isolated runner.
-- [ ] Lot 3: scoped Make sharding, graph, consumer, expected-results and wiring checks on existing Node container; full suites in PR CI.
+- [x] Lot 3: scoped Make sharding, cache, graph, static, consumer, expected-results, DAG, proof and publishable-wiring checks on existing Node container; full suites in PR CI.
 - [ ] Lot 4: scope-check before atomic make commits; push wagon; capture draft timing run; report and test-volume cleanup.
