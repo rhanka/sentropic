@@ -49,7 +49,7 @@ describe('GitHub forge transport (fake HTTP only)', () => {
   it('should preserve authorship and all changes without a REST ref PATCH', async () => {
     const fetcher = fetchMock({ sha: nextSha }); const forge = createGitHubForge(fetcher as GitHubFetch);
     await forge.createTree(context, oldSha, [{ path: 'ui/a', text: 'hello', mode: '100644' }, { path: 'ui/b', text: null, mode: '100755' }]);
-    await forge.createCommit(context, { parentSha: oldSha, treeSha: nextSha, message: 'Update',
+    await forge.createCommit(context, { parentSha: oldSha, treeSha: nextSha, message: 'Update', createdAt: '2026-11-06T00:00:00.000Z',
       author: { name: 'Human', email: 'human@noreply.test' }, committer: { name: 'App', email: 'app@noreply.test' } });
     const calls = vi.mocked(fetcher as GitHubFetch).mock.calls;
     expect(JSON.parse(calls[0][1]!.body as string)).toMatchObject({ base_tree: oldSha,

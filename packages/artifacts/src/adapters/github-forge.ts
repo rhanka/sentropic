@@ -4,6 +4,7 @@ import type { GitForge, GitTreeEntry } from '../server/git-port.js';
 import { githubApi } from './github-http.js';
 import type { GitHubFetch } from './github-http.js';
 import { githubReceivePack } from './github-receive-pack.js';
+import { assertGitBranch } from '../server/git-port-policy.js';
 
 const sha = (value: unknown): string => {
   if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value)) throw new GitForgeError('unavailable');
@@ -21,7 +22,13 @@ export function createGitHubForge(fetcher: GitHubFetch = globalThis.fetch): GitF
     },
     async resolve(context, ref) {
       const result = await api(context, `/commits/${encodeURIComponent(ref)}`);
-      return { sha: sha(result?.sha), treeSha: sha(result?.commit?.tree?.sha) };
+      if (!Array.isArray(result?.parents) || typeof result?.commit?.message !== 'string' ||
+        [result.commit.author, result.commit.committer].some(person => typeof person?.name !== 'string' || typeof person?.email !== 'string')) {
+        throw new GitForgeError('unavailable');
+      }
+      return { sha: sha(result.sha), treeSha: sha(result.commit.tree?.sha), parents: result.parents.map((p: any) => sha(p?.sha)),
+        message: result.commit.message, author: { name: result.commit.author.name, email: result.commit.author.email },
+        committer: { name: result.commit.committer.name, email: result.commit.committer.email } };
     },
     async tree(context, treeSha) {
       const result = await api(context, `/git/trees/${sha(treeSha)}`); // Never use recursive=1 (silent truncation).
@@ -51,14 +58,16 @@ export function createGitHubForge(fetcher: GitHubFetch = globalThis.fetch): GitF
     },
     async createCommit(context, input) {
       const result = await api(context, '/git/commits', { message: input.message, tree: sha(input.treeSha),
-        parents: [sha(input.parentSha)], author: input.author, committer: input.committer });
+        parents: [sha(input.parentSha)], author: { ...input.author, date: input.createdAt },
+        committer: { ...input.committer, date: input.createdAt } });
       return sha(result?.sha);
     },
     async advance(context, branch, expectedSha, commitSha) {
-      sha(expectedSha); sha(commitSha);
+      assertGitBranch(branch); sha(expectedSha); sha(commitSha);
       await githubReceivePack(fetcher, context, branch, expectedSha, commitSha);
     },
     async createBranch(context, branch, baseSha) {
+      assertGitBranch(branch);
       const result = await api(context, '/git/refs', { ref: `refs/heads/${branch}`, sha: sha(baseSha) });
       if (result?.ref !== `refs/heads/${branch}` || result?.object?.sha !== baseSha) throw new GitForgeError('unavailable');
     },

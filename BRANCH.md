@@ -66,5 +66,6 @@
   - [x] Implement GitHub object creation, nonrecursive trees, verified blobs, branch creation and ancestry comparison.
 - [ ] Lot 4: server-resolved authorship, short-lived lease checks, test-only enrolled witness adapter and host docs.
   - [x] Materialize one multi-file child commit with human-directory author, App committer and frozen join trailers; preserve indeterminate ref outcomes.
+  - [x] Expose commit inspection for SG3 reconciliation and use the durable intent timestamp for replayable commit objects.
   - [x] Add fail-closed lease admission, exact repository/permissions/expiry checks and host revocation fencing; no token cache.
 - [ ] Lot 5: scoped tests, typecheck/lint, harness scope, early push, one ready train PR, CI green and volume cleanup.

@@ -17,6 +17,7 @@ export function gitWriter(options: GitPortOptions, sessions: ReturnType<typeof g
     assertGitSha(expectedHeadSha);
     if (!input.files.length || input.files.length > 255 || !input.message.trim() || input.message.length > 16384 ||
       /^Artifacts-(?:Artifact|Invocation|Base):/mi.test(input.message) ||
+      !Number.isFinite(Date.parse(input.createdAt)) || new Date(input.createdAt).toISOString() !== input.createdAt ||
       !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.artifactId) ||
       !/^[\w.-]{1,128}$/.test(input.invocationId)) throw new ArtifactOperationError('invalid_request');
     const paths = input.files.map(file => gitPath(repo, target, file.path, true));
@@ -25,7 +26,9 @@ export function gitWriter(options: GitPortOptions, sessions: ReturnType<typeof g
     for (const file of input.files) {
       if (file.text === null) continue;
       if (typeof file.text !== 'string' || /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/.test(file.text) ||
-        file.text.includes('\0')) throw new ArtifactOperationError('git_path_refused', { publicDetails: { path: file.path, reason: 'not_source_text' } });
+        file.text.includes('\0') || Buffer.from(file.text).toString('utf8') !== file.text) {
+        throw new ArtifactOperationError('git_path_refused', { publicDetails: { path: file.path, reason: 'not_source_text' } });
+      }
       const size = Buffer.byteLength(file.text);
       bytes += size;
       if (size > (options.maxFileBytes ?? 1024 * 1024) || bytes > (options.maxTotalBytes ?? 8 * 1024 * 1024)) {
@@ -42,7 +45,8 @@ export function gitWriter(options: GitPortOptions, sessions: ReturnType<typeof g
     const moved = (actualHeadSha: string) => new ArtifactOperationError('git_head_moved', {
       publicDetails: { expectedHeadSha, actualHeadSha },
     });
-    if ((await head()).sha !== expectedHeadSha) throw moved((await head()).sha);
+    const observed = await head();
+    if (observed.sha !== expectedHeadSha) throw moved(observed.sha);
     const trees = gitTrees(session); const baseTree = await trees.root(expectedHeadSha);
     const changes: { path: string; text: string | null; mode: string }[] = [];
     for (const [i, file] of input.files.entries()) {
@@ -56,12 +60,15 @@ export function gitWriter(options: GitPortOptions, sessions: ReturnType<typeof g
     assertGitSha(treeSha);
     const message = `${input.message}\n\nArtifacts-Artifact: ${input.artifactId}\nArtifacts-Invocation: ${input.invocationId}\nArtifacts-Base: ${expectedHeadSha}`;
     const commitSha = await session.call((forge, context) => forge.createCommit(context,
-      { parentSha: expectedHeadSha, treeSha, message, author, committer: options.committer }));
+      { parentSha: expectedHeadSha, treeSha, message, author, committer: options.committer, createdAt: input.createdAt }));
     assertGitSha(commitSha);
     if (!await options.authorize(target, true)) throw new ArtifactOperationError('access_denied');
     try { await session.call((forge, context) => forge.advance(context, target.branch, expectedHeadSha, commitSha)); }
     catch (error) {
-      if (error instanceof GitForgeError && error.code === 'conflict') throw moved((await head()).sha);
+      if (error instanceof GitForgeError && error.code === 'conflict') {
+        const actual = (await head()).sha;
+        throw actual === expectedHeadSha ? new ArtifactOperationError('git_ref_not_allowed') : moved(actual);
+      }
       // Any other failure after submission is indeterminate, including transport/expiry failures.
       throw new GitPortAdvanceUnknown();
     }
