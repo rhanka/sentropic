@@ -7,6 +7,7 @@ import { deleteCmAccountAsAdmin } from '../../../src/services/identity/cm-accoun
 import { changeCmAccountAsAdmin } from '../../../src/services/identity/cm-account-administration';
 import { createCmUser, findCmUserByEmail, updateCmUser } from '../../../src/services/identity/cm-users';
 import { createCmSession } from '../../../src/services/identity/cm-sessions';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 import { createCmMagicLink, sha256Hex } from '../../../src/services/identity/cm-proofs';
 import { app } from '../../../src/app';
 import { createCmTenant, enrolCmWorkspace, putCmWorkspaceMember, setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
@@ -142,5 +143,35 @@ describe('A4 account deletion with the real CM V2 coordinator', () => {
       LEFT JOIN ${cmTable('identity_login_token_bindings')} b ON b.session_id = s.session_id
       WHERE s.user_id = $1 AND (a.user_id IS NULL OR b.session_id IS NULL)`, [subject]);
     expect(orphans).toEqual([]);
+  });
+
+  it('commits the one-attempt cascade while unrelated workspace writers are active', async () => {
+    let finished = false;
+    const created: string[] = [];
+    let started!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    const writer = (async () => {
+      while (!finished) {
+        const id = randomUUID();
+        await runCmIdentityWrite(async tx => {
+          await tx.hostTransaction.query('SELECT id FROM public.workspaces WHERE owner_user_id = $1', [actor]);
+          started();
+          await tx.hostTransaction.query('SELECT pg_sleep(0.02)');
+          await tx.hostTransaction.query(`INSERT INTO public.workspaces (id, name, owner_user_id, type)
+            VALUES ($1, 'Unrelated concurrent workspace', $2, 'neutral')`, [id, actor]);
+        });
+        created.push(id);
+      }
+    })();
+    try {
+      await ready;
+      const receipt = await deleteCmAccountAsAdmin({ actorId: actor, userId: subject }, randomUUID());
+      expect(receipt.transaction, JSON.stringify({ code: receipt.resultCode, steps: receipt.steps })).toBe('committed');
+      expect(await cmQuery(`SELECT user_id FROM ${cmTable('identity_user_accounts')} WHERE user_id = $1`, [subject])).toEqual([]);
+    } finally {
+      finished = true;
+      await writer;
+      for (const id of created) await db.delete(workspaces).where(eq(workspaces.id, id));
+    }
   });
 });
