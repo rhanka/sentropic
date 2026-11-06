@@ -1,7 +1,7 @@
 # Feature: Git artifact live pod lifecycle
 
 ## Objective
-- [ ] Deliver A-LIVE pod lifecycle, locked dependency cache, idle build and same-origin live serving.
+- [x] Deliver the testable A-LIVE controller, locked cache, idle build and live proxy; train integration and cluster qualification remain explicit below.
 
 ## Scope / Guardrails
 - [x] Branch `feat/git-artifact-live-pod`; worktree `tmp/worktrees/live-pod`; base train `1f28f6792`.
@@ -49,17 +49,17 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read contracts, initialize worktree and verify branch mechanically.
-- [ ] Lot 1: durable runtime, attempt and publication-progress fences; Postgres CAS adapter.
+- [x] Lot 1: durable runtime, attempt and publication-progress fences; Postgres CAS adapter.
   - [x] Define host runtime/progress records and transactional integration ports.
   - [x] Persist scoped state under a cross-replica Postgres transaction; freeze no-secret R1 recipes.
-- [ ] Lot 2: one-pod Kubernetes adapter and restricted manifest; safe revive/stop/recovery.
+- [x] Lot 2: one-pod Kubernetes adapter and restricted manifest; safe revive/stop/recovery.
   - [x] Pin the VAP-compatible pod and adopt response-loss creations under UID/session fences.
   - [x] Fence revive readiness, retain draft conflicts and checkpoint before decommissioning.
   - [x] Limit the in-cluster client to namespace pod/service CRUD with UID deletion preconditions.
-- [ ] Lot 3: locked integrity-verified cache; fixed R1 live/build recipes.
+- [x] Lot 3: locked integrity-verified cache; fixed R1 live/build recipes.
   - [x] Require complete pre-approved integrity inventory and literal lockfile script-package qualification.
   - [x] Admit only clean locked installs; authenticate cache receipts and rehash safe read-only trees on use.
-- [ ] Lot 4: clean idle build, B2 eligibility, wake/finalization serialization and crash recovery.
+- [x] Lot 4: clean idle build, B2 eligibility, wake/finalization serialization and crash recovery.
   - [x] Build a clean last head after strictly 600 seconds; atomically consume B2 eligibility with publication.
   - [x] Fence route epochs and advance clean drafts only through a verified empty-overlay CAS.
   - [x] Implement wake cancellation, narrow revoked-owner stop, heartbeat exclusion and crash/lifetime reaping.
@@ -78,10 +78,10 @@
   - [x] Document host integrations and distinguish fake acceptance from production qualification.
   - [x] Normalize malformed cache receipts and lock records to closed admission errors.
   - [x] Keep the lost-response fake's original implementation separate from its spy wrapper.
-- [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
+- [x] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.
-- [ ] Lot 6: scoped fake Kubernetes/forge/cache/publication race tests and content proxy tests.
+- [x] Lot 6: scoped fake Kubernetes/forge/cache/publication race tests and content proxy tests; 60 tests, strict types (including tests) and scoped lint pass.
   - [x] Add an isolated transactional fake store, Kubernetes Core fake and forge/worker fixture.
   - [x] Cover exact revive, idle threshold/activity, dirty conflicts, divergence and B2 publication counterexamples.
   - [x] Exercise wake/build/finalization races, uncertain termination, interrupted work and store failures.
@@ -90,3 +90,5 @@
   - [x] Use explicit non-returning guards so strict TypeScript retains refusal-path narrowing.
   - [x] Test VAP manifests, provision-response loss, foreign-generation denial and historical build-only entry.
 - [ ] Lot 7: record evidence in `.tmp/rv/live-pod.md`, push without PR and remove test volumes.
+  - [x] Source validation passed at `4404c380c`; no build, version, lock or fixture update.
+  - [x] Consolidated independent review remains with the train under the wagon review rule.
