@@ -54,6 +54,7 @@
   - [ ] `tests/forge/github-app-http.spec.ts`: owner prompt, callback sanitization and broker authentication.
 - [ ] **Lot 2 — Enrollment and custody**
   - [x] Added the exact frozen lease/webhook ports and internal encrypted-store transaction contract.
+  - [x] Implemented authenticated-encryption custody; specified host prompt and service authentication tests before routing implementation.
   - [ ] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
 - [ ] **Lot 3 — Lifecycle and runbook**
   - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
