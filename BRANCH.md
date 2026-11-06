@@ -53,6 +53,7 @@
   - [x] Add atomic memory store, principal-scoped replay receipts and transition/CAS invariants.
 - [ ] Lot 3: additive migration 0010, append-only audit/index and Postgres adapter; shared conformance suite.
   - [x] Add 0010 records, release column, scoped foreign keys and partial active uniqueness indexes.
+  - [x] Add Postgres binding/receipt/event transaction and cross-process replay locking.
 - [ ] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
 - [ ] Lot 5: written SQLite decision and adapter/host integration documentation.
 - [ ] Lot 6: scoped local tests, typecheck/lint, scope check, one ready PR and green CI.
