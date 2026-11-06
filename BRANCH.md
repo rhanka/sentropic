@@ -47,6 +47,7 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review R2 acceptance: scoped IdP shared email-code HTTP handler loads the real runtime policy and token custodian; missing policy/approval/keys refuse before the isolated transaction double, and absent qualified deletion budgets refuse.
 - [x] Review R5: add a digest-bound private execution annex and make action entrypoint for the reviewed fence/scales/deletion/restriction; tenant restore/recovery stay separately approved tenant make procedures.
 - [x] Review R1: internal verification never probes stopped UI; public HTTP follows the restricted, pinned UI proxy with other controllers fenced; IdP is the only separately authorized identity writer.
 - [x] Review R4: separate genuine isolated D11 qualification from final rollback dump bytes; require reviewed candidate/assets/verifier/census applicability and refuse every drift or absent evidence. No qualifying current-candidate receipt found locally; execution remains blocked pending tenant qualification.
