@@ -106,6 +106,8 @@ function toRelease(row: ReleaseRow): ReleaseRecord {
 }
 
 /** Create the Postgres-backed store over an injected pool (no DDL). */
+export { createPostgresGitBindingStore, createPostgresGitReleaseIndexStore } from './postgres-git-bindings.js';
+
 export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
   return {
     async ensureArtifact(input: ArtifactBindingInput): Promise<ArtifactBinding> {
