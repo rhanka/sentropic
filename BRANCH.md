@@ -63,6 +63,7 @@
   - [x] Build a clean last head after strictly 600 seconds; atomically consume B2 eligibility with publication.
   - [x] Fence route epochs and advance clean drafts only through a verified empty-overlay CAS.
   - [x] Implement wake cancellation, narrow revoked-owner stop, heartbeat exclusion and crash/lifetime reaping.
+  - [x] Add explicit historical build-only provisioning without Vite, routes or draft restoration.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.
