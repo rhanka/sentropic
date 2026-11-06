@@ -8,8 +8,10 @@ export A4_STAGE
 export A4_REMOTE_FILE
 export A4_REHEARSAL_FILE
 export A4_BUDGETS_FILE
+export A4_VERIFY_PHASE ?= internal
+export A4_VERIFICATION_FILE
 .PHONY: k8s-preprod-a4-verify
-k8s-preprod-a4-verify: ## Read-only journal, CM receipt, D11, readiness and public HTTP verification
+k8s-preprod-a4-verify: ## Read-only internal gates; A4_VERIFY_PHASE=http additionally requires the restricted UI proxy
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
 	@node deploy/ci/preprod-a4/verify.mjs
 .PHONY: k8s-preprod-a4-custody
