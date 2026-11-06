@@ -48,7 +48,7 @@ export function createLiveProxy(ports: LiveProxyPorts) {
       if (url.protocol !== 'https:' || url.port || (request.headers.has('origin') && request.headers.get('origin') !== url.origin)
         || request.headers.has('service-worker') || !safePath(url) || !['GET', 'HEAD'].includes(request.method)) return;
       const route = await ports.authorize(request, artifactId);
-      if (!route || !await valid(route)) return;
+      if (!route || route.artifactId !== artifactId || !await valid(route)) return;
       if (websocket ? url.pathname !== hmrPath(route.sessionId) || !!url.search
         || request.headers.get('origin') !== url.origin : !await ports.admittedPath(route, url.pathname, url.searchParams)) return;
       return { route, upstream: `http://${route.podName}.sentropic-artifact-builders.svc.cluster.local:5173`,
