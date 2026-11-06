@@ -57,8 +57,9 @@ returned URL as its enrollment prompt link. It grants no access without owner au
 
 1. On the prompt page, click **Enroll <repository>**. This posts a nonsecret App
    manifest to GitHub's App-creation page under the signed-in owner's account.
-2. Review the GitHub App creation screen and approve **Create GitHub App**; complete
-   GitHub 2FA when requested. Cluster-mesh receives the manifest conversion code,
+2. Review the GitHub App creation screen and approve **Create GitHub App**. The intended
+   gesture is **one click to approve, plus the password confirmation if GitHub asks**.
+   Cluster-mesh receives the manifest conversion code,
    exchanges it server-side and keeps the returned credentials in encrypted custody.
 3. The callback redirects to GitHub's installation screen. Choose **Only select
    repositories**, select exactly the intended repository, and approve **Install**.
@@ -75,8 +76,10 @@ failure. A failed or expired flow must be restarted by its owner.
 
 P2's real GitHub prompt count and one-approval-click target remain **unverified**.
 The screens above are the operator path to witness, not a claimed live receipt.
+The intended gesture is **one click to approve, plus the password confirmation if GitHub asks**.
 The fake GitHub suite proves local protocol behavior only. Record actual screens,
-2FA and forge receipts before activation; no real enrollment was run for this wagon.
+password confirmation and any additional forge prompts in the P2 receipt before
+activation; no real enrollment was run for this wagon.
 
 ## Lease and verification composition
 
@@ -92,6 +95,11 @@ Every mint requests one repository id and exactly `contents:write` plus
 rejects extra repositories or permissions. App grants are rechecked on every mint.
 Tokens expire within one hour, are never cached for reuse, and are retained only
 in encrypted custody until expiry or revocation so all issued leases can be revoked.
+Transient GitHub server, rate-limit or transport failures refuse the current
+request and retain a recoverable `unavailable` enrollment. Retry lease acquisition
+or the failed permission-change webhook after recovery; success returns it to
+`ready` without reenrollment or changing its credential epoch. Confirmed access
+loss still revokes enrollment, invalidates the epoch and revokes issued leases.
 Artifacts receives only the short-lived token response. It still checks expiry,
 repo/permission equality and current epoch, and enforces branch/path/principal/CAS
 rules before forge access. A1 contents permission itself is repository-wide.
