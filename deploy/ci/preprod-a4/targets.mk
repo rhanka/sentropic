@@ -3,6 +3,13 @@ export A4_PHASE ?= checkpoint
 export A4_DRY_RUN ?= 1
 export A4_KUBECONFIG_FILE
 export A4_REQUEST_FILE
+export A4_OPERATION
+export A4_STAGE
+export A4_REMOTE_FILE
+export A4_REHEARSAL_FILE
+.PHONY: k8s-preprod-a4-custody
+k8s-preprod-a4-custody: ## Prepare the tenant custodian or stage protected inputs; dry-run by default
+	@node deploy/ci/preprod-a4/ops.mjs
 .PHONY: k8s-preprod-a4-prepare test-preprod-a4
 k8s-preprod-a4-prepare: ## Prepare the owner-authorized A4 evidence; dry-run by default (see runbook)
 	@node deploy/ci/preprod-a4/run.mjs

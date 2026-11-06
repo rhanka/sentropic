@@ -14,7 +14,7 @@ resources:
   - ingress.yaml
   - artifact-content-ingress.yaml
   - idp-identity-sync
-  - ../../../ci/preprod-a4
+  - a4-runtime
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
 #   images:

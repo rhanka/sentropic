@@ -16,9 +16,9 @@ export function kubectl(config, args, input) {
   if (result.status !== 0 || result.error) throw new Error('kubectl_failed');
   return result.stdout;
 }
-export function privateInput(path) {
+export function privateInput(path, max = 32768) {
   const metadata = lstatSync(path);
-  if (!metadata.isFile() || metadata.size > 32768 || (metadata.mode & 0o077)
+  if (!metadata.isFile() || metadata.size > max || (metadata.mode & 0o077)
     || metadata.uid !== process.getuid() || realpathSync(path) !== path) throw new Error('private_input_invalid');
   return readFileSync(path, 'utf8');
 }
