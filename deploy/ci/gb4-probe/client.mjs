@@ -36,4 +36,4 @@ const result = await new Promise((resolve) => {
     finish(pending[0] === 0x81 && pending[1] === 8 && pending.subarray(2, 10).toString() === 'gb4-echo' ? 'ECHO_OK' : 'INVALID_ECHO');
   });
 });
-console.log(JSON.stringify({ address, result }));
+console.log(JSON.stringify({ type: 'GB4_WEBSOCKET', address, result }));

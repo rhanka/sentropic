@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { manifests, serverSource, clientSource, image } from './manifests.mjs';
+import { manifests, serverSource, clientSource, image, egressRule, clientPod } from './manifests.mjs';
 
 test('should refuse live execution without GO before loading credentials', () => {
   const root = mkdtempSync(join(tmpdir(), 'gb4-gate-'));
@@ -18,7 +18,7 @@ test('should refuse live execution without GO before loading credentials', () =>
 });
 
 test('should render a restricted digest-pinned Pod with only emptyDir storage', () => {
-  const [pod, service, policy] = manifests([['live-service', '10.0.0.1', 443]]);
+  const [pod, service] = manifests([['live-service', '10.0.0.1', 443]]);
   assert.match(image, /^docker.io\/library\/node@sha256:[a-f0-9]{64}$/);
   assert.equal(pod.spec.automountServiceAccountToken, false);
   assert.equal(pod.spec.serviceAccountName, 'artifact-builder');
@@ -35,9 +35,13 @@ test('should render a restricted digest-pinned Pod with only emptyDir storage', 
   assert.ok(c.env.every((env) => !env.valueFrom));
   assert.equal(service.spec.type, 'ClusterIP');
   assert.deepEqual(service.spec.selector, pod.metadata.labels);
-  assert.equal(policy.spec.egress[0].to.length, 1);
-  assert.equal(policy.spec.egress[0].to[0].namespaceSelector.matchLabels['kubernetes.io/metadata.name'], pod.metadata.namespace);
-  assert.equal(policy.spec.egress[0].ports[0].port, 5173);
+  assert.equal(manifests().length, 2);
+  assert.equal(egressRule.to.length, 1);
+  assert.equal(egressRule.to[0].namespaceSelector.matchLabels['kubernetes.io/metadata.name'], pod.metadata.namespace);
+  assert.equal(egressRule.ports[0].port, 5173);
+  const denied = clientPod('probe.example');
+  assert.notEqual(denied.metadata.labels['sentropic.dev/artifact-binding'], pod.metadata.labels['sentropic.dev/artifact-binding']);
+  assert.equal(denied.spec.containers[0].command.at(-1), 'probe.example');
 });
 
 test('should echo a split masked WebSocket frame and detect reachable egress', async () => {
