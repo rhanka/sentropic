@@ -13,10 +13,10 @@ import {
   workflowDefinitions,
   workflowRunState,
   workflowTaskTransitions,
-  workspaceMemberships,
   workspaces,
   workspaceTypeWorkflows,
 } from "../db/schema";
+import { findCmWorkspaceMember } from "./identity/cm-tenancy";
 import { createId } from "../utils/id";
 import {
   DEFAULT_GENERATION_AGENTS,
@@ -277,11 +277,7 @@ type EventDbExecutor = Pick<typeof db, "select" | "insert">;
 
 export class TodoOrchestrationService {
   private async assertWorkspaceMember(workspaceId: string, userId: string): Promise<void> {
-    const [membership] = await db
-      .select({ userId: workspaceMemberships.userId })
-      .from(workspaceMemberships)
-      .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, userId)))
-      .limit(1);
+    const membership = await findCmWorkspaceMember(workspaceId, userId);
 
     if (!membership) {
       throw new TodoOrchestrationError(400, "User is not a workspace member");

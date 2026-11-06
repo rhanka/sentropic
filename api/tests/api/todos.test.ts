@@ -1,8 +1,10 @@
+import { putCmWorkspaceMember } from "../../src/services/identity/cm-tenancy";
+import { cmDeleteWorkspaceMembers } from "../utils/cm-identity-test-store";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { app } from "../../src/app";
 import { db } from "../../src/db/client";
-import { executionEvents, executionRuns, plans, tasks, todos, workspaceMemberships } from "../../src/db/schema";
+import { executionEvents, executionRuns, plans, tasks, todos } from "../../src/db/schema";
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
 
 describe("Todos API through the root-mounted workflows namespace", () => {
@@ -15,23 +17,8 @@ describe("Todos API through the root-mounted workflows namespace", () => {
     owner = await createAuthenticatedUser("editor");
     viewer = await createAuthenticatedUser("guest");
 
-    await db
-      .insert(workspaceMemberships)
-      .values([
-        {
-          workspaceId: editor.workspaceId,
-          userId: owner.id,
-          role: "editor",
-          createdAt: new Date(),
-        },
-        {
-          workspaceId: editor.workspaceId,
-          userId: viewer.id,
-          role: "viewer",
-          createdAt: new Date(),
-        },
-      ])
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(editor.workspaceId, owner.id, "editor");
+    await putCmWorkspaceMember(editor.workspaceId, viewer.id, "viewer");
   });
 
   afterEach(async () => {
@@ -41,7 +28,7 @@ describe("Todos API through the root-mounted workflows namespace", () => {
       await db.delete(tasks).where(eq(tasks.workspaceId, editor.workspaceId));
       await db.delete(todos).where(eq(todos.workspaceId, editor.workspaceId));
       await db.delete(plans).where(eq(plans.workspaceId, editor.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, editor.workspaceId));
+      await cmDeleteWorkspaceMembers(editor.workspaceId);
     }
     await cleanupAuthData();
   });

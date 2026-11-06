@@ -3,7 +3,9 @@ import JSZip from 'jszip';
 import { createHash } from 'crypto';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { workspaces, workspaceMemberships, workspaceTypeWorkflows, workflowDefinitionTasks, workflowDefinitions, agentDefinitions, viewTemplates } from '../../src/db/schema';
+import { workspaces, workspaceTypeWorkflows, workflowDefinitionTasks, workflowDefinitions, agentDefinitions, viewTemplates } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { eq, inArray } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 
@@ -101,7 +103,7 @@ describe('Workspaces API', () => {
       await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, id));
       await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, id));
       await db.delete(viewTemplates).where(eq(viewTemplates.workspaceId, id));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, id));
+      await cmDeleteWorkspaceMembers(id);
       await db.delete(workspaces).where(eq(workspaces.id, id));
     }
     createdWorkspaceIds.length = 0;
@@ -154,12 +156,7 @@ describe('Workspaces API', () => {
 
   it('enforces admin role for workspace lifecycle actions', async () => {
     const wsId = await createWorkspace();
-    await db.insert(workspaceMemberships).values({
-      workspaceId: wsId,
-      userId: viewer.id,
-      role: 'viewer',
-      createdAt: new Date(),
-    });
+    await putCmWorkspaceMember(wsId, viewer.id, 'viewer');
 
     const hideAsViewer = await authenticatedRequest(
       app,
@@ -246,12 +243,7 @@ describe('Workspaces API', () => {
   });
 
   it('requires admin to export workspace', async () => {
-    await db.insert(workspaceMemberships).values({
-      workspaceId: editor.workspaceId!,
-      userId: viewer.id,
-      role: 'viewer',
-      createdAt: new Date(),
-    });
+    await putCmWorkspaceMember(editor.workspaceId!, viewer.id, 'viewer');
 
     const resEditor = await authenticatedRequest(app, 'POST', '/api/v1/exports', editor.sessionToken, {
       scope: 'workspace',
@@ -275,12 +267,7 @@ describe('Workspaces API', () => {
   });
 
   it('requires admin to import into existing workspace', async () => {
-    await db.insert(workspaceMemberships).values({
-      workspaceId: editor.workspaceId!,
-      userId: viewer.id,
-      role: 'viewer',
-      createdAt: new Date(),
-    });
+    await putCmWorkspaceMember(editor.workspaceId!, viewer.id, 'viewer');
 
     const zipBytes = await buildImportZip();
     const form = new FormData();

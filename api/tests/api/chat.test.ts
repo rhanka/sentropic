@@ -7,7 +7,9 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatSessions, chatMessages, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
+import { chatSessions, chatMessages, jobQueue, workspaces } from '../../src/db/schema';
+import { enrolCmWorkspace, putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
 import { eq } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
 import { chatService } from '../../src/services/chat-service';
@@ -678,17 +680,12 @@ describe('Chat API Endpoints', () => {
       const secondWorkspaceId = crypto.randomUUID();
       await db.insert(workspaces).values({
         id: secondWorkspaceId,
-        ownerUserId: user.id,
         name: `Second workspace ${createTestId()}`,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      await db.insert(workspaceMemberships).values({
-        workspaceId: secondWorkspaceId,
-        userId: user.id,
-        role: 'editor',
-        createdAt: new Date(),
-      });
+      await enrolCmWorkspace({ workspaceId: secondWorkspaceId, tenantId: PLATFORM_TENANT_ID });
+      await putCmWorkspaceMember(secondWorkspaceId, user.id, 'editor');
       const otherUser = await createAuthenticatedUser('editor');
       const ownCurrentWorkspaceSessionId = crypto.randomUUID();
       const ownSecondWorkspaceSessionId = crypto.randomUUID();

@@ -68,6 +68,21 @@ spec:
               volumeMounts: [{ name: work, mountPath: /work }]
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
               resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+            - name: replica-sync
+              image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+              workingDir: /work/in
+              # The phase-2 shell consumes the runner stdout from this file; keep
+              # the redirect (dash-safe, no pipe) so a runner crash still surfaces.
+              command: ["sh", "-c", "node /app/dist/scripts/identity-replica-sync.js --relay-dir=/work/in > /work/cm-sync.log 2>&1; code=$?; cat /work/cm-sync.log; exit $code"]
+              env:
+                - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
+                - { name: DATABASE_URL, value: "postgres://app:$(POSTGRES_PASSWORD)@postgres:5432/app" }
+                - { name: DRY_RUN, value: "1" }
+                - { name: MAX_SNAPSHOT_AGE_S, value: "7200" }
+                - { name: CM_IDENTITY_DELETION_BUDGETS_JSON, valueFrom: { secretKeyRef: { name: sentropic-identity-budgets, key: CM_IDENTITY_DELETION_BUDGETS_JSON } } }
+              volumeMounts: [{ name: work, mountPath: /work }]
+              securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+              resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
           containers:
             - name: import-preprod
               image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
@@ -79,7 +94,6 @@ spec:
                 - { name: PGUSER, value: app }
                 - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
                 - { name: DRY_RUN, value: "1" }
-                - { name: ALLOWED_REKEY, value: "" }
                 - { name: ALLOWED_CLIENTS, value: "" }
                 - { name: IMMO_MCP_WORKLOAD_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: immo-mcp-workload, key: IMMO_MCP_WORKLOAD_CLIENT_SECRET, optional: true } } }
                 - { name: MAX_SNAPSHOT_AGE_S, value: "7200" }

@@ -9,12 +9,12 @@ import {
   folders,
   jobQueue,
   initiatives,
-  tenantMemberships,
-  users,
   workspaces,
-  workspaceMemberships
 } from '../../src/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
+import { cmDeleteWorkspaceMembers, cmDeleteForUsers, cmDeleteTenants, cmQuery, cmTable } from '../utils/cm-identity-test-store';
+import { createCmTenant, enrolCmWorkspace, putCmWorkspaceMember, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
 import { chatService } from '../../src/services/chat-service';
 import { toolService } from '../../src/services/tool-service';
 import { createId } from '../../src/utils/id';
@@ -53,7 +53,6 @@ describe('AI - comment_assistant tool exposure', () => {
     });
 
     user = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
     const folderResponse = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, {
       name: `Test Folder ${createTestId()}`,
       description: 'Test folder for comment assistant',
@@ -76,7 +75,7 @@ describe('AI - comment_assistant tool exposure', () => {
     if (user?.workspaceId) {
       await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
       await db.delete(chatSessions).where(eq(chatSessions.workspaceId, user.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, user.workspaceId));
+      await cmDeleteWorkspaceMembers(user.workspaceId);
       await db.delete(workspaces).where(eq(workspaces.id, user.workspaceId));
     }
     await cleanupAuthData();
@@ -92,7 +91,7 @@ describe('AI - comment_assistant tool exposure', () => {
       return stream();
     });
 
-    const created = await chatService.createUserMessageWithAssistantPlaceholder({
+    const created = await createAdmittedChatMessage({
       userId: user.id,
       sessionId: null,
       content: 'Analyse les commentaires',
@@ -150,12 +149,13 @@ describe('AI - comment_assistant permissions', () => {
       updatedAt: now,
     });
 
-    await db.insert(workspaceMemberships).values([
-      { workspaceId, userId: viewerUser.id, role: 'viewer', createdAt: now },
-      { workspaceId, userId: commenterUser.id, role: 'commenter', createdAt: now },
-      { workspaceId, userId: editorUser.id, role: 'editor', createdAt: now },
-      { workspaceId, userId: adminUser.id, role: 'admin', createdAt: now },
-    ]);
+    await createCmTenant({ tenantId: workspaceId });
+    await enrolCmWorkspace({ workspaceId, tenantId: workspaceId });
+    for (const [actor, role] of [[viewerUser, 'viewer'], [commenterUser, 'commenter'],
+      [editorUser, 'editor'], [adminUser, 'admin']] as const) {
+      await setCmMembershipState(actor.id, workspaceId, { status: 'approved', decidedBy: adminUser.id });
+      await putCmWorkspaceMember(workspaceId, actor.id, role);
+    }
 
     await db.insert(comments).values({
       id: createId(),
@@ -175,9 +175,11 @@ describe('AI - comment_assistant permissions', () => {
 
   afterEach(async () => {
     await db.delete(comments).where(eq(comments.workspaceId, workspaceId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(users).where(inArray(users.id, [viewerUser.id, commenterUser.id, editorUser.id, adminUser.id]));
+    await cmDeleteForUsers([viewerUser.id, commenterUser.id, editorUser.id, adminUser.id]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
+    await cmDeleteTenants([workspaceId]);
     await cleanupAuthData();
   });
 
@@ -243,17 +245,21 @@ describe('AI - comment_assistant Lot 0 characterization', () => {
       createdAt: now,
       updatedAt: now,
     });
-    await db.insert(workspaceMemberships).values([
-      { workspaceId, userId: creatorUser.id, role: 'admin', createdAt: now },
-      { workspaceId, userId: assigneeUser.id, role: 'editor', createdAt: now },
-    ]);
+    await createCmTenant({ tenantId: workspaceId });
+    await enrolCmWorkspace({ workspaceId, tenantId: workspaceId });
+    for (const [actor, role] of [[creatorUser, 'admin'], [assigneeUser, 'editor']] as const) {
+      await setCmMembershipState(actor.id, workspaceId, { status: 'approved', decidedBy: creatorUser.id });
+      await putCmWorkspaceMember(workspaceId, actor.id, role);
+    }
   });
 
   afterEach(async () => {
     await db.delete(comments).where(eq(comments.workspaceId, workspaceId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(users).where(inArray(users.id, [creatorUser.id, assigneeUser.id]));
+    await cmDeleteForUsers([creatorUser.id, assigneeUser.id]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
+    await cmDeleteTenants([workspaceId]);
     await cleanupAuthData();
   });
 

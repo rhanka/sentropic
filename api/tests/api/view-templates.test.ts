@@ -7,7 +7,8 @@ import {
   cleanupAuthData,
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { viewTemplates, workspaceMemberships } from '../../src/db/schema';
+import { viewTemplates } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import { eq } from 'drizzle-orm';
 import { viewTemplateService } from '../../src/services/view-template-service';
 
@@ -19,10 +20,7 @@ describe('View Templates API', () => {
     user = await createAuthenticatedUser('admin_org', `admin-${createTestId()}@example.com`);
     viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
     if (user.workspaceId) {
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: user.workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
-        .onConflictDoNothing();
+      await putCmWorkspaceMember(user.workspaceId, viewer.id, 'viewer');
     }
   });
 

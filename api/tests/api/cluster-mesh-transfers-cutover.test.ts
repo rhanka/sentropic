@@ -9,6 +9,8 @@ import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '../../src/db/client';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
+import { findCmWorkspaceMember, listCmWorkspaceMembers } from '../../src/services/identity/cm-tenancy';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
   comments,
@@ -16,7 +18,6 @@ import {
   folders,
   initiatives,
   organizations,
-  workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
@@ -136,7 +137,7 @@ const buildArchive = async (
 
 const bridges = [
   ['db/client.ts', 'a26b33f68913593f17d07f288b855d14e0f21e537592673a42d5ae28606a5b99'],
-  ['db/schema.ts', 'becc16a83cdec26457f0dfe1f83f8d5c381a2e21b55491fd72abab584bdd8492'],
+  ['db/schema.ts', '7c7ad5054d12553baca640ad4585544cb524e34c9b3ea169f57940e87339cef3'],
   ['services/storage-s3.ts', '964b5aefd2f186ee2047c6b24b52e87fcacdde037f983fd49c450e2941966da5'],
   ['services/workspace-access.ts', '128364cb1712e7b5c70d88b33a34199af1254b624b337e82e95cd230849fa110'],
   ['utils/id.ts', '7148d17b36975340ed8d20ae49c96a1b06f7d107b9b2492e32e15fe169a24aa3'],
@@ -151,7 +152,7 @@ describe('cluster mesh transfers cutover', () => {
     await clearCutover();
     artifactRoot = join(tmpdir(), `transfer-cutover-${process.pid}-${crypto.randomUUID()}`);
     setArtifactStoreForTesting(new LocalFsArtifactStore(artifactRoot, 'transfer-cutover'));
-    owner = await createAuthenticatedUser('admin');
+    owner = await createAuthenticatedUser('admin_org');
     workspaceIds.add(owner.workspaceId!);
   });
 
@@ -163,7 +164,7 @@ describe('cluster mesh transfers cutover', () => {
       await db.delete(initiatives).where(inArray(initiatives.workspaceId, ids));
       await db.delete(folders).where(inArray(folders.workspaceId, ids));
       await db.delete(organizations).where(inArray(organizations.workspaceId, ids));
-      await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.workspaceId, ids));
+      for (const id of ids) await cmDeleteWorkspaceMembers(id);
       await db.delete(workspaces).where(inArray(workspaces.id, ids));
     }
     workspaceIds.clear();
@@ -218,7 +219,10 @@ describe('cluster mesh transfers cutover', () => {
       status: 'ready', data: { summaryLang: 'en' }, version: 1,
     });
 
-    vi.spyOn(Date.prototype, 'toISOString').mockReturnValue('2026-09-02T00:00:00.000Z');
+    // No wall-clock freeze: CM session validation fail-closes when the readable
+    // now stops advancing (a frozen `toISOString` makes every claims expiry compare
+    // equal to now), so both twins run on the live clock and the two volatile
+    // fields below are compared semantically instead of byte-wise.
     const request = (app: Hono) => authenticatedRequest(
       app, 'POST', '/api/v1/exports', owner.sessionToken!, {
         scope: 'workspace', include_comments: false, include_documents: true,
@@ -239,10 +243,30 @@ describe('cluster mesh transfers cutover', () => {
     expect(JSON.parse(await candidateZip.file('manifest.json')!.async('string')).schema_version)
       .toBe(currentJournal.entries[currentJournal.entries.length - 1].tag);
     expect(Object.keys(candidateZip.files).sort()).toEqual(Object.keys(legacyZip.files).sort());
-    for (const path of ['manifest.json', 'meta.json']) {
-      expect(await candidateZip.file(path)!.async('string'))
-        .toBe(await legacyZip.file(path)!.async('string'));
+    const legacyManifest = JSON.parse(await legacyZip.file('manifest.json')!.async('string')) as Record<string, unknown>;
+    const candidateManifest = JSON.parse(await candidateZip.file('manifest.json')!.async('string')) as Record<string, unknown>;
+    const { created_at: _legacyCreatedAt, manifest_hash: _legacyHash, ...legacyCore } = legacyManifest;
+    const { created_at: _candidateCreatedAt, manifest_hash: _candidateHash, ...candidateCore } = candidateManifest;
+    const withoutMembershipEntry = (core: Record<string, unknown>) => ({
+      ...core,
+      files: ((core.files ?? []) as Array<Record<string, unknown>>).filter(
+        (entry) => entry.path !== 'workspace_memberships.json'),
+    });
+    expect(withoutMembershipEntry(candidateCore)).toEqual(withoutMembershipEntry(legacyCore));
+    for (const createdAt of [_legacyCreatedAt, _candidateCreatedAt]) {
+      expect(typeof createdAt).toBe('string');
+      expect(Number.isNaN(Date.parse(createdAt as string))).toBe(false);
     }
+    for (const hash of [_legacyHash, _candidateHash]) {
+      expect(hash).toMatch(/^[a-f0-9]{64}$/);
+    }
+    expect(await candidateZip.file('meta.json')!.async('string'))
+      .toBe(await legacyZip.file('meta.json')!.async('string'));
+    const legacyMembers = JSON.parse(await legacyZip.file('workspace_memberships.json')!.async('string')) as Array<Record<string, unknown>>;
+    const candidateMembers = JSON.parse(await candidateZip.file('workspace_memberships.json')!.async('string')) as Array<Record<string, unknown>>;
+    // The CM twin carries no membership timestamps; the bridge serializes them as null.
+    for (const member of legacyMembers) expect(member.created_at).toBeNull();
+    expect(legacyMembers.map(({ created_at: _ignored, ...rest }) => rest)).toEqual(candidateMembers);
     const documentPath = Object.keys(candidateZip.files).find(
       (path) => path.startsWith('documents/') && !path.endsWith('/'),
     )!;
@@ -314,19 +338,14 @@ describe('cluster mesh transfers cutover', () => {
   });
 
   it('denies cross-workspace imports through both admin and editor authorization', async () => {
-    const targetOwner = await createAuthenticatedUser('admin');
+    const targetOwner = await createAuthenticatedUser('admin_org');
     const targetWorkspaceId = targetOwner.workspaceId!;
     workspaceIds.add(targetWorkspaceId);
-    expect(await db.select().from(workspaceMemberships).where(and(
-      eq(workspaceMemberships.workspaceId, targetWorkspaceId),
-      eq(workspaceMemberships.userId, owner.id),
-    ))).toHaveLength(0);
+    expect(await findCmWorkspaceMember(targetWorkspaceId, owner.id)).toBeNull();
 
     const durableState = async () => ({
       workspaces: await db.select().from(workspaces).orderBy(workspaces.id),
-      memberships: await db.select().from(workspaceMemberships).where(
-        eq(workspaceMemberships.workspaceId, targetWorkspaceId),
-      ),
+      memberships: await listCmWorkspaceMembers(targetWorkspaceId),
       organizations: await db.select().from(organizations).where(
         eq(organizations.workspaceId, targetWorkspaceId),
       ),
@@ -430,9 +449,7 @@ describe('cluster mesh transfers cutover', () => {
       });
     };
     const assertTwin = async (workspaceId: string): Promise<void> => {
-      expect(await db.select().from(workspaceMemberships).where(
-        eq(workspaceMemberships.workspaceId, workspaceId),
-      )).toHaveLength(1);
+      expect(await listCmWorkspaceMembers(workspaceId)).toHaveLength(1);
       expect(await db.select().from(organizations).where(
         eq(organizations.workspaceId, workspaceId),
       )).toHaveLength(1);

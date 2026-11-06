@@ -4,7 +4,10 @@ import { sql } from 'drizzle-orm';
 
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
-import { workspaceMemberships, workspaces } from '../../src/db/schema';
+import { workspaces } from '../../src/db/schema';
+import { enrolCmWorkspace, putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -52,17 +55,12 @@ describe('VSCode project/workspace mapping API', () => {
     const workspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({
       id: workspaceId,
-      ownerUserId: editor.id,
       name: 'Code Workspace B',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(workspaceMemberships).values({
-      workspaceId,
-      userId: editor.id,
-      role: 'editor',
-      createdAt: new Date(),
-    });
+    await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
+    await putCmWorkspaceMember(workspaceId, editor.id, 'editor');
     await db.run(sql`
       INSERT INTO settings (key, user_id, value, description, updated_at)
       VALUES (
@@ -114,7 +112,7 @@ describe('VSCode project/workspace mapping API', () => {
       mappedWorkspaceName: 'Code Workspace B',
     });
 
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
   });
 
@@ -193,17 +191,12 @@ describe('VSCode project/workspace mapping API', () => {
     const codeWorkspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({
       id: codeWorkspaceId,
-      ownerUserId: editor.id,
       name: 'Code Workspace C',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(workspaceMemberships).values({
-      workspaceId: codeWorkspaceId,
-      userId: editor.id,
-      role: 'editor',
-      createdAt: new Date(),
-    });
+    await enrolCmWorkspace({ workspaceId: codeWorkspaceId, tenantId: PLATFORM_TENANT_ID });
+    await putCmWorkspaceMember(codeWorkspaceId, editor.id, 'editor');
     await db.run(sql`
       INSERT INTO settings (key, user_id, value, description, updated_at)
       VALUES (
@@ -239,7 +232,7 @@ describe('VSCode project/workspace mapping API', () => {
       mappedWorkspaceName: 'Code Workspace C',
     });
 
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, codeWorkspaceId));
+    await cmDeleteWorkspaceMembers(codeWorkspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, codeWorkspaceId));
   });
 });

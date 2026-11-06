@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 
 import { db } from '../../../src/db/client';
-import { tenants, workspaces } from '../../../src/db/schema';
+import { workspaces } from '../../../src/db/schema';
+import { createCmTenant } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
 
 const migrationSql = readFileSync(
   join(process.cwd(), 'drizzle/control/0006_arch11_outbox_tenant_rekey.sql'),
@@ -33,12 +35,20 @@ describe('ARCH-11 G1a outbox tenant re-key migration', () => {
          OR (aggregate_type = 'tenant_rekey' AND aggregate_id = ${workspaceId})
     `);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
+    await cmDeleteTenants([tenantId]);
+    await db.run(sql`ALTER TABLE public.workspaces DROP COLUMN IF EXISTS tenant_id`);
   });
 
   it('re-keys only proven aliases, including embedded tenant and UBO scope copies', async () => {
-    await db.insert(tenants).values({ id: tenantId, name: tenantId, status: 'active' });
-    await db.insert(workspaces).values({ id: workspaceId, name: workspaceId, tenantId });
+    await createCmTenant({ tenantId, slug: tenantId, status: 'active' });
+    await db.insert(workspaces).values({ id: workspaceId, name: workspaceId });
+    // The migration under test predates cutover 0015: it resolves the workspace →
+    // tenant mapping from public.workspaces.tenant_id, which 0015 dropped (the
+    // mapping now lives in cm_identity.cm_workspaces). Recreate that column for
+    // this test only so the migration file executes against its real precondition;
+    // the journal hash-guard forbids changing the migration itself.
+    await db.run(sql`ALTER TABLE public.workspaces ADD COLUMN IF NOT EXISTS tenant_id text`);
+    await db.run(sql`UPDATE public.workspaces SET tenant_id = ${tenantId} WHERE id = ${workspaceId}`);
 
     const aliasedEnvelope = JSON.stringify({
       tenant: { tenantId: workspaceId, workspaceId, userId: 'user-a' },

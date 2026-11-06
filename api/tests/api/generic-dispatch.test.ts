@@ -1,3 +1,4 @@
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../src/db/client";
@@ -11,7 +12,6 @@ import {
   workflowRunState,
   workflowTaskResults,
   workflowTaskTransitions,
-  workspaceMemberships,
   workspaceTypeWorkflows,
 } from "../../src/db/schema";
 import { createAuthenticatedUser, cleanupAuthData } from "../utils/auth-helper";
@@ -47,7 +47,7 @@ describe("Generic dispatch and backward compat", () => {
       await db.delete(workflowDefinitionTasks).where(eq(workflowDefinitionTasks.workspaceId, editor.workspaceId));
       await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, editor.workspaceId));
       await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, editor.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, editor.workspaceId));
+      await cmDeleteWorkspaceMembers(editor.workspaceId);
     }
     await cleanupAuthData();
     vi.restoreAllMocks();

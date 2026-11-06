@@ -9,9 +9,13 @@ import {
   folders,
   organizations,
   initiatives,
-  workspaceMemberships,
   workspaces,
 } from '../../db/schema';
+import { listCmWorkspaceMembers } from '../../services/identity/cm-tenancy';
+import { runCmIdentityWrite } from '../../services/identity/cm-transaction';
+import { CmIdentityForbiddenError } from '../../services/identity/cm-deletion-authorization';
+import { provisionWorkspace } from '../../services/workspace-provisioning';
+import { TenantNotActiveError } from '@sentropic/cluster-mesh';
 import { db } from '../../db/client';
 import { createId } from '../../utils/id';
 import {
@@ -340,25 +344,23 @@ async function collectExportData(opts: {
   if (opts.scope === 'workspace') {
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, opts.workspaceId)).limit(1);
     if (ws) {
+      // Lot A4: workspace ownership/membership live in the CM store.
+      const cmMembers = await listCmWorkspaceMembers(ws.id);
+      const owner = cmMembers.find((m) => m.role === 'admin') ?? cmMembers[0];
       payload.workspaces.push({
         id: ws.id,
-        owner_user_id: ws.ownerUserId,
+        owner_user_id: owner?.userId ?? null,
         name: ws.name,
         hidden_at: toIso(ws.hiddenAt),
         created_at: toIso(ws.createdAt),
         updated_at: toIso(ws.updatedAt),
       });
+      payload.workspace_memberships = cmMembers.map((m) => ({
+        workspace_id: m.workspaceId,
+        user_id: m.userId,
+        role: m.role,
+      }));
     }
-    const memberships = await db
-      .select()
-      .from(workspaceMemberships)
-      .where(eq(workspaceMemberships.workspaceId, opts.workspaceId));
-    payload.workspace_memberships = memberships.map((m) => ({
-      workspace_id: m.workspaceId,
-      user_id: m.userId,
-      role: m.role,
-      created_at: toIso(m.createdAt),
-    }));
 
     const includeFolders = opts.includeWorkspaceFolders || opts.includeWorkspaceInitiatives;
     const includeInitiatives = opts.includeWorkspaceInitiatives;
@@ -1342,21 +1344,16 @@ const createImportsRouter = (ports: TransferDomainRuntimePorts): Hono => {
         : "Workspace d'import";
     const newWorkspaceId = createId();
     idMap.workspace.set((sourceWs?.id as string) || 'source', newWorkspaceId);
-    await db.transaction(async (tx) => {
-      await tx.insert(workspaces).values({
-        id: newWorkspaceId,
-        ownerUserId: user.userId,
-        name: wsName,
-        createdAt: now,
-        updatedAt: now,
-      });
-      await tx.insert(workspaceMemberships).values({
-        workspaceId: newWorkspaceId,
-        userId: user.userId,
-        role: 'admin',
-        createdAt: now,
-      });
-    });
+    const type = sourceWs?.type === 'code' || sourceWs?.type === 'opportunity' ? sourceWs.type : 'ai-priorities';
+    try {
+      await runCmIdentityWrite(tx => provisionWorkspace(tx, {
+        workspaceId: newWorkspaceId, ownerUserId: user.userId, name: wsName, type,
+      }));
+    } catch (error) {
+      if (error instanceof CmIdentityForbiddenError) return c.json({ message: 'Insufficient permissions' }, 403);
+      if (error instanceof TenantNotActiveError) return c.json({ message: 'Tenant not active' }, 409);
+      return c.json({ message: 'Identity service unavailable' }, 503);
+    }
     resolvedWorkspaceId = newWorkspaceId;
   }
 

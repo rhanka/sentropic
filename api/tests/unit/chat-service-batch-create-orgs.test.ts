@@ -1,3 +1,4 @@
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
 import {
@@ -7,14 +8,13 @@ import {
   folders,
   jobQueue,
   organizations,
-  tenantMemberships,
-  users,
   workspaces,
-  workspaceMemberships,
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 
 // Mock OpenAI streaming — must be declared before importing chatService.
 vi.mock('../../src/services/llm-runtime', () => {
@@ -83,18 +83,9 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     savedReasoningEffortEvalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval;
     CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `batch-orgs-test-${userId}@example.com`,
-      displayName: 'BatchOrgs Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
-    await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
+    const actor = await createTestUser({ email: `batch-orgs-test-${userId}@example.com`, displayName: 'BatchOrgs Test User', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
     folderId = createId();
     await db.insert(folders).values({
@@ -116,9 +107,10 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     await db.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
     if (savedReasoningEffortEvalTemplate !== undefined) {
       CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
       savedReasoningEffortEvalTemplate = undefined;
@@ -141,7 +133,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations',
@@ -175,7 +167,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations',
@@ -195,7 +187,8 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
   });
 
   it('should NOT include batch_create_organizations for neutral workspace', async () => {
-    // ensureWorkspaceForUser creates neutral by default, no update needed
+    // The CM fixture workspace defaults to ai-priorities: pin neutral explicitly.
+    await db.update(workspaces).set({ type: 'neutral' }).where(eq(workspaces.id, workspaceId));
 
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let capturedTools: string[] = [];
@@ -209,7 +202,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations',
@@ -228,6 +221,33 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     expect(capturedTools).not.toContain('batch_create_organizations');
   });
 
+  it.each(['before-selection', 'during-model-response'] as const)(
+    'refuses batch creation after a role downgrade %s', async timing => {
+      await db.update(workspaces).set({ type: 'opportunity' }).where(eq(workspaces.id, workspaceId));
+      const message = await createAdmittedChatMessage({ userId, workspaceId, content: 'Create Acme',
+        primaryContextType: 'folder', primaryContextId: folderId, model: 'gpt-4.1-nano' });
+      const downgrade = () => putCmWorkspaceMember(workspaceId, userId, 'viewer');
+      if (timing === 'before-selection') await downgrade();
+      const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+      let selected: string[] = [];
+      mock.mockImplementationOnce(async function* (opts: any) {
+        selected = toolNames(opts.tools);
+        if (timing === 'during-model-response') await downgrade();
+        yield { type: 'tool_call_start', data: { tool_call_id: 'revoked-batch',
+          name: 'batch_create_organizations', args: JSON.stringify({ description: 'Acme' }) } };
+        yield { type: 'done', data: {} };
+      }).mockImplementation(() => stream([{ type: 'content_delta', data: { delta: 'OK' } }, { type: 'done', data: {} }]));
+      await chatService.runAssistantGeneration({ userId, ...message });
+      if (timing === 'before-selection') expect(selected).not.toContain('batch_create_organizations');
+      else expect(selected).toContain('batch_create_organizations');
+      expect(await db.select().from(organizations).where(eq(organizations.workspaceId, workspaceId))).toEqual([]);
+      expect(await db.select().from(jobQueue).where(eq(jobQueue.workspaceId, workspaceId))).toEqual([]);
+      const events = await db.select().from(chatStreamEvents)
+        .where(eq(chatStreamEvents.streamId, message.assistantMessageId));
+      expect(events.some(event => event.eventType === 'tool_call_result'
+        && JSON.stringify(event.data).includes('catalog_access_denied'))).toBe(true);
+    });
+
   it('should handle batch_create_organizations tool call and produce a result event', async () => {
     await db.update(workspaces).set({ type: 'opportunity' }).where(eq(workspaces.id, workspaceId));
 
@@ -242,16 +262,15 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
             name: 'batch_create_organizations',
             args: JSON.stringify({
               description: 'Create 3 tech companies: Acme Corp (AI), Beta Inc (Cloud), Gamma Ltd (IoT)',
-              workspaceId,
             }),
           },
         },
         { type: 'done', data: {} },
       ]),
-    );
+    ).mockImplementation(() => stream([{ type: 'content_delta', data: { delta: 'OK' } }, { type: 'done', data: {} }]));
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations from description',
@@ -298,17 +317,16 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
             tool_call_id: 'tool_batch_orgs_nodesc',
             name: 'batch_create_organizations',
             args: JSON.stringify({
-              workspaceId,
               // description deliberately omitted
             }),
           },
         },
         { type: 'done', data: {} },
       ]),
-    );
+    ).mockImplementation(() => stream([{ type: 'content_delta', data: { delta: 'OK' } }, { type: 'done', data: {} }]));
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'batch create orgs',

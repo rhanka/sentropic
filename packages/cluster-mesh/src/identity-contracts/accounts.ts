@@ -85,7 +85,7 @@ export function createUserAccounts(input: {
       forbidSelfAction(userId, actorId, 'disable');
       const account = await requireAccount(userId);
       if (isProtectedAdmin(account.globalRole)) throw new AdminUserProtectedError('disable');
-      if (account.accountStatus !== 'active') throw new AccountTransitionError();
+      if (account.accountStatus !== 'active' && account.accountStatus !== 'pending_admin_approval') throw new AccountTransitionError();
       const now = clock();
       const updated = await input.accounts.setAccountStatus(userId, 'disabled', now);
       await input.audit.append({ at: now, kind: 'account.disabled', actorId, subjectId: userId });
@@ -104,7 +104,9 @@ export function createUserAccounts(input: {
       forbidSelfAction(userId, actorId, 'delete');
       const account = await requireAccount(userId);
       if (isProtectedAdmin(account.globalRole)) throw new AdminUserProtectedError('delete');
-      if (account.accountStatus !== 'disabled') throw new AccountTransitionError('User must be disabled before deletion');
+      if (account.accountStatus !== 'disabled' && account.accountStatus !== 'pending_admin_approval') {
+        throw new AccountTransitionError('User must be pending or disabled before deletion');
+      }
       const now = clock();
       await input.accounts.deleteAccount(userId, now);
       await input.audit.append({ at: now, kind: 'account.deleted', actorId, subjectId: userId });

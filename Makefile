@@ -1070,7 +1070,7 @@ ci-package-qualification: ci-package-verify
 	    case "$(PACKAGE_LANE)" in \
 	      installed) target=cluster-mesh-comments-installed ;; \
 	      major) target=cluster-mesh-pg-major-upgrade ;; \
-	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1,@sentropic/engram@0.22.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
+	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1,@sentropic/engram@0.22.0,@sentropic/auth-ui@0.9.0,@sentropic/design-system-svelte@0.34.75 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
 	    esac; \
 	    $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk "$$target" CM_COMMENTS_TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/$(PACKAGE_LANE) ENV=$(ENV) ;; \
 	  *) echo 'Unknown package qualification lane' >&2; exit 1 ;; \
@@ -2972,7 +2972,9 @@ up-api-test-ci: ci-test-env ## Start source API from the cached toolbox; no inst
 up-api-sut: ci-test-env ## Start the shipped API as-is; boot owns migrations
 	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
 	# The app treats any nonempty value as disabled; the runner expects literal false.
-	DISABLE_RATE_LIMIT=$(if $(filter false 0,$(DISABLE_RATE_LIMIT)),,$(or $(DISABLE_RATE_LIMIT),true)) $(CI_COMPOSE) up --no-build -d --wait api-sut
+	# CI_SUT_OVERLAY optionally points at an extra compose file (e.g. the restore
+	# rehearsal checkpoint env); empty in every other flow.
+	DISABLE_RATE_LIMIT=$(if $(filter false 0,$(DISABLE_RATE_LIMIT)),,$(or $(DISABLE_RATE_LIMIT),true)) $(CI_COMPOSE) $(if $(CI_SUT_OVERLAY),-f $(CI_SUT_OVERLAY)) up --no-build -d --wait api-sut
 down-api-ci: ## Stop the isolated CI source/SUT stack
 	$(CI_COMPOSE) down
 logs-api-ci: ## Print source and production SUT logs
@@ -2992,8 +2994,20 @@ restore-api-sut: ci-test-env ## Restore a dump before the first production boot;
 	$(CI_COMPOSE) stop api api-sut auth-idp
 	$(CI_COMPOSE) up -d --wait postgres
 	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
-	@set -eu; before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
-	$(MAKE) up-api-sut ENV=$(ENV); \
+	@set -eu; overlay="$$(mktemp)"; genoverlay="$$(mktemp)"; trap 'rm -f "$$overlay" "$$genoverlay"' EXIT; \
+	printf '%s\n' 'services:' '  api-sut:' '    environment:' \
+		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' \
+		'      WEBAUTHN_RP_ID: localhost' \
+		'      WEBAUTHN_ORIGIN: http://localhost:$(or $(UI_PORT),5173)' > "$$overlay"; \
+	printf '%s\n' 'services:' '  api-sut:' '    volumes:' \
+		'      - cm-restore-checkpoint:/run/cm-checkpoint' > "$$genoverlay"; \
+	$(CI_COMPOSE) -f "$$genoverlay" run --rm --no-deps -w /workspace/api \
+		-e WEBAUTHN_RP_ID=localhost \
+		-e WEBAUTHN_ORIGIN=http://localhost:$(or $(UI_PORT),5173) \
+		-e CANDIDATE_COMMIT="$$(git rev-parse HEAD 2>/dev/null || printf '%040d' 0)" \
+		api-sut node dist/index.js --cm-restore-checkpoint; \
+	before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
+	$(MAKE) up-api-sut ENV=$(ENV) CI_SUT_OVERLAY="$$overlay"; \
 	after="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
 	test "$$before" = "$$after"; echo "Restored business data preserved across production boot: $$after"
 
@@ -3017,7 +3031,7 @@ up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrate
 smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2E browser against compiled IdP
 	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
 	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
-	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" -e CM_IDENTITY_EMAIL_CODE_POLICY=sha256 -e CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only api npx --no-install tsx --tsconfig apps/auth-idp/tsconfig.json apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
 	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
 	test -n "$$user_id"; test -n "$$session_token"; \
 	idp_container="$$( $(CI_COMPOSE) ps -q auth-idp )"; test -n "$$idp_container"; \
@@ -3150,6 +3164,8 @@ smoke-idp: ## Run the deterministic SSO authorization_code smoke against the liv
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
 		-e IDP_BASE_URL=http://auth-idp:8787 \
 		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
+		-e CM_IDENTITY_EMAIL_CODE_POLICY=sha256 \
+		-e CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only \
 		-w /workspace api npx --no-install tsx apps/auth-idp/sso-smoke.ts
 
 .PHONY: smoke-idp-screens
@@ -3160,7 +3176,9 @@ smoke-idp-screens: ## Screen-driven SSO smoke: drives the IdP-SERVED login+conse
 	@echo "▶ Seeding verified user + session on the shared DB..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
 		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
-		-w /workspace api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
+		-e CM_IDENTITY_EMAIL_CODE_POLICY=sha256 \
+		-e CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF=synthetic-smoke-test-only \
+		-w /workspace api npx --no-install tsx --tsconfig apps/auth-idp/tsconfig.json apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
 	USER_ID=$$(grep '^USER_ID=' .tmp-idp-seed.env | cut -d= -f2-); \
 	SESSION_TOKEN=$$(grep '^SESSION_TOKEN=' .tmp-idp-seed.env | cut -d= -f2-); \
 	rm -f .tmp-idp-seed.env; \
@@ -3718,7 +3736,7 @@ API_TEST_ARGS ?=
 .PHONY: test-api-%
 
 test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
-	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
+	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) $(if $(filter unit endpoints,$*),-e NODE_ENV=test) -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
 	  TEST_TYPE="$*"; \
 	  requested_workers="$${VITEST_MAX_WORKERS:-4}"; \
 	  extra_args="$${API_TEST_ARGS:-}"; \

@@ -1,16 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '../../src/db/client';
+import { createCmUser, updateCmUser } from '../../src/services/identity/cm-users';
+import { createCmTenant, enrolCmWorkspace, putCmWorkspaceMember, setCmMembershipState, listCmWorkspaceMembers } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmDeleteTenants, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import {
   connectorTenantEnrollments,
   liveGitDeclarations,
 } from '../../src/db/control-schema';
 import {
   chatSessions,
-  tenantMemberships,
-  tenants,
-  users,
-  workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
 import { defaultCodeWorkspaceBindingAuthorizer } from '../../src/routes/namespaces/code-git-ports';
@@ -55,56 +54,42 @@ const ALL_TEST_USERS = [
   TEST_USER_REVOKED_TENANT,
 ];
 const ALL_TEST_WORKSPACES = [TEST_CODE_WORKSPACE, TEST_NEUTRAL_WORKSPACE, TEST_HIDDEN_WORKSPACE, TEST_ADMIN_NEUTRAL_WORKSPACE];
+const membershipSnapshot = async () => (await Promise.all(ALL_TEST_WORKSPACES.map(listCmWorkspaceMembers))).flat();
 
 async function cleanupTestData() {
   await db.delete(liveGitDeclarations).where(eq(liveGitDeclarations.tenantId, TEST_TENANT));
   await db.delete(connectorTenantEnrollments).where(eq(connectorTenantEnrollments.tenantId, TEST_TENANT));
   await db.delete(chatSessions).where(inArray(chatSessions.workspaceId, ALL_TEST_WORKSPACES));
-  await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.workspaceId, ALL_TEST_WORKSPACES));
+  for (const workspaceId of ALL_TEST_WORKSPACES) await cmDeleteWorkspaceMembers(workspaceId);
   await db.delete(workspaces).where(inArray(workspaces.id, ALL_TEST_WORKSPACES));
-  await db.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, TEST_TENANT));
-  await db.delete(users).where(inArray(users.id, ALL_TEST_USERS));
-  await db.delete(tenants).where(eq(tenants.id, TEST_TENANT));
+  await cmDeleteForUsers(ALL_TEST_USERS);
+  await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = ANY($1)`, [ALL_TEST_WORKSPACES]);
+  await cmDeleteTenants([TEST_TENANT]);
 }
 
 beforeEach(async () => {
   await cleanupTestData();
-  await db.insert(tenants).values({ id: TEST_TENANT, name: TEST_TENANT, status: 'active' });
-  await db.insert(users).values([
-    { id: TEST_USER_AUTHORIZED, email: `${TEST_USER_AUTHORIZED}@example.com`, displayName: TEST_USER_AUTHORIZED, role: 'user', accountStatus: 'active' },
-    { id: TEST_USER_UNAUTHORIZED, email: `${TEST_USER_UNAUTHORIZED}@example.com`, displayName: TEST_USER_UNAUTHORIZED, role: 'user', accountStatus: 'active' },
-    { id: TEST_USER_ADMIN_BIND, email: `${TEST_USER_ADMIN_BIND}@example.com`, displayName: TEST_USER_ADMIN_BIND, role: 'user', accountStatus: 'active' },
-    { id: TEST_USER_VIEWER, email: `${TEST_USER_VIEWER}@example.com`, displayName: TEST_USER_VIEWER, role: 'user', accountStatus: 'active' },
-    { id: TEST_USER_COMMENTER, email: `${TEST_USER_COMMENTER}@example.com`, displayName: TEST_USER_COMMENTER, role: 'user', accountStatus: 'active' },
-    { id: TEST_USER_SUSPENDED, email: `${TEST_USER_SUSPENDED}@example.com`, displayName: TEST_USER_SUSPENDED, role: 'user', accountStatus: 'suspended' },
-    { id: TEST_USER_DISABLED, email: `${TEST_USER_DISABLED}@example.com`, displayName: TEST_USER_DISABLED, role: 'user', accountStatus: 'active', disabledAt: new Date() },
-    { id: TEST_USER_REVOKED_TENANT, email: `${TEST_USER_REVOKED_TENANT}@example.com`, displayName: TEST_USER_REVOKED_TENANT, role: 'user', accountStatus: 'active' },
-  ]);
-  await db.insert(tenantMemberships).values([
-    { tenantId: TEST_TENANT, userId: TEST_USER_AUTHORIZED, status: 'approved', role: 'member' },
-    { tenantId: TEST_TENANT, userId: TEST_USER_UNAUTHORIZED, status: 'approved', role: 'member' },
-    { tenantId: TEST_TENANT, userId: TEST_USER_ADMIN_BIND, status: 'approved', role: 'member' },
-    { tenantId: TEST_TENANT, userId: TEST_USER_VIEWER, status: 'approved', role: 'member' },
-    { tenantId: TEST_TENANT, userId: TEST_USER_COMMENTER, status: 'approved', role: 'member' },
-    { tenantId: TEST_TENANT, userId: TEST_USER_SUSPENDED, status: 'approved', role: 'member' },
-    { tenantId: TEST_TENANT, userId: TEST_USER_DISABLED, status: 'approved', role: 'member' },
-    { tenantId: TEST_TENANT, userId: TEST_USER_REVOKED_TENANT, status: 'suspended', role: 'member' },
-  ]);
+  await createCmTenant({ tenantId: TEST_TENANT });
+  for (const userId of ALL_TEST_USERS) {
+    await createCmUser({ userId, email: `${userId}@example.com`, displayName: userId, role: 'editor',
+      accountStatus: userId === TEST_USER_SUSPENDED ? 'disabled_by_admin' : 'active' });
+    await setCmMembershipState(userId, TEST_TENANT, {
+      status: userId === TEST_USER_REVOKED_TENANT ? 'suspended' : 'approved', decidedBy: TEST_USER_AUTHORIZED,
+    });
+  }
+  // Keep the independent profile-disable guard covered as well as account status.
+  await updateCmUser(TEST_USER_DISABLED, { disabledAt: new Date() });
   await db.insert(workspaces).values([
-    { id: TEST_CODE_WORKSPACE, name: 'Code WS', tenantId: TEST_TENANT, type: 'code' },
-    { id: TEST_NEUTRAL_WORKSPACE, name: 'Neutral WS', tenantId: TEST_TENANT, type: 'neutral' },
-    { id: TEST_HIDDEN_WORKSPACE, name: 'Hidden WS', tenantId: TEST_TENANT, type: 'code', hiddenAt: new Date() },
-    { id: TEST_ADMIN_NEUTRAL_WORKSPACE, name: 'Admin Neutral WS', tenantId: TEST_TENANT, type: 'ai-priorities' },
+    { id: TEST_CODE_WORKSPACE, name: 'Code WS', type: 'code' },
+    { id: TEST_NEUTRAL_WORKSPACE, name: 'Neutral WS', type: 'neutral' },
+    { id: TEST_HIDDEN_WORKSPACE, name: 'Hidden WS', type: 'code', hiddenAt: new Date() },
+    { id: TEST_ADMIN_NEUTRAL_WORKSPACE, name: 'Admin Neutral WS', type: 'ai-priorities' },
   ]);
-  await db.insert(workspaceMemberships).values([
-    { workspaceId: TEST_CODE_WORKSPACE, userId: TEST_USER_AUTHORIZED, role: 'editor' },
-    { workspaceId: TEST_CODE_WORKSPACE, userId: TEST_USER_VIEWER, role: 'viewer' },
-    { workspaceId: TEST_CODE_WORKSPACE, userId: TEST_USER_COMMENTER, role: 'commenter' },
-    { workspaceId: TEST_CODE_WORKSPACE, userId: TEST_USER_SUSPENDED, role: 'editor' },
-    { workspaceId: TEST_CODE_WORKSPACE, userId: TEST_USER_DISABLED, role: 'editor' },
-    { workspaceId: TEST_CODE_WORKSPACE, userId: TEST_USER_REVOKED_TENANT, role: 'editor' },
-    { workspaceId: TEST_ADMIN_NEUTRAL_WORKSPACE, userId: TEST_USER_ADMIN_BIND, role: 'admin' },
-  ]);
+  for (const workspaceId of ALL_TEST_WORKSPACES) await enrolCmWorkspace({ workspaceId, tenantId: TEST_TENANT });
+  for (const [userId, role] of [[TEST_USER_AUTHORIZED, 'editor'], [TEST_USER_VIEWER, 'viewer'],
+    [TEST_USER_COMMENTER, 'commenter'], [TEST_USER_SUSPENDED, 'editor'], [TEST_USER_DISABLED, 'editor'],
+    [TEST_USER_REVOKED_TENANT, 'editor']] as const) await putCmWorkspaceMember(TEST_CODE_WORKSPACE, userId, role);
+  await putCmWorkspaceMember(TEST_ADMIN_NEUTRAL_WORKSPACE, TEST_USER_ADMIN_BIND, 'admin');
   await db.insert(connectorTenantEnrollments).values([
     { principalSub: TEST_USER_ADMIN_BIND, connectorInstanceId: 'conn-admin', tenantId: TEST_TENANT, status: 'active' },
     { principalSub: TEST_USER_AUTHORIZED, connectorInstanceId: 'conn-user', tenantId: TEST_TENANT, status: 'active' },
@@ -122,7 +107,7 @@ function makeDeclaration(overrides: Record<string, unknown> = {}) {
 describe('live registration product-binding persistence (L6a)', () => {
   it('product declarations use authorized code-workspace bindings without changing membership or enrollment semantics', async () => {
     const issuer = resolveOAuthIssuer();
-    const membershipsBefore = await db.select().from(workspaceMemberships);
+    const membershipsBefore = await membershipSnapshot();
     const enrollmentsBefore = await db.select().from(connectorTenantEnrollments);
 
     const authorized = makeDeclaration({
@@ -170,7 +155,7 @@ describe('live registration product-binding persistence (L6a)', () => {
       bindingRevision: INITIAL_BINDING_REVISION,
     }) as never)).rejects.toThrow(/serverIssuer mismatch/);
 
-    const membershipsAfter = await db.select().from(workspaceMemberships);
+    const membershipsAfter = await membershipSnapshot();
     const enrollmentsAfter = await db.select().from(connectorTenantEnrollments);
     expect(membershipsAfter).toEqual(membershipsBefore);
     expect(enrollmentsAfter).toEqual(enrollmentsBefore);
@@ -186,7 +171,7 @@ describe('live registration product-binding persistence (L6a)', () => {
       title: 'Default transcript session',
     });
 
-    const membershipsBefore = await db.select().from(workspaceMemberships);
+    const membershipsBefore = await membershipSnapshot();
     const enrollmentsBefore = await db.select().from(connectorTenantEnrollments);
     const transcriptsBefore = await db.select().from(chatSessions).where(eq(chatSessions.id, TEST_SESSION_ID));
 
@@ -204,7 +189,7 @@ describe('live registration product-binding persistence (L6a)', () => {
       bindingRevision: INITIAL_BINDING_REVISION,
     }) as never)).rejects.toThrow(/not an authorized member/);
 
-    const membershipsAfter = await db.select().from(workspaceMemberships);
+    const membershipsAfter = await membershipSnapshot();
     const enrollmentsAfter = await db.select().from(connectorTenantEnrollments);
     const transcriptsAfter = await db.select().from(chatSessions).where(eq(chatSessions.id, TEST_SESSION_ID));
     expect(membershipsAfter).toEqual(membershipsBefore);
