@@ -83,6 +83,9 @@ test('should retain every API shard and both artifact lanes in the actual workfl
   const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
   const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
   const matrix = workflow.jobs['test-api-unit-integration'].strategy.matrix.include;
+  const base = workflow.jobs['consumer-contracts'].steps.find(step => step.env?.VERIFY_BASE).env.VERIFY_BASE;
+  assert.match(base, /github\.event\.pull_request\.base\.sha \|\| github\.event\.before/);
+  assert.match(base, /format\('origin\/\{0\}', github\.event\.repository\.default_branch\)/);
   assert.deepEqual(matrix.filter(row => row.suite === 'unit').map(row => row.unit_shard), [1, 2]);
   assert.deepEqual(matrix.filter(row => row.suite === 'endpoints').map(row => row.endpoints_shard), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(matrix.filter(row => row.suite === 'app-cluster-mesh').length, 1);
