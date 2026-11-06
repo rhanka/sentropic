@@ -68,4 +68,5 @@
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.
 - [ ] Lot 6: scoped fake Kubernetes/forge/cache/publication race tests and content proxy tests.
   - [x] Add an isolated transactional fake store, Kubernetes Core fake and forge/worker fixture.
+  - [x] Cover exact revive, idle threshold/activity, dirty conflicts, divergence and B2 publication counterexamples.
 - [ ] Lot 7: record evidence in `.tmp/rv/live-pod.md`, push without PR and remove test volumes.
