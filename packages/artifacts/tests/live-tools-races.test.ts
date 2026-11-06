@@ -51,6 +51,17 @@ it('should stop after code-right revocation without source revision access or dr
   await expect(w.call('live_read')).rejects.toMatchObject({ kind: 'access_denied' });
   expect(w.worker.stop).toHaveBeenCalledTimes(1);
 });
+it('should retain an indeterminate commit while permitting the revoked owner to stop its worker', async () => {
+  const w = liveWitness(); const written = await w.write({ files: [{ path: 'ui/a.ts', text: 'retained' }] });
+  w.git.commit.mockRejectedValueOnce(new ArtifactOperationError('provider_unavailable'));
+  await expect(w.call('git_commit', { expectedHeadSha: written.currentHeadSha, message: 'Uncertain', idempotencyKey: 'uncertain',
+    files: [{ path: 'ui/a.ts', text: 'retained' }] })).rejects.toThrow();
+  w.revoke();
+  expect(await w.call('live_control', { action: 'stop', liveSessionId: written.liveSessionId, idempotencyKey: 'stop-uncertain' }))
+    .toEqual({ liveSessionId: written.liveSessionId, state: 'DORMANT' });
+  expect(await w.store.transaction({ storageScopeId: w.context.storageScopeId, artifactId: w.binding.artifactId, bindingGeneration: 1 },
+    async tx => tx.record!.changedPaths)).toBe(1);
+});
 it('should refuse no-op commits and allow deleting an uncommitted new file', async () => {
   const w = liveWitness(); const state = await w.status();
   await expect(w.call('git_commit', { expectedHeadSha: state.baseHeadSha, files: [{ path: 'ui/a.ts', text: 'alpha' }],
