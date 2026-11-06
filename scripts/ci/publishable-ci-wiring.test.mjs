@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
 import { evaluateSelection } from './ci-expected-results.mjs';
 import { loadBoundaries, verifyDispatch } from './consumer-contracts.mjs';
+import { tupleForApp } from './installed-tuple.mjs';
+import { classifyCompatibility } from './compatibility-classifier.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -805,16 +807,36 @@ test('consumer contracts (BR-83): IdP consumer checks stay selected on api chang
 test('consumer contracts: real UI dispatch qualifies PRs and retains main delivery', () => {
   const boundaries = loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json'));
   const workflowText = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  // Same real manifests, root lock, Dockerfiles and empty candidate input as
+  // consumer-contracts-verify in CI. Linked dependencies remain unqualified.
+  const installed = Object.fromEntries(['api', 'ui'].map(appDir =>
+    [appDir, tupleForApp({ root, appDir, candidates: [] })]));
+  assert.ok(Object.values(installed).every(tuple =>
+    Object.values(tuple.closure).some(entry => entry.qualified === false)));
+  const tuples = { before: installed, after: structuredClone(installed) };
   for (const ref of ['refs/pull/1/merge', 'refs/heads/main']) {
     for (const kind of ['ui-only', 'shared-asset']) {
       const shared = kind === 'shared-asset';
       const result = verifyDispatch({ kind, slugs: shared ? ['auth-ui'] : [], boundaries,
-        workflow: ci, workflowText, ref, event: ref === 'refs/heads/main' ? 'push' : 'pull_request',
+        workflow: ci, workflowText, tuples, ref, event: ref === 'refs/heads/main' ? 'push' : 'pull_request',
         changes: { global: 'false', ui: 'true', api: String(shared), auth_ui: String(shared) } });
       assert.equal(result.ok, true, `${kind} ${ref}: ${result.problems.join('; ')}`);
       assert.equal(result.required.some(row => row.identity === 'deploy-preprod'), ref === 'refs/heads/main');
+      const drift = structuredClone(tuples);
+      Object.values(drift.after.api.closure).find(entry => typeof entry.integrity === 'string').integrity += '-changed';
+      const changed = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, tuples: drift,
+        changes: { ui: 'true', api: String(shared), auth_ui: String(shared) } });
+      assert.equal(changed.ok, false);
+      assert.ok(changed.problems.some(problem => problem.includes('installed tuple changed for api')));
+      assert.equal(verifyDispatch({ kind, boundaries, workflow: ci, workflowText, tuples,
+        changes: { ui: 'true', api: String(shared), auth_ui: String(shared) }, expectOmission: true }).ok, false);
     }
   }
+  const omission = verifyDispatch({ kind: 'internal-fix', slugs: ['comments'], boundaries,
+    workflow: ci, workflowText, tuples, changes: { comments: 'true', cluster_mesh: 'true' }, expectOmission: true });
+  assert.equal(omission.ok, false);
+  assert.ok(omission.problems.some(problem => problem.includes('without candidate bytes')));
+  assert.equal(classifyCompatibility({ files: ['ui/src/routes/+page.svelte'] }).kind, 'ui-only');
 });
 
 test('consumer contracts: API runtime changes select the complete integration set', () => {

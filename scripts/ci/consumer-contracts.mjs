@@ -79,8 +79,10 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
   }
   // Only selections that omit consumer work need tuple proof: full and
   // adopted selections omit nothing, so their tuple drift is informational.
-  // Proof is identical tuples with every linked dependency qualified by
-  // candidate bytes; unqualified workspace resolution never omits work.
+  // UI/shared dispatch retains its own validation/build policy and requires
+  // identical dependency/image inputs. Only the library boundary fast path
+  // claims omission based on candidate contracts, so it additionally needs
+  // qualified bytes. CI intentionally supplies no candidates for UI/shared.
   const omissionGated = verdict.selection !== 'full' && verdict.selection !== 'adopted';
   if (tuples !== null && tuples !== undefined && omissionGated) {
     if (!isPlainObject(tuples.before) || !isPlainObject(tuples.after)) {
@@ -96,7 +98,8 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
       }
       const unqualified = names.filter((name) => {
         const row = tuples.after[name];
-        return row?.closure && Object.values(row.closure).some((entry) => entry?.qualified === false);
+        return verdict.fastPath === 'tuple-gated' && row?.closure
+          && Object.values(row.closure).some((entry) => entry?.qualified === false);
       });
       for (const name of unqualified) {
         problems.push(`installed tuple for ${name} resolves linked sources without candidate bytes: omission is unproven`);
