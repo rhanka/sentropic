@@ -53,6 +53,7 @@
   - [ ] `tests/forge/github-app.spec.ts`: fake manifest/install, scoped mint, escalation refusal, state replay/scope refusal, expiry, rotation and revocation.
   - [ ] `tests/forge/github-app-http.spec.ts`: owner prompt, callback sanitization and broker authentication.
 - [ ] **Lot 2 — Enrollment and custody**
+  - [x] Added the exact frozen lease/webhook ports and internal encrypted-store transaction contract.
   - [ ] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
 - [ ] **Lot 3 — Lifecycle and runbook**
   - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
