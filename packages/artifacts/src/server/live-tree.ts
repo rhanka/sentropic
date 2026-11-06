@@ -31,6 +31,7 @@ export function validateLiveMutation(repo: GitPortRepository, target: GitPortTar
         for (const key of keys.filter(key => key !== 'path')) {
           const text = (value as unknown as Record<string, unknown>)[key];
           if (typeof text !== 'string' || !liveTextValid(text) || (key === 'oldStr' && !text)) throw new ArtifactOperationError('invalid_request');
+          if (/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/.test(text)) throw new ArtifactOperationError('git_path_refused');
           bytes += Buffer.byteLength(text);
         }
       }
@@ -89,7 +90,10 @@ export async function applyLiveMutation(git: GitPort, target: GitPortTarget, bas
     const entry = baseEntry(path);
     if (base.entries.some(e => e.path.startsWith(full + '/') || (full.startsWith(e.path + '/') && e.type !== 'tree')) ||
       (entry && (entry.type !== 'blob' || !['100644', '100755'].includes(entry.mode)))) throw new ArtifactOperationError('git_path_refused');
-    if (text === null && !entry) throw new ArtifactOperationError('invalid_request');
+    if (text === null && !entry) {
+      if (overlay.get(path)?.text === undefined || overlay.get(path)?.text === null) throw new ArtifactOperationError('invalid_request');
+      overlay.delete(path); return;
+    }
     if (text !== null && Buffer.byteLength(text) > 1024 * 1024) throw new ArtifactOperationError('limit_exceeded');
     if (text !== null && entry && text === await textAtBase(path)) overlay.delete(path);
     else overlay.set(path, { path, text, mode: entry?.mode ?? '100644' });

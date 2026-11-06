@@ -58,8 +58,12 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       const prior = await deps.store.transaction(identity, tx => tx.receipt(command.actorId, command.key));
       if (prior) {
         if (prior.hash !== command.hash) throw new ArtifactOperationError('command_conflict');
-        return stop && !authority.canReadCode ? { liveSessionId: prior.result.liveSessionId, state: prior.result.state } :
-          { ...prior.result, replayed: true };
+        const runtime = operation === 'live_control' ? await deps.store.transaction(identity, async tx => tx.record?.runtime) : null;
+        const liveness = operation !== 'live_control' ? {} : runtime?.liveSessionId === prior.result.liveSessionId ?
+          { state: runtime!.phase, runtimeState: runtime!.phase, appliedRevision: runtime!.appliedRevision } :
+          { state: 'DORMANT', runtimeState: 'DORMANT', appliedRevision: null };
+        return stop && !authority.canReadCode ? { liveSessionId: prior.result.liveSessionId, state: liveness.state } :
+          { ...prior.result, ...liveness, replayed: true };
       }
     }
     if (expired && !stop && operation !== 'live_reset') throw new ArtifactOperationError('git_live_draft_expired');
