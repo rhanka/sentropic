@@ -56,6 +56,7 @@
   - [x] Pin the VAP-compatible pod and adopt response-loss creations under UID/session fences.
 - [ ] Lot 3: locked integrity-verified cache; fixed R1 live/build recipes.
   - [x] Require complete pre-approved integrity inventory and literal lockfile script-package qualification.
+  - [x] Admit only clean locked installs; authenticate cache receipts and rehash safe read-only trees on use.
 - [ ] Lot 4: clean idle build, B2 eligibility, wake/finalization serialization and crash recovery.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
 - [ ] Lot 6: scoped fake Kubernetes/forge/cache/publication race tests and content proxy tests.
