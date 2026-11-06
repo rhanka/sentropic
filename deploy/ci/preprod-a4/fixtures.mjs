@@ -1,5 +1,5 @@
 export const sha = 'a'.repeat(64), commit = 'b'.repeat(40);
-export const image = `rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:${sha}`;
+export const image = `ghcr.io/rhanka/sentropic-api@sha256:${sha}`;
 export const cron = { metadata: { namespace: 'sentropic-preprod' }, spec: { suspend: true,
   jobTemplate: { spec: { backoffLimit: 2, template: { spec: { restartPolicy: 'OnFailure',
     initContainers: [{ name: 'dump', image: 'tenant-postgres-pinned' }],

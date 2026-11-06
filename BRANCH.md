@@ -39,6 +39,7 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-REF1 — Switch A4 authorization contracts, identity/artifact render fixtures and source API digest validation to GHCR.
 - [x] BRGHCR-EX1 — Owner explicitly requests Make registry migration/guard/copy entry points; impact: image delivery only; rollback: revert this train. Local mechanical scope uses the installed host harness via .tmp/ghcr-ops.mk to avoid a forbidden local build.
 - [x] BRGHCR-EX2 — Owner explicitly requests GHCR-only CI with packages:write; temporary remote-copy workflow is deleted after completion; impact: container registry only; rollback: revert this train without changing cluster Secrets.
 - [ ] Preserve BR-82 tested-artifact joins; remote published config digest equals the loaded/tested image ID; manifest digest is recorded before deployment.
