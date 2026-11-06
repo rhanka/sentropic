@@ -156,7 +156,7 @@ test('should classify CI scripts as toolchain and docs as benign', () => {
   const verdict = classifyCompatibility({ files: ['scripts/ci/compatibility-classifier.mjs'], packages: [] });
   assert.equal(verdict.kind, 'root-lock-toolchain');
   const docs = classifyCompatibility({ files: ['spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md', 'BRANCH.md'], packages: [] });
-  assert.equal(docs.kind, 'internal-fix');
+  assert.equal(docs.kind, 'documentation-only');
 });
 
 test('should classify ui-only edits as ui-only and shared auth-ui assets as shared asset', () => {
@@ -187,5 +187,5 @@ test('should keep the most conservative kind when a change spans areas', () => {
 
 test('should expose every documented change kind', () => {
   assert.deepEqual([...CHANGE_KINDS].sort(), ['additive', 'breaking', 'explicit-adoption',
-    'internal-fix', 'root-lock-toolchain', 'runtime-security', 'shared-asset', 'ui-only', 'unknown'].sort());
+    'documentation-only', 'internal-fix', 'root-lock-toolchain', 'runtime-security', 'shared-asset', 'ui-only', 'unknown'].sort());
 });
