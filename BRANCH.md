@@ -1,7 +1,7 @@
 # train 2026-11-06: artifacts 0.2.17, CI contracts, A4 follow-ups and preprod procedure
 
 ## Objective
-- [ ] Integrate three wagons on current origin/main, refresh integration artifacts once, qualify one READY PR; do not merge.
+- [ ] Integrate five approved wagons on current origin/main, preserve artifacts 0.2.17 and the qualified locks/pins, keep preprod on its recovery release, and qualify one READY PR; do not merge.
 - [ ] Supersedes [#923](https://github.com/rhanka/sentropic/pull/923), [#921](https://github.com/rhanka/sentropic/pull/921), [#924](https://github.com/rhanka/sentropic/pull/924); the conductor closes them after this train merges.
 - [ ] Extension 06/11: integrate approved [#929](https://github.com/rhanka/sentropic/pull/929) and `origin/feat/preprod-a4-procedure` (1a5a9ef98 or later), retain the recovery images in preprod until owner-authorized A4 execution, and qualify the extended train without merging.
 
@@ -135,6 +135,8 @@
 - [x] EXT06-EX2 — Existing CI manifest target also qualifies A4/recovery renders and operator tests. Its digest fixture layers an image override over the actual pinned overlay, preserving every existing content assertion. Impact: read-only CI qualification only; rollback: restore the fixture recipe.
 - [x] EXT06-EX1 — Extend scope to approved #929 and A4 wagon paths, including existing BR83-EX1 workflow union and BRA4B-EX1 Makefile include. Impact: requested train integration/preprod pin only; rollback: revert the two wagon merges and image block. Preserve versions, lock entries and existing pins except the wagon's chat-ui 1.0.1 version record.
 - [ ] EXT06-CI — Independent consolidated review, local scoped gates, exact-head attempt-1 CI green, PR body and Extension 06/11 report; conductor remains the Track writer.
+- [x] EXT06-REVIEW-F1 — Astra's single blocking finding resolved: restore #929's per-case DOCX workspace/folder fixture and initial GET/POST presence handshake. Retain the train's readonly assertions. Complete spec PASS 3/3 with WORKERS=1 RETRIES=0 on current candidate production images; independent closure GO. No timeout/retry increase.
+- [x] EXT06-LOCK — Merge-required metadata alignment only: UI's local chat-ui record follows #929's 1.0.1 manifest/root record. No dependency resolution, lock regeneration or pin refresh; retained L5 verification passes unchanged.
 - [x] TRAIN-CI11 — Run 42258636361 shard 3: /auth/session returns 500 after session_validate activity writes exhaust unchanged serialization attempts (40001). Use CM's supported read-only session_validate completion while preserving all write flows/refusal mapping. Real current-session handler: 16 concurrent requests pass, activity row remains unchanged, invalid/revoked tokens return 401; complete concurrency suite 5/5 PASS. Before-fix HTTP fan-out happened to pass locally, but the retained deterministic activity-write assertion failed; CI retains the actual 500 evidence. No retry/deadline increase or E2E assertion change.
 - [x] TRAIN-ASTRA1 — Reproduced UI-only dispatch failure with real API/UI tuples and CI's empty candidate input. Require qualified candidates only for library-boundary omissions; retain UI/shared tuple equality and reject unsupported omission claims. Real-workflow UI/shared PR/main, dependency-drift and unqualified-boundary negative controls PASS; wiring/contracts/tuple suites 72/72.
 - [x] TRAIN-ASTRA2 — Positively identified documentation has its own no-consumer policy, including README files under tooling directories. Real README/docs/BRANCH paths with unchanged real manifests/tuples match the actual workflow filters and pass. Mixed unknown paths, executable files under docs/spec and missing mandatory consumers still refuse; wiring/classification/contracts suites 101/101 PASS.
@@ -171,7 +173,7 @@
 - [x] Deterministic failures block; provider exceptions require same-head evidence and explicit owner sign-off; none accepted here.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Multi-branch** — Three wagons, one train integration, consolidated final review and one PR CI; conductor owns final merge.
+- [x] **Multi-branch** — Five wagons, one train integration, consolidated review and exact-head PR CI; conductor owns final merge.
 
 ## UAT Management (in orchestration context)
 - [ ] Qualify safe/application mode and reader grants on the exact train head using scoped tests and full PR CI; retain SHA and receipts in the report.
