@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Branch `train/artifacts-0.2.18`; isolated worktree `tmp/worktrees/train-artifacts-0218`.
-- [x] Base is upstream mention checkpoint `fd91e7d2ae3be6f135a72b0e64f015114f46ee16`, carrying artifacts 0.2.17 and chat-core 0.3.2; advanced from packaging checkpoint `40fc3e133` under BR0218-EX10.
+- [x] Base is upstream guarded-candidate checkpoint `6bd09d5569828773ac32dbb10d9b156d9f96de40`, carrying artifacts 0.2.17 and chat-core 0.3.2; advanced through mention checkpoint `fd91e7d2a` under BR0218-EX10/EX11.
 - [ ] After the dated train merges, rebase onto `origin/main` and recheck registry versions.
 - [x] Make only; Docker commands through `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command.
 - [x] Dedicated ports `API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218`; ENV always last; tear down volumes after tests.
@@ -42,7 +42,7 @@
   - `api/tests/api/app-mcp-registry.test.ts` (BR0218-EX3)
   - `api/tests/api/app-mcp-installed.test.ts` (BR0218-EX3)
   - `tools/memory-mcp-l5/artifacts/**` (BR0218-EX4)
-  - `e2e/Dockerfile` (BR0218-EX5)
+  - `e2e/Dockerfile` (BR0218-EX5, BR0218-EX12)
   - `api/src/services/identity/cm-session-facade.ts` (BR0218-EX6)
   - `api/src/services/identity/cm-auth-binding.ts` (BR0218-EX6)
   - `api/src/services/identity/cm-http-principal.ts` (BR0218-EX6)
@@ -68,7 +68,8 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
-- [ ] BR0218-EX11 / TRAIN0218-CI8: run 42286441423 reveals two stale 0.3.1 references after the inherited patch bump. Rebase onto minimal upstream checkpoint 6bd09d556 (exact release pin plus guarded packer's emitted tarball output); retain strict equality and installed-pair qualification, with no gate or assertion relaxation. Workflow wiring is inherited from the approved upstream base under its BR83-EX1, not rewritten by this lane. Root lock and all runtime sources remain unchanged; repeat scoped pin/wiring, versions and L5 verification. Rollback ref backup/train0218-before-ci8.
+- [x] BR0218-EX11 / TRAIN0218-CI8: inherited minimal upstream checkpoint 6bd09d556 by rebase, aligning strict release equality to 0.3.2 and qualifying the guarded packer's emitted tarball. New wiring regression fails against the old workflow and passes after: wiring 40/40, core-host/comments 55/55, versions and L5 verification pass. Workflow is byte-identical to the approved upstream base under its BR83-EX1; no qualification or dispatch gate relaxed. Root lock, runtime sources and immutable L5 evidence remain unchanged; rollback ref backup/train0218-before-ci8. Fresh CI required.
+- [ ] BR0218-EX12 / TRAIN0218-CI9: run 42286441423 container-e2e scan reports HIGH CVE-2026-107891 in musl/musl-utils 1.2.6-r2, fixed in 1.2.6-r3. Extend the bounded E2E Dockerfile security exception with exact patched pins; qualify the final image with both Chromium modes and an image-level Trivy scan. No register waiver or scanner/gate change. Impact limited to the fixed native libc packages; rollback restores the previous package list.
 - [x] BR0218-EX10 / TRAIN0218-CI7: inherited immediate upstream checkpoint fd91e7d2a by rebase with merge history preserved, fixing the asynchronous mention-loading failure in run 42267445221 shard 4. Three regressions reproduce two failures before; comments 32/32 and tenancy browser file 6/6 pass after at four workers, zero retries/skips. Web build and post-rebase versions pass (chat-core 0.3.2 > published 0.3.1); L5 regenerated/retained through make and verified 30 files/54 edges with unchanged archive bytes. All prior runtime/test corrections remain byte-identical and all four wagon tips remain ancestors. Impact limited to the inherited mention fix, root/UI version metadata and required immutable L5 evidence under EX4; rollback ref backup/train0218-before-ci7. Fresh CI required; no copied commit, gate, timeout or assertion relaxation.
 - [x] BR0218-EX9 / TRAIN0218-CI6: run 42263294555 shard 6 exposes stale organization presence. A delayed initial HTTP snapshot overwrites a newer SSE event; final deterministic regression fails on the verified original CI UI and passes with the six-line response-order guard. Scoped organization file passes 9/9 at four workers with zero retries/skips; production web build and C2 pass. Broader local shard has two separate role/document failures retained in the receipt; full fresh CI remains required. Impact limited to organization presence ordering and its regression; rollback restores these two files. No timeout, retry or assertion relaxation.
 - [x] Review #931 re-review residual R1: incomplete mint permissions no longer imply installation loss; reject and clean up the unissued token while preserving the prior valid lease, enrollment and credential epoch. Missing, empty and both partial permission cases fail before correction and pass after; complete forge suite passes 55/55, including confirmed suspension/permission-loss fencing and healthy retry without reenrollment. Cluster-mesh typecheck/lint and C1/C2 pass; fresh final-head CI remains required.
