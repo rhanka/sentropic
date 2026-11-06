@@ -84,12 +84,12 @@
 - [ ] **Lot 2 — Single release regeneration**
   - [x] Registry verified through make after rebase/conflict resolution; bump artifacts to 0.2.18 and cluster-mesh to dev.14 with CHANGELOG entries.
   - [x] Regenerate root/API lock metadata through make, retaining dependency resolutions; align existing file-package optional peer metadata.
-  - [ ] Regenerate selected-fixture versions/integrity through make.
+  - [x] Regenerate selected-fixture versions/integrity through make from guarded artifacts/cluster-mesh archives; archive SHA-256 `cf0a3ea115517e5945a0566af2f13c24389d019499047628f8e127022f9724f8` / `479fe63272ce86eb1a9b54442c19d6f34e35d03cbab06adf134ebd0bee8e2073`.
   - [x] Recompute APP-P1 digest through make: `d55df3ada3722b79274e52c650a12d6baccd2640c61e4d712fe1380bd03c4c86`; frozen profile retained, physical installation pin and digest history updated.
   - [ ] Commit final lock before L5 packing; retain upstream manifest/sidecar, regenerate and verify P1 once through make.
 - [ ] **Lot 3 — Scoped integrated checks and review**
   - [x] Scoped `make test-artifacts`: git-port 75, git-bindings 10, git-binding registry/projection 4, build-contract 36, provider-failures 100, tools-list snapshot 1; 226/226 pass on the union.
-  - [ ] `make test-artifacts-integration SCOPE="tests/git-bindings.integration.test.ts tests/git-release-index.integration.test.ts"`.
+  - [x] `make test-artifacts-integration` per file: git-bindings 12/12 and release-index 1/1; separate runs preserve the shared-schema isolation used by the complete target.
   - [ ] `make test-cluster-mesh SCOPE=tests/forge`; artifacts and cluster-mesh typecheck/lint.
   - [ ] API `tests/api/app-mcp-registry.test.ts`, `tests/api/app-mcp-installed.test.ts` and packaging tuple/pin verification; full suites run in train CI.
   - [ ] One consolidated code review on the final train diff; resolve evidenced root causes and retain the receipt.
