@@ -24,7 +24,7 @@ function cacheFixture() {
     const cacheIdentity: CacheIdentity = { storageScopeId: 'scope', repoId: 'repo', lockSha256: sha256(lockfile),
       image: BUILDER_IMAGE, platform: 'linux/amd64', nodeVersion: '24', npmVersion: '11', policyRevision: 'p1',
       workspaceTopology: 'root', integrityDigest: 'f'.repeat(64) };
-    return { lockfile, cacheIdentity };
+    return { lockfile, cacheIdentity, stagingRef: 'verified-clean-checkout' };
   };
   return { lock, ports, source, cache: createDependencyCache(ports), stored: () => stored! };
 }
