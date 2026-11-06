@@ -6,6 +6,7 @@
 ## Scope / Guardrails
 - [x] Base: origin/main c107f6abd; worktree tmp/worktrees/preprod-a4-procedure; wagon feat/preprod-a4-procedure for the next dated train; no PR, merge, version or lock changes.
 - [x] Use Node/TypeScript and kubectl; no Python, secret output, live execution, or CI suppression.
+- [x] Packet-declared author: codex / gpt-6.1-sol / xhigh; independent consolidated review belongs to the train.
 - [x] ENV=test-preprod-a4; reserved ports API 9620, UI 5820, Maildev UI 1720; Docker commands use the shared docker-slot wrapper.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
@@ -53,9 +54,11 @@
   - [x] Node/kubectl operator guard and digest-only transport; Makefile exception explicitly allowed after scope-check detected the inherited forbidden entry.
   - [x] Overlay keeps runtime assets inside deploy/k8s for existing isolated kustomize renderers; custodian and staging commands never boot migrations.
 - [x] Lot 3: tests in api/tests/unit/auth/cm-preprod-*.test.ts and deploy/ci/preprod-a4/*.test.mjs, including refusal, redaction, backup corruption, permissions, receipts and dry-run side effects.
-  - [x] 26 API checks and 12 operator checks passed in isolated containers; read-only SQL census, exact restore binding and corruption/refusal paths covered.
+  - [x] 36 API checks and 18 operator checks passed in isolated containers; read-only SQL census, exact restore binding, corruption/refusal, pre-backup drift and dry-run output collisions covered.
+  - [x] Full API typecheck, scoped lint, production bundle build/CLI smoke, and actual prod/preprod kustomize assertions passed with reused API toolbox local/sentropic-api:387528; no image build or cluster access.
 - [x] Lot 4: docs/runbooks/preprod-a4-cutover.md and owner report .tmp/rv/preprod-a4-procedure.md with exact authorization text, Kubernetes actions, abort/rollback and verification.
 - [ ] Lot 5: scoped tests, harness scope checks before make commit, push review-ready wagon, leave preprod untouched.
+  - [x] Unit custody is private per test file/worker, avoiding cross-file collisions in the train CI; local Docker resources cleaned with down-volumes.
 
 <!-- Retained base plan for Track event continuity. -->
 # Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)

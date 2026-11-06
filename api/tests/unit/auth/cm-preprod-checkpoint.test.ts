@@ -7,6 +7,10 @@ import { preparePreprod } from '../../../src/scripts/cm-preprod-checkpoint';
 import { inspectPreprod } from '../../../src/scripts/cm-preprod-state';
 import { downloadTenantBackup } from '../../../src/scripts/cm-preprod-backup';
 
+vi.mock('../../../src/scripts/cm-preprod-contract', async original => ({
+  ...await original<typeof import('../../../src/scripts/cm-preprod-contract')>(),
+  custody: `/tmp/sentropic-a4-checkpoint-${process.pid}-${process.env.VITEST_WORKER_ID}`,
+}));
 vi.mock('../../../src/scripts/cm-preprod-state', () => ({ inspectPreprod: vi.fn() }));
 vi.mock('../../../src/scripts/cm-preprod-backup', async original => ({
   ...await original<typeof import('../../../src/scripts/cm-preprod-backup')>(), downloadTenantBackup: vi.fn(),
