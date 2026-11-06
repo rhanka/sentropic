@@ -68,6 +68,6 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
       record.runtime.idleDeadline = new Date(now + 600000).toISOString();
     }
   }
-  return { action, result: { ...liveResponse(record, currentHeadSha), state: record.runtime?.phase ?? 'DORMANT',
+  return { action, result: { ...liveResponse(record, currentHeadSha, now), state: record.runtime?.phase ?? 'DORMANT',
     replayed: false, workerPending: record.runtime?.appliedRevision !== record.revision } };
 }
