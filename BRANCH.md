@@ -50,6 +50,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, G0 v3, owner decisions and SG0-app port; create worktree and pass harness C1.
 - [ ] Lot 1: typed GitPort, read/write policy and SG0-app structural lease contract.
+  - [x] Compose the exported port with required authorization and typed, sanitized forge failures.
   - [x] Define SHA-pinned source pages, materialized atomic changes and the injected SG0-app lease surface.
   - [x] Implement canonical path admission, secret exclusions and A1 allow/deny matching before transport.
 - [ ] Lot 2: fake forge tests in `tests/git-port.test.ts`, `tests/git-port-policy.test.ts`, `tests/fixtures/git-port-fake.ts`.
