@@ -26,7 +26,7 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
   workflowText = null, changes = {}, event = 'pull_request', ref = '', tuples = null,
   expectOmission = false } = {}) {
   const problems = [];
-  const verdict = selectConsumers({ kind, slugs, boundaries });
+  const verdict = selectConsumers({ kind, slugs, boundaries, ref });
   const jobs = workflow ?? (workflowText !== null ? loadYaml().parse(workflowText) : null);
   if (!jobs?.jobs) problems.push('workflow is missing: cannot prove dispatch');
   const context = { changes, event, ref, inputs: {} };
@@ -58,7 +58,12 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
     }
   }
   if (verdict.selection === 'full') {
+    const mandatory = new Set([...INTEGRATION_LANES,
+      ...boundaryValidations(slugs, boundaries).map(item => item.identity)]);
+    // Unrelated package validators remain change-scoped; full integration and
+    // affected owners are obligations even when dispatch omits or removes them.
     verdict.required = verdict.required.filter((item) => item.kind !== 'job'
+      || mandatory.has(item.identity)
       || membersOf(item.identity).some((row) => row.required !== false && row.selected !== false));
   }
   for (const item of verdict.required) {
@@ -152,7 +157,7 @@ const fullSelection = (boundaries, reason) => {
   return { selection: 'full', required, fastPath: false, reasons: [reason] };
 };
 
-export function selectConsumers({ kind, slugs = [], boundaries = null } = {}) {
+export function selectConsumers({ kind, slugs = [], boundaries = null, ref = '' } = {}) {
   if (!isPlainObject(boundaries)) throw new Error('consumer boundaries are required');
   const policy = boundaries.policies?.[kind];
   if (!policy) throw new Error(`unknown change kind: ${kind}`);
@@ -188,14 +193,15 @@ export function selectConsumers({ kind, slugs = [], boundaries = null } = {}) {
   }
   if (policy.selection === 'ui') {
     return { selection: 'ui',
-      required: ['test-ui', 'build-ui', 'smoke-idp-screens', 'build-ui-image', 'deploy-preprod']
+      required: ['test-ui', 'build-ui', 'smoke-idp-screens', ...(ref === 'refs/heads/main' ? ['deploy-preprod'] : [])]
         .map((identity) => ({ kind: 'job', identity })),
       fastPath: false,
       reasons: [`${kind}: ${policy.note}`, 'API digest unchanged proven by installed-tuple comparison'] };
   }
   if (policy.selection === 'shared') {
     return { selection: 'shared',
-      required: ['validate-auth-ui', 'test-ui', 'smoke-idp-screens', 'build-api-image', 'build-ui-image', 'deploy-preprod']
+      required: ['validate-auth-ui', 'test-ui', 'smoke-idp-screens', 'build-api-image', 'build-ui',
+        ...(ref === 'refs/heads/main' ? ['deploy-preprod'] : [])]
         .map((identity) => ({ kind: 'job', identity })),
       fastPath: false, reasons: [`${kind}: ${policy.note}`] };
   }

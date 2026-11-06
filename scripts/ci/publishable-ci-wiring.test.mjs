@@ -9,6 +9,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
 import { evaluateSelection } from './ci-expected-results.mjs';
+import { loadBoundaries, verifyDispatch } from './consumer-contracts.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -799,6 +800,28 @@ test('consumer contracts (BR-83): IdP consumer checks stay selected on api chang
   const ui = jobs['test-ui'];
   assert.equal(evaluateSelection(ui.if, (key) => key === 'needs.changes.outputs.ui' ? 'true'
     : key === 'needs.changes.outputs.global' ? 'false' : ''), true);
+});
+
+test('consumer contracts: real UI dispatch qualifies PRs and retains main delivery', () => {
+  const boundaries = loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json'));
+  const workflowText = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  for (const ref of ['refs/pull/1/merge', 'refs/heads/main']) {
+    for (const kind of ['ui-only', 'shared-asset']) {
+      const shared = kind === 'shared-asset';
+      const result = verifyDispatch({ kind, slugs: shared ? ['auth-ui'] : [], boundaries,
+        workflow: ci, workflowText, ref, event: ref === 'refs/heads/main' ? 'push' : 'pull_request',
+        changes: { global: 'false', ui: 'true', api: String(shared), auth_ui: String(shared) } });
+      assert.equal(result.ok, true, `${kind} ${ref}: ${result.problems.join('; ')}`);
+      assert.equal(result.required.some(row => row.identity === 'deploy-preprod'), ref === 'refs/heads/main');
+    }
+  }
+});
+
+test('consumer contracts: API runtime changes select the complete integration set', () => {
+  const result = verifyDispatch({ kind: 'runtime-security', boundaries: loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json')),
+    workflow: ci, workflowText: fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8'),
+    changes: { global: 'false', api: 'true', ui: 'false' }, event: 'pull_request', ref: 'refs/pull/1/merge' });
+  assert.equal(result.ok, true, result.problems.join('; '));
 });
 
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
