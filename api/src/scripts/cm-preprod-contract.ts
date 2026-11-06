@@ -26,7 +26,10 @@ export const evidenceSchema = z.object({
   backupBytes: z.number().int().positive(), writerFenceRef: ref,
 }).strict();
 export const rehearsalSchema = z.object({
-  format: z.literal('preprod-a4-rehearsal/1'), receiptRef: ref, evidenceSha256: digest,
+  format: z.literal('preprod-a4-rehearsal/2'), receiptRef: ref, applicabilityReviewRef: ref,
+  candidateCommit: requestSchema.shape.candidateCommit, candidateImage: requestSchema.shape.candidateImage,
+  sourceContentSha256: digest, schemaSha256: digest, journalSha256: digest, remoteSnapshotDigest: digest,
+  mappingSha256: digest, identityAssetSha256: digest, connectorAssetSha256: digest,
   restoredBackupSha256: digest, candidateBootPassed: z.literal(true), functionalAuthPassed: z.literal(true),
   d11Passed: z.literal(true), isolatedRestoreRef: ref,
 }).strict();
