@@ -46,9 +46,9 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read common/master/workflow/testing/template and harness rules; mechanical harness branch check passed.
-- [ ] Lot 1: add exact-toolbox compiler/linter Make recipes with mounted incremental caches; split API/IdP/web checks and retain static release join.
+- [x] Lot 1: add exact-toolbox compiler/linter Make recipes with mounted incremental caches; split API/IdP/web checks and retain static release join.
 - [ ] Lot 1 gate: `scripts/ci/ci-static.test.mjs`, `scripts/ci/ci-dag.test.mjs`, `scripts/ci/ci-expected-results.test.mjs` validate complete expected membership and cache isolation.
-- [ ] Lot 2: shard budget, static/package/consumer, unit, integration and activation qualifications without altering suite membership; require all shards in artifact join and final gate.
+- [x] Lot 2: shard budget, static/package/consumer, unit, integration and activation qualifications without altering suite membership; require all shards in artifact join and final gate.
 - [ ] Lot 2 gate: fixture failures, missing/skipped/cancelled shards block promotion; all prior Make commands retained.
 - [ ] Lot 3: scope check per atomic make commit; push branch; obtain fresh PR CI timing run; inspect logs and fix regressions.
 - [ ] Lot 3 gate: record run ID, SHA, attempt, wall time, per-job durations, cache results and remaining bottlenecks in `.tmp/rv/ci10-a.md`.
