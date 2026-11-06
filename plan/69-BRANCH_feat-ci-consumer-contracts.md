@@ -41,13 +41,14 @@
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/ci.yml` under BR83-EX1; `Makefile` under BR83-EX2.
+  - [ ] `.github/workflows/ci.yml` under BR83-EX1; `Makefile` under BR83-EX2; `apps/auth-idp/tsconfig.json` under BR83-EX3 (include the new `tests/` contract only).
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
 - [ ] BR83-EX1 — Planned workflow exception: extend `changes`, `enforce-package-bump`, compatibility classification, candidate-first consumer contracts, immutable tuple verification, missing owning validations, and the complete verdict. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR83-EX2 — Planned Makefile exception: add classifier/contract/tuple test targets and isolated consumer install/build contexts; retain version-bump and image hash/filter guards. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [ ] BR83-EX3 — Bounded typecheck exception: include `tests/` in `apps/auth-idp/tsconfig.json` so the new `cluster-candidate` contract participates in `typecheck-idp`; no source change. Reason: the IdP composition previously had no tests directory. Impact: one include line. Rollback: revert the include line (the test still runs under vitest via `test-idp-candidate`).
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -72,7 +73,7 @@
   - [ ] Create the named classifier/contracts scripts and tests plus `consumer-boundaries.json` (new); start comments → API, then cluster-mesh → API/IdP/gateway, retaining comments → cluster peer qualification.
   - [ ] Create the four named consumer-owned candidate tests (new); contracts consume BR-80 qualified tarballs and verify public exports, wire shape, auth/storage/streaming behavior as relevant, not just semver declarations.
   - [ ] Re-inventory all 43 study components and dynamic/protocol/configuration edges; wire existing missing owning validations before any affected fast path. Include `test-pkg-chat-core`, gateway-host `test-llm-gateway-process`, and real API integration for ubo-contracts; a delegated or absent test script is not a passing package test.
-  - [ ] Lot gate: new `make test-ci-compatibility test-ci-consumer-contracts ENV=test-ci-consumer-contracts`; run the four named test files in isolated candidate installations and retain all newly wired validation receipts.
+  - [ ] Lot gate: new `make test-ci-compatibility test-ci-consumer-contracts ENV=test-ci-consumer-contracts` (measured green: 18/18 + 20/20); run the four named test files in isolated candidate installations and retain all newly wired validation receipts (measured: api pair 4/4 + 4/4 green via `make test-api-contracts`; gateway + IdP pending — gateway 1 failure on first run under diagnosis, IdP 2 consecutive npm network failures in `prepare-node-workspace`).
 - [ ] **Lot 2 — Immutable installed tuples and conservative selection**
   - [ ] Add `installed-tuple.mjs` and its test; resolve isolated immutable dependency closures and Docker inputs. Adjust only the listed application/package manifests, root lock, and Dockerfiles; do not trust root workspaces, `file:` links, or numeric ranges as proof.
   - [ ] Update classification/wiring tests and the image-filter guard for internal fix, additive, breaking, explicit adoption, root-lock/toolchain, runtime/security, UI-only, and shared AuthProviderGlyph changes; unknown/missing evidence selects full blocking integration.
