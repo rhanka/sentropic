@@ -35,3 +35,8 @@ export * from './server/git-bindings.js';
 export * from './server/git-registry.js';
 export * from './server/git-projection.js';
 export * from './adapters/postgres-management.js';
+export * from './server/git-port.js';
+export type { GitPortOptions } from './server/git-port-session.js';
+export { GitPortAdvanceUnknown } from './server/git-port-session.js';
+export * from './adapters/github-git-port.js';
+export * from './adapters/github-forge.js';
