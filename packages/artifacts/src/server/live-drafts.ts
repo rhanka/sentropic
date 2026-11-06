@@ -62,6 +62,12 @@ export function createLiveDraftVault(deps: { store: LiveStore; keys: LiveKeyPort
       return deps.store.transaction(identity, async tx => tx.record
         ? { ...tx.record, overlay: await readLiveOverlay(tx, deps.keys) } : undefined);
     },
+    async collect(identity: LiveIdentity) {
+      return deps.store.transaction(identity, async tx => {
+        expireLiveDraft(tx, now());
+        return tx.collectObjects();
+      });
+    },
     async write(input: LiveDraftWrite) {
       const snapshot = structuredClone(input);
       await expire(snapshot.identity);
@@ -73,7 +79,7 @@ export function createLiveDraftVault(deps: { store: LiveStore; keys: LiveKeyPort
             return { ...prior.result, replayed: true } as LiveDraftRecord & { replayed: boolean };
           }
         }
-        if (tx.record?.tombstone === 'expired') throw new ArtifactOperationError('git_live_draft_expired');
+        if (tx.record?.tombstone === 'expired' || tx.record?.expiresAt && Date.parse(tx.record.expiresAt) <= now()) throw new ArtifactOperationError('git_live_draft_expired');
         if ((tx.record?.revision ?? null) !== snapshot.expectedRevision) throw new ArtifactOperationError('git_live_revision_moved');
         const record = await persistLiveOverlay(tx, deps.keys, snapshot, now());
         if (snapshot.command) await tx.complete(snapshot.command, { ...record });
@@ -84,7 +90,7 @@ export function createLiveDraftVault(deps: { store: LiveStore; keys: LiveKeyPort
       await expire(identity);
       return deps.store.transaction(identity, async tx => {
         const record = tx.record;
-        if (record?.tombstone === 'expired') throw new ArtifactOperationError('git_live_draft_expired');
+        if (record?.tombstone === 'expired' || record?.expiresAt && Date.parse(record.expiresAt) <= now()) throw new ArtifactOperationError('git_live_draft_expired');
         if (!record || record.revision !== expectedRevision) throw new ArtifactOperationError('git_live_revision_moved');
         const overlay = await readLiveOverlay(tx, deps.keys);
         if (!record.changedPaths) return record;
