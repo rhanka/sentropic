@@ -35,7 +35,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     /** Lot 1a: reader consent store; flows into appDeps via the options spread. */
     readerConsent?: ArtifactReaderStore;
     /** LOT 2: upload/storage metering sink for the world app. */
-    metrics?: ArtifactsMetrics; git?: HttpAppDeps['git'] } = {}) {
+    metrics?: ArtifactsMetrics; git?: HttpAppDeps['git']; live?: HttpAppDeps['live'] } = {}) {
   const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
     operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
