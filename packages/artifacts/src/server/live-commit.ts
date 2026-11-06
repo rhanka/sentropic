@@ -82,7 +82,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
       cause.kind === 'git_live_conflict' && cause.details.publicDetails?.reason === 'commit_indeterminate')) throw new LiveCommitUnknownError(cause);
     throw cause;
   }
-  const result = await deps.store.transaction(identity, async tx => {
+  const result: Record<string, unknown> = await deps.store.transaction(identity, async tx => {
     const prior = await tx.receipt(command.actorId, command.key);
     if (prior) return { ...prior.result, replayed: true };
     const record = tx.record!;
