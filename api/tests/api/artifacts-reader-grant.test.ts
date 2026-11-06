@@ -61,7 +61,7 @@ describe('generic grant contract on a fake tenant', () => {
     expect(await refused.json()).toEqual({ code: 'reader_consent_required', scopeId: SCOPE, retryable: false });
 
     // Single prescribed navigation: the screen URL derives from the 403 fields.
-    const screenResponse = await app.request(`/artifacts/${consentScreenPath(ARTIFACT, SCOPE)}`, { method: 'GET' });
+    const screenResponse = await app.request(`/artifacts/${consentScreenPath(ARTIFACT, SCOPE, 'workspace-fake')}`, { method: 'GET' });
     expect(screenResponse.status).toBe(200);
     const screen = await screenResponse.text();
     expect(screen).toContain('Acme');
@@ -101,7 +101,7 @@ describe('generic grant contract on a fake tenant', () => {
 
   it('should refuse a stale displayed version without granting the widened scope', async () => {
     const { app, gate, declaration } = route(true);
-    const screen = await (await app.request(`/artifacts/${consentScreenPath(ARTIFACT, SCOPE)}`)).text();
+    const screen = await (await app.request(`/artifacts/${consentScreenPath(ARTIFACT, SCOPE, 'workspace-fake')}`)).text();
     expect(screen).toContain(VERSION);
     declaration.scopeVersion = 'v2';
     const grant = await app.request('/artifacts/reader-consents/grant', { method: 'POST',

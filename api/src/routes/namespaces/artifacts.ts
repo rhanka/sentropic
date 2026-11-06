@@ -193,7 +193,8 @@ export function createArtifactHttpRouter(ports: ArtifactHttpPorts): Hono {
     const declared = declaredScope(query.scopeId);
     if (!declared) return context.json({ error: 'not_found' }, 404);
     return context.html(renderConsentScreen({ ...ports.readerConsent!.consentScreen,
-      artifactId: query.artifactId, scopeId: query.scopeId, scopeVersion: declared.scopeVersion }));
+      artifactId: query.artifactId, scopeId: query.scopeId, scopeVersion: declared.scopeVersion,
+      workspaceId: resolved.bound.workspaceId }));
   });
   router.post('/reader-consents/grant', bodyLimit({ maxSize: 4096 }), async context => {
     context.header('Cache-Control', 'no-store');
