@@ -24,7 +24,7 @@ it('should renew a restored draft only after the matching projection ACK and nev
   w.worker.reconcile.mockImplementation(async identity => {
     const record = await w.store.transaction(identity, async tx => tx.record!);
     return { liveSessionId: record.runtime!.liveSessionId, leaseEpoch: record.runtime!.leaseEpoch,
-      revision: record.revision, ready: true };
+      routeEpoch: record.runtime!.routeEpoch, revision: record.revision, ready: true };
   });
   const state = await w.status();
   const start = await w.call('live_control', { action: 'start', expectedHeadSha: state.currentHeadSha,

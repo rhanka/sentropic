@@ -11,7 +11,8 @@ export interface LiveAuthority {
 export interface LiveWorkerPort {
   /** Trusted controller reads the authoritative store; no draft key or store API enters the worker. */
   reconcile(identity: LiveIdentity): Promise<void | { liveSessionId: string; leaseEpoch: number;
-    revision: string; ready: boolean }>;
+    routeEpoch: number; revision: string; ready: boolean }>;
+  /** Confirms quiescence, durable checkpoint and complete pod/volume decommissioning. */
   stop(input: LiveIdentity & { liveSessionId: string; leaseEpoch: number }): Promise<void>;
 }
 export interface LiveServiceDeps {

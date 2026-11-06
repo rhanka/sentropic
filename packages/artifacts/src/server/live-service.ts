@@ -109,13 +109,13 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       if (!deps.git.snapshot && !stop) throw new ArtifactOperationError('capability_unselected');
       const base = stop ? { treeSha: tx.record?.baseTreeSha ?? '', entries: [] } : await deps.git.snapshot!(authority.target,
         operation === 'live_reset' ? head : baseSha);
-      if (!tx.record) tx.record = cleanLiveRecord(identity, head, base.treeSha);
+      if (!tx.record) tx.record = cleanLiveRecord(identity, head, base.treeSha, now());
       const record = tx.record;
       if (!stop && operation !== 'live_reset' && record.expiresAt && Date.parse(record.expiresAt) <= now()) throw new ArtifactOperationError('git_live_draft_expired');
       if (!stop && record.latestVerifiedHeadSha !== head) {
         const fastForward = await deps.git.isAncestor(authority.target, record.latestVerifiedHeadSha, head);
         if (!fastForward && writer) throw new ArtifactOperationError('git_diverged');
-        if (fastForward) { record.latestVerifiedHeadSha = head; record.progressSeq++; }
+        if (fastForward) { record.latestVerifiedHeadSha = head; record.progressSeq++; record.lastProgressEventId = 'head:' + head; }
       }
       if (!stop && record.baseHeadSha !== head && !record.changedPaths) {
         if (!await deps.git.isAncestor(authority.target, record.baseHeadSha, head)) throw new ArtifactOperationError('git_diverged');

@@ -9,12 +9,13 @@ export interface LiveDraftWrite {
   identity: LiveIdentity; expectedRevision: string | null; baseHeadSha: string; baseTreeSha: string;
   liveTreeSha: string; overlay: LiveOverlayEntry[]; command?: LiveCommand;
 }
-export function cleanLiveRecord(identity: LiveIdentity, head: string, tree: string): LiveDraftRecord {
+export function cleanLiveRecord(identity: LiveIdentity, head: string, tree: string, now = Date.now()): LiveDraftRecord {
   return { ...identity, revision: randomUUID(), baseHeadSha: head, baseTreeSha: tree, liveTreeSha: tree,
     objectRef: null, keyVersion: null, digest: null, expiresAt: null, changedPaths: 0, draftBytes: 0,
     tombstone: null, runtime: null, pendingCommit: null, progressSeq: 0, latestVerifiedHeadSha: head,
     publicationBaselineSeq: 0, publicationBaselineHeadSha: head, lastSuccessfulReleaseId: null,
-    initialUnpublishedBranchEligible: false };
+    initialUnpublishedBranchEligible: false, rowVersion: 0, createdAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString(), lastProgressEventId: null };
 }
 /** Expiry is a serialized tombstone; stale renewal and command replay cannot reverse it. */
 export function expireLiveDraft(tx: LiveTransaction, now: number): boolean {
@@ -39,7 +40,8 @@ export async function persistLiveOverlay(tx: LiveTransaction, keys: LiveKeyPort,
   now: number, renew = true, preserveRevision = false): Promise<LiveDraftRecord> {
   const overlay = [...input.overlay].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   const size = overlayBytes(overlay);
-  const record = { ...(tx.record ?? cleanLiveRecord(input.identity, input.baseHeadSha, input.baseTreeSha)),
+  const record = { ...(tx.record ?? cleanLiveRecord(input.identity, input.baseHeadSha, input.baseTreeSha, now)),
+    updatedAt: new Date(now).toISOString(),
     revision: preserveRevision ? tx.record!.revision : randomUUID(), baseHeadSha: input.baseHeadSha, baseTreeSha: input.baseTreeSha,
     liveTreeSha: input.liveTreeSha, objectRef: randomUUID(), digest: liveDigest(JSON.stringify(overlay)),
     changedPaths: overlay.length, draftBytes: size, tombstone: null,
