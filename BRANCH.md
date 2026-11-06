@@ -31,6 +31,7 @@
   - `api/tests/api/session-adoption.test.ts`
   - `api/tests/unit/auth/**`
   - `api/tests/unit/identity/**`
+  - `e2e/tests/06-settings-codex-provider.spec.ts`
   - `packages/cluster-mesh/src/identity/**`
   - `packages/cluster-mesh/src/storage/identity/**`
   - `packages/cluster-mesh/tests/identity/**`
@@ -46,6 +47,7 @@
   - `package-lock.json`
 - **Exception process**:
   - [x] Declare BRxx-EXn with reason, impact and rollback before conditional edits.
+  - [x] BR929-EX1: extend scope to the single Codex settings E2E spec after CI 42157095451 observed the mode array before its asynchronous POST completed. Impact: synchronize existing clicks with their exact response; preserve every assertion, timeout and retry count. Rollback: remove the response handshake if the interaction contract changes. Evidence: `.tmp/rv/a4-followups.md` and browser-shard-3 artifacts.
 
 ## Feedback Loop
 - [ ] Track source: designated conductor imports this BRANCH.md; concurrent lane does not write `.track`.
@@ -89,5 +91,6 @@
   - [x] Scoped API tests: 182/182 in 15 files; all requested tests enabled and original assertions unchanged. API typecheck/lint qualified separately.
   - [x] Two independent Sol fallback reviews approve implementation `b9742ff4e`; credential-binding and V2 authorization races resolved. Vibe 402 and Argon 429 prevent complementary-model review; no such consensus claimed.
   - [x] Early safety pushes made; final implementation and scoped validation committed.
+  - [x] CI browser-shard-3: exact failure reproduced with a temporary request gate; awaiting each mode POST makes the forced case pass. Probe removed; normal single-spec replay passes with every assertion unchanged and zero retries.
   - [ ] Open one ready PR with BRANCH.md body and monitor CI until green; do not merge.
   - [x] `make down-volumes`; report `.tmp/rv/a4-followups.md` with validation and review evidence, CI handoff pending.
