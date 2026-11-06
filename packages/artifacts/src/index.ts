@@ -35,3 +35,4 @@ export * from './adapters/postgres-management.js';
 export * from './server/git-port.js';
 export * from './server/git-port-session.js';
 export * from './adapters/github-git-port.js';
+export * from './adapters/github-forge.js';
