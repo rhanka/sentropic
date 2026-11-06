@@ -46,36 +46,62 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
-- [x] TRAIN-R1 — Missing worker-script CSP reproduced in four MIME vectors and Chromium 148; corrected application responses block external fetch/eval/Wasm while same-origin reads work. CSP 26/26 and content 79/79 PASS; safe mode and SVG/PDF sandbox preserved.
-- [x] TRAIN-R2 — Bind JSON/form grants to the displayed scope version and reject missing/stale versions without granting a widened scope; regression 5/5 PASS after reproducing missing version binding.
-- [x] TRAIN-R3 — Retain all core integration jobs and affected owners even when missing/unselected; broaden UI validation for API runtime changes under BR83-EX1. Two regression cases failed before the fix; consumer-contract fixtures 23/23 PASS.
-- [x] TRAIN-R4 — Require existing UI build job identities and main-only deployment only on main; select IdP smoke for UI changes under BR83-EX1. Real-workflow UI/shared PR/main and API runtime cases pass; wiring fixtures 39/39 PASS.
-- [x] BROJ-EX1 — #923 OAuth registration job workingDir only; reason: npm must run inside its package; impact: job startup; rollback: revert workingDir.
-- [x] BR83-EX1 — #921 CI classifier/contracts/tuple dispatch; reason: prove omitted consumers unchanged; impact: CI selection/verdict; rollback: revert wagon workflow edits.
-- [x] BR83-EX2 — #921 named Make entry points; reason: reproducible CI tooling gates; impact: tooling recipes; rollback: revert wagon recipes.
-- [x] BR83-EX3 — #921 IdP tsconfig test include; reason: candidate-contract static coverage; impact: test inclusion; rollback: restore prior include.
-- [x] BR83-EX4 — #921 inherited readiness-only E2E fix: focus row, require tabindex=0 within two seconds before click; reason: documented unregistered-row race; impact: one test; rollback: revert readiness lines. No timeout/retry increases.
-- [x] BRTRAIN-EX1 — Retain #921 durable plan updates; reason: wagon traceability; impact: plan only; rollback: restore base plan.
-- [x] BRTRAIN-EX2 — Refresh retained L5 P1 manifest/archives after committing integrated lock; reason: lock freshness; impact: generated evidence; rollback: restore prior artifact set with its lock.
-- [ ] Track handoff: designated conductor imports this request, wagons, deliverables and acceptance receipts; this concurrent lane never appends `.track/events.jsonl`.
+- [x] BR-TRAIN0218-EX1: conductor REFUSED the previous CI gate proposal; branch-only wagons resolve the gate requirement normally on the bumped train.
+- [x] BR0218-EX1: regenerate root workspace and API file-dependency lock metadata through make after final union; impact limited to train manifests; rollback restores upstream locks.
+- [x] BR0218-EX2: refresh selected artifacts/cluster-mesh candidate pins and packed integrity through make; impact is qualification evidence; rollback restores upstream fixture pins and integrity assertion.
+- [x] BR0218-EX3: recompute APP-P1 manifest digest through make for artifacts 0.2.18 and retain historical digest coverage; profile selection and existing definitions remain unchanged; rollback restores upstream pin and test.
+- [x] BR0218-EX4: retain upstream L5 manifest/sidecar in history, regenerate P1 from the committed union lock and verify; impact limited to generated evidence; rollback restores retained upstream evidence.
+- [x] SG0-app scope exceptions: none; merge only enrollment/custody source, tests and runbook.
+- [x] SG1 scope exceptions: none; merge binding records, registry, Postgres migration 0010, projection and conformance tests.
+- [x] GB1 scope exceptions: none; merge build validation, public export and inert fixture/tests; no executor activation.
+- [x] SG2 scope exceptions: none; merge GitPort and GitHub adapters, scoped tests and documentation; preserve typed failure unions from all wagons.
+- [ ] Conductor confirms the reserved cluster-mesh dev.N above dev.10 before its release bump.
+- [ ] Conductor imports this source and the owner decision into Track as designated single writer; this concurrent lane does not write `.track`.
+- [ ] Live forge probes and enrollment acceptance remain activation gates; local fake tests cannot certify them.
 
 ## AI Flaky tests
-- [x] Deterministic failures block; provider exceptions require same-head evidence and explicit owner sign-off; none accepted here.
+- [x] No AI-dependent wagon acceptance or flaky exception requested; do not increase timeouts.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Multi-branch** — Three wagons, one train integration, consolidated final review and one PR CI; conductor owns final merge.
+- [x] Mono-branch train integration by merging wagon branches; one consolidated final-diff review and one PR CI per review-ready head.
 
 ## UAT Management (in orchestration context)
-- [ ] Qualify safe/application mode and reader grants on the exact train head using scoped tests and full PR CI; retain SHA and receipts in the report.
+- [ ] Verify the integrated local package keeps safe/application-mode behavior inherited from 0.2.17.
+- [ ] Verify binding projections and fake-forge code-right, lease, ref, path and authorship boundaries.
+- [ ] Keep real enrollment, release activation and live workers disabled until their named acceptance receipts exist.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline**: read common/master/workflow/testing rules, steward evidence and wagon plans; isolated worktree and mechanical branch gate.
-- [x] **Lot 1 — Integration**: merge #923, then #921, then #924; keep this single plan and preserve implementation changes.
-- [x] **Lot 2 — Artifacts**: check published version below 0.2.17; regenerate root/API/selected locks, selected archive integrity, APP-P1 digest and L5 P1 once through Make.
-- [x] **Lot 3 — Scoped gates**: publishable wiring/classification, compatibility, consumer contracts, installed tuple; artifacts CSP/handler/MIME, content-host application mode, reader-grant/registry and selected packaging tuple tests.
-- [x] Local receipts: compatibility 18/18, consumer contracts 23/23, installed tuples 10/10, publishable wiring/classification 59/59; `make test-artifacts SCOPE=tests/content-` 79/79.
-- [x] Scoped host receipts through `.tmp/train/integration.mk`: application wrapper 4/4; API registry/grant/consent 33/33; selected tuple/preparation 24 passed with three installed-fixture-only tests deferred to full CI.
-- [x] Final archive after review remediation: SHA-256 `08df842f9873356e8d0c1ed834763df0bc1160544c73f4883e4446db67a763d8`; selected integrity re-pinned through Make. Root/API lock refresh, APP-P1 digest and L5 generation were not repeated.
-- [x] Integration receipt: APP-P1 `0725ef3044cf06b04eaae5f407cc364e8c3c8ef570b6835b9aa0038fb556f34b`; L5 `e46814a6678a1bc2b9aedff17c64a2eab522689f250b040134f5de96ad7cbb5c`, packed graph 30 files/54 edges PASS.
-- [ ] **Lot 4 — Review and CI**: consolidated final-diff review, mechanical scope/branch gates; push review-ready head, open one READY PR, watch attempt 1 and fix evidenced root causes.
-- [ ] **Lot 5 — Handoff**: report `.tmp/rv/train-2026-11-06.md`; clean test volumes; leave train unmerged and wagons open for conductor.
+- [ ] **Lot 0 — Required base and scope**
+  - [x] Read common rules first, MASTER, workflow, frozen G0 and wagon plans; harness branch C1 passes.
+  - [x] Establish the branch on the published dated-train ref carrying artifacts 0.2.17 and retain its exact SHA.
+  - [ ] Write this single train plan and mechanically verify its scope before every commit.
+- [ ] **Lot 1 — Merge ready wagon branches**
+  - [ ] SG0-app `origin/feat/git-artifact-sg0-app` — GitHub App enrollment and encrypted cluster-mesh custody.
+  - [ ] SG1 `origin/feat/git-artifact-sg1` — binding lifecycle, host registry and immutable release index.
+  - [ ] GB1 `origin/feat/git-artifact-gb1` — build descriptor and locked dependency validation.
+  - [ ] SG2 `origin/feat/git-artifact-sg2` — injected leases, GitPort and atomic forge commits.
+  - [ ] Resolve source conflicts as the union of all typed categories/exports and retained upstream behavior; verify every wagon tip is an ancestor.
+- [ ] **Lot 2 — Single release regeneration**
+  - [ ] Verify registry versions through make; bump artifacts to 0.2.18 and cluster-mesh to reserved dev.N with CHANGELOG entries.
+  - [ ] Regenerate root/API lock metadata and selected-fixture versions/integrity through make.
+  - [ ] Recompute APP-P1 digest through make; assert the frozen four-tool profile selection and historical digest coverage.
+  - [ ] Commit final lock before L5 packing; retain upstream manifest/sidecar, regenerate and verify P1 once through make.
+- [ ] **Lot 3 — Scoped integrated checks and review**
+  - [ ] `make test-artifacts SCOPE=tests/git-`, `SCOPE=tests/build-contract.test.ts`, `SCOPE=tests/provider-failures.test.ts`, `SCOPE=tests/tools-list-snapshot.test.ts`.
+  - [ ] `make test-artifacts-integration SCOPE="tests/git-bindings.integration.test.ts tests/git-release-index.integration.test.ts"`.
+  - [ ] `make test-cluster-mesh SCOPE=tests/forge`; artifacts and cluster-mesh typecheck/lint.
+  - [ ] API `tests/api/app-mcp-registry.test.ts`, `tests/api/app-mcp-installed.test.ts` and packaging tuple/pin verification; full suites run in train CI.
+  - [ ] One consolidated code review on the final train diff; resolve evidenced root causes and retain the receipt.
+  - [ ] `make scope-check`, `git diff --check`, no conflict markers, ordinary package-bump verification.
+  - [ ] `make down-volumes API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218`.
+- [ ] **Lot 4 — One train PR and CI watch**
+  - [x] Close only wagon PRs #925/#926 with `superseded by train/artifacts-0.2.18`; preserve their branches.
+  - [ ] Push one review-ready head and open one READY PR `train/artifacts-0.2.18` to main using this plan as body.
+  - [ ] Observe and fix full CI; no reruns or gate changes; never merge to main from this lane.
+  - [ ] After the dated train merges, rebase onto origin/main and recheck published versions and generated evidence.
+
+## Deferred to later wagons on this train
+- [ ] SG3a/SG3b: tools, attach and commit orchestration; append scoped paths when branches land.
+- [ ] SG4a/SG4b: job-bound release publication and receipt handling.
+- [ ] GB4 and live lots: qualified ephemeral execution and private HMR lifecycle; no premature activation.
+- [ ] SG1 SQLite parity and real forge probes retain their own recorded acceptance gates.
