@@ -18,6 +18,7 @@ export const createGitAppRotation = (input: GitAppLifecycleInput) => {
     await github.verifyKey(replacement);
     record.app = replacement;
     await invalidateCredentials(record, input);
+    record.credentialVersion = randomUUID();
     record.state = 'ready';
     return publicStatus(record);
   }),

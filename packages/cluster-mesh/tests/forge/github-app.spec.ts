@@ -77,6 +77,7 @@ describe('GitHub App enrollment', () => {
     await f.service.rotateAppKey(owner, entry.installationRef, key());
     const after = await f.service.acquire({ ...owner, ...entry });
     expect(after.credentialVersion).not.toBe(before.credentialVersion);
+    expect(f.invalidations.at(-1)?.credentialVersion).toBe(before.credentialVersion);
     expect(f.revoked).toContain(before.token);
     expect(JSON.stringify(await f.service.status(owner, entry.installationRef))).not.toContain('PRIVATE KEY');
   });
@@ -106,7 +107,7 @@ describe('GitHub App enrollment', () => {
     const lease = await f.service.acquire({ ...owner, ...entry });
     await f.service.revoke(owner, entry.installationRef, reason);
     expect(f.invalidations.at(-1)?.repoId).toBe(owner.repoId);
-    expect(f.invalidations.at(-1)?.credentialVersion).not.toBe(lease.credentialVersion);
+    expect(f.invalidations.at(-1)?.credentialVersion).toBe(lease.credentialVersion);
     expect(f.revoked).toContain(lease.token);
     await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
     expect((await f.service.status(owner, entry.installationRef)).state).toBe('revoked');
