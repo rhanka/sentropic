@@ -6,6 +6,16 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve };
 }
 describe('live crash and wake fences', () => {
+  it('should stop revoked bindings through reconciliation', async () => {
+    const f = fixture(); await f.controller.start(key); f.binding.healthy = false;
+    await f.controller.reconcile(key); expect(f.objects.size).toBe(0); expect(f.ports.worker.build).not.toHaveBeenCalled();
+  });
+  it('should confirm a disappeared pod before allowing a new worker', async () => {
+    const f = fixture(); const live = await f.controller.start(key); f.objects.delete('pods' + live.podName);
+    await f.controller.reconcile(key); expect((await f.state())?.runtime.phase).toBe('DORMANT');
+    expect(f.core.create).toHaveBeenCalledTimes(2);
+    await f.controller.start(key); expect(f.core.create).toHaveBeenCalledTimes(4);
+  });
   it('should cancel an idle build before restoring the saved draft in the same pod', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     const entered = deferred<void>(); const output = deferred<{ candidateDigest: string }>();
