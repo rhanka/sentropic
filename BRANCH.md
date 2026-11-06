@@ -50,6 +50,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read contracts, initialize worktree and verify branch mechanically.
 - [ ] Lot 1: durable runtime, attempt and publication-progress fences; Postgres CAS adapter.
+  - [x] Define host runtime/progress records and transactional integration ports.
 - [ ] Lot 2: one-pod Kubernetes adapter and restricted manifest; safe revive/stop/recovery.
 - [ ] Lot 3: locked integrity-verified cache; fixed R1 live/build recipes.
 - [ ] Lot 4: clean idle build, B2 eligibility, wake/finalization serialization and crash recovery.
