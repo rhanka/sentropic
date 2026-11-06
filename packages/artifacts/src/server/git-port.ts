@@ -13,6 +13,7 @@ export interface GitPortRepository {
 }
 export interface GitPortTarget {
   storageScopeId: string; repoId: string; branch: string; subPath: string;
+  principalId: string;
   /** Descriptor output subtree resolved by the host, relative to subPath. */
   outputDir: string;
 }
@@ -29,7 +30,7 @@ export interface GitSourcePage {
 }
 export interface GitCommitInput {
   target: GitPortTarget; expectedHeadSha: string;
-  principalId: string; artifactId: string; invocationId: string;
+  artifactId: string; invocationId: string;
   message: string;
   /** Fully materialized changes after SG3's exactly-once edit application; null deletes. */
   files: { path: string; text: string | null }[];
