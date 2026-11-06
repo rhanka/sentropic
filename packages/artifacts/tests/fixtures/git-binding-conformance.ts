@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GitBinding, GitBindingStore, GitBindingWrite } from '../../src/server/git-bindings.js';
+import { classifyArtifactFailure } from '../../src/server/failures.js';
 
 export const gitBinding = (artifactId = '11111111-1111-4111-8111-111111111111',
   storageScopeId = 'scope-a', branch = 'artifact/shared/demo'): GitBinding => ({
@@ -16,6 +17,24 @@ export const gitWrite = (binding = gitBinding(), key = 'attach'): GitBindingWrit
 
 export function gitBindingConformance(name: string, fresh: () => Promise<GitBindingStore>) {
   describe(name, () => {
+    it.each([{ repoId: 'repo-b' }, { branch: 'artifact/shared/other' }, { subPath: 'apps/demo' }])
+    ('should include the artifact in a refused active target change %j', async (target) => {
+      const store = await fresh();
+      const binding = gitBinding();
+      await store.write(gitWrite(binding));
+      const events = await store.events('scope-a', binding.artifactId);
+      const rejected = { ...gitWrite({ ...binding, ...target, version: 2 }, 'target'), expectedVersion: 1 };
+      const failure = await store.write(rejected).then(() => { throw new Error('target change succeeded'); },
+        cause => classifyArtifactFailure(cause, { invocationId: 'target', operation: 'attach', phase: 'admit',
+          commitState: 'not_committed' }));
+      expect(failure).toMatchObject({ httpStatus: 409, publicCode: 'git_binding_conflict',
+        details: { artifactId: binding.artifactId } });
+      expect(failure.details).toEqual({ artifactId: binding.artifactId });
+      expect(await store.get('scope-a', binding.artifactId)).toEqual(binding);
+      expect(await store.events('scope-a', binding.artifactId)).toEqual(events);
+      expect((await store.write({ ...rejected, binding: { ...binding, version: 2, autoPublish: true } })).replayed).toBe(false);
+    });
+
     it('should retain audit and served SHA through pause, resume, detach and reattach', async () => {
       const store = await fresh();
       let binding = { ...gitBinding(), releaseCommitSha: 'b'.repeat(40) };
