@@ -1,6 +1,7 @@
 import type { LivePorts } from './ports';
 import { assertFence, automaticEligible, conflict, LiveError, publicationBaseline, type LiveKey, type LiveRuntime } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
+import { withinPhase } from './deadline';
 
 export async function idleBuild(ports: LivePorts, key: LiveKey) {
   const binding = await currentBinding(ports, key);
@@ -29,11 +30,11 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
         baselineSeq: state.progress.publicationBaselineSeq, initial: state.progress.initialUnpublishedBranchEligible };
     });
     const attempt = runtime.attempt!;
-    const cache = await ports.cache.acquire(source);
+    const cache = await ports.cache.acquire(source, runtime);
     await ports.worker.clean(runtime);
     await ports.worker.prepare(runtime, source, cache);
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
-    const candidate = await ports.worker.build(runtime, attempt);
+    const candidate = await withinPhase(ports.worker.build(runtime, attempt));
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING' || state.runtime.attempt?.id !== attempt.id) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt.candidateDigest = candidate.candidateDigest;
