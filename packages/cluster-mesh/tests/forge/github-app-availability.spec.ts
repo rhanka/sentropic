@@ -17,6 +17,42 @@ const delivery = () => {
 };
 
 describe('recoverable GitHub availability', () => {
+  it.each([
+    ['missing', undefined], ['empty', {}], ['contents only', { contents: 'write' }], ['metadata only', { metadata: 'read' }],
+  ])('should recover after %s mint permissions without revoking a prior lease', async (_name, mintedPermissions) => {
+    const f = fixture();
+    const entry = await f.ready();
+    const lease = await f.service.acquire({ ...owner, ...entry });
+    const healthy = f.github.mint;
+    const cleanup: string[] = [];
+    f.github.mint = createGitHubAppApi({ fetch: async (url, init) => {
+      if (url.endsWith('/access_tokens')) return Response.json({ token: 'synthetic-unissued-token',
+        expires_at: '2026-11-05T13:00:00Z', permissions: mintedPermissions });
+      if (url.endsWith('/installation/token') && init?.method === 'DELETE') {
+        cleanup.push(new Headers(init.headers).get('authorization')!);
+        return new Response(null, { status: 204 });
+      }
+      throw new Error('unexpected forge call');
+    } }).mint;
+    await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow(/^capability_unavailable$/);
+    expect(await f.service.status(owner, entry.installationRef)).toMatchObject({
+      state: 'unavailable', installationRef: entry.installationRef, credentialVersion: lease.credentialVersion,
+    });
+    expect(cleanup).toEqual(['Bearer synthetic-unissued-token']);
+    expect(f.invalidations).toEqual([]);
+    expect(f.revoked).toEqual([]);
+    f.github.mint = healthy;
+    const recovered = await f.service.acquire({ ...owner, ...entry });
+    expect(recovered.credentialVersion).toBe(lease.credentialVersion);
+    expect(recovered.token).not.toBe(lease.token);
+    expect(await f.service.status(owner, entry.installationRef)).toMatchObject({
+      state: 'ready', installationRef: entry.installationRef, credentialVersion: lease.credentialVersion,
+    });
+    expect(f.invalidations).toEqual([]);
+    expect(f.revoked).toEqual([]);
+    expect((await f.service.verify({ ...owner, ...entry, ...delivery(), deliveryId: 'mint-recovered' })).valid).toBe(true);
+  });
+
   it.each([401, 404])('should not infer enrollment loss from minted-token inventory HTTP %s', async (status) => {
     const f = fixture();
     const entry = await f.ready();
