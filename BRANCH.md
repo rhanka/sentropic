@@ -73,7 +73,7 @@
 - [x] Mono-branch, sequential implementation; no delegated build work.
 
 ## UAT Management (in orchestration context)
-- [x] HTTP and storage regressions qualify server-only changes; no UI change.
+- [x] HTTP/storage regressions qualify identity changes; controlled browser regressions qualify organization draft and presence concurrency.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
@@ -115,6 +115,6 @@
   - [x] UI typecheck passes with zero errors/six warnings; lint passes. Final 36-case qualification exposed a session-info 40001/HTTP 500 and concurrent magic-link provisioning 40001/HTTP 503; both original UI race regressions pass.
   - [x] Read-only session-validation completion preserves its refusal contract and final remote signing fences; registration/magic-link provisioning selects the existing exclusive context before its single UOW. Both old failures reproduce; all five concurrency cases and consolidated 220 tests in 20 files pass, with attempts/deadlines unchanged.
   - [x] Final API typecheck passes; lint has zero errors and 232 warnings. Cached development dependencies are reused; original assertion and retry/deadline settings remain unchanged.
-  - [ ] Qualify final API types/lint and all six browser specs against rebuilt production images; obtain exact-head supplement reviews before the next push.
+  - [x] Final production browser qualification: all six specs pass 36/36, four workers, zero skips/retries, on API 339bee, UI 96ef66 and patched runner e098f9; original assertions/budgets unchanged. Exact-head supplement reviews gate the next push and are recorded in the external review dossier.
   - [ ] Open one ready PR with BRANCH.md body and monitor CI until green; do not merge.
-  - [x] `make down-volumes`; report `.tmp/rv/a4-followups.md` with validation and review evidence, CI handoff pending.
+  - [x] Final `make down-volumes` succeeds; subsequent `make ps` confirms no services (2026-11-06 03:27 EST). Report `.tmp/rv/a4-followups.md` retains validation/review evidence; final CI and conductor Track import remain pending.
