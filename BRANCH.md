@@ -46,14 +46,16 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read common/master/workflow/testing/subagents, README/TODO/PLAN, study, binding plan/template; harness branch passed; measure #930 and recent PR/main runs through gh API.
-- [ ] Lot 1: sanitized jobs/steps, dependency graphs, queue and four endpoints in runs.json; implement ci-performance-report.mjs and ci-performance-report.test.mjs; extend ci-run-metrics.test.mjs for incomplete/rerun/capacity/mixed paths.
+- [x] Lot 1 tooling: sanitized jobs/steps, dependency graphs and four endpoints in runs.json; ci-performance-report.mjs/tests and extended metrics tests reject missing/rerun/capacity/mixed-path claims; 33 attempts retained, campaign acceptance remains open.
 - [ ] Lot 1 gate: make test-ci-run-metrics test-ci-performance-report ci-performance-report ENV=test-ci-ten-minute-proof; retain n/median/p90/p95/max, costs, failures, cancellations and missing profiles.
 - [ ] Speed gate: exact toolbox for complete API/IdP compiler and API linter programs; parallel app/unit and artifact/dossier qualification; preserve matrix membership and complete verdict.
 - [x] Measured app host qualification was 233.53s for 30 files (run 42300540682, unit job); split its unchanged file selection across two isolated shards and retain content static/process checks in both.
-- [ ] Lot 2: versioned portable Svelte dossier from retained generator/theme, one dependency model, graph controls, links, expanded jobs/steps and budget-to-measure labels; test path calculation and controls.
+- [x] Lot 2: versioned portable Svelte dossier from retained generator/theme, one dependency model, graph controls, links, expanded jobs/steps and budget-to-measure labels; test path calculation and controls.
 - [ ] Lot 2 gate: make build-ci-dossier test-ci-dossier ENV=test-ci-ten-minute-proof; TypeScript/Svelte/lint/build, keyboard/viewport, all cases/events/steps, wide/narrow exported artifact UAT.
+- [x] Dossier gate receipts: zero TypeScript/Svelte warnings, ESLint/build pass; 2 path tests and 23 Chromium controls pass; inspect wide/narrow captures and keep the toolbar above the graph inside the canvas.
 - [ ] Lot 3: ≥30 full-product runs across warm/source-miss/lock-miss/full-cold/concurrent profiles and API/UI/mixed/shared/tooling/fresh-release cases; endpoints ≤600s; retain all breaches and separate daily providers.
 - [ ] Lot 3 rollback: withdraw unsupported claims, preserve evidence, route regressions to owning branch.
 - [ ] Lot 4: consolidate acceptance.md, study and binding plan; `.tmp/rv/br84.md` includes before/after IDs and gap.
+- [x] Consolidated versioned acceptance/study/plan; API static observed 682s →138s on first after dispatch, whole-workflow target still breached by runner waits. Manual dispatch base fix passes the real consumer verifier locally.
 - [ ] Lot 5: changed-file gates, harness branch and make scope-check before each ≤150-line make commit; push wagon without PR; full product suites in CI, no image build at 95% disk.
 - [ ] Cleanup: make down-volumes for lane test/e2e environments; disk-hygiene if available; no root-owned file deletion.
