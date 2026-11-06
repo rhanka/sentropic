@@ -386,9 +386,9 @@ describe('RC1 product to issuer revocation', () => {
       });
       expect(response.status).toBe(200);
     }
-    expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
-    // Issuer tombstoning now lands through the sweep, not the lifecycle call.
-    await drainAllCmRevocations();
+    if (operation.endsWith('delete')) expect(await cmQuery(
+      `SELECT * FROM ${cmTable('identity_login_sessions')} WHERE user_id = $1`, [userId])).toEqual([]);
+    else expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
     expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(true);
     if (operation.endsWith('delete')) {
@@ -401,6 +401,7 @@ describe('RC1 product to issuer revocation', () => {
     }
     await cmReinsertSession(session!);
     expect(await validateSession(tokens.sessionToken)).toMatchObject({ userId });
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
     // The restored session does not revive the issuer tombstone.
     expect(getRemoteSessionAuthority()!.find(tokens.sessionId)).toMatchObject({ revoked: true });
   });
@@ -412,7 +413,7 @@ describe('RC1 product to issuer revocation', () => {
     await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 failed delivery', ownerUserId: userId });
     await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
     await putCmWorkspaceMember(workspaceId, userId, 'admin');
-    await mintMfaSession();
+    const tokens = await mintMfaSession();
     if (operation === 'admin-delete') await updateCmUser(userId, { accountStatus: 'disabled_by_admin' });
     // Active self deletion is refused (409); the supported self flow
     // deactivates first, then deletes.
@@ -421,7 +422,8 @@ describe('RC1 product to issuer revocation', () => {
       expect(deactivated.status).toBe(200);
     }
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('issuer unavailable')));
+    const transport = vi.fn().mockRejectedValue(new Error('issuer unavailable'));
+    vi.stubGlobal('fetch', transport);
     const admin = operation.startsWith('admin');
     const endpoint = admin ? `/admin/users/${userId}${operation === 'admin-disable' ? '/disable' : ''}`
       : `/account${operation === 'self-deactivate' ? '/deactivate' : ''}`;
@@ -429,16 +431,30 @@ describe('RC1 product to issuer revocation', () => {
       method: operation.endsWith('delete') ? 'DELETE' : 'POST',
       ...(operation === 'admin-disable' ? { headers: { 'content-type': 'application/json' }, body: '{}' } : {}),
     });
-    // Destruction commits against the CM store and queues issuer delivery for
-    // the sweep; an unreachable issuer no longer turns the lifecycle call into
-    // a 503 with a retry-after. Deletions report delivery_pending (202) while
-    // intents are queued; transitions report success (200).
-    expect([200, 202]).toContain(response.status);
-    if (operation.endsWith('delete')) expect(await findCmUserById(userId)).toBeNull();
-    expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'authority_unavailable', revocation: 'pending' });
+    expect(response.headers.get('retry-after')).toBe('60');
+    if (admin) expect(response.headers.get('set-cookie')).toBeNull();
+    else {
+      expect(response.headers.get('set-cookie')).toContain('session=;');
+      expect(response.headers.get('set-cookie')).toContain('refresh_token=;');
+    }
+    expect(transport).toHaveBeenCalled();
+    if (operation.endsWith('delete')) expect(await cmQuery(
+      `SELECT * FROM ${cmTable('identity_user_accounts')} WHERE user_id = $1`, [userId])).toEqual([]);
+    if (operation.endsWith('delete')) expect(await cmQuery(
+      `SELECT * FROM ${cmTable('identity_login_sessions')} WHERE user_id = $1`, [userId])).toEqual([]);
+    else expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
     if (operation.endsWith('delete')) expect(await db.select().from(workspaces).where(eq(workspaces.id, workspaceId))).toEqual([]);
-    // One ledger row per revoked target now, not one settings row.
-    expect((await pendingCmRevocations()).length).toBeGreaterThan(0);
+    // One pending operation, with every target retained in its CM outbox rows.
+    const pending = await cmQuery<{ operation_id: string }>(
+      `SELECT DISTINCT operation_id FROM ${cmTable('identity_revocation_outbox')} WHERE subject_id = $1 AND state = 'pending'`, [userId]);
+    expect(pending).toHaveLength(1);
+    expect(await cmQuery(`SELECT target_kind, target_ref FROM ${cmTable('identity_revocation_outbox')}
+      WHERE subject_id = $1 AND state = 'pending' ORDER BY target_kind`, [userId])).toEqual([
+      { target_kind: 'login_session', target_ref: tokens.sessionId },
+      { target_kind: 'subject', target_ref: userId },
+    ]);
     await bridge();
     // No user or session row is needed to drain a committed intent on a later scheduled sweep.
     await drainAllCmRevocations();

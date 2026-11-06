@@ -13,6 +13,8 @@ const coordinator = (handlerId: BusinessDeletionHandlerIdV1, continuation?: CmSe
   clock: () => new Date().toISOString(), transactionOptions: loadCmDeletionOptions(),
 });
 
+export const readCmAccountDeletionReceipt = (operationId: string) => coordinator('self_account').getReceipt(operationId);
+
 /** Caller ids come from verified HTTP authority; the request cannot select a handler. */
 export const deleteOwnCmAccount = (userId: string, operationId: string = randomUUID(), continuation?: CmSelfDeletionContinuation) => {
   return coordinator('self_account', continuation).deletePerson({ operationId, userId, actorId: userId, handlerId: 'self_account' });

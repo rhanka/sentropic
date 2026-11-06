@@ -58,5 +58,6 @@ accountRouter.post('/deactivate', async (c) => {
 
 accountRouter.delete('/', async (c) => {
   const { userId } = c.get('user');
-  return runCmAccountDeletionHttp(c, operationId => deleteOwnCmAccount(userId, operationId, c.get('cmSelfDeletion')));
+  return runCmAccountDeletionHttp(c, operationId => deleteOwnCmAccount(userId, operationId, c.get('cmSelfDeletion')),
+    { clearOwnSessionCookies: true });
 });

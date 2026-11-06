@@ -13,6 +13,7 @@ import { commitRemoteEvidence, resolveRemoteLogin, reserveRemoteEvidence } from 
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
 import { createRemoteIdpEvidencePorts } from '../../../src/services/auth/remote-idp';
+import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
 
 const keys = generateKeyPairSync('ed25519');
 let userId: string;
@@ -65,9 +66,7 @@ describe('RC1 current issuer session store', () => {
     if (failure === 'lock') mkdirSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json.lock`));
     if (failure === 'corrupt-foreign-file') writeFileSync(join(directory, `${'0'.repeat(64)}.json`), '{');
     if (failure === 'missing-pvc') rmSync(directory, { recursive: true });
-    // Post-cutover only the CM binding supplies session authority (the OAuth
-    // host bag keeps sessions unsupported by design); the oauth-* entries go
-    // through the binding session service, like the serving OAuth namespace does.
+    // Exercise the transaction-bound session service used by the serving OAuth namespace.
     const cmRevoke = (sessionId: string) => withAppCmAuth(runner =>
       runner.request(async binding => binding.sessions.revokeSession(sessionId)));
     const cmRevokeAll = (id: string) => withAppCmAuth(runner =>
@@ -110,8 +109,7 @@ describe('RC1 current issuer session store', () => {
     if (pending.revoked) throw new Error('Expected active test session');
     // Reproduce the committed DB insert while its private-create continuation is paused.
     unlinkSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json`));
-    expect(await withAppCmAuth(runner =>
-      runner.request(async binding => binding.sessions.revokeAllSessions(userId)))).toBe(1);
+    expect(await getSentropicOAuthPorts().sessions.revokeAllForUser(userId)).toBe(1);
     expect(() => store.create(pending)).toThrow();
     await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
@@ -133,6 +131,7 @@ describe('RC1 current issuer session store', () => {
       headers: { cookie: `session=${tokens.sessionToken}`, 'sec-fetch-mode': 'navigate' },
     });
     expect(result.status).toBe(200);
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
     await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
