@@ -5,6 +5,7 @@ import { applyLiveMutation, liveTreeSha } from './live-tree.js';
 import { liveBusy } from './live-mutations.js';
 import { liveResponse, type LiveAuthority, type LiveInvocation, type LiveServiceDeps } from './live-contracts.js';
 import type { LiveCommand, LiveIdentity } from './live-store.js';
+import { LiveCommitUnknownError } from './live-commit-outcome.js';
 
 export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity: LiveIdentity;
   authority: LiveAuthority; invocation: LiveInvocation; args: Record<string, any>;
@@ -65,6 +66,8 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
         if (tx.record?.pendingCommit?.invocationId === intent.invocationId) tx.record.pendingCommit = null;
       });
     }
+    if (cause instanceof ArtifactOperationError && (cause.kind === 'provider_unavailable' ||
+      cause.kind === 'git_live_conflict' && cause.details.publicDetails?.reason === 'commit_indeterminate')) throw new LiveCommitUnknownError(cause);
     throw cause;
   }
   return deps.store.transaction(identity, async tx => {
@@ -86,5 +89,5 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
       publicationIntent: authority.binding.autoPublish ? 'deferred' : null, replayed: false };
     await tx.complete(command, result);
     return result;
-  });
+  }).catch(cause => { throw new LiveCommitUnknownError(cause); });
 }

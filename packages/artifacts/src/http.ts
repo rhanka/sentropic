@@ -34,6 +34,7 @@ import { artifactSummary } from './server/summary.js';
 import { projectGitBinding, type GitProjectionPorts } from './server/git-projection.js';
 import type { LiveService } from './server/live-contracts.js';
 import { isLiveBodyStream, readBoundedLiveJson } from './server/live-body.js';
+import { LiveCommitUnknownError } from './server/live-commit-outcome.js';
 import { artifactVersions } from './server/versions.js';
 import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } from './server/management.js';
 import { createPostgresManagementUnit } from './adapters/postgres-management.js';
@@ -1194,6 +1195,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           result: { status: 200, body: { total: visibleArtifacts.length,
             artifacts: visibleArtifacts.slice(offset, offset + (normalized.limit as number)) } } };
       } catch (cause) {
+        if (cause instanceof LiveCommitUnknownError) commitState = 'unknown';
         const failure = classifyArtifactFailure(cause, { invocationId: invocation?.invocationId ?? '',
           operation, phase, commitState }, (error) => error instanceof ArtifactProfileInputError
             ? new ArtifactOperationError(error.category, { publicDetails: error.details }) : deps.mapHostError?.(error));
