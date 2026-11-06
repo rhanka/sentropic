@@ -52,6 +52,7 @@
 - [ ] Lot 1: typed GitPort, read/write policy and SG0-app structural lease contract.
   - [x] Define SHA-pinned source pages, materialized atomic changes and the injected SG0-app lease surface.
 - [ ] Lot 2: fake forge tests in `tests/git-port.test.ts`, `tests/git-port-policy.test.ts`, `tests/fixtures/git-port-fake.ts`.
+  - [x] Add traversal, secret-file, A1 denial precedence and repository-relative glob acceptance cases.
 - [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
 - [ ] Lot 4: server-resolved authorship, short-lived lease checks, test-only enrolled witness adapter and host docs.
 - [ ] Lot 5: scoped tests, typecheck/lint, harness scope, early push, one ready train PR, CI green and volume cleanup.

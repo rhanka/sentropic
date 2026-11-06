@@ -6,7 +6,9 @@ export type ArtifactErrorKind =
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
   | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed'
-  | 'edit_mismatch' | 'precondition_required';
+  | 'edit_mismatch' | 'precondition_required'
+  | 'git_head_moved' | 'git_path_refused' | 'git_branch_missing'
+  | 'git_ref_not_allowed' | 'git_repo_not_registered';
 
 /** Optimistic-concurrency payload: the caller re-reads and merges against this. */
 export interface ArtifactConflictDetails {
@@ -55,7 +57,8 @@ export interface ArtifactOperationalFailure extends ArtifactFailureFields {
 
 export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
   readonly kind: 'ordinary';
-  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required';
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required'
+    | 'git_path_refused' | 'git_branch_missing' | 'git_ref_not_allowed' | 'git_repo_not_registered';
   readonly retriable: false;
 }
 
@@ -126,6 +129,7 @@ const DOMAIN_STATUS = {
   invalid_request: 400, anonymous: 401, access_denied: 403,
   not_found: 404, gone: 410, release_unavailable: 410, limit_exceeded: 413, unprocessable: 422, verification_failed: 422, edit_mismatch: 422,
   precondition_required: 428,
+  git_path_refused: 422, git_branch_missing: 422, git_ref_not_allowed: 422, git_repo_not_registered: 422,
 } as const;
 
 function field(value: unknown, name: string): unknown {
@@ -159,6 +163,10 @@ const internal = (): Projection => ({ kind: 'operational', category: 'provider_e
 function operationProjection(error: ArtifactOperationError): Projection {
   const { kind } = error;
   switch (kind) {
+    case 'git_head_moved': return { ...conflict(kind), publicCode: kind, details: error.details.publicDetails };
+    case 'git_path_refused': case 'git_branch_missing': case 'git_ref_not_allowed': case 'git_repo_not_registered':
+      return { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind,
+        retriable: false, details: error.details.publicDetails };
     case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
     case 'command_conflict': case 'pointer_conflict': {
       const base = conflict(kind);
