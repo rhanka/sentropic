@@ -4,7 +4,13 @@ import { liveIdentityKey, type LiveStore, type LiveTransaction } from '../server
 
 /** No import-time I/O. PostgreSQL owns lease serialization, private objects and replay durability. */
 export function createPostgresLiveStore(pool: Pool): LiveStore {
-  return { async transaction(identity, action) {
+  return {
+    async sessionIdentity(scope, artifactId, sessionId) {
+      const result = await pool.query(`SELECT binding_generation FROM artifacts.live_drafts
+        WHERE storage_scope_id=$1 AND artifact_id=$2 AND record #>> '{runtime,liveSessionId}'=$3`, [scope, artifactId, sessionId]);
+      return result.rows[0] ? { storageScopeId: scope, artifactId, bindingGeneration: Number(result.rows[0].binding_generation) } : undefined;
+    },
+    async transaction(identity, action) {
     const client = await pool.connect();
     const values = [identity.storageScopeId, identity.artifactId, identity.bindingGeneration];
     try {
