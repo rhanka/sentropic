@@ -183,7 +183,8 @@ test.describe('Configuration de la matrice', () => {
 
       const exportAction = page.locator('button').filter({ hasText: /Exporter|Export/i }).first();
       await expect(exportAction).toBeVisible();
-      await exportAction.click({ force: true });
+      await expect(exportAction).toBeEnabled({ timeout: 2_000 });
+      await exportAction.click();
 
       const exportDialog = page.locator('h3').filter({ hasText: /Exporter la matrice|Export matrix/i });
       await expect(exportDialog).toBeVisible({ timeout: 2_000 });

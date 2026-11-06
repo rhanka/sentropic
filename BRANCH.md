@@ -46,6 +46,9 @@
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
   - `e2e/tests/03-dashboard.spec.ts`
   - `e2e/tests/08-chat-checkpoint-restore.spec.ts`
+  - `packages/auth-ui/tests/oauth-consent-rendering.test.ts`
+  - `e2e/Dockerfile`
+  - `e2e/tests/07-matrix.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -61,6 +64,11 @@
   - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
 
 ## Feedback Loop
+- [x] Owner continuation: push each verified fix and iterate until the entire train CI is green; no rerun, CI-skip marker, relaxed assertion, timeout/retry increase or merge.
+- [ ] TRAIN-CI4 — Run 42224685316 shard 6: isolated magic-link verification returns HTTP 503 after PostgreSQL 40001 serialization conflicts. Preserve current retry/deadline limits; reproduce concurrent isolated logins and remove the conflict. No product patch present at resume.
+- [x] TRAIN-CI3 — Shard 3 export readiness correction: retain the two-second dialog and ZIP assertions, require enabled state before a normal actionable click. Combined dashboard/matrix/checkpoint specs on the corrected image: 21/21 PASS, zero retries.
+- [x] BRTRAIN-EX3 — Fix CVE-2026-85091: pin E2E zlib 1.3.2-r1, the Alpine fixed version. Impact: E2E runtime library only; rollback: restore prior pin while retaining the blocking security gate. Image build/browser/video probes PASS; Trivy zero HIGH/CRITICAL findings; no suppression or register exception.
+- [x] TRAIN-CI2 — Share the auth-ui compiled-renderer fixture; preserve both resource cases and every assertion, without changing timeout/retry settings. make test-auth-ui: 56/56 PASS.
 - [x] TRAIN-CI1 — Fix shard 4 on run 42157650191: observe the dashboard lock across presence replacement while retaining the fallback print-hidden requirement and requiring a disabled presence lock; await the post-restore response before checking the unchanged route-handler flag. Scope: the two named E2E specs only, authorized by the train fix request; no timeout/retry increases or assertion weakening. Deterministic Chromium probe reproduces both races and rejects missing print-hidden/enabled presence locks. Local specs 4/4 PASS; complete shard 4: 43 PASS, six existing declared skips, zero retries. Full PR CI remains pending the single fix push.
 - [x] TRAIN-R1 — Missing worker-script CSP reproduced in four MIME vectors and Chromium 148; corrected application responses block external fetch/eval/Wasm while same-origin reads work. CSP 26/26 and content 79/79 PASS; safe mode and SVG/PDF sandbox preserved.
 - [x] TRAIN-R2 — Bind JSON/form grants to the displayed scope version and reject missing/stale versions without granting a widened scope; regression 5/5 PASS after reproducing missing version binding.
