@@ -42,7 +42,8 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
-- [x] GHCR-PINS — Recovery f2313a/434fe5 and three distinct prod digests are preserved remotely; manifests pin their exact GHCR digests. Preprod verifies the rendered images anonymously. Prod adoption requires a separate owner GO and operator apply; no prod workflow exists.
+- [x] GHCR-CONTRACT — Retain the shared prod API/IdP/content image contract; preserve live prod digests as recovery copies. Digest-pinned recovery fixtures still exercise tagged-image refusal by explicitly using an unqualified tag, preserving every negative assertion.
+- [x] GHCR-PINS — Recovery f2313a/434fe5 and three distinct prod digests are preserved remotely; preprod pins exact recovery digests and verifies them anonymously. Retain the prod base image-equality contract and main aliases; the separately approved prod apply picks up the then-published GHCR main images. No prod workflow exists.
 - [x] GHCR-TAG-TEST — Reproduced fixture refusal before collision inspection: the old dummy registry violates GHCR-only login. Retain every case/assertion, use the real namespace plus dummy credentials, and keep API guard qualification separate from the CI receipt promotion.
 - [x] GHCR-BYTES — Always publish the transported tested UI artifact, refuse config-digest collisions for all three images, promote aliases from the loaded image ID, and retain registry manifest/config receipts. The original API collision guard remains active.
 - [x] GHCR-DELIVERY — CI registry is explicit, publishers alone receive GITHUB_TOKEN packages:write, all steady-state private-registry credentials and pull-secret creation are removed; public pulls are anonymous.

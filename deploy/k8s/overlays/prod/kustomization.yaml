@@ -14,6 +14,5 @@ resources:
 # Pins the live OVH storage class on the postgres StatefulSet, mirroring
 # overlays/preprod (#474). Without it the prod overlay cannot converge at all.
 patches:
-  - path: patch-images.yaml
   - path: patch-artifact-content-config.yaml
   - path: patch-postgres-storageclass.yaml
