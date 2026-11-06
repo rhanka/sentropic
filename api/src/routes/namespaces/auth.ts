@@ -5,7 +5,7 @@ import {
 import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
 import { Hono } from 'hono';
 
-import { requireAuth } from '../../middleware/auth';
+import { requireCmAccountAuth } from '../../services/identity/cm-self-deletion';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { getSentropicOAuthPorts } from '../auth/oauth';
 import { applyAuthAuthorFence, type AuthCompositionRoot } from './auth-cutover';
@@ -72,7 +72,7 @@ export const createAuthNamespaceModule = (
 
     // Only enumerated identity routes are fenced. `/oauth` and `/session` are never prefix-caught.
     applyAuthAuthorFence(router, options.compositionRoot, [...authPaths, ...accountPaths]);
-    for (const path of accountPaths) router.use(path, requireAuth);
+    for (const path of accountPaths) router.use(path, requireCmAccountAuth);
 
     router.route('/', createAuthRouter({
       excludeRoutes: ['refreshSession', 'logout'],

@@ -9,6 +9,9 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
 import { evaluateSelection } from './ci-expected-results.mjs';
+import { loadBoundaries, verifyDispatch } from './consumer-contracts.mjs';
+import { tupleForApp } from './installed-tuple.mjs';
+import { classifyCompatibility } from './compatibility-classifier.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -732,6 +735,157 @@ test('gateway mesh wait resolves a union range to an exact dependency floor', ()
   const result = spawnSync('sh', ['-ec', command], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, '0.28.0');
+});
+
+test('consumer contracts (BR-83): change filters select every boundary consumer lane', () => {
+  const filterStep = jobs.changes.steps.find((step) => step.uses?.startsWith('dorny/paths-filter'));
+  assert.ok(filterStep, 'changes uses dorny paths-filter');
+  const filters = YAML.parse(filterStep.with.filters);
+  const covers = (filter, pattern) => assert.ok(filters[filter].includes(pattern),
+    `${filter} must cover ${pattern}`);
+  // Shared AuthProviderGlyph: auth-ui changes select the UI lane (plus the
+  // API lane through the api filter) with both images and preproduction.
+  covers('ui', 'packages/auth-ui/**');
+  covers('api', 'packages/auth-ui/**');
+  // Comments is a cluster peer: comments changes retain peer qualification.
+  covers('cluster_mesh', 'packages/comments/**');
+  // The gateway host consumes cluster-mesh: cluster-mesh changes select it.
+  covers('llm_gateway', 'packages/cluster-mesh/**');
+  // Boundary packages keep their own selections.
+  covers('comments', 'packages/comments/**');
+  covers('cluster_mesh', 'packages/cluster-mesh/**');
+});
+
+test('consumer contracts (BR-83): candidate contract lanes are wired into CI', () => {
+  // The API contracts run in the new contracts suite of the API integration job.
+  const matrix = jobs['test-api-unit-integration'].strategy.matrix.include.map((row) => row.suite);
+  assert.ok(matrix.includes('contracts'), 'api integration must run the contracts suite');
+  const apiScripts = JSON.parse(fs.readFileSync(path.join(root, 'api', 'package.json'), 'utf8')).scripts;
+  assert.ok(apiScripts['test:contracts'].includes('tests/contracts'),
+    'test:contracts must cover api/tests/contracts');
+  for (const file of ['api/tests/contracts/comments-candidate.test.ts',
+    'api/tests/contracts/cluster-candidate.test.ts',
+    'apps/auth-idp/tests/cluster-candidate.test.ts',
+    'apps/llm-gateway/tests/cluster-candidate.test.ts']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist: delegation is not passing evidence`);
+  }
+  const boundaries = JSON.parse(fs.readFileSync(path.join(root, 'scripts', 'ci', 'consumer-boundaries.json'), 'utf8'));
+  const workflowText = fs.readFileSync(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8');
+  for (const [file, via] of Object.entries(boundaries.contractLanes)) {
+    assert.ok(fs.existsSync(path.join(root, file)), `contract ${file} must exist`);
+    assert.ok(workflowText.includes(via), `contract ${file} must be wired through ${via}`);
+  }
+  // The gateway host suite runs inside its consumer validation.
+  const gatewaySteps = jobs['validate-llm-gateway'].steps.map((step) => step.run ?? '');
+  assert.ok(gatewaySteps.some((run) => run.includes('make test-llm-gateway-process')),
+    'validate-llm-gateway must run the gateway host process suite');
+});
+
+test('consumer contracts (BR-83): verifier job joins the complete verdict', () => {
+  const job = jobs['consumer-contracts'];
+  assert.ok(job, 'consumer-contracts job must exist');
+  assert.deepEqual(job.needs, ['changes', 'package-candidates']);
+  const runs = job.steps.map((step) => step.run ?? '').join('\n');
+  assert.ok(runs.includes('test-ci-compatibility'), 'classifier gate must run');
+  assert.ok(runs.includes('test-ci-consumer-contracts'), 'contract selection gate must run');
+  assert.ok(runs.includes('test-ci-installed-tuple'), 'installed tuple gate must run');
+  assert.ok(runs.includes('make consumer-contracts-verify'), 'live dispatch verify must run');
+  assert.ok(needsOf('ci-gate').includes('consumer-contracts'), 'ci-gate must require the verifier');
+  const bumpSteps = jobs['enforce-package-bump'].steps.map((step) => step.run ?? '').join('\n');
+  assert.ok(bumpSteps.includes('consumer-boundaries.json'), 'package bump gate must check boundary inventory');
+});
+
+test('consumer contracts (BR-83): IdP consumer checks stay selected on api changes', () => {
+  const smoke = jobs['smoke-idp-screens'];
+  assert.equal(evaluateSelection(smoke.if, (key) => key === 'needs.changes.outputs.api' ? 'true'
+    : key === 'needs.changes.outputs.global' ? 'false' : ''), true);
+  const ui = jobs['test-ui'];
+  assert.equal(evaluateSelection(ui.if, (key) => key === 'needs.changes.outputs.ui' ? 'true'
+    : key === 'needs.changes.outputs.global' ? 'false' : ''), true);
+});
+
+test('consumer contracts: real UI dispatch qualifies PRs and retains main delivery', () => {
+  const boundaries = loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json'));
+  const workflowText = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  // Same real manifests, root lock, Dockerfiles and empty candidate input as
+  // consumer-contracts-verify in CI. Linked dependencies remain unqualified.
+  const installed = Object.fromEntries(['api', 'ui'].map(appDir =>
+    [appDir, tupleForApp({ root, appDir, candidates: [] })]));
+  assert.ok(Object.values(installed).every(tuple =>
+    Object.values(tuple.closure).some(entry => entry.qualified === false)));
+  const tuples = { before: installed, after: structuredClone(installed) };
+  for (const ref of ['refs/pull/1/merge', 'refs/heads/main']) {
+    for (const kind of ['ui-only', 'shared-asset']) {
+      const shared = kind === 'shared-asset';
+      const result = verifyDispatch({ kind, slugs: shared ? ['auth-ui'] : [], boundaries,
+        workflow: ci, workflowText, tuples, ref, event: ref === 'refs/heads/main' ? 'push' : 'pull_request',
+        changes: { global: 'false', ui: 'true', api: String(shared), auth_ui: String(shared) } });
+      assert.equal(result.ok, true, `${kind} ${ref}: ${result.problems.join('; ')}`);
+      assert.equal(result.required.some(row => row.identity === 'deploy-preprod'), ref === 'refs/heads/main');
+      const drift = structuredClone(tuples);
+      Object.values(drift.after.api.closure).find(entry => typeof entry.integrity === 'string').integrity += '-changed';
+      const changed = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, tuples: drift,
+        changes: { ui: 'true', api: String(shared), auth_ui: String(shared) } });
+      assert.equal(changed.ok, false);
+      assert.ok(changed.problems.some(problem => problem.includes('installed tuple changed for api')));
+      assert.equal(verifyDispatch({ kind, boundaries, workflow: ci, workflowText, tuples,
+        changes: { ui: 'true', api: String(shared), auth_ui: String(shared) }, expectOmission: true }).ok, false);
+    }
+  }
+  const omission = verifyDispatch({ kind: 'internal-fix', slugs: ['comments'], boundaries,
+    workflow: ci, workflowText, tuples, changes: { comments: 'true', cluster_mesh: 'true' }, expectOmission: true });
+  assert.equal(omission.ok, false);
+  assert.ok(omission.problems.some(problem => problem.includes('without candidate bytes')));
+  for (const files of [['ui/src/routes/+page.svelte'], ['ui/src/routes/+page.svelte', 'BRANCH.md']]) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'ui/package.json'), 'utf8'));
+    const { kind } = classifyCompatibility({ files,
+      packages: [{ slug: 'ui', scope: 'app', published: manifest, candidate: manifest }] });
+    assert.equal(kind, 'ui-only');
+    const result = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, tuples,
+      changes: { ui: 'true' }, event: 'pull_request', ref: 'refs/pull/1/merge' });
+    assert.equal(result.ok, true, result.problems.join('; '));
+  }
+});
+
+test('consumer contracts: API runtime changes select the complete integration set', () => {
+  const result = verifyDispatch({ kind: 'runtime-security', boundaries: loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json')),
+    workflow: ci, workflowText: fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8'),
+    changes: { global: 'false', api: 'true', ui: 'false' }, event: 'pull_request', ref: 'refs/pull/1/merge' });
+  assert.equal(result.ok, true, result.problems.join('; '));
+});
+
+test('consumer contracts: documentation-only PR agrees with real workflow dispatch', () => {
+  const boundaries = loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json'));
+  const workflowText = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  const filters = YAML.parse(jobs.changes.steps.find(step => step.id === 'filter').with.filters);
+  const packages = boundaries.components.map(component => {
+    const dir = component.kind === 'app' ? ({ api: 'api', ui: 'ui',
+      'auth-idp': 'apps/auth-idp', 'llm-gateway': 'apps/llm-gateway' })[component.slug]
+      : `packages/${component.slug}`;
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, dir, 'package.json'), 'utf8'));
+    return { slug: component.slug, scope: component.kind, published: manifest, candidate: manifest };
+  });
+  const installed = Object.fromEntries(['api', 'ui'].map(appDir =>
+    [appDir, tupleForApp({ root, appDir, candidates: [] })]));
+  for (const files of [['README.md'], ['docs/guide.md', 'BRANCH.md'], ['scripts/README.md']]) {
+    const changes = Object.fromEntries(Object.entries(filters).map(([name, patterns]) =>
+      [name, String(files.some(file => patterns.some(pattern => path.matchesGlob(file, pattern))))]));
+    assert.ok(Object.values(changes).every(value => value === 'false'));
+    const { kind } = classifyCompatibility({ files, packages });
+    assert.equal(kind, 'documentation-only');
+    const result = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, changes,
+      tuples: { before: installed, after: installed }, event: 'pull_request', ref: 'refs/pull/1/merge' });
+    assert.equal(result.ok, true, result.problems.join('; '));
+    assert.deepEqual(result.required, []);
+    assert.equal(result.fastPath, false);
+  }
+  for (const file of ['vendor/uncovered.ts', 'docs/runtime.ts', 'spec/runtime.js']) {
+    const { kind } = classifyCompatibility({ files: ['README.md', file], packages });
+    assert.equal(kind, 'unknown');
+    const result = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, changes: {} });
+    assert.equal(result.ok, false);
+    assert.ok(result.problems.some(problem => problem.includes('test-e2e') && problem.includes('not selected')));
+  }
 });
 
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {

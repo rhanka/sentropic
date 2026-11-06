@@ -2,6 +2,8 @@ import { createUserAccounts, IdentityCustodyErrorV1, IdentityNotFoundError,
   type GlobalRole } from '@sentropic/cluster-mesh';
 import { withAppCmAuth } from './cm-auth-runtime';
 import { CmIdentityForbiddenError } from './cm-deletion-authorization';
+import { recordCmSelfDeletion } from './cm-self-deletion-proof';
+import { deliverCmSubjectRevocations } from './cm-revocation-worker';
 
 type AdminAction = { readonly kind: 'approve'; readonly role?: GlobalRole }
   | { readonly kind: 'disable'; readonly reason?: string } | { readonly kind: 'reactivate' };
@@ -35,16 +37,21 @@ export const changeCmAccountAsAdmin = (input: {
       approvedByUserId: input.actorId, disabledAt: null, disabledReason: null, legacyAccountStatus: null });
   }
   await tx.advanceSubjectRevision(input.userId, at, false);
-}));
+})).then(async () => {
+  if (input.action.kind === 'disable') await deliverCmSubjectRevocations(input.userId);
+});
 
-export const deactivateOwnCmAccount = (userId: string): Promise<void> =>
+export const deactivateOwnCmAccount = (userId: string, sessionId: string, credential: string): Promise<void> =>
   withAppCmAuth(runner => runner.request(async (binding, tx) => {
     await tx.lockSubject(userId);
     const profile = await tx.custody.profiles.find(userId);
     if (!profile) throw new IdentityCustodyErrorV1('identity_material_missing');
     const at = new Date().toISOString();
+    const claims = await binding.ports.tokens.verifySessionToken(credential);
+    if (!claims || claims.userId !== userId || claims.sessionId !== sessionId) throw new IdentityCustodyErrorV1('login_binding_mismatch');
+    await recordCmSelfDeletion(tx, userId, sessionId, await binding.ports.tokens.hashSecret(credential), at);
     await createUserAccounts({ accounts: tx.stores.accounts, audit: tx.stores.audit, clock: () => at }).disableSelf(userId);
     await tx.custody.profiles.put({ ...profile, disabledAt: at, disabledReason: 'user_deactivated', legacyAccountStatus: 'disabled_by_user' });
     await binding.sessions.revokeAllSessions(userId);
     await tx.advanceSubjectRevision(userId, at, false);
-  }));
+  })).then(() => deliverCmSubjectRevocations(userId));

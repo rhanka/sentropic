@@ -21,8 +21,8 @@ describe('ChatConversation — export surface registration', () => {
     expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
   });
 
-  it('should have version 1.0.0 in package.json', () => {
-    expect(pkgJson.version).toBe('1.0.0');
+  it('should have version 1.0.1 in package.json', () => {
+    expect(pkgJson.version).toBe('1.0.1');
   });
 
   it('should have _version 1.0.0 in export-manifest.json', () => {

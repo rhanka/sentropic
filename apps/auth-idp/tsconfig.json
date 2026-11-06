@@ -23,6 +23,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["./*.ts", "../../api/src"],
+  "include": ["./*.ts", "./tests/*.ts", "../../api/src"],
   "exclude": ["./screen-smoke.ts"]
 }

@@ -382,6 +382,9 @@ export function createCommentState(host: CommentHost, presentation: CommentPrese
       const res = await host.listMentionMembers();
       mentionMembers = res.items ?? [];
       mentionWorkspaceLoaded = true;
+      mentionMatches = showMentionMenu
+        ? getMentionMatches(mentionMembers, mentionQuery, presentation)
+        : [];
     } catch (e) {
       mentionError = e instanceof Error ? e.message : String(e);
     } finally {

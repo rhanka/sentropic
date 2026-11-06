@@ -17,12 +17,12 @@ export interface A4SourceSnapshot {
 }
 
 /** Called on the migration connection after legacy writers have been quiesced. */
-export async function readA4IdentitySource(client: PoolClient): Promise<A4SourceSnapshot> {
+export async function readA4IdentitySource(client: PoolClient, readOnly = false): Promise<A4SourceSnapshot> {
   await client.query("SET LOCAL TIME ZONE 'UTC'");
   // The table names are fixed source inventory, never request or configuration input.
   await client.query(`LOCK TABLE ${a4IdentitySourceTables.map(table => `public.${table}`).join(', ')},
     public.federation_flow_states, public.settings, public.document_connector_accounts,
-    control.event_outbox IN ACCESS EXCLUSIVE MODE`);
+    control.event_outbox IN ${readOnly ? 'ACCESS SHARE' : 'ACCESS EXCLUSIVE'} MODE`);
   const live = await client.query('SELECT count(*)::int AS count FROM public.federation_flow_states WHERE expires_at > now()');
   const secrets = await client.query('SELECT count(*)::int AS count FROM public.identities WHERE token_secret IS NOT NULL');
   if (live.rows[0]?.count !== 0 || secrets.rows[0]?.count !== 0) return invalidA4Import();

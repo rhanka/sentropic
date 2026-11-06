@@ -8,7 +8,7 @@
  * — the owner's instrument is share revocation. Revoking for an unreadable
  * artifact reads `not_found`, never 403, so the existence oracle stays closed.
  */
-import { assertConsentScopeId } from '@sentropic/artifacts/server/consent';
+import { assertConsentScopeId, decideGateB, type FreshRights, type GateBDecision } from '@sentropic/artifacts/server/consent';
 import type { ArtifactReaderStore } from '@sentropic/artifacts/server/reader-store';
 
 export interface ConsentGrantInput {
@@ -22,6 +22,14 @@ export interface ConsentRevokeInput {
   readerAccountId: string;
   artifactId: string;
   scopeId?: string;
+}
+
+export interface GateCheckInput {
+  readerAccountId: string;
+  artifactId: string;
+  scopeId: string;
+  scopeVersion: string;
+  rights: FreshRights;
 }
 
 const denied = (code: 'not_found' | 'access_denied') => new Error(code);
@@ -49,6 +57,26 @@ export function createReaderConsentService(deps: {
       if (!await checkRights()) throw denied('access_denied');
       return deps.store.grantConsent({ storageScopeId: deps.storageScopeId, ...input,
         consentId: crypto.randomUUID(), grantedAt: now(), grantedVia: 'reader_screen' });
+    },
+    /**
+     * J1.3b — fresh-rights probe for the first-party grant route: the same
+     * readability check the service was built with, so the grant route never
+     * invents its own authority rule.
+     */
+    async checkReaderFreshRights(input: { readerAccountId: string; artifactId: string }) {
+      return deps.canReadArtifact(input.artifactId, input.readerAccountId);
+    },
+    /**
+     * J1.3b — Gate B for the generic reader gate route: live consent at the
+     * host-declared version plus fresh rights, evaluated on this call.
+     */
+    async evaluateGate(input: GateCheckInput): Promise<GateBDecision> {
+      assertConsentScopeId(input.scopeId);
+      const consent = await deps.store.findLiveConsent({ storageScopeId: deps.storageScopeId,
+        readerAccountId: input.readerAccountId, artifactId: input.artifactId,
+        scopeId: input.scopeId, scopeVersion: input.scopeVersion });
+      return decideGateB({ consent, currentScopeVersion: input.scopeVersion,
+        rights: input.rights, scopeId: input.scopeId });
     },
     async listOwnConsents(readerAccountId: string) {
       const rows = await deps.store.listConsentsForReader(deps.storageScopeId, readerAccountId);

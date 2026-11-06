@@ -1,9 +1,11 @@
 import type { AuthHonoPorts, OAuthRefreshLock, OAuthRefreshStorePort } from '@sentropic/auth-hono';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { db } from '../../db/client';
 import { oauthRefreshTokens } from '../../db/schema';
 import { CM_IDENTITY_SCHEMA } from '../identity/cm-identity';
+import { currentCmIdentityTransaction } from '../identity/cm-transaction';
 
 type Database = NodePgDatabase;
 type Transaction = Database;
@@ -16,6 +18,11 @@ interface Adapter extends OAuthRefreshStorePort {
   withLock<T>(lock: OAuthRefreshLock,
     work: (store: OAuthRefreshStorePort, tx: Transaction) => Promise<T>): Promise<T>;
 }
+
+const transactionObserver = new AsyncLocalStorage<() => Promise<void>>();
+/** Request-scoped interception after the live transaction owns its refresh locks. */
+export const withOAuthRefreshTransactionObserver = <T>(observer: () => Promise<void>, work: () => Promise<T>): Promise<T> =>
+  transactionObserver.run(observer, work);
 
 // The account lock follows CM identity. A bound request borrows its current
 // executor, so refresh and the auth binding commit or roll back together.
@@ -72,11 +79,14 @@ export const createOAuthRefreshAdapter = (options: Options = {}): Adapter => {
     work: (store: OAuthRefreshStorePort, tx: Transaction) => Promise<T>,
   ): Promise<T> => {
     if (options.transactionBound) {
+      await currentCmIdentityTransaction()?.lockSubject(lock.userId);
       await lockOAuthRefresh(database, lock);
+      await transactionObserver.getStore()?.();
       return work(createOAuthRefreshAdapter({ ...options, database }), database);
     }
     return database.transaction(async (tx) => {
       await lockOAuthRefresh(tx, lock);
+      await transactionObserver.getStore()?.();
       return work(createOAuthRefreshAdapter({ ...options, database: tx, transactionBound: true }), tx);
     });
   };

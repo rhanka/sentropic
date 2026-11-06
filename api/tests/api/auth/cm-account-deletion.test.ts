@@ -14,10 +14,11 @@ import { createCmTenant, enrolCmWorkspace, putCmWorkspaceMember, setCmMembership
 import { cmDeleteForEmails, cmDeleteForUsers, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 
 describe('A4 account deletion with the real CM V2 coordinator', () => {
-  let subject: string, actor: string, tenant: string, workspace: string, fault: string;
+  let subject: string, actor: string, tenant: string, workspace: string, fault: string, sessionId: string;
   beforeEach(async () => {
     if (process.env.NODE_ENV !== 'test') throw new Error('Isolated test environment required');
     subject = randomUUID(); actor = randomUUID(); tenant = randomUUID(); workspace = randomUUID();
+    sessionId = randomUUID();
     fault = `a4_fault_${randomUUID().replaceAll('-', '')}`;
     const budget = { deadlineMs: 10_000, maxAttempts: 1 };
     vi.stubEnv('CM_IDENTITY_DELETION_BUDGETS_JSON', JSON.stringify({
@@ -32,7 +33,7 @@ describe('A4 account deletion with the real CM V2 coordinator', () => {
     await setCmMembershipState(subject, tenant, { status: 'approved', decidedBy: actor });
     await putCmWorkspaceMember(workspace, subject, 'admin');
     await db.insert(settings).values({ key: 'deletion-fixture', userId: subject, value: 'preserve-on-rollback' });
-    await createCmSession({ id: randomUUID(), userId: subject, sessionTokenHash: sha256Hex(randomUUID()),
+    await createCmSession({ id: sessionId, userId: subject, sessionTokenHash: sha256Hex(randomUUID()),
       refreshTokenHash: sha256Hex(randomUUID()), now: new Date(), expiresAt: new Date(Date.now() + 60_000) });
     await updateCmUser(subject, { accountStatus: 'disabled_by_admin', disabledAt: new Date(), disabledReason: 'test' });
   });
@@ -71,11 +72,14 @@ describe('A4 account deletion with the real CM V2 coordinator', () => {
     const receipt = await deleteCmAccountAsAdmin({ actorId: actor, userId: subject }, randomUUID());
     expect(receipt).toMatchObject({ transaction: 'committed', resultCode: 'identity_deleted', complete: false });
     expect(receipt.steps.find(step => step.step === 'account')).toMatchObject({ outcome: 'applied' });
-    // Remote projection invalidation is queued after every local account deletion.
-    expect(receipt.deliveryIds).toHaveLength(1);
-    expect(await cmQuery(`SELECT step, subject_id, state FROM ${cmTable('identity_revocation_outbox')}
-      WHERE delivery_id = $1`, [receipt.deliveryIds[0]]))
-      .toEqual([{ step: 'remote_reader_sessions', subject_id: subject, state: 'pending' }]);
+    // Both subject scanning and the exact session tombstone must survive cleanup.
+    expect(receipt.deliveryIds).toHaveLength(2);
+    expect(await cmQuery(`SELECT step, subject_id, state, target_kind, target_ref FROM ${cmTable('identity_revocation_outbox')}
+      WHERE delivery_id = ANY($1::text[]) ORDER BY target_kind`, [receipt.deliveryIds]))
+      .toEqual([
+        { step: 'remote_reader_sessions', subject_id: subject, state: 'pending', target_kind: 'login_session', target_ref: sessionId },
+        { step: 'remote_reader_sessions', subject_id: subject, state: 'pending', target_kind: 'subject', target_ref: subject },
+      ]);
     expect(await cmQuery(`SELECT user_id FROM ${cmTable('identity_user_accounts')} WHERE user_id = $1`, [subject]))
       .toEqual([]);
   });

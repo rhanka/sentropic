@@ -53,7 +53,7 @@ spec:
         - name: register
           image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
           imagePullPolicy: Always
-          workingDir: /workspace
+          workingDir: /workspace/api
           command: ["node", "dist/scripts/oauth-register-client.js"]
           envFrom:
             - secretRef:

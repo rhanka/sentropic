@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "note": "BR-83 consumer graph: library to host-consumer edges, owning validations, and change-kind policies. A consumer integration or deployment lane may only be omitted when the selected boundary contracts pass on qualified candidate bytes and the installed application tuples are unchanged.",
+  "components": [
+    { "slug": "artifacts", "kind": "library", "validation": "validate-artifacts" },
+    { "slug": "auth-client", "kind": "library", "validation": "validate-auth-client" },
+    { "slug": "auth-hono", "kind": "library", "validation": "validate-auth-hono" },
+    { "slug": "auth-ui", "kind": "library", "validation": "validate-auth-ui" },
+    { "slug": "chat-core", "kind": "library", "validation": "validate-chat-core" },
+    { "slug": "chat-server", "kind": "library", "validation": "validate-chat-server" },
+    { "slug": "chat-ui", "kind": "library", "validation": "validate-chat-ui" },
+    { "slug": "cited-source-viewer", "kind": "library", "validation": "validate-cited-source-viewer" },
+    { "slug": "cluster-mesh", "kind": "library", "validation": "validate-cluster-mesh" },
+    { "slug": "comments", "kind": "library", "validation": "validate-comments" },
+    { "slug": "connector-host", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "contracts", "kind": "library", "validation": "validate-contracts" },
+    { "slug": "cowork-bridge", "kind": "library", "validation": "validate-cowork-bridge" },
+    { "slug": "cowork-desktop", "kind": "library", "validation": "validate-cowork-desktop" },
+    { "slug": "events", "kind": "library", "validation": "validate-events" },
+    { "slug": "flow", "kind": "library", "validation": "validate-flow" },
+    { "slug": "harness", "kind": "library", "validation": "validate-harness" },
+    { "slug": "live-speech", "kind": "library", "validation": "validate-live-speech" },
+    { "slug": "llm-gateway", "kind": "library", "validation": "validate-llm-gateway" },
+    { "slug": "llm-mesh", "kind": "library", "validation": "validate-llm-mesh" },
+    { "slug": "mcp-auth", "kind": "library", "validation": "validate-mcp-auth" },
+    { "slug": "mcp-broker", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-airtable", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-dropbox", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-gmail", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-google", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-googlecalendar", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-googledocs", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-googledrive", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-googlesheets", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-hubspot", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-linear", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-notion", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-slack", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-connector-stripe", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "mcp-platform", "kind": "library", "validation": "validate-mcp-platform" },
+    { "slug": "oauth-verify", "kind": "library", "validation": "validate-oauth-verify" },
+    { "slug": "skills", "kind": "library", "validation": "validate-skills" },
+    { "slug": "ubo-contracts", "kind": "library", "validation": null, "note": "private; owning validation is the real API integration api/tests/object-registry/object-type-registry.test.ts, not the delegated package test script" },
+    { "slug": "api", "kind": "app", "validation": "test-api-unit-integration" },
+    { "slug": "ui", "kind": "app", "validation": "test-ui" },
+    { "slug": "auth-idp", "kind": "app", "validation": "smoke-idp-screens" },
+    { "slug": "llm-gateway", "kind": "app", "validation": "test-llm-gateway-process", "note": "gateway host; packages/llm-gateway is the library" }
+  ],
+  "boundaries": [
+    {
+      "package": "comments",
+      "consumers": ["api"],
+      "contracts": ["api/tests/contracts/comments-candidate.test.ts"],
+      "peerQualification": "validate-cluster-mesh",
+      "note": "comments ships to the API over the ./hono export; cluster-mesh peer qualification is retained through validate-cluster-mesh"
+    },
+    {
+      "package": "cluster-mesh",
+      "consumers": ["api", "auth-idp", "llm-gateway"],
+      "contracts": [
+        "api/tests/contracts/cluster-candidate.test.ts",
+        "apps/auth-idp/tests/cluster-candidate.test.ts",
+        "apps/llm-gateway/tests/cluster-candidate.test.ts"
+      ],
+      "note": "cluster-mesh reaches the API namespaces, the IdP plugin, and the gateway host registry"
+    }
+  ],
+  "contractLanes": {
+    "api/tests/contracts/comments-candidate.test.ts": "suite: contracts",
+    "api/tests/contracts/cluster-candidate.test.ts": "suite: contracts",
+    "apps/auth-idp/tests/cluster-candidate.test.ts": "test-idp-candidate",
+    "apps/llm-gateway/tests/cluster-candidate.test.ts": "test-llm-gateway-process"
+  },
+  "owningValidations": {
+    "chat-core": { "make": "test-pkg-chat-core", "job": "validate-chat-core", "note": "runtime unit tests retained in the validate step" },
+    "llm-gateway-host": { "make": "test-llm-gateway-process", "job": "validate-llm-gateway", "note": "wired by BR-83 into validate-llm-gateway; previously only gateway-check ran" },
+    "ubo-contracts": { "test": "api/tests/object-registry/object-type-registry.test.ts", "job": "test-api-unit-integration", "note": "delegated package test script is not passing evidence" }
+  },
+  "sharedAssets": [
+    {
+      "path": "packages/auth-ui/src/components/AuthProviderGlyph.svelte",
+      "scope": "packages/auth-ui/src/**",
+      "consumers": ["ui", "auth-idp"],
+      "images": ["api", "ui"],
+      "preprod": true,
+      "note": "shared glyph is embedded in UI and IdP screens; changes qualify auth-ui and exercise UI, IdP, both images, and preproduction"
+    }
+  ],
+  "policies": {
+    "documentation-only": { "selection": "documentation", "note": "positively identified documentation needs no consumer integration; unknown functional paths remain full blocking integration" },
+    "unknown": { "selection": "full", "note": "unknown or missing evidence selects full blocking integration" },
+    "runtime-security": { "selection": "full", "note": "runtime, deploy, security, e2e, or host changes select full blocking integration" },
+    "root-lock-toolchain": { "selection": "full", "note": "root lock, toolchain, image input, or workflow changes select full blocking integration" },
+    "breaking": { "selection": "full", "note": "breaking library changes select full blocking integration" },
+    "explicit-adoption": { "selection": "adopted", "note": "adopted upgrades run complete deterministic consumers" },
+    "additive": { "selection": "boundary", "note": "tuple-gated fast path: boundary contracts plus owning validations, omission only on unchanged tuples" },
+    "internal-fix": { "selection": "boundary", "note": "tuple-gated fast path: boundary contracts plus owning validations, omission only on unchanged tuples" },
+    "ui-only": { "selection": "ui", "note": "UI changes still deploy UI with preproduction while preserving the API digest" },
+    "shared-asset": { "selection": "shared", "note": "shared auth-ui assets qualify auth-ui and exercise UI, IdP, both images, and preproduction" }
+  }
+}

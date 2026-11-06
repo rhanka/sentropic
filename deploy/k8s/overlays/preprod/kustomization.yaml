@@ -27,3 +27,10 @@ patches:
   - path: patch-api-config.yaml
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
+
+# Temporary recovery pin: remove at the A4 preprod cutover execution.
+images:
+  - name: rg.fr-par.scw.cloud/nc-reg/sentropic-api
+    newTag: "f2313a"
+  - name: rg.fr-par.scw.cloud/nc-reg/sentropic-ui
+    newTag: "434fe5"

@@ -351,15 +351,23 @@ test.describe('Chat checkpoint restore', () => {
       const editable = composer.locator('[contenteditable="true"]');
       await editable.click();
       await page.keyboard.type('Post-restore message');
-      const [postRestoreReq] = await Promise.all([
+      const [postRestoreReq, postRestoreResponse] = await Promise.all([
         page.waitForRequest(
           (req) =>
             req.method() === 'POST' && req.url().includes('/api/v1/chat/messages'),
           { timeout: 15_000 },
         ),
+        // The request event can arrive before the route handler sets sendObserved.
+        page.waitForResponse(
+          (res) =>
+            res.request().method() === 'POST' &&
+            new URL(res.url()).pathname === '/api/v1/chat/messages',
+          { timeout: 15_000 },
+        ),
         page.keyboard.press('Enter'),
       ]);
       expect(new URL(postRestoreReq.url()).pathname).toBe('/api/v1/chat/messages');
+      expect(postRestoreResponse.status()).toBe(200);
       expect(sendObserved).toBeTruthy();
 
       expect(pageErrors, `pageerrors: ${pageErrors.join(' | ')}`).toHaveLength(0);

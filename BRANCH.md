@@ -1,540 +1,196 @@
-# Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
+# train 2026-11-06: artifacts 0.2.17, CI contracts, A4 follow-ups and preprod procedure
 
 ## Objective
-One lot: migrate app identity data (users, proofs, invitations, login sessions, tenants, both memberships, workspaces) into the cluster-mesh stores, switch the single author under the r13 D11 protocol with the rollback checkpoint recorded before any legacy table deletion, point every reader/writer at the CM stores, delete the legacy app identity tables/files, replace request-authority with F15, and land the F11 screens. Cutover (2026-11-04, PR #879): rebased onto `origin/main` past the A2.0b merge (#882), the G1–G5 train (#912) and the 2026-11-04 train (#914, `b9cdb2d33`); fold lot G0 (#906, superseded); consume G1–G5 in the app (lot G6, four series, no fallback); prepare the preprod sync replacement up to a dry run only (lot G7, no preprod run without the owner nominative list). Lane 2026-11-05: rebased onto `origin/main` past #915 (`4d7517d94`, union); fixed review r1 D1/D2 + the 0014→0015 comment; ported the revocation tests to the CM sweep path with the R1/R2 root fixes above.
+- [ ] Integrate five approved wagons on current origin/main, preserve artifacts 0.2.17 and the qualified locks/pins, keep preprod on its recovery release, and qualify one READY PR; do not merge.
+- [ ] Supersedes [#923](https://github.com/rhanka/sentropic/pull/923), [#921](https://github.com/rhanka/sentropic/pull/921), [#924](https://github.com/rhanka/sentropic/pull/924); the conductor closes them after this train merges.
+- [ ] Extension 06/11: integrate approved [#929](https://github.com/rhanka/sentropic/pull/929) and `origin/feat/preprod-a4-procedure` (1a5a9ef98 or later), retain the recovery images in preprod until owner-authorized A4 execution, and qualify the extended train without merging.
 
 ## Scope / Guardrails
-- Scope limited to the app cutover: api identity read/write paths, one control data migration, ui F11 screens, e2e; plus G6 CM-consumption swaps and the G7 ops replacement (scripts + idp-identity-sync overlays).
-- One migration max: `api/drizzle/control/0015_app_cm_identity_cutover.sql` (control stream; slot 0015, main owns 0014).
-- Make-only workflow, no direct Docker commands; each Docker-using make command through `.tmp/packets/docker-slot.sh make ...`, one slot per command, never nested; `make down-volumes ENV=<env>` after every test stack.
-- Branch development in isolated worktree `tmp/worktrees/app-cm-a4-3` on branch `feat/app-cm-a4` (base `main` since #882 merged; PR #879 retargeted).
-- Test campaigns on `ENV=test-a4-cutover` (ENV last), never root dev; never `ENV=dev`.
-- All new text in English.
-- No dual writer, no legacy fallback; the app keeps business data only.
-- Pins: a4-cm-gaps-r2.md (binding design, lots G0/G6/G7); A2.0b amendment r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; owner-answers-20261030.md (Q-G interim accepted; Q-K=A with HMAC + .env/k8s rotation; Q-WS1 deleted-with-workspace; Q-IDP1 case-by-case with nominative consent); PR #879 base `main` at `b9cdb2d33` (train #914; G1–G5 arrived via #912 `a1d0a815a`).
+- [x] Merge order: `origin/fix/oauth-register-job-workdir`, `origin/feat/ci-consumer-contracts`, `origin/feat/artifacts-0.2.17-app-mode`.
+- [x] Base `c107f6abd70e47e0aba33ab4afad01f8dafe4534`; branch `train/2026-11-06`; worktree `tmp/worktrees/train-2026-11-06`.
+- [x] Preserve wagon histories and the inherited #921 conversation-row readiness fix; resolve conflicts at the train root.
+- [x] Make-only; no Python, CI reruns, CI-skip markers or attribution trailers; selective staging and `make commit`.
+- [x] Docker via `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command; cleanup with `make down-volumes`.
+- [x] ENV=test-train-1106; API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570; ENV always last; no root UAT services.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `docker-compose.test.yml` (BRxx-EX16)
-  - `packages/cluster-mesh/src/storage/identity/schema.ts` (BRxx-EX17)
-  - `packages/cluster-mesh/src/identity-contracts/accounts.ts` (BRxx-EX15)
-  - `packages/cluster-mesh/src/storage/identity/atomic-deletion.ts` (BRxx-EX15)
-  - `packages/cluster-mesh/tests/identity-lifecycle.spec.ts` (BRxx-EX15)
-  - `api/src/**`
-  - `api/tests/**`
-  - `api/vitest.config.ts`
-  - `api/drizzle/control/0015_app_cm_identity_cutover.sql` + `api/drizzle/control/meta/**`
-  - `deploy/k8s/overlays/prod/idp-identity-sync/**` + `deploy/k8s/overlays/preprod/idp-identity-sync/**` (G7 ops replacement only)
-  - `deploy/ci/idp-identity-sync/**` (G7 selftests only)
-  - `ui/src/**`
-  - `ui/tests/**`
-  - `e2e/tests/**`
-  - `packages/cluster-mesh/ui/**`
-  - `packages/cluster-mesh/tests/ui/**`
-  - `packages/cluster-mesh/package.json`
-  - `ui/package.json` + `ui/package-lock.json`
+  - `BRANCH.md`
+  - `scripts/ci/compatibility-classifier*.mjs`
+  - `scripts/ci/consumer-contracts*.mjs`
+  - `scripts/ci/consumer-boundaries.json`
+  - `scripts/ci/installed-tuple*.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `scripts/ci/publishable-classification.test.mjs`
+  - `api/package.json`
+  - `api/tests/contracts/*-candidate.test.ts`
+  - `apps/auth-idp/tests/cluster-candidate.test.ts`
+  - `apps/llm-gateway/tests/cluster-candidate.test.ts`
+  - `packages/artifacts/src/**`
+  - `packages/artifacts/tests/**`
+  - `packages/artifacts/package.json`
+  - `packages/artifacts/CHANGELOG.md`
+  - `apps/artifact-content/src/host.ts`
+  - `apps/artifact-content/tests/application-mode.test.ts`
+  - `api/src/services/artifacts/**`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/src/routes/namespaces/artifacts.ts`
+  - `api/src/routes/namespaces/resources.ts`
+  - `api/tests/api/artifacts-reader*.test.ts`
+  - `api/tests/api/app-mcp-*.test.ts`
+  - `api/tests/api/root-mount-fence-completeness.test.ts`
+  - `api/tests/api/cluster-mesh-resources.test.ts`
   - `package-lock.json`
-  - `BRANCH.md`
+  - `api/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
+  - `e2e/tests/03-dashboard.spec.ts`
+  - `e2e/tests/08-chat-checkpoint-restore.spec.ts`
+  - `packages/auth-ui/tests/oauth-consent-rendering.test.ts`
+  - `e2e/Dockerfile`
+  - `e2e/tests/07-matrix.spec.ts`
+  - `e2e/tests/01-app.spec.ts`
+  - `api/tests/api/auth/cm-auth-request-concurrency.test.ts`
+  - `api/src/services/identity/cm-auth-binding.ts`
+  - `api/src/services/identity/cm-transaction.ts`
+  - `packages/cluster-mesh/tests/packaging/prepare.sh`
+  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
+  - `packages/chat-core/src/runtime/comments/state.ts`
+  - `packages/chat-core/tests/runtime/comments-module.spec.ts`
+  - `packages/chat-core/tests/runtime/chat-core-host.spec.ts`
+  - `packages/chat-core/package.json`
+  - `ui/package-lock.json`
+  - `api/src/middleware/auth.ts`
+  - `api/src/routes/auth/oauth.ts`
+  - `api/src/routes/namespaces/admin-identity.ts`
+  - `api/src/routes/namespaces/auth.ts`
+  - `api/src/routes/namespaces/auth/cm-auth-hono.ts`
+  - `api/src/routes/namespaces/auth/cm-deletion-http.ts`
+  - `api/src/routes/namespaces/workspaces/cm-member-ports.ts`
+  - `api/src/services/auth/consent-store-adapter.ts`
+  - `api/src/services/auth/oauth-refresh-adapter.ts`
+  - `api/src/services/auth/remote-revocation.ts`
+  - `api/src/services/auth/remote-session.ts`
+  - `api/src/services/cluster-mesh/session-workspace.ts`
+  - `api/src/services/identity/cm-account-*.ts`
+  - `api/src/services/identity/cm-deletion-*.ts`
+  - `api/src/services/identity/cm-error-code.ts`
+  - `api/src/services/identity/cm-http-principal.ts`
+  - `api/src/services/identity/cm-remote-session-authority.ts`
+  - `api/src/services/identity/cm-revocation-worker.ts`
+  - `api/src/services/identity/cm-self-deletion*.ts`
+  - `api/tests/api/admin-users.test.ts`
+  - `api/tests/api/auth/cm-account-connectors.test.ts`
+  - `api/tests/api/auth/cm-account-deletion.test.ts`
+  - `api/tests/api/auth/cm-oauth-consent.test.ts`
+  - `api/tests/api/auth/cm-self-deletion.test.ts`
+  - `api/tests/api/auth/cm-v2-revocation-fence.test.ts`
+  - `api/tests/api/auth/oauth-refresh.integration.test.ts`
+  - `api/tests/api/auth/remote-*.test.ts`
+  - `api/tests/api/me.test.ts`
+  - `api/tests/api/session-adoption.test.ts`
+  - `api/tests/unit/auth/optional-auth.test.ts`
+  - `api/tests/unit/auth/require-auth-logging.test.ts`
+  - `e2e/tests/01-organizations-detail.spec.ts`
+  - `e2e/tests/02-organizations.spec.ts`
+  - `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
+  - `e2e/tests/06-settings-codex-provider.spec.ts`
+  - `packages/chat-ui/package.json`
+  - `packages/chat-ui/src/components/AgentsList.svelte`
+  - `packages/chat-ui/tests/agents-list.dom.spec.ts`
+  - `packages/chat-ui/tests/chat-conversation.spec.ts`
+  - `packages/chat-ui/tests/documents-module.spec.ts`
+  - `ui/src/routes/organizations/[id]/+page.svelte`
+  - `ui/src/routes/organizations/new/+page.svelte`
+  - `api/src/index.ts`
+  - `api/src/scripts/cm-preprod-*.ts`
+  - `api/src/services/identity/cm-cutover-checkpoint.ts`
+  - `api/src/services/identity/cm-import-source.ts`
+  - `api/tests/unit/auth/cm-preprod-*.test.ts`
+  - `deploy/ci/preprod-a4/**`
+  - `deploy/ci/idp-identity-sync/idp-sync.selftest.mjs`
+  - `deploy/ci/artifact-content/tests.mk`
+  - `deploy/k8s/overlays/preprod/**`
+  - `deploy/k8s/overlays/preprod-a4/**`
+  - `docs/runbooks/preprod-a4-cutover.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/cluster-mesh/src/**` (A2.0b owns backend contracts/implementation; gaps remain stack dependencies)
-  - `packages/cluster-mesh/tests/identity/**`
-  - `.github/workflows/**`
-  - `spec/**`
+  - `api/drizzle/*.sql`
+  - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` public stream (not used; control stream only)
-  - `api/package.json` (build entries for the two G7 replica runners only, BRxx-EX2)
-  - `apps/auth-idp/screen-smoke-seed.ts` + `apps/auth-idp/sso-smoke.ts` (CM identity seeding for the smoke flows only, BRxx-EX4)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (selected-fixture peer alignment only, BRxx-EX5)
-  - `packages/cluster-mesh/tests/packaging/prepare.sh` (pack the auth-ui sibling for the frozen `latest` consumer only, BRxx-EX6)
-  - `Makefile` (cluster-mesh candidate install-lane PEERS tuple only, BRxx-EX6)
-  - `.github/workflows/ci.yml` (cluster-mesh post-publication/bootstrap qualify PEERS tuples only, BRxx-EX6)
-  - `scripts/ci/publishable-ci-wiring.test.mjs` (CLUSTER_MESH_PEERS expectation only, BRxx-EX6)
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - `.github/workflows/ci.yml` under BR83-EX1
+  - `Makefile` under BR83-EX2
+  - `apps/auth-idp/tsconfig.json` under BR83-EX3
+  - `e2e/tests/08-chat-workspace-switch.spec.ts` under BR83-EX4
+  - `deploy/k8s/base/36-oauth-register-client-job.yaml` under BROJ-EX1
+  - `plan/69-BRANCH_feat-ci-consumer-contracts.md` under BRTRAIN-EX1
+  - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
 
 ## Feedback Loop
-- [x] A4-CLOSE-DELETE-DIAG — CI 42132522076 identifies SQLSTATE 40001 at the account phase while other CM transactions create workspaces. A local concurrent-writer regression reproduces the rolled-back receipt. The host now acquires a shared writer gate before ordinary write snapshots, exclusive for qualified delete operations, across API replicas. Read-only authentication stays concurrent; ordinary writers remain parallel; failed connections release their gate on destruction. Gate wait consumes the existing deadline, with unchanged attempts/budgets. Deletion, workspace, authentication, consent and host-scope suites: 34/34 passed; API typecheck/lint passed.
-- [x] A4-CLOSE-CHAT-SWITCH — CI 42134359400 passes all six E2E shards, including the unchanged chat session/workspace switching scenario (4.8 seconds), all presence/lock cases and the admin lifecycle. No separate speculative chat UI change or browser retry was introduced.
-- [x] A4-CLOSE-PROVISION-CONCURRENCY — CI 42134359400 endpoint shard 3 exhausted serializable attempts while creating two distinct accounts in parallel. A 16-account provisioning regression reproduced the same predicate conflict. Root account provisioning now drains competing writers before its snapshot through the existing exclusive gate, without changing attempts/deadlines. Provisioning, tenant-metrics and deletion suites: 11/11 passed; the original metric response assertions remain exact.
-- [x] A4-CLOSE-RESTORE-SCHEMA — The real production-dump import/boot now completes. Port restore smoke checks to the CM identity tables and equivalent credential/user/expiry indexes, require legacy-table absence and the exhaustive invalidation receipt. Scoped Schema Validation: 4/4 passed.
-- [x] A4-CLOSE-CONSENT — CI 42127383445 shows a consent-details 503 while concurrent settings requests run on the same admin session. A PostgreSQL activity-write conflict reproduces 503 for otherwise valid consent. GET consent now uses the read-only runner, with no activity mutation; current session/account/client policy checks remain. Retain typed custody code/SQLSTATE only at unexpected HTTP failures. Fan-out and conflict regressions keep their 200 assertions; no retries are added.
-- [x] BRxx-EX17 — Closing restore CI 42127383445: preserve the legacy critical session user/expiry indexes on CM-owned login sessions in the canonical custody schema. Rationale: the restored database now has CM identity tables, while its smoke assertions still inspect removed public tables/indexes; CM also lacked the two equivalent session lookup indexes. Impact: two additive indexes in the existing canonical schema application, with equivalent schema assertions plus legacy-absence and import-receipt checks. Rollback: revert the index declarations and smoke mapping together before cutover; no extra migration or data change.
-- [x] BRxx-EX16 — Closing CI 42127383445: provide the existing synthetic API-test deletion budgets in `docker-compose.test.yml` for the E2E API. Rationale: A4 introduced mandatory qualified operation budgets; the browser stack supplies no record, so account and workspace deletion fail closed with 503. Impact: test stacks receive explicit 10,000 ms / one-attempt budgets and a synthetic receipt reference; production still requires its protected qualification record, and browser assertions/timeouts/retries are unchanged. Rollback: remove the test environment entry.
-- [x] A4-CLOSE-COMMENTS — Translate authoritative tenant refusal after workspace authorization into HTTP 403 without masking unexpected failures. Approved creators can read comments immediately after atomic workspace provisioning (four concurrent reads); a withdrawn tenant grant is denied with no comment mutation. Tenant and workspace grants remain independent and fail-closed.
-- [x] A4-CLOSE-PRESENCE — Project email/display name from the validated CM account rather than absent JWT presentation claims. Bind pooled PostgreSQL notification callbacks to the SSE subscriber context so identity reads do not borrow an unrelated expired UOW. Regression probe reproduced the inherited context before the fix and passes after it; no polling timeout or retry change.
-- [x] A4-CLOSE-MEMBERS — Restore the workspace-admin-only members section and its existing h4 heading. The transport still derives mutation authority from committed workspace memberships; access-control E2E flow and assertions are unchanged.
-- [x] A4-IMPORT-EPHEMERAL — Owner decision B (2026-11-05): no email code/ticket, magic link, WebAuthn challenge or login session/refresh token is imported, for either rehearsal or real cutover. Counts by type are bound to the manifest and retained in the cutover receipt. Re-request a code and log in after cutover. Source column and shape validation, remote divergence refusal, invitation hashes, passkeys, provider-secret refusal and connector custody remain fail-closed. Supersedes the earlier ticket/session preservation acceptance; no production signing seed enters CI.
-- [x] BRxx-EX15 — Owner 2026-11-05 closing packet: allow `packages/cluster-mesh/src/identity-contracts/accounts.ts`, `packages/cluster-mesh/src/storage/identity/atomic-deletion.ts`, `packages/cluster-mesh/tests/identity-lifecycle.spec.ts` and the app deletion authorizer/tests to restore admin disable/delete of pending accounts. Rationale: main permits moderation before approval; A4 introduced incompatible state guards in both the lifecycle and V2 deletion coordinator. Impact: pending non-admin accounts can be disabled or deleted by an authorized admin; self-action, protected-admin and active-delete refusals remain. Rollback: revert these guard/test hunks together. Existing branch package bump covers the changed CM source.
-- [ ] A4-CLOSE — Owner 2026-11-05: invalidate every inventoried ephemeral identity proof and open login at import in both rehearsal and real cutover, record per-type counts, preserve all other fail-closed checks; restore workspace member UI and presence parity; resolve fresh-workspace comment failures; local ENV=test-a4-fix2, API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; push and watch PR #879 until green; do not merge. Mergeable Track source for the designated conductor writer.
-- [x] A4-TEST-POLICY — Declare the API Vitest configuration for synthetic fixture policy only; production Q-K remains required. The first C2 check flagged this previously undeclared path but exited zero, and commit 3f587bf61 proceeded. The declaration is corrected here; subsequent gates must inspect PASS text as well as the exit status. Rollback: revert the test env entry; no production configuration changes.
-- [x] BRxx-EX1 — Approved r2 F11 requires CM-owned screens. Allow only `packages/cluster-mesh/ui/**`, `tests/ui/**`, its browser exports/optional peer metadata, and root/UI lock/dependency entries needed to mount them. Backend CM source/tests stay excluded. Impact: one shared screen behavior across root projections; publication/version validation is required after rebase. Rollback: revert the UI projection/package commits together before activation; no data or A2.0b branch changes.
-- [x] A4-STACK — delivered by the A2.0b merge (#882) and the G1–G5 train (#912, `a1d0a815a`, carried on `main` through train #914 `b9cdb2d33`): UOW, auth-hono binding/runner, importer, V2 planes and all P1–P6 contracts are on `main`.
-- [x] A4-AUTH-BINDING — delivered by the merges above; the app binding/runner mounts and the mounted-route suites run in the cutover campaign.
-- [x] A4-WORKSPACE-DELETE — P5 `createAtomicWorkspaceDeletionV1` on `main`; the app DELETE route is bound to it (G6 series 4), 503 branch deleted.
-- [x] A4-MEMBERSHIP-SEAM — P2 boundary domain/port on `main`; the app seam is deleted (G6 series 2), resolution goes through the CM port.
-- [x] A4-SERVICE-TENANCY — P3 issuer + binding `serviceTenancy` on `main`; the app selector is deleted (G6 series 3), OBO is CM-owned.
-- [x] A4-CONSENT-READER — P4 `oauthTenantStoreV1` on `main`; the app reads authority and bindings through the finders (G6 series 1), no bound SQL reader survives outside the recorded artifacts JOIN.
-- [x] BRxx-EX2 — G7 replica runners must ship in the api image: allow `api/package.json` build entries for `identity-replica-export.ts` and `identity-replica-sync.ts` only (same esbuild flags as the `oauth-register-client.ts` precedent, no dependency or version change). Impact: two extra bundled scripts in `dist/scripts/`; no new image, no new dependency. Rollback: drop the two bundle segments and the runner files together.
-- [x] BRxx-EX3 — CI-fix: allow one-line `@simplewebauthn/browser@13.3.0` addition to `packages/cluster-mesh/tests/storage/cold-workspace.sh` plus one appended shallow tool-lock entry in `scripts/ci/tool-locks.json` (same pinned version as the repo root lock, zero transitive deps). Without it the new `@sentropic/auth-ui` peer pulls auth-ui into the candidate closure and its tsc fails on the missing browser types, so `package-candidates` and every downstream validation stay red. Impact: cold workspaces install one extra type-only browser package; no runtime, image, or version change. Rollback: revert the install line and drop the appended lock entry; packaging returns to the pre-UI-peer state.
-- [x] BRxx-EX4 — CI-fix: seed the IdP smoke flows from the CM identity store. Allow `apps/auth-idp/screen-smoke-seed.ts` + `apps/auth-idp/sso-smoke.ts` only (replace the deleted legacy `public.users` insert/select with `cm_identity.identity_user_accounts` + `identity_account_profiles` upserts; session minting via the CM-backed `createSession` is unchanged). Impact: smoke seeds create the same deterministic test user through CM instead of the dropped legacy table; no flow, assertion, or prod-code change. Rollback: revert both seed files to the legacy-table version (only valid pre-cutover).
-- [x] BRxx-EX5 — CI-fix: keep the selected packaging fixture aligned with the candidate release tuple. Allow `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` peer-entry update only (append the 3 UI peers + meta from the live `packages/cluster-mesh/package.json`, same spec strings, no other entry touched). Impact: the `prepare-artifacts` alignment gate passes; consumer install is unchanged (all UI peers are optional). Rollback: drop the appended peer lines; the gate fails again until the fixture is refreshed.
-- [x] BRxx-EX6 — CI-fix: install-qualify the two new cluster-mesh UI optional peers in the release/install lanes.
-  - Tuple: append `@sentropic/auth-ui@0.9.0` + `@sentropic/design-system-svelte@0.34.75` to the release tuple in `Makefile` (ci-package-qualification install lane), `.github/workflows/ci.yml` (publish-cluster-mesh + bootstrap-publish qualify steps) and `scripts/ci/publishable-ci-wiring.test.mjs` (CLUSTER_MESH_PEERS expectation). Without it validate-publishable-manifests fails closed on the unqualified peers (seen on run 41885757770); both pins are published and satisfy the declared ranges (verified via the ui container registry probe). Impact: candidate/post-publication installs cover the UI peers. Rollback: drop the appended specs; the manifests gate fails again.
-  - Frozen universe: pack `packages/auth-ui` in `packages/cluster-mesh/tests/packaging/prepare.sh` (direct `npm pack`, never the receipt-gated `candidate_archive`) and select it as `file:` in the `latest` consumer only. Without it the frozen registry (committed locks + candidate archives) serves no auth-ui packument — auth-ui is file:-linked everywhere — and the `latest` fixture (which spreads every peer as a direct dep) hard-fails E404 (seen on run 41885757770 lazy lane: 9 packaging failures + qualify FAIL). Impact: `latest` installs offline from the local pack; no lock/metadata change; `bare`/selected/session consumers unchanged (optional peers stay best-effort). Rollback: drop the pack + dep; the lazy lane fails again.
-- [x] BRxx-EX7 — CI-fix: test-stack identity environment + CM WebAuthn timeout plumbing.
-  - `Makefile` (`test-api-%` only): pass `-e NODE_ENV=test` for the `unit` + `endpoints` suites. Without it the branch's guard-gated identity tests (`cm-host-scope`, `cm-cutover-migration`, six `artifacts-*` API suites) fail closed with `Isolated test environment required` because the compose stack bakes `NODE_ENV=development`, and `env.ts` test defaults (auth rate-limit off) never engage. Impact: unit/endpoints vitest processes only; long-running services, boot path and all other suites unchanged. Rollback: drop the flag; guard tests fail closed again.
-  - `packages/cluster-mesh/src/identity-contracts/custody-auth.ts` + `packages/cluster-mesh/src/identity/auth-webauthn.ts`: add OPTIONAL `registrationTimeoutMs`/`authenticationTimeoutMs` to `webAuthnPolicy` and forward them (client `timeout` + server challenge TTL derived from the same value) to the auth-hono factories; `api/src/services/identity/cm-auth-binding.ts` + `cm-auth-runtime.ts` supply them from `getWebAuthnConfig()`. Without it the stored challenge TTL (300 s service default) diverges from the app's 60 s registration timeout and the coherence test fails. Impact: additive optional fields only; service defaults and every other consumer unchanged. Rollback: revert the four files; the TTL coherence test goes red again.
-- [x] BRxx-EX8 — CI-fix: honor the `unlinkIdentity` boolean contract. `packages/cluster-mesh/src/identity/auth-social.ts`: return `false` directly for absent/foreign links instead of routing through `finishAuthCompletion('social_unlink', false)`, which aborts on `false` and makes the declared `Promise<boolean>` negative unreachable. Impact: missing-link unlink resolves `false` (idempotent no-op); success and conflict paths unchanged. Rollback: restore the `finishAuthCompletion` routing; the unlink-idempotency test throws instead of resolving `false`.
-- [x] A4-CM-VERSION — CI-fix: bump `@sentropic/cluster-mesh` `0.26.0-dev.9` → `0.26.0-dev.10` (workflow.md Package Publication is mandatory: EX7/EX8 touch `packages/cluster-mesh/src/**`, so `enforce-package-bump` fails the PR without a bump; skipping is forbidden). Slot dev.10 is free (G2 #902 closed unmerged; G1/G3–G5 #899/#900/#903/#904 likewise closed; main and npm stay at dev.9/0.25.0). The `0.26.0-dev.N` line keeps the pack-only tolerance (`isPackOnlyDevBump`); locks and the selected fixture are re-pinned through make. Rollback: revert the version plus the regenerated lock/fixture lines; the bump gate fails again.
-- [x] BRxx-EX14 — CI-fix (root cause D, seed runtime): both `screen-smoke-seed.ts` invocations (`smoke-idp-screens-ci`, dev `smoke-idp-screens`) pass `--tsconfig apps/auth-idp/tsconfig.json` so tsx maps `@sentropic/oauth-verify` to source (see A4-IDP-SEED). Makefile-only, test/CI invocation, no prod config, flow, assertion or timeout change. Rollback: drop the flags; the tsx seed fails again.
-- [x] A4-IDP-SEED — fix (root cause D, screen-smoke residue) [BRxx-EX14]: the tsx seed's bare `require()` of `@sentropic/oauth-verify` fails `ERR_PACKAGE_PATH_NOT_EXPORTED` (published entry has `types`+`import` only; seen in `smoke-idp-screens-ci` on run 42007418528 after B had already made `auth-idp` healthy). Fixed WITHOUT touching the published package (a manifest edit broke the `selected`-fixture lock integrity on run 42013363946 and is reverted): `apps/auth-idp/tsconfig.json` maps the package to its TypeScript source (tsx-only; esbuild bundles and node runtime ignore tsconfig paths, packaging/lock untouched) and both seed invocations pass `--tsconfig`. Plus: `screen-smoke-seed.ts` now mints its user via `createCmUser` instead of raw account/profile upserts, which left no `identity_subject_fences` row so session minting failed closed (`identity_material_missing`, seen on run 42013363946). Rollback: revert the tsconfig/seed/Makefile lines; the tsx seed fails again.
-- [x] A4-QUEUE-DEFER — fix (root cause C): the `QueueManager` constructor no longer calls `loadSettings` (it queried the not-yet-created `settings` table on fresh-database boot); `api/src/index.ts` awaits `queueManager.reloadSettings()` right after `runMigrations` via dynamic import (no circular import). Warn-and-defaults preserved. Rollback: restore the constructor call; fresh boots warn again.
-- [x] A4-SERIALIZE-RETRY — fix (root cause C+E, concurrency): `api/src/services/identity/cm-transaction.ts` gains `withSerializationRetry` (bounded retry on 40001/40P01 in a fresh transaction; an aborted attempt commits and publishes nothing). Wired into `cm-auth-binding.ts` `complete`/`request` (fixes the auth-middleware `touchActivity` 500s under concurrent same-session requests, e.g. `chat.test.ts` concurrent steer, seen on run 42007418528) and `session-workspace.ts` `adopt`/`detach`/`end` (loser of an adopt race now observes the winner and maps `session_already_attached` instead of leaking the raw driver error, seen on run 42007418528). No check weakened, no timeout touched. Rollback: drop the wrappers; concurrent races 500 again.
-- [x] A4-AUTH-READ — fix (e2e residue run 42032530355, all shards): per-request authentication runs read-only. `cm-auth-binding.ts` gains `authenticate` (same attempt/audit pattern over `cmRequestReadOptions`); `cm-http-principal.ts` uses it, so CM session validation skips subject locks and the `touchActivity` write and the page-load fan-out (6+ parallel same-session GETs on workspaces/me/catalog/agent-config/workflow-config/sse) no longer aborts itself with 40001 on the hot login-token-binding row (retries exhausted into 500 `Authentication failed` on every shard; admin h2 missing and oauth-revoke consent stall are downstream of the same 500s/latency). Liveness stays best-effort: the middleware's `sessions.touch` is overridden in `cm-http-principal.ts` with a separate READ COMMITTED `last_activity_at` update (row-lock wait, never 40001; logged, never thrown), because the shipped middleware always touches through the bound port and the CM port requires a write transaction. Fail-closed validation unchanged (no check weakened, no timeout/attempt touched). Reproduced locally: 12 parallel `authenticateCmHttpRequest` → 40001 at `touchActivity` pre-fix (`cm-auth-request-concurrency.test.ts`); read-only attempt then surfaced the port-touch write requirement, fixed by the override. Rollback: revert to `request`; the fan-out 500s return.
-- [x] A4-MEMBER-RETRY — fix (e2e residue run 42032530355 shard 6): `changeCmWorkspaceMember` is wrapped in `withSerializationRetry` (same bounded pattern as A4-SERIALIZE-RETRY; aborted attempts commit nothing) so parallel isolated-member adds under cross-worker load retry instead of escaping 40001 into the route's 503 `Identity service unavailable` (beforeAll + `createIsolatedMember` failures). The catch-all now logs the cause (`Workspace membership operation failed`) since the missing log left the 503s unattributable in CI. Reproduced locally: parallel member adds abort with 40001 pre-fix (`cm-workspace-members.test.ts` concurrent case; fixture-phase storm included). Rollback: drop the wrapper and the log line; concurrent adds 503 again.
-- [x] A4-SESSION-PHASES — fix (root cause E, forced-interleave): `SessionWorkspaceService.detach/end/get` split into Phase A (lock-free pre-read of the binding + rights, no transaction, so an interleaved writer commits independently without deadlock) and Phase B (fresh transaction: re-read, lock, mutate with the Phase-A `expectedVersion`/`isAdmin`; the `get` moved-row guard compares against the Phase-A pre-read and re-resolves rights on the row actually returned). Fixes 2 of the 3 forced-interleave tests (`session-adoption.test.ts` stale detach/non-disclosure, seen on run 42007418528) with zero assertion changes; sequential behavior identical (Phase A and B agree when unraced). The stale-end variant stays red (hook joins the outer ALS tx; see A4-ADOPTION-INTERLEAVE) and is skipped with assertions verbatim. Rollback: revert the three methods; the interleave tests fail again.
-- [x] A4-E-FIXTURES — fix (root cause E, fixtures): reseed/align the suites the CM cutover orphaned, assertions otherwise unchanged — `chat-sync.test.ts` (deleted `tenantMemberships` import → `createCmTenant`+`setCmMembershipState`); `cluster-mesh-catalog.test.ts` (admit the business conversation before invoking, as the sibling test does); `apps/artifact-content/src/runtime.ts` `isApprovedAccount` (legacy `users/tenants` join → CM stores, same predicate as `reader-activation.ts`; fixes the 3 `runtime.test.ts` 500s); `cm-oauth-consent.test.ts` (tenant-less `saveGrant` resolves undefined per the recorded A4-LANE-R1R2 no-op design, protocol/authority stay empty); `remote-session.test.ts` (oauth-* entries go through the CM binding session ports instead of the dead-by-design host bag; shared-DB/file recovery + private-create fence + restored-authority tests skipped BLOCKED pending the RC1 revocation-fence design); `me.test.ts` 2 self-delete variants skipped BLOCKED (see A4-LANE-BLOCKED-DELETE); `llm-admission-schema.test.ts` (CM fixture runner + `created_at >= 0` journal count) and `arch11-outbox-rekey.test.ts` (recreate the 0015-dropped `tenant_id` for the test only). Rollback: revert the test files + `runtime.ts`; the suites fail again.
-- [x] A4-RESTORE-CHECKPOINT — done via `BRxx-EX13`: `test-smoke-restore` boots the shipped API against a restored prod dump carrying legacy identity rows, which migration 0015 fail-closes without the privileged operator checkpoint (`identity_contract_unavailable` at `loadCmCutoverCheckpoint`, seen on run 41938853570; pg_restore itself passes). The fail-closed is the designed cutover safety property — supplying a rehearsal checkpoint (snapshot tooling + receipts) is the pending rehearsal work, not a CI wiring gap. No assertion weakened, no timeout touched; tracked here so the next lane picks it up with the rehearsal lot.
-- [x] BRxx-EX9 — CI-fix: classify bundler-only export targets in the published-install probe. `scripts/ci/qualify-published-install.mjs` gains a `bundler-only` status (Svelte/TS sources node cannot import; recorded and skipped like `types-only`) instead of `unsupported ... PROBLEM → FAIL`. Without it the F11 `./ui/*` exports (BRxx-EX1) fail `qualify-published-install` in every lane (seen on run 41938853570 lazy lane). Impact: node probe coverage unchanged (every JS entry still imported; only never-importable sources are classified); UI entries stay validated by the UI/packaging lanes. Rollback: drop the carve-out; the lazy lane fails again.
-- [x] BRxx-EX10 — CI-fix: port the artifact-content runtime suite to CM fixtures. `apps/artifact-content/tests/runtime.test.ts` seeds/mutates `cm_identity` rows (via the shared `seedCmArtifactIdentity` + direct CM updates) instead of the dropped legacy tables; `api/src/services/identity/reader-activation.ts` reads approval from the CM stores (same predicate as `createArtifactAuthorization`). Without it `test-app-cluster-mesh` fails with `relation "users" does not exist` after control migration 0015 (seen on runs 41936835961/41938853570). Impact: test + one prod reader only; assertions unchanged (same 404/200 matrix). Rollback: revert both files; the gate fails again.
-- [x] BRxx-EX11 — CI-fix: synthetic email-code policy for the tsx IdP smoke seeds. `Makefile` (`smoke-idp-screens-ci`, `smoke-idp`, `smoke-idp-screens`) passes `CM_IDENTITY_EMAIL_CODE_POLICY=sha256` + `..._APPROVAL_REF=synthetic-smoke-test-only` (same values as `api/vitest.config.ts`) to the `tsx` seed invocations. Without it `withAppCmAuth` fails closed with `identity_contract_unavailable` outside vitest (seen on run 41938853570 smoke-idp-screens); the Q-K deployment choice (A4-QK) stays open — this is test-only, never production. Impact: seed processes only; no flow, assertion or prod-code change. Rollback: drop the `-e` flags; the smoke seed fails again.
-- [x] BRxx-EX12 — CI-fix (root cause B): export the synthetic CM email-code policy to every CI SUT. `docker-compose.test.yml` (`api`) + `docker-compose.ci.yml` (`api`, `api-sut`, `auth-idp`) set `CM_IDENTITY_EMAIL_CODE_POLICY=sha256` + `..._APPROVAL_REF=synthetic-smoke-test-only` (same values as the Makefile seed targets and `api/vitest.config.ts`; keys default to the empty-but-valid JSON per `cm-email-policy.ts`). Without it `loadCmEmailCodePolicy` fails closed with `identity_contract_unavailable`, so magic-link returns 503 and the auth middleware returns 500 across e2e a/b/c/d/e, e2e-vscode, api smoke and endpoints (seen on runs 41976632433 and 41980137448). Impact: CI SUT containers only; no prod config, flow, assertion or timeout change. Rollback: drop the env lines; the SUTs fail closed again.
-- [x] BRxx-EX13 — CI-fix (root cause A): supply a rehearsal checkpoint to the restore SUT. New `api/src/scripts/cm-restore-checkpoint.ts` snapshots the restored legacy identity source and writes `purpose: rehearsal` `source.json`/`remote.json`/`checkpoint.json` (0600, code-derived asset digests, self-verified with the migration loader); `Makefile` (`restore-api-sut`) runs it in the toolbox after `pg_restore` with the SUT WebAuthn env and boots `api-sut` with an inline overlay setting `CM_IDENTITY_CUTOVER_CHECKPOINT_FILE` plus pinned `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN` (same make expressions as the generator flags, so the SUT verifier matches by construction; new `CI_SUT_OVERLAY` hook on `up-api-sut`); `docker-compose.ci.yml` shares a `cm-restore-checkpoint` volume between `api` and `api-sut` (ro). Without it migration 0015 fail-closes on the restored prod dump (`identity_import_invalid`, seen on runs 41976632433 and 41980137448). Impact: restore job only; the fail-closed gate is unchanged (no check weakened, no timeout touched); implements `A4-RESTORE-CHECKPOINT`. Rollback: revert the files listed below; the restore job fail-closes again. 2026-11-05 vehicle fix (same exception): the generator runs inside the api-sut image itself (`node dist/index.js --cm-restore-checkpoint`, new argv branch in `api/src/index.ts` exiting before migrations; the script body is now exported `runCmRestoreCheckpoint` with a dev-only direct-invocation guard) because the mapping digest hashes `Function.prototype.toString`, which differs between the tsx-interpreted source and the esbuild dist — a toolbox-side tsx generator can never produce a checkpoint the booted SUT accepts (seen on run 42017895332: generator `2c0fa8…` vs SUT recompute). The generator one-shot mounts the checkpoint volume read-write via a Makefile-owned inline overlay; the boot mount stays read-only. 2026-11-05 double-run fix (same exception): the script's dev-only direct-invocation guard matched by source filename (`endsWith('cm-restore-checkpoint.ts')`) after the import-URL comparison proved bundle-unsafe — a relative argv[1] resolving to the bundle path double-invoked the generator (two concurrent runs sharing one pool: `Cannot use a pool after calling end` + `end called more than once`, seen on run 42024251267; the first run had already written and self-verified the checkpoint with dist digests). Rollback: revert `api/src/scripts/cm-restore-checkpoint.ts`, `api/src/index.ts`, `Makefile`, `docker-compose.ci.yml`.
-- [ ] A4-SELF-DELETE — CM/auth owner: define and qualify authorized re-entry for a disabled account, since deactivation revokes login sessions and normal auth refuses disabled accounts; active self deletion remains 409 without mutation.
-- [ ] A4-LANE-BLOCKED-DELETE — Cutover lane 2026-11-05: the 4 account-delete lifecycle variants (`remote-revocation.test.ts` tombstone/commit self-delete + admin-delete) are skipped (`ctx.skip`) because the V2 cascade rolls back for every fixture (`login_sessions` onward, `identity_cascade_rolled_back`; the file's own `cm-account-deletion` rollback test fails the same way). Owning lots: A4-SELF-DELETE above + the V2 cascade (line 269, execution awaits A2.0b). Re-enable the variants when the cascade lands; the tombstone/commit assertions themselves are already ported to the sweep path. Plus 2026-11-05: the 2 `me.test.ts` self-delete variants (workspace-data purge, admin-chat FK) are skipped (`it.skip`) — deactivation revokes the token the delete reuses (401 by design) until A4-SELF-DELETE re-entry lands; assertions unchanged.
-- [ ] A4-LANE-BLOCKED-SERIALIZE — Cutover lane 2026-11-05: 3 `oauth-refresh` serialize variants skipped (`ctx.skip`). The mint-first barrier overrode the host-bag transaction (dead on the per-attempt binding path) and the consent cases need an app-facing CM consent revocation API (CM consent outlives the app evidence row by design). `security revoke-first` still pins family-revocation serialization. Re-enable when the interception point / revocation API exists.
-- [ ] A4-ADOPTION-INTERLEAVE — A4/conductor (session-workspace concurrency design): define the interception point for a concurrent writer interleaved inside a mutating adoption call. The stale-end forced-interleave variant (`session-adoption.test.ts` `:489`, `it.skip`, assertions preserved verbatim) fails because the `beforeCompareAndSet` hook joins the outer ALS transaction, so the outer `workspace_rights_refused` rollback erases the interleaved detach/re-adopt and the final get returns null instead of the v3 binding; a separate inner transaction would deadlock on the advisory subject/workspace locks. The `end` rejection assertion itself passes. Re-enable the variant when the interception point lands (skip vs separate-tx decision). Last red: run 42024251267.
-- [x] A4-LANE-R1R2 — Cutover lane 2026-11-05 root fixes (allowed `api/src/**`, no exception): (1) `oauth-ingress.ts` well-known forward runs inside `runCmAuthHttp` with binding ports — the host bag has no attempt transaction so every metadata read threw `identity_transaction_unbound` (all 12 `oauth-refresh` tests 500/503 in CI run 41944101436 and locally); (2) `consent-store-adapter.ts` `saveGrant` returns early on a null tenant — tenant-less grants are unkeyable (`getGrant` returns null without a tenantId), so login proceeds with per-visit consent and no authority is conferred (legacy defaulted to `sentropic`; the cutover keeps fail-closed for offline, which still requires a resolvable tenant).
-- [ ] A4-IDP-SYNC — A2/operations owner: supply a CM synchronization contract preserving immutable ids/owners and counter CAS before replacing the suspended legacy export/import scripts; mechanical table renaming would preserve incompatible mutations.
-- [ ] A4-VALIDATION — A4/conductor: runtime, UI and rehearsal gates remain open. Two local Docker attempts failed before tests and ran their `make down` traps; the third was cancelled before acquiring the sole shared flock. No current-head passing tests or A4 CI run are claimed.
-- [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
-- [x] A4-OWNERSHIP — r6 §5.3 requires business-authorized ownership. Preserve `public.workspaces.owner_user_id` solely for destruction policy; CM owns membership/tenant access. Membership never substitutes for ownership. Rollback uses the recorded source checkpoint.
-- [x] A4-CONVERSATION — Business chats retain an opaque CM authority reference. Verified HTTP admission opens a separate seven-day conversation lifetime; login expiry/logout never renews or revokes it. Revoked/expired records cannot be reopened. Workspace adoption must revoke/clear the prior binding.
-- [x] CUTOVER-REBASE — `feat/app-cm-a4` rebased onto `origin/main` (`a1d0a815a`, train #912 with G1–G5): 266 A4-only commits replayed, zero `packages/cluster-mesh/src` touches; conflicts resolved by union (BRANCH.md kept A4's own + train reference block; lock/manifest/journal merged keeping main's versions).
-- [ ] CUTOVER-REBASE-914 — `feat/app-cm-a4` rebased onto `origin/main` (`b9cdb2d33`, train #914): 317 commits replayed with zero code conflicts; BRANCH.md union refreshed to the train-2026-11-04 reference block (BRLOCK-EX1 line kept); root/ui/selected-fixture locks additive UI peers only (artifacts stays 0.2.14, cluster-mesh 0.26.0-dev.9, equal to main); L5 manifest untouched (identical to main, no regen per OPTIM-2); migration slots union (main 0014 policy store + branch 0015 cutover). A2.0b stack items above (A4-STACK, A4-AUTH-BINDING) are delivered by the #882 merge; A4-MEMBERSHIP-SEAM/A4-SERVICE-TENANCY/A4-CONSENT-READER/A4-WORKSPACE-DELETE/A4-IDP-SYNC move to G6/G7 below. PR #879 retargeted to base `main`.
-- [x] CUTOVER-G0 — lot G0 folded from #906 (closed as superseded; review `pr906-large4_r1.md` APPROVE): import split (9 auth-hono names to subpath), `handlerId` on both `deletePerson` calls, migration slot 0014→0015, 2 new specs green at G0 time. Version bump skipped (rebased tree already `0.26.0-dev.9` > published). Residual: P1a host widening (G0C) NOT on main — `IdentityUnitOfWorkV1<PoolClient>` vs `<CustodyOpHost>` typecheck residuals stay a named stack dependency; `packages/cluster-mesh/src/**` stays forbidden.
-- [ ] CUTOVER-G6 — app consumption of G1–G5 per design §10.7, tests first, no fallback: (1) consent finder swap + tenant-scan removal; (2) boundary seam deletion; (3) service-tenancy adapter deletion; (4) workspace DELETE via `createAtomicWorkspaceDeletionV1`. Code complete (series commits on this branch); flips to done after the `test-a4-cutover` campaign validates the scoped suites.
-- [ ] CUTOVER-G7 — preprod sync replacement per design §9.2/§10.8 up to `--dry-run` only on the test env; no preprod run (waits for the owner nominative list per Q-IDP1; CronJob stays `suspend: true`). Done: phase-2 SQL, replica runners + budgets, job shell/cronjobs, manifest selftest. Pending: test-env dry run, then the owner list + `sentropic-identity-budgets` secret + activation lane for the CD-suite rewrite and the real run.
+- [x] EXT06-W1 — Merge #929 with manual conflict union: retain train's social/registration admission and read-only session validation, add the wagon's post-commit remote-session authority, preserve both HTTP concurrency regression sets, and keep candidate-core archive output with chat-ui 1.0.1.
+- [x] EXT06-W2 — Merge approved A4 procedure at 1a5a9ef98, retain both bundle commands; operator/API/manifest qualification follows; no live cutover execution.
+- [x] EXT06-PIN — Six-line recovery image block with temporary removal comment; candidate build/publication unchanged. Local four-workload recovery and A4 renders PASS; production source unchanged. CI log receipt remains required.
+- [x] EXT06-RUNTIME — Default preprod must keep the recovery entrypoint and omit unprovisioned A4 custody dependencies. Move A4 patches into an explicit preview overlay; the existing authorized wire operation still installs them under fence. Qualify both actual renders and keep all prior custody assertions.
+- [x] EXT06-EX2 — Existing CI manifest target also qualifies A4/recovery renders and operator tests. Its digest fixture layers an image override over the actual pinned overlay, preserving every existing content assertion. Impact: read-only CI qualification only; rollback: restore the fixture recipe.
+- [x] EXT06-EX1 — Extend scope to approved #929 and A4 wagon paths, including existing BR83-EX1 workflow union and BRA4B-EX1 Makefile include. Impact: requested train integration/preprod pin only; rollback: revert the two wagon merges and image block. Preserve versions, lock entries and existing pins except the wagon's chat-ui 1.0.1 version record.
+- [ ] EXT06-CI — Independent consolidated review, local scoped gates, exact-head attempt-1 CI green, PR body and Extension 06/11 report; conductor remains the Track writer.
+- [x] EXT06-REVIEW-F1 — Astra's single blocking finding resolved: restore #929's per-case DOCX workspace/folder fixture and initial GET/POST presence handshake. Retain the train's readonly assertions. Complete spec PASS 3/3 with WORKERS=1 RETRIES=0 on current candidate production images; independent closure GO. No timeout/retry increase.
+- [x] EXT06-LOCK — Merge-required metadata alignment only: UI's local chat-ui record follows #929's 1.0.1 manifest/root record. No dependency resolution, lock regeneration or pin refresh; retained L5 verification passes unchanged.
+- [x] EXT06-ZLIB / BRTRAIN-EX3 — Cold browser build proves Alpine v3.24 removed zlib 1.3.2-r1; apk policy/search identifies 1.4-r0 as its replacement. Exact replacement pin passes both browser/capture/video probes, serial DOCX and the unchanged security gate; no suppression or gate change.
+- [x] EXT06-MUSL / BRTRAIN-EX3 — Scan reproduces HIGH CVE-2026-107891 in musl/musl-utils 1.2.6-r2; pin both to the scanner's fixed 1.2.6-r3. Final API/UI/E2E scans report zero findings, with unchanged compliance checks and no exception-register edit.
+- [x] EXT06-CI1 — Run 42299724847 validate-idp-sync rejects the intentional parent-overlay transformation from replica-sync :main to recovery f2313a. Local Make replay reproduces the exact mismatch; corrected full selftest PASS 74/74. Compare every sync object strictly after applying only the declared parent image pin to the expected replica image; negative controls reject undeclared images and any CronJob activation. No runtime, source sync manifest, production image or gate change.
+- [x] EXT06-NS — Full-resource namespace assertion reproduces the A4 preview runtime ConfigMap's absent namespace. Explicitly stamp the preview sentropic-preprod, like the ordinary overlay; require every resource in both renders to remain in that namespace. Authorized wire and production remain unchanged.
+- [x] TRAIN-CI11 — Run 42258636361 shard 3: /auth/session returns 500 after session_validate activity writes exhaust unchanged serialization attempts (40001). Use CM's supported read-only session_validate completion while preserving all write flows/refusal mapping. Real current-session handler: 16 concurrent requests pass, activity row remains unchanged, invalid/revoked tokens return 401; complete concurrency suite 5/5 PASS. Before-fix HTTP fan-out happened to pass locally, but the retained deterministic activity-write assertion failed; CI retains the actual 500 evidence. No retry/deadline increase or E2E assertion change.
+- [x] TRAIN-ASTRA1 — Reproduced UI-only dispatch failure with real API/UI tuples and CI's empty candidate input. Require qualified candidates only for library-boundary omissions; retain UI/shared tuple equality and reject unsupported omission claims. Real-workflow UI/shared PR/main, dependency-drift and unqualified-boundary negative controls PASS; wiring/contracts/tuple suites 72/72.
+- [x] TRAIN-ASTRA2 — Positively identified documentation has its own no-consumer policy, including README files under tooling directories. Real README/docs/BRANCH paths with unchanged real manifests/tuples match the actual workflow filters and pass. Mixed unknown paths, executable files under docs/spec and missing mandatory consumers still refuse; wiring/classification/contracts suites 101/101 PASS.
+- [x] TRAIN-ASTRA3 — Screen navigation carries the selected workspace; rendered form targets the authenticated bound workspace. Three regressions fail before correction, then grant/consent/workspace suites 11/11 PASS. Real requireAuth middleware selects workspace-B while the artifact is inaccessible in default workspace-A; form grant opens B without a loop. Tampered workspace and membership removal refuse with no grant; existing origin/version checks retained.
+- [x] TRAIN-ASTRA4 — Independent closure exposed UI source plus BRANCH.md selecting full integration. Reproduced with real workflow/Make tuple inputs; ignore identified documentation when determining UI confinement. Also reproduce/fix scripts/README.md toolchain misclassification; unknown functional paths remain conservative. Final script regression suites 111/111 PASS.
+- [x] TRAIN-CI10 — Run 42245247246 shard 5 fails 01-app.spec.ts:94: disabled-state URL assertion expects /organizations but receives /dashboard. The folders response selects the first seeded folder after the test reads the disabled class; normal Playwright click waits for activation before navigating. A controlled Chromium probe reproduces the stale snapshot failure and preserves the disabled negative control. Require enabled Dashboard navigation within two seconds before leaving /folders; keep every existing URL assertion and both state branches. Real scoped E2E: 5/5 PASS, zero skips/retries, on this run's verified API/UI image archives and the qualified Chromium image.
+- [x] TRAIN-CI9 / BRTRAIN-EX3 — Run 42242515912 build-e2e: full Chromium starts but capture returns an empty-image protocol error. The title-only probe has no painted content in either channel. Render visible fixture content and require first-contentful-paint within 2000 ms before mandatory screenshot/video capture; additionally assert PNG signature. No retry or existing timeout change. Cold local build passes both Chromium 156 channels; exact protocol failure was not reproduced locally, while absent paint was deterministic. Trivy/compliance PASS with zero HIGH/CRITICAL findings; full CI receipt follows in the train report.
+- [x] TRAIN-CI8 / BR83-EX1 — Run 42241084291 chat-core 695/695 PASS, chat-ui DOM 206/206 PASS; installed pair still names the old core 0.3.1 archive. Feed the guarded packer's tarball output into pair qualification so it validates the actual candidate. Scope: producer output/wiring only; no qualification or dispatch gate relaxed. Wiring 39/39 PASS; real installed UI 1.0.0/core 0.3.2 contracts, Svelte typecheck, Vite build and runtime/remount/permission matrix PASS.
+- [x] TRAIN-CI7 — Run 42240457717 validate-chat-core: 694/695 PASS; only the durable-port release test still expects 0.3.1 after the required patch bump. Align its exact equality to 0.3.2, retaining the release identity assertion.
+- [x] TRAIN-CI6 — Run 42237216892 shard 4 fails the unchanged workspace-B mention assertion at 04-tenancy-workspaces.spec.ts:183. Members arrive after @ input, but the comment state never refreshes mentionMatches. Deterministic delayed-response regressions fail for @ and a changed @bob query, then pass after recomputing matches on member arrival; a dismissed menu stays closed. Module suite: 32/32 PASS. Patch chat-core 0.3.2 exceeds published 0.3.1; root/UI workspace version records only, with no dependency re-resolution. Retained P1 manifest verification remains PASS (30 files, 54 edges); no new manifest generation needed.
+- [x] TRAIN-CI5c — Selected/latest preparation prefers the guarded auth-ui receipt; selected consumer installs that peer and tuple alignment requires its exact manifest/lock contract. Unchanged strict sibling-integrity gates and full packed suite PASS (135/135, zero skips); publish the completed repair after the two prerequisite lock commits.
+- [x] TRAIN-CI5b — Pin auth-ui 0.9.0 and its renderer peers in the selected consumer; verified published archive SHA-256 0ce478a6c2bf07e9a6edd972e70e8e18ec899cd403509fee30a3bb2b90ee42f7. Existing tuple pins unchanged; real packed qualification 135/135 PASS.
+- [x] TRAIN-CI5a — Freeze the selected auth-ui compiler prerequisites from the committed dependency universe; preserve every existing version, URL and integrity. Complete local packed-consumer qualification: 135/135 PASS, zero skips; source/tuple regression: 20/20 PASS. Commit generated records in bounded parts before publishing the complete fix.
+- [x] Owner continuation: push each verified fix and iterate until the entire train CI is green; no rerun, CI-skip marker, relaxed assertion, timeout/retry increase or merge.
+- [x] TRAIN-CI4 — Reproduced five HTTP 503 responses among 16 concurrent new-account magic-link completions, with PostgreSQL SSI pivot errors (40001). Account creation reads the account-wide first-user predicate. Admit registration/magic-link/social completions through the existing exclusive writer gate before BEGIN, matching direct account creation; serializable isolation and all retry/deadline limits stay unchanged. Regression: 16/16 HTTP 200 with session tokens, accounts and admin workspace memberships; replay HTTP 400. Existing concurrency cases also PASS (4/4 tests total). Full CI/shard 6 confirmation pending.
+- [x] TRAIN-CI3 — Shard 3 export readiness correction: retain the two-second dialog and ZIP assertions, require enabled state before a normal actionable click. Combined dashboard/matrix/checkpoint specs on the corrected image: 21/21 PASS, zero retries.
+- [x] BRTRAIN-EX3 — Fix CVE-2026-85091: pin E2E zlib 1.3.2-r1, the Alpine fixed version. Impact: E2E runtime library only; rollback: restore prior pin while retaining the blocking security gate. Image build/browser/video probes PASS; Trivy zero HIGH/CRITICAL findings; no suppression or register exception.
+- [x] TRAIN-CI2 — Share the auth-ui compiled-renderer fixture; preserve both resource cases and every assertion, without changing timeout/retry settings. make test-auth-ui: 56/56 PASS.
+- [x] TRAIN-CI1 — Fix shard 4 on run 42157650191: observe the dashboard lock across presence replacement while retaining the fallback print-hidden requirement and requiring a disabled presence lock; await the post-restore response before checking the unchanged route-handler flag. Scope: the two named E2E specs only, authorized by the train fix request; no timeout/retry increases or assertion weakening. Deterministic Chromium probe reproduces both races and rejects missing print-hidden/enabled presence locks. Local specs 4/4 PASS; complete shard 4: 43 PASS, six existing declared skips, zero retries. Full PR CI remains pending the single fix push.
+- [x] TRAIN-R1 — Missing worker-script CSP reproduced in four MIME vectors and Chromium 148; corrected application responses block external fetch/eval/Wasm while same-origin reads work. CSP 26/26 and content 79/79 PASS; safe mode and SVG/PDF sandbox preserved.
+- [x] TRAIN-R2 — Bind JSON/form grants to the displayed scope version and reject missing/stale versions without granting a widened scope; regression 5/5 PASS after reproducing missing version binding.
+- [x] TRAIN-R3 — Retain all core integration jobs and affected owners even when missing/unselected; broaden UI validation for API runtime changes under BR83-EX1. Two regression cases failed before the fix; consumer-contract fixtures 23/23 PASS.
+- [x] TRAIN-R4 — Require existing UI build job identities and main-only deployment only on main; select IdP smoke for UI changes under BR83-EX1. Real-workflow UI/shared PR/main and API runtime cases pass; wiring fixtures 39/39 PASS.
+- [x] BROJ-EX1 — #923 OAuth registration job workingDir only; reason: npm must run inside its package; impact: job startup; rollback: revert workingDir.
+- [x] BR83-EX1 — #921 CI classifier/contracts/tuple dispatch; reason: prove omitted consumers unchanged; impact: CI selection/verdict; rollback: revert wagon workflow edits.
+- [x] BR83-EX2 — #921 named Make entry points; reason: reproducible CI tooling gates; impact: tooling recipes; rollback: revert wagon recipes.
+- [x] BR83-EX3 — #921 IdP tsconfig test include; reason: candidate-contract static coverage; impact: test inclusion; rollback: restore prior include.
+- [x] BR83-EX4 — #921 inherited readiness-only E2E fix: focus row, require tabindex=0 within two seconds before click; reason: documented unregistered-row race; impact: one test; rollback: revert readiness lines. No timeout/retry increases.
+- [x] BRTRAIN-EX1 — Retain #921 durable plan updates; reason: wagon traceability; impact: plan only; rollback: restore base plan.
+- [x] BRTRAIN-EX2 — Refresh retained L5 P1 manifest/archives after committing integrated lock; reason: lock freshness; impact: generated evidence; rollback: restore prior artifact set with its lock.
+- [ ] Track handoff: designated conductor imports this request, wagons, deliverables and acceptance receipts; this concurrent lane never appends `.track/events.jsonl`.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [x] Deterministic failures block; provider exceptions require same-head evidence and explicit owner sign-off; none accepted here.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single consolidated lot; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: conductor decision 2026-10-31T22:57Z consolidated A4.1+A4.2+A4.3 into ONE lot (tables interlinked; splitting failed twice: .tmp/rv/lot-A4-2.md, .tmp/rv/lot-A4.2.md). Stacked on feat/cm-identity-a2-0b; draft PR with base feat/cm-identity-a2-0b while A2.0b is open; rebase onto origin/main after A2.0b merges; one CI run on the final head.
+- [x] **Multi-branch** — Five wagons, one train integration, consolidated review and exact-head PR CI; conductor owns final merge.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- F11 screens land in this lot; e2e on ENV=e2e-app-a4 covers them.
+- [ ] Qualify safe/application mode and reader grants on the exact train head using scoped tests and full PR CI; retain SHA and receipts in the report.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read COMMON-RULES, MASTER, A2-lots, r2 §5/§9.3, gap.fr.md, STOP reports, A2.0b r6, owner answers (Q-G recorded), workflow.
-  - [x] Worktree `tmp/worktrees/app-cm-a4-3`, branch `feat/app-cm-a4` from origin/feat/cm-identity-a2-0b head; harness C1 PASS.
-  - [x] BRANCH.md from plan/BRANCH_TEMPLATE.md.
-  - [x] ENV mapping: test-app-a4 / e2e-app-a4; ports API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740.
-  - [x] Resume C1 PASS; review inherited account, challenge and invitation fixtures; restore original email data.
-  - [x] Review inherited session, magic-link and WebAuthn fixtures without weakening assertions.
-  - [x] Add real CM WebAuthn coverage for persisted COSE, options policy, counter/challenge atomicity, replay, expiry, purpose/owner binding and stale signed counters; replacement execution awaits A2.0b.
-  - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
-  - [x] Correct control-schema custody cleanup, conversation/escalation fixture references and the synthetic test-only email policy; remove a false null-email migration claim from registration coverage.
-  - [x] Review session-adoption setup and tenant-bound authorization fixtures against CM stores.
-  - [x] Make authenticated fixtures explicitly seed their tenant approval, business ownership and admin workspace membership; production registration still grants no tenant approval.
-  - [x] Review remaining adoption race/role fixtures and LLM identity directory fixtures against CM stores.
-  - [x] Preserve OAuth refresh revocation assertions during CM fixture conversion.
-  - [x] Review document, history, stream and lock fixture conversions; preserve original email values.
-  - [x] Port chat-service-tools.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port chat-service-tab-tools.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port chat-service-batch-create-orgs.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port chat-service-document-generate.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port chat-service-document-generate-pptx.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port chat-checkpoint-runtime.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port chat-summary-runtime.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port todo-orchestration-chat-progression.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port vscode-code-agent-prompt-profile.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
-  - [x] Port workspace-type, generic-dispatch, extended-object, flow-runtime, transfers and chat-tool API membership fixtures to CM while retaining business assertions.
-  - [x] Port artifacts-host-publication.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
-  - [x] Port artifacts-host-recovery.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
-  - [x] Port artifacts-host-credentials.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
-  - [x] Port artifacts-reader-activation.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
-  - [ ] Docker stack through `docker-slot.sh` (one slot per command), `make down-volumes ENV=test-a4-cutover` after.
-- [ ] **Lot 1 — CM identity composition + one data migration**
-  - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
-  - [x] Bind the r6 combined UOW to one app PostgreSQL connection, including indeterminate-commit refusal.
-  - [x] Join account/profile registration and partial updates to the active combined UOW; refuse absent profiles.
-  - [ ] Control migration 0014: CM identity schema + id-preserving copy of users/proofs/invitations/login sessions/tenants/memberships/workspaces + rollback checkpoint row; journal integrity test passes.
-  - [ ] Migration tests (both directions of the copy, id preservation, counts).
-  - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
-  - [x] Add a protected synthetic snapshot fixture for actual bound-import tests; its evidence is explicitly excluded from operational rehearsal receipts.
-  - [x] Make successful migration and rollback tests call the actual bound importer before SQL deletion; retain the SQL-only refusal test separately.
-  - [x] Add import mapping regressions for expired approval, null email, terminal proofs, credential counters and login lineage.
-  - [x] Map account/profile, credential, single-use proof and login source fields to the r6 import records without invented history.
-  - [x] Map invitations, signature-verified email continuations and social links; refuse prohibited provider secrets.
-  - [x] Map tenant/workspace directories, independent memberships and OAuth tenant bindings through their frozen records.
-  - [x] Extract the locked source inventory and assemble one typed batch; refuse live federation flows and non-null social secrets.
-  - [x] Check the exhaustive removed-column inventory and hash the shipped mapping with pinned RP/origin policy; trace historical metadata to the protected checkpoint.
-  - [x] Map pending settings revocations to one deterministic CM delivery group per legacy intent, preserving every target and refusing unknown ownership.
-  - [x] Verify the protected remote snapshot digest, reconcile SQL/file tuples and refuse live orphan or divergent file authority.
-  - [x] Account for every legacy connector event through captured or unresolved records; move metadata invitations to the digest representation.
-  - [x] Load pinned migration assets, verifier policy, protected snapshots and borrowed token keys before transaction entry.
-  - [x] Apply the canonical CM asset and bound importer/custody verifier on the control migration connection, recording D11 before any legacy-row deletion.
-  - [x] Invoke the typed import from the real control migration runner on its SERIALIZABLE connection; dispose keys after success or rollback and skip completed journals.
-  - [x] Delete the manually copied CM core/custody DDL from control migration 0014; the canonical package asset is its schema source.
-  - [x] Delete copied tenancy/enforcement DDL; bootstrap the merged CM schemas through their shipped statement exports.
-  - [x] Delete the raw identity copy SQL and guessed lifecycle/expiry/revision mappings; the typed importer is the only migration writer.
-  - [x] Delete the SQL count-only checkpoint; keep the protected-source D11 checkpoint and real import receipt from the bound runner.
-  - [x] Rebind actual business foreign keys to CM while preserving delete/update/deferral actions; refuse unrepresentable references and record the inventory.
-  - [x] Preserve the existing business workspace owner reference and set it on new personal/business workspace rows.
-  - [x] Preallocate auth entity/workspace id hints outside transaction entry and keep them stable across whole-callback retries; remove locking of a nonexistent workspace.
-  - [x] Add real PostgreSQL host-scope probes for backend/transaction identity, expired handles, swallowed failures, nested control and unawaited queries.
-  - [x] Reject commented transaction commands and use the driver's single-statement extended protocol; real PostgreSQL regressions await execution.
-  - [x] Bind app SQL to expiring host capabilities, refuse nested transaction control and rethrow caught driver failures before publication/commit.
-  - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
-  - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
-  - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
-  - [x] Borrow the unchanged v1 derived key for HKDF-separated connector custody; add authenticated envelopes with owned-buffer disposal.
-  - [x] Define the host control-schema custody contribution and strict minimal-capability/envelope codecs; retain bounded long capabilities.
-  - [x] Verify custody against the actual pending/delivered CM outbox tuple and erase only the acknowledged envelope on its transaction.
-  - [x] Capture source connectors on the active host connection with independent owner/scope checks and exact replay comparison.
-  - [x] Bind the V2 connector plane to the full owner-or-deleted-workspace union, retaining actual owners and verifying every enqueued custody reference before commit.
-  - [x] Add the CM leased delivery drain with short claim/ack/release transactions and atomic custody erasure; network delivery stays outside callbacks.
-  - [x] Drain the CM ledger on periodic sweeps and delete the replaced settings queue/pending/ack module.
-- [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
-  - [x] Preserve credential/session HTTP refusal shapes after rollback and reject malformed completion status; regression execution remains pending.
-  - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
-  - [x] Add social-completion regression cases for whole-attempt retry, fresh linking-session checks and no SQL after an insert conflict.
-  - [x] Require a completion boundary in the federation broker contract; isolate the in-memory resolver adapter in protocol test fixtures.
-  - [x] Resolve social sign-in and mint its session through per-attempt CM capabilities; recheck the pinned assertion deadline on retry.
-  - [x] Remove manual-link catch-and-reread; revalidate the current link actor each attempt and consume email-challenge proof inside the same completion.
-  - [x] Mount CM social completion with current session/eligibility checks and atomic email-ticket consumption; remove root-pool social user/workspace/session writes.
-  - [x] Preserve the upstream evidence deadline through email challenge and test expired retries and ticket-consume failure before login publication.
-  - [x] Retain only verified OIDC expiry evidence for retry and reject missing/malformed expiry; remove raw upstream error text from federation audit events.
-  - [x] Remove the standalone federation identity writer and unsafe conflict translation; root federation ports retain only transient protocol flow storage.
-  - [x] Delete obsolete federation conflict helpers and root OAuth session/ticket signing and verification; only the CM binding supplies those capabilities.
-  - [x] Delete root OAuth user/profile/proof adapters; request-bound CM adapters are the sole authentication readers and writers.
-  - [x] Remove the duplicated root login eligibility/role algorithm; preserve protocol-only federation transport tests with an explicit completion mock.
-  - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
-  - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
-  - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
-  - [x] Construct OAuth refresh/state/consent/JWKS participants on the active app executor; no nested transaction in bound refresh/consent.
-  - [x] Stage every OAuth identity handler on the CM bound ports; publish ordinary protocol denials after commit and roll back infrastructure failures.
-  - [x] Delete root OAuth session authority and its settings-outbox writer; only the per-attempt CM binding supplies these methods.
-  - [x] Add private-context execution of the shipped required/optional authentication middleware, returning copied principals only after commit.
-  - [x] Mount the staged middleware before business workspace selection; optional authentication never invokes downstream effects twice or ignores infrastructure failure.
-  - [x] Add transaction-bound auth workspace provisioning and an explicit Q-K configuration parser with key-reader disposal tests.
-  - [x] Add the production auth runner configuration and private HTTP response staging with sanitized failures.
-  - [x] Mount real CM WebAuthn options/authentication and login creation in one completion callback.
-  - [x] Delete the replaced app passkey authentication handler.
-  - [x] Mount CM email and magic-link completions; consume proof and create login before the same commit; delete old email handler.
-  - [x] Bind registration to verified email/invitation context and stage a fresh private HTTP context per attempt.
-  - [x] Add mounted registration/approval/login coverage with real attestation/assertion and invitation replay across two prepared ceremonies; assert that account approval does not approve tenant membership. Execution awaits A2.0b.
-  - [x] Remove the replaced registration finalizer and its old route factory mount.
-  - [x] Remove the replaced app registration account/proof writers.
-  - [x] Remove the replaced app registration challenge preparation.
-  - [x] Route credential listing, rename and revocation through a fresh CM binding; add the CM session-service facade.
-  - [x] Resolve credential-route actors with the unchanged bound OAuth consumer, avoiding a nested session-validation abort; add revoked-session mutation regressions.
-  - [x] Delete the replaced app credential handler and its revision-free counter/proof mutations.
-  - [x] Replace the app session adapter implementation with the CM session-service facade.
-  - [x] Remove the app refresh signer and rotation algorithm in favor of CM signed refresh completion.
-  - [x] Remove the app session creation writer; require verified CM assertion completion for MFA lineage.
-  - [x] Remove the app session validation algorithm; middleware and host consumers use CM validation.
-  - [x] Remove the obsolete app JWT signer, key instance and token-claim implementation from session-manager.
-  - [x] Route root revoke/revoke-all/list calls through the CM signed-session service and its single delivery ledger.
-  - [x] Replace remote-file signing authority with a CM subject-fenced signing callback released only after commit.
-  - [x] Remove app SQL session writes and duplicate base-row inserts; refresh projects remotely only after CM CAS commits.
-  - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
-  - [x] Add CM membership-domain adapters with current tenant-admin checks, serialized anti-abuse caps, full decision auditing and CM-authorized OAuth client listing.
-  - [x] Point membership acceptance tests at CM and cover forged global roles and current approver suspension; execution awaits the combined UOW.
-  - [x] Mount CM membership handlers directly in the shared workspace router, with typed refusals and sanitized infrastructure failures.
-  - [x] Delete the replaced `workspaces/product-tenants.ts` identity routes.
-  - [x] Remove the replaced app membership request, decision and directory implementations.
-  - [x] Delete `services/auth/tenant-membership.ts`, including the caller-role trust seam and duplicate transition rules.
-  - [x] Remove the obsolete root deletion factory/UOW and unused pool-based membership counters; fixed V2 coordinators own deletion.
-  - [x] Convert the workspace cutover HTTP fixtures to CM stores, retaining cross-tenant/workspace denial and exact decision-replay assertions.
-  - [x] Repair the unpinned historical fixture bridges to CM without changing byte-pinned routes or recreating legacy tables (Argon finding 2).
-  - [x] Add mounted member response/idempotency regressions and clean both CM/business workspace fixtures (confirmed Argon findings 3/6).
-  - [x] Preserve member error bodies and self-action precedence; absent-member deletion stays a no-op without revision changes or notifications.
-  - [x] Add `api/tests/api/auth/cm-workspace-members.test.ts` for current-role authorization, isolated role changes, personal workspace restrictions and joined business rollback.
-  - [x] Bind workspace member reads and mutations to CM domains in one transaction, with subject/workspace locks, audit, last-admin protection and current actor checks.
-  - [x] Mount the CM member handlers in the shared router; publish workspace membership notifications only after the identity commit.
-  - [x] Delete the old product member-list, mention-list and add-member handlers.
-  - [x] Delete the old product role-change and member-removal handlers and their identity-only imports.
-  - [x] Join workspace provisioning and session adoption to CM's combined transaction; preallocate workspace ids and recheck current account/tenant authority before enrollment.
-  - [x] Add binding regressions for account/tenant suspension across adopt, detach, end and get, preserving the prior binding on refusal.
-  - [x] Bind detach/end/get and their authority reads to one CM transaction; lock write subjects/workspaces and require current active account/tenant plus profile.
-  - [x] Remove bootstrap and per-request admin membership upserts; workspace selection requires an existing CM admin membership (Mistral M3).
-  - [x] Resolve workspace selection on one CM snapshot and delegate explicit personal-workspace provisioning to the bound CM hook without role elevation (Mistral M4).
-  - [x] Join VS Code workspace enrollment, creator membership, business metadata and mapping state in the CM transaction (Mistral M2).
-  - [x] Delete the unsafe standalone workspace business-first/member-after deletion path; record the missing CM cleanup contract instead of duplicating identity SQL.
-  - [x] Use atomic CM enrollment for imported workspaces and translate current-authority refusals on product/import creation without a 500.
-  - [x] Add real CM consent/protocol rollback, revocation, explicit-tenant and suspended-tenant regression tests before removing the old consent authority path.
-  - [x] Bind OAuth tenant selection and token-time checks to the CM TidIssuer; use its immutable slug and reject suspended tenants in the current transaction.
-  - [x] Commit CM consent authority with OAuth protocol evidence under the subject fence; reject unbound writes, remove the default tenant, and honor CM revocation on reads.
-  - [x] Add service-client tenant regressions for absent binding, distinct registry id/slug, suspended tenant and joint protocol/CM rollback.
-  - [x] Read fixed S2S bindings exclusively from CM, and validate connector enrollment tenants in the same CM snapshot.
-  - [x] Use CM service bindings in the LLM directory's shared snapshot and drain S2S mint audits through the current CM binding instead of a root logger.
-  - [x] Provision service protocol credentials and CM tenant bindings atomically; seed replay preserves existing bindings, including suspended tenants.
-  - [x] Delete the residual service-client tenant column in the single cutover migration after import/checkpoint; update tenant-data regressions to require explicit CM bindings.
-  - [x] Delete the obsolete app WebAuthn registration/authentication/challenge services and their superseded tests after adding real CM ceremony coverage.
-  - [x] Replace the obsolete sweep-expiry expectation with r6's current-read guest role while preserving pending status and its deadline.
-  - [x] Delete the app approval-expiry writer; schedule only the CM revocation worker, and run proof retention through the CM UOW.
-  - [x] Preserve committed membership success when post-commit realtime hints fail, with HTTP regression coverage for both notification and mutation failures.
-  - [x] Resolve tenants in one CM snapshot and translate only actual boundary refusals; private retry and infrastructure failures propagate unchanged.
-  - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
-  - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
-  - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
-  - [x] Admit conversations before chat job publication and resolve turn authority through the CM reference; F15 refusal leaves the complete tool set empty.
-  - [x] Load artifact assets outside CM callbacks and pass every tool identifier through the F15 catalog mapping.
-  - [x] Fence chat creation with CM subject/workspace locks and atomically revoke conversation authority when deleting its business chat.
-  - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
-  - [x] Add a real V2 deletion failure test with a subject-scoped final-delete trigger, nontransactional reachability probe, exact row snapshots, durable rollback receipt and orphan checks; execution awaits A2.0b.
-  - [x] Add fixed V2 self/admin authorizers with current CM prerequisites and a complete business ownership/reference plan; membership alone never authorizes destruction.
-  - [x] Declare personal-data deletion and nullable shared-attribution dispositions, with a database inventory guard for unclassified person references.
-  - [x] Extract the unchanged persisted job-to-stream mapping for deletion inventory without initializing the queue manager in CM callbacks.
-  - [x] Process every authorized workspace's persisted history/stream/job scope and business dependency graph; detach retained chats/traces and refuse restrictive cross-scope references.
-  - [x] Bind the real V2 business participant with summed affected-row receipts and subject-scoped job deletion/orphan checks across retained workspaces.
-  - [x] Bind remote/catalogue effects and verify absent agent/purpose capability inventory plus scoped r13 bindings/runtimes; any deployed unbound authority blocks deletion.
-  - [x] Construct fixed self/admin V2 coordinators over the combined UOW; require explicitly qualified reservation/deletion/diagnostic/read budgets before entry.
-  - [x] Mount self deletion without pre-disabling outside V2; preserve operation ids and distinguish rollback, pending delivery and complete HTTP outcomes.
-  - [x] Mount admin deletion on its fixed V2 authorizer; remove outside-transaction prerequisite reads and direct remote delivery.
-  - [x] Bind account approve/disable/reactivate and self-deactivate to the frozen CM lifecycle, current actor guards, profile metadata and one-ledger revocation in one callback.
-  - [x] Add the CM-backed admin identity router and one-snapshot authorized user directory projection, leaving business administration separate.
-  - [x] Mount CM-backed administration and delete the replaced user-list/lifecycle/delete handlers from admin-product-authority.
-  - [x] Remove obsolete admin identity schemas/imports and mount transactional CM self-deactivation, including revocation in the same commit boundary.
-  - [x] Delete the replaced app cascade coordinator and its membership-as-ownership business participant.
-  - [x] Delete the obsolete raw settings/tombstone writers and single-workspace deletion helpers with the old account-deletion module.
-  - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
-  - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
-  - [x] Rebind client, consent, membership, credential and restore invalidation to CM identity records.
-  - [x] Correct PostgreSQL index qualification and the OAuth consent account lock column.
-  - [ ] All residual readers of legacy identity tables switched to CM stores (46-file inventory).
-  - [x] Replace omitted artifact authorization and login-credential SQL readers with CM identity sources.
-  - [x] Require the current CM consent and exact active CM conversation in artifact effect guards, locking their authority rows and rechecking conversation expiry after waits.
-- [ ] **Lot 3 — Deletions**
-  - [ ] Drop legacy identity tables in migration; delete identity part of api/src/db/schema.ts and the named files; no dual writer, no legacy fallback.
-- [ ] **Lot 4 — F11 screens + e2e**
-  - [x] Add CM-owned login/registration screens and shared completion/continuation behavior with host-only navigation/session ports.
-  - [x] Add the app projection of CM auth screens with host storage/navigation adapters and declare the UI package dependency.
-  - [x] Replace root login/registration flow implementations with CM screen projections; remove their duplicated continuation/session/navigation decisions.
-  - [x] Add shared CM management screen ports and transport for account administration, membership decisions and workspace members.
-  - [x] Relocate the existing account-administration screen into the CM package and project it from settings; portable host-port conversion follows.
-  - [x] Replace the moved screen's duplicate row/status/role declarations with its shared CM management view contract.
-  - [x] Make the CM admin screen portable through host ports and remove root behavior duplication; pending-delivery presentation follows.
-  - [x] Retain deletion operation ids across retries and distinguish completed deletion from pending external revocations in localized admin feedback.
-  - [x] Add the CM membership request/decision screen with tenant-scoped lists, explicit independent approvals, author/time display and stale-response exclusion.
-  - [x] Add the CM workspace-members screen with current-member management gates, committed-role display and scope-bound mutations/refresh.
-  - [x] Share the app's management host ports and localized membership labels; locale changes refresh the projected screen text.
-  - [x] Project CM members in workspace settings and mount the membership decision/request page, including the no-workspace recovery path.
-  - [x] Delete the replaced app member list/add/role/remove behavior and selection watcher; only the CM screen owns those interactions.
-  - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
-- [ ] **Lot 5 — Tests**
-  - [x] Complete comment characterization/tool-service fixture conversion and make Decision API revocation cases mutate the authoritative CM membership stores.
-  - [x] Run federation identity adapter regressions through actual bound CM ports, with valid credential/proof fixtures and explicit rejection of unbound root access; preserve one-time protocol-state assertions.
-  - [x] Add artifact effect-guard regressions for absent/revoked/expired/foreign CM conversations and withdrawn CM OAuth consent while business chat/protocol rows remain.
-  - [x] Prepare fresh isolated databases with real prior migrations and protected synthetic checkpoint files, then exercise the unchanged A4 migration runner; no synthetic receipt qualifies rehearsal.
-  - [x] Port comment-assistant fixtures and the read-only gateway qualification probe to CM accounts, sessions, tenant bindings and memberships.
-  - [x] Port live-code registration fixtures and immutable membership snapshots to CM, retaining account, profile, tenant, editor-role and hidden-workspace refusal assertions.
-  - [x] Add real CM mid-conversation membership/account suspension coverage requiring an empty full tool set, including local tools; preserve the separate conversation lifetime after revoke-all.
-  - [x] Add a real Chromium virtual-authenticator and Maildev registration fixture for F11 qualification, without logging proof material or stubbing identity services.
-  - [x] Add F11/gap browser acceptance for independent approvals, members, live-session suspension, revoke-all and a fresh passkey login; execution remains pending the qualified stack.
-  - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
-  - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
-- [ ] **Lot 6 — Final validation**
-  - [x] Remove trailing blank lines found by full A4 diff validation; runtime and stack qualification gates remain open.
-  - [x] Add runnable source-custodian unit cases for legacy capability classification while proving the new-deletion reader still rejects malformed material.
-  - [x] Account for unreadable/missing historical connector capabilities as unresolved per r6 §5.6; add real migration cases preserving every event and separating recoverable deliveries without weakening new-deletion capture refusal.
-  - [x] Scope pending workspace-deletion fixture cleanup to its own accounts/workspaces and reuse the real connector capture helper; retain its success assertions without skips.
-  - [x] Verify that active self deletion refuses with 409 and preserves the connector/account; this does not qualify the missing authorized re-entry for disabled self deletion.
-  - [x] Delete the remaining obsolete connector capture service, including its catch-and-return-empty fallback; all production capture is inside the CM deletion transaction.
-  - [x] Delete the unused legacy connector tombstone/revocation writers; production deletion uses the CM custody/outbox worker exclusively, and the historical admin route is archival only.
-  - [x] Port the remaining standalone workspace connector regression to CM memberships and shared encrypted fixtures; preserve its 204 success expectation as an unmet stack acceptance item.
-  - [x] Retire the superseded account connector tests after adding CM V2 custody/rollback/delivery regressions; standalone workspace success and disabled self-deletion re-entry remain explicitly unmet.
-  - [x] Remove the obsolete connector deletion-site source census; the new CM route/custody tests check effects and preserved rows instead of requiring deleted legacy handlers.
-  - [x] Retire the historical admin identity writer from live cutover comparisons; preserve its archived byte pins and assert current CM listing/approval behavior and isolation directly.
-  - [x] Replace connector-deletion assumptions with real CM V2 HTTP/worker coverage: capture the owner/member union, preserve unrelated grants, erase acknowledged custody, and roll back unreadable capabilities without orphaning rows.
-  - [x] Add isolated real encrypted connector fixtures and capture the exact external revocation capability for CM deletion regression tests.
-  - [x] Delete the synchronous catalog tenant-to-workspace alias fallback; require the explicit CM tenant in callers and characterization fixtures.
-  - [x] Revalidate the opaque CM conversation authority reference at catalog dispatch, read membership directly from the same transaction, and test reference replacement between selection and invocation.
-  - [x] Gate batch organization creation through current F15 tool selection and invocation; add role-downgrade cases before selection and during the model response.
-  - [x] Bind artifact turn credentials to the target workspace and add a same-tenant regression with valid editor memberships in both workspaces; execution pending the Docker queue.
-  - [x] Add a real none-attestation registration fixture over the same valid public COSE key and verify it with the actual WebAuthn library.
-  - [x] Preserve the shipped validation-error DTO, including field details, while discarding rolled-back success fields and cookies.
-  - [x] Delete the replaced app WebAuthn service adapter after migrating its remaining MFA test consumer to real CM completion.
-  - [x] Replace the obsolete MFA adapter mock with signed assertions through the mounted CM login route; verify UV success and no session for required-UV refusal.
-  - [x] Replace malformed credential fixture bytes with real public P-256 COSE keys and add a signed-assertion fixture checked by the actual WebAuthn verifier.
-  - [x] Delete the replaced magic-link service, including the separate issuer and mail-failure fallback; CM completion and deferred delivery are the only paths.
-  - [x] Delete the obsolete standalone magic-link verifier and its split account/proof mutations; all completion consumers use CM.
-  - [x] Delete the replaced app magic-link route; only the CM completion projection remains mounted.
-  - [x] Delete the unmounted magic-link route's old issuance adapter before removing the remaining legacy route.
-  - [x] Remove the unmounted magic-link route's obsolete device-activation writer as the first atomic deletion of that replaced route.
-  - [x] Exercise CM magic-link issuance/consumption in the existing regression suite, fill its expired-link case and preserve the ten-minute lifetime and branded mail.
-  - [x] Revalidate manual social-link actors through the unchanged OAuth session consumer over bound CM ports, without nesting a different completion flow.
-  - [x] Retain caught adapter failures in the host attempt fence and prohibit further queries before rollback, including private restart signals without a driver error.
-  - [x] Delete the old email verification service, including its Math.random code issuer and development proof-logging fallback; CM owns issuance and exchange.
-  - [x] Preserve verification-mail branding in post-commit CM delivery and test sanitized observable delivery failure without a code-logging fallback.
-  - [x] Delete the standalone email-code exchange writer and exercise the CM completion service from registration test fixtures.
-  - [x] Isolate the inherited ticket signing seed for CM import/runtime and delete the unused legacy validation-token verifier.
-  - [x] Move OAuth state regression fixtures to CM accounts and independent bound request transactions, retaining consume-once concurrency assertions.
-  - [x] Reject unbound and escaped OAuth state participants before any protocol query; join protocol expiry cleanup to a CM write transaction.
-  - [x] Resolve client-bound invitation context from the verified OAuth continuation using the existing state key and a fresh per-attempt expiry check.
-  - [x] Specify invitation client binding tests with real sealed OAuth continuation signatures, exact expiry, retry expiry, tampering and email mismatch.
-  - [x] Restore social start/refusal protocol audit outside the CM completion while keeping transactional success audit in the CM ledger; cover the real route and broker.
-  - [x] Recheck verified social assertion expiry with the live attempt clock after blocking mutations; reject malformed deadlines before CM work.
-  - [x] Bound replayed HTTP request bodies and publish only error DTOs without provisional cookies or candidate tokens after a confirmed rollback; add publication-boundary tests.
-  - [ ] typecheck/lint api+ui; targeted make tests; push often; draft PR base feat/cm-identity-a2-0b.
-  - [ ] ONE CI run on the final head (after rebase onto origin/main once A2.0b merges).
-  - [ ] Report to .tmp/rv/lot-A4.md; stop; do not merge.
-
-
----
-<!-- Retained main-train reference (union rebase onto origin/main b9cdb2d33, train #914): train BRANCH.md follows verbatim, including the BRLOCK-EX1 policy reference. -->
-
-# Feature: Release train N+1 (integration lane, wagons E + F + G)
-
-## Objective
-Integrate the wagon branches into one release branch with `--no-ff` merges in order E then F then G, assign package versions once, regenerate the integration-owned files once through make, and open exactly one READY PR with one CI.
-
-## Scope / Guardrails
-- Scope limited to the union of wagons E (`chore/ci-ai-tests-scoped` @ fe78bfcbf, AI test shards scoped to AI-relevant path changes + async-wait root-cause fix), F (`feat/artifacts-sqlite-u1` @ 0d4acee17, h2a artifacts durable local SQLite adapter U1) and G (`feat/artifacts-files-parity-lot2` @ 6546031d0, artifacts files-parity LOT 2: upload pages, staged assets, GC/quotas); all three merged, departure called.
-- Merge order: E first, then F, then G, each with `git merge --no-ff`; conflicts resolved as UNION.
-- The integration lane owns versions, CHANGELOG entries, locks, the APP-P1 pin, cluster-mesh fixtures and the L5 manifest: on conflict take either side, then REGENERATE once at the end through make.
-- Versions: `@sentropic/artifacts` 0.2.14 (stays in 0.2.x: cluster-mesh pins peer `>=0.2.0 <0.3.0`); no other package bumped unless touched.
-- Pre-existing MCP tool definitions stay byte-identical (tools/list snapshot must pass).
-- Make-only workflow, no direct Docker commands; Docker through `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make … ENV=test-train-next` (one slot per command, never nested).
-- Tests on `ENV=test-train-next` (always LAST argument), never `ENV=dev`; the lane ends with `make down-volumes ENV=test-train-next`.
-- No `[skip ci]` in any commit; CI budget: one run on the final head; never `gh run rerun` (fresh pull_request run via a new commit instead).
-- Never merge `main` into this branch; future updates go through `git rebase` only if the conductor orders it.
-- All new text in English.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-
-## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `.github/workflows/ci.yml` (TN01-EX9, wagon E scoped AI shards; TN01-EX11 ai-filter coverage fix + guard step)
-  - `scripts/ci/ci-expected-results.test.mjs` (TN01-EX9, wagon E expected-results sync)
-  - `scripts/check-ci-ai-filters.sh` (TN01-EX11, ai-filter self-test: fails when an AI service path is uncovered)
-  - `api/tests/ai/initiative-generation-async.test.ts` (TN01-EX9, wagon E root-cause wait fix)
-  - `packages/artifacts/**` (wagon F sqlite adapter set + 0.2.14 version normalization)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (TN01-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (TN01-EX3)
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (TN01-EX3)
-  - `api/src/services/mcp/cluster-registry.ts` (TN01-EX6, APP-P1 pin only)
-  - `api/tests/api/app-mcp-installed.test.ts` (TN01-EX6, pin digest only)
-  - `api/tests/api/app-mcp-registry.test.ts` (TN01-EX6, pin digest only)
-  - `package-lock.json` (TN01-EX2, version lines only)
-  - `api/package-lock.json` (TN01-EX2, `file:` link lines only)
-  - `tools/memory-mcp-l5/artifacts/**` (TN01-EX5, P1 manifest regen)
-  - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts` (TN01-EX10, range restore only)
-  - `api/**`, `ui/**`, `e2e/**`, `apps/**`, `deploy/**` except the Allowed files above
-  - `packages/**` other than `packages/artifacts/**` and the TN01-EX3 files above
-- **Exception process**:
-  - Declare exception ID `TNxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop`.
-
-## Feedback Loop
-- TN01-EX2 (lock pins): the 0.2.14 union changes workspace version lines, so root `package-lock.json` entries are refreshed through `make lock-root` (version lines only) and the `../packages/*` version lines in `api/package-lock.json` are synced. No dependency graph change. Rollback: revert the lock lines with the version fix.
-- TN01-EX3 (cluster-mesh packaging fixture re-pin): the `selected` fixture must pin the workspace candidate version exactly (artifacts 0.2.14). Re-pin through `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock` with the packed sibling receipts, never hand-editing integrities. Rollback: revert the fixture files to the origin/main pins.
-- TN01-EX5 (memory-l5 P1 manifest): every lock change requires regenerating the P1 manifest through `make memory-l5-pack STAGE=pre-candidate ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json`; previous manifest+sidecar retained in `artifacts/history/`. Rollback: restore the retained history manifest/sidecar and delete the new snapshot.
-- TN01-EX6 (APP-P1 pin): the shipped profile digest and manifest digest in `api/src/services/mcp/cluster-registry.ts` are recomputed through make after the union; pre-existing tool selection unchanged. Rollback: restore origin/main digests.
-- TN01-EX9 (wagon E CI scoping): `.github/workflows/ci.yml` AI-shard path filter, `ci-expected-results.test.mjs` sync and the `initiative-generation-async` deterministic-wait fix (BR02-EX3 on the wagon branch) are taken as the wagon union; the integration lane amends nothing there except conflict union. Rollback: revert those hunks to origin/main.
-- TN01-EX10 (union source repair): wagon F's stale base predates main's G2 sharing port and LOT1 presigner/export additions, so `--theirs` conflict resolution dropped main-side lines and the union root-cause fix restores them: `packages/artifacts/package.json` presigner peer+dev deps and the four missing subpath exports (`./adapters/s3-uploads`, `./adapters/postgres-reader-consent`, `./server/consent`, `./server/reader-store`), `packages/artifacts/src/mcp-core.ts` byte-stable block (version bumped to 0.2.14), `packages/artifacts/CHANGELOG.md` 0.2.13 section kept under the new 0.2.14 entry, `api/tests/api/app-mcp-registry.test.ts` restored to main (history chain + refusal coverage) pending the 0.2.14 digest recompute, `packages/cluster-mesh/src/modules/catalog.ts` range restored to `>=0.2.0 <0.3.0` (conditional path, one line). Rollback: re-checkout the wagon-F side of each file.
-- Wagon watch: OPEN until the single train CI is green, then wagons E, F and G are commented as superseded and closed.
-- TN01-EX12 (untouched-package alignment): `packages/cluster-mesh/package.json` restored byte-identical to origin/main (`0.26.0-dev.9`, A4 exports and peer ranges) because the train touches no cluster-mesh source; the train version stays `@sentropic/artifacts` 0.2.14 only. Rollback: revert the file to the wagon-F side.
-- TN01-EX11 (ai-filter false-negative fix, review E1): the `ai` filter covered only `default-org-aware-prompts.ts` among prompt configs, so changes to sibling prompt files, comment/document backends and `packages/llm-gateway/**` skipped the AI shards. Fixed at the root: `api/src/config/**` replaces the single-file entry (directory glob), plus `api/src/services/comments/**`, `api/src/services/context-*.ts`, `api/src/services/document-*.ts` and `packages/llm-gateway/**`. New self-test `scripts/check-ci-ai-filters.sh` (wired into the `changes` job) fails when any listed AI service path is uncovered; verified green on the fixed filter and red on the pre-fix filter (11 uncovered paths). Rollback: revert the `ai` block and the guard step to origin/main.
-- TN01-EX13 (LOT2 24-tool contract sync, CI-fix lane): wagon G appended `artifacts_create_upload_page`, `artifacts_list_assets`, `artifacts_publish_bundle_v2` to the canonical contract (`packages/artifacts/src/profile/contracts.ts`, 21→24), but two pins still assert the 21-name list: `packages/artifacts/probe/packed-consumer.mjs` EXPECTED_TOOLS (allowed path) and `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` SPEC_TOOLS (conditional path, one hunk appended in canonical order). Exact-equality assertions kept, no timeout touched. Rollback: revert both hunks to the 21-name list.
-
-## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
-- Owner rule for this train: the AI tests must pass green at least once; `initiative-generation-async` / `executive-summary-sync` flakiness fixed at the root on wagon E (deterministic waits on real conditions, isolation, capped retry only on a provider rate limit), never masked by longer timeouts.
-
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single integration branch, single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: one integration branch merging ready wagon heads; wagons were built and tested on their own branches.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI surface changes in wagons E + F; UAT = package suites + scoped api lanes + CI. No browser UAT for this train.
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/train-next`.
-  - Push branch before CI.
-  - No root-workspace UAT needed (no app surface changed).
-
-## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Create isolated worktree `tmp/worktrees/train-next` on branch `release/train-next` from `origin/main` (HEAD fa7199852).
-  - [x] Verify wagon heads: E `chore/ci-ai-tests-scoped` = fe78bfcbf; F `feat/artifacts-sqlite-u1` = 0d4acee17; neither touches `.track`.
-  - [x] Confirm command style: `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make … ENV=test-train-next` with `ENV` last, one slot per make command, never nested.
-  - [x] Confirm scope boundaries declared above (TN01-EX2/EX3/EX5/EX6/EX9).
-  - [x] Environment mapping: `ENV=test-train-next` for every test lane; no custom ports (disposable compose services per make target).
-- [x] **Lot 1 — Merge wagon E (`chore/ci-ai-tests-scoped` @ fe78bfcbf)**
-  - [x] `git merge --no-ff chore/ci-ai-tests-scoped`; resolve conflicts as UNION (`BRANCH.md` keeps this train doc; only BRANCH.md conflicted).
-  - [x] Lot gate: merge shows only wagon-E paths; E tip is an ancestor of HEAD; `.track/` untouched.
-- [x] **Lot 2 — Merge wagon F (`feat/artifacts-sqlite-u1` @ 0d4acee17)**
-  - [x] `git merge --no-ff feat/artifacts-sqlite-u1`; resolve conflicts as UNION (BRANCH.md + regen-owned files; no markers left).
-  - [x] Normalize 0.3.0 to 0.2.14 (`packages/artifacts/package.json`, `ARTIFACTS_PROVIDER_VERSION`, CHANGELOG heading); keep main's cluster-mesh `0.26.0-dev.8` and peer range `>=0.2.0 <0.3.0`.
-  - [x] Union root-cause repair (TN01-EX10): wagon F base predates G2/LOT1; restored main's presigner deps, four subpath exports, mcp-core byte-stable block, CHANGELOG 0.2.13 section, registry test file, catalog range.
-  - [x] Union port fix: sqlite management unit + store ACL paths + `artifact_access_events` table follow the G2 sharing port (`accessMode`/`changed`, `recordEvent`, authoritative `access_mode`); conformance assertions updated to G2 semantics.
-  - [x] Lot gate: both wagon tips are ancestors of HEAD (`git merge-base --is-ancestor`); `.track/` untouched.
-- [ ] **Lot 3 — Versions + regeneration ONCE through make**
-  - [x] Registry check through a repo make target: `qualify-published-install` proves 0.2.14 free (`is not published`) and 0.2.13 published (install exit 0, resolved integrity).
-  - [x] `typecheck-artifacts` green after the union port fix (0 errors).
-  - [x] `make lock-root` (TN01-EX2): version/range lines only (artifacts 0.2.14, cluster-mesh dev.8, llm-gateway 0.22.4); presigner restored after the package.json union repair.
-  - [x] APP-P1 pin recompute (TN01-EX6): the boot oracle refused the main digest, so the true digests were computed in-container from the repo code — profile `9d216231…` unchanged, manifest 0.2.14 `8e80ebf4…`; history chain 0.2.5–0.2.13 verified identical; `cluster-registry.ts`, both pin tests and the 0.2.13/0.2.14 chain entries updated.
-  - [x] `make lock-api` (TN01-EX2): no diff, already in sync.
-  - [x] Cluster-mesh `selected` fixture re-pin (TN01-EX3): fixture `package.json` restored to the base tuple with the train versions (mesh dev.8, artifacts 0.2.14); sibling receipt packed via `pack-artifacts` (guard pass, sha256 `48a1530d…`) and collected; `refresh-lazy-package-lock` green; lock carries the packed bytes at the registry URL form; tuple-spec integrity synced to the verified `sha512-5k7YRUpu…`; `test-lazy-package` 135/135 green.
-  - [ ] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TN01-EX5) — requires a clean tree, runs after the regen commits.
-  - [ ] Cluster-mesh `selected` fixture re-pin through `packaging.mk refresh-lazy-package-lock` (TN01-EX3).
-  - [ ] APP-P1 pin recompute through make if the pin tests fail on the union (TN01-EX6).
-  - [ ] `make memory-l5-pack STAGE=pre-candidate …` + `make memory-l5-verify` (TN01-EX5).
-  - [ ] Lot gate: `make scope-check` PASS C2 before any commit.
-- [x] **Lot 4 — Final validation (all on `ENV=test-train-next`, LAST)**
-  - [x] Typecheck & lint: `typecheck-artifacts` green (0 errors) + `lint-artifacts` green + `typecheck-api` green (no `error TS`).
-  - [x] Scoped lanes: sqlite-conformance 20/20, sqlite-export 2/2, adapter-conformance.integration 36/36 both backends (pg lane needed the full 0001–0008 migration chain, fixed in-train), `test-lazy-package` 135/135, `test-ci-expected-results` 28/0.
-  - [x] Api pin lanes: app-mcp-registry 25/25, app-mcp-installed 2/2, artifacts-host-publication 17/17 (APP-P1 0.2.14 digest `8e80ebf4…` confirmed by the running service).
-  - [x] AI scoped lane: `initiative-generation-async` + `executive-summary-sync` 4/4 green on the union (owner green-at-least-once satisfied; root-cause wait fix from wagon E holds).
-  - [x] Pre-existing MCP tool definitions byte-identical (tools/list snapshot 1/1).
-  - [x] `make down-volumes ENV=test-train-next` last (stack + volumes removed, no test-train-next containers left).
-- [ ] **Lot 5 — PR + wagon closure + report** (in progress)
-  - [ ] Atomic commits via `make commit MSG="…"` (specific `git add` only, BRANCH.md checkboxes updated in the same commits); `make scope-check` PASS C2 before every commit; no AI trailers; no `[skip ci]`.
-  - [ ] Push `release/train-next` to origin; open exactly one READY PR (body = this BRANCH.md); comment #908 and #891 as superseded by the train PR and close them; do NOT merge the train PR.
-  - [ ] Report every step and every CI run id to `.tmp/rv/train-next.md` (root workspace).
-- [ ] **Lot 6 — Single CI watch** (in progress)
-  - [x] PR #914 `pull_request` events spawned no Actions run: `opened` + `synchronize` + `reopened` all produced zero check-runs and zero workflow runs (same quirk as wagon F's first push; `ci.yml` YAML valid, base=main correct, workflow active, global Actions flow healthy). Triggered the single CI with a normal content commit, then close/reopen — still nothing.
-  - [x] Manual dispatch (wagon-F precedent): `gh workflow run CI --ref release/train-next` → run 41842605281 (`workflow_dispatch`, in progress). This is the one and only CI run on the final head; empty-commit budget (3, owner-authorized) untouched. Pull-request event delivery for #914 to be investigated owner-side.
-  - [ ] Watch the single PR CI; fix real failures at the root; if only the AI shards fail, retrigger with an empty commit, up to 3 times (owner-authorized).
-- [ ] **Lot 7 — Train fix pass (rebase onto A4 main + reviews E1/F1 + wagon G)**
-  - [x] Rebase onto origin/main (a1d0a815a, A4 train): already contained; union keeps this train BRANCH.md with the BRLOCK-EX1 line; generated files re-taken then regenerated in the single pass below.
-  - [x] E1 root fix (TN01-EX11): `ai` filter covers `api/src/config/**`, `api/src/services/comments/**`, `context-*.ts`, `document-*.ts`, `packages/llm-gateway/**`; self-test `scripts/check-ci-ai-filters.sh` green on fixed filter, red on pre-fix filter (11 paths); wired into the `changes` job.
-  - [x] Merge wagon G (`feat/artifacts-files-parity-lot2` @ 6546031d0) with `git merge --no-ff`; conflicts resolved as UNION (train BRANCH.md kept; version stays 0.2.14); no markers left; G tip is an ancestor of HEAD.
-  - [x] Versions ONCE: `@sentropic/artifacts` 0.2.14; `packages/cluster-mesh` restored to main's `0.26.0-dev.9` (TN01-EX12, train touches no cm src); no other package above main.
-  - [x] Regen through make: root lock (cm dev.9), api lock (F1: all 5 `file:` entries synced to union manifests; `lock-api` alone cannot move `file:` versions so the #878 one-line sync applies), selected fixture (mesh dev.9 + artifacts 0.2.14, lock refreshed from verified packed bytes, tuple integrity synced and cross-checked); APP-P1 pin verified unchanged (G tools outside frozen P1 selection; boot healthy + pin test green).
-  - [x] L5 P1 regen: retained 65203d6a manifest+sidecar in history/ (self-sha names), packed fresh manifest 8862b06f (44 contracts) + lock-snapshot 7e159e96 via `memory-l5-pack`, `memory-l5-verify` ok (bindings verified against declared lock + l5Head e3251ac9a + main a1d0a815a); `scope-check` PASS C2.
-  - [x] Scoped tests on `ENV=test-train-next` (LAST): ai-filter self-test green; ci-expected-results 28/28; test-artifacts 60 files/621 green (lot2 20/20, snapshot 24 defs); adapter-conformance.integration 36/36; migration.integration 16/16; pin lanes 25+2+17 green; AI lanes 2+2 green; test-lazy-package 135/135 green; typechecks + lint (0 errors) green; `make down-volumes ENV=test-train-next` last (no leftovers).
-  - [ ] Atomic `make commit` commits (specific files only, ≤150 lines except machine-generated regens); push `--force-with-lease`; PR #914 body lists wagons E, F, G; single CI watched, real failures fixed at root.
+- [x] **Lot 0 — Baseline**: read common/master/workflow/testing rules, steward evidence and wagon plans; isolated worktree and mechanical branch gate.
+- [x] **Lot 1 — Integration**: merge #923, then #921, then #924; keep this single plan and preserve implementation changes.
+- [x] **Lot 2 — Artifacts**: check published version below 0.2.17; regenerate root/API/selected locks, selected archive integrity, APP-P1 digest and L5 P1 once through Make.
+- [x] **Lot 3 — Scoped gates**: publishable wiring/classification, compatibility, consumer contracts, installed tuple; artifacts CSP/handler/MIME, content-host application mode, reader-grant/registry and selected packaging tuple tests.
+- [x] Local receipts: compatibility 18/18, consumer contracts 23/23, installed tuples 10/10, publishable wiring/classification 59/59; `make test-artifacts SCOPE=tests/content-` 79/79.
+- [x] Scoped host receipts through `.tmp/train/integration.mk`: application wrapper 4/4; API registry/grant/consent 33/33; selected tuple/preparation 24 passed with three installed-fixture-only tests deferred to full CI.
+- [x] Final archive after review remediation: SHA-256 `08df842f9873356e8d0c1ed834763df0bc1160544c73f4883e4446db67a763d8`; selected integrity re-pinned through Make. Root/API lock refresh, APP-P1 digest and L5 generation were not repeated.
+- [x] Integration receipt: APP-P1 `0725ef3044cf06b04eaae5f407cc364e8c3c8ef570b6835b9aa0038fb556f34b`; L5 `e46814a6678a1bc2b9aedff17c64a2eab522689f250b040134f5de96ad7cbb5c`, packed graph 30 files/54 edges PASS.
+- [ ] **Lot 4 — Review and CI**: consolidated final-diff review, mechanical scope/branch gates; push review-ready head, open one READY PR, watch attempt 1 and fix evidenced root causes.
+- [ ] **Lot 5 — Handoff**: report `.tmp/rv/train-2026-11-06.md`; clean test volumes; leave train unmerged and wagons open for conductor.

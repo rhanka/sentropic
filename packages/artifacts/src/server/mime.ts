@@ -27,7 +27,50 @@ export const SERVER_MIME_CEILING: readonly string[] = Object.freeze([
   'application/pdf',
   'font/woff', 'font/woff2', 'font/ttf', 'font/otf',
   'video/mp4', 'video/webm',
+  // J1.1a: bound application assets. Served bytes can never compile without
+  // `wasm-unsafe-eval`, which no served policy carries.
+  'application/wasm',
+  'application/x-protobuf',
 ]);
+
+/**
+ * J1.1a — generic extension to MIME map (binding J1.0 relay). `.geojson`
+ * serves as `application/json`, `.mjs` as `text/javascript` and `.woff2` as
+ * `font/woff2`; `.wasm` and `.pbf` stay mapped as the owner asked. Every
+ * value stays inside the server ceiling.
+ */
+export const EXTENSION_TO_MIME: Readonly<Record<string, string>> = Object.freeze({
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.geojson': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.wasm': 'application/wasm',
+  '.pbf': 'application/x-protobuf',
+});
+
+/** MIME type for a manifest path by extension, case-insensitive, undefined off-map. */
+export function mimeTypeForPath(path: string): string | undefined {
+  const dot = path.lastIndexOf('.');
+  if (dot === -1) return undefined;
+  return EXTENSION_TO_MIME[path.slice(dot).toLowerCase()];
+}
 
 /** True when the MIME type is inside the generic ceiling. */
 export function isWithinMimeCeiling(mimeType: string): boolean {
@@ -45,6 +88,7 @@ const MAGIC_BYTES: Readonly<Record<string, readonly (readonly number[])[]>> = Ob
   'application/pdf': [[0x25, 0x50, 0x44, 0x46, 0x2d]], // %PDF-
   'font/woff': [[0x77, 0x4f, 0x46, 0x46]], // wOFF
   'font/woff2': [[0x77, 0x4f, 0x46, 0x32]], // wOF2
+  'application/wasm': [[0x00, 0x61, 0x73, 0x6d]], // \0asm
   'font/ttf': [[0x00, 0x01, 0x00, 0x00]],
   'font/otf': [[0x4f, 0x54, 0x54, 0x4f]], // OTTO
   'video/mp4': [[0x66, 0x74, 0x79, 0x70]], // ftyp (brand checked loosely: isom/iso2/mp41/mp42/avc1/dash/msdh/m4v...)
@@ -119,6 +163,9 @@ export function validateFileBytes(mimeType: string, bytes: Uint8Array): void {
     if (!isMp4(bytes)) throw new Error('mp4 magic bytes mismatch');
     return;
   }
+  // Opaque protobuf has no magic: any bytes pass (the ceiling allowlist and
+  // the serving policy without `wasm-unsafe-eval` stay the guards).
+  if (mimeType === 'application/x-protobuf') return;
   const magics = MAGIC_BYTES[mimeType];
   if (magics === undefined) throw new Error(`no magic-byte rule for ${mimeType}`);
   if (!magics.some((magic) => hasMagic(bytes, magic))) {

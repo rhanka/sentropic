@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    createOrganization,
     createDraftOrganization,
     fetchOrganizationById,
     updateOrganization,
@@ -36,6 +35,7 @@
   let isEnriching = false;
   let isCreating = false;
   let draftCreating = false;
+  let pendingDraftCreation: Promise<string | null> | null = null;
   let draftError: string | null = null;
   let draftTimer: ReturnType<typeof setTimeout> | null = null;
   let docsUploading = false;
@@ -87,20 +87,25 @@
 
   const ensureDraftOrganization = async (): Promise<string | null> => {
     if (organization.id) return organization.id;
-    if (!organization.name?.trim()) return null;
-    if (draftCreating) return null;
+    const name = organization.name;
+    if (!name?.trim()) return null;
+    if (pendingDraftCreation) return pendingDraftCreation;
     draftCreating = true;
     draftError = null;
-    try {
-      const draftOrganization = await createDraftOrganization(organization.name);
-      organization = { ...organization, id: draftOrganization.id };
-      return draftOrganization.id;
-    } catch (err) {
-      draftError = err instanceof Error ? err.message : get(_)('organizations.errors.draftCreate');
-      return null;
-    } finally {
-      draftCreating = false;
-    }
+    pendingDraftCreation = (async () => {
+      try {
+        const draftOrganization = await createDraftOrganization(name);
+        organization = { ...organization, id: draftOrganization.id };
+        return draftOrganization.id;
+      } catch (err) {
+        draftError = err instanceof Error ? err.message : get(_)('organizations.errors.draftCreate');
+        return null;
+      } finally {
+        draftCreating = false;
+        pendingDraftCreation = null;
+      }
+    })();
+    return pendingDraftCreation;
   };
 
   // Create draft lazily once user typed a name (debounced), so documents can be attached before creating/enriching.
@@ -162,14 +167,7 @@
     try {
       const id = await ensureDraftOrganization();
       if (!id) {
-        // fallback: create directly if draft couldn't be created
-      const newOrganization = await createOrganization(organization as Omit<Organization, 'id'>);
-        addToast({ type: 'success', message: get(_)('organizations.toast.created') });
-        if (newOrganization?.id) {
-        unsavedChangesStore.reset();
-        goto(`/organizations/${newOrganization.id}`);
-        }
-        return;
+        throw new Error(draftError || get(_)('organizations.errors.draftMissing'));
       }
 
       await updateOrganization(id, organization as Partial<Organization>);
