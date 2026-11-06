@@ -1,66 +1,47 @@
-# train 2026-11-06: artifacts 0.2.17, CI contracts, A4 follow-ups and preprod procedure
+# chore: registry retention
 
 ## Objective
-- [ ] Integrate five approved wagons on current origin/main, preserve artifacts 0.2.17 and the qualified locks/pins, keep preprod on its recovery release, and qualify one READY PR; do not merge.
-- [ ] Supersedes [#923](https://github.com/rhanka/sentropic/pull/923), [#921](https://github.com/rhanka/sentropic/pull/921), [#924](https://github.com/rhanka/sentropic/pull/924); the conductor closes them after this train merges.
-- [ ] Extension 06/11: integrate approved [#929](https://github.com/rhanka/sentropic/pull/929) and `origin/feat/preprod-a4-procedure` (1a5a9ef98 or later), retain the recovery images in preprod until owner-authorized A4 execution, and qualify the extended train without merging.
+- [ ] Complete the owner-approved 2026-11-06 nc-reg cleanup and propose retention for the next dated train; no PR or automation activation.
 
 ## Scope / Guardrails
-- [x] Merge order: `origin/fix/oauth-register-job-workdir`, `origin/feat/ci-consumer-contracts`, `origin/feat/artifacts-0.2.17-app-mode`.
-- [x] Base `c107f6abd70e47e0aba33ab4afad01f8dafe4534`; branch `train/2026-11-06`; worktree `tmp/worktrees/train-2026-11-06`.
-- [x] Preserve wagon histories and the inherited #921 conversation-row readiness fix; resolve conflicts at the train root.
-- [x] Make-only; no Python, CI reruns, CI-skip markers or attribution trailers; selective staging and `make commit`.
-- [x] Docker via `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command; cleanup with `make down-volumes`.
-- [x] ENV=test-train-1106; API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570; ENV always last; no root UAT services.
+- [x] Base origin/main: `165ce5b932206bcd89e6374f5b80d970cd1d19b6`; branch `chore/registry-retention`; worktree `tmp/registry-retention`.
+- [x] Keep live preprod/prod workloads and Pod images/digests, recovery images, main candidates, ten newest tags per repository and all origin/main overlay/pin references.
+- [x] Delete only other sentropic-* tags created before `2026-10-01T00:00:00Z`; save exact sized lists before mutation.
+- [x] Make-only, no Python, credentials by variable name only, read-only Kubernetes access, existing scw CLI/API.
+- [x] ENV=test-registry-retention; no Compose services or ports allocated; reuse existing images without building.
+- [x] No versions, locks, fixtures, APP-P1 pins, L5 manifests or workflow changes; proposal only.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/compatibility-classifier*.mjs`
-  - `scripts/ci/consumer-contracts*.mjs`
-  - `scripts/ci/consumer-boundaries.json`
-  - `scripts/ci/installed-tuple*.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `scripts/ci/publishable-classification.test.mjs`
-  - `api/package.json`
-  - `api/tests/contracts/*-candidate.test.ts`
-  - `apps/auth-idp/tests/cluster-candidate.test.ts`
-  - `apps/llm-gateway/tests/cluster-candidate.test.ts`
-  - `packages/artifacts/src/**`
-  - `packages/artifacts/tests/**`
-  - `packages/artifacts/package.json`
-  - `packages/artifacts/CHANGELOG.md`
-  - `apps/artifact-content/src/host.ts`
-  - `apps/artifact-content/tests/application-mode.test.ts`
-  - `api/src/services/artifacts/**`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/src/routes/namespaces/artifacts.ts`
-  - `api/src/routes/namespaces/resources.ts`
-  - `api/tests/api/artifacts-reader*.test.ts`
-  - `api/tests/api/app-mcp-*.test.ts`
-  - `api/tests/api/root-mount-fence-completeness.test.ts`
-  - `api/tests/api/cluster-mesh-resources.test.ts`
-  - `package-lock.json`
-  - `api/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
-  - `e2e/tests/03-dashboard.spec.ts`
-  - `e2e/tests/08-chat-checkpoint-restore.spec.ts`
-  - `packages/auth-ui/tests/oauth-consent-rendering.test.ts`
-  - `e2e/Dockerfile`
-  - `e2e/tests/07-matrix.spec.ts`
-  - `e2e/tests/01-app.spec.ts`
-  - `api/tests/api/auth/cm-auth-request-concurrency.test.ts`
-  - `api/src/services/identity/cm-auth-binding.ts`
-  - `api/src/services/identity/cm-transaction.ts`
-  - `packages/cluster-mesh/tests/packaging/prepare.sh`
-  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
-  - `packages/chat-core/src/runtime/comments/state.ts`
-  - `packages/chat-core/tests/runtime/comments-module.spec.ts`
-  - `packages/chat-core/tests/runtime/chat-core-host.spec.ts`
-  - `packages/chat-core/package.json`
-  - `ui/package-lock.json`
-  - `api/src/middleware/auth.ts`
-  - `api/src/routes/auth/oauth.ts`
-  - `api/src/routes/namespaces/admin-identity.ts`
+  - `docs/runbooks/registry-retention.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `.github/workflows/**`
+  - `.track/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `plan/**`
+- [x] No scope exception required; ignored operational evidence stays in `.tmp/rv/registry-retention*`.
+
+## Feedback Loop
+- [ ] Design handoff: Astra MAX author and independent Argon high review; proposal activation belongs to the next dated train.
+- [ ] Track handoff: designated conductor imports this request, owner approval, cleanup outcome, proposal and acceptance from this file and `.tmp/rv/registry-retention.md`; this concurrent lane never appends `.track/events.jsonl`.
+
+## AI Flaky tests
+- [x] Not applicable: documentation proposal and direct operational verification; no application change.
+
+## Orchestration Mode (AI-selected)
+- [x] Single wagon; no PR; the integration lane carries the next dated train's consolidated review, versions and CI.
+
+## UAT Management (in orchestration context)
+- [x] Application UAT not applicable; qualify exact registry actions and retained workload/pod images directly.
+
+## Plan / Todo (lot-based)
+- [x] Lot 0 — Read common/master/workflow rules; create isolated wagon at origin/main and pass mechanical branch check.
+- [x] Lot 1 — Save 302-tag exact sized inventory: KEEP 156, DELETE 146; read both namespaces and resolve all manifest/index references.
+- [ ] Lot 2 — Recheck workload/pod collisions and tag identities, delete eligible tag UUIDs through scw, verify all retained manifests and measure registry storage delta.
+- [ ] Lot 3 — Review `docs/runbooks/registry-retention.md`, pass scope/diff checks, commit bounded changes and push wagon without a PR.
+- [ ] Lot 4 — Finish report and designated-writer Track/train handoff; clean only this lane's resources.
