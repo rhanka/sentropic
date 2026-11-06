@@ -63,6 +63,7 @@ describe('content handler modes', () => {
     expect(entry.headers['content-security-policy']).toBe(APPLICATION_HTML_CSP);
     const script = await get('/assets/app.js');
     expect(script.status).toBe(200);
+    expect(script.headers['content-security-policy']).toBe(APPLICATION_HTML_CSP);
     expect(script.headers['content-type']).toBe('text/javascript; charset=utf-8');
     // Module worker (worker-src self), computed styles (style-src
     // unsafe-inline), deep link (history fallback): locked below.
