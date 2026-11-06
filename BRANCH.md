@@ -31,6 +31,7 @@
 ## Feedback Loop
 - [x] BR84-EX1 — Run 42300540682: API static 682s, unit 567s, artifacts 554s. Reuse qualified toolbox for full static programs; parallelize retained qualifications; publish evidence. Impact: dependencies/matrix/receipts; rollback: revert workflow and Makefile together.
 - [x] BR84-EX2 — Add capture/report/dispatch and toolbox static targets; use installed host harness for this disk-constrained environment. Impact: named Make entry points; rollback: restore recipes.
+- [x] BR84-EX3 — Include dossier tsconfig, ESLint/Playwright configuration, edge renderer and a source archive of the retained private diagram generator. Reason: portable pinned build inputs and complete static/browser gates; impact: dossier only; rollback: remove these supporting files with the dossier.
 - [ ] Track handoff: designated conductor imports this owner request, plan and acceptance; this concurrent lane never appends `.track/events.jsonl`.
 - [ ] Acceptance requires successful complete endpoints, ≥30 full-product runs and cache/traffic profiles. Missing receipts stay to measure; projections never count as runs.
 

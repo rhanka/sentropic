@@ -992,6 +992,10 @@ CI_PROOF_DIR ?= tmp/ci-performance
 CI_PROOF_REF ?= $(shell git branch --show-current)
 CI_PROOF_INPUT ?= spec/ci-cd-ten-minutes/runs.json
 .PHONY: ci-performance-capture ci-performance-report test-ci-performance-report ci-performance-dispatch ci-static-api
+.PHONY: ci-performance-receipt ci-performance-retain
+ci-performance-receipt: ## Read the original workflow-SHA receipt for an already captured run
+	@mkdir -p "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capacity"
+	@gh run download $(CI_RUN_ID) --repo rhanka/sentropic --name ci-capacity-$(CI_RUN_ID)-$(CI_RUN_ATTEMPT) --dir "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capacity"
 ci-performance-retain: ## Retain sanitized API captures as the versioned report input
 	@mkdir -p spec/ci-cd-ten-minutes
 	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --collect $(CI_PROOF_DIR) > "$(CI_PROOF_INPUT).new"
