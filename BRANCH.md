@@ -59,6 +59,7 @@
   - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
 
 ## Feedback Loop
+- [x] TRAIN-R1 — Consolidated review reproduced missing worker-script CSP (four failing MIME vectors); apply the application policy to asset responses, preserve HTML-only inline hashes, SVG/PDF sandbox and unchanged safe mode. Scoped regression gate required before push.
 - [x] BR923-EX1 — #923 OAuth registration job workingDir only; reason: npm must run inside its package; impact: job startup; rollback: revert workingDir.
 - [x] BR83-EX1 — #921 CI classifier/contracts/tuple dispatch; reason: prove omitted consumers unchanged; impact: CI selection/verdict; rollback: revert wagon workflow edits.
 - [x] BR83-EX2 — #921 named Make entry points; reason: reproducible CI tooling gates; impact: tooling recipes; rollback: revert wagon recipes.

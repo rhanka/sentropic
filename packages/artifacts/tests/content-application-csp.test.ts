@@ -59,6 +59,14 @@ describe('application CSP constant', () => {
     expect(headers['content-security-policy']).toBe(APPLICATION_HTML_CSP);
   });
 
+  it.each(['text/javascript', 'application/javascript', 'application/ecmascript', 'text/x-javascript'])(
+    'should constrain workers served as %s without inheriting HTML inline hashes', (mimeType) => {
+      const headers = contentHeaders({ mimeType, size: 12, mode: 'application', scriptHashes: ["'sha256-abc'"] });
+      expect(headers['content-security-policy']).toBe(APPLICATION_HTML_CSP);
+      expect(contentHeaders({ mimeType, size: 12, mode: 'safe' })['content-security-policy']).toBeUndefined();
+    },
+  );
+
   it('appends per-release inline hashes to script-src only', () => {
     const headers = contentHeaders({ mimeType: 'text/html', size: 12,
       mode: 'application', scriptHashes: ["'sha256-abc'", "'sha256-def'"] });
