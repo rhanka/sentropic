@@ -94,6 +94,8 @@
     class="chat-agents-list"
   >
     {#each rows as row (row.entry.id)}
+      <!-- Display updates must not re-register an unchanged row identity. -->
+      {@const entryId = row.entry.id}
       {@const displayStatus = displayStatusFor(row)}
       {@const statusTone = STATUS_TONES[displayStatus]}
       {@const hasPendingQuestion = row.entry.status === 'awaiting-input'}
@@ -105,7 +107,7 @@
         aria-current={activeId != null && activeId === row.entry.id ? 'true' : undefined}
         style={`--agents-list-depth: ${row.depth};`}
       >
-        <SelectableRow value={row.entry.id} accentBar>
+        <SelectableRow value={entryId} accentBar>
           {#snippet leading()}
             <Icon name={ICON_BY_KIND[row.entry.kind]} size={18} />
           {/snippet}

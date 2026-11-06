@@ -40,6 +40,8 @@
   - `e2e/tests/01-organizations-detail.spec.ts`
   - `ui/src/routes/organizations/new/+page.svelte`
   - `ui/src/routes/organizations/[id]/+page.svelte`
+  - `packages/chat-ui/src/components/AgentsList.svelte`
+  - `packages/chat-ui/tests/agents-list.dom.spec.ts`
   - `packages/cluster-mesh/src/identity/**`
   - `packages/cluster-mesh/src/storage/identity/**`
   - `packages/cluster-mesh/tests/identity/**`
@@ -52,6 +54,7 @@
 - **Conditional Paths (allowed only with explicit exception)**:
   - `api/drizzle/**`
   - `packages/cluster-mesh/package.json`
+  - `packages/chat-ui/package.json`
   - `package-lock.json`
 - **Exception process**:
   - [x] Declare BRxx-EXn with reason, impact and rollback before conditional edits.
@@ -61,6 +64,7 @@
   - [x] BR929-EX4: extend scope to the E2E Dockerfile after CI 42180070528 identified HIGH CVE-2026-85091 in zlib 1.3.2-r0, with Alpine fixed version 1.3.2-r1. Impact: install the exact patched package in the existing browser layer; scanner, policy, assertions and retries unchanged. Rollback: replace the pin when the maintained base includes the fix. Evidence: `.tmp/rv/a4-followups-ci4-security/container-e2e.json`.
   - [x] BR929-EX5: extend scope to the three browser specs failing in CI 42180070528: session navigation remains on the list, organization deletion leaves a draft, and presence is visible in only one peer despite two server records. Impact: controlled diagnosis and narrowly scoped fixture/readiness corrections with original assertions, timeouts and retries preserved. Rollback: remove each handshake when its underlying initialization contract changes. Evidence: `.tmp/rv/a4-followups-ci4-shard2`, `a4-followups-ci4-shard5`, `a4-followups-ci4-shard6`.
   - [x] BR929-EX6: extend scope to organization creation/detail routes for the actual races exposed by CI 42180070528. A held draft response reproduces the original deletion count failure; an in-flight draft must be awaited and reused. Detail presence HTTP snapshots need a fence against newer SSE state. Impact: bounded concurrency fixes with controlled browser regressions, no assertion/policy/budget changes. Rollback: replace these local fences if their upstream concurrency contracts change. Evidence: `.tmp/a4-followups-organizations-draft-red.log` and independent CI4 diagnosis reviews.
+  - [x] BR929-EX7: extend scope to AgentsList and its DOM regression after CI5's exact shard reproduces 15/16 locally. Instrumented registration proves teardown reads an old snapshot and deletes the just-re-registered first row. Impact: memoize each keyed row's primitive identity before passing it to the DS component, preserving display updates, navigation and budgets. A source change in this standalone owner-requested PR requires a chat-ui patch version and Make-regenerated root lock under the existing CI gate; no publication or merge is performed here. Rollback: revert this identity boundary and its patch allocation if the dependency lifecycle contract changes. Evidence: `.tmp/a4-followups-ci5-shard2-probe12.log`.
 
 ## Feedback Loop
 - [ ] Track source: designated conductor imports this BRANCH.md; concurrent lane does not write `.track`.
@@ -116,5 +120,8 @@
   - [x] Read-only session-validation completion preserves its refusal contract and final remote signing fences; registration/magic-link provisioning selects the existing exclusive context before its single UOW. Both old failures reproduce; all five concurrency cases and consolidated 220 tests in 20 files pass, with attempts/deadlines unchanged.
   - [x] Final API typecheck passes; lint has zero errors and 232 warnings. Cached development dependencies are reused; original assertion and retry/deadline settings remain unchanged.
   - [x] Final production browser qualification: all six specs pass 36/36, four workers, zero skips/retries, on API 339bee, UI 96ef66 and patched runner e098f9; original assertions/budgets unchanged. Exact-head supplement reviews gate the next push and are recorded in the external review dossier.
+  - [x] CI5 chat root cause: exact seven-spec shard reproduces 15/16; DS teardown reads an old registry snapshot while rerunning rows, removing the first row's new registration. A fresh-feed DOM regression fails on the old code and all 12 component cases pass with a memoized primitive row id. All temporary browser probes are removed; original session-switch spec and budgets remain unchanged.
+  - [x] chat-ui patch allocation 1.0.1 exceeds registry latest 1.0.0; `make lock-root` changes only that workspace's version metadata. This standalone PR obeys the unchanged package-bump CI gate; no release or merge is performed.
+  - [x] Row-identity production qualification: exact seven-spec shard passes 16/16 and prior six browser specs pass 36/36, four workers, zero skips/retries, API 66db9b/UI 2a71c8/runner e098f9; original session-switch spec unchanged. UI typecheck/lint and retained P1 manifest verification pass. Exact-head Astra/Sol supplement reviews gate the next push in the external dossier.
   - [ ] Open one ready PR with BRANCH.md body and monitor CI until green; do not merge.
-  - [x] Final `make down-volumes` succeeds; subsequent `make ps` confirms no services (2026-11-06 03:27 EST). Report `.tmp/rv/a4-followups.md` retains validation/review evidence; final CI and conductor Track import remain pending.
+  - [x] Final `make down-volumes` succeeds; subsequent `make ps` confirms no services after all CI5 replays. Make also removes generated host dependency directories; report `.tmp/rv/a4-followups.md` retains validation/review evidence. Final CI and conductor Track import remain pending.
