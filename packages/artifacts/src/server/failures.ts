@@ -57,7 +57,8 @@ export interface ArtifactOperationalFailure extends ArtifactFailureFields {
 
 export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
   readonly kind: 'ordinary';
-  | 'edit_mismatch' | 'precondition_required'
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded'
+  | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required'
   | 'build_descriptor_invalid' | 'build_script_missing' | 'lock_missing'
   | 'dep_outside_lock' | 'install_script_not_allowlisted';
   readonly retriable: false;

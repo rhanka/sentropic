@@ -29,18 +29,29 @@ export function validateBuildDependencies(
   if ((lock.lockfileVersion !== 2 && lock.lockfileVersion !== 3) || !buildRecord(lock.packages)
     || !buildRecord(lock.packages[''])) throw new ArtifactOperationError('build_descriptor_invalid');
   const packages = lock.packages;
+  const lockedPackage = (path: string, name: string): boolean => {
+    let directory = path;
+    for (;;) {
+      if (Object.hasOwn(packages, `${directory ? `${directory}/` : ''}node_modules/${name}`)) return true;
+      if (!directory) return false;
+      directory = directory.includes('/') ? directory.slice(0, directory.lastIndexOf('/')) : '';
+    }
+  };
   const registries = snapshot.allowedRegistries ?? ['https://registry.npmjs.org/'];
   const allowlist = snapshot.postinstallAllowlist ?? [];
   const postinstall: PostinstallAllowlistEntry[] = [];
   const repositoryPath = (path: string): string => installDirectory ? `${installDirectory}/${path}` : path;
   const workspaceTargets = new Set<string>();
   for (const [path, raw] of Object.entries(packages)) {
-    if (!buildRecord(raw) || (path !== '' && !buildPath(path))) refuse();
+    if (!buildRecord(raw) || (path !== '' && !buildPath(path))
+      || (raw.hasInstallScript !== undefined && typeof raw.hasInstallScript !== 'boolean')) refuse();
     if (raw.link === true) {
       if (!path.includes('node_modules/') || !buildPath(raw.resolved)
         || raw.resolved.split('/').includes('node_modules') || !buildRecord(packages[raw.resolved])
         || !Object.hasOwn(snapshot.files, repositoryPath(`${raw.resolved}/package.json`))) refuse();
       workspaceTargets.add(raw.resolved);
+      const workspace = buildJson(snapshot.files[repositoryPath(`${raw.resolved}/package.json`)]);
+      if (path.split('node_modules/').at(-1) !== workspace.name) refuse();
     }
   }
   for (const [path, raw] of Object.entries(packages)) {
@@ -48,6 +59,7 @@ export function validateBuildDependencies(
     if (raw.link === true) continue;
     const local = path === '' || workspaceTargets.has(path);
     if (!local && (!registryUrl(raw.resolved, registries) || typeof raw.version !== 'string'
+      || !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?$/.test(raw.version)
       || typeof raw.integrity !== 'string' || !raw.integrity)) refuse();
     const manifestPath = repositoryPath(path ? `${path}/package.json` : 'package.json');
     const manifest = local ? buildJson(snapshot.files[manifestPath]) : raw;
@@ -55,7 +67,11 @@ export function validateBuildDependencies(
       for (const section of sections) {
         if (source[section] === undefined) continue;
         if (!buildRecord(source[section])) refuse();
-        for (const spec of Object.values(source[section])) if (!registrySpec(spec)) refuse();
+        for (const [name, spec] of Object.entries(source[section])) {
+          if (!registrySpec(spec) || !/^(?:@[A-Za-z0-9._-]+\/)?[A-Za-z0-9._-]+$/.test(name)) refuse();
+          if ((section === 'dependencies' || (local && section === 'devDependencies'))
+            && !lockedPackage(path, name)) refuse();
+        }
       }
     }
     // npm ci must not resolve an edited workspace manifest beyond its committed lock entry.
