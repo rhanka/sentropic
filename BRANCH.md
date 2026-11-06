@@ -71,6 +71,7 @@
 - [x] **Lot 2 — RC1 revocation fence**
   - [x] Restored issuer private authority mint/rotation after acknowledged CM commit, local revocation closure and private signing fence.
   - [x] All 35 remote-session tests pass; private-session and integrity units pass. Refused-revocation fixtures must explicitly start without private authority.
+  - [x] Private-session wrapping preserves the deferred-mail getter; registration and authentication regressions pass.
 - [x] **Lot 3 — A4-ADOPTION-INTERLEAVE**
   - [x] Request-scoped service interception occurs between the lock-free rights read and mutation transaction; current row authorization and CAS stay mandatory.
   - [x] Re-enabled stale-end test; all 38 tests in `api/tests/api/session-adoption.test.ts` pass with assertions unchanged.
