@@ -12,6 +12,7 @@ import { createServiceTenantEnrollmentSource } from '../tenancy/enrollment-store
 import { createCmAuthEntityPlan, withCmAuthEntityPlan } from './cm-auth-entity-plan';
 import { assertCmHostHealthy, createCmPortFailureFence } from './cm-host-scope';
 import { resolveCmRegistrationContext, type CmRegistrationPresentation } from './cm-registration-context';
+import { bindCmRemoteSessionAuthority } from './cm-remote-session-authority';
 export type { CmRegistrationPresentation } from './cm-registration-context';
 
 export interface CmAuthBindingConfig {
@@ -43,7 +44,8 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
         return currentBinding.ports;
       });
       const hostPorts = capture({ ...host, random: { ...host.random, uuid: entityPlan.attemptUuid() } });
-      const binding = capture(createIdentityAuthHonoTransactionBindingV1({
+      const committed: Array<() => void> = [];
+      const binding = bindCmRemoteSessionAuthority(capture(createIdentityAuthHonoTransactionBindingV1({
         tx, hostPorts, digest: config.tokens.digest,
         loginTokens: config.tokens.loginTokens, ticketTokens: config.tokens.ticketTokens,
         rp: config.rp, accountPolicy: config.accountPolicy, emailCodeKeys: config.emailCodeKeys,
@@ -52,18 +54,19 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
         magicLink: { baseUrl: config.magicLinkBaseUrl, tokenBytes: 32, ttlSeconds: 600 },
         social: { autoLinkProviders: ['google'] }, business: config.business, trustedRegistration,
         serviceTenancy: { enrollments: createServiceTenantEnrollmentSource(tx) },
-      }));
+      })), tx, committed);
       currentBinding = binding;
       try {
         const value = await work(binding, tx);
         assertCmHostHealthy(tx.hostTransaction);
         // Drain the callback-owned synchronous audit buffer before any commit/publication.
         await binding.flushAudit();
-        return { value, mail: binding.deferredMail.map(intent => ({ ...intent })) };
+        return { value, committed, mail: binding.deferredMail.map(intent => ({ ...intent })) };
       } finally { currentBinding = undefined; }
     }));
-  const publish = async <T>(result: { value: T; mail: IdentityDeferredMailV1[] }): Promise<T> => {
+  const publish = async <T>(result: { value: T; committed: Array<() => void>; mail: IdentityDeferredMailV1[] }): Promise<T> => {
     try {
+      for (const operation of result.committed) operation();
       for (const intent of result.mail) await config.sendDeferredMail(intent);
       return result.value;
     } finally { result.mail.length = 0; }

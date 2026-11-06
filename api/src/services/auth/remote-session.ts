@@ -7,6 +7,7 @@ import { withAppCmAuth } from '../identity/cm-auth-runtime';
 import { RemoteAuthorityError, remoteCounter, remoteRawHash, remoteEvidenceRequestSchema, type RemoteEvidenceRequest } from './remote-contract';
 import type { RemoteLogin } from './remote-evidence';
 import { remoteCanonicalJson } from './remote-json';
+import { getRemoteSessionAuthority } from './remote-private-session';
 
 const signedLogin = z.object({
   mfaVerified: z.boolean(), authTime: remoteCounter, sessionVersion: remoteCounter,
@@ -26,6 +27,10 @@ async function readRemoteLogin(binding: IdentityAuthHonoTransactionBindingV1, cr
     || !login.mfaVerified || !record.mfaVerified || login.sessionVersion !== record.createdAt.getTime()
     || login.authTime !== Math.floor(record.createdAt.getTime() / 1000)
     || typeof payload.exp !== 'number') return null;
+  const privateRecord = getRemoteSessionAuthority()?.find(record.id);
+  if (!privateRecord || privateRecord.revoked || privateRecord.userId !== record.userId
+    || privateRecord.sessionTokenHash !== record.sessionTokenHash
+    || remoteCanonicalJson(privateRecord.login) !== remoteCanonicalJson(login)) return null;
   return {
     sub: record.userId, sid: record.id, sessionVersion: login.sessionVersion, authTime: login.authTime,
     amr: ['hwk', 'user', 'mfa'], expiresAt: Math.min(record.expiresAt.getTime(), payload.exp * 1000),
@@ -64,7 +69,9 @@ export async function commitRemoteEvidence(login: RemoteLogin, input: RemoteEvid
       }
       // Local signing stays under the same CM subject fence as refresh/revoke/delete.
       // A retry discards this signature; only the acknowledged commit releases it.
-      return operation();
+      const authority = getRemoteSessionAuthority();
+      if (!authority) throw new RemoteAuthorityError('authority_unavailable');
+      return authority.signCurrent(current.sid, remoteRawHash(request.sessionCredential), current, operation);
     }));
   } catch (error) {
     if (error instanceof RemoteAuthorityError) throw error;
