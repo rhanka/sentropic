@@ -45,6 +45,7 @@ export const fixture = () => {
     },
     resolveRepository: async (_app: unknown, _installationId: string, locator: string) => locator === owner.locator ? '101' : '202',
     verifyKey: async () => undefined,
+    updateWebhookSecret: async () => undefined,
     revokeToken: async (token: string) => { revoked.push(token); },
   };
   const service = createGitHubAppEnrollment({ custody, github, publicBaseUrl: 'https://mesh.example', now: () => time });

@@ -21,6 +21,7 @@ export interface GitHubAppApi {
   resolveRepository(app: AppCredential, installationId: string, locator: string): Promise<string>;
   mint(app: AppCredential, installationId: string, repositoryId: string, permissions: Record<string, string>): Promise<MintedToken>;
   verifyKey(app: AppCredential): Promise<void>;
+  updateWebhookSecret(app: AppCredential): Promise<void>;
   revokeToken(token: string): Promise<void>;
 }
 export type RevocationReason = 'suspended' | 'uninstalled' | 'repository_removed' | 'permissions_lost' | 'owner_revoked';
@@ -37,6 +38,7 @@ export interface EnrollmentRecord {
   repositoryId?: string;
   previousWebhook?: { secret: string; version: string; until: number };
   webhookVersion: string;
+  webhookRotationPending?: boolean;
   /** Encrypted revocation cache, never an audit journal; expired entries are erased. */
   leases: { token: string; expiresAt: string }[];
 }
