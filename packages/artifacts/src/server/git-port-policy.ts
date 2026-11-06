@@ -33,7 +33,8 @@ function refused(path: string, reason: string): never {
   throw new ArtifactOperationError('git_path_refused', { publicDetails: { path, reason } });
 }
 function safePath(path: string): void {
-  if (!path || Buffer.byteLength(path) > 1024 || /[\x00-\x1f\x7f\\%:?#]/.test(path) || path !== path.normalize('NFC') ||
+  if (!path || Buffer.byteLength(path) > 1024 || Buffer.from(path).toString('utf8') !== path ||
+    /[\x00-\x1f\x7f\\%:?#]/.test(path) || path !== path.normalize('NFC') ||
     path.split('/').some(p => !p || p === '.' || p === '..' || /[. ]$/.test(p))) refused(path, 'noncanonical');
   for (const part of path.split('/')) {
     if (/^(?:\.git|\.github|\.ssh|\.npmrc)$/i.test(part) || /^\.yarnrc/i.test(part) || /^\.env/i.test(part) ||
