@@ -33,3 +33,21 @@ it('should check durable principal quota before reading the forge for a commit',
     idempotencyKey: 'quota-overflow', files: [{ path: 'ui/a.ts', text: 'changed' }] })).rejects.toMatchObject({ kind: 'limit_exceeded' });
   expect(w.git.resolveRef).not.toHaveBeenCalled(); expect(w.git.commit).not.toHaveBeenCalled();
 });
+it.each([false, true])('should reject same-batch file/directory collisions atomically (reverse=%s)', async reverse => {
+  const w = liveWitness(); const before = await w.status();
+  const files = [{ path: 'ui/new', text: 'file' }, { path: 'ui/new/child.ts', text: 'child' }];
+  await expect(w.write({ files: reverse ? files.reverse() : files })).rejects.toMatchObject({ kind: 'git_path_refused' });
+  expect(await w.status()).toMatchObject({ liveRevision: before.liveRevision, dirty: false });
+});
+it.each([false, true])('should preserve a prior draft on cross-write hierarchy collisions (reverse=%s)', async reverse => {
+  const w = liveWitness(); const files = [{ path: 'ui/new', text: 'file' }, { path: 'ui/new/child.ts', text: 'child' }];
+  if (reverse) files.reverse();
+  const before = await w.write({ files: [files[0]] });
+  const retainedFiles = (await w.call('live_read')).files;
+  const identity = { storageScopeId: w.binding.storageScopeId, artifactId: w.binding.artifactId, bindingGeneration: 1 };
+  const objectRef = await w.store.transaction(identity, async tx => tx.record!.objectRef);
+  await expect(w.write({ files: [files[1]] })).rejects.toMatchObject({ kind: 'git_path_refused' });
+  expect(await w.status()).toMatchObject({ liveRevision: before.liveRevision, dirty: true });
+  expect(await w.store.transaction(identity, async tx => tx.record!.objectRef)).toBe(objectRef);
+  expect((await w.call('live_read')).files).toEqual(retainedFiles);
+});
