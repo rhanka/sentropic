@@ -36,7 +36,7 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
     },
     restore: (runtime, draft) => supervisor.overlay(runtime, draft),
     async live(runtime) {
-      await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId));
+      await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName));
       return supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment());
     },
     async build(runtime, attempt) {

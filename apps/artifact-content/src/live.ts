@@ -50,10 +50,12 @@ export function createLiveProxy(ports: LiveProxyPorts) {
         || request.headers.has('service-worker') || !safePath(url) || !['GET', 'HEAD'].includes(request.method)) return;
       const route = await ports.authorize(request, artifactId);
       if (!route || route.artifactId !== artifactId || !await valid(route)) return;
-      if (websocket ? url.pathname !== hmrPath(route.sessionId) || !!url.search
+      const query = [...url.searchParams.entries()];
+      const viteToken = query.length === 0 || (query.length === 1 && query[0][0] === 'token' && /^[A-Za-z0-9_-]{1,256}$/.test(query[0][1]));
+      if (websocket ? url.pathname !== hmrPath(route.sessionId) || !viteToken
         || request.headers.get('origin') !== url.origin : !await ports.admittedPath(route, url.pathname, url.searchParams)) return;
       return { route, upstream: `http://${route.podName}.sentropic-artifact-builders.svc.cluster.local:5173`,
-        path: websocket ? '/' : url.pathname + url.search };
+        path: websocket ? '/' + url.search : url.pathname + url.search };
     },
     valid, watch: ports.watch,
     async fetch(request: Request, artifactId: string): Promise<Response | undefined> {
