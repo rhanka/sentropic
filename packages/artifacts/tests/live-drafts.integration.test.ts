@@ -10,13 +10,14 @@ import { gitWrite } from './fixtures/git-binding-conformance.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 beforeAll(async () => {
+  await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
   await pool.query('CREATE SCHEMA IF NOT EXISTS artifacts');
   const directory = new URL('../migrations/', import.meta.url);
   for (const file of readdirSync(directory).filter(name => name.endsWith('.sql')).sort()) {
     await pool.query(readFileSync(new URL(file, directory), 'utf8'));
   }
 });
-afterAll(async () => { await pool.end(); });
+afterAll(async () => { await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE'); await pool.end(); });
 draftConformance('Postgres retained encrypted drafts', async () => {
   await pool.query('TRUNCATE artifacts.live_drafts, artifacts.live_draft_objects, artifacts.live_commands, artifacts.live_commit_quota');
   return createPostgresLiveStore(pool);
