@@ -93,7 +93,7 @@ test('should select complete deterministic consumers for adopted upgrades', () =
 });
 
 test('should keep UI changes on the UI lane with preproduction while preserving the API digest', () => {
-  const verdict = selectConsumers({ kind: 'ui-only', slugs: [], boundaries });
+  const verdict = selectConsumers({ kind: 'ui-only', slugs: [], boundaries, ref: 'refs/heads/main' });
   assert.equal(verdict.selection, 'ui');
   assert.equal(verdict.fastPath, false);
   for (const job of ['test-ui', 'build-ui', 'smoke-idp-screens', 'deploy-preprod']) {
@@ -103,10 +103,10 @@ test('should keep UI changes on the UI lane with preproduction while preserving 
 });
 
 test('should qualify auth-ui and exercise UI, IdP, both images, and preproduction for shared assets', () => {
-  const verdict = selectConsumers({ kind: 'shared-asset', slugs: ['auth-ui'], boundaries });
+  const verdict = selectConsumers({ kind: 'shared-asset', slugs: ['auth-ui'], boundaries, ref: 'refs/heads/main' });
   assert.equal(verdict.selection, 'shared');
   assert.equal(verdict.fastPath, false);
-  for (const job of ['validate-auth-ui', 'test-ui', 'smoke-idp-screens', 'build-api-image', 'build-ui-image', 'deploy-preprod']) {
+  for (const job of ['validate-auth-ui', 'test-ui', 'smoke-idp-screens', 'build-api-image', 'build-ui', 'deploy-preprod']) {
     assert.ok(jobs(verdict).includes(job), `shared selection must include ${job}`);
   }
 });
@@ -259,4 +259,31 @@ test('should keep owning validations for chat-core, the gateway host, and ubo-co
   for (const file of ['api/tests/object-registry/object-type-registry.test.ts']) {
     assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist: delegation is not passing evidence`);
   }
+});
+
+test('should reject omitted or missing full-integration consumers even without changed package slugs', () => {
+  const names = ['test-api-unit-integration', 'test-ui', 'test-e2e', 'e2e-vscode', 'smoke-idp-screens'];
+  const workflow = { jobs: { changes: {}, 'ci-gate': { needs: names },
+    ...Object.fromEntries(names.map(name => [name, { if: "needs.changes.outputs.global == 'true'" }])) } };
+  for (const kind of ['unknown', 'breaking', 'runtime-security', 'root-lock-toolchain']) {
+    const good = verifyDispatch({ kind, boundaries, workflow, changes: { global: 'true' } });
+    assert.equal(good.ok, true, JSON.stringify(good.problems));
+    const omitted = verifyDispatch({ kind, boundaries, workflow, changes: { global: 'false' } });
+    assert.equal(omitted.ok, false, `${kind} must not erase unselected consumers`);
+    assert.ok(omitted.problems.some(problem => problem.includes('test-ui') && problem.includes('not selected')));
+    const missing = structuredClone(workflow);
+    delete missing.jobs['test-ui'];
+    assert.equal(verifyDispatch({ kind, boundaries, workflow: missing, changes: { global: 'true' } }).ok, false);
+  }
+});
+
+test('should reject an unselected owning validation on the full path', () => {
+  const names = ['test-api-unit-integration', 'test-ui', 'test-e2e', 'e2e-vscode', 'smoke-idp-screens'];
+  const workflow = { jobs: { changes: {}, 'ci-gate': { needs: [...names, 'validate-comments'] },
+    ...Object.fromEntries(names.map(name => [name, {}])),
+    'validate-comments': { if: "needs.changes.outputs.comments == 'true'" } } };
+  const result = verifyDispatch({ kind: 'breaking', slugs: ['comments'], boundaries,
+    workflow, changes: { comments: 'false' } });
+  assert.equal(result.ok, false);
+  assert.ok(result.problems.some(problem => problem.includes('validate-comments') && problem.includes('not selected')));
 });
