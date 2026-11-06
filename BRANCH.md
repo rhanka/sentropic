@@ -42,6 +42,7 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-DOCS — Document public packages, secret-object custody and the exact manual prod adoption/approval boundary. Remove obsolete registry-key/pull-secret setup instructions and update historical URL fixtures.
 - [x] GHCR-CONTRACT — Retain the shared prod API/IdP/content image contract; preserve live prod digests as recovery copies. Digest-pinned recovery fixtures still exercise tagged-image refusal by explicitly using an unqualified tag, preserving every negative assertion.
 - [x] GHCR-PINS — Recovery f2313a/434fe5 and three distinct prod digests are preserved remotely; preprod pins exact recovery digests and verifies them anonymously. Retain the prod base image-equality contract and main aliases; the separately approved prod apply picks up the then-published GHCR main images. No prod workflow exists.
 - [x] GHCR-TAG-TEST — Reproduced fixture refusal before collision inspection: the old dummy registry violates GHCR-only login. Retain every case/assertion, use the real namespace plus dummy credentials, and keep API guard qualification separate from the CI receipt promotion.
