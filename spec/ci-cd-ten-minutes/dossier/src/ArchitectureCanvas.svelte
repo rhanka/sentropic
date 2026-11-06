@@ -32,7 +32,7 @@
             <label>Run<select aria-label="Run" bind:value={runId}>{#each runs as row (row.runId)}<option value={row.runId}>{row.runId}/{row.attempt} · {row.conclusion ?? row.status}</option>{/each}</select></label>
           </div>
           <div class="plan-steps" aria-label="Plan steps">{#each steps as [title], index (title)}<button aria-pressed={step === index + 1} onclick={() => step = index + 1}>{index + 1}. {title}</button>{/each}</div>
-          <p aria-live="polite">{run ? `Wall ${run.wallSeconds ?? 'to measure'}s; qualification ${run.qualificationSeconds ?? 'to measure'}s; gap ${run.gapSeconds ?? 'to measure'}s` : 'No matching measurements — to measure. Budget to measure: ≤600s.'}</p>
+          <p aria-live="polite">{run ? `Wall ${run.wallSeconds ?? (run.elapsedLowerBoundSeconds === null ? 'to measure' : '≥' + run.elapsedLowerBoundSeconds)}s; qualification ${run.qualificationSeconds ?? 'to measure'}s; gap ${run.gapSeconds ?? (run.gapLowerBoundSeconds === null ? 'to measure' : '≥' + run.gapLowerBoundSeconds)}s` : 'No matching measurements — to measure. Budget to measure: ≤600s.'}</p>
         </div>
     <div class="flow-surface">
     <SvelteFlowProvider>
@@ -48,7 +48,7 @@
     <aside aria-label="Selected job detail">
       <h2>{selected.id}</h2><p>Optimization: {selected.data.optimization}. <a href="https://github.com/rhanka/sentropic/blob/test/ci-ten-minute-proof/spec/ci-cd-ten-minutes/acceptance.md">Acceptance evidence</a></p>
       {#each selected.data.members as job (job.jobId)}
-        <details><summary>{job.name} · {job.seconds ?? 'to measure'}s execution · {job.queueSeconds ?? 'to measure'}s queue</summary>
+        <details><summary>{job.name} · {job.seconds ?? 'to measure'}s execution · {job.queueSeconds ?? (job.queueLowerBoundSeconds === null ? 'to measure' : '≥' + job.queueLowerBoundSeconds)}s queue</summary>
           <a href={job.url}>Run {job.runId}, attempt {job.attempt}, job {job.jobId}</a>
           <ol>{#each job.steps as entry (entry.number)}<li>{entry.name}: {entry.seconds ?? 'to measure'}s · {entry.conclusion ?? 'pending'}</li>{/each}</ol>
         </details>

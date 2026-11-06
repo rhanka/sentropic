@@ -1024,7 +1024,7 @@ ci-static-api: ci-test-env ## Run complete API/IdP compiler and API linter progr
 # BR84-EX2: dossier dependencies stay in a lane-owned volume, never host node_modules.
 CI_DOSSIER = spec/ci-cd-ten-minutes/dossier
 CI_DOSSIER_NODE = node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
-CI_DOSSIER_BROWSER_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0-noble
+CI_DOSSIER_BROWSER_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
 CI_DOSSIER_PULL ?= never
 CI_DOSSIER_MOUNTS = -v "$(CURDIR):/workspace" -v "$(ENV)-ci-dossier-deps:/workspace/$(CI_DOSSIER)/node_modules" -w /workspace/$(CI_DOSSIER)
 CI_DOSSIER_RUN = docker run --rm --pull=$(CI_DOSSIER_PULL) -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) $(CI_DOSSIER_NODE)
