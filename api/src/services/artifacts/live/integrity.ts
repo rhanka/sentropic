@@ -10,7 +10,7 @@ export interface IntegrityEvidence {
   disabledHooks: readonly { path: string; version: string; integrity: string }[];
 }
 function fail(code = 'dependency_integrity_missing'): never { throw new LiveError(code); }
-const safe = (path: string) => path.length <= 1024 && !path.startsWith('/') && !path.includes('\\')
+const safe = (path: unknown): path is string => typeof path === 'string' && path.length <= 1024 && !path.startsWith('/') && !path.includes('\\')
   && !path.includes('\0') && path.split('/').every(p => p && p !== '.' && p !== '..');
 export function verifySri(bytes: Uint8Array, sri: string) {
   const match = /^(sha256|sha384|sha512)-([A-Za-z0-9+/]+={0,2})$/.exec(sri);
@@ -23,7 +23,8 @@ export function integrityInventory(lockBytes: Uint8Array, evidence: IntegrityEvi
   if (sha256(lockBytes) !== evidence.lockSha256 || !/^[a-f0-9]{64}$/.test(evidence.digest)) fail();
   let lock: { lockfileVersion: number; packages: Record<string, Record<string, unknown>> };
   try { lock = JSON.parse(Buffer.from(lockBytes).toString('utf8')); } catch { return fail(); }
-  if (![2, 3].includes(lock.lockfileVersion) || !lock.packages || !lock.packages['']) fail();
+  if (!lock || ![2, 3].includes(lock.lockfileVersion) || !lock.packages || typeof lock.packages !== 'object'
+    || Array.isArray(lock.packages) || !lock.packages['']) fail();
   const workspacePaths = new Set<string>();
   for (const [path, entry] of Object.entries(lock.packages)) {
     if (path && !safe(path)) fail();
