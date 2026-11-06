@@ -46,7 +46,9 @@ describe('live content proxy', () => {
   it('should authenticate exactly the same-origin websocket endpoint', async () => {
     const f = fixture(); const headers = { origin };
     expect(await f.proxy.authorize(new Request(origin + hmrPath('session'), { headers }), 'artifact', true)).toBeDefined();
-    for (const path of ['/', hmrPath('another'), hmrPath('session') + '?token=1']) {
+    expect(await f.proxy.authorize(new Request(origin + hmrPath('session') + '?token=viteToken', { headers }), 'artifact', true))
+      .toMatchObject({ path: '/?token=viteToken' });
+    for (const path of ['/', hmrPath('another'), hmrPath('session') + '?other=1', hmrPath('session') + '?token=a&token=b']) {
       expect(await f.proxy.authorize(new Request(origin + path, { headers }), 'artifact', true)).toBeUndefined();
     }
     expect(await f.proxy.authorize(new Request(origin + hmrPath('session'), { headers: { origin: 'https://elsewhere.example' } }), 'artifact', true)).toBeUndefined();
