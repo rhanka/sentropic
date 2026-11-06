@@ -8,6 +8,7 @@ import { liveResponse, type LiveAuthority, type LiveInvocation, type LiveService
 import type { LiveCommand, LiveIdentity } from './live-store.js';
 import { LiveCommitUnknownError } from './live-commit-outcome.js';
 import { isGitSha } from './git-port-policy.js';
+import { settleLiveWorker } from './live-worker.js';
 
 export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity: LiveIdentity;
   authority: LiveAuthority; invocation: LiveInvocation; args: Record<string, any>;
@@ -81,7 +82,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
       cause.kind === 'git_live_conflict' && cause.details.publicDetails?.reason === 'commit_indeterminate')) throw new LiveCommitUnknownError(cause);
     throw cause;
   }
-  return deps.store.transaction(identity, async tx => {
+  const result = await deps.store.transaction(identity, async tx => {
     const prior = await tx.receipt(command.actorId, command.key);
     if (prior) return { ...prior.result, replayed: true };
     const record = tx.record!;
@@ -96,10 +97,16 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
       changedPaths: 0, draftBytes: 0, tombstone: null, pendingCommit: null,
       latestVerifiedHeadSha: committed.commitSha, progressSeq: record.progressSeq + (record.latestVerifiedHeadSha === committed.commitSha ? 0 : 1),
       lastProgressEventId: 'commit:' + intent.invocationId, updatedAt: new Date(now).toISOString() });
-    const result = { ...liveResponse(record, committed.commitSha), revision: record.revision,
+    if (record.runtime) Object.assign(record.runtime, { sourceRevision: record.revision,
+      baseHeadSha: committed.commitSha, liveTreeSha: committed.treeSha });
+    const result = { ...liveResponse(record, committed.commitSha, now), revision: record.revision,
       commitSha: committed.commitSha, treeSha: committed.treeSha, parentSha: intent.expectedHeadSha,
       publicationIntent: authority.binding.autoPublish ? 'deferred' : null, replayed: false };
     await tx.complete(command, result);
     return result;
   }).catch(cause => { throw new LiveCommitUnknownError(cause); });
+  if (!result.replayed && ['LIVE', 'REVIVING'].includes(String(result.runtimeState))) {
+    void settleLiveWorker({ deps, identity, action: 'project', result, now });
+  }
+  return result;
 }
