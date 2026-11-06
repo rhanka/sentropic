@@ -1,69 +1,58 @@
-# Feature: CI ten-minute unit and dependency graph wagon
+# Feature: BR-84 — Measure and prove ten-minute CI/CD
 
 ## Objective
-- [ ] Shorten the API unit path with measured balanced shards and a verified toolbox cache; start independent consumer checks after change selection.
-- [x] Retain BR-84 from origin/test/ci-ten-minute-proof (791150e53); no package version or lock changes in this wagon.
-- [x] Rebase onto lane A origin/perf/ci10-typecheck-artifacts (48da613bd); retain its complete static programs, caches, five artifact shards and promotion joins for combined timing.
-- [x] After rebase, extend the pack-context guard to the artifact shard job; retain the original count and all context/ENV assertions.
+- [ ] Execute binding `plan/70-BRANCH_test-ci-ten-minute-proof.md`; report real endpoints and every breach without claiming an unmet budget.
+- [x] Owner 2026-11-06: CI/CD speed first; wagon only, no PR. Conductor owns Track import, train review, versions and locks.
 
 ## Scope / Guardrails
-- [x] Branch perf/ci10-unit-graph; worktree tmp/worktrees/ci10-b; multi-branch wagon.
-- [x] ENV=test-ci10-b; API_PORT=9496 UI_PORT=5696 MAILDEV_UI_PORT=1596; check ports before services.
-- [x] Make entry points, ENV last; no Python, local image build, CI skip/rerun, attribution trailer, removed test or weakened assertion.
+- [x] Branch `test/ci-ten-minute-proof`, worktree `tmp/worktrees/ci-ten-minute-proof`, based on train `01429a910`, rebased onto main `165ce5b93` after #930 merged.
+- [x] Slot 0 owner BR-84: ENV=test-ci-ten-minute-proof; API_PORT=9420 UI_PORT=5620 MAILDEV_UI_PORT=1520. Check ports before starting services.
+- [x] Make entry points; ENV last; no Python, skipped CI, reruns, local image builds, attribution trailers, removed assertions or package source changes.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/vitest.config.ts`
-  - `api/ci/unit-shards*`
-  - `scripts/ci/api-unit-shards.test.mjs`
-  - `scripts/ci/api-unit-shards-cli.test.mjs`
-  - `scripts/ci/api-tool-cache*`
-  - `scripts/ci/ci-unit-graph.test.mjs`
-  - `scripts/ci/consumer-contracts.mjs`
-  - `scripts/ci/consumer-contracts.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `scripts/ci/ci-performance-report.test.mjs`
+  - `scripts/ci/ci-run-metrics.mjs`
+  - `scripts/ci/ci-run-metrics.test.mjs`
   - `scripts/ci/ci-performance-report.mjs`
-  - `scripts/ci/ci-expected-results*`
-  - `scripts/ci/ci-static*`
+  - `scripts/ci/ci-performance-report.test.mjs`
+  - `spec/ci-cd-ten-minutes/runs.json`
+  - `spec/ci-cd-ten-minutes/acceptance.md`
+  - `spec/ci-cd-ten-minutes/dossier/**`
+  - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`
+  - `plan/70-BRANCH_test-ci-ten-minute-proof.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `.track/**`
-  - `packages/*/src/**`
-  - `package-lock.json`
+  - `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`; `.track/**`; `PLAN.md`; production deployment configuration.
 - **Conditional Paths (allowed with declared exception)**:
-  - `.github/workflows/ci.yml` under BR84b-EX1.
-  - `Makefile` under BR84b-EX2.
+  - `.github/workflows/ci.yml` under BR84-EX1.
+  - `Makefile` under BR84-EX2.
 
 ## Feedback Loop
-- [x] BR84b-EX1: owner-authorized CI matrix, needs and exact toolbox cache changes; keep every qualification, publication and final-verdict gate. Rollback: revert lane workflow changes with wiring tests.
-- [x] BR84b-EX2: named cache/shard check targets and host scope checking for this disk-constrained environment. Rollback: revert lane Makefile recipes.
-- [x] Baseline 42300540682/1, job 128179794335: unit job 567s, app qualification 254s, unit tests 205s; BR-84 already split app qualification.
-- [x] Cluster-mesh consumes verified candidate closure and prepared archives; retain that edge. Consumer verifier does not consume candidates.
-- [ ] Conductor Track handoff: import request, deliverables and evidence with designated writer; no concurrent Track append here.
+- [x] BR84-EX1 — Run 42300540682: API static 682s, unit 567s, artifacts 554s. Reuse qualified toolbox for full static programs; parallelize retained qualifications; publish evidence. Impact: dependencies/matrix/receipts; rollback: revert workflow and Makefile together.
+- [x] BR84-EX2 — Add capture/report/dispatch and toolbox static targets; use installed host harness for this disk-constrained environment. Impact: named Make entry points; rollback: restore recipes.
+- [x] BR84-EX3 — Include dossier tsconfig, ESLint/Playwright configuration, edge renderer and a source archive of the retained private diagram generator. Reason: portable pinned build inputs and complete static/browser gates; impact: dossier only; rollback: remove these supporting files with the dossier.
+- [ ] Track handoff: designated conductor imports this owner request, plan and acceptance; this concurrent lane never appends `.track/events.jsonl`.
+- [ ] Acceptance requires successful complete endpoints, ≥30 full-product runs and cache/traffic profiles. Missing receipts stay to measure; projections never count as runs.
 
 ## AI Flaky tests
-- [x] No flaky acceptance, timeout increase or new skip.
+- [x] Deterministic checks block; no timeout/retry increase or provider exception accepted.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch wagon; preserve BR-84 history through rebase; consolidated review at train integration.
+- [x] Multi-branch: one wagon, next dated train, consolidated review at integration.
 
 ## UAT Management (in orchestration context)
-- [ ] Draft PR only for exact-head CI timing; retain run id, attempt, wall time and conclusion in .tmp/rv/ci10-b.md.
+- [ ] Exact-head CI and dossier qualification with source/workflow SHAs and run/attempt/job IDs; no root-dev automated testing.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: common/master/workflow/testing, baseline steps and unit durations read; harness branch check passed.
-- [x] Retain measured durations of all 186 unit files from baseline 42300540682/1; no projected duration is a receipt.
-- [x] Lot 1: measured sequencer assigns every discovered unit file exactly once and includes additions; make test-ci-unit-shards passed (3 checks, zero skips).
-- [x] Lot 2: source suites detached from production image; verified toolbox cache keyed by lock and full source identity; unused consumer candidate edge removed.
-- [x] Source/production split: consumer, graph, expected-results, DAG and BR-84 proof checks passed; both production suites remain mandatory for publication and ci-gate.
-- [x] Consumer checks no longer wait for unused candidate archives; graph regressions retain the necessary cluster-mesh candidate dependency.
-- [x] Cache validators reject source, lock, architecture and archive corruption; scoped cache, graph and 40 publishable-wiring checks passed.
-- [x] Real Vitest 4.1.5 collection and configured sequencer: all 186 unit files assigned exactly once across four shards (34/51/51/50 files).
-- [x] The former 254s app qualification runs as two file shards with the complete content-process checks retained on each isolated runner.
-- [x] CI 42308475249 exposed the Vitest 4 shard hook signature; read shard configuration from context and add four real CLI fixture executions with exact membership and zero pending tests.
-- [x] Lot 3: scoped Make sharding, cache, graph, static, consumer, expected-results, DAG, proof and publishable-wiring checks on existing Node container; full suites in PR CI.
-- [ ] Lot 4: scope-check before atomic make commits; push wagon; capture draft timing run; report and test-volume cleanup.
+- [x] Lot 0: read common/master/workflow/testing/subagents, README/TODO/PLAN, study, binding plan/template; harness branch passed; measure #930 and recent PR/main runs through gh API.
+- [ ] Lot 1: sanitized jobs/steps, dependency graphs, queue and four endpoints in runs.json; implement ci-performance-report.mjs and ci-performance-report.test.mjs; extend ci-run-metrics.test.mjs for incomplete/rerun/capacity/mixed paths.
+- [ ] Lot 1 gate: make test-ci-run-metrics test-ci-performance-report ci-performance-report ENV=test-ci-ten-minute-proof; retain n/median/p90/p95/max, costs, failures, cancellations and missing profiles.
+- [ ] Speed gate: exact toolbox for complete API/IdP compiler and API linter programs; parallel app/unit and artifact/dossier qualification; preserve matrix membership and complete verdict.
+- [ ] Lot 2: versioned portable Svelte dossier from retained generator/theme, one dependency model, graph controls, links, expanded jobs/steps and budget-to-measure labels; test path calculation and controls.
+- [ ] Lot 2 gate: make build-ci-dossier test-ci-dossier ENV=test-ci-ten-minute-proof; TypeScript/Svelte/lint/build, keyboard/viewport, all cases/events/steps, wide/narrow exported artifact UAT.
+- [ ] Lot 3: ≥30 full-product runs across warm/source-miss/lock-miss/full-cold/concurrent profiles and API/UI/mixed/shared/tooling/fresh-release cases; endpoints ≤600s; retain all breaches and separate daily providers.
+- [ ] Lot 3 rollback: withdraw unsupported claims, preserve evidence, route regressions to owning branch.
+- [ ] Lot 4: consolidate acceptance.md, study and binding plan; `.tmp/rv/br84.md` includes before/after IDs and gap.
+- [ ] Lot 5: changed-file gates, harness branch and make scope-check before each ≤150-line make commit; push wagon without PR; full product suites in CI, no image build at 95% disk.
+- [ ] Cleanup: make down-volumes for lane test/e2e environments; disk-hygiene if available; no root-owned file deletion.
