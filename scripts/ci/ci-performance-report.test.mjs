@@ -108,3 +108,18 @@ test('should fail the delivered proof CLI when a short run lacks the campaign ev
     assert.equal(result.before.n, 1);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('should expose active workflow and ready-queue lower bounds without treating placeholder starts as execution', () => {
+  const capture = fixture();
+  capture.run.status = 'queued'; capture.run.conclusion = null; capture.capturedAt = stamp(900);
+  capture.records[1] = { ...capture.records[1], status: 'queued', conclusion: null,
+    dispatched: false, startedAt: stamp(100), completedAt: null };
+  const row = measureRun(capture);
+  assert.equal(row.wallSeconds, null);
+  assert.equal(row.elapsedLowerBoundSeconds, 900);
+  assert.equal(row.gapLowerBoundSeconds, 300);
+  assert.equal(row.jobs[1].queueSeconds, null);
+  assert.equal(row.jobs[1].queueLowerBoundSeconds, 800);
+  assert.equal(row.jobs[1].seconds, null);
+  assert.equal(row.qualified, false);
+});
