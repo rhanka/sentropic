@@ -5,6 +5,7 @@ import { prepareLive } from './prepare-live';
 import { idleBuild } from './idle';
 import { buildOnly } from './build-only';
 import { withinPhase } from './deadline';
+import { projectRevision } from './project';
 import { currentBinding, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
@@ -12,6 +13,7 @@ export function createLiveController(ports: LivePorts) {
     start: (key: LiveKey) => revive(ports, key),
     idle: (key: LiveKey) => idleBuild(ports, key),
     buildOnly: (key: LiveKey, admittedJobId: string) => buildOnly(ports, key, admittedJobId),
+    project: (key: LiveKey, durableRevision: number) => projectRevision(ports, key, durableRevision),
     /** Only the authenticated host calls this after an admitted source operation or visible interaction. */
     async activity(key: LiveKey, sessionId: string, kind: 'edit' | 'read' | 'foreground' | 'heartbeat' | 'status') {
       if (kind === 'heartbeat' || kind === 'status') return;

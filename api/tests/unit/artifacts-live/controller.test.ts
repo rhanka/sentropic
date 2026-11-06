@@ -3,6 +3,14 @@ import { fixture, key } from './fixture';
 import { publicationBaseline } from '../../../src/services/artifacts/live/records';
 
 describe('artifact live controller', () => {
+  it('should project only the current durable draft and ignore exact projection replay', async () => {
+    const f = fixture(); const live = await f.controller.start(key); f.draft().revision = 2;
+    const projected = await f.controller.project(key, 2);
+    expect(projected).toMatchObject({ phase: 'LIVE', sourceRevision: 2, appliedRevision: 2, podUid: live.podUid });
+    const count = vi.mocked(f.ports.worker.restore).mock.calls.length;
+    await f.controller.project(key, 2); expect(f.ports.worker.restore).toHaveBeenCalledTimes(count);
+    await expect(f.controller.project(key, 1)).rejects.toMatchObject({ code: 'git_live_revision_moved' });
+  });
   it('should restore the exact durable revision before exposing a route', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     expect(live).toMatchObject({ phase: 'LIVE', sourceRevision: 1, appliedRevision: 1 });
