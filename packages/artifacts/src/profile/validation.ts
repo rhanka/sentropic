@@ -82,12 +82,15 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   const { defaults, limits } = operationProfile(profile, operation);
   const normalized = { ...copyJson(defaults) as Record<string, JsonValue>, ...args } as Record<string, JsonValue>;
   if (['ensure', 'publish', 'commit_upload', 'publish_bundle', 'publish_bundle_v2',
-    'set_access', 'delete', 'revert'].includes(operation)) {
+    'set_access', 'delete', 'revert', 'git_attach', 'git_commit', 'git_publish', 'git_live',
+    'live_write', 'live_reset', 'live_control'].includes(operation)) {
     const key = args.idempotencyKey;
     requireInput(typeof key === 'string' && key.trim().length > 0 && key.length <= limits.idempotencyKeyMaxUnits);
     requireInput(envelopeKey === undefined || envelopeKey === key);
   } else requireInput(envelopeKey === undefined);
   if (Object.hasOwn(args, 'artifactId')) requireInput(isArtifactId(args.artifactId));
+  if (operation === 'git_commit') requireInput(typeof args.message === 'string' &&
+    args.message.trim().length > 0 && args.message.length <= limits.gitMessageMaxUnits);
   if (operation === 'get_source' && args.paths !== undefined) {
     const paths = args.paths as string[];
     requireInput(new Set(paths).size === paths.length && paths.every((path) =>
