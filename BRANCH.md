@@ -60,6 +60,7 @@
 - [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
   - [x] Add bounded nonrecursive tree traversal with fixed-SHA resolution and symlink/gitlink refusal.
   - [x] Add MAC-bound caller/scope/SHA pagination, UTF-8/base64 reads and explicit omission reasons across the total budget.
+  - [x] Add bounded GitHub HTTP and smart-HTTP old/new-SHA compare-and-swap with sanitized, indeterminate outcome handling.
 - [ ] Lot 4: server-resolved authorship, short-lived lease checks, test-only enrolled witness adapter and host docs.
   - [x] Materialize one multi-file child commit with human-directory author, App committer and frozen join trailers; preserve indeterminate ref outcomes.
   - [x] Add fail-closed lease admission, exact repository/permissions/expiry checks and host revocation fencing; no token cache.
