@@ -56,14 +56,14 @@ receipt and inspects the remote registry manifest (`docker manifest inspect`) be
 - **Exists with different digest (collision)**: If the tag exists and points to a different config digest, publication immediately FAILS with a non-zero exit code and an explicit collision error. Immutable release tags must never be overwritten.
 - **Registry inspect error**: Any other inspection failure (such as credential helper, network, or authorization failures) fails closed and halts publication.
 
-This provides local artifact/config identity, not a complete OCI manifest digest or a deployed Pod imageID proof. Registry digest receipts, registry-enforced immutable tags and deployment evidence remain follow-ups. Clear the generated receipt when intentionally returning a checkout to tag-based use.
+GHCR publication also checks the anonymous manifest digest and records it in `*-image.published.json`. The canonical tag and `main` alias must have the same manifest digest and tested config identity. Preprod validates its actual rendered recovery digests before applying. Clear the generated local receipt when intentionally returning a checkout to tag-based use.
 
 Because remote registries may lack native immutable tag enforcement, an inspect-then-push sequence contains an inherent time-of-check to time-of-use (TOCTOU) window. In CI, this window is serialized by the GitHub Actions concurrency group `concurrency: api-image-publication` in `.github/workflows/ci.yml`.
 
 ### Content-addressed tag format whitelist vs moving tags
 
 - **Immutable release tags**: Canonical content-addressed tags (`API_VERSION` hashes) represent immutable production releases. `scripts/publish-api-image.sh` strictly enforces a format whitelist requiring exactly 6 lowercase hexadecimal characters (`^[0-9a-f]{6}$`). The collision guard prevents overwriting existing tags with different digests and ensures idempotency when tags already exist with matching digests.
-- **Moving / alias tags**: Pointers such as `main`, `latest`, `staging`, or `v1` must NOT be published through `publish-api-image.sh` and are rejected by the 6-hex format whitelist. The `main` alias is promoted directly from the verified local ID via `make publish-api-main-image` without re-pulling.
+- **Moving / alias tags**: Pointers such as `main`, `latest`, `staging`, or `v1` must NOT be published through `publish-api-image.sh` and are rejected by the 6-hex format whitelist. CI uses `make ci-publish-api-image` to promote `main` directly from the verified local ID and check its public manifest digest without re-pulling.
 
 ### Historical incident context
 
