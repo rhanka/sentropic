@@ -761,6 +761,8 @@ jobs:
         run: make test-ci-lockfile-installs ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
+      - name: Qualify public GHCR delivery and the actual Make login recipe
+        run: make test-ghcr-images ENV=test-ci-manifests
       - name: Test candidate identity and qualification DAG
         run: make test-ci-package-candidate test-ci-package-qualification-dag ENV=test-ci-manifests
       - name: Check publishable manifests
@@ -1552,7 +1554,7 @@ jobs:
         run: make ci-build-api ENV=test-ci-images
       - name: Test image receipt integrity and input guards
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-image-receipts test-ghcr-images ENV=test-ci-images
+        run: make test-ci-image-receipts ENV=test-ci-images
       - name: Verify npm CLI and cache are absent from the production runtime
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-runtime ENV=test-ci-api

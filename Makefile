@@ -748,7 +748,7 @@ docker-login:
 	@echo "▶ Logging in to registry"
 	@test -n "$(REGISTRY)" || { echo "REGISTRY is not set" >&2; exit 1; }
 	@test "$(REGISTRY)" = ghcr.io/rhanka || { echo "Publication requires the public GHCR namespace" >&2; exit 1; }
-	@printf '%s' "${DOCKER_PASSWORD:?missing GITHUB_TOKEN}" | docker login ghcr.io -u "${DOCKER_USERNAME:?missing GitHub actor}" --password-stdin
+	@printf '%s' "$${DOCKER_PASSWORD:?missing GITHUB_TOKEN}" | docker login ghcr.io -u "$${DOCKER_USERNAME:?missing GitHub actor}" --password-stdin
 
 check-api-image:
 	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
@@ -4766,5 +4766,9 @@ check-image-registry: ## Reject the retired registry anywhere in tracked files
 check-preprod-images: ## Check the actual rendered recovery pins by anonymous digest
 	@node scripts/ci/check-preprod-images.mjs
 
-test-ghcr-images: ci-test-env ## Reject registry collisions and private or altered manifests
+test-ghcr-images: ci-test-env test-ghcr-login ## Reject registry collisions and private or altered manifests
 	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs
+
+.PHONY: test-ghcr-login
+test-ghcr-login: ci-test-env ## Exercise the real Make login recipe with fixture credentials
+	@bash scripts/ci/ghcr-login.test.sh

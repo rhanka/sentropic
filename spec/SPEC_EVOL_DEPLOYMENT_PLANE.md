@@ -217,7 +217,7 @@ of these, a digest-pinned promotion still promotes a stale digest.
   inputs* must differ even though the controller is shared, see D6/R3).
 
 ### 3.6 Platform facts (constraints, not gaps)
-- Registry: Scaleway `ghcr.io/rhanka/`. Cluster: SCW `poc-...`.
+- Registry: public GHCR `ghcr.io/rhanka/`. Cluster: SCW `poc-...`.
 - Ingress only applied when `K8S_INGRESS=1` (`Makefile` k8s-deploy path); the
   `60-ingress.yaml` host blocks (`sentropic.sent-tech.ca`,
   `auth.sent-tech.ca`) are gated out of the default deploy path.
