@@ -52,9 +52,12 @@ export function gitSourceReader(options: GitPortOptions, open: (repo: GitPortRep
       if (bytes.length > maxFile) reason = 'too_large';
       else if (total + bytes.length > maxTotal) reason = 'over_total_budget';
       if (reason) { files.push({ path: entry.path, omitted: reason }); continue; }
+      if (/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/.test(Buffer.from(bytes).toString('utf8'))) {
+        throw new ArtifactOperationError('git_path_refused', { publicDetails: { path: entry.path, reason: 'private_key' } });
+      }
       total += bytes.length;
       try {
-        const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
         if (bytes.includes(0)) throw new Error();
         files.push({ path: entry.path, text, encoding: 'utf-8' });
       } catch { files.push({ path: entry.path, base64: Buffer.from(bytes).toString('base64'), encoding: 'base64' }); }

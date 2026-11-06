@@ -5,6 +5,30 @@ import { createEnrolledWitnessGitPort } from './fixtures/git-port-witness.js';
 import { commitInput, fakeGit, target } from './fixtures/git-port-fake.js';
 
 describe('GitPort source and policy boundaries', () => {
+  it('should read registered source refs outside the writable artifact namespace', async () => {
+    const f = fakeGit(); f.refs.set('main', f.initial);
+    expect(await f.port.resolveRef({ ...target, branch: 'main' }, 'main')).toBe(f.initial);
+    await expect(f.port.commit({ ...commitInput(f.initial), target: { ...target, branch: 'main' } })).rejects.toThrow('git_ref_not_allowed');
+  });
+  it('should preserve UTF-8 BOMs and refuse private-key bytes hidden under a source filename', async () => {
+    const f = fakeGit({ 'ui/bom': '\ufeffsource', 'ui/hidden': '-----BEGIN PRIVATE KEY-----' });
+    expect((await f.port.read(target, { commitSha: f.initial, paths: ['ui/bom'] })).files[0]).toMatchObject({ text: '\ufeffsource' });
+    await expect(f.port.read(target, { commitSha: f.initial, paths: ['ui/hidden'] })).rejects.toThrow('git_path_refused');
+  });
+  it('should reject an ancestor rewind between object creation and ref advance', async () => {
+    const f = fakeGit(); const prior = await f.port.commit(commitInput(f.initial));
+    const create = f.forge.createTree;
+    f.forge.createTree = async (...args) => { const tree = await create(...args); f.refs.set(target.branch, f.initial); return tree; };
+    await expect(f.port.commit({ ...commitInput(prior.commitSha), files: [{ path: 'ui/a.ts', text: 'next' }] })).rejects.toMatchObject({
+      kind: 'git_head_moved', details: { publicDetails: { expectedHeadSha: prior.commitSha, actualHeadSha: f.initial } },
+    });
+    expect(f.refs.get(target.branch)).toBe(f.initial);
+  });
+  it('should expose parent, join trailers and attribution for crash reconciliation', async () => {
+    const f = fakeGit(); const written = await f.port.commit(commitInput(f.initial));
+    expect(await f.port.inspectCommit(target, written.commitSha)).toMatchObject({ parents: [f.initial],
+      author: { name: 'Human' }, committer: f.options.committer, message: expect.stringContaining('Artifacts-Invocation: invocation-1') });
+  });
   it('should omit over-budget entries and keep binary source byte-exact', async () => {
     const f = fakeGit({ 'ui/a': '1234', 'ui/b': '12345', 'ui/c': '6789', 'ui/d': '\0binary' });
     const port = createGitPort({ ...f.options, pageSize: 100, maxFileBytes: 4, maxTotalBytes: 6 });

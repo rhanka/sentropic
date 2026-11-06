@@ -1,7 +1,7 @@
 import { ArtifactOperationError } from '../server/failures.js';
 import { GitForgeError } from '../server/git-port.js';
 import type { GitPort } from '../server/git-port.js';
-import { assertGitSha } from '../server/git-port-policy.js';
+import { assertGitReadRef, assertGitSha } from '../server/git-port-policy.js';
 import { gitSessions } from '../server/git-port-session.js';
 import type { GitPortOptions } from '../server/git-port-session.js';
 import { gitSourceReader } from '../server/git-port-read.js';
@@ -30,9 +30,7 @@ export function createGitPort(options: GitPortOptions): GitPort & Pick<ReturnTyp
     invalidate: sessions.invalidate,
     resolveRef: (target, ref) => safe(async () => {
       const repo = await sessions.admit(target, false);
-      if (!ref || ref.length > 1024 || /[\x00-\x20\x7f~^:?*\[\\]/.test(ref) || ref.includes('..') || ref.includes('@{')) {
-        throw new ArtifactOperationError('git_ref_not_allowed');
-      }
+      assertGitReadRef(ref);
       const session = await sessions.open(repo);
       const result = await session.call((forge, context) => forge.resolve(context, ref));
       assertGitSha(result.sha);
