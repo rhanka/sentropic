@@ -9,6 +9,22 @@ const YAML = createRequire(join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'
 const workflow = YAML.parse(readFileSync('.github/workflows/ci.yml', 'utf8'));
 const jobs = workflow.jobs;
 
+test('should cache exact toolbox inputs without reusing a previous run transport receipt', () => {
+  const steps = jobs['build-api-tool-image'].steps;
+  const restore = steps.find(s => s.id === 'toolbox-cache');
+  assert.ok(restore.with.key.includes('steps.toolbox-key.outputs.key'));
+  assert.equal(restore.with['restore-keys'], undefined);
+  assert.equal(restore.if, "env.CI_IMAGE_CACHE == '1'");
+  for (const command of ['load-api-tool-cache', 'test-ci-api-tool-runtime', 'save-api-tool', 'save-api-tool-cache']) {
+    assert.ok(steps.some(s => s.run === `make ${command} ENV=test-ci-api`), command);
+  }
+  for (const command of ['test-ci-api-tool-runtime', 'save-api-tool']) {
+    assert.equal(steps.find(s => s.run === `make ${command} ENV=test-ci-api`).if, undefined);
+  }
+  assert.equal(steps.find(s => s.run === 'make ci-build-api-tool ENV=test-ci-images').if,
+    "steps.toolbox-cache.outputs.cache-hit != 'true'");
+});
+
 test('should start independent consumer checks after selection and retain real archive dependencies', () => {
   assert.deepEqual(jobs['consumer-contracts'].needs, ['changes']);
   assert.ok(!jobs['consumer-contracts'].steps.some(step => step.with?.name === 'package-candidates'));
