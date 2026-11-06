@@ -37,6 +37,10 @@
   - `deploy/k8s/base/artifact-content-networkpolicy.yaml` (BR0218-EX15)
   - `deploy/ci/artifact-content/bundle.selftest.mjs` (BR0218-EX16)
   - `deploy/ci/artifact-content/network.selftest.mjs` (BR0218-EX16)
+  - `api/src/services/artifacts/live/**` (BR0218-EX17)
+  - `api/tests/unit/artifacts-live/**` (BR0218-EX17)
+  - `apps/artifact-content/src/**` (BR0218-EX17)
+  - `apps/artifact-content/tests/live*.test.ts` (BR0218-EX17)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -79,6 +83,8 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] BR0218-EX17 live admission: both initially absent wagons are now pushed with green scoped receipts. Admit live-tools `56a3b5bc0577e633801247e0123dc98b3e2c2c6e` (275 scoped memory/transport/profile/GitPort and 11 Postgres tests, typecheck/lint) and live-pod `2e4015bbcbc0a190637d3f3f4e50497c33f43cd8` (60 scoped tests, strict types/lint; source `4404c380c`, final documentation only). Owner's conditional merge instruction is satisfied; contracts are frozen A-LIVE v2 and Immo R1-R5. Impact limited to reviewed live/draft/controller/proxy modules and their tests; rollback reverts the wagon merges. No production activation or cluster mutation; OD-SUBSTRATE, GB4/relay/integrity and host-integration gates remain open.
+- [ ] TRAIN0218-LIVE: merge both eligible wagons while retaining all main/CI corrections, qualify the source union and fixed four-tool APP-P1 profile, refresh final-union guarded pins and P1 evidence through Make, complete independent consolidated review and full fresh CI. No second version allocation or wagon lock regeneration.
 - [x] TRAIN0218-MAIN-CI2 / BR0218-EX6: run `42307948112`, job `128207506968` fails main's unchanged current-session immutability assertion at line 206. Upstream `204c2a95a` explicitly makes session validation an authority read; the train's inherited facade then writes activity outside completion. Restore main's facade byte-for-byte, keep HTTP activity/sanitization and all main assertions intact, and strengthen the train's 64-read regression to require unchanged seeded activity. Isolated source reproduction: two failures/seven passes before, nine passes after, including HTTP activity, account admission and invalid/revoked refusals. API typecheck, scoped source lint and build pass. Impact limited to removing the conflicting facade side effect; rollback restores the facade/test delta. No authority, refusal, attempt-budget, timeout, package lock, L5 or preprod pin change; fresh CI required.
 - [x] BR0218-EX16 / TRAIN0218-MAIN-CI1: run `42307278002`, job `128200464943` rejects the requested GB4 egress rule because manifest qualification still asserts the former exact policy; unchanged local target reproduces the failure. Extend the exact expected policy and additive reachability checks to the reviewed namespace/Exists-label/TCP5173 destination; retain all old ingress/DNS/Postgres and denial assertions and correct positional PG selection. Exact Make target passes 62 policy checks, 31 A4 tests and preprod bundle checks, including label/namespace/port/protocol denials. Impact limited to manifest qualification; rollback restores the two test files. No runtime policy, preprod pin, release evidence or CI gate changes; fresh CI required.
 - [x] BR0218-EX13: owner requests the pushed disk-hygiene wagon; integrate its bounded Make prune/opt-in build guard and shell checks. Impact limited to local Docker hygiene; rollback reverts that wagon. Retain all main Make behavior.
