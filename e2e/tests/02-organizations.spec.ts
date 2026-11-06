@@ -180,7 +180,18 @@ test.describe('Gestion des organisations', () => {
   });
 
   test('devrait permettre de supprimer une organisation', async ({ browser }) => {
-    const { context, page } = await createScopedPage(browser, USER_A_STATE, ADMIN_WORKSPACE_ID);
+    const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAId);
+    let releaseDraft!: () => void;
+    const draftGate = new Promise<void>((resolve) => { releaseDraft = resolve; });
+    let draftStarted!: () => void;
+    const draftRequest = new Promise<void>((resolve) => { draftStarted = resolve; });
+    // Submit while the already committed background draft still awaits its response.
+    await page.route('**/api/v1/organizations/draft*', async (route) => {
+      const response = await route.fetch();
+      draftStarted();
+      await draftGate;
+      await route.fulfill({ response });
+    });
     try {
       await page.goto('/organizations');
       await page.waitForLoadState('domcontentloaded');
@@ -190,7 +201,7 @@ test.describe('Gestion des organisations', () => {
     await expect(page).toHaveURL(/\/organizations\/new$/);
     const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input');
     await nameInput.fill('Organization to Delete');
-    await page.waitForTimeout(75);
+    await draftRequest;
     const createBtn2 = page.locator('button[title="Créer"], button[aria-label="Créer"], button:has-text("Créer")');
     await expect(createBtn2).toBeVisible();
     await expect(createBtn2).toBeEnabled();
@@ -198,7 +209,7 @@ test.describe('Gestion des organisations', () => {
     await createBtn2.hover();
     await Promise.all([
       page.waitForURL(/\/organizations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 }),
-      createBtn2.click()
+      createBtn2.click().then(() => releaseDraft())
     ]);
     await expect(page).toHaveURL(/\/organizations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 });
 
@@ -220,8 +231,10 @@ test.describe('Gestion des organisations', () => {
     // Vérifier que l'organisation a disparu de la liste UI
     await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByText('Org Readonly E2E', { exact: true })).toBeVisible();
       await expect(page.locator('text=Organization to Delete')).toHaveCount(0);
     } finally {
+      releaseDraft();
       await context.close();
     }
   });
