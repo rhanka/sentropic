@@ -2,7 +2,7 @@
  * J1.3b — neutral host-parameterizable reader consent screen (generic grant
  * contract). No tenant strings: brand, title and support URL come from the
  * host declaration. The single prescribed navigation from a typed 403 is
- * `consentScreenPath(artifactId, scopeId)`; the screen posts once to the
+ * `consentScreenPath(artifactId, scopeId, workspaceId)`; the screen posts once to the
  * sibling `grant` route (JSON or form), so a reader without consent reaches
  * it in one click with no loop.
  */
@@ -14,11 +14,12 @@ export interface ConsentScreenParams {
   artifactId: string;
   scopeId: string;
   scopeVersion: string;
+  workspaceId: string;
 }
 
 /** Single prescribed navigation from the typed 403 `{ code, scopeId, retryable: false }`. */
-export function consentScreenPath(artifactId: string, scopeId: string): string {
-  return `reader-consents/screen?artifactId=${encodeURIComponent(artifactId)}&scopeId=${encodeURIComponent(scopeId)}`;
+export function consentScreenPath(artifactId: string, scopeId: string, workspaceId: string): string {
+  return `reader-consents/screen?artifactId=${encodeURIComponent(artifactId)}&scopeId=${encodeURIComponent(scopeId)}&workspace_id=${encodeURIComponent(workspaceId)}`;
 }
 
 function esc(value: string): string {
@@ -33,6 +34,7 @@ export function renderConsentScreen(params: ConsentScreenParams): string {
   const artifactId = esc(params.artifactId);
   const scopeId = esc(params.scopeId);
   const scopeVersion = esc(params.scopeVersion);
+  const action = `grant?workspace_id=${encodeURIComponent(params.workspaceId)}`;
   const support = params.supportUrl === undefined ? '' :
     `<p><a href="${esc(params.supportUrl)}">Support</a></p>`;
   return `<!doctype html>
@@ -50,7 +52,7 @@ export function renderConsentScreen(params: ConsentScreenParams): string {
 <dt>Scope</dt><dd>${scopeId}</dd>
 <dt>Version</dt><dd>${scopeVersion}</dd>
 </dl>
-<form method="post" action="grant">
+<form method="post" action="${esc(action)}">
 <input type="hidden" name="artifactId" value="${artifactId}">
 <input type="hidden" name="scopeId" value="${scopeId}">
 <input type="hidden" name="scopeVersion" value="${scopeVersion}">
