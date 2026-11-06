@@ -42,6 +42,7 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-SOURCE-READY — Main run 42304697239 passed every API/UI qualification and both source image publishers; final remote preservation can now proceed. E2E bootstrap has already succeeded and is removed from the temporary workflow.
 - [x] GHCR-CANDIDATE-ID — Read the main producer job logs without credentials: API config da6af026... (job 128191555204), UI config ac35dc8c... (job 128196327671). The temporary remote copy also requires these exact tested config IDs, in addition to equal source/destination manifest digests.
 - [x] GHCR-GUARD — The repository-wide host guard also rejects escaped regex/JSON hostname references, covering the same authorization-regex form migrated by this train. Hidden-path negative fixtures cover literal and single/double escaped forms without printing content.
 - [x] GHCR-REVIEW — Two independent Astra xhigh code reviews closed PASS on 6890c034d; all blocking findings fixed. Update the removed promotion target in docs/ci-images.md; final remote preservation and CI remain required.
