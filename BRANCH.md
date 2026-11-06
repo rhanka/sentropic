@@ -65,5 +65,6 @@
   - [x] Implement wake cancellation, narrow revoked-owner stop, heartbeat exclusion and crash/lifetime reaping.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
+  - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.
 - [ ] Lot 6: scoped fake Kubernetes/forge/cache/publication race tests and content proxy tests.
 - [ ] Lot 7: record evidence in `.tmp/rv/live-pod.md`, push without PR and remove test volumes.
