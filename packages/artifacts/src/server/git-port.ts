@@ -24,9 +24,10 @@ export interface GitHumanDirectory {
 }
 export interface GitSourcePage {
   commitSha: string;
-  files: { path: string; text: string }[];
-  omitted: { path: string; reason: 'too_large' | 'over_total_budget' }[];
-  cursor?: string;
+  treeSha: string;
+  files: ({ path: string; text: string; encoding: 'utf-8' } | { path: string; base64: string; encoding: 'base64' } |
+    { path: string; omitted: 'too_large' | 'over_total_budget' })[];
+  nextCursor: string | null;
 }
 export interface GitCommitInput {
   target: GitPortTarget; expectedHeadSha: string;
