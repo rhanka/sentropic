@@ -2,6 +2,7 @@
 
 ## 0.2.17
 
+- Application assets carry the worker's own same-origin/no-eval CSP; HTML inline hashes stay confined to HTML responses.
 - Application content mode (host-configured, owner decision 05/11): the
   generic host offers `safe` (historic strict regime, default, bit-for-bit
   unchanged) and `application` (binding J1.0 policy: same-origin workers,
