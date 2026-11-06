@@ -1,7 +1,7 @@
 # Feature: A-LIVE tools and encrypted retained drafts
 
 ## Objective
-- [ ] Deliver AL-T and AL-D from frozen G0 v3 / A-LIVE v2, including Immo R1–R5.
+- [x] Deliver the AL-T/AL-D implementation from frozen G0 v3 / A-LIVE v2, including Immo R1–R5.
 
 ## Scope / Guardrails
 - [x] Wagon for train/artifacts-0.2.18; push branch only; no PR or version/lock changes.
@@ -48,9 +48,10 @@
 - [x] Lot 2 — Encrypted immutable drafts, atomic pointers/results, TTL tombstones, key rotation and collection; memory 9/9 and Postgres 11/11.
 - [x] Lot 3 — Five tools, typed failures, source policy, exact snapshot commit and transport wiring.
   - [x] Five definitions appended after G0; service snapshot/recipe, A1 refusal and drift/reset tests pass 4/4.
-- [ ] Lot 4 — Scoped tests, typecheck/lint, evidence and branch push.
+- [x] Lot 4 — Scoped tests, typecheck/lint, evidence and branch push.
   - [x] tests/live-drafts.test.ts and tests/live-drafts.integration.test.ts.
   - [x] tests/live-tools.test.ts, live-tools-races.test.ts, live-tools-pages.test.ts, live-tree.test.ts, live-body.test.ts and live-tools-transport.test.ts.
   - [x] tests/tools-list-snapshot.test.ts; deliberate 24 to 35 catalogue extension; all 24 original definitions unchanged.
-  - [x] Scoped memory/transport/profile/GitPort verification: 269 tests plus five new path-denial cases; Postgres 11 pass; typecheck and changed-file lint pass.
-  - [ ] Run make down-volumes ENV=test-live-tools and disk-hygiene when available.
+  - [x] Scoped memory/transport/profile/GitPort verification: 275 passing tests; Postgres 11 pass; typecheck and changed-file lint pass.
+  - [x] make down-volumes ENV=test-live-tools removed Postgres, toolcache, network and all three lane volumes; disk-hygiene target is absent from this base.
+  - [x] Push the verified wagon without a PR; train integration owns final review, profile qualification, activation receipts and Track import.
