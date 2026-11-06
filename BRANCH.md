@@ -56,6 +56,7 @@
   - [x] Add traversal, secret-file, A1 denial precedence and repository-relative glob acceptance cases.
 - [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
   - [x] Add bounded nonrecursive tree traversal with fixed-SHA resolution and symlink/gitlink refusal.
+  - [x] Add MAC-bound caller/scope/SHA pagination, UTF-8/base64 reads and explicit omission reasons across the total budget.
 - [ ] Lot 4: server-resolved authorship, short-lived lease checks, test-only enrolled witness adapter and host docs.
   - [x] Add fail-closed lease admission, exact repository/permissions/expiry checks and host revocation fencing; no token cache.
 - [ ] Lot 5: scoped tests, typecheck/lint, harness scope, early push, one ready train PR, CI green and volume cleanup.
