@@ -85,7 +85,8 @@ export function campaign(captures) {
   const after = runs.filter(run => run.phase === 'after');
   const candidates = after.filter(run => run.qualified);
   const products = candidates.filter(run => run.fullProduct);
-  const breaches = after.filter(run => run.wallSeconds > 600);
+  const breaches = runs.filter(run => (run.wallSeconds ?? run.elapsedLowerBoundSeconds) > 600);
+  const afterBreaches = breaches.filter(run => run.phase === 'after');
   const profileCounts = Object.fromEntries(profiles.map(profile => [profile, products.filter(run => run.profile === profile).length]));
   const caseCounts = Object.fromEntries(cases.map(name => [name, products.filter(run => run.case === name).length]));
   const selectedEndpointsComplete = run => Object.values(run.endpoints).every(endpoint =>
@@ -100,7 +101,7 @@ export function campaign(captures) {
     ...(candidates.some(run => !run.workflowSha) ? ['workflow SHA receipts'] : []),
     ...new Set(candidates.flatMap(run => run.evidenceGaps)),
   ];
-  return { budgetSeconds: 600, accepted: missing.length === 0 && breaches.length === 0
+  return { budgetSeconds: 600, accepted: missing.length === 0 && afterBreaches.length === 0
       && products.every(selectedEndpointsComplete),
     count: runs.length, successful: successes.length, fullProduct: products.length,
     before: distribution(successes.filter(run => run.phase === 'before').map(run => run.wallSeconds)),
@@ -109,6 +110,7 @@ export function campaign(captures) {
     pr: distribution(successes.filter(run => run.event === 'pull_request').map(run => run.wallSeconds)),
     main: distribution(successes.filter(run => run.event === 'push' && run.headBranch === 'main').map(run => run.wallSeconds)),
     profileCounts, caseCounts, missing, breachRunIds: breaches.map(run => run.runId),
+    afterBreachRunIds: afterBreaches.map(run => run.runId),
     runnerMinutes: runs.reduce((sum, run) => sum + run.runnerMinutes, 0), runs };
 }
 
