@@ -57,6 +57,7 @@
   - [x] Add traversal, secret-file, A1 denial precedence and repository-relative glob acceptance cases.
   - [x] Add an in-memory forge with atomic old-SHA comparison and immutable source snapshots.
   - [x] Exercise attribution, multi-file create/replace/delete, concurrent CAS, cursor identity and enrollment/revocation failures.
+  - [x] Add fake-HTTP protocol tests, complete-tree refusal, object hashing and sanitized driver failures.
 - [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
   - [x] Add bounded nonrecursive tree traversal with fixed-SHA resolution and symlink/gitlink refusal.
   - [x] Add MAC-bound caller/scope/SHA pagination, UTF-8/base64 reads and explicit omission reasons across the total budget.
