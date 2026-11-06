@@ -35,6 +35,7 @@ AHONO="$(train_version auth-hono)"
 COMMENTS="$(train_version comments)"
 MPLATFORM="$(train_version mcp-platform)"
 ARTIFACTS="$(train_version artifacts)"
+AUTH_UI="$(train_version auth-ui)"
 rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
 CM_ARTIFACTS_COMPAT="$(node --input-type=module -e '
@@ -110,12 +111,12 @@ platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
 receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/mcp-platform "$MPLATFORM")"
 if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
 
-# The app cutover adds @sentropic/auth-ui as an optional peer with no committed registry
-# metadata yet (BRxx-EX6): pack the workspace exactly as published so the frozen
-# `latest` consumer resolves it from a verified local tarball. Direct pack only:
-# auth-ui carries no train receipt, so candidate_archive would fail closed here.
-(cd ../auth-ui && npm pack --silent --pack-destination "$work/src" >/dev/null)
+# Qualify the optional UI peer in both selected and latest consumers. A changed
+# auth-ui package carries a guarded sibling receipt whose exact bytes must win.
+candidate_archive auth-ui "$work/src"
 auth_ui_tgz="$(ls "$work"/src/sentropic-auth-ui-*.tgz)"
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/auth-ui "$AUTH_UI")"
+if [ -n "$receipt" ]; then cp "$receipt" "$auth_ui_tgz"; fi
 
 # Release-train specs for workspace packages that may be ahead of the registry
 # (pre-publication gate, e.g. before their publish jobs run): pack each one exactly as
@@ -244,11 +245,16 @@ cp "$fixtures/selected/package.json" "$work/selected/"
 cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
 cp "$fixtures/selected/package-lock.json" "$work/selected/package-lock.json"
 artifacts_spec="file:$artifacts_tgz"
+auth_ui_spec="file:$auth_ui_tgz"
 # Lock refresh retains the registry/verified-sibling contract of check-lock-integrity.mjs.
-if [ "${REFRESH_LOCK:-}" = 1 ]; then artifacts_spec="$(src @sentropic/artifacts "$ARTIFACTS")"; fi
+if [ "${REFRESH_LOCK:-}" = 1 ]; then
+  artifacts_spec="$(src @sentropic/artifacts "$ARTIFACTS")"
+  auth_ui_spec="$(src @sentropic/auth-ui "$AUTH_UI")"
+fi
 consumer "$work/selected" "@sentropic/llm-mesh=$mesh_spec" \
   "@sentropic/llm-gateway=$gateway_spec" \
   "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
+  "@sentropic/auth-ui=$auth_ui_spec" \
   "@sentropic/comments=$comments_spec" \
   "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")" \
   "@sentropic/artifacts=$artifacts_spec"
