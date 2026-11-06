@@ -40,7 +40,7 @@ const consentAllBody = z.object({ artifactId: z.uuid() }).strict();
 const consentAdminBody = z.object({ readerAccountId: z.string().min(1).max(256),
   artifactId: z.uuid(), scopeId: consentScope.optional() }).strict();
 const consentGateQuery = z.object({ artifactId: z.uuid(), scopeId: consentScope }).strict();
-const consentGrantBody = z.object({ artifactId: z.uuid(), scopeId: consentScope }).strict();
+const consentGrantBody = z.object({ artifactId: z.uuid(), scopeId: consentScope, scopeVersion: consentScope }).strict();
 
 /** APP-P1 dispatch and a separate host reader port; activation is never a public tool. */
 export function createArtifactHttpRouter(ports: ArtifactHttpPorts): Hono {
@@ -207,12 +207,13 @@ export function createArtifactHttpRouter(ports: ArtifactHttpPorts): Hono {
       const body = consentGrantBody.parse(raw);
       const declared = declaredScope(body.scopeId);
       if (!declared) return context.json({ error: 'not_found' }, 404);
+      if (body.scopeVersion !== declared.scopeVersion) return context.json({ error: 'invalid_request' }, 400);
       const readerAccountId = context.get('user').userId;
       const granted = await resolved.service.grantWithFreshRights({ readerAccountId,
-        artifactId: body.artifactId, scopeId: body.scopeId, scopeVersion: declared.scopeVersion },
+        artifactId: body.artifactId, scopeId: body.scopeId, scopeVersion: body.scopeVersion },
         () => resolved.service.checkReaderFreshRights({ readerAccountId, artifactId: body.artifactId }));
       return context.json({ granted: true, artifactId: body.artifactId,
-        scopeId: body.scopeId, scopeVersion: declared.scopeVersion, grantedAt: granted.grantedAt });
+        scopeId: body.scopeId, scopeVersion: body.scopeVersion, grantedAt: granted.grantedAt });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       return context.json({ error: message === 'access_denied' ? 'access_denied' : 'invalid_request' },
