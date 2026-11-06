@@ -53,6 +53,7 @@
   - [x] Define host runtime/progress records and transactional integration ports.
   - [x] Persist scoped state under a cross-replica Postgres transaction; freeze no-secret R1 recipes.
 - [ ] Lot 2: one-pod Kubernetes adapter and restricted manifest; safe revive/stop/recovery.
+  - [x] Pin the VAP-compatible pod and adopt response-loss creations under UID/session fences.
 - [ ] Lot 3: locked integrity-verified cache; fixed R1 live/build recipes.
 - [ ] Lot 4: clean idle build, B2 eligibility, wake/finalization serialization and crash recovery.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
