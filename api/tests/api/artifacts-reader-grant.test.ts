@@ -19,6 +19,7 @@ const VERSION = 'v1';
 const CONTROL_ORIGIN = 'https://control.example.test';
 
 function route(readable: boolean) {
+  const declaration = { scopeId: SCOPE, scopeVersion: VERSION };
   const store = createMemoryReaderConsentStore();
   const service = createReaderConsentService({
     store,
@@ -43,13 +44,13 @@ function route(readable: boolean) {
     readerConsent: {
       enabled: () => true,
       controlOrigin: CONTROL_ORIGIN,
-      declaredScopes: [{ scopeId: SCOPE, scopeVersion: VERSION }],
+      declaredScopes: [declaration],
       consentScreen: { brand: 'Acme', title: 'Allow access' },
       service: async () => service,
     },
   }));
   const gate = (query: string) => app.request(`/artifacts/reader-gate${query}`, { method: 'GET' });
-  return { app, gate };
+  return { app, gate, declaration };
 }
 
 describe('generic grant contract on a fake tenant', () => {
@@ -67,10 +68,11 @@ describe('generic grant contract on a fake tenant', () => {
     expect(screen).toContain(SCOPE);
     expect(screen.match(/<form /g)?.length).toBe(1);
     expect(screen).not.toContain('Radar');
+    expect(screen).toContain(`name="scopeVersion" value="${VERSION}"`);
 
     const grant = await app.request('/artifacts/reader-consents/grant', { method: 'POST',
       headers: { 'content-type': 'application/json', origin: CONTROL_ORIGIN },
-      body: JSON.stringify({ artifactId: ARTIFACT, scopeId: SCOPE }) });
+      body: JSON.stringify({ artifactId: ARTIFACT, scopeId: SCOPE, scopeVersion: VERSION }) });
     expect(grant.status).toBe(200);
     expect(await grant.json()).toMatchObject({ granted: true, artifactId: ARTIFACT, scopeId: SCOPE, scopeVersion: VERSION });
 
@@ -95,5 +97,28 @@ describe('generic grant contract on a fake tenant', () => {
   it('never oracles an unreadable artifact', async () => {
     const { gate } = route(false);
     expect((await gate(`?artifactId=${ARTIFACT}&scopeId=${SCOPE}`)).status).toBe(404);
+  });
+
+  it('should refuse a stale displayed version without granting the widened scope', async () => {
+    const { app, gate, declaration } = route(true);
+    const screen = await (await app.request(`/artifacts/${consentScreenPath(ARTIFACT, SCOPE)}`)).text();
+    expect(screen).toContain(VERSION);
+    declaration.scopeVersion = 'v2';
+    const grant = await app.request('/artifacts/reader-consents/grant', { method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: CONTROL_ORIGIN },
+      body: new URLSearchParams({ artifactId: ARTIFACT, scopeId: SCOPE, scopeVersion: VERSION }) });
+    expect(grant.status).toBe(400);
+    expect((await gate(`?artifactId=${ARTIFACT}&scopeId=${SCOPE}`)).status).toBe(403);
+  });
+
+  it('should require the accepted scope version and accept a current form submission', async () => {
+    const { app } = route(true);
+    const submit = (scopeVersion?: string) => app.request('/artifacts/reader-consents/grant', { method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: CONTROL_ORIGIN },
+      body: new URLSearchParams({ artifactId: ARTIFACT, scopeId: SCOPE, ...(scopeVersion === undefined ? {} : { scopeVersion }) }) });
+    expect((await submit()).status).toBe(400);
+    const grant = await submit(VERSION);
+    expect(grant.status).toBe(200);
+    expect(await grant.json()).toMatchObject({ granted: true, scopeVersion: VERSION });
   });
 });
