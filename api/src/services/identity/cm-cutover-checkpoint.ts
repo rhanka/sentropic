@@ -19,6 +19,19 @@ const checkpointSchema = z.object({
 }).strict();
 export type CmCutoverCheckpoint = z.infer<typeof checkpointSchema>;
 
+/** Shared in-memory validation lets preparation dry-runs use the boot contract without writes. */
+export function parseCmCutoverCheckpoint(parsed: unknown, expected: {
+  mappingSha256: string; identityAssetSha256: string; connectorAssetSha256: string;
+}): CmCutoverCheckpoint {
+  const result = checkpointSchema.safeParse(parsed);
+  if (!result.success) return invalidA4Import();
+  const value = result.data;
+  if (value.mappingSha256 !== expected.mappingSha256 || value.identityAssetSha256 !== expected.identityAssetSha256
+    || value.connectorAssetSha256 !== expected.connectorAssetSha256
+    || (value.purpose === 'cutover' && !value.rehearsalReceiptRef)) return invalidA4Import();
+  return value;
+}
+
 /** Load privileged evidence before entering the migration transaction; never log its contents. */
 export async function loadCmCutoverCheckpoint(path: string | undefined, expected: {
   mappingSha256: string; identityAssetSha256: string; connectorAssetSha256: string;
@@ -28,12 +41,7 @@ export async function loadCmCutoverCheckpoint(path: string | undefined, expected
   if (!metadata.isFile() || metadata.size > 32768 || (metadata.mode & 0o077) !== 0) return invalidA4Import();
   let parsed: unknown;
   try { parsed = JSON.parse(await readFile(path, 'utf8')); } catch { return invalidA4Import(); }
-  const result = checkpointSchema.safeParse(parsed);
-  if (!result.success) return invalidA4Import();
-  const value = result.data;
-  if (value.mappingSha256 !== expected.mappingSha256 || value.identityAssetSha256 !== expected.identityAssetSha256
-    || value.connectorAssetSha256 !== expected.connectorAssetSha256
-    || (value.purpose === 'cutover' && !value.rehearsalReceiptRef)) return invalidA4Import();
+  const value = parseCmCutoverCheckpoint(parsed, expected);
   for (const [snapshot, expectedDigest] of [[value.sourceSnapshotPath, value.sourceSnapshotDigest],
     [value.remoteSnapshotPath, value.remoteSnapshotDigest]]) {
     const hash = createHash('sha256');

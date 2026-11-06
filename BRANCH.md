@@ -127,7 +127,7 @@
 
 ## Feedback Loop
 - [x] EXT06-W1 — Merge #929 with manual conflict union: retain train's social/registration admission and read-only session validation, add the wagon's post-commit remote-session authority, preserve both HTTP concurrency regression sets, and keep candidate-core archive output with chat-ui 1.0.1.
-- [ ] EXT06-W2 — Merge approved A4 procedure, retain both bundle commands and qualify operator/API/manifest tests; no live cutover execution.
+- [x] EXT06-W2 — Merge approved A4 procedure at 1a5a9ef98, retain both bundle commands; operator/API/manifest qualification follows; no live cutover execution.
 - [ ] EXT06-PIN — Six-line recovery image block with temporary removal comment; candidate build/publication unchanged, preprod four-workload render and CI receipt required, production untouched.
 - [x] EXT06-EX1 — Extend scope to approved #929 and A4 wagon paths, including existing BR83-EX1 workflow union and BRA4B-EX1 Makefile include. Impact: requested train integration/preprod pin only; rollback: revert the two wagon merges and image block. Preserve versions, lock entries and existing pins except the wagon's chat-ui 1.0.1 version record.
 - [ ] EXT06-CI — Independent consolidated review, local scoped gates, exact-head attempt-1 CI green, PR body and Extension 06/11 report; conductor remains the Track writer.

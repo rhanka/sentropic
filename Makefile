@@ -2125,6 +2125,7 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
 include deploy/ci/artifact-content/tests.mk
+include deploy/ci/preprod-a4/targets.mk
 
 .PHONY: test-artifact-content
 test-artifact-content: ## Qualify content process behavior, types and lint on the API test executor
