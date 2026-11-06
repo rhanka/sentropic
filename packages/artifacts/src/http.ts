@@ -32,6 +32,7 @@ import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 import { readArtifactSource } from './server/source-read.js';
 import { artifactSummary } from './server/summary.js';
 import { projectGitBinding, type GitProjectionPorts } from './server/git-projection.js';
+import type { LiveService } from './server/live-contracts.js';
 import { artifactVersions } from './server/versions.js';
 import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } from './server/management.js';
 import { createPostgresManagementUnit } from './adapters/postgres-management.js';
@@ -59,6 +60,8 @@ export function errorBody(status: number): { error: string } {
     500: 'internal_error', 503: 'capability_unavailable' } as Record<number, string>)[status] ?? 'internal_error' };
 }
 export interface HttpAppDeps {
+  /** AL-T/AL-D: trusted service; absence is a closed capability refusal. */
+  live?: LiveService;
   /** SG1: host repository code access, independent of page/source grants. */
   git?: GitProjectionPorts;
   /** Trusted mapping of host wrapper errors; causes remain private. Also bind on the coordinator. */
@@ -133,7 +136,8 @@ export function assertArtifactsTransportProfile(value: unknown): asserts value i
     'artifacts_lookup_people', 'artifacts_list_access',
     'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
     'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2',
-    'artifacts_revoke_reader_consent'];
+    'artifacts_revoke_reader_consent', 'artifacts_git_commit', 'artifacts_live_write',
+    'artifacts_live_read', 'artifacts_live_reset', 'artifacts_live_status', 'artifacts_live_control'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
@@ -619,6 +623,14 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           }
         }
         const normalized = profile.validate(capability, args, request.idempotencyKey, { deferPrecondition: true });
+        if (capability.startsWith('artifacts_live_') || capability === 'artifacts_git_commit') {
+          if (!deps.live) throw new ArtifactOperationError('capability_unselected');
+          phase = 'dispatch';
+          const result = await deps.live.execute(operation, normalized, invocation);
+          return { ok: true, invocationId: invocation.invocationId,
+            commitState: ['live_read', 'live_status'].includes(operation) ? 'not_committed' : 'committed',
+            replayed: result.replayed === true, result: { status: 200, body: result } };
+        }
         const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
           'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_publish_bundle_v2'].includes(capability)
           ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey,

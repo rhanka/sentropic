@@ -278,6 +278,9 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
       const args = profile.validate(input.tool, input.args, input.idempotencyKey, { deferPrecondition: true });
       let request: Pick<HttpRequest, 'method' | 'path' | 'body'>;
       switch (input.tool) {
+        case 'artifacts_live_write': case 'artifacts_live_read': case 'artifacts_live_reset':
+        case 'artifacts_live_status': case 'artifacts_live_control': case 'artifacts_git_commit':
+          request = { method: 'POST', path: '/' + input.tool.slice(10), body: args }; break;
         case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
         case 'artifacts_publish_bundle': request = { method: 'POST', path: '/publish_bundle', body: args }; break;
