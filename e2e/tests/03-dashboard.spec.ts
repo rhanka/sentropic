@@ -153,7 +153,7 @@ test.describe('Dashboard DOCX flow', () => {
     expect(response.ok()).toBeTruthy();
   };
 
-  test.beforeAll(async () => {
+  test.beforeEach(async () => {
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,
@@ -245,29 +245,29 @@ test.describe('Dashboard DOCX flow', () => {
     const page = await context.newPage();
 
     try {
+      const initialPresence = Promise.all(['GET', 'POST'].map(method => page.waitForResponse(response => {
+        const url = new URL(response.url()), req = response.request();
+        return url.pathname === '/api/v1/locks/presence' && req.method() === method
+          && (method === 'GET' ? url.searchParams.get('objectId') === folderId
+            : req.postDataJSON()?.objectId === folderId);
+      }, { timeout: 2_000 })));
       await page.goto('/dashboard');
       await page.waitForLoadState('domcontentloaded');
+      await Promise.all((await initialPresence).map(response => response.finished()));
 
       const readOnlyLockButton = page.locator(
         'button.print-hidden[aria-label*="lecture seule"], button.print-hidden[aria-label*="read-only"]'
       );
       const presenceLockGroup = page.locator(
         'div[role="group"][aria-label*="Verrou"], div[role="group"][aria-label*="Lock"]'
+      ).filter({ has: page.locator('button[aria-disabled="true"]') });
+
+      // Presence can replace the standalone lock between browser commands.
+      // Keep print-hidden in its selector and require the presence lock to be read-only.
+      await expect(presenceLockGroup.getByRole('tooltip')).toContainText(
+        /[1-9]\d* (?:utilisateurs? connectés?|users? connected)/, { timeout: 2_000 }
       );
-
-      await expect
-        .poll(
-          async () => (await readOnlyLockButton.count()) + (await presenceLockGroup.count()),
-          { timeout: 2_000 }
-        )
-        .toBeGreaterThan(0);
-
-      if ((await readOnlyLockButton.count()) > 0) {
-        await expect(readOnlyLockButton.first()).toBeVisible({ timeout: 2_000 });
-        await expect(readOnlyLockButton.first()).toHaveClass(/print-hidden/);
-      } else {
-        await expect(presenceLockGroup.first()).toBeVisible({ timeout: 2_000 });
-      }
+      await expect(readOnlyLockButton.or(presenceLockGroup).first()).toBeVisible({ timeout: 2_000 });
     } finally {
       await context.close().catch(() => undefined);
     }

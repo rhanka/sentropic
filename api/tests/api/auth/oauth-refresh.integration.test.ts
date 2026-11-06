@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { app } from '../../../src/app';
 import { db, pool } from '../../../src/db/client';
-import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
+import { withOAuthRefreshTransactionObserver } from '../../../src/services/auth/oauth-refresh-adapter';
+import { revokeCmOAuthConsent } from '../../../src/services/auth/consent-store-adapter';
+import { withAppCmAuth } from '../../../src/services/identity/cm-auth-runtime';
 import { idTokenSigningKeys, oauthClients, oauthConsents } from '../../../src/db/schema';
 import { updateCmUser } from '../../../src/services/identity/cm-users';
 import { listCmSessionsForUser } from '../../../src/services/identity/cm-sessions';
@@ -163,41 +165,29 @@ describe('host OAuth refresh HTTP integration', () => {
     expect((await post('token', { grant_type: 'refresh_token', refresh_token: initial.refresh_token })).status).toBe(200);
   });
 
-  // BLOCKED (a4-lane, re-enable when the interception point exists): the
-  // mint-first barrier overrode the host-bag transaction, which no longer
-  // reaches the per-attempt binding ports, and the consent cases need an
-  // app-facing CM consent revocation API (CM consent outlives the app
-  // evidence row by design). The passing 'security revoke-first' variant
-  // below still pins the family-revocation serialization property.
   for (const { kind, order } of ['consent', 'security'].flatMap((kind) => ['mint-first', 'revoke-first'].map((order) => ({ kind, order })))) {
-  ((kind === 'security' && order === 'revoke-first') ? it : it.skip)
+  it
   (`should serialize initial family creation with ${kind}: ${order}`, async () => {
     const code = await obtainCode();
-    const writer = await pool.connect();
-    const ports = getSentropicOAuthPorts();
-    const original = ports.oauthRefresh!.transaction;
+    const writer = revocationWriter(kind);
     let release = () => {};
     try {
-      await writer.query('BEGIN');
-      const { rows: [{ pid: writerPid }] } = await writer.query('SELECT pg_backend_pid() AS pid');
-      const mutation = kind === 'consent' ? 'DELETE FROM oauth_consents WHERE user_id=$1'
-        : "SELECT oauth_refresh_revoke_user($1, 'security_event')";
+      const writerPid = await writer.pid;
       if (order === 'revoke-first') {
-        await writer.query(mutation, [userId]);
+        await writer.mutate();
         const pending = exchangeCode(code);
         await waitForBlocker(writerPid);
-        await writer.query('COMMIT');
+        await writer.commit();
         expect((await pending).status).toBe(400);
       } else {
         let entered!: () => void;
         const locked = new Promise<void>((resolve) => { entered = resolve; });
         const barrier = new Promise<void>((resolve) => { release = resolve; });
-        ports.oauthRefresh!.transaction = (lock, work) => original(lock, async (bound) => {
-          entered(); await barrier; return work(bound);
-        });
-        const pending = exchangeCode(code);
+        const pending = withOAuthRefreshTransactionObserver(async () => {
+          entered(); await barrier;
+        }, () => exchangeCode(code));
         await locked;
-        const revocation = writer.query(mutation, [userId]);
+        const revocation = writer.mutate();
         // The owning transaction's user lock is visible as the writer's blocker.
         for (let attempt = 0; attempt < 500; attempt++) {
           const { rows } = await pool.query('SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND cardinality(pg_blocking_pids(pid)) > 0', [writerPid]);
@@ -206,17 +196,36 @@ describe('host OAuth refresh HTTP integration', () => {
           await new Promise<void>((resolve) => setImmediate(resolve));
         }
         release(); expect((await pending).status).toBe(200);
-        await revocation; await writer.query('COMMIT');
+        await revocation; await writer.commit();
       }
       const { rows } = await pool.query('SELECT count(*)::int AS count FROM oauth_refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
       expect(rows[0].count).toBe(0);
     } finally {
-      release(); ports.oauthRefresh!.transaction = original;
-      await writer.query('ROLLBACK'); writer.release();
+      release();
+      await writer.close();
     }
   });
   }
 });
+
+function revocationWriter(kind: string) {
+  let ready!: (pid: number) => void, begin!: () => void, applied!: () => void, finish!: () => void;
+  const pid = new Promise<number>(resolve => { ready = resolve; });
+  const mutation = new Promise<void>(resolve => { begin = resolve; });
+  const mutated = new Promise<void>(resolve => { applied = resolve; });
+  const commit = new Promise<void>(resolve => { finish = resolve; });
+  const done = withAppCmAuth(runner => runner.request(async (_binding, tx) => {
+    const { rows: [{ pid: backendPid }] } = await tx.hostTransaction.query('SELECT pg_backend_pid() AS pid');
+    ready(backendPid);
+    await mutation;
+    if (kind === 'consent') await revokeCmOAuthConsent({ userId, clientId, tenantId: PLATFORM_TENANT_ID });
+    else await tx.hostTransaction.query("SELECT oauth_refresh_revoke_user($1, 'security_event')", [userId]);
+    applied();
+    await commit;
+  }));
+  return { pid, mutate: () => { begin(); return Promise.race([mutated, done]); }, commit: () => { finish(); return done; },
+    close: async () => { begin(); finish(); await done; } };
+}
 
 async function waitForBlocker(pid: number) {
   for (let attempt = 0; attempt < 500; attempt++) {

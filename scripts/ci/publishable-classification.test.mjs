@@ -205,3 +205,28 @@ test('sibling plan: BLOCK packages in the dependency closure only; no context in
   assert.equal(await run({}), 0);
   assert.equal(fs.readFileSync(outFile, 'utf8'), '');
 });
+
+test('consumer contracts (BR-83): changed boundary packages stay BLOCK and feed the classifier', async () => {
+  const { classifyCompatibility } = await import('./compatibility-classifier.mjs');
+  const BOUNDARY = ['comments', 'cluster-mesh'];
+  for (const slug of BOUNDARY) {
+    const files = [`packages/${slug}/src/a.ts`, `packages/${slug}/package.json`];
+    const context = ctx({ files, filters: [`${slug.replace(/-/g, '_')}`] });
+    const { classification } = await classifyPackages({ publicSlugs: BOUNDARY, context, absent: async () => false });
+    assert.equal(classification.get(slug).severity, 'block', `${slug} source changes must block its candidate`);
+    assert.ok(classification.get(slug).reasons.includes('changed'));
+    // The same change feeds the compatibility classifier: a patch bump with
+    // identical deps is an internal fix eligible for the tuple-gated path.
+    const verdict = classifyCompatibility({ files,
+      packages: [{ slug, scope: 'library',
+        published: { name: `@sentropic/${slug}`, version: '0.3.1', dependencies: {} },
+        candidate: { name: `@sentropic/${slug}`, version: '0.3.2', dependencies: {} } }] });
+    assert.equal(verdict.kind, 'internal-fix', `${slug}: ${JSON.stringify(verdict.reasons)}`);
+  }
+  // Toolchain-only changes block no package, but still gate the workflow.
+  const toolContext = ctx({ files: [], filters: ['manifest_guard'] });
+  const { classification } = await classifyPackages({ publicSlugs: BOUNDARY, context: toolContext, absent: async () => false });
+  assert.deepEqual(BOUNDARY.filter((slug) => classification.get(slug).severity === 'block'), []);
+  const toolVerdict = classifyCompatibility({ files: ['scripts/ci/compatibility-classifier.mjs'], packages: [] });
+  assert.equal(toolVerdict.kind, 'root-lock-toolchain');
+});

@@ -172,6 +172,28 @@ jobs:
             exit 1
           fi
           echo "All touched packages have bumped versions."
+      # BR83-EX1: every changed public package must own a consumer contract —
+      # a changed package without a boundary entry cannot take any fast path.
+      - name: Check consumer-contract coverage for changed packages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          export MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          node -e '
+            const { execSync } = require("node:child_process");
+            const boundaries = require("./scripts/ci/consumer-boundaries.json");
+            const files = execSync(`git diff --name-only ${process.env.MERGE_BASE} ${process.env.HEAD_SHA}`, { encoding: "utf8" }).split("\n");
+            const changed = new Set(files.map((f) => (f.match(/^packages\/([^/]+)\//) || [])[1]).filter(Boolean));
+            const known = new Set(boundaries.components.map((c) => c.slug));
+            const missing = [...changed].filter((slug) => !known.has(slug));
+            if (missing.length > 0) {
+              console.error(`::error::Changed packages without consumer-boundary inventory: ${missing.join(", ")}`);
+              process.exit(1);
+            }
+            console.log(`Consumer-boundary inventory covers changed packages: ${[...changed].join(", ") || "none"}`);
+          '
       - name: Retain actual-base bump receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -443,6 +465,10 @@ jobs:
               - 'packages/chat-core/src/runtime/**'
               - 'packages/chat-core/package.json'
               - 'packages/chat-core/tsconfig.json'
+              # BR83-EX1: the shared AuthProviderGlyph is embedded in UI and IdP
+              # screens, so auth-ui changes select the UI lane (plus IdP checks
+              # through the api filter) with both images and preproduction.
+              - 'packages/auth-ui/**'
             llm_mesh:
               - 'Makefile'
               - 'package.json'
@@ -454,6 +480,9 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/cluster-mesh/**'
+              # BR83-EX1: comments is a cluster peer (optional peerDep); retain
+              # peer qualification on comments changes (postgres comments lane).
+              - 'packages/comments/**'
               - '.github/workflows/ci.yml'
             cluster_mesh_publish:
               - 'packages/cluster-mesh/**'
@@ -463,6 +492,9 @@ jobs:
               - 'package-lock.json'
               - 'packages/llm-gateway/**'
               - 'packages/llm-mesh/**'
+              # BR83-EX1: the gateway host consumes cluster-mesh; select the
+              # gateway consumer lane (including the host process suite).
+              - 'packages/cluster-mesh/**'
               - '.github/workflows/ci.yml'
             llm_mesh_publish:
               - 'packages/llm-mesh/**'
@@ -845,6 +877,42 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # BR83-EX1 — prove consumer boundaries before omitting work: classify the
+  # change, select the required consumers from consumer-boundaries.json, and
+  # fail when the live dispatch does not select every required consumer or
+  # when installed tuples drift behind an omission claim. The complete verdict
+  # (ci-gate) requires this job. Rollback: delete this job and its ci-gate
+  # entry; the publishable-manifest guard keeps its own complete-result checks.
+  consumer-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes, package-candidates]
+    if: always() && !cancelled() && inputs.decision_fixtures_only != true
+    permissions:
+      contents: read
+    env:
+      CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+      CI_MANIFEST_EVENT: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Qualify compatibility classification, consumer selection, and installed tuples
+        run: make test-ci-compatibility test-ci-consumer-contracts test-ci-installed-tuple ENV=test-ci-contracts
+      - name: Verify the live dispatch selects every required consumer
+        env:
+          VERIFY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          VERIFY_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          VERIFY_CHANGES_JSON: ${{ toJSON(needs.changes.outputs) }}
+          VERIFY_EVENT: ${{ github.event_name }}
+          VERIFY_REF: ${{ github.ref }}
+        run: make consumer-contracts-verify ENV=test-ci-contracts
+      - name: Run the IdP cluster-candidate contract on the isolated workspace
+        if: needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-idp-candidate ENV=test-ci-contracts
+
   validate-llm-mesh:
     runs-on: ubuntu-latest
     needs: [changes, package-candidates]
@@ -960,6 +1028,10 @@ jobs:
         run: make lint-llm-gateway ENV=test-ci-llm-gateway
       - name: Typecheck and test LLM Gateway from isolated preparation
         run: make cluster-mesh-workspace CM_ACTION=gateway-check ENV=test-ci-llm-gateway
+      # BR83-EX1: the gateway host is a consumer of cluster-mesh, so its own
+      # process suite runs here; the check above only covers the library lane.
+      - name: Test the standalone LLM Gateway host process
+        run: make test-llm-gateway-process ENV=test-ci-llm-gateway
       - name: Pack LLM Gateway
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
@@ -997,13 +1069,14 @@ jobs:
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-chat-ui PACK_DESTINATION=tmp/chat-pair/ui ENV=test-ci-chat-ui
       - name: Pack Chat Core
+        id: chat-core-candidate
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-chat-core PACK_DESTINATION=tmp/chat-pair/core ENV=test-ci-chat-ui
+        run: make pack-chat-core PACK_DESTINATION=tmp/chat-pair/core PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-chat-ui
       - name: Qualify installed Chat pair
-        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz CORE_ARCHIVE=tmp/chat-pair/core/sentropic-chat-core-0.3.1.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
+        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.1.tgz CORE_ARCHIVE="${{ steps.chat-core-candidate.outputs.tarball }}" REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
       - name: Retain installed Chat pair evidence
         uses: actions/upload-artifact@v7
         with:
@@ -1571,6 +1644,9 @@ jobs:
           - suite: artifact-store
           - suite: object-registry
           - suite: outbox
+          # BR83-EX1: consumer-owned candidate contracts for the comments and
+          # cluster-mesh boundaries (api/tests/contracts/).
+          - suite: contracts
           - suite: endpoints
             endpoints_shard: 1
           - suite: endpoints
@@ -1705,7 +1781,7 @@ jobs:
   test-ui:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     permissions:
       contents: read
     steps:
@@ -1945,7 +2021,7 @@ jobs:
     permissions:
       contents: read
     needs: [changes, build-api-image, build-api-tool-image, build-e2e]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
@@ -3320,6 +3396,7 @@ jobs:
       - changes
       - validate-publishable-manifests
       - package-candidates
+      - consumer-contracts
       - build-e2e
       - typecheck-lint-ui
       - typecheck-lint-api

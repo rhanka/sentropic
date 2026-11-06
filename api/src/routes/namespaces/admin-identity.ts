@@ -7,9 +7,12 @@ import { listCmAdminUserViews } from '../../services/identity/cm-administration-
 import { CmIdentityForbiddenError } from '../../services/identity/cm-deletion-authorization';
 import { deleteCmAccountAsAdmin } from '../../services/identity/cm-account-deletion';
 import { runCmAccountDeletionHttp } from './auth/cm-deletion-http';
+import { RemoteAuthorityError } from '../../services/auth/remote-contract';
+import { remoteRevocationError } from '../../services/auth/remote-revocation-error';
 
 export const cmAdminIdentityRouter = new Hono();
 cmAdminIdentityRouter.onError((error, c) => {
+  if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c);
   if (error instanceof IdentityNotFoundError) return c.json({ error: 'User not found' }, 404);
   if (error instanceof CmIdentityForbiddenError) return c.json({ error: 'Forbidden' }, 403);
   if (error instanceof AccountTransitionError || error instanceof AdminUserProtectedError || error instanceof SelfActionForbiddenError) {

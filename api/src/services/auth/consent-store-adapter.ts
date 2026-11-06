@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, type SQL } from 'drizzle-orm';
 
 import { oauthConsents } from '../../db/schema';
-import { bindCmAppDatabase, type CmIdentityTransaction } from '../identity/cm-transaction';
+import { bindCmAppDatabase, runCmIdentityWrite, type CmIdentityTransaction } from '../identity/cm-transaction';
+import { lockOAuthRefresh } from './oauth-refresh-adapter';
 import { issueCmOAuthTid, isCmTenantRefusal, requireCmOAuthTransaction } from '../identity/cm-oauth-tenancy';
 import { cmOAuthConsentId } from '../identity/cm-import-tenancy';
 
@@ -12,6 +13,21 @@ interface CreateConsentStoreAdapterOptions {
   transaction?: CmIdentityTransaction;
   now?: () => Date;
 }
+
+/** The subject comes from verified application authority; no request selects another owner. */
+export const revokeCmOAuthConsent = (input: { userId: string; clientId: string; tenantId: string }): Promise<boolean> =>
+  runCmIdentityWrite(async tx => {
+    await tx.lockSubject(input.userId);
+    const database = bindCmAppDatabase(tx);
+    await lockOAuthRefresh(database, input);
+    const claim = await issueCmOAuthTid(tx, input.userId, input.tenantId);
+    const at = new Date().toISOString();
+    const changed = await tx.stores.oauth.revokeConsent(cmOAuthConsentId(input.userId, input.clientId, claim.tenantId), at);
+    await database.delete(oauthConsents).where(and(eq(oauthConsents.userId, input.userId),
+      eq(oauthConsents.clientId, input.clientId), eq(oauthConsents.tenantId, claim.tid)));
+    await tx.advanceSubjectRevision(input.userId, at, false);
+    return changed;
+  });
 
 /** CM owns consent authority; app protocol evidence joins the same transaction. */
 export const createConsentStoreAdapter = (
@@ -21,7 +37,7 @@ export const createConsentStoreAdapter = (
   /** CM consent authority through the P4 finder; a revoked row confers no authority. */
   const hasAuthority = async (tx: CmIdentityTransaction, userId: string, clientId: string, tenantId: string) => {
     const record = await oauthTenantStoreV1(tx).findConsent(cmOAuthConsentId(userId, clientId, tenantId));
-    return record?.revokedAt === undefined;
+    return record !== null && record.revokedAt === undefined;
   };
 
   const grantFilter = (userId: string, clientId: string, tenantId: string): SQL => {

@@ -126,6 +126,7 @@ export class SessionWorkspaceService {
 
   constructor(
     storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore = createDrizzleBindingStore,
+    private readonly hooks?: { readonly beforeMutation?: () => Promise<void> },
   ) {
     this.storeFactory = storeFactory;
   }
@@ -266,6 +267,8 @@ export class SessionWorkspaceService {
       throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
     }
     const preIsAdmin = await this.checkIsAdmin(tenantId, principalId, pre.workspaceId);
+    // Interleaved writers commit independently before Phase B acquires locks.
+    await this.hooks?.beforeMutation?.();
     return withSerializationRetry(() => runCmIdentityWrite(async identityTx => {
       await identityTx.lockSubject(principalId);
       await this.checkTenantMember(tenantId, principalId);
@@ -306,6 +309,7 @@ export class SessionWorkspaceService {
       throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
     }
     const preIsAdmin = await this.checkIsAdmin(tenantId, principalId, pre.workspaceId);
+    await this.hooks?.beforeMutation?.();
     return withSerializationRetry(() => runCmIdentityWrite(async identityTx => {
       await identityTx.lockSubject(principalId);
       await this.checkTenantMember(tenantId, principalId);

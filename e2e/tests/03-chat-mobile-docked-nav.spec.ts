@@ -99,6 +99,8 @@ test.describe('Chat placement menu — desktop geometry', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
+    // Placement is scoped by workspace; hydration must not replace it during the drag.
+    await page.waitForFunction(() => Boolean(localStorage.getItem('workspaceScopeId')), null, { timeout: 10_000 });
 
     const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 10_000 });
