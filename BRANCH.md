@@ -13,6 +13,7 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `Makefile` (BR06-EX1: disk hygiene/self-test recipes and image-build guard calls only)
   - `BRANCH.md`
   - `scripts/check-disk-hygiene.sh`
   - `scripts/check-disk-space.sh`
@@ -26,7 +27,7 @@
   - `.github/workflows/**`
   - `spec/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR06-EX1: disk hygiene/self-test recipes and image-build guard calls only)
+  - None for this lane; the explicit BR06-EX1 grant overrides inherited/default Makefile prohibitions.
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -39,8 +40,8 @@
 - [x] **Lot DISK-HYGIENE-0 — Scope**
   - [x] Read common/project rules, inspect `check-down-volumes`, mechanically verify branch with host harness; reuse the clean existing worktree while retaining its old branch.
 - [ ] **Lot DISK-HYGIENE-1 — Safe host cleanup and build guard**
-  - [ ] `Makefile`: builder prune with `--keep-storage 5G --force`, dangling prune, unused images older than 24h, reclaimed-space output; no volume operations.
-  - [ ] `scripts/check-disk-space.sh`, `scripts/resolve-api-image.sh`, `Makefile`: opt-in `DISK_HYGIENE_THRESHOLD=90`, Docker-root filesystem usage, refuse before actual builds, preserve image reuse.
+  - [x] `Makefile`: builder prune with `--keep-storage 5G --force`, dangling prune, unused images older than 24h, reclaimed-space output; no volume operations.
+  - [x] `scripts/check-disk-space.sh`, `scripts/resolve-api-image.sh`, `Makefile`: opt-in `DISK_HYGIENE_THRESHOLD=90`, Docker-root filesystem usage, refuse before actual builds, preserve image reuse.
 - [ ] **Lot DISK-HYGIENE-2 — Scoped self-test and handoff**
   - [ ] `scripts/check-disk-hygiene.sh`: dry-run recipes for default/empty/dev/test ENV; stub-only cleanup and build boundary/failure tests, no real Docker cleanup.
   - [ ] Gate: `make check-disk-hygiene check-down-volumes ENV=test-disk-hygiene`; host harness scope checks before each `make commit` (existing host-only scope ENV selector).
