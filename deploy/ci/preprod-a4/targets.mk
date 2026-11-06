@@ -1,0 +1,12 @@
+# Operator-side Node/kubectl only; values are inherited by name, never interpolated into argv.
+export A4_PHASE ?= checkpoint
+export A4_DRY_RUN ?= 1
+export A4_KUBECONFIG_FILE
+export A4_REQUEST_FILE
+.PHONY: k8s-preprod-a4-prepare test-preprod-a4
+k8s-preprod-a4-prepare: ## Prepare the owner-authorized A4 evidence; dry-run by default (see runbook)
+	@node deploy/ci/preprod-a4/run.mjs
+
+test-preprod-a4: ## Scoped operator, secret-composition and bundle preparation tests; no cluster
+	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test deploy/ci/preprod-a4/*.test.mjs
