@@ -623,6 +623,10 @@ test-artifact-content-image: ci-test-env ## Qualify the content role in the reco
 	@bash scripts/test-artifact-content-image.sh $(or $(CONTENT_IMAGE_CASE),all)
 
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
+.PHONY: test-ci-unit-shards
+test-ci-unit-shards: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test api/ci/unit-shards.test.mjs
+
 api-tool-version: ## Print the content-addressed CI toolbox tag
 	@echo $(API_TOOL_VERSION)
 
