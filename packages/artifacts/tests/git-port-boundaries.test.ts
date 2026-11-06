@@ -14,7 +14,9 @@ describe('GitPort source and policy boundaries', () => {
   it('should retain a definite refusal when the lease expires before ref submission', async () => {
     const f = fakeGit(); const create = f.forge.createCommit;
     f.forge.createCommit = async (...args) => { const id = await create(...args); f.lease.expiresAt = '2000-01-01T00:00:00Z'; return id; };
-    await expect(f.port.commit(commitInput(f.initial))).rejects.toMatchObject({ kind: 'provider_unavailable', commitState: undefined });
+    const error = await f.port.commit(commitInput(f.initial)).catch(cause => cause);
+    expect(error).toMatchObject({ kind: 'provider_unavailable' });
+    expect(error).not.toHaveProperty('commitState');
     expect(f.forge.advance).not.toHaveBeenCalled(); expect(f.refs.get(target.branch)).toBe(f.initial);
   });
   it('should read registered source refs outside the writable artifact namespace', async () => {
