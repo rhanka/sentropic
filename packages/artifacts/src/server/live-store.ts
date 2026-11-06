@@ -1,0 +1,86 @@
+import { createKeyMutex } from './ports.js';
+import { ArtifactOperationError } from './failures.js';
+
+export interface LiveIdentity { storageScopeId: string; artifactId: string; bindingGeneration: number }
+export interface LiveOverlayEntry { path: string; text: string | null; mode: string }
+export interface LiveRuntimeState {
+  liveSessionId: string; phase: string; leaseEpoch: number; routeEpoch: number;
+  appliedRevision: string | null; lastAccessAt: string; pendingWake: boolean;
+}
+export interface LiveCommitIntent {
+  actorId: string; key: string; hash: string; invocationId: string; createdAt: string;
+  message: string; expectedHeadSha: string; revision: string; liveTreeSha: string;
+}
+export interface LiveDraftRecord extends LiveIdentity {
+  revision: string; baseHeadSha: string; baseTreeSha: string; liveTreeSha: string;
+  objectRef: string | null; keyVersion: string | null; digest: string | null;
+  expiresAt: string | null; changedPaths: number; draftBytes: number;
+  tombstone: 'reset' | 'expired' | null;
+  runtime: LiveRuntimeState | null; pendingCommit: LiveCommitIntent | null;
+  progressSeq: number; latestVerifiedHeadSha: string; publicationBaselineSeq: number;
+  publicationBaselineHeadSha: string; lastSuccessfulReleaseId: string | null;
+  initialUnpublishedBranchEligible: boolean;
+}
+export interface LiveEnvelope { nonce: string; ciphertext: string; tag: string }
+export interface LiveCommand { actorId: string; key: string; hash: string; operation: string }
+export type LiveResult = Record<string, unknown> & { revision: string };
+export interface LiveReceipt { hash: string; result: LiveResult }
+export interface LiveTransaction {
+  record: LiveDraftRecord | undefined;
+  getObject(ref: string): Promise<LiveEnvelope | undefined>;
+  putObject(ref: string, envelope: LiveEnvelope): Promise<void>;
+  receipt(actorId: string, key: string): Promise<LiveReceipt | undefined>;
+  complete(command: LiveCommand, result: LiveResult): Promise<void>;
+  reserveCommit(actorId: string, invocationId: string, now: string): Promise<void>;
+  /** Adapter-owned SG1 update in the same transaction as draft cleanup. */
+  advanceBinding?(input: { expectedHeadSha: string; commitSha: string; invocationId: string;
+    actorId: string; now: string }): Promise<void>;
+}
+export interface LiveStore {
+  transaction<T>(identity: LiveIdentity, action: (tx: LiveTransaction) => Promise<T>): Promise<T>;
+}
+export const liveIdentityKey = (identity: LiveIdentity): string => JSON.stringify([
+  identity.storageScopeId, identity.artifactId, identity.bindingGeneration]);
+
+/** Atomic fake; the persisted representation contains encrypted objects and metadata only. */
+export function createMemoryLiveStore(): LiveStore {
+  const records = new Map<string, LiveDraftRecord>();
+  const objects = new Map<string, LiveEnvelope>();
+  const receipts = new Map<string, LiveReceipt>();
+  const quota: { scope: string; artifact: string; actor: string; invocation: string; at: number }[] = [];
+  const mutex = createKeyMutex();
+  return { transaction: (identity, action) => mutex.runSerialized('live-store', async () => {
+    const id = liveIdentityKey(identity);
+    const pendingObjects = new Map<string, LiveEnvelope>();
+    const pendingReceipts = new Map<string, LiveReceipt>();
+    const pendingQuota: typeof quota = [];
+    const receiptKey = (actor: string, key: string) => JSON.stringify([identity.storageScopeId, actor, key]);
+    const tx: LiveTransaction = {
+      record: structuredClone(records.get(id)),
+      getObject: async ref => structuredClone(pendingObjects.get(id + ref) ?? objects.get(id + ref)),
+      async putObject(ref, value) {
+        if (objects.has(id + ref) || pendingObjects.has(id + ref)) throw new ArtifactOperationError('command_conflict');
+        pendingObjects.set(id + ref, structuredClone(value));
+      },
+      receipt: async (actor, key) => structuredClone(receipts.get(receiptKey(actor, key))),
+      async complete(command, result) {
+        const key = receiptKey(command.actorId, command.key);
+        if (receipts.has(key)) throw new ArtifactOperationError('command_conflict');
+        pendingReceipts.set(key, structuredClone({ hash: command.hash, result }));
+      },
+      async reserveCommit(actor, invocation, now) {
+        const scoped = quota.filter(q => q.scope === identity.storageScopeId && q.at > Date.parse(now) - 3600000);
+        if (scoped.some(q => q.invocation === invocation && q.actor === actor)) return;
+        if (scoped.filter(q => q.actor === actor).length >= 30 ||
+          scoped.filter(q => q.artifact === identity.artifactId).length >= 60) throw new ArtifactOperationError('limit_exceeded');
+        pendingQuota.push({ scope: identity.storageScopeId, artifact: identity.artifactId, actor, invocation, at: Date.parse(now) });
+      },
+    };
+    const result = await action(tx);
+    if (tx.record) records.set(id, structuredClone(tx.record));
+    for (const [key, object] of pendingObjects) objects.set(key, object);
+    for (const [key, receipt] of pendingReceipts) receipts.set(key, receipt);
+    quota.push(...pendingQuota);
+    return structuredClone(result);
+  }) };
+}
