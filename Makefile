@@ -1068,6 +1068,26 @@ ci-performance-report: ## Report retained real-run measurements; REQUIRE_PROOF=1
 	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --input $(CI_PROOF_INPUT) $(if $(filter 1,$(REQUIRE_PROOF)),--require-proof) $(if $(filter 1,$(CI_PROOF_JSON)),--json)
 test-ci-performance-report: ## Reject incomplete, failed, rerun and undersampled performance claims
 	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-performance-report.test.mjs'
+# BR84-EX2: dossier dependencies stay in a lane-owned volume, never host node_modules.
+CI_DOSSIER = spec/ci-cd-ten-minutes/dossier
+CI_DOSSIER_NODE = node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+CI_DOSSIER_MOUNTS = -v "$(CURDIR):/workspace" -v "$(ENV)-ci-dossier-deps:/workspace/$(CI_DOSSIER)/node_modules" -w /workspace/$(CI_DOSSIER)
+CI_DOSSIER_RUN = docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) $(CI_DOSSIER_NODE)
+.PHONY: ci-dossier-tools build-ci-dossier test-ci-dossier clean-ci-dossier
+ci-dossier-tools: ci-test-env
+	@docker run --rm --pull=never -v "$(ENV)-ci-dossier-deps:/deps" $(CI_DOSSIER_NODE) chown "$$(id -u):$$(id -g)" /deps
+	@$(CI_DOSSIER_RUN) npm ci --ignore-scripts --no-audit --no-fund
+	@$(CI_DOSSIER_RUN) sh -ec 'mkdir -p node_modules/.ci-diagram-source; tar -xzf vendor/diagram-source.tgz -C node_modules/.ci-diagram-source; node scripts/contract-evidence.mjs'
+build-ci-dossier: ci-dossier-tools ## Typecheck, lint and build the portable measured dossier
+	@$(CI_DOSSIER_RUN) npm run check
+	@$(CI_DOSSIER_RUN) npm run lint
+	@$(CI_DOSSIER_RUN) npm run build
+test-ci-dossier: build-ci-dossier ## Qualify graph calculation and controls in the exported portable artifact
+	@$(CI_DOSSIER_RUN) npm test
+	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) mcr.microsoft.com/playwright:v1.63.0 node node_modules/@playwright/test/cli.js test
+clean-ci-dossier: ci-test-env ## Remove only this lane's dossier dependency volume
+	@docker volume rm $(ENV)-ci-dossier-deps
+
 test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
 
