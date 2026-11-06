@@ -84,6 +84,8 @@
 
 ## Feedback Loop
 
+- [x] TRAIN0218-LIVE-R2: reject registry authority-like paths and assign the admitted pathname on a fixed relay URL, preventing relative-URL authority replacement. Matching-SRI transport-spy regression fails before and passes after with zero outbound calls; ordinary relay fetch/integrity checks retained. Live suite 61/61, strict types and scoped lint pass. Rollback restores these adapter/test lines.
+
 - [x] TRAIN0218-LIVE-R1: preserve the exact session HMR path and approved token upstream. The real-authorizer/path-sensitive native upgrade and endpoint assertions fail before (2/60) and pass after; credential stripping and immediate revocation remain checked. Combined live suite 61/61, strict types and scoped lint pass. Rollback restores the proxy/test change; production gates remain.
 
 - [x] TRAIN0218-LIVE pod merge: integrated qualified wagon `2e4015bbc`; retained the train plan and all corrected main/auth/CI foundations. This adds inert controller/cache/pod and authenticated live-proxy modules; production activation still requires the frozen substrate, integrity, relay and host-wiring gates. Combined scoped qualification and final release evidence remain pending.

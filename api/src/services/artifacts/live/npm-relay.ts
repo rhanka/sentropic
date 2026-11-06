@@ -6,10 +6,13 @@ import { NPM_RELAY } from './recipes';
 export async function fetchLockedTarball(pin: IntegrityPin, relay: typeof NPM_RELAY = NPM_RELAY,
   transport: typeof fetch = fetch): Promise<Uint8Array> {
   const url = new URL(pin.url);
-  if (relay !== NPM_RELAY || url.origin !== 'https://registry.npmjs.org' || url.username || url.password || url.search || url.hash) {
+  if (relay !== NPM_RELAY || url.origin !== 'https://registry.npmjs.org' || url.username || url.password || url.search || url.hash
+    || url.pathname.startsWith('//')) {
     throw new LiveError('dependency_integrity_missing');
   }
-  const response = await transport(new URL(url.pathname, relay), {
+  const target = new URL(relay);
+  target.pathname = url.pathname;
+  const response = await transport(target, {
     redirect: 'error', headers: { 'accept-encoding': 'identity' }, signal: AbortSignal.timeout(30_000),
   });
   if (response.status !== 200 || !response.body) throw new LiveError('builder_unavailable');
