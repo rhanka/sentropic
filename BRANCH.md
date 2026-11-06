@@ -74,6 +74,7 @@
   - [x] Restored issuer private authority mint/rotation after acknowledged CM commit, local revocation closure and private signing fence.
   - [x] All 35 remote-session tests pass; private-session and integrity units pass. Refused-revocation fixtures must explicitly start without private authority.
   - [x] Private-session wrapping preserves the deferred-mail getter; registration and authentication regressions pass.
+  - [x] Private projections require non-null refresh binding material; continuation cleanup matches exact subject/session proof ids.
 - [x] **Lot 3 — A4-ADOPTION-INTERLEAVE**
   - [x] Request-scoped service interception occurs between the lock-free rights read and mutation transaction; current row authorization and CAS stay mandatory.
   - [x] Re-enabled stale-end test; all 38 tests in `api/tests/api/session-adoption.test.ts` pass with assertions unchanged.
@@ -85,6 +86,6 @@
   - [x] Invalid/expired public credentials continue anonymously; infrastructure failures return 503; all three focused regressions pass; requireAuth unchanged.
   - [x] Activity-touch and workspace-member catch-all log only known custody codes or validated SQLSTATEs, with a fixed generic code otherwise.
 - [ ] **Lot 6 — Docs consolidation and final validation**
-  - [ ] Scoped API tests, API typecheck/lint; no requested test remains skipped.
+  - [x] Scoped API tests: 182/182 in 15 files; all requested tests enabled and original assertions unchanged. API typecheck/lint qualified separately.
   - [ ] Review final diff, resolve findings, push early, open one ready PR with BRANCH.md body, monitor CI until green; do not merge.
   - [ ] `make down-volumes`; report `.tmp/rv/a4-followups.md`.
