@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import { assertRequest, canonical, digest, kubectl, namespace, privateInput } from './guards.mjs';
+import { assertAuthorization, assertRequest, canonical, digest, kubectl, namespace, privateInput } from './guards.mjs';
 import { assertTrafficRestriction } from './verification-boundary.mjs';
 
 export function executionGrant(env, request, read = privateInput) {
@@ -16,8 +16,10 @@ export function executionGrant(env, request, read = privateInput) {
 /** Execute only the exact command vectors recorded in the owner's immutable annex. */
 export function execute(env = process.env, call = kubectl, read = privateInput) {
   read(env.A4_KUBECONFIG_FILE);
-  const request = JSON.parse(read(env.A4_REQUEST_FILE)); assertRequest(request);
-  const grant = executionGrant(env, request, read), action = env.A4_ACTION;
+  const action = env.A4_ACTION;
+  const request = JSON.parse(read(action === 'fence' ? env.A4_AUTHORIZATION_FILE : env.A4_REQUEST_FILE));
+  if (action === 'fence') assertAuthorization(request); else assertRequest(request);
+  const grant = executionGrant(env, request, read);
   if (!['fence', 'delete-custodian', 'start-api', 'start-ui', 'start-idp', 'refence', 'resume', 'restrict', 'open-traffic'].includes(action)
     || !['0', '1'].includes(env.A4_DRY_RUN ?? '1')) throw new Error('action_invalid');
   const k = (args, input) => call(env.A4_KUBECONFIG_FILE, args, input);
