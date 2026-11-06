@@ -71,6 +71,7 @@
   - [x] Compose the API service with scoped Postgres state, private immutable cache blobs and Kubernetes/supervisor adapters.
   - [x] Carry verified source staging into clean installs, quarantine corrupt storage pointers and return current row versions.
   - [x] Project only current durable revisions; keep replay and outdated readiness from exposing older source.
+  - [x] Reconcile revoked/missing workers and retain generation-qualified drafts before permitting replacement.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.

@@ -36,7 +36,7 @@ export interface LivePorts {
     snapshot(key: LiveKey, headSha: string): Promise<SourceSnapshot>;
   };
   drafts: {
-    current(key: LiveKey): Promise<DraftSnapshot>;
+    current(key: LiveKey, generation: number): Promise<DraftSnapshot>;
     /** CAS only an empty overlay to a verified new head; a concurrent edit must refuse. */
     advanceClean(key: LiveKey, expected: DraftSnapshot, headSha: string): Promise<DraftSnapshot>;
     /** Verifies the already-durable encrypted pointer; failure must prevent destructive cleanup. */
