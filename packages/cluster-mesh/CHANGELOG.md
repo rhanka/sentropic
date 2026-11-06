@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.0-dev.14
+
+- Add GitHub App enrollment with owner/scope/repository-bound callbacks,
+  encrypted credential custody, selected-repository installation and a
+  short-lived installation-lease broker for artifacts Git operations.
+- Add App-key and webhook-secret rotation, bounded verification overlap,
+  revocation fencing and host invalidation callbacks. Keys and webhook
+  secrets remain in cluster-mesh custody; hosts compose their durable store
+  and authenticated routes before enrollment and real-forge qualification.
+- Reserve this train's development version after the documented dev.11–dev.13
+  allocations; stable publication and deployment retain their existing gates.
+
 ## 0.26.0-dev.5
 
 - Add the A2.0b identity custody extension bundle (contract 1.1.0, atomic
