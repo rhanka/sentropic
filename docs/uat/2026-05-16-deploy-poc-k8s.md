@@ -25,8 +25,8 @@ State of this branch (`feat/deploy-poc-k8s`) :
   cluster: pod, PVC, and auth Secret all return `NotFound`.
 - The `sentropic` tenant baseline was applied on 2026-05-17: namespace,
   ResourceQuota, LimitRange, NetworkPolicy, and tenant ServiceAccount exist.
-- The api/ui manifests target `rg.fr-par.scw.cloud/nc-reg/sentropic-api:feat-deploy-poc-k8s`
-  and `rg.fr-par.scw.cloud/nc-reg/sentropic-ui:feat-deploy-poc-k8s`.
+- The api/ui manifests target `ghcr.io/rhanka/sentropic-api:feat-deploy-poc-k8s`
+  and `ghcr.io/rhanka/sentropic-ui:feat-deploy-poc-k8s`.
 - Secrets were bundled on 2026-05-17 from the root `.env`: `sentropic-postgres`
   and `sentropic-api` exist in namespace `sentropic`.
 - Remaining rollout gate: the namespace must have the `sentropic-registry`
@@ -95,7 +95,7 @@ persistentvolumeclaim/data-postgres-0   Bound  1Gi   scw-bssd
 
 - `make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s` created `sentropic-registry`.
 - `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` rolled out api and ui successfully after:
-  - aligning manifests to `rg.fr-par.scw.cloud/nc-reg/sentropic-{api,ui}:feat-deploy-poc-k8s`;
+  - aligning manifests to `ghcr.io/rhanka/sentropic-{api,ui}:feat-deploy-poc-k8s`;
   - using `strategy: Recreate` for api/ui under the tight tenant quota;
   - adding workload NetworkPolicies for api -> postgres and ui -> api;
   - adding an api `startupProbe` so startup migrations are not killed by liveness.
