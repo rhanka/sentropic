@@ -138,7 +138,11 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       await tx.complete(command!, { ...mutation.result, revision: tx.record!.revision });
       return mutation.result;
     });
-    if (!result.replayed && action) await settleLiveWorker({ deps, identity, action, result, now: now() });
+    if (!result.replayed && action) {
+      const settling = settleLiveWorker({ deps, identity, action, result, now: now() });
+      if (action === 'stop') await settling;
+      else void settling;
+    }
     return narrowStop ? { liveSessionId: result.liveSessionId, state: result.state } : result;
   } };
 }
