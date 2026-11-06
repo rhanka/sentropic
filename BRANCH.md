@@ -78,6 +78,7 @@
 - [x] **Lot 4 — A4-LANE-BLOCKED-SERIALIZE**
   - [x] Intercept live refresh transaction after subject/refresh locks; revoke CM consent, protocol evidence and subject revision atomically.
   - [x] All 12 refresh integration tests pass with assertions unchanged; writer uses the real CM request runner and its unchanged attempt budget. Both consent-plane rollback/restoration regressions pass.
+  - [x] Missing CM consent authority refuses even when a protocol evidence row remains; no fallback from the protocol row to authority.
 - [x] **Lot 5 — Optional authentication and logging**
   - [x] Invalid/expired public credentials continue anonymously; infrastructure failures return 503; all three focused regressions pass; requireAuth unchanged.
   - [x] Activity-touch and workspace-member catch-all log only known custody codes or validated SQLSTATEs, with a fixed generic code otherwise.
