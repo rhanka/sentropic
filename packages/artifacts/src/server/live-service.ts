@@ -53,7 +53,13 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       if (new Set(args.paths).size !== args.paths.length || args.paths.length > 255) throw new ArtifactOperationError('invalid_request');
       for (const path of args.paths) gitPath(authority.repository, authority.target, path, false);
     }
-    const identity = { storageScopeId: invocation.storageScopeId, artifactId: binding.artifactId, bindingGeneration: binding.generation };
+    let identity = { storageScopeId: invocation.storageScopeId, artifactId: binding.artifactId, bindingGeneration: binding.generation };
+    if (stop) {
+      const sessionIdentity = await deps.store.sessionIdentity(invocation.storageScopeId, binding.artifactId, args.liveSessionId);
+      if (!sessionIdentity) liveBusy('stale_session');
+      identity = sessionIdentity!;
+    }
+    const narrowStop = stop && (!authority.canReadCode || identity.bindingGeneration !== binding.generation);
     const expired = await deps.store.transaction(identity, async tx => expireLiveDraft(tx, now()));
     const command = writer ? { actorId: invocation.actorId, key: args.idempotencyKey,
       hash: orderedDigest({ operation, args }), operation } : undefined;
@@ -65,7 +71,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
         const liveness = operation !== 'live_control' ? {} : runtime?.liveSessionId === prior.result.liveSessionId ?
           { state: runtime!.phase, runtimeState: runtime!.phase, appliedRevision: runtime!.appliedRevision } :
           { state: 'DORMANT', runtimeState: 'DORMANT', appliedRevision: null };
-        return stop && !authority.canReadCode ? { liveSessionId: prior.result.liveSessionId, state: liveness.state } :
+        return narrowStop ? { liveSessionId: prior.result.liveSessionId, state: liveness.state } :
           { ...prior.result, ...liveness, replayed: true };
       }
     }
@@ -87,7 +93,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
     let action: 'project' | 'stop' | null = null;
     const result = await deps.store.transaction(identity, async tx => {
       const current = await deps.authorize(invocation, args.artifactId);
-      if (current.binding.generation !== identity.bindingGeneration || current.ownerId !== invocation.actorId && !current.invited ||
+      if (!stop && current.binding.generation !== identity.bindingGeneration || current.ownerId !== invocation.actorId && !current.invited ||
         (!stop && !current.canReadCode)) throw new ArtifactOperationError('access_denied');
       if (writer && !stop && (!current.canWrite || !current.humanLinked || current.binding.state !== 'attached')) throw new ArtifactOperationError('access_denied');
       authority = current;
@@ -131,6 +137,6 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       return mutation.result;
     });
     if (!result.replayed && action) await settleLiveWorker({ deps, identity, action, result, now: now() });
-    return stop && !authority.canReadCode ? { liveSessionId: result.liveSessionId, state: result.state } : result;
+    return narrowStop ? { liveSessionId: result.liveSessionId, state: result.state } : result;
   } };
 }
