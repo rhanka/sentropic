@@ -12,7 +12,7 @@ test('should verify internal gates with UI stopped, then HTTP only through the r
   const ui = structuredClone(api); ui.spec.replicas = 0;
   ui.spec.template.spec.containers = [{ name: 'ui', image: image.replace('sentropic-api', 'sentropic-ui') }];
   const restriction = { ipAllowList: { sourceRange: ['192.0.2.10/32'] } };
-  const grant = { ...request, uiImage: ui.spec.template.spec.containers[0].image,
+  const grant = { ...request, format: 'preprod-a4-execution/1', uiImage: ui.spec.template.spec.containers[0].image,
     middlewareSpecSha256: digest(canonical(restriction)), trafficRestrictionReceiptRef: 'tenant:external-denial-proof' };
   const worker = { kind: 'Deployment', metadata: { name: 'worker' }, spec: { replicas: 0 }, status: { replicas: 0 } };
   const call = (_config, args) => {
@@ -32,7 +32,7 @@ test('should verify internal gates with UI stopped, then HTTP only through the r
   const result = await verify(env, call, read, () => assert.fail('stopped UI must not be probed'));
   assert(result.trim().split('\n').every(line => /^[A-Za-z]+Sha256=[a-f0-9]{64}$/.test(line)));
   assert(calls.every(args => ['get', 'exec'].includes(args[0])));
-  const http = { ...env, A4_VERIFY_PHASE: 'http', A4_VERIFICATION_FILE: '/private/grant' };
+  const http = { ...env, A4_VERIFY_PHASE: 'http', A4_EXECUTION_FILE: '/private/grant', A4_EXECUTION_SHA256: digest(JSON.stringify(grant)) };
   await assert.rejects(verify(http, call, read, () => assert.fail('stopped UI must not be probed')), /ui_not_ready/);
   ui.spec.replicas = 1;
   await verify(http, call, read, async () => new Response('{}', { status: 200 }));

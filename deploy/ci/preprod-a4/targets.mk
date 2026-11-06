@@ -9,7 +9,13 @@ export A4_REMOTE_FILE
 export A4_REHEARSAL_FILE
 export A4_BUDGETS_FILE
 export A4_VERIFY_PHASE ?= internal
-export A4_VERIFICATION_FILE
+export A4_EXECUTION_FILE
+export A4_EXECUTION_SHA256
+export A4_ACTION
+.PHONY: k8s-preprod-a4-action
+k8s-preprod-a4-action: ## Execute one owner-approved immutable annex action; dry-run by default
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/execution.mjs
 .PHONY: k8s-preprod-a4-verify
 k8s-preprod-a4-verify: ## Read-only internal gates; A4_VERIFY_PHASE=http additionally requires the restricted UI proxy
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac

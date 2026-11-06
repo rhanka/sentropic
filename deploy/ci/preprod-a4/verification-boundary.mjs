@@ -1,6 +1,6 @@
 import { canonical, digest, namespace } from './guards.mjs';
 
-export function assertVerificationBoundary(request, grant, k) {
+export function assertTrafficRestriction(request, grant, k) {
   if (grant.authorizationRef !== request.authorizationRef || grant.operationId !== request.operationId
     || grant.candidateImage !== request.candidateImage || grant.candidateCommit !== request.candidateCommit
     || !/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-ui@sha256:[a-f0-9]{64}$/.test(grant.uiImage)
@@ -20,6 +20,10 @@ export function assertVerificationBoundary(request, grant, k) {
       throw new Error('ingress_boundary_invalid');
     }
   }
+}
+
+export function assertVerificationBoundary(request, grant, k) {
+  assertTrafficRestriction(request, grant, k);
   const objects = JSON.parse(k(['get', 'deployments,statefulsets,daemonsets,cronjobs,jobs', '-o', 'json'])).items;
   for (const object of objects) {
     if (object.kind === 'StatefulSet' && object.metadata.name === 'postgres') continue;
