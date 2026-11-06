@@ -44,6 +44,7 @@ export function measureRun(capture) {
   const complete = run.status === 'completed' && records.length > 0 && records.every(row => row.conclusion
     && (row.conclusion === 'skipped' || row.dispatched === false || executionSeconds(row) !== null));
   const wallSeconds = complete ? durationSeconds(run.created_at, run.updated_at) : null;
+  const elapsedLowerBoundSeconds = complete ? wallSeconds : durationSeconds(run.created_at, capture.capturedAt);
   const allSelectedMeasured = selected.length > 0 && selected.every(item => records.some(row => row.name === item.job
     && row.conclusion === 'success' && row.dispatched === true && executionSeconds(row) !== null));
   const qualified = complete && fresh && run.conclusion === 'success' && verdict?.ok === true && allSelectedMeasured;
@@ -52,6 +53,8 @@ export function measureRun(capture) {
   const measurements = records.map(row => ({ runId: row.runId, attempt: row.attempt,
     jobId: row.jobId, name: row.name, conclusion: row.conclusion, labels: row.labels,
     seconds: row.conclusion === 'skipped' ? null : executionSeconds(row), queueSeconds: queueSeconds(row),
+    queueLowerBoundSeconds: ['queued', 'waiting', 'pending'].includes(row.status)
+      ? durationSeconds(row.queuedAt, capture.capturedAt) : null,
     steps: stepSpans(row), url: `https://github.com/rhanka/sentropic/actions/runs/${run.id}/job/${row.jobId}` }));
   return { runId: run.id, attempt: run.run_attempt, event: run.event, headBranch: run.head_branch,
     phase: capture.phase ?? 'before', evidenceGaps: capture.evidenceGaps ?? ['product/cache/test receipts'],
@@ -59,7 +62,9 @@ export function measureRun(capture) {
     policyDigest: manifest?.policyDigest ?? null, status: run.status, conclusion: run.conclusion,
     profile: capture.profile ?? null, case: capture.case ?? null,
     url: `https://github.com/rhanka/sentropic/actions/runs/${run.id}/attempts/${run.run_attempt}`,
-    wallSeconds, qualificationSeconds: elapsed.qualification.elapsedSeconds,
+    wallSeconds, elapsedLowerBoundSeconds, capturedAt: capture.capturedAt ?? null,
+    gapLowerBoundSeconds: elapsedLowerBoundSeconds === null ? null : Math.max(0, elapsedLowerBoundSeconds - 600),
+    qualificationSeconds: elapsed.qualification.elapsedSeconds,
     gapSeconds: wallSeconds === null ? null : Math.max(0, wallSeconds - 600),
     complete, fresh, qualified, fullProduct, endpoints: elapsed,
     expectedResults: selected.length, passedResults: verdict?.passed.length ?? null,
@@ -118,11 +123,12 @@ export function collect(directory) {
       'created_at', 'run_started_at', 'updated_at'];
     const manifest = read(path.join(dir, 'expected.json'));
     const capacity = read(path.join(dir, 'capacity/capture.json'));
-    return { run: Object.fromEntries(fields.map(key => [key, capture.run[key] ?? null])),
+    return { capturedAt: capture.capturedAt ?? null,
+      run: Object.fromEntries(fields.map(key => [key, capture.run[key] ?? null])),
       records: captureRecords(capture), manifest,
       workflowSha: capacity?.workflowSha ?? null, profile: null, case: null,
       phase: capture.run.head_branch === 'test/ci-ten-minute-proof' ? 'after' : 'before',
-      evidenceGaps: ['cache profile', 'change case', 'executed test identities', 'provider cost',
+      evidenceGaps: ['cache profile', 'change case', 'executed test identities', 'production artifact tuples', 'account capacity/readiness', 'provider cost',
         ...(capacity?.workflowSha ? [] : ['workflow SHA'])] };
   });
 }
