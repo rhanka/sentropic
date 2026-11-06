@@ -7,6 +7,8 @@ import { deactivateOwnCmAccount } from '../../../services/identity/cm-account-ad
 import { remoteRevocationError } from '../../../services/auth/remote-revocation-error';
 import { deleteOwnCmAccount } from '../../../services/identity/cm-account-deletion';
 import { runCmAccountDeletionHttp } from './cm-deletion-http';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { readCmAccountCredential } from '../../../services/identity/cm-self-deletion';
 
 // ---------------------------------------------------------------------------
 // /me — account lifecycle over the CM stores
@@ -41,12 +43,20 @@ accountRouter.get('/', async (c) => {
 
 accountRouter.post('/deactivate', async (c) => {
   const { userId, sessionId } = c.get('user');
-  await deactivateOwnCmAccount(userId, sessionId);
+  const credential = readCmAccountCredential(c.req.raw);
+  if (!credential) return c.json({ error: 'Authentication required' }, 401);
+  try { await deactivateOwnCmAccount(userId, sessionId, credential); }
+  catch (error) {
+    if (error instanceof IdentityCustodyErrorV1 && error.code === 'login_binding_mismatch') {
+      return c.json({ error: 'Session is invalid or expired' }, 401);
+    }
+    throw error;
+  }
 
   return c.json({ success: true });
 });
 
 accountRouter.delete('/', async (c) => {
   const { userId } = c.get('user');
-  return runCmAccountDeletionHttp(c, operationId => deleteOwnCmAccount(userId, operationId));
+  return runCmAccountDeletionHttp(c, operationId => deleteOwnCmAccount(userId, operationId, c.get('cmSelfDeletion')));
 });
