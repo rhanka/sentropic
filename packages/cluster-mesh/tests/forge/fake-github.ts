@@ -1,13 +1,14 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { createEncryptedGitAppCustodian } from '../../src/forge/custody.js';
 import { createGitHubAppEnrollment } from '../../src/forge/enrollment.js';
+import type { GitCredentialInvalidation } from '../../src/forge/contracts.js';
 
 export const key = () => generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey
   .export({ type: 'pkcs8', format: 'pem' }).toString();
 export const owner = { ownerId: 'owner', storageScopeId: 'immo', repoId: 'repo-immo', locator: 'rhanka/radar-immobilier' };
 export const permissions = { contents: 'write', metadata: 'read' } as const;
 
-export const fixture = () => {
+export const fixture = (options: { onCredentialsChanged?: (event: GitCredentialInvalidation) => Promise<void> } = {}) => {
   let time = Date.parse('2026-11-05T12:00:00Z');
   const envelopes = new Map<string, string>();
   let tail = Promise.resolve();
@@ -33,6 +34,7 @@ export const fixture = () => {
   let tokenRepos = ['101'];
   let tokenLifetime = 3600000;
   let invalidationFails = false;
+  let revocationFails = false;
   const github = {
     exchange: async () => ({ appId: '42', slug: 'test-app', privateKey: appKey, webhookSecret: 'fake-webhook' }),
     inspectInstallation: async () => {
@@ -48,13 +50,17 @@ export const fixture = () => {
     resolveRepository: async (_app: unknown, _installationId: string, locator: string) => locator === owner.locator ? '101' : '202',
     verifyKey: async () => undefined,
     updateWebhookSecret: async () => undefined,
-    revokeToken: async (token: string) => { revoked.push(token); },
+    revokeToken: async (token: string) => {
+      if (revocationFails) throw new Error('fake token revocation failure');
+      revoked.push(token);
+    },
   };
-  const invalidations: { repoId: string; credentialVersion: string }[] = [];
+  const invalidations: GitCredentialInvalidation[] = [];
   const service = createGitHubAppEnrollment({ custody, github, publicBaseUrl: 'https://mesh.example', now: () => time,
     onCredentialsChanged: async (event) => {
       if (invalidationFails) throw new Error('fake-sensitive-host-error');
       invalidations.push(event);
+      await options.onCredentialsChanged?.(event);
     } });
   const ready = async (target = owner) => {
     const start = await service.begin(target);
@@ -70,5 +76,6 @@ export const fixture = () => {
     remove: () => { installed = false; },
     lifetime: (ms: number) => { tokenLifetime = ms; },
     failInvalidation: (fails: boolean) => { invalidationFails = fails; },
+    failRevocation: (fails: boolean) => { revocationFails = fails; },
     tokenRepos: (ids: string[]) => { tokenRepos = ids; } };
 };
