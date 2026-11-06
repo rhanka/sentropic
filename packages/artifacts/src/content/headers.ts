@@ -91,6 +91,10 @@ export function contentHeaders(input: ContentHeaderInput): Record<string, string
   const withCharset = mimeType.startsWith('text/') ? `${mimeType}; charset=utf-8` : mimeType;
   const cacheable = !isHtml && input.assetCacheSeconds !== undefined && input.assetCacheSeconds > 0;
   const mode = input.mode ?? 'safe';
+  // Workers enforce the script response's policy, not the document's CSP.
+  // Cover every application asset so alternate JavaScript MIME types cannot bypass it.
+  const csp = mode === 'application' ? applicationCsp(isHtml ? input.scriptHashes : undefined)
+    : isHtml ? SAFE_HTML_CSP : undefined;
   return {
     'content-type': withCharset,
     'content-length': String(input.size),
@@ -99,7 +103,7 @@ export function contentHeaders(input: ContentHeaderInput): Record<string, string
     'cache-control': cacheable ? `private, max-age=${input.assetCacheSeconds}` : 'no-store',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
-    ...(isHtml ? { 'content-security-policy': mode === 'application' ? applicationCsp(input.scriptHashes) : SAFE_HTML_CSP } : {}),
+    ...(csp === undefined ? {} : { 'content-security-policy': csp }),
     ...(SANDBOXED_MIME_TYPES.has(mimeType) ? { 'content-security-policy': SANDBOX_CSP } : {}),
   };
 }
