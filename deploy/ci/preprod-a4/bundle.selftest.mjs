@@ -2,10 +2,25 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { verifyRenderedSequence } from './topology.selftest.mjs';
-const { parseAllDocuments } = createRequire('/workspace/package.json')('yaml');
+const { parseAllDocuments } = createRequire(process.env.A4_YAML_PACKAGE ?? '/workspace/package.json')('yaml');
 const load = tier => parseAllDocuments(readFileSync(`/rendered/${tier}.yaml`, 'utf8')).map(doc => doc.toJSON());
-const preprod = load('preprod'), prod = load('prod');
+const recovery = load('preprod'), preprod = load('preprod-a4'), prod = load('prod');
 const object = (objects, kind, name) => objects.find(object => object.kind === kind && object.metadata.name === name);
+for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
+  const pod = object(recovery, 'Deployment', name).spec.template.spec;
+  const tag = name === 'ui' ? 'sentropic-ui:434fe5' : 'sentropic-api:f2313a';
+  assert.equal(pod.containers[0].image, `rg.fr-par.scw.cloud/nc-reg/${tag}`);
+  assert(!pod.volumes?.some(volume => ['cm-cutover', 'cm-runtime'].includes(volume.name)));
+  assert(!pod.containers[0].command?.some(arg => arg.includes('/run/cm-runtime/')));
+  assert(!pod.containers[0].env?.some(env => env.valueFrom?.secretKeyRef?.name === 'sentropic-identity-budgets'));
+  console.log(`PASS: deploy-preprod would deploy ${name} on ${tag} with recovery runtime`);
+}
+assert(!object(recovery, 'ConfigMap', 'sentropic-a4-runtime'));
+assert.equal(object(recovery, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, undefined);
+for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
+  assert.equal(object(prod, 'Deployment', name).spec.template.spec.containers[0].image,
+    `rg.fr-par.scw.cloud/nc-reg/sentropic-${name === 'ui' ? 'ui' : 'api'}:main`);
+}
 const api = object(preprod, 'Deployment', 'api').spec.template.spec;
 const config = object(preprod, 'ConfigMap', 'api').data;
 const container = api.containers.find(container => container.name === 'api');

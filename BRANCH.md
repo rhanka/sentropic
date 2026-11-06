@@ -109,7 +109,9 @@
   - `api/src/services/identity/cm-import-source.ts`
   - `api/tests/unit/auth/cm-preprod-*.test.ts`
   - `deploy/ci/preprod-a4/**`
+  - `deploy/ci/artifact-content/tests.mk`
   - `deploy/k8s/overlays/preprod/**`
+  - `deploy/k8s/overlays/preprod-a4/**`
   - `docs/runbooks/preprod-a4-cutover.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
@@ -128,7 +130,9 @@
 ## Feedback Loop
 - [x] EXT06-W1 — Merge #929 with manual conflict union: retain train's social/registration admission and read-only session validation, add the wagon's post-commit remote-session authority, preserve both HTTP concurrency regression sets, and keep candidate-core archive output with chat-ui 1.0.1.
 - [x] EXT06-W2 — Merge approved A4 procedure at 1a5a9ef98, retain both bundle commands; operator/API/manifest qualification follows; no live cutover execution.
-- [ ] EXT06-PIN — Six-line recovery image block with temporary removal comment; candidate build/publication unchanged, preprod four-workload render and CI receipt required, production untouched.
+- [x] EXT06-PIN — Six-line recovery image block with temporary removal comment; candidate build/publication unchanged. Local four-workload recovery and A4 renders PASS; production source unchanged. CI log receipt remains required.
+- [x] EXT06-RUNTIME — Default preprod must keep the recovery entrypoint and omit unprovisioned A4 custody dependencies. Move A4 patches into an explicit preview overlay; the existing authorized wire operation still installs them under fence. Qualify both actual renders and keep all prior custody assertions.
+- [x] EXT06-EX2 — Existing CI manifest target also qualifies A4/recovery renders and operator tests. Its digest fixture layers an image override over the actual pinned overlay, preserving every existing content assertion. Impact: read-only CI qualification only; rollback: restore the fixture recipe.
 - [x] EXT06-EX1 — Extend scope to approved #929 and A4 wagon paths, including existing BR83-EX1 workflow union and BRA4B-EX1 Makefile include. Impact: requested train integration/preprod pin only; rollback: revert the two wagon merges and image block. Preserve versions, lock entries and existing pins except the wagon's chat-ui 1.0.1 version record.
 - [ ] EXT06-CI — Independent consolidated review, local scoped gates, exact-head attempt-1 CI green, PR body and Extension 06/11 report; conductor remains the Track writer.
 - [x] TRAIN-CI11 — Run 42258636361 shard 3: /auth/session returns 500 after session_validate activity writes exhaust unchanged serialization attempts (40001). Use CM's supported read-only session_validate completion while preserving all write flows/refusal mapping. Real current-session handler: 16 concurrent requests pass, activity row remains unchanged, invalid/revoked tokens return 401; complete concurrency suite 5/5 PASS. Before-fix HTTP fan-out happened to pass locally, but the retained deterministic activity-write assertion failed; CI retains the actual 500 evidence. No retry/deadline increase or E2E assertion change.

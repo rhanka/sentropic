@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Preview of the runtime installed by the authorized, fenced A4 wire operation.
+# Continuous deployment uses ../preprod and keeps the recovery runtime.
+resources:
+  - ../preprod
+  - ../preprod/a4-runtime
+patches:
+  - path: patch-api-config.yaml
+  - path: patch-auth-idp-config.yaml
+  - path: patch-api-a4.yaml
+  - path: patch-auth-idp-a4.yaml
