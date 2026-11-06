@@ -36,11 +36,11 @@ export async function readLiveOverlay(tx: LiveTransaction, keys: LiveKeyPort): P
   } catch (cause) { throw new ArtifactOperationError('git_live_draft_unavailable', { cause }); }
 }
 export async function persistLiveOverlay(tx: LiveTransaction, keys: LiveKeyPort, input: LiveDraftWrite,
-  now: number, renew = true): Promise<LiveDraftRecord> {
+  now: number, renew = true, preserveRevision = false): Promise<LiveDraftRecord> {
   const overlay = [...input.overlay].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   const size = overlayBytes(overlay);
   const record = { ...(tx.record ?? cleanLiveRecord(input.identity, input.baseHeadSha, input.baseTreeSha)),
-    revision: randomUUID(), baseHeadSha: input.baseHeadSha, baseTreeSha: input.baseTreeSha,
+    revision: preserveRevision ? tx.record!.revision : randomUUID(), baseHeadSha: input.baseHeadSha, baseTreeSha: input.baseTreeSha,
     liveTreeSha: input.liveTreeSha, objectRef: randomUUID(), digest: liveDigest(JSON.stringify(overlay)),
     changedPaths: overlay.length, draftBytes: size, tombstone: null,
     expiresAt: renew ? new Date(now + LIVE_RETENTION_MS).toISOString() : tx.record?.expiresAt ?? null } satisfies LiveDraftRecord;
@@ -90,11 +90,7 @@ export function createLiveDraftVault(deps: { store: LiveStore; keys: LiveKeyPort
         if (!record.changedPaths) return record;
         const renewed = await persistLiveOverlay(tx, deps.keys, { identity, expectedRevision,
           baseHeadSha: record.baseHeadSha, baseTreeSha: record.baseTreeSha,
-          liveTreeSha: record.liveTreeSha, overlay }, now());
-        // Renewal changes the authenticated envelope, not the logical source revision.
-        renewed.revision = record.revision;
-        renewed.objectRef = randomUUID();
-        await tx.putObject(renewed.objectRef, await encryptLiveDraft(renewed, JSON.stringify(overlay), deps.keys));
+          liveTreeSha: record.liveTreeSha, overlay }, now(), true, true);
         return renewed;
       });
     },

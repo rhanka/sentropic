@@ -45,8 +45,9 @@
 - [x] Lot 0 — Read binding contracts, create isolated worktree and mechanically check branch.
 - [ ] Lot 1 — Tests first: live-draft conformance (memory/Postgres), live service and frozen catalogue.
   - [x] Specify shared vault durability, CAS, cap, replay and expiry behaviors before implementation.
-- [ ] Lot 2 — Encrypted immutable drafts, atomic pointers/results, TTL tombstones and rotation.
+- [x] Lot 2 — Encrypted immutable drafts, atomic pointers/results and TTL tombstones; memory 5/5 and Postgres 6/6.
 - [ ] Lot 3 — Five tools, typed failures, source policy, exact snapshot commit and transport wiring.
+  - [x] Five definitions appended after G0; service snapshot/recipe, A1 refusal and drift/reset tests pass 4/4.
 - [ ] Lot 4 — Scoped tests, typecheck/lint, evidence and branch push.
   - [ ] tests/live-drafts.test.ts and tests/live-drafts.integration.test.ts.
   - [ ] tests/live-tools.test.ts and tests/live-tools-transport.test.ts.

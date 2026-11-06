@@ -63,12 +63,12 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       }
     }
     if (expired && !stop && operation !== 'live_reset') throw new ArtifactOperationError('git_live_draft_expired');
+    if (operation === 'git_commit') return executeLiveCommit({ deps, identity, authority, invocation, args, command: command!, now: now() });
     const head = stop ? binding.headCommitSha! : await deps.git.resolveRef(authority.target, binding.branch);
     if (!stop && !isGitSha(head)) throw new ArtifactOperationError('invalid_request');
     if (args.expectedHeadSha && (!isGitSha(args.expectedHeadSha) || args.expectedHeadSha.length !== head.length)) throw new ArtifactOperationError('invalid_request');
     if (args.expectedHeadSha && args.expectedHeadSha !== head) throw new ArtifactOperationError('git_head_moved',
       { publicDetails: { expectedHeadSha: args.expectedHeadSha, actualHeadSha: head } });
-    if (operation === 'git_commit') return executeLiveCommit({ deps, identity, authority, invocation, args, command: command!, head, now: now() });
     let action: 'project' | 'stop' | null = null;
     const result = await deps.store.transaction(identity, async tx => {
       const current = await deps.authorize(invocation, args.artifactId);

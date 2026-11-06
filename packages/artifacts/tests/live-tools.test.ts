@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { createLiveService } from '../src/server/live-service.js';
 import { createMemoryLiveStore } from '../src/server/live-store.js';
 import { gitBinding } from './fixtures/git-binding-conformance.js';
+import { liveTreeSha } from '../src/server/live-tree.js';
 
 export function liveWitness() {
   let head = 'a'.repeat(40);
   let canReadCode = true;
-  const binding = { ...gitBinding(), executor: 'sandbox' as const, personalPrincipalId: 'alice', headCommitSha: head };
+  const binding = { ...gitBinding(), channel: 'personal' as const, executor: 'sandbox' as const, personalPrincipalId: 'alice', headCommitSha: head };
   const baseFiles = new Map([['ui/a.ts', 'alpha'], ['ui/b.ts', 'beta']]);
   const git = {
     resolveRef: vi.fn(async () => head),
@@ -17,8 +18,10 @@ export function liveWitness() {
     read: vi.fn(async (_target, input) => ({ commitSha: input.commitSha, treeSha: 'b'.repeat(40),
       files: (input.paths ?? [...baseFiles.keys()]).map(path => ({ path, text: baseFiles.get(path)!, encoding: 'utf-8' as const })), nextCursor: null })),
     isAncestor: vi.fn(async () => true),
-    commit: vi.fn(async input => { for (const f of input.files) { if (f.text === null) baseFiles.delete(f.path); else baseFiles.set(f.path, f.text); }
-      head = 'c'.repeat(40); return { commitSha: head, treeSha: input.liveTreeSha ?? 'e'.repeat(40) }; }),
+    commit: vi.fn(async input => {
+      const treeSha = liveTreeSha(await git.snapshot(), input.files.map(f => ({ ...f, mode: '100644' })), input.target);
+      for (const f of input.files) { if (f.text === null) baseFiles.delete(f.path); else baseFiles.set(f.path, f.text); }
+      head = 'c'.repeat(40); return { commitSha: head, treeSha }; }),
     createBranch: vi.fn(async () => undefined),
   };
   const worker = { reconcile: vi.fn(async () => undefined), stop: vi.fn(async () => undefined) };
