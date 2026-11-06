@@ -1,6 +1,7 @@
 import type { AuthHonoDeviceInfo, AuthHonoSessionService } from '@sentropic/auth-hono';
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { withAppCmAuth } from './cm-auth-runtime';
+import { touchCmSessionActivity } from './cm-session-activity';
 
 /** Root calls enter CM; transaction-bound consumers use binding.sessions directly. */
 export const cmAuthSessionService: AuthHonoSessionService = {
@@ -13,7 +14,10 @@ export const cmAuthSessionService: AuthHonoSessionService = {
     return result.committed ? result.value : null;
   }),
   validateSessionToken: token => withAppCmAuth(async runner => {
+    // Page loads share the same login row. Keep validation read-only, then
+    // record liveness outside its serializable snapshot, as HTTP auth does.
     const result = await runner.complete('session_validate', binding => binding.sessions.validateSessionToken(token));
+    if (result.committed && result.value) await touchCmSessionActivity(result.value.sessionRecord.id, new Date());
     return result.committed ? result.value : null;
   }),
 };
