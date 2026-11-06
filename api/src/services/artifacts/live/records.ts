@@ -26,7 +26,7 @@ export interface LiveState { runtime: LiveRuntime; progress: PublicationProgress
 export class LiveError extends Error {
   constructor(readonly code: string, readonly reason?: string) { super(code); }
 }
-export const conflict = (reason: string): never => { throw new LiveError('git_live_conflict', reason); };
+export function conflict(reason: string): never { throw new LiveError('git_live_conflict', reason); }
 export function assertFence(state: LiveState | undefined, fence: LiveRuntime): asserts state is LiveState {
   if (!state || state.runtime.generation !== fence.generation || state.runtime.sessionId !== fence.sessionId
     || state.runtime.leaseEpoch !== fence.leaseEpoch || state.runtime.routeEpoch !== fence.routeEpoch) conflict('stale_fence');
