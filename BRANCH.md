@@ -49,6 +49,7 @@
   - `packages/auth-ui/tests/oauth-consent-rendering.test.ts`
   - `e2e/Dockerfile`
   - `e2e/tests/07-matrix.spec.ts`
+  - `e2e/tests/01-app.spec.ts`
   - `api/tests/api/auth/cm-auth-request-concurrency.test.ts`
   - `api/src/services/identity/cm-auth-binding.ts`
   - `api/src/services/identity/cm-transaction.ts`
@@ -74,6 +75,7 @@
   - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
 
 ## Feedback Loop
+- [x] TRAIN-CI10 — Run 42245247246 shard 5 fails 01-app.spec.ts:94: disabled-state URL assertion expects /organizations but receives /dashboard. The folders response selects the first seeded folder after the test reads the disabled class; normal Playwright click waits for activation before navigating. A controlled Chromium probe reproduces the stale snapshot failure and preserves the disabled negative control. Require enabled Dashboard navigation within two seconds before leaving /folders; keep every existing URL assertion and both state branches. Real scoped E2E: 5/5 PASS, zero skips/retries, on this run's verified API/UI image archives and the qualified Chromium image.
 - [x] TRAIN-CI9 / BRTRAIN-EX3 — Run 42242515912 build-e2e: full Chromium starts but capture returns an empty-image protocol error. The title-only probe has no painted content in either channel. Render visible fixture content and require first-contentful-paint within 2000 ms before mandatory screenshot/video capture; additionally assert PNG signature. No retry or existing timeout change. Cold local build passes both Chromium 156 channels; exact protocol failure was not reproduced locally, while absent paint was deterministic. Trivy/compliance PASS with zero HIGH/CRITICAL findings; full CI receipt follows in the train report.
 - [x] TRAIN-CI8 / BR83-EX1 — Run 42241084291 chat-core 695/695 PASS, chat-ui DOM 206/206 PASS; installed pair still names the old core 0.3.1 archive. Feed the guarded packer's tarball output into pair qualification so it validates the actual candidate. Scope: producer output/wiring only; no qualification or dispatch gate relaxed. Wiring 39/39 PASS; real installed UI 1.0.0/core 0.3.2 contracts, Svelte typecheck, Vite build and runtime/remount/permission matrix PASS.
 - [x] TRAIN-CI7 — Run 42240457717 validate-chat-core: 694/695 PASS; only the durable-port release test still expects 0.3.1 after the required patch bump. Align its exact equality to 0.3.2, retaining the release identity assertion.
