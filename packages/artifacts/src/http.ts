@@ -33,6 +33,7 @@ import { readArtifactSource } from './server/source-read.js';
 import { artifactSummary } from './server/summary.js';
 import { projectGitBinding, type GitProjectionPorts } from './server/git-projection.js';
 import type { LiveService } from './server/live-contracts.js';
+import { isLiveBodyStream, readBoundedLiveJson } from './server/live-body.js';
 import { artifactVersions } from './server/versions.js';
 import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } from './server/management.js';
 import { createPostgresManagementUnit } from './adapters/postgres-management.js';
@@ -616,7 +617,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           if (request.body !== undefined && Object.keys(object(request.body)).length) throw new ArtifactProfileInputError();
           args = { artifactId: request.path.slice(getPrefix.length) };
         } else {
-          args = { ...object(request.body ?? {}) };
+          args = (capability.startsWith('artifacts_live_') || capability === 'artifacts_git_commit') && isLiveBodyStream(request.body)
+            ? await readBoundedLiveJson(request.body, operation) : { ...object(request.body ?? {}) };
           if (Object.hasOwn(args, 'storageScopeId')) {
             if (args.storageScopeId !== invocation.storageScopeId) throw new ArtifactProfileInputError();
             delete args.storageScopeId;
