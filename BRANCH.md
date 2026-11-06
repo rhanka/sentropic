@@ -71,12 +71,12 @@
 - [ ] Keep real enrollment, release activation and live workers disabled until their named acceptance receipts exist.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Required base and scope**
+- [x] **Lot 0 — Required base and scope**
   - [x] Read common rules first, MASTER, workflow, frozen G0 and wagon plans; harness branch C1 passes.
   - [x] Establish the branch on the published dated-train ref carrying artifacts 0.2.17 and retain its exact SHA.
-  - [ ] Write this single train plan and mechanically verify its scope before every commit.
+  - [x] Write this single train plan and mechanically verify its scope before every commit.
 - [ ] **Lot 1 — Merge ready wagon branches**
-  - [ ] SG0-app `origin/feat/git-artifact-sg0-app` — GitHub App enrollment and encrypted cluster-mesh custody.
+  - [x] SG0-app `origin/feat/git-artifact-sg0-app` — GitHub App enrollment and encrypted cluster-mesh custody.
   - [ ] SG1 `origin/feat/git-artifact-sg1` — binding lifecycle, host registry and immutable release index.
   - [ ] GB1 `origin/feat/git-artifact-gb1` — build descriptor and locked dependency validation.
   - [ ] SG2 `origin/feat/git-artifact-sg2` — injected leases, GitPort and atomic forge commits.
