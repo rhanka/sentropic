@@ -29,8 +29,8 @@ async function fresh() {
     [gitBinding().artifactId, 'scope-a'], ['22222222-2222-4222-8222-222222222222', 'scope-a'],
     ['33333333-3333-4333-8333-333333333333', 'scope-b'],
   ]) {
-    await pool.query('INSERT INTO artifacts.artifacts(id,storage_scope_id,owner_id,binding_name) VALUES ($1,$2,$3,$1)',
-      [id, scope, 'alice']);
+    await pool.query('INSERT INTO artifacts.artifacts(id,storage_scope_id,owner_id,binding_name) VALUES ($1,$2,$3,$4)',
+      [id, scope, 'alice', id]);
   }
   return createPostgresGitBindingStore(pool);
 }
