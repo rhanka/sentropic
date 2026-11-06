@@ -56,10 +56,13 @@
   - `packages/auth-ui/tests/oauth-consent-rendering.test.ts` (BR0218-EX7)
   - `packages/cluster-mesh/tests/packaging/prepare.sh` (BR0218-EX8)
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (BR0218-EX8)
+  - `ui/src/routes/organizations/[id]/+page.svelte` (BR0218-EX9)
+  - `e2e/tests/01-organizations-detail.spec.ts` (BR0218-EX9)
 - **Exception process**:
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] BR0218-EX9 / TRAIN0218-CI6: run 42263294555 shard 6 exposes stale organization presence. A delayed initial HTTP snapshot overwrites a newer SSE event; final deterministic regression fails on the verified original CI UI and passes with the six-line response-order guard. Scoped organization file passes 9/9 at four workers with zero retries/skips; production web build and C2 pass. Broader local shard has two separate role/document failures retained in the receipt; full fresh CI remains required. Impact limited to organization presence ordering and its regression; rollback restores these two files. No timeout, retry or assertion relaxation.
 - [x] Review #931 re-review residual R1: incomplete mint permissions no longer imply installation loss; reject and clean up the unissued token while preserving the prior valid lease, enrollment and credential epoch. Missing, empty and both partial permission cases fail before correction and pass after; complete forge suite passes 55/55, including confirmed suspension/permission-loss fencing and healthy retry without reenrollment. Cluster-mesh typecheck/lint and C1/C2 pass; fresh final-head CI remains required.
 - [x] Review #931 R1 authority closure: minted-token inventory refusal and incomplete installation responses do not prove enrollment loss. Three additional regressions failed before correction; complete forge suite passes 51/51, including automatic suspension/permission-loss fencing and recovery without enrollment or epoch changes.
 - [x] Review #931 R4: supported rollback restores the previous application and retains additive 0010 schema, journal and immutable history. Postgres qualification passes: a pre-0010 release remains readable, unchanged legacy publication/CAS works after rollback, binding rows/receipts/events and indexed provenance remain unchanged, and append-only triggers still refuse mutation. Host deployment qualification remains host-owned.
