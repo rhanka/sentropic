@@ -1,77 +1,55 @@
-# Feature: release-receipt skipped publishers hotfix
+# Feature: SG1 git binding, registry and release index
 
 ## Objective
-Unblock main deploys: `release-receipts` must pass when a selected package publisher ran green but explicitly published nothing (dev-line skip, already-published equal-integrity).
+- [ ] Deliver G0 FROZEN v3 section 2 records and SG1 acceptance for the artifacts 0.2.18 train.
 
 ## Scope / Guardrails
-- Scope limited to release receipt assessment and the CI record outputs feeding it.
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/release-receipt-hotfix`.
-- Automated tests run on dedicated environment (`ENV=test-ci-receipt`), never on root `dev`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
+- [x] Contract SHA-256: `4c405c8f49e9d242d65eebe35a14a45e4826afc0007e9f94a7fe21d7404e21ba`.
+- [x] Branch `feat/git-artifact-sg1`; worktree `tmp/worktrees/sg1`; base `origin/main`.
+- [x] Docker slot wrapper; make only; no Python; no secret values in outputs.
+- [x] Use `API_PORT=8801 UI_PORT=5201 MAILDEV_UI_PORT=1101 ENV=test-sg1`, ENV last.
+- [x] Train integration owns versions, locks, pins and L5; this wagon changes none.
+- [x] Keep one ready PR and observe CI; merge freeze applies; never merge this wagon.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/release-receipt.mjs`
-  - `scripts/ci/release-receipt.test.mjs`
-  - `.tmp/rv/hotfix-release-receipt.md`
+  - `packages/artifacts/src/**`
+  - `packages/artifacts/tests/**`
+  - `packages/artifacts/migrations/0010_git_bindings.sql`
+  - `packages/artifacts/docs/git-bindings.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `**/package*.json`
+  - `tools/memory-mcp-l5/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `<none>`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `attention`: BR82-EX2 — `.github/workflows/ci.yml` record steps touched (conditional path). Reason: the cluster-mesh decision-skip path emits no `record` outputs today, so the receipt sees job `success` with no `pack` and fails a publisher that never published; the equal-integrity conflict is also not forwarded. Impact: three `record` steps only (llm-mesh, llm-gateway, cluster-mesh) gain an explicit `status=skipped` branch and a forwarded `conflict` output; no job `if` conditions change. Rollback: revert the `record` step blocks; the `.mjs` fix alone already passes already-published mesh/gateway receipts.
-- `acknowledge`: main is RED at `843efe3a1` (run 42036741718, `release-receipt: FAIL (1): repacked publication: @sentropic/cluster-mesh (pack=missing, expected candidate)`); this branch is the urgent hotfix lane, no merge until the PR CI is green.
+- [x] SG1-sqlite: named follow-up for SQLite binding parity; acceptance and resource scope in `packages/artifacts/docs/git-bindings.md`; conductor imports this source into Track as designated writer.
+- [x] SG2 owns forge adapter/probe-qualified GitPort; SG3 owns git tools and attach orchestration; SG4 owns release transaction writes.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [x] No AI-dependent acceptance; no flaky exception requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single orthogonal hotfix, one final test cycle on the PR CI.
+- [x] Mono-branch; one build lane; consolidated train review.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this branch; no UAT required.
+- [ ] Verify fake tenant and Postgres lifecycle, conflicts, namespace, CAS and scope isolation.
+- [ ] Verify MCP artifacts_get omits git entirely without current repository code right.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Create isolated worktree `tmp/worktrees/release-receipt-hotfix` on branch `fix/release-receipt-skipped-publishers` from `origin/main` (`843efe3a1`); harness branch check PASS C1.
-  - [x] Confirm scope boundaries and declare BR82-EX2 for `.github/workflows/ci.yml`.
-  - [x] Confirm command style: `make ... ENV=test-ci-receipt` with `ENV` last.
-- [x] **Lot 1 — Tests-first receipt fix**
-  - [x] Added red tests to `scripts/ci/release-receipt.test.mjs` (5 failed pre-fix, 2 fail-closed locks passed pre-fix).
-  - [x] Fixed `scripts/ci/release-receipt.mjs` (`assessChain` reads `publication_*` outputs + explicit status; `publicationProblems` passes explicit skipped/already-published, keeps pack FAIL-closed for real publications).
-  - [x] Fixed `ci.yml` record steps (explicit `status=skipped` on the cluster-mesh decision-skip path, forward `conflict`).
-  - [x] Lot gate:
-    - [x] `make test-publishable-manifests SCOPE=scripts/ci/release-receipt.test.mjs ENV=test-ci-receipt` green (40/40); full manifest suite 119/119 green.
-    - [x] `make scope-check` clean before every commit; commits via `make commit` only.
-- [ ] **Lot 2 — PR + CI to green**
-  - [x] Opened READY PR #920 from `fix/release-receipt-skipped-publishers`, pushed head `5dde70c77`.
-  - [ ] Watch PR CI to green (no `[skip ci]`, no `gh run rerun`).
-  - [ ] Run 42043369956: only `test-e2e (2)` failed (single `08-chat-workspace-switch` visibility assertion; no app code touched by this branch); main run 41981165023 failed `test-e2e (2)` + `(4)` without this change — unrelated e2e instability, retriggered via fresh head per CI budget.
-  - [ ] Run 42046499747: `test-e2e (2)` PASSED (run-1 e2e failure proven transient); `build-desktop` failed on `pkg` download `504 Gateway Time-out` + `spawnSync patch ENOENT` (runner infra, no input from this branch) cascading to `build-ui`/`security-container-ui` skipped and the `security-container` join red; run 1 had `build-desktop` green with the same tree — unrelated infra flake, retriggering via fresh head per CI budget.
-- [ ] **Lot 3 — Report, no merge**
-  - [ ] Write `.tmp/rv/hotfix-release-receipt.md`.
-  - [ ] Do NOT merge; hand control back.
+- [x] Lot 0: read rules, contract and baseline; create isolated worktree; mechanical branch check.
+- [ ] Lot 1: tests first in `tests/git-bindings.test.ts`, `tests/fixtures/git-binding-conformance.ts`, `tests/git-bindings.integration.test.ts`, `tests/git-binding-projection.test.ts`.
+- [ ] Lot 2: frozen record types, scope-bound host registry, binding store port, memory double and lifecycle CAS.
+- [ ] Lot 3: additive migration 0010, append-only audit/index and Postgres adapter; shared conformance suite.
+- [ ] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
+- [ ] Lot 5: written SQLite decision and adapter/host integration documentation.
+- [ ] Lot 6: scoped local tests, typecheck/lint, scope check, one ready PR and green CI.
+
+## Deferred to SG1-sqlite
+- [ ] Add SQLite migration/adapter and run the same binding conformance suite on both SQL backends by 2026-11-10; no Immo dependency.
