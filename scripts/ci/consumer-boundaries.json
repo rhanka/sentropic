@@ -87,6 +87,7 @@
     }
   ],
   "policies": {
+    "documentation-only": { "selection": "documentation", "note": "positively identified documentation needs no consumer integration; unknown functional paths remain full blocking integration" },
     "unknown": { "selection": "full", "note": "unknown or missing evidence selects full blocking integration" },
     "runtime-security": { "selection": "full", "note": "runtime, deploy, security, e2e, or host changes select full blocking integration" },
     "root-lock-toolchain": { "selection": "full", "note": "root lock, toolchain, image input, or workflow changes select full blocking integration" },
