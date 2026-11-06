@@ -68,12 +68,12 @@ export function createDependencyCache(ports: CachePorts) {
   }
   function verify(object: CacheObject, identity: CacheIdentity) {
     try {
-    const { seal: signature, ...receipt } = object.receipt;
-    const expected = Buffer.from(seal(receipt));
-    const actual = Buffer.from(signature);
-    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)
-      || receipt.key !== cacheKey(identity) || cacheKey(receipt.identity) !== cacheKey(identity)
-      || treeDigest(object.files) !== receipt.treeSha256) invalid();
+      const { seal: signature, ...receipt } = object.receipt;
+      const expected = Buffer.from(seal(receipt));
+      const actual = Buffer.from(signature);
+      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)
+        || receipt.key !== cacheKey(identity) || cacheKey(receipt.identity) !== cacheKey(identity)
+        || treeDigest(object.files) !== receipt.treeSha256) invalid();
       return object.receipt;
     } catch { return invalid(); }
   }
