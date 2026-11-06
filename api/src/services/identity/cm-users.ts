@@ -154,6 +154,8 @@ export const countCmUsersWithRole = (role: string): Promise<number> => runCmIden
   return accounts.filter((account) => account.globalRole === role).length;
 });
 
+// New subjects have no fence row to lock: protect the absence check from
+// unrelated registrations before taking the serializable snapshot.
 export const createCmUser = (input: CmCreateUserInput): Promise<CmUserRecord> => runCmIdentityWrite(async (tx) => {
   const now = new Date().toISOString();
   const userId = input.userId ?? randomUUID();
@@ -179,7 +181,7 @@ export const createCmUser = (input: CmCreateUserInput): Promise<CmUserRecord> =>
   const created = await findCmUserById(userId);
   if (!created) throw new Error('Failed to create user.');
   return created;
-});
+}, { exclusive: true });
 
 export const updateCmUser = (userId: string, input: CmUpdateUserInput): Promise<CmUserRecord | null> => runCmIdentityWrite(async (tx) => {
   const { core, custody } = getCmIdentity();
