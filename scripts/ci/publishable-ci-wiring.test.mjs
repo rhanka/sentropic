@@ -427,6 +427,18 @@ test('lint wiring follows baseline evidence, independently per package, before t
   }
 });
 
+test('chat pair qualifies the core archive emitted by its guarded pack step', () => {
+  const steps = jobs['validate-chat-ui'].steps;
+  const pack = steps.find((step) => step.run?.startsWith('make pack-chat-core '));
+  const qualify = steps.find((step) => step.run?.startsWith('make qualify-chat-pair '));
+  assert.ok(pack?.id, 'core pack output must have a step identity');
+  assert.match(pack.run, /PACK_OUTPUT_FILE="\$GITHUB_OUTPUT"/);
+  assert.ok(qualify?.run.includes('CORE_ARCHIVE="${{ steps.' + pack.id + '.outputs.tarball }}"'));
+  assert.ok(steps.indexOf(pack) < steps.indexOf(qualify));
+  assert.equal(qualify.if, undefined);
+  assert.equal(qualify['continue-on-error'], undefined);
+});
+
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
 const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1,@sentropic/engram@0.22.0,@sentropic/auth-ui@0.9.0,@sentropic/design-system-svelte@0.34.75';
 
