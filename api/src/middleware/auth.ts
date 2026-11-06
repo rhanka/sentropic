@@ -3,6 +3,7 @@ import { logger } from '../logger';
 import { authenticateCmHttpRequest, publishCmAuthenticationRefusal } from '../services/identity/cm-http-principal';
 import { ensureWorkspaceForUser } from '../services/workspace-service';
 import { getWorkspaceRole, isWorkspaceDeleted } from '../services/workspace-access';
+import { cmErrorCode } from '../services/identity/cm-error-code';
 
 /**
  * Authentication uses the shipped `@sentropic/auth-hono` middleware with a
@@ -91,7 +92,7 @@ export async function requireAuth(c: Context, next: Next) {
     
     await next();
   } catch (error) {
-    logger.error({ err: error, path: c.req.path }, 'Authentication middleware error');
+    logger.error({ code: cmErrorCode(error), path: c.req.path }, 'Authentication middleware error');
     return c.json({ error: 'Authentication failed' }, 500);
   }
 }

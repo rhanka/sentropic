@@ -21,6 +21,7 @@
   - `api/src/services/me.ts`
   - `api/src/middleware/auth.ts`
   - `api/src/routes/namespaces/auth/**`
+  - `api/src/routes/namespaces/admin-identity.ts`
   - `api/src/routes/namespaces/auth.ts`
   - `api/src/routes/auth/oauth.ts`
   - `api/src/routes/namespaces/users/**`
@@ -69,6 +70,7 @@
   - [x] BR929-EX7: extend scope to AgentsList and its DOM regression after CI5's exact shard reproduces 15/16 locally. Instrumented registration proves teardown reads an old snapshot and deletes the just-re-registered first row. Impact: memoize each keyed row's primitive identity before passing it to the DS component, preserving display updates, navigation and budgets. A source change in this standalone owner-requested PR requires a chat-ui patch version and Make-regenerated root lock under the existing CI gate; no publication or merge is performed here. Rollback: revert this identity boundary and its patch allocation if the dependency lifecycle contract changes. Evidence: `.tmp/a4-followups-ci5-shard2-probe12.log`.
   - [x] BR929-EX8: CI6 identifies two package metadata tests still requiring exact 1.0.0 after the mandatory patch allocation. Impact: update their expected package version to exact 1.0.1, preserving strict equality, export-snapshot version, behavioral assertions and budgets. Rollback: keep these exact metadata expectations aligned with the next allocated package version. Evidence: CI6 validate-chat-ui job 127826385546, two failures among 533 cases.
   - [x] BR929-EX9: CI7 passes all chat-ui tests but its installed-pair command names the previous 1.0.0 archive. Impact: align only that exact UI_ARCHIVE argument in ci.yml with the allocated 1.0.1 guarded candidate; all qualification checks, triggers, guards, assertions and budgets remain unchanged. Other workflow paths remain outside allowed scope. Rollback: align the exact filename with the next package allocation. Evidence: CI7 validate-chat-ui job 127833410994, guarded 1.0.1 pack followed by missing 1.0.0 archive refusal.
+  - [x] BR929-EX10: owner-requested original admin failed-delivery contract requires admin-identity.ts to map the typed remote-authority refusal through the existing HTTP 503/retry handler. Impact: exact historical body and headers after committed disable/delete; rollback: remove this mapping with a future approved lifecycle contract. Evidence: review-929.md P1 and a4-review-contract-red.log.
 
 ## Feedback Loop
 - [ ] Track source: designated conductor imports this BRANCH.md; concurrent lane does not write `.track`.
@@ -84,6 +86,11 @@
 - [x] HTTP/storage regressions qualify identity changes; controlled browser regressions qualify organization draft and presence concurrency.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 7 — PR #929 REQUEST_CHANGES (baseline 1115dd372)**
+  - [ ] Restore exact failed-delivery HTTP 503/body/retry/cookie assertions, pending-operation cardinality and delivery before response for self/admin lifecycle calls.
+  - [ ] Restore immediate issuer tombstones, empty deleted-session storage, restored-session resolver refusal, original OAuth bulk-revoke assertion and both OIDC refusal observations.
+  - [x] Sanitize requireAuth errors through cmErrorCode; six sentinel-bearing authentication/workspace regressions fail on the old logger and pass with typed codes only.
+  - [ ] Audit all 13 cases against 1115dd372, run scoped API/type/lint checks, push once and monitor exact-head CI; no merge. Conductor imports this source into Track.
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read common rules, master, workflow, testing, template and #879 closure review; harness C1 PASS; ports free before startup.
 - [x] **Lot 1 — A4-SELF-DELETE and V2 cascade**
