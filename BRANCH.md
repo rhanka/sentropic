@@ -1,7 +1,7 @@
 # Feature: disk hygiene target (wagon)
 
 ## Objective
-- [ ] Add host-wide Docker cache/image hygiene, reclaimed-space output, a Docker-free self-test and an optional local image-build disk guard.
+- [x] Add host-wide Docker cache/image hygiene, reclaimed-space output, a Docker-free self-test and an optional local image-build disk guard.
 - [x] Owner packet: `.tmp/packets/disk-hygiene-target.md`; branch `chore/disk-hygiene-target`, base `origin/main` (`c107f6abd`), worktree `tmp/worktrees/disk-hygiene`.
 
 ## Scope / Guardrails
@@ -42,10 +42,11 @@
 - [x] **Lot DISK-HYGIENE-1 — Safe host cleanup and build guard**
   - [x] `Makefile`: builder prune with `--keep-storage 5G --force`, dangling prune, unused images older than 24h, reclaimed-space output; no volume operations.
   - [x] `scripts/check-disk-space.sh`, `scripts/resolve-api-image.sh`, `Makefile`: opt-in `DISK_HYGIENE_THRESHOLD=90`, Docker-root filesystem usage, refuse before actual builds, preserve image reuse.
-- [ ] **Lot DISK-HYGIENE-2 — Scoped self-test and handoff**
+- [x] **Lot DISK-HYGIENE-2 — Scoped self-test and handoff**
   - [x] `scripts/check-disk-hygiene.sh`: dry-run recipes for default/empty/dev/test ENV; stub-only cleanup and build boundary/failure tests, no real Docker cleanup.
   - [x] Gate: `make check-disk-hygiene check-down-volumes ENV=test-disk-hygiene`; host harness scope checks before each `make commit` (existing host-only scope ENV selector).
-  - [ ] End: `make down-volumes ENV=test-disk-hygiene`, `make disk-hygiene ENV=test-disk-hygiene`; push verified wagon, report `.tmp/rv/disk-hygiene.md`, Track import handoff to conductor.
+  - [x] End: dedicated `make down-volumes` and `make disk-hygiene ENV=test-disk-hygiene` succeeded through Docker slots; all three prunes reclaimed 0B; host remains 95% used. Verified wagon delivery: push branch only, report `.tmp/rv/disk-hygiene.md`; designated conductor owns Track import and consolidated train review/CI.
+  - [x] Existing regression gates: canonical API resolution (`CI_CANONICAL_CASE=resolve`) and toolbox cache miss (`CI_TOOLING_CASE=cache`) passed with the optional threshold disabled; no real image build ran.
 
 ## Inherited main train feedback (reference)
 - [x] A4-CLOSE-DELETE-DIAG — CI 42132522076 identifies SQLSTATE 40001 at the account phase while other CM transactions create workspaces. A local concurrent-writer regression reproduces the rolled-back receipt. The host now acquires a shared writer gate before ordinary write snapshots, exclusive for qualified delete operations, across API replicas. Read-only authentication stays concurrent; ordinary writers remain parallel; failed connections release their gate on destruction. Gate wait consumes the existing deadline, with unchanged attempts/budgets. Deletion, workspace, authentication, consent and host-scope suites: 34/34 passed; API typecheck/lint passed.
