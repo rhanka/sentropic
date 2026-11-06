@@ -23,7 +23,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
     }
     const writer = !['live_read', 'live_status'].includes(operation);
     const stop = operation === 'live_control' && args.action === 'stop';
-    const authority = await deps.authorize(invocation, args.artifactId);
+    let authority = await deps.authorize(invocation, args.artifactId);
     const { binding } = authority;
     if (authority.target.storageScopeId !== binding.storageScopeId || authority.target.repoId !== binding.repoId ||
       authority.target.branch !== binding.branch || authority.target.subPath !== binding.subPath ||
@@ -69,7 +69,11 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
           { ...prior.result, ...liveness, replayed: true };
       }
     }
-    if (expired && !stop && operation !== 'live_reset') throw new ArtifactOperationError('git_live_draft_expired');
+    if (expired && !stop && operation !== 'live_reset') {
+      const tombstone = await deps.store.transaction(identity, async tx => ({ draftExpiresAt: tx.record?.expiresAt,
+        liveRevision: tx.record?.revision, tombstone: true, bindingGeneration: identity.bindingGeneration }));
+      throw new ArtifactOperationError('git_live_draft_expired', { publicDetails: tombstone });
+    }
     if (writer && !stop && !expired) await deps.store.transaction(identity, async tx => {
       const overlay = await readLiveOverlay(tx, deps.keys);
       if (overlay.length) validateLiveMutation(authority.repository, authority.target, { deletes: overlay.map(e => e.path) });
@@ -85,6 +89,8 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       const current = await deps.authorize(invocation, args.artifactId);
       if (current.binding.generation !== identity.bindingGeneration || current.ownerId !== invocation.actorId && !current.invited ||
         (!stop && !current.canReadCode)) throw new ArtifactOperationError('access_denied');
+      if (writer && !stop && (!current.canWrite || !current.humanLinked || current.binding.state !== 'attached')) throw new ArtifactOperationError('access_denied');
+      authority = current;
       if (command) {
         const prior = await tx.receipt(command.actorId, command.key);
         if (prior) {
@@ -99,10 +105,15 @@ export function createLiveService(deps: LiveServiceDeps): LiveService {
       if (!tx.record) tx.record = cleanLiveRecord(identity, head, base.treeSha);
       const record = tx.record;
       if (!stop && operation !== 'live_reset' && record.expiresAt && Date.parse(record.expiresAt) <= now()) throw new ArtifactOperationError('git_live_draft_expired');
+      if (!stop && record.latestVerifiedHeadSha !== head) {
+        const fastForward = await deps.git.isAncestor(authority.target, record.latestVerifiedHeadSha, head);
+        if (!fastForward && writer) throw new ArtifactOperationError('git_diverged');
+        if (fastForward) { record.latestVerifiedHeadSha = head; record.progressSeq++; }
+      }
       if (!stop && record.baseHeadSha !== head && !record.changedPaths) {
         if (!await deps.git.isAncestor(authority.target, record.baseHeadSha, head)) throw new ArtifactOperationError('git_diverged');
         Object.assign(record, { revision: randomUUID(), baseHeadSha: head, baseTreeSha: base.treeSha, liveTreeSha: base.treeSha,
-          latestVerifiedHeadSha: head, progressSeq: record.progressSeq + 1 });
+        });
       }
       if (operation === 'live_reset' && record.baseHeadSha !== head &&
         !await deps.git.isAncestor(authority.target, record.baseHeadSha, head)) throw new ArtifactOperationError('git_diverged');
