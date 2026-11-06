@@ -6,6 +6,7 @@ import { gitSessions } from '../server/git-port-session.js';
 import type { GitPortOptions } from '../server/git-port-session.js';
 import { gitSourceReader } from '../server/git-port-read.js';
 import { gitWriter } from '../server/git-port-write.js';
+import { gitTrees } from '../server/git-port-tree.js';
 
 /** Trusted SG0-net composition only. Inject SG0-app's lease port, never an App key or PAT. */
 export function createGitPort(options: GitPortOptions): GitPort & Pick<ReturnType<typeof gitSessions>, 'invalidate'> {
@@ -28,6 +29,22 @@ export function createGitPort(options: GitPortOptions): GitPort & Pick<ReturnTyp
   }
   return {
     invalidate: sessions.invalidate,
+    snapshot: (target, commitSha) => safe(async () => {
+      const repo = await sessions.admit(target, false); assertGitSha(commitSha);
+      const trees = gitTrees(await sessions.open(repo));
+      const root = await trees.root(commitSha);
+      const entries: import('../server/git-port.js').GitTreeEntry[] = [];
+      async function walk(sha: string, prefix: string, depth: number): Promise<void> {
+        if (depth > 128) throw new ArtifactOperationError('limit_exceeded');
+        for (const entry of await trees.tree(sha)) {
+          if (entries.length >= 1_000_000) throw new ArtifactOperationError('limit_exceeded');
+          if (entry.type === 'tree') await walk(entry.sha, prefix + entry.path + '/', depth + 1);
+          else entries.push({ ...entry, path: prefix + entry.path });
+        }
+      }
+      await walk(root, '', 0);
+      return { treeSha: root, entries };
+    }),
     resolveRef: (target, ref) => safe(async () => {
       const repo = await sessions.admit(target, false);
       assertGitReadRef(ref);
