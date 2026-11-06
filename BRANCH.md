@@ -53,7 +53,7 @@
 - [x] GHCR-REF1 — Switch A4 authorization contracts, identity/artifact render fixtures and source API digest validation to GHCR.
 - [x] BRGHCR-EX1 — Owner explicitly requests Make registry migration/guard/copy entry points; impact: image delivery only; rollback: revert this train. Local mechanical scope uses the installed host harness via .tmp/ghcr-ops.mk to avoid a forbidden local build.
 - [x] BRGHCR-EX2 — Owner explicitly requests GHCR-only CI with packages:write; temporary remote-copy workflow is deleted after completion; impact: container registry only; rollback: revert this train without changing cluster Secrets.
-- [ ] Preserve BR-82 tested-artifact joins; remote published config digest equals the loaded/tested image ID; manifest digest is recorded before deployment.
+- [x] Preserve BR-82 tested-artifact joins; remote published config digest equals the loaded/tested image ID; manifest digest is recorded before deployment.
 - [ ] Public package visibility: attempt supported API; if unsupported, record exact owner click and verify anonymous pulls after the owner applies it.
 
 ## AI Flaky tests
@@ -69,6 +69,6 @@
 - [x] **Lot 0 — Baseline**: read common/master/workflow rules, create origin/main worktree, pass harness branch check, enumerate references and credential names without values.
 - [ ] **Lot 1 — Delivery**: GHCR-only registry configuration, GITHUB_TOKEN packages:write, immutable tested-byte publication and public visibility evidence.
 - [ ] **Lot 2 — Preservation**: read named live prod Deployments; remote-copy recovery api:f2313a/ui:434fe5, live prod digests and candidate 165ce5b93; record source=destination digests and remove temporary source access.
-- [ ] **Lot 3 — References**: migrate base/prod/preprod/A4, identity-sync, OAuth job, artifact-content, tests and historical docs; remove public-image pull-secret references.
-- [ ] **Lot 4 — Guard and scoped checks**: repository-wide forbidden-host guard including hidden tracked files; existing image/release receipt suites; identity/artifact/A4 render suites; workflow contract tests. Reuse existing container images only.
+- [x] **Lot 3 — References**: migrate base/prod/preprod/A4, identity-sync, OAuth job, artifact-content, tests and historical docs; remove public-image pull-secret references.
+- [x] **Lot 4 — Guard and scoped checks**: repository guard PASS; image receipts 16/16, release receipts 40/40, API tag cases 11/11, workflow/security contracts 92/92, artifact renders 56/56, A4 operators 31/31, identity sync 74/74, GHCR negative controls 5/5. Existing container images only; no local build.
 - [ ] **Lot 5 — Review/CI/handoff**: independent final-diff review; one READY PR and attempt-1 CI green; exact prod adoption procedure and approval requirement; .tmp/rv/ghcr-migration.md; make down-volumes cleanup. Conductor merges and owns Track import.
