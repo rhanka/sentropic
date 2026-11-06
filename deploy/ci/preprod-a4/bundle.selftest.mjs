@@ -11,7 +11,9 @@ for (const objects of [recovery, preprod]) {
 }
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
   const pod = object(recovery, 'Deployment', name).spec.template.spec;
-  const tag = name === 'ui' ? 'sentropic-ui:434fe5' : 'sentropic-api:f2313a';
+  const tag = name === 'ui'
+    ? 'sentropic-ui@sha256:a9d7c1aa415e7c445ceb47f6eca47789c1edc4ca3b84ab465cd1386b4e31f28d'
+    : 'sentropic-api@sha256:0a401baad9904c555f756f998538fddf0b4b86013878269ad34494a03d2807bb';
   assert.equal(pod.containers[0].image, `ghcr.io/rhanka/${tag}`);
   assert(!pod.volumes?.some(volume => ['cm-cutover', 'cm-runtime'].includes(volume.name)));
   assert(!pod.containers[0].command?.some(arg => arg.includes('/run/cm-runtime/')));
@@ -21,8 +23,14 @@ for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
 assert(!object(recovery, 'ConfigMap', 'sentropic-a4-runtime'));
 assert.equal(object(recovery, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, undefined);
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
+  const images = {
+    api: 'sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7',
+    'auth-idp': 'sentropic-api@sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909',
+    ui: 'sentropic-ui@sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e',
+    'artifact-content': 'sentropic-api:main',
+  };
   assert.equal(object(prod, 'Deployment', name).spec.template.spec.containers[0].image,
-    `ghcr.io/rhanka/sentropic-${name === 'ui' ? 'ui' : 'api'}:main`);
+    `ghcr.io/rhanka/${images[name]}`);
 }
 const api = object(preprod, 'Deployment', 'api').spec.template.spec;
 const config = object(preprod, 'ConfigMap', 'api').data;
