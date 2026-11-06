@@ -26,8 +26,10 @@ export const createGitHubAppApi = (input: {
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       if (!response.ok) {
-        if (response.status === 401 || response.status === 404) throw new GitAppAccessLostError();
-        if (response.status === 403 && !response.headers.has('retry-after') &&
+        // A rejected short-lived bearer does not prove loss of the App installation.
+        const appAuthentication = path === '/app' || path.startsWith('/app/');
+        if (appAuthentication && (response.status === 401 || response.status === 404)) throw new GitAppAccessLostError();
+        if (appAuthentication && response.status === 403 && !response.headers.has('retry-after') &&
             response.headers.get('x-ratelimit-remaining') !== '0') {
           const data = await response.json().catch(() => null);
           if (data?.message === 'Resource not accessible by integration') throw new GitAppAccessLostError();
@@ -80,7 +82,10 @@ export const createGitHubAppApi = (input: {
       numericId(installationId);
       const data = await request(`/app/installations/${installationId}`, 'GET', jwt(app));
       if (String(data?.app_id) !== app.appId || String(data?.id) !== installationId) throw unavailable();
-      return { permissions: data.permissions ?? {}, suspended: data.suspended_at !== null };
+      if (!data.permissions || typeof data.permissions !== 'object' || Array.isArray(data.permissions) ||
+          (data.suspended_at !== null && (typeof data.suspended_at !== 'string' ||
+            !Number.isFinite(Date.parse(data.suspended_at))))) throw unavailable();
+      return { permissions: data.permissions, suspended: data.suspended_at !== null };
     },
     resolveRepository: async (app, installationId, locator) => {
       const token = await mintFor(app, installationId, { repositories: [locator.split('/')[1]] });

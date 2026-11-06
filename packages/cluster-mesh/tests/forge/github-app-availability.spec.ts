@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createGitHubAppApi } from '../../src/forge/github-api.js';
-import { fixture, owner } from './fake-github.js';
+import { fixture, owner, permissions } from './fake-github.js';
 
 const failures = [
   ['server error', () => new Response(null, { status: 503 })],
@@ -17,6 +17,48 @@ const delivery = () => {
 };
 
 describe('recoverable GitHub availability', () => {
+  it.each([401, 404])('should not infer enrollment loss from minted-token inventory HTTP %s', async (status) => {
+    const f = fixture();
+    const entry = await f.ready();
+    const healthy = f.github.mint;
+    f.github.mint = createGitHubAppApi({ fetch: async (url, init) => {
+      if (url.endsWith('/access_tokens')) return Response.json({ token: 'synthetic-token', permissions,
+        expires_at: '2026-11-05T13:00:00Z' });
+      return init?.method === 'DELETE' ? new Response(null, { status: 204 }) : new Response(null, { status });
+    } }).mint;
+    await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
+    expect((await f.service.status(owner, entry.installationRef)).state).toBe('unavailable');
+    expect(f.invalidations).toEqual([]);
+    f.github.mint = healthy;
+    await expect(f.service.acquire({ ...owner, ...entry })).resolves.toMatchObject({ repositoryId: '101' });
+  });
+
+  it.each(['suspended_at', 'permissions'])('should not infer access loss from a missing %s field', async (field) => {
+    const f = fixture();
+    const entry = await f.ready();
+    const healthy = f.github.inspectInstallation;
+    const installation: Record<string, unknown> = { app_id: 42, id: 500, permissions, suspended_at: null };
+    delete installation[field];
+    f.github.inspectInstallation = createGitHubAppApi({ fetch: async () => Response.json(installation) }).inspectInstallation;
+    await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
+    expect((await f.service.status(owner, entry.installationRef)).state).toBe('unavailable');
+    expect(f.invalidations).toEqual([]);
+    f.github.inspectInstallation = healthy;
+    await expect(f.service.acquire({ ...owner, ...entry })).resolves.toMatchObject({ repositoryId: '101' });
+  });
+
+  it.each([{ permissions: { contents: 'read', metadata: 'read' }, suspended: false },
+    { permissions, suspended: true }])('should permanently revoke after confirmed installation loss %j', async (installed) => {
+    const f = fixture();
+    const entry = await f.ready();
+    const lease = await f.service.acquire({ ...owner, ...entry });
+    f.github.inspectInstallation = async () => installed;
+    await expect(f.service.acquire({ ...owner, ...entry })).rejects.toThrow('capability_unavailable');
+    expect((await f.service.status(owner, entry.installationRef)).state).toBe('revoked');
+    expect(f.revoked).toContain(lease.token);
+    expect(f.invalidations.at(-1)?.credentialVersion).toBe(lease.credentialVersion);
+  });
+
   for (const operation of ['inspectInstallation', 'mint'] as const) {
     it.each(failures)(`should recover ${operation} after a %s without reenrollment`, async (_name, fail) => {
       const f = fixture();
