@@ -5,9 +5,9 @@
 - [x] Owner scope: preprod probe only; next dated train wagon, no PR, version bump or lock regeneration.
 - [x] Resolve official Node LTS digest and publish it first in .tmp/rv/gb4-probe.md.
 - [x] GB4-1: deploy/ci/gb4-probe/checks.mjs and server.mjs; dependency-free HTTP/self-tests and WebSocket echo.
-- [ ] GB4-2: deploy/ci/gb4-probe/manifests.mjs; restricted Pod and ClusterIP Service; emptyDir volumes only.
+- [x] GB4-2: deploy/ci/gb4-probe/manifests.mjs; restricted Pod and ClusterIP Service; emptyDir volumes only.
 - [ ] GB4-3: deploy/ci/gb4-probe/run.mjs and probe.mk; preprod-only access through KUBE_CONFIG_DATA_PREPROD_BASCULE, GO gate, cleanup and report.
-- [ ] GB4-4: deploy/k8s/base/artifact-content-networkpolicy.yaml; TCP 5173 only to builder namespace AND binding-labelled pods.
+- [x] GB4-4: deploy/k8s/base/artifact-content-networkpolicy.yaml; TCP 5173 only to builder namespace AND binding-labelled pods.
 - [ ] GB4-5: scoped offline checks, make scope-check before every commit, push wagon once ready.
 - [ ] GB4-6: poll the conductor GO file every 120 seconds, at most 10 hours; execute only after it exists.
 - [ ] GB4-7: record every self-test, positive/negative WebSocket result and verified cleanup in the report.
