@@ -56,6 +56,7 @@
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
   - `packages/chat-core/src/runtime/comments/state.ts`
   - `packages/chat-core/tests/runtime/comments-module.spec.ts`
+  - `packages/chat-core/tests/runtime/chat-core-host.spec.ts`
   - `packages/chat-core/package.json`
   - `ui/package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
@@ -73,6 +74,7 @@
   - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
 
 ## Feedback Loop
+- [x] TRAIN-CI7 — Run 42240457717 validate-chat-core: 694/695 PASS; only the durable-port release test still expects 0.3.1 after the required patch bump. Align its exact equality to 0.3.2, retaining the release identity assertion.
 - [x] TRAIN-CI6 — Run 42237216892 shard 4 fails the unchanged workspace-B mention assertion at 04-tenancy-workspaces.spec.ts:183. Members arrive after @ input, but the comment state never refreshes mentionMatches. Deterministic delayed-response regressions fail for @ and a changed @bob query, then pass after recomputing matches on member arrival; a dismissed menu stays closed. Module suite: 32/32 PASS. Patch chat-core 0.3.2 exceeds published 0.3.1; root/UI workspace version records only, with no dependency re-resolution. Retained P1 manifest verification remains PASS (30 files, 54 edges); no new manifest generation needed.
 - [x] TRAIN-CI5c — Selected/latest preparation prefers the guarded auth-ui receipt; selected consumer installs that peer and tuple alignment requires its exact manifest/lock contract. Unchanged strict sibling-integrity gates and full packed suite PASS (135/135, zero skips); publish the completed repair after the two prerequisite lock commits.
 - [x] TRAIN-CI5b — Pin auth-ui 0.9.0 and its renderer peers in the selected consumer; verified published archive SHA-256 0ce478a6c2bf07e9a6edd972e70e8e18ec899cd403509fee30a3bb2b90ee42f7. Existing tuple pins unchanged; real packed qualification 135/135 PASS.
