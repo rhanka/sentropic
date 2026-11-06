@@ -3,6 +3,7 @@ import { createUserAccounts, IdentityCustodyErrorV1, IdentityNotFoundError,
 import { withAppCmAuth } from './cm-auth-runtime';
 import { CmIdentityForbiddenError } from './cm-deletion-authorization';
 import { recordCmSelfDeletion } from './cm-self-deletion-proof';
+import { deliverCmSubjectRevocations } from './cm-revocation-worker';
 
 type AdminAction = { readonly kind: 'approve'; readonly role?: GlobalRole }
   | { readonly kind: 'disable'; readonly reason?: string } | { readonly kind: 'reactivate' };
@@ -36,7 +37,9 @@ export const changeCmAccountAsAdmin = (input: {
       approvedByUserId: input.actorId, disabledAt: null, disabledReason: null, legacyAccountStatus: null });
   }
   await tx.advanceSubjectRevision(input.userId, at, false);
-}));
+})).then(async () => {
+  if (input.action.kind === 'disable') await deliverCmSubjectRevocations(input.userId);
+});
 
 export const deactivateOwnCmAccount = (userId: string, sessionId: string, credential: string): Promise<void> =>
   withAppCmAuth(runner => runner.request(async (binding, tx) => {
@@ -51,4 +54,4 @@ export const deactivateOwnCmAccount = (userId: string, sessionId: string, creden
     await tx.custody.profiles.put({ ...profile, disabledAt: at, disabledReason: 'user_deactivated', legacyAccountStatus: 'disabled_by_user' });
     await binding.sessions.revokeAllSessions(userId);
     await tx.advanceSubjectRevision(userId, at, false);
-  }));
+  })).then(() => deliverCmSubjectRevocations(userId));

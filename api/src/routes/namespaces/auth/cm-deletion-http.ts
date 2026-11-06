@@ -4,11 +4,15 @@ import { AccountTransitionError, AdminUserProtectedError, IdentityNotFoundError,
 import type { Context } from 'hono';
 import { CmIdentityForbiddenError } from '../../../services/identity/cm-deletion-authorization';
 import { logger } from '../../../logger';
+import { deliverCmSubjectRevocations } from '../../../services/identity/cm-revocation-worker';
+import { readCmAccountDeletionReceipt } from '../../../services/identity/cm-account-deletion';
+import { RemoteAuthorityError } from '../../../services/auth/remote-contract';
+import { remoteRevocationError } from '../../../services/auth/remote-revocation-error';
 
 /** The operation id is an idempotency key, never a permission to read another operation. */
 export async function runCmAccountDeletionHttp(c: Context,
   operation: (operationId: string) => Promise<PersonDeletionReceiptV2>,
-  options?: { readonly activeRefusalStatus?: 400 | 409 }): Promise<Response> {
+  options?: { readonly activeRefusalStatus?: 400 | 409; readonly clearOwnSessionCookies?: boolean }): Promise<Response> {
   const operationId = c.req.header('idempotency-key') ?? randomUUID();
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(operationId)) return c.json({ error: 'Invalid operation id' }, 400);
   c.header('identity-operation-id', operationId);
@@ -18,9 +22,13 @@ export async function runCmAccountDeletionHttp(c: Context,
       logger.warn({ operationId, resultCode: receipt.resultCode, steps: receipt.steps }, 'CM account deletion rolled back');
       return c.json({ success: false, complete: false, operationId, resultCode: receipt.resultCode }, 503);
     }
-    return c.json({ success: true, complete: receipt.complete, operationId,
-      status: receipt.complete ? 'complete' : 'delivery_pending', receipt }, 200);
+    await deliverCmSubjectRevocations(receipt.userId);
+    const delivered = await readCmAccountDeletionReceipt(operationId);
+    if (!delivered) throw new RemoteAuthorityError('authority_unavailable');
+    return c.json({ success: true, complete: delivered.complete, operationId,
+      status: delivered.complete ? 'complete' : 'delivery_pending', receipt: delivered }, 200);
   } catch (error) {
+    if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c, options?.clearOwnSessionCookies);
     if (error instanceof IdentityNotFoundError) return c.json({ error: 'User not found' }, 404);
     // The refusal status is a route contract, not a property of the shared transition
     // error: the admin API refuses with 400 (validation-style), self-service with 409.

@@ -87,10 +87,11 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 7 — PR #929 REQUEST_CHANGES (baseline 1115dd372)**
-  - [ ] Restore exact failed-delivery HTTP 503/body/retry/cookie assertions, pending-operation cardinality and delivery before response for self/admin lifecycle calls.
-  - [ ] Restore immediate issuer tombstones, empty deleted-session storage, restored-session resolver refusal, original OAuth bulk-revoke assertion and both OIDC refusal observations.
+  - [x] Restore exact failed-delivery HTTP 503/body/retry/cookie assertions, one pending operation with both exact targets and issuer delivery before response; preserve asynchronous connector delivery assertions.
+  - [x] Restore immediate issuer tombstones, empty deleted-session storage, restored-session resolver refusal, literal original OAuth bulk-revoke assertion and both OIDC refusal observations.
   - [x] Sanitize requireAuth errors through cmErrorCode; six sentinel-bearing authentication/workspace regressions fail on the old logger and pass with typed codes only.
-  - [ ] Audit all 13 cases against 1115dd372, run scoped API/type/lint checks, push once and monitor exact-head CI; no merge. Conductor imports this source into Track.
+  - [x] Audit all 13 cases against 1115dd372: original assertions retained; 160/160 scoped tests and final HTTP/connector supplement 49/49 pass; API typecheck/lint pass. Evidence: .tmp/rv/a4-followups.md.
+  - [ ] Push this review correction once and monitor exact-head CI to green; no merge. Conductor imports this source and the final report receipt into Track.
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read common rules, master, workflow, testing, template and #879 closure review; harness C1 PASS; ports free before startup.
 - [x] **Lot 1 — A4-SELF-DELETE and V2 cascade**
