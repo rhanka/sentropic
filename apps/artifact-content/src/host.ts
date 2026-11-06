@@ -3,6 +3,7 @@ import { createContentHandler, type ContentHandlerDeps } from '@sentropic/artifa
 import { contentHeaders, GRANT_COOKIE_NAME, grantCookie, parseGrantCookie, type ContentMode } from '@sentropic/artifacts/content/headers';
 import { CONTENT_GRANT_TTL_SECONDS, type ContentGrantClaims, type GrantSigner, type TicketRecord } from '@sentropic/artifacts/content/grants';
 import { parseContentHost } from '@sentropic/artifacts/content/routing';
+import type { LiveProxy } from './live';
 
 export interface ContentActivationInput { flowId: string; ticketId: string; nonce: string; targetOrigin: string }
 export interface ContentHostOptions {
@@ -24,6 +25,7 @@ export interface ContentHostOptions {
   contentMode?: ContentMode;
   /** Per-release inline script hashes for the served HTML file, application mode only. */
   getScriptHashes?: (filePath: string) => readonly string[] | undefined;
+  live?: LiveProxy;
 }
 const NONCE_COOKIE = '__Host-artifacts_nonce';
 function nonceCookie(header: string | null) {
@@ -62,6 +64,8 @@ export function createContentHost(options: ContentHostOptions) {
     const cookies = request.headers.get('cookie') ?? '';
     if (cookies.length > 4096) return fail(400);
     if (request.headers.has('service-worker')) return fail(404);
+    const live = await options.live?.fetch(request, origin.id);
+    if (live) return live;
     if (url.pathname === '/_reader/nonce' && request.method === 'GET') {
       if (request.headers.has('origin') && request.headers.get('origin') !== url.origin) return fail(403);
       const nonce = randomBytes(32).toString('base64url');
