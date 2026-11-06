@@ -77,7 +77,7 @@
   - [x] Write this single train plan and mechanically verify its scope before every commit.
 - [ ] **Lot 1 — Merge ready wagon branches**
   - [x] SG0-app `origin/feat/git-artifact-sg0-app` — GitHub App enrollment and encrypted cluster-mesh custody.
-  - [ ] SG1 `origin/feat/git-artifact-sg1` — binding lifecycle, host registry and immutable release index.
+  - [x] SG1 `origin/feat/git-artifact-sg1` — binding lifecycle, host registry and immutable release index.
   - [ ] GB1 `origin/feat/git-artifact-gb1` — build descriptor and locked dependency validation.
   - [ ] SG2 `origin/feat/git-artifact-sg2` — injected leases, GitPort and atomic forge commits.
   - [ ] Resolve source conflicts as the union of all typed categories/exports and retained upstream behavior; verify every wagon tip is an ancestor.
