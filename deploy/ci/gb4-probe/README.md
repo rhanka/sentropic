@@ -8,21 +8,24 @@ make -f deploy/ci/gb4-probe/probe.mk gb4-prepare ENV=test-gb4
 make -f deploy/ci/gb4-probe/probe.mk gb4-wait ENV=test-gb4
 ```
 
-Preparation writes the pinned digest, full Pod/Service/temporary egress manifests,
+Preparation writes the pinned digest, full Pod/Service manifests,
 and pending checks to the shared `.tmp/rv/gb4-probe.md`. The conductor supplies the
 digest to k8s and creates `.tmp/rv/gb4-probe-go.flag` after the namespace baseline
 and image allowlist have been applied. Waiting polls every 120 seconds for at most
 10 hours. `gb4-run` also refuses to load credentials before GO exists.
 
-Access uses `KUBE_CONFIG_DATA_PREPROD_BASCULE` from the shared root `.env` or the
-environment, without displaying its value. The selected context must name
-`sentropic-preprod`. The probe creates resources only in that namespace and
-`sentropic-artifact-builders`. It needs ready artifact-content and API/auth-idp
-pods with Node, and at least two services with ready endpoints. The temporary
-egress policy enables the positive test before the train's permanent policy lands.
+Access uses `K8S_TENANT_ADMIN_KUBECONFIG_B64` from the shared root `.env` or the
+environment, without displaying its value. Read-only discovery is scoped to
+`sentropic-preprod`; every builder operation impersonates
+`system:serviceaccount:sentropic-preprod:sentropic-app`. No exec, attach or
+port-forward is used. The probe creates only Pods and one ClusterIP Service in
+`sentropic-artifact-builders`, using the exact allowlisted image spelling.
 
-The runner verifies short WebSocket echoes from both the allowed and denied
-source, through both Service DNS and Pod IP. DNS failures, refused connections,
+The server logs its self-test and a loopback WebSocket positive control. Two
+restricted client Pods test denial through both Service DNS and Pod IP; together
+with the server they request 300m CPU/384Mi memory, within the three-Pod quota.
+Artifact-content WebSocket remains `PENDING-EGRESS` until its permanent egress
+rule is deployed; this runner never applies a NetworkPolicy. DNS failures, refused connections,
 protocol errors and missing live-service prerequisites fail the probe. A negative
 connection alone cannot distinguish source egress denial from target ingress denial.
 All temporary resources are deleted and checked absent, including on errors.
