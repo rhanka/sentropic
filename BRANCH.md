@@ -56,6 +56,7 @@
   - [x] Added the exact frozen lease/webhook ports and internal encrypted-store transaction contract.
   - [x] Implemented authenticated-encryption custody; specified host prompt and service authentication tests before routing implementation.
   - [x] Added owner/scope/repo-bound expiring single-use manifest and installation callbacks.
+  - [x] Added fixed-origin GitHub REST exchange, RS256 App authentication, selected-repo discovery and narrowed installation token minting.
   - [ ] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
 - [ ] **Lot 3 — Lifecycle and runbook**
   - [x] Added exact-permission repository token leases, revocation fencing and bounded HMAC overlap verification.
