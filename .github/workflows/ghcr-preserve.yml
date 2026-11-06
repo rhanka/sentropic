@@ -1,0 +1,61 @@
+name: Preserve GHCR images
+on:
+  push:
+    branches: [train/2026-11-06-ghcr]
+    paths: [.github/workflows/ghcr-preserve.yml]
+permissions:
+  contents: read
+  packages: write
+jobs:
+  preserve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Authenticate temporary read source and GHCR destination
+        env:
+          SOURCE_REGISTRY: ${{ secrets.REGISTRY }}
+          SOURCE_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+          GHCR_PASSWORD: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_PASSWORD" | docker login "${SOURCE_REGISTRY%%/*}" -u nologin --password-stdin
+          printf '%s' "$GHCR_PASSWORD" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+      - name: Preserve manifests and blobs remotely without loading an image
+        env:
+          SOURCE_REGISTRY: ${{ secrets.REGISTRY }}
+        run: |
+          set -euo pipefail
+          mkdir -p receipts
+          copy() {
+            local image="$1" source="$2" tag="$3" digest actual
+            digest="$(docker buildx imagetools inspect "${SOURCE_REGISTRY}/${image}:${source}" | awk '/^Digest:/ {print $2; exit}')"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            docker buildx imagetools create --prefer-index=false --tag "ghcr.io/rhanka/${image}:${tag}" "${SOURCE_REGISTRY}/${image}@${digest}"
+            actual="$(docker buildx imagetools inspect "ghcr.io/rhanka/${image}:${tag}" | awk '/^Digest:/ {print $2; exit}')"
+            test "$actual" = "$digest"
+            printf '%s\t%s\t%s\n' "$image" "$tag" "$digest" | tee -a receipts/copied.tsv
+          }
+          copy sentropic-api f2313a f2313a
+          copy sentropic-ui 434fe5 434fe5
+          copy_digest() {
+            local image="$1" digest="$2" tag="$3" actual
+            docker buildx imagetools create --prefer-index=false --tag "ghcr.io/rhanka/${image}:${tag}" "${SOURCE_REGISTRY}/${image}@${digest}"
+            actual="$(docker buildx imagetools inspect "ghcr.io/rhanka/${image}:${tag}" | awk '/^Digest:/ {print $2; exit}')"
+            test "$actual" = "$digest"
+            printf '%s\t%s\t%s\n' "$image" "$tag" "$digest" | tee -a receipts/copied.tsv
+          }
+          copy_digest sentropic-api sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7 prod-api-20261106
+          copy_digest sentropic-api sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909 prod-idp-20261106
+          copy_digest sentropic-ui sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e prod-ui-20261106
+          copy sentropic-api ff9bb4 ff9bb4
+          copy sentropic-api ff9bb4 candidate-165ce5b93
+          copy sentropic-ui 2d6476 2d6476
+          copy sentropic-ui 2d6476 candidate-165ce5b93
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: ghcr-preserved-digests
+          path: receipts/
+          if-no-files-found: error
+          retention-days: 90
