@@ -121,6 +121,15 @@ describe('CM OAuth consent authority and protocol participant', () => {
       .getGrant(userId, clientId, tenantId))).toBeNull();
   });
 
+  it('refuses protocol evidence whose CM authority is missing', async () => {
+    await runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
+      .saveGrant(userId, clientId, ['read'], tenantId));
+    await cmQuery(`DELETE FROM ${cmTable('cm_oauth_consents')} WHERE consent_id = $1`, [consentId]);
+    expect(await protocol()).toHaveLength(1);
+    expect(await runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
+      .getGrant(userId, clientId, tenantId))).toBeNull();
+  });
+
   it('rolls back both consent planes when revocation fails before commit', async () => {
     await runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
       .saveGrant(userId, clientId, ['read'], tenantId));

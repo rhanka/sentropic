@@ -37,7 +37,7 @@ export const createConsentStoreAdapter = (
   /** CM consent authority through the P4 finder; a revoked row confers no authority. */
   const hasAuthority = async (tx: CmIdentityTransaction, userId: string, clientId: string, tenantId: string) => {
     const record = await oauthTenantStoreV1(tx).findConsent(cmOAuthConsentId(userId, clientId, tenantId));
-    return record?.revokedAt === undefined;
+    return record !== null && record.revokedAt === undefined;
   };
 
   const grantFilter = (userId: string, clientId: string, tenantId: string): SQL => {
