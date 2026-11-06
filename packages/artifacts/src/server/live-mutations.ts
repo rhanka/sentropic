@@ -14,7 +14,6 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
   const { deps, tx, authority, operation, args, base, overlay, currentHeadSha, now } = input;
   let record = tx.record!;
   if (args.expectedLiveRevision !== record.revision) throw new ArtifactOperationError('git_live_revision_moved');
-  if (record.pendingCommit) liveBusy('commit_indeterminate');
   const phase = record.runtime?.phase ?? 'DORMANT';
   let action: 'project' | 'stop' | null = null;
   if (operation === 'live_control' && args.action === 'stop') {
@@ -22,6 +21,7 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
     record.runtime!.phase = 'DECOMMISSIONING'; record.runtime!.routeEpoch++;
     action = 'stop';
   } else {
+    if (record.pendingCommit) liveBusy('commit_indeterminate');
     if (!['DORMANT', 'RUNNING', 'REVIVING'].includes(phase)) liveBusy('invalid_phase');
     if (operation !== 'live_reset' && record.baseHeadSha !== currentHeadSha && record.changedPaths) {
       throw new ArtifactOperationError('git_live_draft_conflict');

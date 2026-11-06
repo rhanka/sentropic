@@ -54,7 +54,7 @@ export function createMemoryLiveStore(): LiveStore {
   const mutex = createKeyMutex();
   return { transaction: (identity, action) => mutex.runSerialized('live-store', async () => {
     const id = liveIdentityKey(identity);
-    const pendingObjects = new Map<string, LiveEnvelope>();
+    const pendingObjects = new Map<string, LiveEnvelope | undefined>();
     const pendingReceipts = new Map<string, LiveReceipt>();
     const pendingQuota: typeof quota = [];
     const receiptKey = (actor: string, key: string) => JSON.stringify([identity.storageScopeId, actor, key]);
@@ -69,7 +69,7 @@ export function createMemoryLiveStore(): LiveStore {
         let count = 0;
         for (const key of objects.keys()) {
           if (key.startsWith(id) && key !== id + tx.record?.objectRef) {
-            pendingObjects.set(key, undefined as unknown as LiveEnvelope); count++;
+            pendingObjects.set(key, undefined); count++;
           }
         }
         return count;
