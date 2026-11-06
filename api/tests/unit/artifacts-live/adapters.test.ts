@@ -62,4 +62,15 @@ describe('trusted live adapters', () => {
     await expect(storage.read(cacheKey)).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
     await storage.quarantine(cacheKey); expect(await storage.read(cacheKey)).toBeUndefined();
   });
+  it('should reject registry paths that resolve outside the fixed relay before transport', async () => {
+    const bytes = Buffer.from('tarball');
+    const transport = vi.fn<typeof fetch>(async () => new Response(bytes));
+    const pin = { path: 'node_modules/pkg', version: '1.0.0',
+      integrity: 'sha512-' + createHash('sha512').update(bytes).digest('base64') };
+    for (const path of ['//attacker.example/p.tgz', '///attacker.example/p.tgz']) {
+      await expect(fetchLockedTarball({ ...pin, url: 'https://registry.npmjs.org' + path }, NPM_RELAY, transport))
+        .rejects.toMatchObject({ code: 'dependency_integrity_missing' });
+    }
+    expect(transport).not.toHaveBeenCalled();
+  });
 });
