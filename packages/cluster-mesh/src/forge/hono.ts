@@ -85,6 +85,10 @@ export const createGitHubAppRouter = (input: {
     csrf(c.req.raw);
     return c.json(await input.service.switchWebhookSender(await owner(c.req.raw), c.req.param('ref')));
   });
+  app.post('/github-app/:ref/webhook-retire', async (c) => {
+    csrf(c.req.raw);
+    return c.json(await input.service.retirePreviousWebhook(await owner(c.req.raw), c.req.param('ref')));
+  });
   app.post('/github-app/:ref/revoke', async (c) => {
     csrf(c.req.raw);
     return c.json(await input.service.revoke(await owner(c.req.raw), c.req.param('ref'), 'owner_revoked'));
