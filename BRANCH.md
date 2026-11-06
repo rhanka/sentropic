@@ -58,6 +58,7 @@
   - [x] Added owner/scope/repo-bound expiring single-use manifest and installation callbacks.
   - [ ] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
 - [ ] **Lot 3 — Lifecycle and runbook**
+  - [x] Added exact-permission repository token leases, revocation fencing and bounded HMAC overlap verification.
   - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
   - [ ] Document owner clicks and activation gates in `docs/github-app-enrollment.md`.
 - [ ] **Lot 4 — Final validation and handoff**
