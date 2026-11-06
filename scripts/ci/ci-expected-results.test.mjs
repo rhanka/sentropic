@@ -62,7 +62,8 @@ test('should keep validators independent without static capacity mutexes', () =>
   assert.equal(independentValidators(workflow), true);
   for (const [name, job] of validators) {
     const consumers = ['validate-cluster-mesh', 'validate-llm-mesh', 'validate-llm-gateway'];
-    assert.deepEqual(job.needs, consumers.includes(name) ? ['changes', 'package-candidates'] : ['changes'], name);
+    assert.deepEqual(job.needs, name === 'validate-artifacts' ? ['changes', 'artifacts-qualification']
+      : consumers.includes(name) ? ['changes', 'package-candidates'] : ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
   }
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -81,6 +82,8 @@ test('should reject validator serialization beyond the immutable candidate produ
     ['validate-publishable-manifests', ['changes', 'package-candidates', 'validate-llm-mesh']],
     ['validate-chat-core', ['changes', 'package-candidates']],
     ['memory-l5-qualification', ['changes', 'validate-mcp-platform']],
+    ['artifacts-qualification', ['changes', 'validate-chat-core']],
+    ['validate-artifacts', ['changes']],
   ]) {
     const changed = structuredClone(workflow);
     changed.jobs[name].needs = needs;

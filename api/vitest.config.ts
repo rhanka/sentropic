@@ -1,5 +1,14 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import { BaseSequencer } from 'vitest/node';
+import { unitShard } from './ci/unit-shards.mjs';
+
+class MeasuredUnitSequencer extends BaseSequencer {
+  override shard(files: Parameters<BaseSequencer['shard']>[0]) {
+    return files.every(file => file.moduleId.replaceAll('\\', '/').includes('/tests/unit/'))
+      ? unitShard(files, this.ctx.config.shard!, this.ctx.config.root) : super.shard(files);
+  }
+}
 
 const pkgSrc = (name: string, entry = 'index.ts'): string =>
   fileURLToPath(new URL(`../packages/${name}/src/${entry}`, import.meta.url));
@@ -52,6 +61,7 @@ export default defineConfig({
     },
   },
   test: {
+    sequence: { sequencer: MeasuredUnitSequencer },
     pool: 'forks',
     // Synthetic test policy only; this is not a production Q-K approval or rehearsal receipt.
     env: {
