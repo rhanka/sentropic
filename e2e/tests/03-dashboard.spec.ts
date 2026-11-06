@@ -153,7 +153,7 @@ test.describe('Dashboard DOCX flow', () => {
     expect(response.ok()).toBeTruthy();
   };
 
-  test.beforeAll(async () => {
+  test.beforeEach(async () => {
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,
@@ -245,8 +245,15 @@ test.describe('Dashboard DOCX flow', () => {
     const page = await context.newPage();
 
     try {
+      const initialPresence = Promise.all(['GET', 'POST'].map(method => page.waitForResponse(response => {
+        const url = new URL(response.url()), req = response.request();
+        return url.pathname === '/api/v1/locks/presence' && req.method() === method
+          && (method === 'GET' ? url.searchParams.get('objectId') === folderId
+            : req.postDataJSON()?.objectId === folderId);
+      }, { timeout: 2_000 })));
       await page.goto('/dashboard');
       await page.waitForLoadState('domcontentloaded');
+      await Promise.all((await initialPresence).map(response => response.finished()));
 
       const readOnlyLockButton = page.locator(
         'button.print-hidden[aria-label*="lecture seule"], button.print-hidden[aria-label*="read-only"]'
@@ -255,6 +262,10 @@ test.describe('Dashboard DOCX flow', () => {
         'div[role="group"][aria-label*="Verrou"], div[role="group"][aria-label*="Lock"]'
       );
 
+      // Initial presence replaces the static viewer lock before these checks.
+      await expect(presenceLockGroup.getByRole('tooltip')).toContainText(
+        /[1-9]\d* (?:utilisateurs? connectés?|users? connected)/, { timeout: 2_000 }
+      );
       await expect
         .poll(
           async () => (await readOnlyLockButton.count()) + (await presenceLockGroup.count()),

@@ -32,6 +32,7 @@
   - `api/tests/unit/auth/**`
   - `api/tests/unit/identity/**`
   - `e2e/tests/06-settings-codex-provider.spec.ts`
+  - `e2e/tests/03-dashboard.spec.ts`
   - `packages/cluster-mesh/src/identity/**`
   - `packages/cluster-mesh/src/storage/identity/**`
   - `packages/cluster-mesh/tests/identity/**`
@@ -48,6 +49,7 @@
 - **Exception process**:
   - [x] Declare BRxx-EXn with reason, impact and rollback before conditional edits.
   - [x] BR929-EX1: extend scope to the single Codex settings E2E spec after CI 42157095451 observed the mode array before its asynchronous POST completed. Impact: synchronize existing clicks with their exact response; preserve every assertion, timeout and retry count. Rollback: remove the response handshake if the interaction contract changes. Evidence: `.tmp/rv/a4-followups.md` and browser-shard-3 artifacts.
+  - [x] BR929-EX2: extend scope to the dashboard E2E spec after CI 42174483201 observed the static viewer lock disappear between its visibility/class assertions when initial presence replaced it. Serial local replay also inherited a previous case's completed DOCX job. Impact: await initial presence readiness and give each case its own workspace/folder; preserve all assertions, timeouts and retries. Rollback: remove the handshake or per-case fixture if those contracts change. Evidence: `.tmp/rv/a4-followups-ci2-shard4` and `.tmp/a4-followups-dashboard-after.log`.
 
 ## Feedback Loop
 - [ ] Track source: designated conductor imports this BRANCH.md; concurrent lane does not write `.track`.
@@ -93,5 +95,6 @@
   - [x] Two independent Sol fallback reviews approve implementation `b9742ff4e`; credential-binding and V2 authorization races resolved. Vibe 402 and Argon 429 prevent complementary-model review; no such consensus claimed.
   - [x] Early safety pushes made; final implementation and scoped validation committed.
   - [x] CI browser-shard-3: exact failure reproduced with a temporary request gate; awaiting each mode POST makes the forced case pass. Probe removed; normal single-spec replay passes with every assertion unchanged and zero retries.
+  - [x] CI browser-shard-4: await rendered initial presence before unchanged viewer-lock checks; independent workspace/folder per case removes inherited DOCX state. Full spec passes 3/3 with one worker and zero retries.
   - [ ] Open one ready PR with BRANCH.md body and monitor CI until green; do not merge.
   - [x] `make down-volumes`; report `.tmp/rv/a4-followups.md` with validation and review evidence, CI handoff pending.
