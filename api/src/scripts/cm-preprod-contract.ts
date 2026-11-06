@@ -44,6 +44,11 @@ export async function writeExclusive(path: string, bytes: string | Uint8Array): 
   const file = await open(path, 'wx', 0o600);
   try { await file.writeFile(bytes); await file.sync(); } finally { await file.close(); }
 }
+export async function assertAbsent(path: string): Promise<void> {
+  try { await lstat(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
+  throw new Error('output_already_exists');
+}
 
 /** Stable across physical row order; only the aggregate digest leaves custody. */
 export function canonical(value: unknown): string {

@@ -23,8 +23,16 @@ export function privateInput(path, max = 32768) {
   return readFileSync(path, 'utf8');
 }
 export function assertRequest(request) {
-  if (request.namespace !== namespace || !/^[a-z][a-z0-9-]{0,39}$/.test(request.operationId)
+  const refs = ['authorizationRef', 'writerFenceRef', 'rollbackCheckpointRef', 'rollbackLimitsRef',
+    'sourceMetadataDispositionRef', 'remoteSnapshotRef'];
+  if (request.format !== 'preprod-a4-request/1' || request.namespace !== namespace
+    || refs.some(name => typeof request[name] !== 'string' || !request[name].trim() || request[name].length > 512
+      || /placeholder|<|>|TODO|example|pending/i.test(request[name]))
+    || request.legacyWritersStopped !== true || request.remoteFileWriterStopped !== true
+    || !/^[a-f0-9]{64}$/.test(request.remoteSnapshotDigest)
+    || !/^[a-z][a-z0-9-]{0,39}$/.test(request.operationId)
     || !/^[a-f0-9]{40}$/.test(request.candidateCommit)
+    || request.candidateCommit === '0'.repeat(40)
     || !/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-api@sha256:[a-f0-9]{64}$/.test(request.candidateImage)
     || !/^[a-f0-9]{64}$/.test(request.backupTemplateSha256)) throw new Error('request_invalid');
 }

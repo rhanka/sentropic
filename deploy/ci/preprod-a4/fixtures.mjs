@@ -9,6 +9,11 @@ export const objects = [
   { kind: 'CronJob', metadata: { name: 'pgbackup' }, spec: { suspend: true } },
   { kind: 'StatefulSet', metadata: { name: 'postgres' }, spec: { replicas: 1 } },
 ];
+export const approvedRequest = { format: 'preprod-a4-request/1', namespace: 'sentropic-preprod', operationId: 'approved-cutover',
+  candidateCommit: commit, candidateImage: image, backupTemplateSha256: digest(canonical(cron.spec.jobTemplate.spec)),
+  authorizationRef: 'track:approval', writerFenceRef: 'track:fence', rollbackCheckpointRef: 'track:rollback',
+  rollbackLimitsRef: 'track:limits', sourceMetadataDispositionRef: 'track:metadata', remoteSnapshotRef: 'custody:remote',
+  remoteSnapshotDigest: digest('{}'), legacyWritersStopped: true, remoteFileWriterStopped: true };
 export const pods = [{ metadata: { name: 'sentropic-a4-custodian' },
   spec: { automountServiceAccountToken: false, containers: [{ image,
     volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: false }] }],
@@ -30,3 +35,4 @@ export function fixture(overrides = {}) {
     throw new Error('unexpected_fake_call');
   } };
 }
+import { canonical, digest } from './guards.mjs';

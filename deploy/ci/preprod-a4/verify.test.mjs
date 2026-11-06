@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { verify } from './verify.mjs';
-import { commit, image, sha } from './fixtures.mjs';
+import { approvedRequest, commit, image, sha } from './fixtures.mjs';
 
 test('should require readiness, serving endpoints, database evidence and HTTP 200', async () => {
-  const request = { namespace: 'sentropic-preprod', operationId: 'a4', candidateCommit: commit, candidateImage: image, backupTemplateSha256: sha };
+  const request = { ...approvedRequest, operationId: 'a4', candidateCommit: commit, candidateImage: image, backupTemplateSha256: sha };
   const api = { metadata: { generation: 2 }, spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image }] } } },
     status: { availableReplicas: 1, updatedReplicas: 1, observedGeneration: 2 } };
   const calls = [];
