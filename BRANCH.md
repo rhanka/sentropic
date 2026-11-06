@@ -46,7 +46,7 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
-- [ ] TRAIN0218-R1: three composed regressions failed before and pass after notifying the superseded epoch and advancing it only when rotation returns ready; retry preserves the same old fence. Forge 31/31, build/typecheck and both lints pass; independent closure pending.
+- [x] TRAIN0218-R1: notify the superseded epoch and advance it only when rotation returns ready; retry preserves the old fence. Three regressions failed before and pass after, forge 31/31 and build/typecheck/lints pass; independent closure GO at `0af93d063`.
 - [x] BR-TRAIN0218-EX1: conductor REFUSED the previous CI gate proposal; branch-only wagons resolve the gate requirement normally on the bumped train.
 - [x] BR0218-EX1: regenerate root workspace and API file-dependency lock metadata through make after final union; impact limited to train manifests; rollback restores upstream locks.
 - [x] BR0218-EX2: refresh selected artifacts/cluster-mesh candidate pins and packed integrity through make; impact is qualification evidence; rollback restores upstream fixture pins and integrity assertion.
@@ -67,9 +67,9 @@
 - [x] Mono-branch train integration by merging wagon branches; one consolidated final-diff review and one PR CI per review-ready head.
 
 ## UAT Management (in orchestration context)
-- [ ] Verify the integrated local package keeps safe/application-mode behavior inherited from 0.2.17.
-- [ ] Verify binding projections and fake-forge code-right, lease, ref, path and authorship boundaries.
-- [ ] Keep real enrollment, release activation and live workers disabled until their named acceptance receipts exist.
+- [x] Safe/application content paths remain byte-identical to the qualified 0.2.17 dated train; registry, consent and installed-package checks pass on 0.2.18.
+- [x] Binding projections and fake-forge code-right, lease, ref, path and authorship boundaries pass the scoped checks, including composed epoch fencing.
+- [x] Real enrollment, release activation and live workers remain behind their named acceptance gates; no live action performed by this lane.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Required base and scope**
@@ -88,14 +88,14 @@
   - [x] Selected pins derive from guarded archives: artifacts SHA-256 `cf0a3ea115517e5945a0566af2f13c24389d019499047628f8e127022f9724f8`; corrected cluster-mesh `3c09dde3a41d6beb2fb505a5916cd50d310b643fc372a2b7905e8a5a25a19d55`. R1 repack preserves initial evidence; locks/APP-P1/L5 unchanged, tuple tests and L5 verification pass again.
   - [x] Recompute APP-P1 digest through make: `d55df3ada3722b79274e52c650a12d6baccd2640c61e4d712fe1380bd03c4c86`; frozen profile retained, physical installation pin and digest history updated.
   - [x] Commit final lock before L5 packing; generate P1 once through make: `cf7432d500b80de96486872b96c72f0512622e45381b275f6330d3a3fae2270b`, lock snapshot `1db058b64cadabcf0306fa92ff503af9e47acaccc7de10befb05654683eab4b9`; retain upstream history and verify 30 files/54 edges.
-- [ ] **Lot 3 — Scoped integrated checks and review**
+- [x] **Lot 3 — Scoped integrated checks and review**
   - [x] Scoped `make test-artifacts`: git-port 75, git-bindings 10, git-binding registry/projection 4, build-contract 36, provider-failures 100, tools-list snapshot 1, composed invalidation regressions 3; 229 passing tests.
   - [x] `make test-artifacts-integration` per file: git-bindings 12/12 and release-index 1/1; separate runs preserve the shared-schema isolation used by the complete target.
   - [x] `make test-cluster-mesh SCOPE=tests/forge` 31/31; artifacts and cluster-mesh build/typecheck/lint pass (three unchanged unused-disable warnings in artifacts tests).
   - [x] API registry, physical installation, grant and consent 35/35; packaging tuple/preparation 24 pass, three installed-fixture-only cases belong to full CI. Total scoped checks: 332 passing tests.
-  - [ ] One consolidated code review on the final train diff; resolve evidenced root causes and retain the receipt.
-  - [ ] `make scope-check`, `git diff --check`, no conflict markers, ordinary package-bump verification.
-  - [ ] `make down-volumes API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218`.
+  - [x] One consolidated independent Sol xhigh review: initial NO-GO at `c2896d1e5`, P1 R1 reproduced/corrected, closure GO at `0af93d063`; receipts retained in `.tmp/rv/train-0218-*-review.md` and `train-0218-sol-closure.md`.
+  - [x] Full-delta `make scope-check` C2, harness branch C1 and `git diff --check` pass; workflow/Makefile unchanged from the dated train; ordinary version bumps and publication checks pass.
+  - [x] `make down-volumes API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218` completed after scoped checks and remediation.
 - [ ] **Lot 4 — One train PR and CI watch**
   - [x] Close only wagon PRs #925/#926 with `superseded by train/artifacts-0.2.18`; preserve their branches.
   - [ ] Push one review-ready head and open one READY PR `train/artifacts-0.2.18` to main using this plan as body.
