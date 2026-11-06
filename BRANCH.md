@@ -58,10 +58,15 @@
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (BR0218-EX8)
   - `ui/src/routes/organizations/[id]/+page.svelte` (BR0218-EX9)
   - `e2e/tests/01-organizations-detail.spec.ts` (BR0218-EX9)
+  - `packages/chat-core/src/runtime/comments/state.ts` (BR0218-EX10)
+  - `packages/chat-core/tests/runtime/comments-module.spec.ts` (BR0218-EX10)
+  - `packages/chat-core/package.json` (BR0218-EX10)
+  - `ui/package-lock.json` (BR0218-EX10)
 - **Exception process**:
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [ ] BR0218-EX10 / TRAIN0218-CI7: run 42267445221 shard 4 shows empty mention results after asynchronous member loading. Advance the base by rebase onto immediate upstream checkpoint fd91e7d2a (existing fix, three regressions, chat-core 0.3.2 and aligned root/UI locks); retain every train correction and wagon tip. Regenerate L5 P1 through make because the root lock changes, repeat registry/version and scoped comment/browser checks before push. Impact limited to the inherited mention fix and required release evidence; rollback ref backup/train0218-before-ci7. No duplicate copied commit, gate, timeout or assertion relaxation.
 - [x] BR0218-EX9 / TRAIN0218-CI6: run 42263294555 shard 6 exposes stale organization presence. A delayed initial HTTP snapshot overwrites a newer SSE event; final deterministic regression fails on the verified original CI UI and passes with the six-line response-order guard. Scoped organization file passes 9/9 at four workers with zero retries/skips; production web build and C2 pass. Broader local shard has two separate role/document failures retained in the receipt; full fresh CI remains required. Impact limited to organization presence ordering and its regression; rollback restores these two files. No timeout, retry or assertion relaxation.
 - [x] Review #931 re-review residual R1: incomplete mint permissions no longer imply installation loss; reject and clean up the unissued token while preserving the prior valid lease, enrollment and credential epoch. Missing, empty and both partial permission cases fail before correction and pass after; complete forge suite passes 55/55, including confirmed suspension/permission-loss fencing and healthy retry without reenrollment. Cluster-mesh typecheck/lint and C1/C2 pass; fresh final-head CI remains required.
 - [x] Review #931 R1 authority closure: minted-token inventory refusal and incomplete installation responses do not prove enrollment loss. Three additional regressions failed before correction; complete forge suite passes 51/51, including automatic suspension/permission-loss fencing and recovery without enrollment or epoch changes.
