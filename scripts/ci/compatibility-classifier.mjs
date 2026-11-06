@@ -25,12 +25,12 @@ const DOC = /^(?:README|CHANGELOG)(?:\.(?:md|txt|rst))?$/i;
 
 export function classifyFileArea(file) {
   if (typeof file !== 'string' || file.length === 0) return 'unknown';
+  if (file.endsWith('.md') || file === 'LICENSE') return 'unrelated';
   if (file === 'package.json' || file === 'package-lock.json') return 'root-lock';
   if (file === 'Makefile' || file === 'api/Dockerfile' || file === 'ui/Dockerfile'
     || file === '.dockerignore' || file.startsWith('.github/workflows/')
     || file.startsWith('scripts/') || file.startsWith('tools/')
     || file.startsWith('docker-compose')) return 'toolchain';
-  if (file.endsWith('.md') || file === 'LICENSE') return 'unrelated';
   if (file.startsWith('api/') || file.startsWith('deploy/') || file.startsWith('.security/')
     || file.startsWith('e2e/') || file.startsWith('apps/auth-idp/') || file.startsWith('apps/llm-gateway/')
     || file.startsWith('apps/artifact-content/')) return 'runtime-security';
@@ -128,6 +128,8 @@ export function classifyCompatibility({ files = [], packages = [], semver = load
   if (strange.length > 0) {
     return { kind: 'unknown', reasons: strange.map((file) => `unrecognized change area: ${file}`) };
   }
+  const uiConfined = areas.includes('ui')
+    && areas.every((area) => ['ui', 'unrelated', 'package-doc'].includes(area));
   const kinds = [];
   if (areas.includes('runtime-security')) kinds.push({ kind: 'runtime-security', reasons: ['runtime, deploy, security, e2e, or host change'] });
   if (areas.includes('root-lock') || areas.includes('toolchain')) {
@@ -139,13 +141,13 @@ export function classifyCompatibility({ files = [], packages = [], semver = load
     return { kind: 'documentation-only', reasons: ['changes confined to identified documentation'] };
   }
   if (kinds.length === 0) {
-    if (areas.every((area) => area === 'ui')) return { kind: 'ui-only', reasons: ['changes confined to ui/'] };
+    if (uiConfined) return { kind: 'ui-only', reasons: ['functional changes confined to ui/'] };
     return { kind: 'internal-fix', reasons: ['no functional change: tests, docs, or unrelated paths only'] };
   }
   kinds.sort((a, b) => RANK[b.kind] - RANK[a.kind]);
   const winner = kinds[0];
-  if (winner.kind === 'internal-fix' && areas.every((area) => area === 'ui')) {
-    return { kind: 'ui-only', reasons: ['changes confined to ui/'] };
+  if (winner.kind === 'internal-fix' && uiConfined) {
+    return { kind: 'ui-only', reasons: ['functional changes confined to ui/'] };
   }
   return { kind: winner.kind, reasons: kinds.flatMap((row) => row.reasons) };
 }

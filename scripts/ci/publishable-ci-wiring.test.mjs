@@ -836,7 +836,15 @@ test('consumer contracts: real UI dispatch qualifies PRs and retains main delive
     workflow: ci, workflowText, tuples, changes: { comments: 'true', cluster_mesh: 'true' }, expectOmission: true });
   assert.equal(omission.ok, false);
   assert.ok(omission.problems.some(problem => problem.includes('without candidate bytes')));
-  assert.equal(classifyCompatibility({ files: ['ui/src/routes/+page.svelte'] }).kind, 'ui-only');
+  for (const files of [['ui/src/routes/+page.svelte'], ['ui/src/routes/+page.svelte', 'BRANCH.md']]) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'ui/package.json'), 'utf8'));
+    const { kind } = classifyCompatibility({ files,
+      packages: [{ slug: 'ui', scope: 'app', published: manifest, candidate: manifest }] });
+    assert.equal(kind, 'ui-only');
+    const result = verifyDispatch({ kind, boundaries, workflow: ci, workflowText, tuples,
+      changes: { ui: 'true' }, event: 'pull_request', ref: 'refs/pull/1/merge' });
+    assert.equal(result.ok, true, result.problems.join('; '));
+  }
 });
 
 test('consumer contracts: API runtime changes select the complete integration set', () => {
@@ -859,7 +867,7 @@ test('consumer contracts: documentation-only PR agrees with real workflow dispat
   });
   const installed = Object.fromEntries(['api', 'ui'].map(appDir =>
     [appDir, tupleForApp({ root, appDir, candidates: [] })]));
-  for (const files of [['README.md'], ['docs/guide.md', 'BRANCH.md']]) {
+  for (const files of [['README.md'], ['docs/guide.md', 'BRANCH.md'], ['scripts/README.md']]) {
     const changes = Object.fromEntries(Object.entries(filters).map(([name, patterns]) =>
       [name, String(files.some(file => patterns.some(pattern => path.matchesGlob(file, pattern))))]));
     assert.ok(Object.values(changes).every(value => value === 'false'));
