@@ -46,6 +46,7 @@
 - [x] Lot 0: read rules, contract and baseline; create isolated worktree; mechanical branch check.
 - [ ] Lot 1: tests first in `tests/git-bindings.test.ts`, `tests/fixtures/git-binding-conformance.ts`, `tests/git-bindings.integration.test.ts`, `tests/git-binding-projection.test.ts`.
   - [x] Author shared lifecycle, uniqueness, isolation, replay, CAS and concurrency acceptance before implementation.
+  - [x] Initial red: missing git binding module; add Postgres durability and registry refusal tests.
 - [ ] Lot 2: frozen record types, scope-bound host registry, binding store port, memory double and lifecycle CAS.
 - [ ] Lot 3: additive migration 0010, append-only audit/index and Postgres adapter; shared conformance suite.
 - [ ] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
