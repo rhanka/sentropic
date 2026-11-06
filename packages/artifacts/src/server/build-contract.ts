@@ -32,6 +32,16 @@ export interface ArtifactBuildTuple {
   readonly npmVersion: string;
   readonly publicEnvHashes: Readonly<Record<string, string>>;
 }
+export interface ArtifactBuildCandidate { readonly candidateDigest: string }
+export interface ArtifactBuildReceipt extends ArtifactBuildCandidate {
+  readonly jobId: string;
+  readonly tuple: ArtifactBuildTuple;
+  readonly releaseId: string;
+  readonly manifestDigest: string;
+  readonly executor: 'caller' | 'ci' | 'sandbox';
+  readonly producer: { readonly runId: string; readonly attempt: number };
+  readonly verification: 'declared' | 'sha-verified' | 'builder-attested';
+}
 
 export function buildRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -58,10 +68,12 @@ export function validateArtifactBuild(snapshot: ArtifactBuildSnapshot) {
   const fields = ['version', 'buildScript', 'outputDir', 'lockfilePath', 'entry', 'publicEnvNames'];
   if (Object.keys(value).some(key => !fields.includes(key)) || value.version !== 1
     || typeof value.buildScript !== 'string' || !/^[A-Za-z0-9:_-]+$/.test(value.buildScript)
+    || value.buildScript.trim() !== value.buildScript
     || !buildPath(value.outputDir) || !buildPath(value.lockfilePath)
     || (value.entry !== undefined && !buildPath(value.entry))
     || (value.publicEnvNames !== undefined && (!Array.isArray(value.publicEnvNames)
-      || value.publicEnvNames.some(name => typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))))) invalid();
+      || value.publicEnvNames.some(name => typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)
+        || name.trim() !== name)))) invalid();
   const descriptor = value as unknown as ArtifactBuildDescriptor;
   const manifest = buildJson(snapshot.files[join(snapshot.subPath, 'package.json')]);
   if (!buildRecord(manifest.scripts) || !Object.hasOwn(manifest.scripts, descriptor.buildScript)

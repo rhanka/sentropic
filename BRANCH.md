@@ -54,6 +54,7 @@
   - [x] Host-owned exact package/version/integrity allowlist; `npm ci --ignore-scripts` default.
 - [ ] **Lot 3 — Validation and handoff**
   - [x] Added Immo fixture and typed rejection vectors in `tests/build-contract.test.ts`.
+  - [x] Tightened script names, pinned closure and receipt types; corrected compile-time failure mapping.
   - [ ] `make test-artifacts SCOPE=tests/build-contract.test.ts ENV=test-gb1` (includes package compilation).
   - [ ] `make lint-artifacts ENV=test-gb1`; frozen tools/list regression.
   - [ ] Cleanup `make down-volumes ENV=test-gb1`; push; one READY PR; CI green; report `.tmp/rv/gb1.md`.

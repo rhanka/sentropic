@@ -81,4 +81,61 @@ describe('GB1 frozen build contract', () => {
     }
     expect(validateArtifactBuild({ ...snapshot, postinstallAllowlist: [allowed] }).postinstall).toEqual([allowed]);
   });
+  it('should accept the byte-identical §4.1 example with public environment names only', () => {
+    const example = '{\n  "version": 1,\n  "buildScript": "build",\n  "outputDir": "dist",\n  "lockfilePath": "package-lock.json",\n  "entry": "index.html",\n  "publicEnvNames": ["VITE_EXAMPLE"]\n}';
+    const snapshot = fixture({ manifest: { scripts: { build: 'exit 99' } } });
+    snapshot.files['sentropic.artifact.json'] = example;
+    expect(validateArtifactBuild(snapshot).descriptor.publicEnvNames).toEqual(['VITE_EXAMPLE']);
+    for (const publicEnvNames of [['NAME=value'], ['NAME\n'], [{ NAME: 'value' }], 'NAME']) {
+      refusal(fixture({ descriptor: { ...descriptor, publicEnvNames } }), 'build_descriptor_invalid');
+    }
+  });
+  it('should reject required fields missing from the frozen descriptor', () => {
+    for (const key of ['version', 'buildScript', 'outputDir', 'lockfilePath']) {
+      const value = { ...descriptor };
+      delete value[key];
+      refusal(fixture({ descriptor: value }), 'build_descriptor_invalid');
+    }
+  });
+  it('should accept pinned workspace links with root installation and a nested script directory', () => {
+    const app = { name: '@fixture/app', version: '1.0.0', scripts: { 'build:artifact': 'exit 99' } };
+    const snapshot = fixture({ packages: { 'apps/ui': app, 'node_modules/@fixture/app': { resolved: 'apps/ui', link: true } } });
+    snapshot.subPath = 'apps/ui';
+    snapshot.files['apps/ui/package.json'] = JSON.stringify(app);
+    snapshot.files['apps/ui/sentropic.artifact.json'] = immo;
+    expect(validateArtifactBuild(snapshot)).toMatchObject({ installDirectory: '', scriptDirectory: 'apps/ui' });
+    snapshot.files['apps/ui/package.json'] = JSON.stringify({ ...app, dependencies: { example: '*' } });
+    refusal(snapshot, 'dep_outside_lock');
+  });
+  it('should reject escaping, missing and mismatched workspace link targets', () => {
+    for (const resolved of ['../elsewhere', '/tmp/workspace', 'missing']) {
+      refusal(fixture({ packages: { 'node_modules/example': { resolved, link: true } } }), 'dep_outside_lock');
+    }
+    const snapshot = fixture({ packages: { 'ui': {}, 'node_modules/example': { resolved: 'ui', link: true } } });
+    snapshot.files['ui/package.json'] = JSON.stringify({ name: 'other' });
+    refusal(snapshot, 'dep_outside_lock');
+  });
+  it('should reject a missing locked dependency and an edited workspace manifest', () => {
+    refusal(fixture({ manifest: { dependencies: { missing: '^1.0.0' } } }), 'dep_outside_lock');
+    const snapshot = fixture();
+    snapshot.files['package.json'] = JSON.stringify({ scripts: { 'build:artifact': 'exit 99' }, dependencies: { example: '*' } });
+    refusal(snapshot, 'dep_outside_lock');
+  });
+  it('should validate all dependency sections and the transitive closure', () => {
+    for (const section of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+      refusal(fixture({ packages: { 'node_modules/example': { ...dependency, [section]: { bad: 'file:../bad' } } } }), 'dep_outside_lock');
+    }
+    refusal(fixture({ packages: { 'node_modules/example': { ...dependency, hasInstallScript: 'false' } } }), 'dep_outside_lock');
+  });
+  it('should accept a host registry prefix and reject its lookalike paths and credentials', () => {
+    const snapshot = fixture({ packages: { 'node_modules/example': { ...dependency, resolved: 'https://packages.example/npm/example.tgz' } } });
+    refusal(snapshot, 'dep_outside_lock');
+    expect(validateArtifactBuild({ ...snapshot, allowedRegistries: ['https://packages.example/npm/'] }).postinstall).toEqual([]);
+    for (const resolved of ['https://u:p@registry.npmjs.org/x', 'http://registry.npmjs.org/x', 'file:local', 'git:repo']) {
+      refusal(fixture({ packages: { 'node_modules/example': { ...dependency, resolved } } }), 'dep_outside_lock');
+    }
+  });
+  it('should refuse root lifecycle scripts rather than execute them', () => {
+    refusal(fixture({ manifest: { scripts: { 'build:artifact': 'exit 99', postinstall: 'exit 99' } } }), 'install_script_not_allowlisted');
+  });
 });
