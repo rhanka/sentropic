@@ -53,5 +53,7 @@
 - [x] Lot 1: measured sequencer assigns every discovered unit file exactly once and includes additions; make test-ci-unit-shards passed (3 checks, zero skips).
 - [ ] Lot 2: detach units from production image; cache verified toolbox by lock and complete source identity; remove unused consumer candidate dependency.
 - [x] Source/production split: consumer, graph, expected-results, DAG and BR-84 proof checks passed; both production suites remain mandatory for publication and ci-gate.
+- [x] Consumer checks no longer wait for unused candidate archives; graph regressions retain the necessary cluster-mesh candidate dependency.
+- [x] Cache validators reject source, lock, architecture and archive corruption; scoped cache, graph and 40 publishable-wiring checks passed.
 - [ ] Lot 3: scoped Make sharding, graph, consumer, expected-results and wiring checks on existing Node container; full suites in PR CI.
 - [ ] Lot 4: scope-check before atomic make commits; push wagon; capture draft timing run; report and test-volume cleanup.
