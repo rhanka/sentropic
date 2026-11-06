@@ -29,6 +29,21 @@ import {
   toMs,
 } from './ci-run-metrics.mjs';
 
+test('should keep a mixed delivery path incomplete when a selected publication member is absent', () => {
+  const created = '2026-11-06T10:00:00Z';
+  const records = ['ci-gate', 'publish-api-image', 'deploy-preprod'].map((name, i) => ({
+    runId: 84, attempt: 1, jobId: i + 1, name, conclusion: 'success',
+    startedAt: '2026-11-06T10:01:00Z', completedAt: '2026-11-06T10:02:00Z',
+  }));
+  const endpoints = deliveryElapsed(records, created, { qualification: ['ci-gate'],
+    images: ['publish-api-image'], preproduction: ['deploy-preprod'], packages: ['publish-cluster-mesh'] });
+  assert.equal(endpoints.qualification.elapsedSeconds, 120);
+  assert.equal(endpoints.preproduction.elapsedSeconds, 120);
+  assert.equal(endpoints.packages.elapsedSeconds, null);
+  assert.equal(endpoints.packages.status, 'missing');
+  assert.equal(admissionDecision({ peak: 36, availableSlots: 17, reserveSlots: 2 }).status, 'over-capacity');
+});
+
 const job = (overrides = {}) => ({
   runId: 1,
   attempt: 1,
