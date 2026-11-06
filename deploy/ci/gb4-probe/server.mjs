@@ -42,4 +42,9 @@ server.on('upgrade', (request, socket, head) => {
   socket.on('data', receive);
   if (head.length) receive(head);
 });
-server.listen(5173, '0.0.0.0');
+server.listen(5173, '0.0.0.0', async () => {
+  try {
+    const rows = await selfTest();
+    console.log(JSON.stringify({ type: 'GB4_SELF_TEST', pass: rows.every((r) => r.pass), rows }));
+  } catch { console.log(JSON.stringify({ type: 'GB4_SELF_TEST', rows: [], pass: false })); }
+});

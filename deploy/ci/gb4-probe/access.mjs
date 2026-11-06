@@ -2,8 +2,9 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-export const credentialName = 'KUBE_CONFIG_DATA_PREPROD_BASCULE';
+export const credentialName = 'K8S_TENANT_ADMIN_KUBECONFIG_B64';
 export const preprod = 'sentropic-preprod';
+export const controller = 'system:serviceaccount:sentropic-preprod:sentropic-app';
 export function access(root) {
   const match = readFileSync(join(root, '.env'), 'utf8').match(new RegExp(`^${credentialName}=(.*)$`, 'm'));
   let value = process.env[credentialName] || match?.[1]?.trim();
@@ -15,17 +16,23 @@ export function access(root) {
   writeFileSync(file, contents, { mode: 0o600 });
   const env = { ...process.env, KUBECONFIG: file };
   delete env[credentialName];
-  const kube = (args, input) => {
+  const request = (args, input) => {
     const result = spawnSync('kubectl', ['--request-timeout=20s', ...args], { env, input, encoding: 'utf8', timeout: 90000, maxBuffer: 4 * 1024 * 1024 });
     // Never forward kubectl diagnostics: malformed access material may be echoed.
     if (result.status !== 0) throw new Error(`kubectl ${args[0]} failed (exit ${result.status ?? 'timeout'})`);
     return result.stdout.trim();
   };
   try {
-    const current = kube(['config', 'view', '--minify', '-o', 'jsonpath={.contexts[0].context.namespace}']);
-    if (current !== preprod) throw new Error('kube context must select sentropic-preprod');
+    const current = request(['config', 'view', '--minify', '-o', 'jsonpath={.contexts[0].context.namespace}']);
+    if (!['sentropic', preprod].includes(current)) throw new Error('kube context must select the sentropic tenant');
   } catch (error) { rmSync(directory, { recursive: true, force: true }); throw error; }
-  return { kube, close: () => rmSync(directory, { recursive: true, force: true }) };
+  const kube = (args, input) => request([`--as=${controller}`, ...args], input);
+  const discover = (args) => {
+    if (args[0] !== 'get' || !['pods', 'services', 'endpoints'].includes(args[1]) ||
+        args[args.indexOf('-n') + 1] !== preprod) throw new Error('discovery is read-only and preprod-only');
+    return request(args);
+  };
+  return { kube, discover, close: () => rmSync(directory, { recursive: true, force: true }) };
 }
 export function liveInputs(kube) {
   const pods = JSON.parse(kube(['get', 'pods', '-n', preprod, '-o', 'json'])).items;

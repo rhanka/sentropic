@@ -4,7 +4,8 @@ export const namespace = 'sentropic-artifact-builders';
 export const name = 'gb4-isolation-probe';
 export const writablePaths = ['/tmp', '/home/node/app/node_modules', '/home/node/app/.vite', '/home/node/.npm', '/dev/shm'];
 const source = (file) => readFileSync(new URL(file, import.meta.url), 'utf8');
-export const serverSource = () => source('checks.mjs').replace(/export /g, '') + '\n' + source('server.mjs').replace("import { selfTest } from './checks.mjs';", '');
+export const serverSource = () => source('checks.mjs').replace(/export /g, '') + '\n' + source('server.mjs').replace("import { selfTest } from './checks.mjs';", '') +
+  '\nawait import(' + JSON.stringify('data:text/javascript;base64,' + Buffer.from(clientSource().replace('const host = process.argv[1];', "const host = '127.0.0.1';")).toString('base64')) + ');';
 export const clientSource = () => source('client.mjs');
 export const egressRule = {
   to: [{ namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': namespace } },
@@ -35,10 +36,15 @@ export function manifests(clusterTargets = []) {
     { apiVersion: 'v1', kind: 'Service', metadata: { name, namespace }, spec: {
       type: 'ClusterIP', selector: labels, ports: [{ name: 'probe', port: 5173, targetPort: 'probe', protocol: 'TCP' }],
     } },
-    { apiVersion: 'networking.k8s.io/v1', kind: 'NetworkPolicy',
-      metadata: { name: 'gb4-probe-content-egress', namespace: 'sentropic-preprod' }, spec: {
-        podSelector: { matchLabels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'artifact-content' } },
-        policyTypes: ['Egress'], egress: [egressRule],
-      } },
   ];
+}
+export function clientPod(destination) {
+  const pod = manifests()[0];
+  pod.metadata.name = `${name}-denied`;
+  pod.metadata.labels['sentropic.dev/artifact-binding'] = `${name}-denied`;
+  const container = pod.spec.containers[0];
+  container.command = ['node', '--input-type=module', '-e', clientSource(), destination];
+  delete container.readinessProbe;
+  delete container.ports;
+  return pod;
 }
