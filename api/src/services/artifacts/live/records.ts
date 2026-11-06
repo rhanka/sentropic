@@ -29,7 +29,7 @@ export class LiveError extends Error {
 export const conflict = (reason: string): never => { throw new LiveError('git_live_conflict', reason); };
 export function assertFence(state: LiveState | undefined, fence: LiveRuntime): asserts state is LiveState {
   if (!state || state.runtime.generation !== fence.generation || state.runtime.sessionId !== fence.sessionId
-    || state.runtime.leaseEpoch !== fence.leaseEpoch) conflict('stale_fence');
+    || state.runtime.leaseEpoch !== fence.leaseEpoch || state.runtime.routeEpoch !== fence.routeEpoch) conflict('stale_fence');
 }
 export function automaticEligible(progress: PublicationProgress, attempt: LiveAttempt, releaseCommit: string | null) {
   return attempt.headSha === progress.latestVerifiedHeadSha && attempt.headSha !== releaseCommit

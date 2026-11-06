@@ -39,10 +39,15 @@ export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRunt
     state.runtime.routeEpoch++; state.runtime.phase = 'SAVING'; state.runtime.stateDetail = detail;
   });
   await ports.routes.revoke(key, runtime);
-  await ports.worker.quiesce(runtime);
-  await checkpoint(ports, key, runtime);
-  runtime = await transition(ports, key, runtime, state => { state.runtime.phase = 'DECOMMISSIONING'; });
-  await ports.pods.remove(key, runtime);
+  try {
+    await ports.worker.quiesce(runtime);
+    await checkpoint(ports, key, runtime);
+    runtime = await transition(ports, key, runtime, state => { state.runtime.phase = 'DECOMMISSIONING'; });
+    await ports.pods.remove(key, runtime);
+  } catch (error) {
+    await transition(ports, key, runtime, state => { state.runtime.phase = 'RECOVERING'; });
+    throw error;
+  }
   return transition(ports, key, runtime, state => {
     state.runtime.phase = 'DORMANT'; state.runtime.podUid = null;
     state.runtime.appliedRevision = null; state.runtime.attempt = null;
@@ -52,10 +57,5 @@ export async function failed(ports: LivePorts, key: LiveKey, runtime: LiveRuntim
   const detail = error instanceof LiveError ? error.code : 'builder_unavailable';
   // If checkpoint/deletion cannot be confirmed, RECOVERING retains the pod identity and blocks replacement.
   try { await teardown(ports, key, runtime, detail); }
-  catch {
-    await transition(ports, key, runtime, state => {
-      state.runtime.phase = 'RECOVERING'; state.runtime.appliedRevision = null; state.runtime.stateDetail = detail;
-    });
-    await ports.routes.revoke(key, runtime);
-  }
+  catch { /* teardown persisted RECOVERING, or another fenced operation won; never touch its pod. */ }
 }

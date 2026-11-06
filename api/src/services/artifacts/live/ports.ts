@@ -36,6 +36,8 @@ export interface LivePorts {
   };
   drafts: {
     current(key: LiveKey): Promise<DraftSnapshot>;
+    /** CAS only an empty overlay to a verified new head; a concurrent edit must refuse. */
+    advanceClean(key: LiveKey, expected: DraftSnapshot, headSha: string): Promise<DraftSnapshot>;
     /** Verifies the already-durable encrypted pointer; failure must prevent destructive cleanup. */
     checkpoint(key: LiveKey, draft: DraftSnapshot): Promise<void>;
   };
@@ -44,7 +46,10 @@ export interface LivePorts {
     remove(key: LiveKey, runtime: LiveRuntime): Promise<void>;
   };
   cache: { acquire(source: SourceSnapshot): Promise<CacheReceipt> };
-  /** Trusted supervisor transport; implementations must wait for full process-tree termination. */
+  /** Trusted supervisor transport: monotonic routeEpoch fences every operation, including delayed requests.
+   * Quiesce cancels all older commands and waits for full process-tree termination.
+   * Prepare installs dependencies read-only, clears branch npm config and phase-fences relay access.
+   */
   worker: {
     prepare(runtime: LiveRuntime, source: SourceSnapshot, cache: CacheReceipt): Promise<void>;
     restore(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
