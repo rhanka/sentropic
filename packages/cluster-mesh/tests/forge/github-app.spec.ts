@@ -89,9 +89,11 @@ describe('GitHub App enrollment', () => {
       signature: `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}` });
     expect((await verify('fake-webhook')).valid).toBe(true);
     await f.service.rotateWebhook(owner, entry.installationRef, 'fake-next-webhook', 60000);
+    await f.service.switchWebhookSender(owner, entry.installationRef);
     expect((await verify('fake-webhook')).valid).toBe(true);
     expect((await verify('fake-next-webhook')).valid).toBe(true);
     f.advance(60001);
+    await f.service.retirePreviousWebhook(owner, entry.installationRef);
     expect((await verify('fake-webhook')).valid).toBe(false);
     expect((await verify('fake-next-webhook')).valid).toBe(true);
     await expect(f.service.rotateWebhook(owner, entry.installationRef, 'x', Infinity)).rejects.toThrow('invalid_request');
@@ -128,5 +130,38 @@ describe('GitHub App enrollment', () => {
       action === 'removed' ? 'installation_repositories' : 'installation');
     expect(f.revoked).toContain(lease.token);
     expect((await f.service.status(owner, entry.installationRef)).state).toBe('revoked');
+  });
+
+  it('should reject tampered ciphertext and record substitution', async () => {
+    const f = fixture();
+    const first = await f.ready();
+    const second = await f.ready();
+    f.envelopes.set(second.installationRef, f.envelopes.get(first.installationRef)!);
+    await expect(f.service.status(owner, second.installationRef)).rejects.toThrow('capability_unavailable');
+    f.envelopes.set(first.installationRef, '{"v":1,"ciphertext":"tampered"}');
+    await expect(f.service.status(owner, first.installationRef)).rejects.toThrow('capability_unavailable');
+  });
+
+  it('should consume an installation callback only once under concurrency', async () => {
+    const f = fixture();
+    const entry = await f.service.begin(owner);
+    const prompt = await f.service.prompt(owner, entry.installationRef);
+    const converted = await f.service.convert(owner, entry.installationRef, { state: prompt.state, code: 'fake-code' });
+    const callback = { state: new URL(converted.installationUrl).searchParams.get('state')!, installationId: '500' };
+    const results = await Promise.allSettled([f.service.install(owner, entry.installationRef, callback),
+      f.service.install(owner, entry.installationRef, callback)]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+  });
+
+  it('should refuse retiring the previous secret before the window closes or the sender switches', async () => {
+    const f = fixture();
+    const entry = await f.ready();
+    await f.service.rotateWebhook(owner, entry.installationRef, 'fake-next', 60000);
+    await expect(f.service.retirePreviousWebhook(owner, entry.installationRef)).rejects.toThrow('invalid_request');
+    await f.service.switchWebhookSender(owner, entry.installationRef);
+    f.advance(60001);
+    await f.service.retirePreviousWebhook(owner, entry.installationRef);
+    expect((await f.service.status(owner, entry.installationRef)).webhookOverlapEndsAt).toBeNull();
   });
 });

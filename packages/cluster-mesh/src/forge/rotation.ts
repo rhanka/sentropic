@@ -45,4 +45,12 @@ export const createGitAppRotation = ({ custody, github, now }: {
     record.webhookRotationPending = false;
     return publicStatus(record);
   }),
+  retirePreviousWebhook: (target: GitAppOwnerRepository, ref: string) => custody.withRecord(ref, async (record) => {
+    assertOwner(record, target);
+    if (record.webhookRotationPending || !record.previousWebhook || now() < record.previousWebhook.until) {
+      throw new GitAppError('invalid_request');
+    }
+    delete record.previousWebhook;
+    return publicStatus(record);
+  }),
 });
