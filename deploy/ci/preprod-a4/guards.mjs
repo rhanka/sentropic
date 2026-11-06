@@ -30,13 +30,15 @@ export function assertRequest(request) {
 }
 export function assertFence(objects, pods, candidateImage) {
   const custodian = pods.find(pod => pod.metadata.name === podName);
+  const custodyVolume = custodian?.spec.volumes?.find(volume => volume.persistentVolumeClaim?.claimName === 'sentropic-a4-custody');
   if (!custodian || custodian.status?.phase !== 'Running' || custodian.metadata.deletionTimestamp
     || custodian.spec.containers.length !== 1 || custodian.spec.containers[0].image !== candidateImage
     || !custodian.status.containerStatuses?.[0]?.ready
     || !custodian.status.containerStatuses[0].imageID?.endsWith(candidateImage.split('@')[1])
     || custodian.spec.automountServiceAccountToken !== false
-    || !custodian.spec.volumes?.some(volume => volume.persistentVolumeClaim?.claimName === 'sentropic-a4-custody')
-    || !custodian.spec.containers[0].volumeMounts?.some(mount => mount.mountPath === '/run/cm-cutover' && !mount.readOnly)) {
+    || !custodyVolume || custodyVolume.persistentVolumeClaim.readOnly
+    || !custodian.spec.containers[0].volumeMounts?.some(mount => mount.name === custodyVolume.name
+      && mount.mountPath === '/run/cm-cutover' && !mount.readOnly)) {
     throw new Error('custodian_invalid');
   }
   if (!objects.some(object => object.kind === 'Deployment' && object.metadata.name === 'api')) throw new Error('api_missing');
