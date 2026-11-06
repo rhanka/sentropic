@@ -76,7 +76,7 @@ export function createLiveDraftVault(deps: { store: LiveStore; keys: LiveKeyPort
         if (tx.record?.tombstone === 'expired') throw new ArtifactOperationError('git_live_draft_expired');
         if ((tx.record?.revision ?? null) !== snapshot.expectedRevision) throw new ArtifactOperationError('git_live_revision_moved');
         const record = await persistLiveOverlay(tx, deps.keys, snapshot, now());
-        if (snapshot.command) await tx.complete(snapshot.command, record);
+        if (snapshot.command) await tx.complete(snapshot.command, { ...record });
         return { ...record, replayed: false };
       });
     },
