@@ -47,6 +47,8 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Reviews R2–R4 documentation: both runtime consumers, rotation-compatible composition, pre-fence D11 qualification and separate fresh tenant rollback evidence documented without imposing a final-dump restore.
+- [x] Review R1 acceptance: simulate the ordered resume from the actual rendered preprod Ingress/workload topology; stopped proxy and absent restriction refuse before HTTP; only API/UI/IdP resume in the test.
 - [x] Review R2 acceptance: scoped IdP shared email-code HTTP handler loads the real runtime policy and token custodian; missing policy/approval/keys refuse before the isolated transaction double, and absent qualified deletion budgets refuse.
 - [x] Review R5: add a digest-bound private execution annex and make action entrypoint for the reviewed fence/scales/deletion/restriction; tenant restore/recovery stay separately approved tenant make procedures.
 - [x] Review R1: internal verification never probes stopped UI; public HTTP follows the restricted, pinned UI proxy with other controllers fenced; IdP is the only separately authorized identity writer.

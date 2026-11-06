@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { verifyRenderedSequence } from './topology.selftest.mjs';
 const { parseAllDocuments } = createRequire('/workspace/package.json')('yaml');
 const load = tier => parseAllDocuments(readFileSync(`/rendered/${tier}.yaml`, 'utf8')).map(doc => doc.toJSON());
 const preprod = load('preprod'), prod = load('prod');
@@ -42,3 +43,4 @@ assert(!preprod.some(object => object.kind === 'Secret' && ['email-code-hmac', '
 assert.equal(object(prod, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, undefined);
 assert.equal(object(prod, 'Deployment', 'api').spec.template.spec.volumes, undefined);
 console.log('PASS: rendered preprod custody, real policy reference, private HMAC composition and budget wiring; prod unchanged');
+await verifyRenderedSequence(preprod);
