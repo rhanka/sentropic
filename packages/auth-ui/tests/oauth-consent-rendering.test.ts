@@ -1,13 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { build } from 'esbuild';
 import { compile } from 'svelte/compiler';
 
 // Compile the shipped component and its design-system primitives, then inspect its server HTML.
 const root = fileURLToPath(new URL('..', import.meta.url));
-const renderConsent = async (resource: string | null) => {
+let renderConsentComponent: (props: Record<string, unknown>) => string;
+
+// The compiled component is a shared fixture; resource cases only change its props.
+beforeAll(async () => {
   const output = await build({
     stdin: { contents: `import { render } from 'svelte/server';
       import Consent from './src/components/OAuthConsent.svelte';
@@ -21,7 +24,11 @@ const renderConsent = async (resource: string | null) => {
     } }],
   });
   const module = await import(/* @vite-ignore */ `data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
-  return module.default({ state: 'state', transport: {}, initialDetails: {
+  renderConsentComponent = module.default;
+});
+
+const renderConsent = (resource: string | null) => {
+  return renderConsentComponent({ state: 'state', transport: {}, initialDetails: {
     clientName: 'Immo MCP', redirectUri: 'https://client.test/cb', scopes: ['immo:search', 'offline_access'],
     offline: { issuer: 'https://idp.test', resource, audience: resource ?? 'https://idp.test/oauth/userinfo',
       scopes: ['immo:search', 'offline_access'], familyLifetimeDays: 15 },
