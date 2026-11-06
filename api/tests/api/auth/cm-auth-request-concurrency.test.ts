@@ -10,6 +10,8 @@ import { cmDeleteForEmails, cmDeleteForUsers } from '../../utils/cm-identity-tes
 import { cmMagicLinkHandlers } from '../../../src/routes/namespaces/auth/cm-magic-link';
 import { createCmMagicLink, sha256Hex } from '../../../src/services/identity/cm-proofs';
 import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
+import { sessionLifecycleHandlers } from '../../../src/routes/namespaces/session-lifecycle';
+import { revokeSession } from '../../../src/services/session-manager';
 
 /**
  * A4 e2e residue (run 42032530355): every authenticated page load fans out
@@ -118,5 +120,35 @@ describe('CM per-request authentication under same-session fan-out', () => {
     );
     expect(rows.length).toBe(1);
     expect(rows[0].last_activity_at >= before).toBe(true);
+  });
+
+  it('serves concurrent current-session requests and still refuses invalid or revoked sessions', async () => {
+    const user = await createAuthenticatedUser('editor');
+    const sessionToken = user.sessionToken!;
+    const activity = '2026-01-01T00:00:00.000Z';
+    await cmQuery('UPDATE cm_identity.identity_login_token_bindings SET last_activity_at = $2 WHERE session_id IN (SELECT session_id FROM cm_identity.identity_login_sessions WHERE user_id = $1)', [user.id, activity]);
+    const app = new Hono();
+    app.get('/api/v1/auth/session', sessionLifecycleHandlers.current!);
+    const request = (token: string) => app.request('/api/v1/auth/session', {
+      headers: { cookie: `session=${token}` },
+    });
+    const responses = await Promise.all(Array.from({ length: 16 }, () => request(sessionToken)));
+    expect(responses.map(response => response.status)).toEqual(Array(16).fill(200));
+    let sessionId = '';
+    for (const response of responses) {
+      const body = await response.json();
+      expect(body).toMatchObject({ userId: user.id, role: user.role });
+      sessionId = body.sessionId;
+      expect(sessionId).toBeTruthy();
+    }
+    // A session-info read must not contend on activity writes with page loads.
+    const activityRows = await cmQuery<{ unchanged: boolean }>(
+      'SELECT last_activity_at = $2 AS unchanged FROM cm_identity.identity_login_token_bindings WHERE session_id = $1',
+      [sessionId, activity],
+    );
+    expect(activityRows).toEqual([{ unchanged: true }]);
+    expect((await request('invalid-session')).status).toBe(401);
+    await revokeSession(sessionId);
+    expect((await request(sessionToken)).status).toBe(401);
   });
 });
