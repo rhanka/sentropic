@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { ArtifactOperationError } from '../server/failures.js';
 import { gitBindingEvent, gitBindingReceiptKey, validateGitBindingWrite,
   type GitBinding, type GitBindingEvent, type GitBindingStore } from '../server/git-bindings.js';
+import type { GitReleaseIndex, GitReleaseIndexStore } from '../server/git-contracts.js';
 
 const fields = ['artifactId', 'storageScopeId', 'repoId', 'branch', 'channel', 'personalPrincipalId', 'subPath',
   'baseCommitSha', 'headCommitSha', 'releaseCommitSha', 'autoPublish', 'executor', 'pendingJobId',
@@ -80,6 +81,31 @@ export function createPostgresGitBindingStore(pool: Pool): GitBindingStore {
         }
         throw error;
       } finally { client.release(); }
+    },
+  };
+}
+
+const indexFields = ['releaseId', 'artifactId', 'repoId', 'branch', 'commitSha', 'treeSha', 'manifestDigest',
+  'candidateDigest', 'executor', 'verification', 'receiptId', 'jobId', 'buildRunId', 'attempt', 'createdAt'] as const;
+function indexRow(row: Record<string, unknown>): GitReleaseIndex {
+  return Object.fromEntries(indexFields.flatMap(key => {
+    const value = row[column(key)];
+    return value === null ? [] : [[key, value instanceof Date ? value.toISOString() : value]];
+  })) as unknown as GitReleaseIndex;
+}
+/** Read-only SG1 port. SG4 writes both surfaces in the release transaction. */
+export function createPostgresGitReleaseIndexStore(pool: Pool): GitReleaseIndexStore {
+  return {
+    async get(scope, releaseId) {
+      const { rows } = await pool.query(`SELECT * FROM artifacts.git_release_index
+        WHERE storage_scope_id=$1 AND release_id=$2`, [scope, releaseId]);
+      return rows[0] ? indexRow(rows[0]) : undefined;
+    },
+    async forCommit(scope, artifactId, commitSha) {
+      const { rows } = await pool.query(`SELECT * FROM artifacts.git_release_index
+        WHERE storage_scope_id=$1 AND artifact_id=$2 AND commit_sha=$3 ORDER BY created_at,release_id`,
+        [scope, artifactId, commitSha]);
+      return rows.map(indexRow);
     },
   };
 }
