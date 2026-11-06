@@ -10,7 +10,7 @@ export function assertConfig(manifest, testedId) {
 
 function docker(...args) { return execFileSync('docker', args, { encoding: 'utf8' }).trim(); }
 
-export async function publish(kind, env = process.env) {
+export async function publish(kind, env = process.env, fetchImpl = fetch) {
   if (!['api', 'ui', 'e2e'].includes(kind) || env.REGISTRY !== 'ghcr.io/rhanka') throw Error('Invalid public GHCR publication');
   const tag = env[`${kind.toUpperCase()}_VERSION`];
   if (!/^[a-f0-9]{6}$/.test(tag)) throw Error('Publication requires an immutable content tag');
@@ -26,7 +26,7 @@ export async function publish(kind, env = process.env) {
     docker('push', ref);
   }
   assertConfig(JSON.parse(docker('manifest', 'inspect', ref)), receipt.imageId);
-  const anonymous = await publicImage(ref);
+  const anonymous = await publicImage(ref, fetchImpl);
   assertConfig(anonymous.manifest, receipt.imageId);
   const digest = docker('buildx', 'imagetools', 'inspect', ref).match(/^Digest:\s+(sha256:[a-f0-9]{64})$/m)?.[1];
   if (!digest) throw Error('Missing published manifest digest');
@@ -35,6 +35,7 @@ export async function publish(kind, env = process.env) {
   docker('tag', receipt.imageId, `${env.REGISTRY}/sentropic-${kind}:main`);
   docker('push', `${env.REGISTRY}/sentropic-${kind}:main`);
   assertConfig(JSON.parse(docker('manifest', 'inspect', `${env.REGISTRY}/sentropic-${kind}:main`)), receipt.imageId);
+  if ((await publicImage(`${env.REGISTRY}/sentropic-${kind}:main`, fetchImpl)).digest !== digest) throw Error('Main alias differs from the tested publication digest');
   const published = { ...receipt, digest, image: `${env.REGISTRY}/sentropic-${kind}@${digest}` };
   writeFileSync(`${kind}-image.published.json`, `${JSON.stringify(published, null, 2)}\n`);
   console.log(`Published tested ${kind}: ${published.image} (config ${receipt.imageId})`);

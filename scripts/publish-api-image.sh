@@ -27,7 +27,8 @@ TARGET_TAG="${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
 # publish-api-image is dedicated strictly to immutable, content-addressed release tags
 # matching exactly 6 lowercase hexadecimal characters (^[0-9a-f]{6}$).
 # Moving tag aliases ('main', 'latest', 'staging', 'v1') or non-canonical formats must NOT
-# be published through this script; 'main' must be promoted via publish-api-main-image.
+# be published through this script; CI promotes main after checking the tested
+# image identity and the published manifest digest.
 if ! [[ "$API_VERSION" =~ ^[0-9a-f]{6}$ ]]; then
   echo "❌ Error: Invalid API_VERSION '$API_VERSION'. publish-api-image requires a canonical 6-character hex content-addressed tag (^[0-9a-f]{6}$). Moving tag aliases ('main', 'latest', 'staging', 'v1') and non-canonical formats are rejected." >&2
   exit 1
