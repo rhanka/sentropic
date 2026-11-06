@@ -62,6 +62,14 @@ it('should retain an indeterminate commit while permitting the revoked owner to 
   expect(await w.store.transaction({ storageScopeId: w.context.storageScopeId, artifactId: w.binding.artifactId, bindingGeneration: 1 },
     async tx => tx.record!.changedPaths)).toBe(1);
 });
+it('should tear down only the matching old session after pause advances the binding generation', async () => {
+  const w = liveWitness(); const written = await w.write({ files: [{ path: 'ui/a.ts', text: 'retained' }] });
+  w.binding.generation = 2; w.binding.state = 'paused';
+  expect(await w.call('live_control', { action: 'stop', liveSessionId: written.liveSessionId,
+    expectedLiveRevision: written.liveRevision, idempotencyKey: 'paused-stop' }))
+    .toEqual({ liveSessionId: written.liveSessionId, state: 'DORMANT' });
+  expect(w.worker.stop.mock.calls[0][0].bindingGeneration).toBe(1);
+});
 it('should refuse no-op commits and allow deleting an uncommitted new file', async () => {
   const w = liveWitness(); const state = await w.status();
   await expect(w.call('git_commit', { expectedHeadSha: state.baseHeadSha, files: [{ path: 'ui/a.ts', text: 'alpha' }],

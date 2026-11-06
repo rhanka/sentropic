@@ -41,6 +41,7 @@ export interface LiveTransaction {
 }
 export interface LiveStore {
   transaction<T>(identity: LiveIdentity, action: (tx: LiveTransaction) => Promise<T>): Promise<T>;
+  sessionIdentity(scope: string, artifactId: string, liveSessionId: string): Promise<LiveIdentity | undefined>;
 }
 export const liveIdentityKey = (identity: LiveIdentity): string => JSON.stringify([
   identity.storageScopeId, identity.artifactId, identity.bindingGeneration]);
@@ -52,7 +53,13 @@ export function createMemoryLiveStore(): LiveStore {
   const receipts = new Map<string, LiveReceipt>();
   const quota: { scope: string; artifact: string; actor: string; invocation: string; at: number }[] = [];
   const mutex = createKeyMutex();
-  return { transaction: (identity, action) => mutex.runSerialized('live-store', async () => {
+  return {
+    async sessionIdentity(scope, artifactId, sessionId) {
+      const record = [...records.values()].find(row => row.storageScopeId === scope && row.artifactId === artifactId &&
+        row.runtime?.liveSessionId === sessionId);
+      return record ? { storageScopeId: scope, artifactId, bindingGeneration: record.bindingGeneration } : undefined;
+    },
+    transaction: (identity, action) => mutex.runSerialized('live-store', async () => {
     const id = liveIdentityKey(identity);
     const pendingObjects = new Map<string, LiveEnvelope | undefined>();
     const pendingReceipts = new Map<string, LiveReceipt>();
