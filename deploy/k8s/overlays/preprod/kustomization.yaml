@@ -28,9 +28,9 @@ patches:
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
 
-# Temporary recovery pin: remove at the A4 preprod cutover execution.
+# Temporary recovery pin (api:f2313a, ui:434fe5): remove at the A4 cutover execution.
 images:
   - name: ghcr.io/rhanka/sentropic-api
-    newTag: "f2313a"
+    digest: sha256:0a401baad9904c555f756f998538fddf0b4b86013878269ad34494a03d2807bb
   - name: ghcr.io/rhanka/sentropic-ui
-    newTag: "434fe5"
+    digest: sha256:a9d7c1aa415e7c445ceb47f6eca47789c1edc4ca3b84ab465cd1386b4e31f28d
