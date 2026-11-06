@@ -1,7 +1,7 @@
 # chore: registry retention
 
 ## Objective
-- [ ] Complete the owner-approved 2026-11-06 nc-reg cleanup and propose retention for the next dated train; no PR or automation activation.
+- [x] Complete the owner-approved 2026-11-06 nc-reg cleanup and propose retention for the next dated train; no PR or automation activation.
 
 ## Scope / Guardrails
 - [x] Base origin/main: `165ce5b932206bcd89e6374f5b80d970cd1d19b6`; branch `chore/registry-retention`; worktree `tmp/registry-retention`.
@@ -43,5 +43,5 @@
 - [x] Lot 0 — Read common/master/workflow rules; create isolated wagon at origin/main and pass mechanical branch check.
 - [x] Lot 1 — Save 302-tag exact sized inventory: KEEP 156, DELETE 146; read both namespaces and resolve all manifest/index references.
 - [x] Lot 2 — Delete 146 tags (API 82, UI 46, E2E 18); retain all 156 KEEP tags/manifests; live 19 workloads/15 Pods unchanged, zero collisions; registry storage reduced by 51,342,281,964 bytes.
-- [ ] Lot 3 — Review `docs/runbooks/registry-retention.md`, pass scope/diff checks, commit bounded changes and push wagon without a PR.
-- [ ] Lot 4 — Finish report and designated-writer Track/train handoff; clean only this lane's resources.
+- [x] Lot 3 — Review `docs/runbooks/registry-retention.md`, pass scope/diff checks, commit bounded changes and push wagon without a PR.
+- [x] Lot 4 — Finish report and source-artifact Track/train handoff; `make down-volumes ENV=test-registry-retention` PASS. Conductor import remains explicitly pending above; no lane services, image builds or disk-hygiene target at this baseline.
