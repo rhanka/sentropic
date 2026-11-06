@@ -12,7 +12,7 @@ for (const objects of [recovery, preprod]) {
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
   const pod = object(recovery, 'Deployment', name).spec.template.spec;
   const tag = name === 'ui' ? 'sentropic-ui:434fe5' : 'sentropic-api:f2313a';
-  assert.equal(pod.containers[0].image, `rg.fr-par.scw.cloud/nc-reg/${tag}`);
+  assert.equal(pod.containers[0].image, `ghcr.io/rhanka/${tag}`);
   assert(!pod.volumes?.some(volume => ['cm-cutover', 'cm-runtime'].includes(volume.name)));
   assert(!pod.containers[0].command?.some(arg => arg.includes('/run/cm-runtime/')));
   assert(!pod.containers[0].env?.some(env => env.valueFrom?.secretKeyRef?.name === 'sentropic-identity-budgets'));
@@ -22,7 +22,7 @@ assert(!object(recovery, 'ConfigMap', 'sentropic-a4-runtime'));
 assert.equal(object(recovery, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, undefined);
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
   assert.equal(object(prod, 'Deployment', name).spec.template.spec.containers[0].image,
-    `rg.fr-par.scw.cloud/nc-reg/sentropic-${name === 'ui' ? 'ui' : 'api'}:main`);
+    `ghcr.io/rhanka/sentropic-${name === 'ui' ? 'ui' : 'api'}:main`);
 }
 const api = object(preprod, 'Deployment', 'api').spec.template.spec;
 const config = object(preprod, 'ConfigMap', 'api').data;

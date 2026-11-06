@@ -58,7 +58,7 @@ for (const tier of ['prod', 'preprod']) {
     const pinned = load(`/rendered/${tier}-pinned.yaml`);
     qualify(pinned);
     assert.equal(object(pinned, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image,
-      `rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:${'a'.repeat(64)}`);
+      `ghcr.io/rhanka/sentropic-api@sha256:${'a'.repeat(64)}`);
   });
   for (const workload of ['api', 'artifact-content']) for (const flag of closed) {
     const enable = values => {
