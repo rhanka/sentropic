@@ -1,3 +1,58 @@
+# Feature: Reviewable preprod A4 cutover procedure
+
+## Objective
+- [ ] Deliver option B prerequisites 1–6 as executable, tested preparation; owner authorization remains required for preprod execution.
+
+## Scope / Guardrails
+- [x] Base: origin/main c107f6abd; worktree tmp/worktrees/preprod-a4-procedure; wagon feat/preprod-a4-procedure for the next dated train; no PR, merge, version or lock changes.
+- [x] Use Node/TypeScript and kubectl; no Python, secret output, live execution, or CI suppression.
+- [x] ENV=test-preprod-a4; reserved ports API 9620, UI 5820, Maildev UI 1720; Docker commands use the shared docker-slot wrapper.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `api/src/scripts/cm-preprod-*.ts`
+  - `api/src/services/identity/cm-cutover-checkpoint.ts`
+  - `api/src/services/identity/cm-import-source.ts`
+  - `api/src/index.ts`
+  - `api/tests/unit/auth/cm-preprod-*.test.ts`
+  - `deploy/ci/preprod-a4/**`
+  - `deploy/k8s/overlays/preprod/**`
+  - `docs/runbooks/preprod-a4-cutover.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `.track/**`
+  - `packages/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+- **Exception process**:
+  - [x] BRA4B-EX1: Makefile adds the requested operator and scoped test targets; impact limited to explicit invocation; rollback removes the include.
+
+## Feedback Loop
+- [x] Single-writer Track: conductor imports this BRANCH.md; no concurrent .track writer in this wagon.
+- [x] Owner input: .tmp/rv/preprod-api-rollout.md option B; build only, execution explicitly withheld.
+- [ ] Train integration owns the consolidated independent final-diff review and CI; wagon runs scoped local tests.
+
+## AI Flaky tests
+- [x] No AI-dependent tests or flaky exceptions.
+
+## Orchestration Mode (AI-selected)
+- [x] Single wagon, no delegated implementation or PR; integration by the next dated train.
+
+## UAT Management (in orchestration context)
+- [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
+
+## Plan / Todo (lot-based)
+- [x] Lot 0: read common/master/workflow rules, rollout diagnosis, checkpoint/parser, tenant pgbackup, HMAC custody and budget contracts; mechanically check branch with harness.
+- [ ] Lot 1: bundle-side read-only journal/schema/source inspection, immutable evidence binding, sanctioned backup readback and protected checkpoint generation.
+- [ ] Lot 2: Node/kubectl preparation target, write-free dry-run, protected PVC custody and preprod HMAC/budget wiring.
+- [ ] Lot 3: tests in api/tests/unit/auth/cm-preprod-*.test.ts and deploy/ci/preprod-a4/*.test.mjs, including refusal, redaction, backup corruption, permissions, receipts and dry-run side effects.
+- [ ] Lot 4: docs/runbooks/preprod-a4-cutover.md and owner report .tmp/rv/preprod-a4-procedure.md with exact authorization text, Kubernetes actions, abort/rollback and verification.
+- [ ] Lot 5: scoped tests, harness scope checks before make commit, push review-ready wagon, leave preprod untouched.
+
+<!-- Retained base plan for Track event continuity. -->
 # Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
 
 ## Objective
