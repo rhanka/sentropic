@@ -5,7 +5,8 @@ import type { Duplex } from 'node:stream';
 import { once } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { createLiveUpgrade } from '../src/live-upgrade';
-import type { LiveProxy, LiveRoute } from '../src/live';
+import { createLiveProxy, type LiveProxy, type LiveRoute } from '../src/live';
+import { podName } from '../../../api/src/services/artifacts/live/pods';
 
 const artifactId = '11111111-1111-4111-8111-111111111111';
 const host = `${artifactId}.content.example`;
@@ -20,21 +21,32 @@ describe('same-origin HMR transport', () => {
     const upstream = createServer();
     upstream.on('upgrade', (request, socket) => {
       sockets.push(socket); received.push(request.headers);
+      if (request.url !== '/_live/session/hmr?token=viteToken') {
+        socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'); return;
+      }
       const accept = createHash('sha1').update(request.headers['sec-websocket-key'] +
         '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
       socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\nSec-WebSocket-Protocol: vite-hmr\r\n\r\n`);
     });
     const port = await listen(upstream);
-    const route = { artifactId, sessionId: 'session', expiresAt: Date.now() + 30_000 } as LiveRoute;
-    const live = { authorize: vi.fn(async () => ({ route, upstream: `http://127.0.0.1:${port}`, path: '/' })),
-      valid: vi.fn(async () => true), watch: vi.fn((_route, close) => { revoke = close; return vi.fn(); }) } as unknown as LiveProxy;
+    const route: LiveRoute = { storageScopeId: 'scope', artifactId, sessionId: 'session',
+      expiresAt: Date.now() + 30_000, podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, sourceRevision: 1 };
+    route.podName = podName(route);
+    const live = createLiveProxy({ authorize: async () => route, current: async () => true,
+      admittedPath: async () => true, watch: (_route, close) => { revoke = close; return vi.fn(); } });
+    const authorize = live.authorize.bind(live);
+    vi.spyOn(live, 'authorize').mockImplementation(async (...args) => {
+      const admitted = await authorize(...args);
+      return admitted && { ...admitted, upstream: `http://127.0.0.1:${port}` };
+    });
     const content = createServer(); content.on('upgrade', createLiveUpgrade({ live, baseDomain: 'content.example', enabled: () => true }));
     const contentPort = await listen(content);
     const client = connect(contentPort, '127.0.0.1'); sockets.push(client);
     try {
-      const response = once(client, 'data');
-      client.write(`GET /_live/session/hmr HTTP/1.1\r\nHost: ${host}\r\nOrigin: https://${host}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Protocol: vite-hmr\r\nCookie: private-cookie\r\nAuthorization: private-auth\r\nX-Forwarded-For: private-address\r\n\r\n`);
-      expect(String((await response)[0])).toContain('101 Switching Protocols');
+      const response = Promise.race([once(client, 'data').then(([chunk]) => String(chunk)),
+        once(client, 'close').then(() => 'closed without upgrade')]);
+      client.write(`GET /_live/session/hmr?token=viteToken HTTP/1.1\r\nHost: ${host}\r\nOrigin: https://${host}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Protocol: vite-hmr\r\nCookie: private-cookie\r\nAuthorization: private-auth\r\nX-Forwarded-For: private-address\r\n\r\n`);
+      expect(await response).toContain('101 Switching Protocols');
       expect(received).toHaveLength(1);
       for (const name of ['cookie', 'authorization', 'origin', 'x-forwarded-for']) expect(received[0]).not.toHaveProperty(name);
       expect(live.authorize).toHaveBeenCalledWith(expect.any(Request), artifactId, true);
