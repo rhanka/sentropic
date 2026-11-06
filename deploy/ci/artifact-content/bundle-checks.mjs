@@ -26,7 +26,7 @@ export function checkWorkload(objects, tier) {
   assert.equal(pod.serviceAccountName, 'artifact-content');
   const account = object(objects, 'ServiceAccount', 'artifact-content');
   assert.equal(account.automountServiceAccountToken, false);
-  assert.deepEqual(account.imagePullSecrets, [{ name: 'sentropic-registry' }]);
+  assert.equal(account.imagePullSecrets, undefined, 'public GHCR images need no pull secret');
   assert(!objects.some(o => /RoleBinding$/.test(o.kind) && o.subjects?.some(s => s.name === 'artifact-content')));
   assert.deepEqual(content.command, ['node', 'apps/artifact-content/dist/index.js']);
   assert.equal(content.workingDir, '/workspace');

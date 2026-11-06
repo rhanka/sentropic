@@ -13,6 +13,8 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `Makefile`
+  - `.github/workflows/**`
   - `BRANCH.md`
   - `plan/done/2026-11-06-train.md`
   - `deploy/k8s/**`
@@ -39,6 +41,7 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-DELIVERY — CI registry is explicit, publishers alone receive GITHUB_TOKEN packages:write, all steady-state private-registry credentials and pull-secret creation are removed; public pulls are anonymous.
 - [x] GHCR-REF3 — Security qualification evidence, operator runbook, infrastructure fixture and archived registry URLs now name GHCR.
 - [x] GHCR-REF2 — Base workloads, both tier overlays, recovery pins and sync CronJobs now use GHCR; historical baseline URLs follow the owner-requested repository-wide removal.
 - [x] GHCR-REF1 — Switch A4 authorization contracts, identity/artifact render fixtures and source API digest validation to GHCR.
