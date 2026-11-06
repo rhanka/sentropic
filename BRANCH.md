@@ -34,6 +34,7 @@
 - [x] Train owner explicitly overrides package-bump and final merge rules: one READY wagon PR, no merge; integration lane owns publication inputs.
 - [ ] Conductor imports this source plan into Track as designated writer; this concurrent lane does not write `.track`.
 - [ ] P2 real-forge enrollment, prompts and rotation receipts remain activation gates; fake GitHub tests cannot certify them.
+- [ ] Blocked: `.github/workflows/ci.yml:120-174` unconditionally rejects public src changes without a version bump. Owner forbids wagon bumps. Preserve versions/locks; await an approved train mechanism, without weakening or bypassing this job.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests; no accepted flakes or timeout increases.
@@ -47,31 +48,33 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read common rules, MASTER, workflow, testing, approved contract and template; harness C1 passed.
-- [ ] **Lot 1 — Tests first**
+- [x] **Lot 1 — Tests first**
   - [x] Added fake GitHub and manifest/install, callback replay/expiry and scope/repo denial tests before production code.
   - [x] Initial scoped run fails because the forge domain is absent; added permission, dual-repo, rotation and revocation cases before implementation.
-  - [ ] `tests/forge/github-app.spec.ts`: fake manifest/install, scoped mint, escalation refusal, state replay/scope refusal, expiry, rotation and revocation.
-  - [ ] `tests/forge/github-app-http.spec.ts`: owner prompt, callback sanitization and broker authentication.
-- [ ] **Lot 2 — Enrollment and custody**
+  - [x] `tests/forge/github-app.spec.ts`: fake manifest/install, scoped mint, escalation refusal, state replay/scope refusal, expiry, rotation and revocation.
+  - [x] `tests/forge/github-app-http.spec.ts`: owner prompt, callback sanitization and broker authentication.
+  - [x] `tests/forge/github-api.spec.ts`: REST exchange, narrowed minting, App identity and sanitized errors.
+- [x] **Lot 2 — Enrollment and custody**
   - [x] Added the exact frozen lease/webhook ports and internal encrypted-store transaction contract.
   - [x] Implemented authenticated-encryption custody; specified host prompt and service authentication tests before routing implementation.
   - [x] Added owner/scope/repo-bound expiring single-use manifest and installation callbacks.
   - [x] Added fixed-origin GitHub REST exchange, RS256 App authentication, selected-repo discovery and narrowed installation token minting.
   - [x] Added owner-authenticated prompt/callback routes and authenticated, tuple-bound lease broker; exported host composition factories.
   - [x] Added owner rotation/revocation forms, same-origin mutation checks and the authenticated HMAC broker transport.
-  - [ ] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
-- [ ] **Lot 3 — Lifecycle and runbook**
+  - [x] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
+- [x] **Lot 3 — Lifecycle and runbook**
   - [x] Added exact-permission repository token leases, revocation fencing and bounded HMAC overlap verification.
   - [x] Added verified App-key replacement and staged webhook rotation with a separate sender switch; specified REST adapter tests first.
   - [x] Added HMAC-authenticated installation suspension, uninstall, repository-removal and permission-change handling.
   - [x] Added explicit secret retirement and ciphertext tamper/substitution and concurrent callback checks.
   - [x] Required a sanitized host invalidation callback to discard adapter caches and fence dependent jobs on revocation/key rotation.
   - [x] Added renewal/lifetime and host-notification failure checks; retain rejected minted bearers for revocation and conversion credentials through verification failures.
-  - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
+  - [x] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
   - [x] Document owner clicks and activation gates in `docs/github-app-enrollment.md`.
   - [x] Wrote the host-composition and owner-click runbook, including rotation, custody boundaries and unverified live P2 gates.
 - [ ] **Lot 4 — Final validation and handoff**
-  - [ ] Scoped `make test-cluster-mesh SCOPE=tests/forge ENV=test-sg0-app`; typecheck and lint.
-  - [ ] Scope-check before each make commit; every commit under 150 changed lines.
+  - [x] Scoped `make test-cluster-mesh SCOPE=tests/forge ENV=test-sg0-app`: 31 tests pass; typecheck passes; lint passes.
+  - [x] Scope-check before each make commit; every commit under 150 changed lines.
   - [ ] Open one READY PR using this plan; observe CI green; no merge.
   - [ ] Write `.tmp/rv/sg0-app.md`; teardown with `make down-volumes ENV=test-sg0-app`.
+  - [x] Final isolated environment teardown: `make down-volumes ENV=test-sg0-app` passed.
