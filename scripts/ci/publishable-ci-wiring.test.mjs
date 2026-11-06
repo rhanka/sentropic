@@ -803,7 +803,7 @@ test('consumer contracts (BR-83): candidate contract lanes are wired into CI', (
 test('consumer contracts (BR-83): verifier job joins the complete verdict', () => {
   const job = jobs['consumer-contracts'];
   assert.ok(job, 'consumer-contracts job must exist');
-  assert.deepEqual(job.needs, ['changes', 'package-candidates']);
+  assert.deepEqual(job.needs, ['changes']);
   const runs = job.steps.map((step) => step.run ?? '').join('\n');
   assert.ok(runs.includes('test-ci-compatibility'), 'classifier gate must run');
   assert.ok(runs.includes('test-ci-consumer-contracts'), 'contract selection gate must run');

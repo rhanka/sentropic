@@ -926,7 +926,7 @@ jobs:
   # entry; the publishable-manifest guard keeps its own complete-result checks.
   consumer-contracts:
     runs-on: ubuntu-latest
-    needs: [changes, package-candidates]
+    needs: [changes]
     if: always() && !cancelled() && inputs.decision_fixtures_only != true
     permissions:
       contents: read
