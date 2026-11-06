@@ -1,77 +1,62 @@
-# Feature: release-receipt skipped publishers hotfix
+# Feature: SG0-app GitHub App enrollment by cluster-mesh
 
 ## Objective
-Unblock main deploys: `release-receipts` must pass when a selected package publisher ran green but explicitly published nothing (dev-line skip, already-published equal-integrity).
+- [ ] Deliver G0 v3 §2.7 enrollment, encrypted custody, repository leases and rotation for the initial Immo and Sentropic repositories.
 
 ## Scope / Guardrails
-- Scope limited to release receipt assessment and the CI record outputs feeding it.
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/release-receipt-hotfix`.
-- Automated tests run on dedicated environment (`ENV=test-ci-receipt`), never on root `dev`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
+- [x] Binding contract: `.tmp/concertation-git-artifact/G0-FROZEN-v3.md`, SHA-256 `4c405c8f49e9d242d65eebe35a14a45e4826afc0007e9f94a7fe21d7404e21ba`.
+- [x] Worktree `tmp/worktrees/sg0-app`; branch `feat/git-artifact-sg0-app`; base `origin/main`.
+- [x] Docker commands use `.tmp/packets/docker-slot.sh`; Make only; ENV last; no Python.
+- [x] Environment `test-sg0-app`; API_PORT=9585 UI_PORT=5785 MAILDEV_UI_PORT=1685.
+- [x] No live GitHub enrollment, merge, version bump, lock/pin/fixture/L5 regeneration or credential output.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/release-receipt.mjs`
-  - `scripts/ci/release-receipt.test.mjs`
-  - `.tmp/rv/hotfix-release-receipt.md`
+  - `packages/cluster-mesh/src/forge/**`
+  - `packages/cluster-mesh/src/index.ts`
+  - `packages/cluster-mesh/tests/forge/**`
+  - `packages/cluster-mesh/docs/github-app-enrollment.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `package-lock.json`
+  - `packages/*/package.json`
+  - `tools/memory-mcp-l5/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `<none>`
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - [x] Record reason, impact and rollback in Feedback Loop before changing a conditional path.
 
 ## Feedback Loop
-- `attention`: BR82-EX2 — `.github/workflows/ci.yml` record steps touched (conditional path). Reason: the cluster-mesh decision-skip path emits no `record` outputs today, so the receipt sees job `success` with no `pack` and fails a publisher that never published; the equal-integrity conflict is also not forwarded. Impact: three `record` steps only (llm-mesh, llm-gateway, cluster-mesh) gain an explicit `status=skipped` branch and a forwarded `conflict` output; no job `if` conditions change. Rollback: revert the `record` step blocks; the `.mjs` fix alone already passes already-published mesh/gateway receipts.
-- `acknowledge`: main is RED at `843efe3a1` (run 42036741718, `release-receipt: FAIL (1): repacked publication: @sentropic/cluster-mesh (pack=missing, expected candidate)`); this branch is the urgent hotfix lane, no merge until the PR CI is green.
+- [x] Train owner explicitly overrides package-bump and final merge rules: one READY wagon PR, no merge; integration lane owns publication inputs.
+- [ ] Conductor imports this source plan into Track as designated writer; this concurrent lane does not write `.track`.
+- [ ] P2 real-forge enrollment, prompts and rotation receipts remain activation gates; fake GitHub tests cannot certify them.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [x] No AI-dependent tests; no accepted flakes or timeout increases.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single orthogonal hotfix, one final test cycle on the PR CI.
+- [x] Mono-branch; no delegated implementation or cherry-picks.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this branch; no UAT required.
+- [x] No real owner enrollment during this wagon; document the exact owner gesture and host prompt location.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Create isolated worktree `tmp/worktrees/release-receipt-hotfix` on branch `fix/release-receipt-skipped-publishers` from `origin/main` (`843efe3a1`); harness branch check PASS C1.
-  - [x] Confirm scope boundaries and declare BR82-EX2 for `.github/workflows/ci.yml`.
-  - [x] Confirm command style: `make ... ENV=test-ci-receipt` with `ENV` last.
-- [x] **Lot 1 — Tests-first receipt fix**
-  - [x] Added red tests to `scripts/ci/release-receipt.test.mjs` (5 failed pre-fix, 2 fail-closed locks passed pre-fix).
-  - [x] Fixed `scripts/ci/release-receipt.mjs` (`assessChain` reads `publication_*` outputs + explicit status; `publicationProblems` passes explicit skipped/already-published, keeps pack FAIL-closed for real publications).
-  - [x] Fixed `ci.yml` record steps (explicit `status=skipped` on the cluster-mesh decision-skip path, forward `conflict`).
-  - [x] Lot gate:
-    - [x] `make test-publishable-manifests SCOPE=scripts/ci/release-receipt.test.mjs ENV=test-ci-receipt` green (40/40); full manifest suite 119/119 green.
-    - [x] `make scope-check` clean before every commit; commits via `make commit` only.
-- [ ] **Lot 2 — PR + CI to green**
-  - [x] Opened READY PR #920 from `fix/release-receipt-skipped-publishers`, pushed head `5dde70c77`.
-  - [ ] Watch PR CI to green (no `[skip ci]`, no `gh run rerun`).
-  - [ ] Run 42043369956: only `test-e2e (2)` failed (single `08-chat-workspace-switch` visibility assertion; no app code touched by this branch); main run 41981165023 failed `test-e2e (2)` + `(4)` without this change — unrelated e2e instability, retriggered via fresh head per CI budget.
-  - [ ] Run 42046499747: `test-e2e (2)` PASSED (run-1 e2e failure proven transient); `build-desktop` failed on `pkg` download `504 Gateway Time-out` + `spawnSync patch ENOENT` (runner infra, no input from this branch) cascading to `build-ui`/`security-container-ui` skipped and the `security-container` join red; run 1 had `build-desktop` green with the same tree — unrelated infra flake, retriggering via fresh head per CI budget.
-- [ ] **Lot 3 — Report, no merge**
-  - [ ] Write `.tmp/rv/hotfix-release-receipt.md`.
-  - [ ] Do NOT merge; hand control back.
+  - [x] Read common rules, MASTER, workflow, testing, approved contract and template; harness C1 passed.
+- [ ] **Lot 1 — Tests first**
+  - [ ] `tests/forge/github-app.spec.ts`: fake manifest/install, scoped mint, escalation refusal, state replay/scope refusal, expiry, rotation and revocation.
+  - [ ] `tests/forge/github-app-http.spec.ts`: owner prompt, callback sanitization and broker authentication.
+- [ ] **Lot 2 — Enrollment and custody**
+  - [ ] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
+- [ ] **Lot 3 — Lifecycle and runbook**
+  - [ ] Deliver App-key and bounded webhook-secret rotation, token revocation and installation-change fencing.
+  - [ ] Document owner clicks and activation gates in `docs/github-app-enrollment.md`.
+- [ ] **Lot 4 — Final validation and handoff**
+  - [ ] Scoped `make test-cluster-mesh SCOPE=tests/forge ENV=test-sg0-app`; typecheck and lint.
+  - [ ] Scope-check before each make commit; every commit under 150 changed lines.
+  - [ ] Open one READY PR using this plan; observe CI green; no merge.
+  - [ ] Write `.tmp/rv/sg0-app.md`; teardown with `make down-volumes ENV=test-sg0-app`.
