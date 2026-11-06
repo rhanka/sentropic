@@ -217,7 +217,7 @@ of these, a digest-pinned promotion still promotes a stale digest.
   inputs* must differ even though the controller is shared, see D6/R3).
 
 ### 3.6 Platform facts (constraints, not gaps)
-- Registry: Scaleway `rg.fr-par.scw.cloud/nc-reg/`. Cluster: SCW `poc-...`.
+- Registry: Scaleway `ghcr.io/rhanka/`. Cluster: SCW `poc-...`.
 - Ingress only applied when `K8S_INGRESS=1` (`Makefile` k8s-deploy path); the
   `60-ingress.yaml` host blocks (`sentropic.sent-tech.ca`,
   `auth.sent-tech.ca`) are gated out of the default deploy path.
@@ -288,7 +288,7 @@ This does not exist in sentropic OR matchID; it must be designed.
 - Refactor `deploy/k8s/` into a kustomize **base** (namespace-agnostic) +
   **overlays/preprod** and **overlays/prod**. Each overlay sets `namespace:`,
   the image **digests** (`images:` transformer with the **full
-  registry-qualified name** `rg.fr-par.scw.cloud/nc-reg/sentropic-api` and
+  registry-qualified name** `ghcr.io/rhanka/sentropic-api` and
   `…/sentropic-ui` — the base manifests use the fully-qualified path, so the
   transformer `images[].name` MUST match it exactly, otherwise the transform is a
   silent no-op), the public hosts, and the env-specific ConfigMap values.
