@@ -11,6 +11,7 @@ export const requestSchema = z.object({
   operationId: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/),
   candidateCommit: z.string().regex(/^[a-f0-9]{40}$/).refine(value => value !== '0'.repeat(40)),
   candidateImage: z.string().regex(/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-api@sha256:[a-f0-9]{64}$/),
+  backupTemplateSha256: digest,
   authorizationRef: ref, writerFenceRef: ref, rollbackCheckpointRef: ref, rollbackLimitsRef: ref,
   sourceMetadataDispositionRef: ref, remoteSnapshotRef: ref, remoteSnapshotDigest: digest,
   legacyWritersStopped: z.literal(true), remoteFileWriterStopped: z.literal(true),
