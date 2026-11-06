@@ -48,6 +48,7 @@
   - [x] Author shared lifecycle, uniqueness, isolation, replay, CAS and concurrency acceptance before implementation.
   - [x] Initial red: missing git binding module; add Postgres durability and registry refusal tests.
 - [ ] Lot 2: frozen record types, scope-bound host registry, binding store port, memory double and lifecycle CAS.
+  - [x] Define exact binding/live/index records and trusted storage/code-right ports.
 - [ ] Lot 3: additive migration 0010, append-only audit/index and Postgres adapter; shared conformance suite.
 - [ ] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
 - [ ] Lot 5: written SQLite decision and adapter/host integration documentation.
