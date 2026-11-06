@@ -1,5 +1,6 @@
 import type { ArtifactCapabilityName, ArtifactProviderProfile, EffectiveArtifactProfile, ArtifactSchema, OperationProfile } from './contracts.js';
 import { SERVER_MAX_FILE_BYTES, SERVER_MAX_FILES_PER_RELEASE, SERVER_MAX_TOTAL_BYTES } from '../server/publication-limits.js';
+import { GIT_TOOL_DEFINITIONS } from '../git-tool-definitions.js';
 
 const str = { type: 'string', minLength: 1 };
 const integer = (minimum: number, maximum?: number) => ({ type: 'integer', minimum,
@@ -20,6 +21,13 @@ const metadata = {
 /** Required configuration includes semantic limits absent from JSON Schema. */
 export function assertCompleteOperation(config: OperationProfile): void {
   const required: Record<string, { limits: string[]; defaults: string[] }> = {
+    git_attach: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    git_commit: { limits: ['idempotencyKeyMaxUnits', 'gitMessageMaxUnits'], defaults: [] },
+    git_publish: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    git_live: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    live_write: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    live_reset: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    live_control: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     ensure: { limits: ['bindingNameMinUnits', 'bindingNameMaxUnits', 'idempotencyKeyMaxUnits'],
       defaults: ['parameters'] },
     // publish additionally accepts the optional release-budget keys
@@ -60,6 +68,14 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
   const part1 = profile.profileRevisionId === undefined || profile.resultEnvelopeVersion === 2;
   const config = operationProfile(profile, operation);
   const limits = config.limits;
+  if (Object.hasOwn(GIT_TOOL_DEFINITIONS, name)) {
+    const definition = GIT_TOOL_DEFINITIONS[name as keyof typeof GIT_TOOL_DEFINITIONS];
+    const schema = structuredClone(definition.inputSchema) as Record<string, any>;
+    if (schema.properties.idempotencyKey) schema.properties.idempotencyKey.maxLength = limits.idempotencyKeyMaxUnits;
+    if (schema.properties.message) schema.properties.message.maxLength = limits.gitMessageMaxUnits;
+    if (schema.properties.cursor) schema.properties.cursor.maxLength = 4096;
+    return schema;
+  }
   const key = { type: 'string', minLength: 1, maxLength: limits.idempotencyKeyMaxUnits,
     description: 'Nonblank by JavaScript trim(); length is UTF-16 units; original bytes retained.' };
   const idOnly = obj({ artifactId: id }, ['artifactId']);
