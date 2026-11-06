@@ -1,4 +1,4 @@
-# CI10A-EX1: use the exact qualified toolbox; cache diagnostics, never verdicts.
+# BR85a-EX1: use the exact qualified toolbox; cache diagnostics, never verdicts.
 CI_STATIC_CACHE := $(CURDIR)/tmp/ci-static
 CI_STATIC_RUN = docker run --rm --pull=never --network none -u "$$(id -u):$$(id -g)" -v "$(CI_STATIC_CACHE):/ci-cache"
 
