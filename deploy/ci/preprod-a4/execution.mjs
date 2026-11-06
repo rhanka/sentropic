@@ -48,6 +48,12 @@ export function execute(env = process.env, call = kubectl, read = privateInput) 
       || !spec.ipAllowList.sourceRange?.length || !spec.ipAllowList.sourceRange.every(range => /\/(32|128)$/.test(range))) {
       throw new Error('traffic_boundary_invalid');
     }
+    for (const name of ['sentropic', 'auth-idp']) {
+      const ingress = JSON.parse(k(['get', 'ingress', name, '-o', 'json']));
+      if (ingress.metadata.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']) {
+        throw new Error('existing_ingress_middleware');
+      }
+    }
     if (env.A4_DRY_RUN === '0') k(['create', '-f', '-'], JSON.stringify({ apiVersion: 'traefik.io/v1alpha1',
       kind: 'Middleware', metadata: { name: 'a4-verification', namespace }, spec }));
   }
