@@ -1,60 +1,56 @@
-# Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
+# Feature: SG2 GitPort GitHub App
 
 ## Objective
-One lot: migrate app identity data (users, proofs, invitations, login sessions, tenants, both memberships, workspaces) into the cluster-mesh stores, switch the single author under the r13 D11 protocol with the rollback checkpoint recorded before any legacy table deletion, point every reader/writer at the CM stores, delete the legacy app identity tables/files, replace request-authority with F15, and land the F11 screens. Cutover (2026-11-04, PR #879): rebased onto `origin/main` past the A2.0b merge (#882), the G1–G5 train (#912) and the 2026-11-04 train (#914, `b9cdb2d33`); fold lot G0 (#906, superseded); consume G1–G5 in the app (lot G6, four series, no fallback); prepare the preprod sync replacement up to a dry run only (lot G7, no preprod run without the owner nominative list). Lane 2026-11-05: rebased onto `origin/main` past #915 (`4d7517d94`, union); fixed review r1 D1/D2 + the 0014→0015 comment; ported the revocation tests to the CM sweep path with the R1/R2 root fixes above.
+- [ ] Deliver the G0 FROZEN v3 GitPort with enrolled cluster-mesh leases and fake-forge acceptance for the 0.2.18 train.
 
 ## Scope / Guardrails
-- Scope limited to the app cutover: api identity read/write paths, one control data migration, ui F11 screens, e2e; plus G6 CM-consumption swaps and the G7 ops replacement (scripts + idp-identity-sync overlays).
-- One migration max: `api/drizzle/control/0015_app_cm_identity_cutover.sql` (control stream; slot 0015, main owns 0014).
-- Make-only workflow, no direct Docker commands; each Docker-using make command through `.tmp/packets/docker-slot.sh make ...`, one slot per command, never nested; `make down-volumes ENV=<env>` after every test stack.
-- Branch development in isolated worktree `tmp/worktrees/app-cm-a4-3` on branch `feat/app-cm-a4` (base `main` since #882 merged; PR #879 retargeted).
-- Test campaigns on `ENV=test-a4-cutover` (ENV last), never root dev; never `ENV=dev`.
-- All new text in English.
-- No dual writer, no legacy fallback; the app keeps business data only.
-- Pins: a4-cm-gaps-r2.md (binding design, lots G0/G6/G7); A2.0b amendment r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; owner-answers-20261030.md (Q-G interim accepted; Q-K=A with HMAC + .env/k8s rotation; Q-WS1 deleted-with-workspace; Q-IDP1 case-by-case with nominative consent); PR #879 base `main` at `b9cdb2d33` (train #914; G1–G5 arrived via #912 `a1d0a815a`).
+- [x] Branch `feat/git-artifact-sg2`; worktree `tmp/worktrees/sg2`; initial base `origin/main`, rebase onto `train/artifacts-0.2.18` when available.
+- [x] Binding contract SHA-256 `4c405c8f49e9d242d65eebe35a14a45e4826afc0007e9f94a7fe21d7404e21ba`; live owner decisions supersede CI execution.
+- [x] Docker via docker-slot.sh; make only; no Python, secrets in outputs or attribution trailers.
+- [x] Ports `API_PORT=9590 UI_PORT=5790 MAILDEV_UI_PORT=1690 ENV=test-sg2`; ENV always last.
+- [x] No versions, lockfiles, profile pins, existing fixtures or L5 regeneration; integration owns the release.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by `validate-publishable-manifests`).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `docker-compose.test.yml` (BRxx-EX16)
-  - `packages/cluster-mesh/src/storage/identity/schema.ts` (BRxx-EX17)
-  - `packages/cluster-mesh/src/identity-contracts/accounts.ts` (BRxx-EX15)
-  - `packages/cluster-mesh/src/storage/identity/atomic-deletion.ts` (BRxx-EX15)
-  - `packages/cluster-mesh/tests/identity-lifecycle.spec.ts` (BRxx-EX15)
-  - `api/src/**`
-  - `api/tests/**`
-  - `api/vitest.config.ts`
-  - `api/drizzle/control/0015_app_cm_identity_cutover.sql` + `api/drizzle/control/meta/**`
-  - `deploy/k8s/overlays/prod/idp-identity-sync/**` + `deploy/k8s/overlays/preprod/idp-identity-sync/**` (G7 ops replacement only)
-  - `deploy/ci/idp-identity-sync/**` (G7 selftests only)
-  - `ui/src/**`
-  - `ui/tests/**`
-  - `e2e/tests/**`
-  - `packages/cluster-mesh/ui/**`
-  - `packages/cluster-mesh/tests/ui/**`
-  - `packages/cluster-mesh/package.json`
-  - `ui/package.json` + `ui/package-lock.json`
-  - `package-lock.json`
   - `BRANCH.md`
+  - `packages/artifacts/src/server/git-port*.ts`
+  - `packages/artifacts/src/adapters/github-*.ts`
+  - `packages/artifacts/src/index.ts`
+  - `packages/artifacts/src/server/failures.ts`
+  - `packages/artifacts/tests/git-port*.ts`
+  - `packages/artifacts/tests/fixtures/git-port*.ts`
+  - `packages/artifacts/docs/git-port.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/cluster-mesh/src/**` (A2.0b owns backend contracts/implementation; gaps remain stack dependencies)
-  - `packages/cluster-mesh/tests/identity/**`
-  - `.github/workflows/**`
-  - `spec/**`
+  - `**/package*.json`
+  - `.track/**`
+  - `tools/memory-mcp-l5/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` public stream (not used; control stream only)
-  - `api/package.json` (build entries for the two G7 replica runners only, BRxx-EX2)
-  - `apps/auth-idp/screen-smoke-seed.ts` + `apps/auth-idp/sso-smoke.ts` (CM identity seeding for the smoke flows only, BRxx-EX4)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (selected-fixture peer alignment only, BRxx-EX5)
-  - `packages/cluster-mesh/tests/packaging/prepare.sh` (pack the auth-ui sibling for the frozen `latest` consumer only, BRxx-EX6)
-  - `Makefile` (cluster-mesh candidate install-lane PEERS tuple only, BRxx-EX6)
-  - `.github/workflows/ci.yml` (cluster-mesh post-publication/bootstrap qualify PEERS tuples only, BRxx-EX6)
-  - `scripts/ci/publishable-ci-wiring.test.mjs` (CLUSTER_MESH_PEERS expectation only, BRxx-EX6)
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - `.github/workflows/**`
 
+## Feedback Loop
+- [ ] SG2-INPUT: converged-r2 source path in G0 is absent locally; requested its current location, use self-contained frozen G0 meanwhile.
+- [ ] SG2-PROBES: P1–P3/P10 and real enrollment acceptance are unverified; fake tests do not authorize activation.
+- [ ] SG2-CI: conductor owns the wagon version-gate resolution; preserve the no-bump instruction.
+- [x] Conductor is the designated Track writer; import this branch plan and final report, no concurrent `.track` writes here.
+
+## AI Flaky tests
+- [x] No AI-dependent tests or flaky exception.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch build lane; consolidated review on the final train diff.
+
+## UAT Management (in orchestration context)
+- [ ] Verify fake-forge path refusals, fixed-SHA pagination, atomic multi-file commit, attribution, CAS and lease isolation.
+- [ ] Keep real witness calls disabled without explicit enrolled host configuration.
+
+## Plan / Todo (lot-based)
+- [x] Lot 0: read rules, G0 v3, owner decisions and SG0-app port; create worktree and pass harness C1.
+- [ ] Lot 1: typed GitPort, read/write policy and SG0-app structural lease contract.
+- [ ] Lot 2: fake forge tests in `tests/git-port.test.ts`, `tests/git-port-policy.test.ts`, `tests/fixtures/git-port-fake.ts`.
+- [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
+- [ ] Lot 4: server-resolved authorship, short-lived lease checks, test-only enrolled witness adapter and host docs.
+- [ ] Lot 5: scoped tests, typecheck/lint, harness scope, early push, one ready train PR, CI green and volume cleanup.
