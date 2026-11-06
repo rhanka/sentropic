@@ -69,6 +69,7 @@
   - [x] Bound revive/build phases and pass the current pod fence to clean cache installation.
   - [x] Verify native HMR handshake credential stripping and immediate socket revocation.
   - [x] Compose the API service with scoped Postgres state, private immutable cache blobs and Kubernetes/supervisor adapters.
+  - [x] Carry verified source staging into clean installs, quarantine corrupt storage pointers and return current row versions.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.

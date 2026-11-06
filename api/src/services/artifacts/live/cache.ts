@@ -21,7 +21,7 @@ export interface CachePorts {
   fetch(pin: IntegrityPin, relay: typeof NPM_RELAY): Promise<Uint8Array>;
   /** Fresh empty install directory, fixed npm config, verified tarballs, no branch .npmrc or hooks. */
   cleanInstall(input: { lockfile: Uint8Array; identity: CacheIdentity; recipe: typeof INSTALL_RECIPE;
-    runtime?: LiveRuntime; tarballs: readonly { pin: IntegrityPin; bytes: Uint8Array }[] }): Promise<{ files: DependencyFile[]; runId: string }>;
+    stagingRef: string; runtime?: LiveRuntime; tarballs: readonly { pin: IntegrityPin; bytes: Uint8Array }[] }): Promise<{ files: DependencyFile[]; runId: string }>;
   storage: {
     read(key: string): Promise<CacheObject | undefined>;
     /** Atomic immutable create: partial entries are invisible; returns the winning complete object. */
@@ -54,6 +54,13 @@ function treeDigest(files: readonly DependencyFile[]) {
   return sha256(JSON.stringify(manifest));
 }
 export function createDependencyCache(ports: CachePorts) {
+  async function read(key: string) {
+    try { return await ports.storage.read(key); }
+    catch (error) {
+      if (error instanceof LiveError && error.code === 'dependency_cache_invalid') await ports.storage.quarantine(key);
+      throw error;
+    }
+  }
   function seal(receipt: Omit<CacheReceipt, 'seal'>) {
     const key = ports.signingKey();
     if (key.byteLength < 32) return invalid();
@@ -69,14 +76,14 @@ export function createDependencyCache(ports: CachePorts) {
     return object.receipt;
   }
   return {
-    async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity }, runtime?: LiveRuntime) {
+    async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string }, runtime?: LiveRuntime) {
       const identity = source.cacheIdentity;
       if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
       const evidence = await ports.evidence(identity.lockSha256);
       if (evidence.digest !== identity.integrityDigest) invalid();
       const inventory = integrityInventory(source.lockfile, evidence);
       const key = cacheKey(identity);
-      const existing = await ports.storage.read(key);
+      const existing = await read(key);
       if (existing) {
         try { return verify(existing, identity); }
         catch (error) { await ports.storage.quarantine(key); throw error; }
@@ -101,7 +108,7 @@ export function createDependencyCache(ports: CachePorts) {
     },
     /** Reverify content on every read-only dependency materialization, including a warm hit. */
     async materialize(receipt: CacheReceipt) {
-      const object = await ports.storage.read(receipt.key);
+      const object = await read(receipt.key);
       if (!object) invalid();
       try {
         verify(object, receipt.identity);

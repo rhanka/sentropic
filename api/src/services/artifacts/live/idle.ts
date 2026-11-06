@@ -30,8 +30,8 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
         baselineSeq: state.progress.publicationBaselineSeq, initial: state.progress.initialUnpublishedBranchEligible };
     });
     const attempt = runtime.attempt!;
-    const cache = await ports.cache.acquire(source, runtime);
     await ports.worker.clean(runtime);
+    const cache = await withinPhase(ports.cache.acquire(source, runtime));
     await ports.worker.prepare(runtime, source, cache);
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
     const candidate = await withinPhase(ports.worker.build(runtime, attempt));
