@@ -6,7 +6,7 @@
 ## Scope / Guardrails
 - [x] Branch `train/artifacts-0.2.18`; isolated worktree `tmp/worktrees/train-artifacts-0218`.
 - [x] Base is upstream guarded-candidate checkpoint `6bd09d5569828773ac32dbb10d9b156d9f96de40`, carrying artifacts 0.2.17 and chat-core 0.3.2; advanced through mention checkpoint `fd91e7d2a` under BR0218-EX10/EX11.
-- [ ] After the dated train merges, rebase onto `origin/main` and recheck registry versions.
+- [x] Rebase onto merged #930 at `origin/main` `165ce5b932206bcd89e6374f5b80d970cd1d19b6`; preserve upstream auth authority, presence fencing, native browser checks and preprod recovery pin.
 - [x] Make only; Docker commands through `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command.
 - [x] Dedicated ports `API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-train-art0218`; ENV always last; tear down volumes after tests.
 - [x] Wagons push branches and scoped checks; integration owns versions, locks, fixture pins, APP-P1 digest and L5 once per integrated release head.
@@ -26,8 +26,16 @@
   - `packages/cluster-mesh/docs/github-app-enrollment.md`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/CHANGELOG.md`
+  - `Makefile` (BR0218-EX13)
+  - `scripts/check-disk-hygiene.sh` (BR0218-EX13)
+  - `scripts/check-disk-space.sh` (BR0218-EX13)
+  - `scripts/resolve-api-image.sh` (BR0218-EX13)
+  - `.github/workflows/ci.yml` (BR0218-EX14)
+  - `scripts/ci/ci-dag.test.mjs` (BR0218-EX14)
+  - `docs/ci/registry-egress.md` (BR0218-EX14)
+  - `deploy/ci/gb4-probe/**` (BR0218-EX15)
+  - `deploy/k8s/base/artifact-content-networkpolicy.yaml` (BR0218-EX15)
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**`
@@ -68,6 +76,11 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+- [x] BR0218-EX13: owner requests the pushed disk-hygiene wagon; integrate its bounded Make prune/opt-in build guard and shell checks. Impact limited to local Docker hygiene; rollback reverts that wagon. Retain all main Make behavior.
+- [x] BR0218-EX14: owner requests the pushed registry-egress wagon; remove unused registry credentials from internal CI consumers and retain its DAG regressions/report. Impact limited to credential exposure and regression checks; rollback restores the wagon diff. No CI gate or artifact transport changes.
+- [x] BR0218-EX15: owner requests the pushed GB4 probe wagon and artifact-content egress rule. Integrate the offline probe and namespace/pod-scoped TCP 5173 policy only; no cluster deployment. Preserve reported live storage failure and pending positive WebSocket qualification; rollback reverts the wagon.
+- [ ] TRAIN0218-MAIN: regenerate release locks, selected pins, APP-P1 and immutable L5 once after wagon integration; validate scoped checks, independent final-diff review and fresh CI. Keep preprod pin byte-identical to `165ce5b93`.
+- [x] LIVE wagon eligibility at initial fetch: neither `origin/feat/git-artifact-live-tools` nor `origin/feat/git-artifact-live-pod` exists. Exclude both until pushed with green scoped receipts; recheck before the integration push.
 - [x] BR0218-EX11 / TRAIN0218-CI8: inherited minimal upstream checkpoint 6bd09d556 by rebase, aligning strict release equality to 0.3.2 and qualifying the guarded packer's emitted tarball. New wiring regression fails against the old workflow and passes after: wiring 40/40, core-host/comments 55/55, versions and L5 verification pass. Workflow is byte-identical to the approved upstream base under its BR83-EX1; no qualification or dispatch gate relaxed. Root lock, runtime sources and immutable L5 evidence remain unchanged; rollback ref backup/train0218-before-ci8. Fresh CI required.
 - [x] BR0218-EX12 / TRAIN0218-CI9: pin musl/musl-utils 1.2.6-r3 for HIGH CVE-2026-107891 (two findings on 1.2.6-r2 before). Alpine policy confirms zlib 1.3.2-r1 was replaced by 1.4-r0; refresh that exact pin to keep rebuilds resolvable and the prior zlib fix. Final flattened image builds, both Chromium modes pass screenshots/video and native-version probes, and Trivy reports zero HIGH/CRITICAL. No register waiver or scanner/gate change. Impact limited to patched native libraries; rollback restores the previous package list. Fresh full CI required.
 - [x] BR0218-EX10 / TRAIN0218-CI7: inherited immediate upstream checkpoint fd91e7d2a by rebase with merge history preserved, fixing the asynchronous mention-loading failure in run 42267445221 shard 4. Three regressions reproduce two failures before; comments 32/32 and tenancy browser file 6/6 pass after at four workers, zero retries/skips. Web build and post-rebase versions pass (chat-core 0.3.2 > published 0.3.1); L5 regenerated/retained through make and verified 30 files/54 edges with unchanged archive bytes. All prior runtime/test corrections remain byte-identical and all four wagon tips remain ancestors. Impact limited to the inherited mention fix, root/UI version metadata and required immutable L5 evidence under EX4; rollback ref backup/train0218-before-ci7. Fresh CI required; no copied commit, gate, timeout or assertion relaxation.
