@@ -53,6 +53,15 @@ jobs:
           copy sentropic-api ff9bb4 candidate-165ce5b93
           copy sentropic-ui 2d6476 2d6476
           copy sentropic-ui 2d6476 candidate-165ce5b93
+          verify_tested_config() {
+            docker buildx imagetools inspect --raw "ghcr.io/rhanka/$1:candidate-165ce5b93" |
+              EXPECTED_CONFIG="$2" node --input-type=module -e '
+                let raw=""; for await (const chunk of process.stdin) raw+=chunk;
+                if (JSON.parse(raw).config?.digest !== process.env.EXPECTED_CONFIG) throw Error("Copied candidate differs from tested config");
+                console.log("Copied candidate matches tested config " + process.env.EXPECTED_CONFIG);'
+          }
+          verify_tested_config sentropic-api sha256:da6af026c7942ead4316f6e0d8bf997ef6c7d0927b2eda3e8b8f75ccaca5ac39
+          verify_tested_config sentropic-ui sha256:ac35dc8ccf8220ccfa0fb02382579f4c6107e604cd494a63544c22dc72f38b5a
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
