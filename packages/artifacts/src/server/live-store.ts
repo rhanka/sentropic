@@ -105,6 +105,7 @@ export function createMemoryLiveStore(): LiveStore {
     const original = JSON.stringify(tx.record);
     const result = await action(tx);
     if (tx.record && JSON.stringify(tx.record) !== original) {
+      if (liveIdentityKey(tx.record) !== id) throw new ArtifactOperationError('access_denied');
       tx.record.rowVersion = (records.get(id)?.rowVersion ?? 0) + 1;
       records.set(id, structuredClone(tx.record));
     }

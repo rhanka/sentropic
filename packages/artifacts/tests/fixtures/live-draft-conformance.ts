@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLiveDraftVault, type LiveStore } from '../../src/server/live-drafts.js';
+import { createLiveDraftVault, type LiveStore, type LiveKeyPort } from '../../src/server/live-drafts.js';
 
 export const liveIdentity = { storageScopeId: 'scope-a', artifactId: '11111111-1111-4111-8111-111111111111',
   bindingGeneration: 1 };
@@ -8,7 +8,7 @@ export function draftConformance(name: string, fresh: () => Promise<LiveStore>) 
     async function setup() {
       const store = await fresh();
       let clock = Date.parse('2026-11-06T12:00:00Z');
-      const keys = { current: async () => ({ version: 'k1', key: Buffer.alloc(32, 7) }),
+      const keys: LiveKeyPort = { current: async () => ({ version: 'k1', key: Buffer.alloc(32, 7) }),
         resolve: async () => Buffer.alloc(32, 7) };
       const vault = createLiveDraftVault({ store, keys, now: () => clock });
       const save = (revision: string | null, command = 'write-1', text = 'private source') => vault.write({
@@ -83,6 +83,27 @@ export function draftConformance(name: string, fresh: () => Promise<LiveStore>) 
         tx.record!.revision = 'must-roll-back'; throw new Error('injected transaction failure');
       })).rejects.toThrow();
       expect((await vault.read(liveIdentity))?.revision).toBe(first.revision);
+    });
+    it('should rotate the authenticated envelope while retaining readable source and old key custody', async () => {
+      const { vault, save, keys, advance } = await setup();
+      const first = await save(null); advance(3600000);
+      keys.current = async () => ({ version: 'k2', key: Buffer.alloc(32, 8) });
+      keys.resolve = async (_identity, version) => Buffer.alloc(32, version === 'k1' ? 7 : 8);
+      const renewed = await vault.renew(liveIdentity, first.revision);
+      expect(renewed.keyVersion).toBe('k2'); expect(renewed.revision).toBe(first.revision);
+      expect((await vault.read(liveIdentity))?.overlay[0].text).toBe('private source');
+    });
+    it('should reject an authenticated object copied to another storage scope', async () => {
+      const { vault, save, store } = await setup();
+      const first = await save(null);
+      const envelope = await store.transaction(liveIdentity, tx => tx.getObject(first.objectRef!));
+      const other = { ...liveIdentity, storageScopeId: 'scope-b' };
+      await store.transaction(other, async tx => {
+        const { replayed: _replayed, ...record } = first;
+        tx.record = { ...record, storageScopeId: 'scope-b' };
+        await tx.putObject(first.objectRef!, envelope!);
+      });
+      await expect(vault.read(other)).rejects.toMatchObject({ kind: 'git_live_draft_unavailable' });
     });
   });
 }
