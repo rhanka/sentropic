@@ -12,6 +12,12 @@ export function assertGitBranch(branch: string): void {
     throw new ArtifactOperationError('git_ref_not_allowed');
   }
 }
+export function assertGitReadRef(ref: string): void {
+  if (!ref || ref.length > 1024 || /[\x00-\x20\x7f~^:?*\[\\]/.test(ref) || ref.includes('..') ||
+    ref.includes('@{') || ref.endsWith('.') || ref.split('/').some(p => !p || p.startsWith('.') || p.endsWith('.lock'))) {
+    throw new ArtifactOperationError('git_ref_not_allowed');
+  }
+}
 export function assertGitTarget(repo: GitPortRepository, target: GitPortTarget, write: boolean): void {
   if (repo.storageScopeId !== target.storageScopeId || repo.repoId !== target.repoId) {
     throw new ArtifactOperationError('git_repo_not_registered');
@@ -19,7 +25,7 @@ export function assertGitTarget(repo: GitPortRepository, target: GitPortTarget, 
   if (!repo.allowedSubPaths.includes(target.subPath) || (write && !repo.canWrite)) {
     throw new ArtifactOperationError('git_ref_not_allowed');
   }
-  assertGitBranch(target.branch);
+  if (write) assertGitBranch(target.branch); else assertGitReadRef(target.branch);
   if (target.subPath) safePath(target.subPath);
   safePath(target.outputDir);
 }
