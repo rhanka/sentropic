@@ -35,4 +35,18 @@ describe('GitHub App host routes', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
+
+  it('should enforce same-origin owner mutations and never echo callback credentials', async () => {
+    const f = fixture();
+    const entry = await f.service.begin(owner);
+    const prompt = await f.service.prompt(owner, entry.installationRef);
+    const app = createGitHubAppRouter({ service: f.service, publicBaseUrl: 'https://mesh.example',
+      resolveOwner: async () => owner, authenticateBroker: async () => null });
+    expect((await app.request('/github-app/enroll', { method: 'POST' })).status).toBe(403);
+    const response = await app.request(`/github-app/${entry.installationRef}/manifest?state=${prompt.state}&code=fake-code`);
+    expect(response.status).toBe(303);
+    expect(await response.text()).not.toContain('fake-code');
+    expect(response.headers.get('location')).not.toContain('fake-code');
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+  });
 });

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { randomBytes } from 'node:crypto';
 import { GitAppError } from './contracts.js';
 import type { GitAppOwnerRepository } from './contracts.js';
 import type { GitHubAppEnrollment } from './enrollment.js';
@@ -64,6 +65,30 @@ export const createGitHubAppRouter = (input: {
   });
   app.get('/github-app/:ref/status', async (c) =>
     c.json(await input.service.status(await owner(c.req.raw), c.req.param('ref'))));
+  app.get('/github-app/:ref/rotation', async (c) => {
+    const status = await input.service.status(await owner(c.req.raw), c.req.param('ref'));
+    const path = `/github-app/${escapeHtml(status.installationRef)}`;
+    return c.html(`<html><body><form method="post" action="${path}/key" enctype="multipart/form-data"><input type="file" name="privateKey" accept=".pem" required><button>Verify and switch App key</button></form><form method="post" action="${path}/webhook-stage"><button>Stage webhook secret (10 minute overlap)</button></form><form method="post" action="${path}/webhook-switch"><button>Switch GitHub webhook sender</button></form><form method="post" action="${path}/revoke"><button>Revoke enrollment</button></form></body></html>`);
+  });
+  app.post('/github-app/:ref/key', async (c) => {
+    csrf(c.req.raw);
+    const target = await owner(c.req.raw);
+    const body = await c.req.parseBody();
+    if (!(body.privateKey instanceof File) || body.privateKey.size > 32768) throw new GitAppError('invalid_request');
+    return c.json(await input.service.rotateAppKey(target, c.req.param('ref'), await body.privateKey.text()));
+  });
+  app.post('/github-app/:ref/webhook-stage', async (c) => {
+    csrf(c.req.raw);
+    return c.json(await input.service.rotateWebhook(await owner(c.req.raw), c.req.param('ref'), randomBytes(32).toString('hex'), 600000));
+  });
+  app.post('/github-app/:ref/webhook-switch', async (c) => {
+    csrf(c.req.raw);
+    return c.json(await input.service.switchWebhookSender(await owner(c.req.raw), c.req.param('ref')));
+  });
+  app.post('/github-app/:ref/revoke', async (c) => {
+    csrf(c.req.raw);
+    return c.json(await input.service.revoke(await owner(c.req.raw), c.req.param('ref'), 'owner_revoked'));
+  });
   app.post('/github-app/:ref/events', async (c) => {
     const rawBody = new Uint8Array(await c.req.arrayBuffer());
     if (!c.req.header('x-github-delivery')) throw new GitAppError('invalid_request');
@@ -78,6 +103,17 @@ export const createGitHubAppRouter = (input: {
         Object.values(body).some((value) => typeof value !== 'string' || !value)) throw new GitAppError('invalid_request');
     if (body.repoId !== principal.repoId || body.storageScopeId !== principal.storageScopeId) throw new GitAppError('access_denied');
     return c.json(await input.service.acquire(body));
+  });
+  app.post('/github-app/broker/verify', async (c) => {
+    const principal = await input.authenticateBroker(c.req.raw);
+    if (!principal) throw new GitAppError('access_denied');
+    const body = await c.req.json();
+    if (!body || Object.keys(body).sort().join(',') !== 'deliveryId,rawBody,repoId,signature,storageScopeId,webhookSecretRef' ||
+        Object.values(body).some((value) => typeof value !== 'string')) throw new GitAppError('invalid_request');
+    if (body.repoId !== principal.repoId || body.storageScopeId !== principal.storageScopeId) throw new GitAppError('access_denied');
+    const rawBody = Buffer.from(body.rawBody, 'base64');
+    if (rawBody.toString('base64') !== body.rawBody) throw new GitAppError('invalid_request');
+    return c.json(await input.service.verify({ ...body, rawBody }));
   });
   return app;
 };
