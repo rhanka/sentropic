@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SvelteFlow, SvelteFlowProvider, Background, Controls, Panel } from '@xyflow/svelte';
+  import { SvelteFlow, SvelteFlowProvider, Background, Controls } from '@xyflow/svelte';
   import '@xyflow/svelte/dist/style.css';
   import DiagramEdge from './DiagramEdge.svelte';
   import { caseOptions, eventOptions, groups, steps, selectRuns, sceneFor, layoutScene } from '../scripts/contract-diagrams.mjs';
@@ -23,11 +23,7 @@
 </script>
 <figure aria-label="Measured CI dependency graph">
   <div class="canvas" bind:this={canvas} bind:clientWidth={width} data-renderer="sentropic-diagram-canvas">
-    <SvelteFlowProvider>
-      <SvelteFlow {nodes} {edges} edgeTypes={{ 'ds-route': DiagramEdge }} initialViewport={{ x: 24, y: 210, zoom: 0.6 }} minZoom={0.02} maxZoom={4}
-        nodesDraggable={false} nodesConnectable={false} zoomOnScroll={false} onnodeclick={({ node }) => selected = node}>
-        <Background /><Controls />
-        <Panel position="top-left" class="command-panel nodrag nopan">
+        <div class="command-panel nodrag nopan">
           <div class="filters">
             <label>Evidence<select aria-label="Evidence" bind:value={phase}><option value="before">Before</option><option value="after">After</option></select></label>
             <label>Case<select aria-label="Case" bind:value={changeCase}>{#each caseOptions as option (option)}<option value={option}>{option}</option>{/each}</select></label>
@@ -37,14 +33,20 @@
           </div>
           <div class="plan-steps" aria-label="Plan steps">{#each steps as [title], index (title)}<button aria-pressed={step === index + 1} onclick={() => step = index + 1}>{index + 1}. {title}</button>{/each}</div>
           <p aria-live="polite">{run ? `Wall ${run.wallSeconds ?? 'to measure'}s; qualification ${run.qualificationSeconds ?? 'to measure'}s; gap ${run.gapSeconds ?? 'to measure'}s` : 'No matching measurements — to measure. Budget to measure: ≤600s.'}</p>
-        </Panel>
+        </div>
+    <div class="flow-surface">
+    <SvelteFlowProvider>
+      <SvelteFlow {nodes} {edges} edgeTypes={{ 'ds-route': DiagramEdge }} initialViewport={{ x: 24, y: 24, zoom: 0.85 }} minZoom={0.02} maxZoom={4}
+        nodesDraggable={false} nodesConnectable={false} zoomOnScroll={false} onnodeclick={({ node }) => selected = node}>
+        <Background /><Controls />
       </SvelteFlow>
     </SvelteFlowProvider>
+    </div>
   </div>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if selected}
     <aside aria-label="Selected job detail">
-      <h2>{selected.id}</h2><p>Optimization: {selected.data.optimization}. <a href="../acceptance.md">Acceptance evidence</a></p>
+      <h2>{selected.id}</h2><p>Optimization: {selected.data.optimization}. <a href="https://github.com/rhanka/sentropic/blob/test/ci-ten-minute-proof/spec/ci-cd-ten-minutes/acceptance.md">Acceptance evidence</a></p>
       {#each selected.data.members as job (job.jobId)}
         <details><summary>{job.name} · {job.seconds ?? 'to measure'}s execution · {job.queueSeconds ?? 'to measure'}s queue</summary>
           <a href={job.url}>Run {job.runId}, attempt {job.attempt}, job {job.jobId}</a>
