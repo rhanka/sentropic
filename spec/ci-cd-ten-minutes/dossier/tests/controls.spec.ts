@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { caseOptions, eventOptions, groups, sceneFor, steps } from '../scripts/contract-diagrams.mjs';
-import report from '../node_modules/.ci-report.json';
+const report = JSON.parse(fs.readFileSync('node_modules/.ci-report.json', 'utf8'));
 const artifact = pathToFileURL(path.resolve('dist/ci-cd-sentropic-portable.html')).href;
 
 for (const phase of ['before', 'after']) for (const changeCase of caseOptions) {
@@ -66,7 +67,7 @@ test('portable artifact keeps the canvas controls within wide and narrow viewpor
 
 test('group controls render every measured matrix and never fabricate unselected release jobs', async ({ page }) => {
   await page.goto(artifact);
-  const run = report.runs.find(row => row.runId === 42300540682)!;
+  const run = report.runs.find((row: { runId: number }) => row.runId === 42300540682)!;
   for (const group of groups) {
     await page.getByLabel('Groups', { exact: true }).selectOption(group);
     await expect(page.locator('.svelte-flow__node')).toHaveCount(sceneFor(run, group).nodes.length);
