@@ -64,6 +64,7 @@ export function measureRun(capture) {
     complete, fresh, qualified, fullProduct, endpoints: elapsed,
     expectedResults: selected.length, passedResults: verdict?.passed.length ?? null,
     membershipFailures: verdict?.failures ?? [{ job: 'manifest', reason: 'missing' }],
+    dependencies: manifest?.dependencies ?? {},
     criticalPaths: criticalPathScheduling(records, manifest?.dependencies, endpoints, run.created_at),
     runnerMinutes: runnerMinutes(records).totalMinutes, providerCost: capture.providerCost ?? null,
     peakJobs: concurrencyPeak(records), jobs: measurements,
