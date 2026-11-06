@@ -1,7 +1,8 @@
 import type { LivePorts } from './ports';
-import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
+import { conflict, type LiveKey, type LiveRuntime } from './records';
 import { podName } from './pods';
-import { checkpoint, currentBinding, failed, observeHead, transition } from './transitions';
+import { currentBinding, failed } from './transitions';
+import { prepareLive } from './prepare-live';
 
 export async function revive(ports: LivePorts, key: LiveKey) {
   const binding = await currentBinding(ports, key);
@@ -25,29 +26,6 @@ export async function revive(ports: LivePorts, key: LiveKey) {
     unit.save({ runtime, progress });
     return structuredClone(runtime);
   });
-  try {
-    const head = await observeHead(ports, key, runtime);
-    if (draft.dirty && draft.baseHeadSha !== head) throw new LiveError('git_live_draft_conflict');
-    await checkpoint(ports, key, runtime);
-    const pod = await ports.pods.ensure(key, runtime);
-    runtime.podUid = pod.uid;
-    await transition(ports, key, runtime, state => { state.runtime.podUid = pod.uid; });
-    const source = await ports.forge.snapshot(key, head);
-    if (source.headSha !== head) throw new LiveError('git_head_moved');
-    const cache = await ports.cache.acquire(source);
-    await ports.worker.clean(runtime);
-    await ports.worker.prepare(runtime, source, cache);
-    await ports.worker.restore(runtime, draft);
-    const ready = await ports.worker.live(runtime);
-    await currentBinding(ports, key, runtime.generation);
-    const finalHead = await ports.forge.head(key);
-    if (finalHead !== head) throw new LiveError('git_head_moved');
-    const live = await transition(ports, key, runtime, state => {
-      if (state.runtime.phase !== 'REVIVING' || ready.revision !== state.runtime.sourceRevision
-        || ready.routeEpoch !== state.runtime.routeEpoch) conflict('stale_fence');
-      state.runtime.phase = 'LIVE'; state.runtime.appliedRevision = ready.revision;
-    });
-    await ports.routes.ready(key, live);
-    return live;
-  } catch (error) { await failed(ports, key, runtime, error); throw error; }
+  try { return await prepareLive(ports, key, runtime); }
+  catch (error) { await failed(ports, key, runtime, error); throw error; }
 }
