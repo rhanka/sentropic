@@ -53,10 +53,10 @@
   - [x] Read common/project/harness/testing rules; mechanically pass branch check.
   - [x] Count October runs with paginated GitHub API; inspect successful early/mid/late October job receipts.
   - [x] Fetch registry manifests/config history without downloading image layers; distinguish stored unique layers from one-image transfer size.
-- [ ] **Lot 1 — Protect artifact-only CI transport**
-  - [ ] Regress unused registry credentials, remote pull fallback and missing receipt transport in `scripts/ci/ci-dag.test.mjs`.
-  - [ ] Remove unused producer/browser Scaleway credentials in `.github/workflows/ci.yml`.
-  - [ ] Run `make test-ci-dag test-ci-image-receipts test-ci-release-receipts ENV=test-ci-registry-egress`; preserve every BR-82 check.
+- [x] **Lot 1 — Protect artifact-only CI transport**
+  - [x] Regress unused registry credentials, remote pull fallback and missing receipt transport in `scripts/ci/ci-dag.test.mjs`.
+  - [x] Remove unused producer/browser Scaleway credentials in `.github/workflows/ci.yml`.
+  - [x] Run `make test-ci-dag test-ci-image-receipts test-ci-release-receipts ENV=test-ci-registry-egress`: 10 + 16 + 40 passed; BR-82 source, archive, loaded-image and deployed-digest refusals preserved.
 - [ ] **Lot 2 — Evidence and handoff**
   - [ ] Commit findings/slimming proposal in `docs/ci/registry-egress.md`; write owner report `.tmp/rv/ci-registry-egress.md`.
   - [ ] Report historical and current before/after GB per full run/month, with assumptions and marginal savings separated.
