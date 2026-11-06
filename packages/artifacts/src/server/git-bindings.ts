@@ -31,7 +31,8 @@ export function validateGitBindingWrite(before: GitBinding | undefined, input: G
     next.subPath !== before.subPath)) throw new ArtifactOperationError('git_binding_conflict');
   const action = input.event.action;
   const active = before !== undefined && before.state !== 'detached';
-  const transition = action === 'attach' ? (!before || before.state === 'detached') && next.state === 'attached'
+  const configuring = action === 'attach' && active;
+  const transition = action === 'attach' ? (configuring ? next.state === before.state : next.state === 'attached')
     : action === 'pause' ? active && next.state === 'paused'
     : action === 'resume' ? before?.state === 'paused' && next.state === 'attached' &&
       !['git_branch_missing', 'git_diverged'].includes(before.stateDetail ?? '')
@@ -47,13 +48,19 @@ export function validateGitBindingWrite(before: GitBinding | undefined, input: G
     : action === 'resolve' ? before?.state === 'diverged' && next.state === 'build_pending'
     : action === 'error' && active && next.state === 'error';
   if (!transition) throw new ArtifactOperationError('invalid_request');
-  const advance = before && (['attach', 'detach', 'pause'].includes(action) || next.stateDetail === 'git_branch_missing');
+  const advance = before && ((action === 'attach' && before.state === 'detached') ||
+    ['detach', 'pause'].includes(action) || (action === 'inbound' && next.stateDetail === 'git_branch_missing'));
   if (next.generation !== (before ? before.generation + (advance ? 1 : 0) : 1) ||
     (advance && (next.pendingJobId !== null || next.pendingCommitSha !== null)) ||
     (before && action !== 'publish' && next.releaseCommitSha !== before.releaseCommitSha)) {
     throw new ArtifactOperationError('invalid_request');
   }
-  if (action === 'pause' && before?.state === 'diverged' && next.stateDetail !== (before.stateDetail ?? 'git_diverged')) {
+  const fenced = before && (before.state === 'diverged' || ['git_branch_missing', 'git_diverged'].includes(before.stateDetail ?? ''));
+  if ((action === 'pause' && fenced && next.stateDetail !== (before.stateDetail ?? 'git_diverged')) ||
+    (configuring && (next.headCommitSha !== before.headCommitSha || next.stateDetail !== before.stateDetail ||
+      next.baseCommitSha !== before.baseCommitSha || next.channel !== before.channel ||
+      next.personalPrincipalId !== before.personalPrincipalId || next.attachedBy !== before.attachedBy ||
+      next.attachedAt !== before.attachedAt))) {
     throw new ArtifactOperationError('invalid_request');
   }
 }
