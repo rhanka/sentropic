@@ -58,6 +58,7 @@
   - [x] Added owner/scope/repo-bound expiring single-use manifest and installation callbacks.
   - [x] Added fixed-origin GitHub REST exchange, RS256 App authentication, selected-repo discovery and narrowed installation token minting.
   - [x] Added owner-authenticated prompt/callback routes and authenticated, tuple-bound lease broker; exported host composition factories.
+  - [x] Added owner rotation/revocation forms, same-origin mutation checks and the authenticated HMAC broker transport.
   - [ ] `src/forge/*`: durable encrypted custodian, manifest/callback routes, installation records and exact §2.7 ports.
 - [ ] **Lot 3 — Lifecycle and runbook**
   - [x] Added exact-permission repository token leases, revocation fencing and bounded HMAC overlap verification.

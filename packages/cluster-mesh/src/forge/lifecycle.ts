@@ -17,6 +17,8 @@ export const publicStatus = (record: EnrollmentRecord) => ({
   installationRef: record.installationRef, webhookSecretRef: record.webhookSecretRef,
   storageScopeId: record.target.storageScopeId, repoId: record.target.repoId,
   state: record.state, credentialVersion: record.credentialVersion,
+  webhookRotationPending: record.webhookRotationPending ?? false,
+  webhookOverlapEndsAt: record.previousWebhook ? new Date(record.previousWebhook.until).toISOString() : null,
 });
 
 export const revokeLeases = async (record: EnrollmentRecord, github: GitHubAppApi, now: number) => {
