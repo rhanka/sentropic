@@ -1,5 +1,6 @@
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import type { CmIdentityTransaction } from './cm-transaction';
+import { cmSelfDeletionProofId } from './cm-self-deletion-proof';
 
 // Existing personal data/credential ownership is deleted; shared objects retain
 // nullable attribution. Historical append-only actor ids are not authorizers.
@@ -38,8 +39,9 @@ export async function deleteCmBusinessSubjectReferences(userId: string, tx: CmId
   const jobs = await tx.hostTransaction.query(`DELETE FROM public.job_queue
     WHERE data::jsonb->>'userId' = $1 OR data::jsonb->>'initiatedByUserId' = $1`, [userId]);
   deletedByTable.job_queue = jobs.rowCount ?? 0;
-  const continuations = await tx.hostTransaction.query(
-    "DELETE FROM public.oauth_dpop_proofs WHERE split_part(jti, ':', 1) = 'self-delete' AND split_part(jti, ':', 2) = $1", [userId]);
+  const sessions = await tx.custody.sessions.listForUser(userId);
+  const continuations = await tx.hostTransaction.query('DELETE FROM public.oauth_dpop_proofs WHERE jti = ANY($1::text[])',
+    [sessions.map(session => cmSelfDeletionProofId(userId, session.sessionTokenHash))]);
   deletedByTable.oauth_dpop_proofs = continuations.rowCount ?? 0;
   for (const [table, column] of deleted) {
     const personalScope = table === 'llm_provider_accounts' ? " AND scope = 'user'" : '';

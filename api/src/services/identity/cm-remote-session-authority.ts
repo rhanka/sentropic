@@ -6,11 +6,14 @@ import type { CmIdentityTransaction } from './cm-transaction';
 /** Issuer-private projections publish only after the CM commit is acknowledged. */
 export function bindCmRemoteSessionAuthority(binding: IdentityAuthHonoTransactionBindingV1,
   tx: CmIdentityTransaction, committed: Array<() => void>): IdentityAuthHonoTransactionBindingV1 {
-  const project = (record: BoundLoginSessionV1) => ({
+  const project = (record: BoundLoginSessionV1) => {
+    if (!record.refreshTokenHash) throw new IdentityCustodyErrorV1('identity_material_missing');
+    return ({
     sessionId: record.sessionId, userId: record.userId, login: { ...record.login }, revoked: false,
     sessionTokenHash: record.sessionTokenHash, refreshTokenHash: record.refreshTokenHash,
     expiresAt: Date.parse(record.expiresAt),
-  });
+    });
+  };
   const revoke = (ids: string[], userId?: string) => committed.push(() => {
     try {
       const authority = getRemoteSessionAuthority();
@@ -37,6 +40,7 @@ export function bindCmRemoteSessionAuthority(binding: IdentityAuthHonoTransactio
         await binding.ports.tokens.hashSecret(token));
       const result = await binding.sessions.refreshSession(token);
       if (result && before) {
+        if (!before.refreshTokenHash) throw new IdentityCustodyErrorV1('identity_material_missing');
         const record = await tx.custody.sessions.findById(result.sessionId);
         if (!record) throw new IdentityCustodyErrorV1('identity_material_missing');
         const value = project(record), expected = before.refreshTokenHash;
