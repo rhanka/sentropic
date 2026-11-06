@@ -77,6 +77,7 @@
 
 ## Feedback Loop
 - [x] BR0218-EX13: owner requests the pushed disk-hygiene wagon; integrate its bounded Make prune/opt-in build guard and shell checks. Impact limited to local Docker hygiene; rollback reverts that wagon. Retain all main Make behavior.
+- [x] Disk wagon `cd0cbbf3e`: merged with train scope retained; `check-disk-hygiene` and `check-down-volumes` pass on the integration tree, including image reuse and 89/90/91 percent disk boundaries. No real image build ran.
 - [x] BR0218-EX14: owner requests the pushed registry-egress wagon; remove unused registry credentials from internal CI consumers and retain its DAG regressions/report. Impact limited to credential exposure and regression checks; rollback restores the wagon diff. No CI gate or artifact transport changes.
 - [x] BR0218-EX15: owner requests the pushed GB4 probe wagon and artifact-content egress rule. Integrate the offline probe and namespace/pod-scoped TCP 5173 policy only; no cluster deployment. Preserve reported live storage failure and pending positive WebSocket qualification; rollback reverts the wagon.
 - [ ] TRAIN0218-MAIN: regenerate release locks, selected pins, APP-P1 and immutable L5 once after wagon integration; validate scoped checks, independent final-diff review and fresh CI. Keep preprod pin byte-identical to `165ce5b93`.

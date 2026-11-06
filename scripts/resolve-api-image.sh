@@ -35,6 +35,7 @@ record_artifact() {
 # No registry configured: historical local behavior, always build.
 if [ -z "$REGISTRY" ]; then
   echo "▶ No REGISTRY configured; building local production image $TARGET_TAG..."
+  bash scripts/check-disk-space.sh
   # shellcheck disable=SC2086
   API_IMAGE_REF= TARGET=production $DOCKER_COMPOSE build --no-cache api
   record_artifact
@@ -56,6 +57,7 @@ fi
 
 if [ -s "$manifest_err" ] && grep -Eq 'manifest unknown|no such manifest|manifest not found' "$manifest_err"; then
   echo "▶ Canonical tag absent from registry; building new production artifact..."
+  bash scripts/check-disk-space.sh
   # shellcheck disable=SC2086
   API_IMAGE_REF= TARGET=production $DOCKER_COMPOSE build --no-cache api
   record_artifact
