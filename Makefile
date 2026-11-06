@@ -986,10 +986,38 @@ ci-expected-results: ## Evaluate expected vs executed results EXPECTED_FILE=<jso
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_GATE_NEEDS -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-expected-results.mjs $(if $(EXPECTED_FILE),--expected-file $(EXPECTED_FILE),--help) $(if $(EXECUTED_FILE),--executed-file $(EXECUTED_FILE),)
 test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node --test scripts/ci/ci-run-metrics.test.mjs
+
+# BR84-EX2: read-only GitHub capture; no workflow retry, cancellation or publication.
+CI_PROOF_DIR ?= tmp/ci-performance
+CI_PROOF_REF ?= $(shell git branch --show-current)
+CI_PROOF_INPUT ?= spec/ci-cd-ten-minutes/runs.json
+.PHONY: ci-performance-capture ci-performance-report test-ci-performance-report ci-performance-dispatch
+ci-performance-retain: ## Retain sanitized API captures as the versioned report input
+	@mkdir -p spec/ci-cd-ten-minutes
+	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --collect $(CI_PROOF_DIR) > "$(CI_PROOF_INPUT).new"
+	@mv "$(CI_PROOF_INPUT).new" "$(CI_PROOF_INPUT)"
+ci-performance-capture: ## Capture one exact attempt, expanded jobs and dispatch manifest via gh API
+	@printf '%s\n' '$(CI_RUN_ID)' '$(CI_RUN_ATTEMPT)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@mkdir -p "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)"
+	@gh api repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT) > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/run.json"
+	@gh api --paginate 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT)/jobs?per_page=100' | jq -s '[.[].jobs[]]' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/jobs.json"
+	@gh api 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/artifacts?per_page=100' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/artifacts.json"
+	@gh run download $(CI_RUN_ID) --repo rhanka/sentropic --name ci-expected-$(CI_RUN_ID)-$(CI_RUN_ATTEMPT) --dir "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)" || \
+		printf '%s\n' '{"status":"missing","reason":"dispatch artifact unavailable"}' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/missing-manifest.json"
+	@jq -n --slurpfile run "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/run.json" --slurpfile jobs "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/jobs.json" '{run:$$run[0],jobs:$$jobs[0]}' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capture.json"
+ci-performance-dispatch: ## Qualify the wagon through CI without opening a PR or publishing a release
+	@test -n "$(CI_PROOF_REF)" && test "$(CI_PROOF_REF)" != main
+	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_PROOF_REF)" -f bootstrap_publish_target=none
+ci-performance-report: ## Report retained real-run measurements; REQUIRE_PROOF=1 rejects missing/breached acceptance
+	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --input $(CI_PROOF_INPUT) $(if $(filter 1,$(REQUIRE_PROOF)),--require-proof) $(if $(filter 1,$(CI_PROOF_JSON)),--json)
+test-ci-performance-report: ## Reject incomplete, failed, rerun and undersampled performance claims
+	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-performance-report.test.mjs'
 test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
 
 .PHONY: test-ci-dag
+include scripts/ci/ci-static.mk
+
 test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-dag.test.mjs'
 
@@ -2173,7 +2201,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 .PHONY: scope-check
 include docs/governance/kit/artifact-weight.mk
 
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight test-memory-mcp),)
+ifneq ($(filter $(ENV),test-ci-ten-minute-proof test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight test-memory-mcp),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
