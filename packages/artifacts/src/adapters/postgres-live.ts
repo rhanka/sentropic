@@ -58,7 +58,8 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
             count(*) FILTER (WHERE artifact_id=$3)::int AS artifact FROM artifacts.live_commit_quota
             WHERE storage_scope_id=$1 AND created_at > $4::timestamptz - interval '1 hour'`,
           [identity.storageScopeId, actor, identity.artifactId, now]);
-          if (counts.rows[0].principal >= 30 || counts.rows[0].artifact >= 60) throw new ArtifactOperationError('limit_exceeded');
+          if (counts.rows[0].principal >= 30 || counts.rows[0].artifact >= 60) throw new ArtifactOperationError('limit_exceeded',
+            { publicDetails: { quota: 'git_write', scope: counts.rows[0].principal >= 30 ? 'principal' : 'artifact' } });
           await client.query(`INSERT INTO artifacts.live_commit_quota
             (storage_scope_id,actor_id,artifact_id,invocation_id,created_at) VALUES ($1,$2,$3,$4,$5)`,
           [identity.storageScopeId, actor, identity.artifactId, invocation, now]);
