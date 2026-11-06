@@ -11,7 +11,7 @@ const container = api.containers.find(container => container.name === 'api');
 assert.equal(config.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, '/run/cm-cutover/checkpoint.json');
 assert.equal(config.CM_IDENTITY_EMAIL_CODE_POLICY, 'hmac-sha256');
 assert.equal(config.CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF, 'qk-secret-custody-r2:Q-K=A:2026-11-02');
-assert.equal(config.CM_IDENTITY_EMAIL_CODE_ACTIVE_KEY_REF, 'email-code-hmac:v1:preprod:15c2f8b66073655a');
+assert.equal(config.CM_IDENTITY_EMAIL_CODE_ACTIVE_KEY_REF, undefined);
 assert.deepEqual(container.command, ['node', '/run/cm-runtime/launch.mjs']);
 assert.equal(api.securityContext.runAsUser, 0); assert.equal(api.securityContext.runAsGroup, 0);
 assert.equal(api.securityContext.fsGroup, undefined);
