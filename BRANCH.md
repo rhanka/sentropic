@@ -85,7 +85,7 @@
 - [x] **Lot 2 — Single release regeneration**
   - [x] Registry verified through make after rebase/conflict resolution; bump artifacts to 0.2.18 and cluster-mesh to dev.14 with CHANGELOG entries.
   - [x] Regenerate root/API lock metadata through make, retaining dependency resolutions; align existing file-package optional peer metadata.
-  - [x] Regenerate selected-fixture versions/integrity through make from guarded artifacts/cluster-mesh archives; archive SHA-256 `cf0a3ea115517e5945a0566af2f13c24389d019499047628f8e127022f9724f8` / `479fe63272ce86eb1a9b54442c19d6f34e35d03cbab06adf134ebd0bee8e2073`.
+  - [x] Selected pins derive from guarded archives: artifacts SHA-256 `cf0a3ea115517e5945a0566af2f13c24389d019499047628f8e127022f9724f8`; corrected cluster-mesh `3c09dde3a41d6beb2fb505a5916cd50d310b643fc372a2b7905e8a5a25a19d55`. R1 repack preserves initial evidence; locks/APP-P1/L5 unchanged, tuple tests and L5 verification pass again.
   - [x] Recompute APP-P1 digest through make: `d55df3ada3722b79274e52c650a12d6baccd2640c61e4d712fe1380bd03c4c86`; frozen profile retained, physical installation pin and digest history updated.
   - [x] Commit final lock before L5 packing; generate P1 once through make: `cf7432d500b80de96486872b96c72f0512622e45381b275f6330d3a3fae2270b`, lock snapshot `1db058b64cadabcf0306fa92ff503af9e47acaccc7de10befb05654683eab4b9`; retain upstream history and verify 30 files/54 edges.
 - [ ] **Lot 3 — Scoped integrated checks and review**
