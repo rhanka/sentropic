@@ -4,6 +4,7 @@ import type { AppConnectorProviderAdapter, AppMcpProviderManifest, AppToolInvoca
 import type { ProviderParameterSchema } from '@sentropic/mcp-platform/registry';
 import type { ArtifactApp, HttpRequest, HttpResponse } from './http.js';
 import { assertArtifactsTransportProfile } from './http.js';
+import { GIT_TOOL_DEFINITIONS } from './git-tool-definitions.js';
 import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError,
   type CompiledArtifactsProfile } from './profile/index.js';
 import type { ArtifactInvocationContext } from './server/commit/types.js';
@@ -64,9 +65,12 @@ const idOnly = obj({ artifactId: id }, ['artifactId']);
 const ARTIFACTS_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true } as const;
 
 const READ_ONLY_TOOLS: readonly ArtifactsToolName[] = ['artifacts_list', 'artifacts_get',
+  'artifacts_list_app_sources', 'artifacts_fetch_app_source', 'artifacts_live_read', 'artifacts_live_status',
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_get_source', 'artifacts_list_versions',
   'artifacts_lookup_people', 'artifacts_list_access', 'artifacts_list_assets'];
 const IDEMPOTENT_WRITERS: readonly ArtifactsToolName[] = ['artifacts_ensure', 'artifacts_publish',
+  'artifacts_git_attach', 'artifacts_git_commit', 'artifacts_git_publish', 'artifacts_git_live',
+  'artifacts_live_write', 'artifacts_live_reset', 'artifacts_live_control',
   'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_publish_bundle_v2',
   'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
   'artifacts_revoke_reader_consent'];
@@ -88,7 +92,7 @@ function staticTool(name: ArtifactsToolName, inputSchema: Record<string, unknown
     outputSchema: ARTIFACTS_OUTPUT_SCHEMA,
     mutability: READ_ONLY_TOOLS.includes(name) ? 'read-only'
       : name === 'artifacts_publish' || name === 'artifacts_publish_bundle' ||
-        name === 'artifacts_publish_bundle_v2' ? 'append' : 'state-transition',
+        name === 'artifacts_publish_bundle_v2' || name === 'artifacts_git_publish' ? 'append' : 'state-transition',
     idempotency: IDEMPOTENT_WRITERS.includes(name) ? { required: true, scope: 'principal' } : { required: false },
     gates: { requiresElicitation: false, requiresHumanConfirmation: name === 'artifacts_delete',
       requiresPrincipalGate: false },
@@ -97,6 +101,7 @@ function staticTool(name: ArtifactsToolName, inputSchema: Record<string, unknown
 
 /** Static wire definitions for every artifacts tool; identical across deployments and profiles. */
 export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, ArtifactsToolDefinition>> = {
+  ...GIT_TOOL_DEFINITIONS,
   artifacts_get_template: staticTool('artifacts_get_template', obj({ templateId: str }, ['templateId'])),
   artifacts_get_api_guide: staticTool('artifacts_get_api_guide', obj({ version: str })),
   artifacts_ensure: staticTool('artifacts_ensure', obj({ bindingName: str, parameters: obj({}),
