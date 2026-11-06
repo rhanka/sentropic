@@ -14,7 +14,8 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `api/vitest.config.ts`
-  - `scripts/ci/api-unit-shards*`
+  - `api/ci/unit-shards*`
+  - `scripts/ci/api-tool-cache*`
   - `scripts/ci/ci-unit-graph.test.mjs`
   - `scripts/ci/consumer-contracts.mjs`
   - `scripts/ci/consumer-contracts.test.mjs`
@@ -26,12 +27,12 @@
   - `packages/*/src/**`
   - `package-lock.json`
 - **Conditional Paths (allowed with declared exception)**:
-  - `.github/workflows/ci.yml` under CI10B-EX1.
-  - `Makefile` under CI10B-EX2.
+  - `.github/workflows/ci.yml` under BR84b-EX1.
+  - `Makefile` under BR84b-EX2.
 
 ## Feedback Loop
-- [x] CI10B-EX1: owner-authorized CI matrix, needs and exact toolbox cache changes; keep every qualification, publication and final-verdict gate. Rollback: revert lane workflow changes with wiring tests.
-- [x] CI10B-EX2: named cache/shard check targets and host scope checking for this disk-constrained environment. Rollback: revert lane Makefile recipes.
+- [x] BR84b-EX1: owner-authorized CI matrix, needs and exact toolbox cache changes; keep every qualification, publication and final-verdict gate. Rollback: revert lane workflow changes with wiring tests.
+- [x] BR84b-EX2: named cache/shard check targets and host scope checking for this disk-constrained environment. Rollback: revert lane Makefile recipes.
 - [x] Baseline 42300540682/1, job 128179794335: unit job 567s, app qualification 254s, unit tests 205s; BR-84 already split app qualification.
 - [x] Cluster-mesh consumes verified candidate closure and prepared archives; retain that edge. Consumer verifier does not consume candidates.
 - [ ] Conductor Track handoff: import request, deliverables and evidence with designated writer; no concurrent Track append here.
@@ -47,6 +48,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: common/master/workflow/testing, baseline steps and unit durations read; harness branch check passed.
+- [x] Retain measured durations of all 186 unit files from baseline 42300540682/1; no projected duration is a receipt.
 - [ ] Lot 1: partition discovered unit files exactly once by measured duration; automatically include unmeasured additions; retain complete verdict.
 - [ ] Lot 2: detach units from production image; cache verified toolbox by lock and complete source identity; remove unused consumer candidate dependency.
 - [ ] Lot 3: scoped Make sharding, graph, consumer, expected-results and wiring checks on existing Node container; full suites in PR CI.
