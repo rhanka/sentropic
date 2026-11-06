@@ -37,7 +37,10 @@ export function validateGitBindingWrite(before: GitBinding | undefined, input: G
       !['git_branch_missing', 'git_diverged'].includes(before.stateDetail ?? '')
     : action === 'detach' ? before !== undefined && next.state === 'detached'
     : action === 'commit' ? before?.state === 'attached' && ['attached', 'build_pending', 'syncing'].includes(next.state)
-    : action === 'inbound' ? active && ['syncing', 'attached', 'build_pending', 'diverged', 'paused'].includes(next.state)
+    : action === 'inbound' ? (before?.state === 'attached' && ['syncing', 'build_pending'].includes(next.state)) ||
+      (before?.state === 'syncing' && ['attached', 'build_pending', 'diverged'].includes(next.state)) ||
+      (before?.state === 'build_failed' && next.state === 'build_pending') ||
+      (active && next.stateDetail === 'git_branch_missing' && next.state === (before.state === 'paused' ? 'paused' : 'diverged'))
     : action === 'publish' ? before !== undefined && (['attached', 'build_failed'].includes(before.state)
       ? next.state === 'build_pending' : before.state === 'build_pending' && ['attached', 'build_failed'].includes(next.state))
     : action === 'conflict' ? active && ['diverged', 'paused'].includes(next.state)
