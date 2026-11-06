@@ -77,6 +77,11 @@ async function purgeExpiredLocksSweep(): Promise<number> {
 // the tsx-interpreted source and the esbuild dist — only the bundle itself
 // can produce a checkpoint the booted SUT accepts. Boot path untouched:
 // active solely with the explicit argv flag (used by `make restore-api-sut`).
+if (process.argv.includes('--cm-preprod-verify')) {
+  const { runCmPreprodVerification } = await import('./scripts/cm-preprod-verify');
+  await runCmPreprodVerification();
+  process.exit(process.exitCode ?? 0);
+}
 if (process.argv.includes('--cm-preprod-checkpoint')) {
   const { runCmPreprodCheckpoint } = await import('./scripts/cm-preprod-checkpoint');
   await runCmPreprodCheckpoint();

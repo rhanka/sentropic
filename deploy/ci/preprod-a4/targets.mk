@@ -8,6 +8,9 @@ export A4_STAGE
 export A4_REMOTE_FILE
 export A4_REHEARSAL_FILE
 export A4_BUDGETS_FILE
+.PHONY: k8s-preprod-a4-verify
+k8s-preprod-a4-verify: ## Read-only journal, CM receipt, D11, readiness and public HTTP verification
+	@node deploy/ci/preprod-a4/verify.mjs
 .PHONY: k8s-preprod-a4-custody
 k8s-preprod-a4-custody: ## Prepare the tenant custodian or stage protected inputs; dry-run by default
 	@node deploy/ci/preprod-a4/ops.mjs
