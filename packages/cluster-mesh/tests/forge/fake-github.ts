@@ -31,6 +31,8 @@ export const fixture = () => {
   let granted: Record<string, string> = permissions;
   let installed = true;
   let tokenRepos = ['101'];
+  let tokenLifetime = 3600000;
+  let invalidationFails = false;
   const github = {
     exchange: async () => ({ appId: '42', slug: 'test-app', privateKey: appKey, webhookSecret: 'fake-webhook' }),
     inspectInstallation: async () => {
@@ -40,7 +42,7 @@ export const fixture = () => {
     mint: async (_app: unknown, installationId: string, repositoryId: string, requested: Record<string, string>) => {
       if (installationId !== '500') throw new Error('wrong installation');
       minted.push({ repositoryId, permissions: requested });
-      return { token: `fake-token-${minted.length}`, expiresAt: new Date(time + 3600000).toISOString(),
+      return { token: `fake-token-${minted.length}`, expiresAt: new Date(time + tokenLifetime).toISOString(),
         permissions: granted, repositoryIds: tokenRepos };
     },
     resolveRepository: async (_app: unknown, _installationId: string, locator: string) => locator === owner.locator ? '101' : '202',
@@ -50,7 +52,10 @@ export const fixture = () => {
   };
   const invalidations: { repoId: string; credentialVersion: string }[] = [];
   const service = createGitHubAppEnrollment({ custody, github, publicBaseUrl: 'https://mesh.example', now: () => time,
-    onCredentialsChanged: async (event) => { invalidations.push(event); } });
+    onCredentialsChanged: async (event) => {
+      if (invalidationFails) throw new Error('fake-sensitive-host-error');
+      invalidations.push(event);
+    } });
   const ready = async (target = owner) => {
     const start = await service.begin(target);
     const manifest = await service.prompt(target, start.installationRef);
@@ -63,5 +68,7 @@ export const fixture = () => {
     advance: (ms: number) => { time += ms; },
     grant: (value: Record<string, string>) => { granted = value; },
     remove: () => { installed = false; },
+    lifetime: (ms: number) => { tokenLifetime = ms; },
+    failInvalidation: (fails: boolean) => { invalidationFails = fails; },
     tokenRepos: (ids: string[]) => { tokenRepos = ids; } };
 };
