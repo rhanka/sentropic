@@ -73,6 +73,7 @@
   - [x] Project only current durable revisions; keep replay and outdated readiness from exposing older source.
   - [x] Reconcile revoked/missing workers and retain generation-qualified drafts before permitting replacement.
   - [x] Cover fixed supervisor recipes, phase timeout, relay-only fetch and durable cache-pointer corruption.
+  - [x] Include the new test sources in strict type validation and preserve generic fake signatures.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.

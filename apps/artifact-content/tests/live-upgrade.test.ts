@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
-import { connect, type Socket } from 'node:net';
+import { connect } from 'node:net';
+import type { Duplex } from 'node:stream';
 import { once } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { createLiveUpgrade } from '../src/live-upgrade';
@@ -14,7 +15,7 @@ async function listen(server: Server) {
 }
 describe('same-origin HMR transport', () => {
   it('should strip credentials in a real upgrade and close the tunnel immediately on revocation', async () => {
-    const sockets: Socket[] = []; let revoke!: () => void;
+    const sockets: Duplex[] = []; let revoke!: () => void;
     const received: Record<string, unknown>[] = [];
     const upstream = createServer();
     upstream.on('upgrade', (request, socket) => {

@@ -14,7 +14,7 @@ function cacheFixture() {
     signingKey: () => Buffer.alloc(32, 1),
     evidence: vi.fn(async lockSha256 => ({ lockSha256, digest: 'f'.repeat(64), approved: [], disabledHooks: [] })),
     fetch: vi.fn(async () => bytes),
-    cleanInstall: vi.fn(async () => ({ runId: 'clean-run', files: [{ path: 'pkg/index.js', type: 'file', mode: 292,
+    cleanInstall: vi.fn<CachePorts['cleanInstall']>(async () => ({ runId: 'clean-run', files: [{ path: 'pkg/index.js', type: 'file', mode: 292,
       bytes: Buffer.from('module.exports = 1').toString('base64') }] })),
     storage: { read: vi.fn(async () => stored), admit: vi.fn(async (_key, object) => (stored ??= object)),
       quarantine: vi.fn(async () => { stored = undefined; }) },
@@ -58,7 +58,7 @@ describe('locked dependency cache', () => {
     await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'dependency_integrity_missing' });
   });
   it.each(['../escape', '/absolute', 'pkg/../../escape', 'pkg\\escape'])('should reject unsafe dependency path %s', async path => {
-    const f = cacheFixture(); f.ports.cleanInstall = vi.fn(async () => ({ runId: 'run',
+    const f = cacheFixture(); f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async () => ({ runId: 'run',
       files: [{ path, type: 'file', mode: 292, bytes: '' }] }));
     await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
     expect(f.ports.storage.admit).not.toHaveBeenCalled();
