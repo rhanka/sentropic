@@ -14,7 +14,7 @@ export async function settleLiveWorker(input: { deps: LiveServiceDeps; identity:
       await deps.worker.stop({ ...identity, liveSessionId: runtime.liveSessionId, leaseEpoch: runtime.leaseEpoch });
       await deps.store.transaction(identity, async tx => {
         if (tx.record?.runtime?.liveSessionId === runtime.liveSessionId && tx.record.runtime.leaseEpoch === runtime.leaseEpoch &&
-          tx.record.runtime.phase === 'DECOMMISSIONING') {
+          ['QUIESCING', 'SAVING', 'DECOMMISSIONING'].includes(tx.record.runtime.phase)) {
           tx.record.runtime.phase = 'DORMANT'; tx.record.runtime.appliedRevision = null;
           result.state = 'DORMANT'; result.runtimeState = 'DORMANT'; result.appliedRevision = null;
         }
@@ -25,7 +25,7 @@ export async function settleLiveWorker(input: { deps: LiveServiceDeps; identity:
       await deps.store.transaction(identity, async tx => {
         const record = tx.record; const runtime = record?.runtime;
         if (!record || !runtime || ack.liveSessionId !== runtime.liveSessionId || ack.leaseEpoch !== runtime.leaseEpoch ||
-          ack.revision !== record.revision || !['REVIVING', 'RUNNING'].includes(runtime.phase)) return;
+          ack.routeEpoch !== runtime.routeEpoch || ack.revision !== record.revision || !['REVIVING', 'LIVE'].includes(runtime.phase)) return;
         const at = (deps.now ?? Date.now)();
         if (expireLiveDraft(tx, at)) return;
         if (runtime.renewOnReady && record.changedPaths) {
@@ -35,8 +35,8 @@ export async function settleLiveWorker(input: { deps: LiveServiceDeps; identity:
           // Source revision remains fenced to the worker ACK; reauthentication is handled by the vault.
           result.draftExpiresAt = renewed.expiresAt;
         }
-        runtime.renewOnReady = false; runtime.appliedRevision = ack.revision; runtime.phase = 'RUNNING';
-        result.appliedRevision = ack.revision; result.workerPending = false; result.runtimeState = 'RUNNING'; result.state = 'RUNNING';
+        runtime.renewOnReady = false; runtime.appliedRevision = ack.revision; runtime.phase = 'LIVE';
+        result.appliedRevision = ack.revision; result.workerPending = false; result.runtimeState = 'LIVE'; result.state = 'LIVE';
       });
     }
   } catch { /* The durable intent remains available to the controller's fenced reconciliation. */ }

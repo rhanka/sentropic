@@ -4,7 +4,12 @@ import { ArtifactOperationError } from './failures.js';
 export interface LiveIdentity { storageScopeId: string; artifactId: string; bindingGeneration: number }
 export interface LiveOverlayEntry { path: string; text: string | null; mode: string }
 export interface LiveRuntimeState {
-  liveSessionId: string; phase: string; leaseEpoch: number; routeEpoch: number;
+  liveSessionId: string;
+  phase: 'DORMANT' | 'REVIVING' | 'LIVE' | 'QUIESCING' | 'BUILD_PROVISIONING' | 'BUILDING' |
+    'VERIFYING' | 'PUBLISHING' | 'SAVING' | 'DECOMMISSIONING' | 'RECOVERING' | 'FAILED';
+  leaseEpoch: number; routeEpoch: number; rowVersion: number; ownerId: string; podUid: string | null;
+  sourceRevision: string; baseHeadSha: string; liveTreeSha: string;
+  idleDeadline: string; maximumLifetimeAt: string; activeAttemptId: string | null; stateDetail: string | null;
   appliedRevision: string | null; lastAccessAt: string; pendingWake: boolean;
   origin?: 'implicit' | 'explicit'; renewOnReady?: boolean;
 }
@@ -22,6 +27,7 @@ export interface LiveDraftRecord extends LiveIdentity {
   progressSeq: number; latestVerifiedHeadSha: string; publicationBaselineSeq: number;
   publicationBaselineHeadSha: string; lastSuccessfulReleaseId: string | null;
   initialUnpublishedBranchEligible: boolean;
+  rowVersion: number; createdAt: string; updatedAt: string; lastProgressEventId: string | null;
   snapshots?: Record<string, import('./live-contracts.js').LiveSnapshot>;
 }
 export interface LiveEnvelope { nonce: string; ciphertext: string; tag: string }
@@ -97,7 +103,10 @@ export function createMemoryLiveStore(): LiveStore {
       },
     };
     const result = await action(tx);
-    if (tx.record) records.set(id, structuredClone(tx.record));
+    if (tx.record) {
+      tx.record.rowVersion = (records.get(id)?.rowVersion ?? 0) + 1;
+      records.set(id, structuredClone(tx.record));
+    }
     for (const [key, object] of pendingObjects) { if (object) objects.set(key, object); else objects.delete(key); }
     for (const [key, receipt] of pendingReceipts) receipts.set(key, receipt);
     quota.push(...pendingQuota);
