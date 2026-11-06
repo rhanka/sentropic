@@ -64,6 +64,7 @@
   - [x] Correct the expiry assertion to require absence of `commitState`; the definite refusal has no indeterminate-outcome field.
 - [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
   - [x] Add bounded nonrecursive tree traversal with fixed-SHA resolution and symlink/gitlink refusal.
+  - [x] Count repeated directory objects at each path toward the enumeration bound as well as caching their immutable contents.
   - [x] Add MAC-bound caller/scope/SHA pagination, UTF-8/base64 reads and explicit omission reasons across the total budget.
   - [x] Add bounded GitHub HTTP and smart-HTTP old/new-SHA compare-and-swap with sanitized, indeterminate outcome handling.
   - [x] Implement GitHub object creation, nonrecursive trees, verified blobs, branch creation and ancestry comparison.
