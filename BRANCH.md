@@ -49,6 +49,7 @@
 - [ ] Lot 1: sanitized jobs/steps, dependency graphs, queue and four endpoints in runs.json; implement ci-performance-report.mjs and ci-performance-report.test.mjs; extend ci-run-metrics.test.mjs for incomplete/rerun/capacity/mixed paths.
 - [ ] Lot 1 gate: make test-ci-run-metrics test-ci-performance-report ci-performance-report ENV=test-ci-ten-minute-proof; retain n/median/p90/p95/max, costs, failures, cancellations and missing profiles.
 - [ ] Speed gate: exact toolbox for complete API/IdP compiler and API linter programs; parallel app/unit and artifact/dossier qualification; preserve matrix membership and complete verdict.
+- [x] Measured app host qualification was 233.53s for 30 files (run 42300540682, unit job); split its unchanged file selection across two isolated shards and retain content static/process checks in both.
 - [ ] Lot 2: versioned portable Svelte dossier from retained generator/theme, one dependency model, graph controls, links, expanded jobs/steps and budget-to-measure labels; test path calculation and controls.
 - [ ] Lot 2 gate: make build-ci-dossier test-ci-dossier ENV=test-ci-ten-minute-proof; TypeScript/Svelte/lint/build, keyboard/viewport, all cases/events/steps, wide/narrow exported artifact UAT.
 - [ ] Lot 3: ≥30 full-product runs across warm/source-miss/lock-miss/full-cold/concurrent profiles and API/UI/mixed/shared/tooling/fresh-release cases; endpoints ≤600s; retain all breaches and separate daily providers.

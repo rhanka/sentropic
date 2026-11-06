@@ -88,7 +88,7 @@ test('should retain every API shard and both artifact lanes in the actual workfl
   assert.match(base, /format\('origin\/\{0\}', github\.event\.repository\.default_branch\)/);
   assert.deepEqual(matrix.filter(row => row.suite === 'unit').map(row => row.unit_shard), [1, 2]);
   assert.deepEqual(matrix.filter(row => row.suite === 'endpoints').map(row => row.endpoints_shard), [1, 2, 3, 4, 5, 6, 7, 8]);
-  assert.equal(matrix.filter(row => row.suite === 'app-cluster-mesh').length, 1);
+  assert.deepEqual(matrix.filter(row => row.suite === 'app-cluster-mesh').map(row => row.app_shard), [1, 2]);
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
   const executed = expected.filter(row => row.selected).map(row => ({ job: row.job, conclusion: 'success' }));
   for (const row of expected.filter(row => /^(test-api-unit-integration|validate-artifacts) \(/.test(row.job))) {
