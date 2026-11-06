@@ -9,8 +9,9 @@
 - [x] GB4-3: deploy/ci/gb4-probe/run.mjs and probe.mk; preprod-only access through KUBE_CONFIG_DATA_PREPROD_BASCULE, GO gate, cleanup and report.
 - [x] GB4-4: deploy/k8s/base/artifact-content-networkpolicy.yaml; TCP 5173 only to builder namespace AND binding-labelled pods.
 - [x] GB4-5: scoped offline checks 3/3 PASS (GO gate, restricted manifest, split-frame WebSocket and read-only/non-root storage); mechanical harness scope checks before every commit; wagon pushed without PR.
-- [ ] GB4-6: poll the conductor GO file every 120 seconds, at most 10 hours; execute only after it exists.
-- [ ] GB4-7: record every self-test, positive/negative WebSocket result and verified cleanup in the report.
+- [x] GB4-6: polled every 120 seconds from 2026-11-06 03:11:45 to 13:11:45 UTC; ten-hour window expired without GO; no cluster access or mutation.
+- [ ] GB4-7: NOT RUN because the conductor GO file remained absent; live self-tests and positive/negative WebSocket checks remain unassessed. Report: .tmp/rv/gb4-probe.md.
+- [x] GB4-GO-TIMEOUT — handoff owner: conductor/k8s; prerequisite: applied builder baseline and allowlisted reported digest, then the exact GO file. Acceptance: run the prepared preprod probe and record live checks plus verified cleanup; no PR or production run from this lane.
 - [ ] Track handoff: designated conductor imports this mergeable BRANCH.md; this lane never writes concurrent .track events.
 - [x] Test environment: test-gb4; no compose services; reserved ports API=9690, UI=5890, MAILDEV_UI=1790.
 - [x] Scoped validation: make -f deploy/ci/gb4-probe/probe.mk gb4-check ENV=test-gb4; no API/UI/E2E application changes.
