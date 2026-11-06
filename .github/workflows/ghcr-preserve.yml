@@ -4,6 +4,7 @@ on:
     branches: [train/2026-11-06-ghcr]
     paths: [.github/workflows/ghcr-preserve.yml]
 permissions:
+  actions: read
   contents: read
   packages: write
 jobs:
@@ -78,7 +79,7 @@ jobs:
           GITHUB_RUN_ID: '42304697239'
         run: |
           set -euo pipefail
-          make load-e2e ENV=test-ci-preserve
+          make load-e2e GITHUB_RUN_ID=42304697239 ENV=test-ci-preserve
           ref="$(node -p 'JSON.parse(require("node:fs").readFileSync("e2e-image.json")).ref')"
           tag="${ref##*:}"
           printf '%s' "$GHCR_PASSWORD" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin

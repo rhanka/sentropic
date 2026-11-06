@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { publicImage } from './public-image.mjs';
 
 export function assertConfig(manifest, testedId) {
   if (!/^sha256:[a-f0-9]{64}$/.test(testedId) || manifest.config?.digest !== testedId) {
@@ -9,7 +10,7 @@ export function assertConfig(manifest, testedId) {
 
 function docker(...args) { return execFileSync('docker', args, { encoding: 'utf8' }).trim(); }
 
-export function publish(kind, env = process.env) {
+export async function publish(kind, env = process.env) {
   if (!['api', 'ui', 'e2e'].includes(kind) || env.REGISTRY !== 'ghcr.io/rhanka') throw Error('Invalid public GHCR publication');
   const tag = env[`${kind.toUpperCase()}_VERSION`];
   if (!/^[a-f0-9]{6}$/.test(tag)) throw Error('Publication requires an immutable content tag');
@@ -25,8 +26,11 @@ export function publish(kind, env = process.env) {
     docker('push', ref);
   }
   assertConfig(JSON.parse(docker('manifest', 'inspect', ref)), receipt.imageId);
+  const anonymous = await publicImage(ref);
+  assertConfig(anonymous.manifest, receipt.imageId);
   const digest = docker('buildx', 'imagetools', 'inspect', ref).match(/^Digest:\s+(sha256:[a-f0-9]{64})$/m)?.[1];
   if (!digest) throw Error('Missing published manifest digest');
+  if (anonymous.digest !== digest) throw Error('Anonymous registry digest differs from published manifest');
   // Promote the very same local/tested artifact; never pull a mutable tag.
   docker('tag', receipt.imageId, `${env.REGISTRY}/sentropic-${kind}:main`);
   docker('push', `${env.REGISTRY}/sentropic-${kind}:main`);
@@ -37,4 +41,4 @@ export function publish(kind, env = process.env) {
   return published;
 }
 
-if (process.argv[1]?.endsWith('/publish-image.mjs')) publish(process.argv[2]);
+if (process.argv[1]?.endsWith('/publish-image.mjs')) await publish(process.argv[2]);
