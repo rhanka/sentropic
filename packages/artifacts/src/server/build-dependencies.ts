@@ -3,7 +3,7 @@ import { buildJson, buildPath, buildRecord } from './build-contract.js';
 import type { ArtifactBuildSnapshot, PostinstallAllowlistEntry } from './build-contract.js';
 
 const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
-const refuse = (): never => { throw new ArtifactOperationError('dep_outside_lock'); };
+function refuse(): never { throw new ArtifactOperationError('dep_outside_lock'); }
 function registryUrl(value: unknown, registries: readonly string[]): boolean {
   if (typeof value !== 'string') return false;
   try {
@@ -65,9 +65,10 @@ export function validateBuildDependencies(
     const manifest = local ? buildJson(snapshot.files[manifestPath]) : raw;
     for (const source of [raw, manifest]) {
       for (const section of sections) {
-        if (source[section] === undefined) continue;
-        if (!buildRecord(source[section])) refuse();
-        for (const [name, spec] of Object.entries(source[section])) {
+        const dependencies = source[section];
+        if (dependencies === undefined) continue;
+        if (!buildRecord(dependencies)) refuse();
+        for (const [name, spec] of Object.entries(dependencies)) {
           if (!registrySpec(spec) || !/^(?:@[A-Za-z0-9._-]+\/)?[A-Za-z0-9._-]+$/.test(name)) refuse();
           if ((section === 'dependencies' || (local && section === 'devDependencies'))
             && !lockedPackage(path, name)) refuse();
