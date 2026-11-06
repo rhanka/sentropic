@@ -1,4 +1,22 @@
-# Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
+# Feature: GB4 preprod artifact-builder isolation probe
+
+## GB4 wagon execution (2026-11-05 owner GO)
+- [x] Baseline: origin/main c107f6abd; branch feat/gb4-isolation-probe; worktree tmp/worktrees/gb4-probe.
+- [x] Owner scope: preprod probe only; next dated train wagon, no PR, version bump or lock regeneration.
+- [x] Resolve official Node LTS digest and publish it first in .tmp/rv/gb4-probe.md.
+- [ ] GB4-1: deploy/ci/gb4-probe/checks.mjs and server.mjs; dependency-free HTTP/self-tests and WebSocket echo.
+- [ ] GB4-2: deploy/ci/gb4-probe/manifests.mjs; restricted Pod and ClusterIP Service; emptyDir volumes only.
+- [ ] GB4-3: deploy/ci/gb4-probe/run.mjs and probe.mk; preprod-only access through KUBE_CONFIG_DATA_PREPROD_BASCULE, GO gate, cleanup and report.
+- [ ] GB4-4: deploy/k8s/base/artifact-content-networkpolicy.yaml; TCP 5173 only to builder namespace AND binding-labelled pods.
+- [ ] GB4-5: scoped offline checks, make scope-check before every commit, push wagon once ready.
+- [ ] GB4-6: poll the conductor GO file every 120 seconds, at most 10 hours; execute only after it exists.
+- [ ] GB4-7: record every self-test, positive/negative WebSocket result and verified cleanup in the report.
+- [ ] Track handoff: designated conductor imports this mergeable BRANCH.md; this lane never writes concurrent .track events.
+- [x] Test environment: test-gb4; no compose services; reserved ports API=9690, UI=5890, MAILDEV_UI=1790.
+- [x] Scoped validation: make -f deploy/ci/gb4-probe/probe.mk gb4-check ENV=test-gb4; no API/UI/E2E application changes.
+- [x] UAT surface: preprod Pod self-tests and WebSocket echo only; no browser, Chrome or VSCode change.
+- [x] Train owns the consolidated code review and CI; no individual PR or CI dispatch.
+- [x] Upstream completed branch history below is retained verbatim, including the mandatory BRLOCK-EX1 reference.
 
 ## Objective
 One lot: migrate app identity data (users, proofs, invitations, login sessions, tenants, both memberships, workspaces) into the cluster-mesh stores, switch the single author under the r13 D11 protocol with the rollback checkpoint recorded before any legacy table deletion, point every reader/writer at the CM stores, delete the legacy app identity tables/files, replace request-authority with F15, and land the F11 screens. Cutover (2026-11-04, PR #879): rebased onto `origin/main` past the A2.0b merge (#882), the G1–G5 train (#912) and the 2026-11-04 train (#914, `b9cdb2d33`); fold lot G0 (#906, superseded); consume G1–G5 in the app (lot G6, four series, no fallback); prepare the preprod sync replacement up to a dry run only (lot G7, no preprod run without the owner nominative list). Lane 2026-11-05: rebased onto `origin/main` past #915 (`4d7517d94`, union); fixed review r1 D1/D2 + the 0014→0015 comment; ported the revocation tests to the CM sweep path with the R1/R2 root fixes above.
@@ -15,6 +33,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `deploy/ci/gb4-probe/**`
+  - `deploy/k8s/base/artifact-content-networkpolicy.yaml`
   - `docker-compose.test.yml` (BRxx-EX16)
   - `packages/cluster-mesh/src/storage/identity/schema.ts` (BRxx-EX17)
   - `packages/cluster-mesh/src/identity-contracts/accounts.ts` (BRxx-EX15)
