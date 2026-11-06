@@ -47,6 +47,9 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review r2 validation: 89 tests pass (all prior 85 plus four regressions: 31 operator, 58 API/checkpoint); actual prod/preprod overlay rendering and restricted ingress sequence pass with the reused toolbox. No API/runtime/overlay change, live operation, PR or CI dispatch; cleanup uses down-volumes on the test ENV.
+- [x] Review r2 deletion: step 11 ends at checkpoint/digest review; step 12 deletes the custodian exactly once with wait before the pinned API start, retaining PVC/files. A numbered-procedure regression exercises the real executor with duplicate deletion returning NotFound.
+- [x] Review r2 documentation: prior authorization and unchanged signed annex precede fence; actual fence/remote receipts form the separate strict post-fence request. Owner dossier and final authorization text updated; conductor imports these lots into Track.
 - [x] Review r2 R5: fence uses separate prior A4_AUTHORIZATION_FILE bound to the immutable annex, without post-fence request or stopped-writer/snapshot claims; preparation retains strict request and observed fence checks. Three new synthetic regressions cover running writers, missing approval/annex drift and incomplete observed shutdown.
 - [x] Review R5 restriction regression: namespace middleware creation uses the approved exact spec, attaches both Ingresses, and refuses replacing any existing middleware before writes.
 - [x] Review R5 annex: exact make fence/delete/scale/rehearsal/recovery invocations, immutable procedure/command bindings, separate restore allocation/identity, original/target pins/states, tenant backup ownership, rollback loss policy and 2026-11-05 fresh-auth acceptance required before signature.
