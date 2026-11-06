@@ -29,10 +29,21 @@ it('should renew a restored draft only after the matching projection ACK and nev
   const state = await w.status();
   const start = await w.call('live_control', { action: 'start', expectedHeadSha: state.currentHeadSha,
     expectedLiveRevision: state.liveRevision, idempotencyKey: 'start' });
-  expect(start.appliedRevision).toBe(start.liveRevision);
-  expect(start.draftExpiresAt > written.draftExpiresAt).toBe(true);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const ready = await w.status();
+  expect(ready.appliedRevision).toBe(start.liveRevision);
+  expect(ready.draftExpiresAt > written.draftExpiresAt).toBe(true);
   expect((await w.call('live_read')).files[0].text).toBe('retained');
   expect((await w.status()).liveRevision).toBe(start.liveRevision);
+});
+it('should acknowledge a durable edit even when cold worker startup is still pending', async () => {
+  const w = liveWitness();
+  w.worker.reconcile.mockImplementation(() => new Promise(() => undefined));
+  const write = w.write({ files: [{ path: 'ui/a.ts', text: 'durable before startup' }] });
+  const accepted = await Promise.race([write.then(() => true), new Promise(resolve => setImmediate(() => resolve(false)))]);
+  expect(accepted).toBe(true);
+  expect(await write).toMatchObject({ workerPending: true, appliedRevision: null });
+  expect((await w.call('live_read')).files[0].text).toBe('durable before startup');
 });
 it('should refuse stale or differently scoped readers and unsupported control combinations', async () => {
   const w = liveWitness(); const state = await w.status();
