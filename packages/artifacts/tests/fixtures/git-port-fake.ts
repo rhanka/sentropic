@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { vi } from 'vitest';
 import { createGitPort } from '../../src/adapters/github-git-port.js';
 import { GitForgeError } from '../../src/server/git-port.js';
-import type { GitForge, GitPortTarget, GitTreeEntry, GitPortRepository } from '../../src/server/git-port.js';
+import type { GitForge, GitPortTarget, GitTreeEntry, GitPortRepository, GitResolvedCommit } from '../../src/server/git-port.js';
 
 const sha = (value: unknown) => createHash('sha1').update(JSON.stringify(value)).digest('hex');
 export const target: GitPortTarget = { storageScopeId: 'scope', repoId: 'repo', principalId: 'human',
@@ -14,7 +14,7 @@ export function fakeGit(files: Record<string, string> = { 'ui/a.ts': 'first', 'u
   const blobs = new Map<string, Uint8Array>();
   const trees = new Map<string, GitTreeEntry[]>();
   const snapshots = new Map<string, Record<string, string>>();
-  const commits = new Map<string, { sha: string; treeSha: string; parents: string[]; message: string }>();
+  const commits = new Map<string, GitResolvedCommit>();
   const refs = new Map<string, string>();
   function build(values: Record<string, string>, prefix = ''): string {
     const entries: GitTreeEntry[] = [];
@@ -29,7 +29,8 @@ export function fakeGit(files: Record<string, string> = { 'ui/a.ts': 'first', 'u
     const id = sha(entries); trees.set(id, entries); snapshots.set(id, { ...values }); return id;
   }
   const initial = sha('initial'); const treeSha = build(files);
-  commits.set(initial, { sha: initial, treeSha, parents: [], message: 'bootstrap' }); refs.set(target.branch, initial);
+  const bootstrapIdentity = { name: 'Bootstrap', email: 'bootstrap@noreply.test' };
+  commits.set(initial, { sha: initial, treeSha, parents: [], message: 'bootstrap', author: bootstrapIdentity, committer: bootstrapIdentity }); refs.set(target.branch, initial);
   const forge: GitForge = {
     repositoryId: vi.fn(async () => '123'),
     resolve: vi.fn(async (_context, ref) => {
@@ -45,7 +46,7 @@ export function fakeGit(files: Record<string, string> = { 'ui/a.ts': 'first', 'u
       return build(values);
     }),
     createCommit: vi.fn(async (_context, input) => {
-      const id = sha(input); commits.set(id, { sha: id, treeSha: input.treeSha, parents: [input.parentSha], message: input.message }); return id;
+      const id = sha(input); commits.set(id, { ...input, sha: id, treeSha: input.treeSha, parents: [input.parentSha] }); return id;
     }),
     advance: vi.fn(async (_context, branch, expected, next) => {
       if (refs.get(branch) !== expected) throw new GitForgeError('conflict');
@@ -69,5 +70,6 @@ export function fakeGit(files: Record<string, string> = { 'ui/a.ts': 'first', 'u
   return { port: createGitPort(options), options, forge, initial, refs, commits, trees, blobs, lease, leases };
 }
 export const commitInput = (expectedHeadSha: string) => ({ target, expectedHeadSha,
+  createdAt: '2026-11-06T00:00:00.000Z',
   artifactId: '12345678-1234-1234-1234-123456789abc', invocationId: 'invocation-1', message: 'Update source',
   files: [{ path: 'ui/a.ts', text: 'updated' }, { path: 'ui/c.ts', text: 'created' }, { path: 'ui/b.ts', text: null }] });
