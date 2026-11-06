@@ -29,6 +29,7 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
       await supervisor.clear(runtime, ['/workspace', '/dependencies', '/tmp']);
     },
     async prepare(runtime, source, cache) {
+      await supervisor.clear(runtime, ['/workspace', '/dependencies', '/tmp']);
       await supervisor.stage(runtime, source);
       await supervisor.dependencies(runtime, cache, { readOnly: true, verifyHash: true });
       await supervisor.phase(runtime, 'offline');
