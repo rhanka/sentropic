@@ -4,6 +4,7 @@ import { revive } from './revive';
 import { prepareLive } from './prepare-live';
 import { idleBuild } from './idle';
 import { buildOnly } from './build-only';
+import { withinPhase } from './deadline';
 import { currentBinding, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
@@ -39,7 +40,7 @@ export function createLiveController(ports: LivePorts) {
         // The higher phase fence cancels every older worker command before restoring source.
         await ports.worker.quiesce(runtime);
         runtime = await transition(ports, key, runtime, state => { state.runtime.attempt = null; });
-        return await prepareLive(ports, key, runtime);
+        return await withinPhase(prepareLive(ports, key, runtime));
       } catch (error) { await failed(ports, key, runtime, error); throw error; }
     },
     /** Narrow stop after code-right revocation exposes teardown fields only. Identity comes from host auth. */

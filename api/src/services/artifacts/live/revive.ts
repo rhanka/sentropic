@@ -3,6 +3,7 @@ import { conflict, type LiveKey, type LiveRuntime } from './records';
 import { podName } from './pods';
 import { currentBinding, failed } from './transitions';
 import { prepareLive } from './prepare-live';
+import { withinPhase } from './deadline';
 
 export async function revive(ports: LivePorts, key: LiveKey) {
   const binding = await currentBinding(ports, key);
@@ -26,6 +27,6 @@ export async function revive(ports: LivePorts, key: LiveKey) {
     unit.save({ runtime, progress });
     return structuredClone(runtime);
   });
-  try { return await prepareLive(ports, key, runtime); }
+  try { return await withinPhase(prepareLive(ports, key, runtime)); }
   catch (error) { await failed(ports, key, runtime, error); throw error; }
 }
