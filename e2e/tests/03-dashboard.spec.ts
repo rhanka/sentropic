@@ -253,21 +253,11 @@ test.describe('Dashboard DOCX flow', () => {
       );
       const presenceLockGroup = page.locator(
         'div[role="group"][aria-label*="Verrou"], div[role="group"][aria-label*="Lock"]'
-      );
+      ).filter({ has: page.locator('button[aria-disabled="true"]') });
 
-      await expect
-        .poll(
-          async () => (await readOnlyLockButton.count()) + (await presenceLockGroup.count()),
-          { timeout: 2_000 }
-        )
-        .toBeGreaterThan(0);
-
-      if ((await readOnlyLockButton.count()) > 0) {
-        await expect(readOnlyLockButton.first()).toBeVisible({ timeout: 2_000 });
-        await expect(readOnlyLockButton.first()).toHaveClass(/print-hidden/);
-      } else {
-        await expect(presenceLockGroup.first()).toBeVisible({ timeout: 2_000 });
-      }
+      // Presence can replace the standalone lock between browser commands.
+      // Keep print-hidden in its selector and require the presence lock to be read-only.
+      await expect(readOnlyLockButton.or(presenceLockGroup).first()).toBeVisible({ timeout: 2_000 });
     } finally {
       await context.close().catch(() => undefined);
     }
