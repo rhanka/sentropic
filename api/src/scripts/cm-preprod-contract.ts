@@ -19,7 +19,7 @@ export type PreprodRequest = z.infer<typeof requestSchema>;
 
 export const evidenceSchema = z.object({
   format: z.literal('preprod-a4-snapshot/1'), operationId: z.string(), candidateCommit: z.string(), candidateImage: z.string(),
-  sourceContentSha256: digest, schemaSha256: digest, journalSha256: digest, remoteSnapshotDigest: digest,
+  requestSha256: digest, sourceContentSha256: digest, schemaSha256: digest, journalSha256: digest, remoteSnapshotDigest: digest,
   mappingSha256: digest, identityAssetSha256: digest, connectorAssetSha256: digest,
   backupKey: z.string().regex(/^pg\/[0-9]{8}T[0-9]{6}Z\.sql\.gz$/), backupSha256: digest,
   backupBytes: z.number().int().positive(), writerFenceRef: ref,
