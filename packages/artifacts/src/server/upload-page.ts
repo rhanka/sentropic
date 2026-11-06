@@ -169,6 +169,22 @@ export function uploadPageCsp(s3Origins: readonly string[]): string {
 }
 
 /**
+ * J1.1a — browser fallback MIME by extension for the upload page, used only
+ * when the browser reports no `File.type`: `.geojson` as `application/json`,
+ * `.mjs` as `text/javascript`, `.woff2` as `font/woff2`, plus owner-kept
+ * `.wasm` and `.pbf`. Rendered into the page as JSON.
+ */
+export const BROWSER_EXTENSION_FALLBACK_MIME: Readonly<Record<string, string>> = Object.freeze({
+  geojson: 'application/json',
+  mjs: 'text/javascript',
+  woff2: 'font/woff2',
+  wasm: 'application/wasm',
+  pbf: 'application/x-protobuf',
+  avif: 'image/avif',
+  ico: 'image/x-icon',
+});
+
+/**
  * Self-contained static upload page (no external assets). Bytes travel
  * browser → S3 via raw PUT (FormData is banned: multipart wrapping changes
  * length and type); one session per file with `size = File.size`; at most 4
@@ -217,7 +233,7 @@ const api = async (path, body, method) => {
   if (!response.ok) throw new Error(path + ' failed: ' + response.status);
   return response.json();
 };
-const EXT_TYPES = { woff2: 'font/woff', avif: 'image/avif', ico: 'image/x-icon' };
+const EXT_TYPES = ${JSON.stringify(BROWSER_EXTENSION_FALLBACK_MIME)};
 const chunked = (bytes, f) => {
   const view = new Uint8Array(bytes);
   let out = '';

@@ -85,8 +85,10 @@ describe('cluster mesh resources transport', () => {
       '/resources/list', '/resources/stat', '/resources/read', '/resources/grep', '/resources/edit', '/resources/invoke',
       '/resources/artifacts/*', '/resources/artifacts/ensure', '/resources/artifacts/publish',
       '/resources/artifacts/list', '/resources/artifacts/meta/:artifactId', '/resources/artifacts/reader-activation',
+      '/resources/artifacts/reader-gate',
       '/resources/artifacts/reader-consents', '/resources/artifacts/reader-consents/revoke',
       '/resources/artifacts/reader-consents/revoke-all', '/resources/artifacts/reader-consents/admin-revoke',
+      '/resources/artifacts/reader-consents/screen', '/resources/artifacts/reader-consents/grant',
     ]);
     expect(RESOURCE_PATHS).not.toContain('/*');
 
