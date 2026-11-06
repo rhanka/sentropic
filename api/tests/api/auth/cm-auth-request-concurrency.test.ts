@@ -4,6 +4,9 @@ import { createAuthenticatedUser, cleanupAuthData } from '../../utils/auth-helpe
 import { cmQuery } from '../../utils/cm-identity-test-store';
 import { Hono } from 'hono';
 import { requireAuth } from '../../../src/middleware/auth';
+import { randomUUID } from 'node:crypto';
+import { createCmUser, findCmUserById } from '../../../src/services/identity/cm-users';
+import { cmDeleteForEmails, cmDeleteForUsers } from '../../utils/cm-identity-test-store';
 
 /**
  * A4 e2e residue (run 42032530355): every authenticated page load fans out
@@ -17,6 +20,21 @@ import { requireAuth } from '../../../src/middleware/auth';
 describe('CM per-request authentication under same-session fan-out', () => {
   afterEach(async () => {
     await cleanupAuthData();
+  });
+
+  it('registers distinct accounts concurrently without exhausting transaction attempts', async () => {
+    const users = Array.from({ length: 16 }, () => {
+      const userId = randomUUID();
+      return { userId, email: `${userId}@example.test`, role: 'editor', emailVerified: true };
+    });
+    try {
+      const results = await Promise.allSettled(users.map(user => createCmUser(user)));
+      expect(results.filter(result => result.status === 'rejected')).toEqual([]);
+      for (const user of users) expect(await findCmUserById(user.userId)).toMatchObject({ id: user.userId, email: user.email });
+    } finally {
+      await cmDeleteForEmails(users.map(user => user.email));
+      await cmDeleteForUsers(users.map(user => user.userId));
+    }
   });
 
   it('projects presence identity from the validated CM user rather than JWT claims', async () => {
