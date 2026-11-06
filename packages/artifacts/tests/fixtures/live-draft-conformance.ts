@@ -61,5 +61,28 @@ export function draftConformance(name: string, fresh: () => Promise<LiveStore>) 
       expect(renewed.objectRef).not.toBe(first.objectRef);
       expect((await vault.read(liveIdentity))?.overlay[0].text).toBe('private source');
     });
+    it('should serialize renewal with collection and preserve the winning authenticated object', async () => {
+      const { vault, save, advance } = await setup();
+      const first = await save(null); advance(3600000);
+      await Promise.all([vault.renew(liveIdentity, first.revision), vault.collect(liveIdentity)]);
+      expect((await vault.read(liveIdentity))?.overlay[0].text).toBe('private source');
+      advance(8 * 24 * 3600000);
+      expect(await vault.collect(liveIdentity)).toBeGreaterThan(0);
+      await expect(vault.read(liveIdentity)).rejects.toMatchObject({ kind: 'git_live_draft_expired' });
+    });
+    it('should preserve the complete revision when key access or transaction completion fails', async () => {
+      const { vault, save, store, keys } = await setup();
+      const first = await save(null);
+      const failed = createLiveDraftVault({ store, keys: { ...keys, current: async () => { throw new Error('private key outage'); } } });
+      await expect(failed.write({ identity: liveIdentity, expectedRevision: first.revision,
+        baseHeadSha: first.baseHeadSha, baseTreeSha: first.baseTreeSha, liveTreeSha: first.liveTreeSha,
+        overlay: [{ path: 'ui/a.ts', text: 'must not replace', mode: '100644' }] }))
+        .rejects.toMatchObject({ kind: 'git_live_draft_unavailable' });
+      expect((await vault.read(liveIdentity))?.revision).toBe(first.revision);
+      await expect(store.transaction(liveIdentity, async tx => {
+        tx.record!.revision = 'must-roll-back'; throw new Error('injected transaction failure');
+      })).rejects.toThrow();
+      expect((await vault.read(liveIdentity))?.revision).toBe(first.revision);
+    });
   });
 }
