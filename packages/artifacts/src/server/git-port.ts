@@ -39,6 +39,8 @@ export interface GitCommitInput {
   files: { path: string; text: string | null }[];
 }
 export interface GitPort {
+  /** Trusted metadata only: complete immutable repository tree, including excluded base entries. */
+  snapshot?(target: GitPortTarget, commitSha: string): Promise<{ treeSha: string; entries: GitTreeEntry[] }>;
   resolveRef(target: GitPortTarget, ref: string): Promise<string>;
   inspectCommit(target: GitPortTarget, commitSha: string): Promise<GitResolvedCommit>;
   read(target: GitPortTarget, input: { commitSha: string; paths?: string[]; cursor?: string }): Promise<GitSourcePage>;

@@ -1,7 +1,7 @@
 import { ArtifactOperationError } from './failures.js';
 import type { GitPortRepository, GitPortTarget } from './git-port.js';
 
-export const isGitSha = (sha: string): boolean => /^[0-9a-f]{40}$/.test(sha);
+export const isGitSha = (sha: string): boolean => /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha);
 export function assertGitSha(sha: string): void {
   if (!isGitSha(sha)) throw new ArtifactOperationError('invalid_request');
 }
@@ -33,10 +33,10 @@ function refused(path: string, reason: string): never {
   throw new ArtifactOperationError('git_path_refused', { publicDetails: { path, reason } });
 }
 function safePath(path: string): void {
-  if (!path || Buffer.byteLength(path) > 1024 || /[\x00-\x1f\x7f\\%:]/.test(path) || path !== path.normalize('NFC') ||
+  if (!path || Buffer.byteLength(path) > 1024 || /[\x00-\x1f\x7f\\%:?#]/.test(path) || path !== path.normalize('NFC') ||
     path.split('/').some(p => !p || p === '.' || p === '..' || /[. ]$/.test(p))) refused(path, 'noncanonical');
   for (const part of path.split('/')) {
-    if (/^(?:\.git|\.github|\.ssh)$/i.test(part) || /^\.env/i.test(part) ||
+    if (/^(?:\.git|\.github|\.ssh|\.npmrc)$/i.test(part) || /^\.yarnrc/i.test(part) || /^\.env/i.test(part) ||
       /\.(?:pem|key|p12|pfx|p8|jks|keystore)$/i.test(part) ||
       /^(?:id_(?:rsa|dsa|ecdsa|ed25519)|private[_-]?key)(?:\.|$)/i.test(part)) refused(path, 'reserved');
   }

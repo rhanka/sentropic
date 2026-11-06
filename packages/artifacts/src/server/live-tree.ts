@@ -22,6 +22,9 @@ export function validateLiveMutation(repo: GitPortRepository, target: GitPortTar
       const path = typeof value === 'string' ? value : value?.path;
       if (typeof path !== 'string' || seen.has(path)) throw new ArtifactOperationError('invalid_request');
       gitPath(repo, target, path, true); seen.add(path);
+      if (path.split('/').some(part => /^package.*\.json$/i.test(part)) ||
+        ['.github/**', 'deploy/**', 'api/**', '.track/**', 'packages/immo-mcp/**'].some(glob =>
+          path === glob.slice(0, -3) || path.startsWith(glob.slice(0, -2)))) throw new ArtifactOperationError('git_path_refused');
       if (typeof value !== 'string') {
         const keys = kind === 'edits' ? ['path', 'oldStr', 'newStr'] : ['path', 'text'];
         if (Object.keys(value).some(key => !keys.includes(key))) throw new ArtifactOperationError('invalid_request');
