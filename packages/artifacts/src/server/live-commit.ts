@@ -6,11 +6,13 @@ import { liveBusy } from './live-mutations.js';
 import { liveResponse, type LiveAuthority, type LiveInvocation, type LiveServiceDeps } from './live-contracts.js';
 import type { LiveCommand, LiveIdentity } from './live-store.js';
 import { LiveCommitUnknownError } from './live-commit-outcome.js';
+import { isGitSha } from './git-port-policy.js';
 
 export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity: LiveIdentity;
   authority: LiveAuthority; invocation: LiveInvocation; args: Record<string, any>;
   command: LiveCommand; now: number }): Promise<Record<string, any>> {
   const { deps, identity, authority, invocation, args, command, now } = input;
+  if (!isGitSha(args.expectedHeadSha)) throw new ArtifactOperationError('invalid_request');
   if (!args.message.trim() || args.message.length > (deps.gitMessageMaxUnits ?? 16384) ||
     /^Artifacts-(?:Artifact|Invocation|Base):/mi.test(args.message)) throw new ArtifactOperationError('invalid_request');
   const prepared = await deps.store.transaction(identity, async tx => {
@@ -29,6 +31,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     if (!record.changedPaths) throw new ArtifactOperationError('git_live_no_changes');
     await tx.reserveCommit(invocation.actorId, invocation.invocationId, new Date(now).toISOString());
     const head = await deps.git.resolveRef(authority.target, authority.binding.branch);
+    if (!isGitSha(head) || head.length !== args.expectedHeadSha.length) throw new ArtifactOperationError('invalid_request');
     if (args.expectedHeadSha !== head) throw new ArtifactOperationError('git_head_moved',
       { publicDetails: { expectedHeadSha: args.expectedHeadSha, actualHeadSha: head } });
     if (record.baseHeadSha !== head) throw new ArtifactOperationError('git_live_draft_conflict');

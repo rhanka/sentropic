@@ -37,6 +37,12 @@ it('should freeze source while a commit is indeterminate and replay a lost forge
   expect(w.git.commit).toHaveBeenCalledTimes(1);
   expect((await w.status()).dirty).toBe(false);
 });
+it('should refuse a commit SHA with the wrong object format and charge no forge mutation', async () => {
+  const w = liveWitness(); await w.write({ files: [{ path: 'ui/a.ts', text: 'changed' }] });
+  await expect(w.call('git_commit', { expectedHeadSha: 'a'.repeat(64), files: [{ path: 'ui/a.ts', text: 'changed' }],
+    message: 'Wrong object format', idempotencyKey: 'format' })).rejects.toMatchObject({ kind: 'invalid_request' });
+  expect(w.git.commit).not.toHaveBeenCalled();
+});
 it('should stop after code-right revocation without source revision access or draft deletion', async () => {
   const w = liveWitness(); const written = await w.write({ files: [{ path: 'ui/a.ts', text: 'retained' }] });
   w.revoke();
