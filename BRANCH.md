@@ -75,6 +75,7 @@
   - [x] Cover fixed supervisor recipes, phase timeout, relay-only fetch and durable cache-pointer corruption.
   - [x] Include the new test sources in strict type validation and preserve generic fake signatures.
   - [x] Permit only Vite's ephemeral HMR query token at the exact endpoint and pin its internal allowed host.
+  - [x] Document host integrations and distinguish fake acceptance from production qualification.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.

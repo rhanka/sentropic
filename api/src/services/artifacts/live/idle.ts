@@ -1,5 +1,5 @@
 import type { LivePorts } from './ports';
-import { assertFence, automaticEligible, conflict, LiveError, publicationBaseline, type LiveKey, type LiveRuntime } from './records';
+import { assertFence, automaticEligible, conflict, LiveError, publicationBaseline, type LiveKey } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { withinPhase } from './deadline';
 
