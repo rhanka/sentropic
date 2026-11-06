@@ -304,7 +304,27 @@ test.describe('Détail des organisations', () => {
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
+      // Deliver an old HTTP snapshot after the second member's newer SSE presence.
+      const isTargetPresence = (url: string) => {
+        const parsed = new URL(url);
+        return parsed.pathname === '/api/v1/locks/presence'
+          && parsed.searchParams.get('objectType') === 'organization'
+          && parsed.searchParams.get('objectId') === organizationId;
+      };
+      let releaseSnapshot!: () => void;
+      const snapshotGate = new Promise<void>((resolve) => { releaseSnapshot = resolve; });
+      let snapshotCaptured!: () => void;
+      const capturedSnapshot = new Promise<void>((resolve) => { snapshotCaptured = resolve; });
+      await pageA.route('**/api/v1/locks/presence?*', async (route) => {
+        if (route.request().method() !== 'GET' || !isTargetPresence(route.request().url())) return route.continue();
+        const response = await route.fetch();
+        expect(response.ok()).toBeTruthy();
+        snapshotCaptured();
+        await snapshotGate;
+        await route.fulfill({ response });
+      });
       await pageA.goto(`/organizations/${encodeURIComponent(organizationId)}`);
+      await capturedSnapshot;
       await pageB.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageA.waitForLoadState('domcontentloaded');
       await pageB.waitForLoadState('domcontentloaded');
@@ -322,6 +342,11 @@ test.describe('Détail des organisations', () => {
 
       const avatarAInB = pageB.locator(`[aria-label="Verrou du document"] [title="${memberA.displayName}"]`);
       const avatarBInA = pageA.locator(`[aria-label="Verrou du document"] [title="${memberB.displayName}"]`);
+      await expect(avatarBInA).toHaveCount(1, { timeout: 2_000 });
+      const initialSnapshot = pageA.waitForResponse((response) => response.request().method() === 'GET' && isTargetPresence(response.url()), { timeout: 2_000 });
+      releaseSnapshot();
+      await (await initialSnapshot).finished();
+      await pageA.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
       await expect
         .poll(async () => {
           const [aInB, bInA] = await Promise.all([avatarAInB.count(), avatarBInA.count()]);

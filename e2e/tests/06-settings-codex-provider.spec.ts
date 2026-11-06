@@ -142,6 +142,11 @@ test.describe('Codex provider settings', () => {
       });
     });
 
+    const waitForModeSaved = () => page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/v1/settings/provider-connections/openai/mode'
+      && response.request().method() === 'POST',
+    );
+
     await page.goto('/settings');
     await page.waitForLoadState('domcontentloaded');
 
@@ -168,11 +173,11 @@ test.describe('Codex provider settings', () => {
     await expect(page.getByText('Prêt', { exact: true })).toBeVisible();
     await expect(codexTokenButton).toBeEnabled();
 
-    await codexTokenButton.click();
+    await Promise.all([waitForModeSaved(), codexTokenButton.click()]);
     await expect(openAiKeyButton).toBeEnabled();
     expect(postedModes).toEqual(['codex']);
 
-    await openAiKeyButton.click();
+    await Promise.all([waitForModeSaved(), openAiKeyButton.click()]);
     expect(postedModes).toEqual(['codex', 'token']);
 
     await page.getByRole('button', { name: /Disconnect|Déconnecter/i }).click();

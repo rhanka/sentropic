@@ -147,11 +147,7 @@ describe('Me API', () => {
     expect(geminiProData.defaultModel).toBe('gemini-3.5-flash');
   });
 
-  // BLOCKED (a4-lane, re-enable when the owning lot lands): self-deletion needs
-  // a disabled account, but deactivation revokes login sessions and normal auth
-  // refuses disabled accounts — the same-token delete below gets 401 until the
-  // A4-SELF-DELETE authorized re-entry lot lands. See BRANCH.md A4-SELF-DELETE.
-  it.skip('should delete user workspace data on DELETE /me', async () => {
+  it('should delete user workspace data on DELETE /me', async () => {
     const user = await createAuthenticatedUser('editor');
 
     // Trigger auth middleware which ensures workspace exists
@@ -178,9 +174,7 @@ describe('Me API', () => {
     expect(remainingOrgs.length).toBe(0);
   });
 
-  // BLOCKED (a4-lane, same as above): deactivation revokes the token the delete
-  // below reuses — 401 until the A4-SELF-DELETE authorized re-entry lot lands.
-  it.skip('should delete /me even if an admin chat session + trace are scoped to the user workspace (no FK 500)', async () => {
+  it('should delete /me even if an admin chat session + trace are scoped to the user workspace (no FK 500)', async () => {
     const suffix = createTestId();
     const admin = await createAuthenticatedUser('admin_app', `admin-delme-${suffix}@example.com`);
     const user = await createAuthenticatedUser('editor', `user-delme-${suffix}@example.com`);

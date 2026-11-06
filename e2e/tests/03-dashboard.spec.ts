@@ -257,6 +257,9 @@ test.describe('Dashboard DOCX flow', () => {
 
       // Presence can replace the standalone lock between browser commands.
       // Keep print-hidden in its selector and require the presence lock to be read-only.
+      await expect(presenceLockGroup.getByRole('tooltip')).toContainText(
+        /[1-9]\d* (?:utilisateurs? connectés?|users? connected)/, { timeout: 2_000 }
+      );
       await expect(readOnlyLockButton.or(presenceLockGroup).first()).toBeVisible({ timeout: 2_000 });
     } finally {
       await context.close().catch(() => undefined);
