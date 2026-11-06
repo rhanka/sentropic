@@ -42,9 +42,13 @@ export type GitAppErrorCode = 'access_denied' | 'capability_unavailable' | 'inva
 export class GitAppError extends Error {
   constructor(readonly code: GitAppErrorCode) { super(code); this.name = 'GitAppError'; }
 }
+/** Internal evidence of authoritative access loss; public failures stay sanitized. */
+export class GitAppAccessLostError extends GitAppError {
+  constructor() { super('capability_unavailable'); }
+}
 
 export const assertGitAppPermissions = (permissions: Record<string, string>): void => {
   if (Object.keys(permissions).length !== 2 || permissions.contents !== 'write' || permissions.metadata !== 'read') {
-    throw new GitAppError('capability_unavailable');
+    throw new GitAppAccessLostError();
   }
 };
