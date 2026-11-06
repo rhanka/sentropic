@@ -75,12 +75,12 @@
   - [x] Read common rules first, MASTER, workflow, frozen G0 and wagon plans; harness branch C1 passes.
   - [x] Establish the branch on the published dated-train ref carrying artifacts 0.2.17 and retain its exact SHA.
   - [x] Write this single train plan and mechanically verify its scope before every commit.
-- [ ] **Lot 1 — Merge ready wagon branches**
+- [x] **Lot 1 — Merge ready wagon branches**
   - [x] SG0-app `origin/feat/git-artifact-sg0-app` — GitHub App enrollment and encrypted cluster-mesh custody.
   - [x] SG1 `origin/feat/git-artifact-sg1` — binding lifecycle, host registry and immutable release index.
   - [x] GB1 `origin/feat/git-artifact-gb1` — build descriptor and locked dependency validation.
-  - [ ] SG2 `origin/feat/git-artifact-sg2` — injected leases, GitPort and atomic forge commits.
-  - [ ] Resolve source conflicts as the union of all typed categories/exports and retained upstream behavior; verify every wagon tip is an ancestor.
+  - [x] SG2 `origin/feat/git-artifact-sg2` — injected leases, GitPort and atomic forge commits.
+  - [x] Resolve source conflicts as the union of all typed categories/exports and retained upstream behavior; verify every wagon tip is an ancestor.
 - [ ] **Lot 2 — Single release regeneration**
   - [ ] Verify registry versions through make; bump artifacts to 0.2.18 and cluster-mesh to reserved dev.N with CHANGELOG entries.
   - [ ] Regenerate root/API lock metadata and selected-fixture versions/integrity through make.
