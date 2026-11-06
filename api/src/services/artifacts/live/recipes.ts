@@ -18,8 +18,19 @@ export const INSTALL_RECIPE = Object.freeze({
 });
 export const LIVE_RECIPE = Object.freeze({
   executable: '/usr/local/bin/node', args: ['/workspace/node_modules/vite/bin/vite.js',
-    '--host', '0.0.0.0', '--port', '5173', '--strictPort'], timeoutMs: 300_000,
+    '--config', '/tmp/artifact-vite.config.mjs', '--host', '0.0.0.0', '--port', '5173', '--strictPort'], timeoutMs: 300_000,
 });
 export const BUILD_RECIPE = Object.freeze({
   executable: '/usr/local/bin/npm', args: ['--ignore-scripts', '--offline', 'run', 'build:artifact'], timeoutMs: 300_000,
 });
+/** Host-owned wrapper preserves qualified plugins while overriding writable repository server options. */
+export function liveViteConfig(sessionId: string) {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(sessionId)) throw new Error('Invalid live session');
+  return `import { loadConfigFromFile } from '/workspace/node_modules/vite/dist/node/index.js';
+const loaded = await loadConfigFromFile({command:'serve', mode:'development'}, '/workspace/ui/vite.config.ts');
+const repo = loaded?.config ?? {};
+export default {...repo, root:'/workspace/ui', envDir:'/tmp/artifact-empty-env', cacheDir:'/tmp/vite-cache',
+  server:{host:'0.0.0.0', port:5173, strictPort:true, proxy:{}, cors:false,
+    hmr:{protocol:'wss', clientPort:443, path:${JSON.stringify(`/_live/${sessionId}/hmr`)}},
+    fs:{strict:true, allow:['/workspace','/dependencies'], deny:['**/.env*','**/.git/**','**/*.pem','**/*.key']}}};`;
+}
