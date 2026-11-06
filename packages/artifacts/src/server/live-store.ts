@@ -31,6 +31,7 @@ export interface LiveTransaction {
   record: LiveDraftRecord | undefined;
   getObject(ref: string): Promise<LiveEnvelope | undefined>;
   putObject(ref: string, envelope: LiveEnvelope): Promise<void>;
+  collectObjects(): Promise<number>;
   receipt(actorId: string, key: string): Promise<LiveReceipt | undefined>;
   complete(command: LiveCommand, result: LiveResult): Promise<void>;
   reserveCommit(actorId: string, invocationId: string, now: string): Promise<void>;
@@ -64,6 +65,15 @@ export function createMemoryLiveStore(): LiveStore {
         if (objects.has(id + ref) || pendingObjects.has(id + ref)) throw new ArtifactOperationError('command_conflict');
         pendingObjects.set(id + ref, structuredClone(value));
       },
+      async collectObjects() {
+        let count = 0;
+        for (const key of objects.keys()) {
+          if (key.startsWith(id) && key !== id + tx.record?.objectRef) {
+            pendingObjects.set(key, undefined as unknown as LiveEnvelope); count++;
+          }
+        }
+        return count;
+      },
       receipt: async (actor, key) => structuredClone(receipts.get(receiptKey(actor, key))),
       async complete(command, result) {
         const key = receiptKey(command.actorId, command.key);
@@ -80,7 +90,7 @@ export function createMemoryLiveStore(): LiveStore {
     };
     const result = await action(tx);
     if (tx.record) records.set(id, structuredClone(tx.record));
-    for (const [key, object] of pendingObjects) objects.set(key, object);
+    for (const [key, object] of pendingObjects) { if (object) objects.set(key, object); else objects.delete(key); }
     for (const [key, receipt] of pendingReceipts) receipts.set(key, receipt);
     quota.push(...pendingQuota);
     return structuredClone(result);
