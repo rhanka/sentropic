@@ -1058,9 +1058,9 @@ ci-performance-capture: ## Capture one exact attempt, expanded jobs and dispatch
 	@gh api repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT) > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/run.json"
 	@gh api --paginate 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT)/jobs?per_page=100' | jq -s '[.[].jobs[]]' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/jobs.json"
 	@gh api 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/artifacts?per_page=100' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/artifacts.json"
-	@gh run download $(CI_RUN_ID) --repo rhanka/sentropic --name ci-expected-$(CI_RUN_ID)-$(CI_RUN_ATTEMPT) --dir "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)" || \
+	@test -f "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/expected.json" || gh run download $(CI_RUN_ID) --repo rhanka/sentropic --name ci-expected-$(CI_RUN_ID)-$(CI_RUN_ATTEMPT) --dir "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)" || \
 		printf '%s\n' '{"status":"missing","reason":"dispatch artifact unavailable"}' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/missing-manifest.json"
-	@jq -n --slurpfile run "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/run.json" --slurpfile jobs "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/jobs.json" '{run:$$run[0],jobs:$$jobs[0]}' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capture.json"
+	@jq -n --arg capturedAt "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" --slurpfile run "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/run.json" --slurpfile jobs "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/jobs.json" '{capturedAt:$$capturedAt,run:$$run[0],jobs:$$jobs[0]}' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capture.json"
 ci-performance-dispatch: ## Qualify the wagon through CI without opening a PR or publishing a release
 	@test -n "$(CI_PROOF_REF)" && test "$(CI_PROOF_REF)" != main
 	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_PROOF_REF)" -f bootstrap_publish_target=none
@@ -1071,11 +1071,13 @@ test-ci-performance-report: ## Reject incomplete, failed, rerun and undersampled
 # BR84-EX2: dossier dependencies stay in a lane-owned volume, never host node_modules.
 CI_DOSSIER = spec/ci-cd-ten-minutes/dossier
 CI_DOSSIER_NODE = node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+CI_DOSSIER_BROWSER_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0-noble
+CI_DOSSIER_PULL ?= never
 CI_DOSSIER_MOUNTS = -v "$(CURDIR):/workspace" -v "$(ENV)-ci-dossier-deps:/workspace/$(CI_DOSSIER)/node_modules" -w /workspace/$(CI_DOSSIER)
-CI_DOSSIER_RUN = docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) $(CI_DOSSIER_NODE)
+CI_DOSSIER_RUN = docker run --rm --pull=$(CI_DOSSIER_PULL) -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) $(CI_DOSSIER_NODE)
 .PHONY: ci-dossier-tools build-ci-dossier test-ci-dossier clean-ci-dossier
 ci-dossier-tools: ci-test-env
-	@docker run --rm --pull=never -v "$(ENV)-ci-dossier-deps:/deps" $(CI_DOSSIER_NODE) chown "$$(id -u):$$(id -g)" /deps
+	@docker run --rm --pull=$(CI_DOSSIER_PULL) -v "$(ENV)-ci-dossier-deps:/deps" $(CI_DOSSIER_NODE) chown "$$(id -u):$$(id -g)" /deps
 	@$(CI_DOSSIER_RUN) npm ci --ignore-scripts --no-audit --no-fund
 	@$(CI_DOSSIER_RUN) sh -ec 'mkdir -p node_modules/.ci-diagram-source; tar -xzf vendor/diagram-source.tgz -C node_modules/.ci-diagram-source; node scripts/contract-evidence.mjs'
 build-ci-dossier: ci-dossier-tools ## Typecheck, lint and build the portable measured dossier
@@ -1084,7 +1086,7 @@ build-ci-dossier: ci-dossier-tools ## Typecheck, lint and build the portable mea
 	@$(CI_DOSSIER_RUN) npm run build
 test-ci-dossier: build-ci-dossier ## Qualify graph calculation and controls in the exported portable artifact
 	@$(CI_DOSSIER_RUN) npm test
-	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) mcr.microsoft.com/playwright:v1.63.0 node node_modules/@playwright/test/cli.js test
+	@docker run --rm --pull=$(CI_DOSSIER_PULL) -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) $(CI_DOSSIER_BROWSER_IMAGE) node node_modules/@playwright/test/cli.js test
 clean-ci-dossier: ci-test-env ## Remove only this lane's dossier dependency volume
 	@docker volume rm $(ENV)-ci-dossier-deps
 
