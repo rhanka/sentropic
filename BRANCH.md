@@ -47,6 +47,8 @@
 - [ ] Operator follows the runbook after owner authorization; no preprod UAT in this build lane.
 
 ## Plan / Todo (lot-based)
+- [x] Review R5 annex: exact make fence/delete/scale/rehearsal/recovery invocations, immutable procedure/command bindings, separate restore allocation/identity, original/target pins/states, tenant backup ownership, rollback loss policy and 2026-11-05 fresh-auth acceptance required before signature.
+- [x] Reviews R1/R5 procedure: explicit internal -> restricted UI -> public HTTP -> limited IdP -> fresh-auth sequence, excluded-source proof, preserved general fence and refence on failure.
 - [x] Reviews R2–R4 documentation: both runtime consumers, rotation-compatible composition, pre-fence D11 qualification and separate fresh tenant rollback evidence documented without imposing a final-dump restore.
 - [x] Review R1 acceptance: simulate the ordered resume from the actual rendered preprod Ingress/workload topology; stopped proxy and absent restriction refuse before HTTP; only API/UI/IdP resume in the test.
 - [x] Review R2 acceptance: scoped IdP shared email-code HTTP handler loads the real runtime policy and token custodian; missing policy/approval/keys refuse before the isolated transaction double, and absent qualified deletion budgets refuse.
