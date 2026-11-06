@@ -13,6 +13,10 @@ kind: ConfigMap
 metadata:
   name: api
 data:
+  CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: "/run/cm-cutover/checkpoint.json"
+  CM_IDENTITY_EMAIL_CODE_POLICY: "hmac-sha256"
+  # Existing owner decision and custody method; see the HMAC credential-cycle runbook.
+  CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: "qk-secret-custody-r2:Q-K=A:2026-11-02"
   WEBAUTHN_RP_ID: "preprod.sentropic.sent-tech.ca"
   WEBAUTHN_ORIGIN: "https://preprod.sentropic.sent-tech.ca"
   # Public base URL for magic-link login emails, and the base of the POST-OAuth app RETURN url

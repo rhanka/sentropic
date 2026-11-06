@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sentropic-a4-custody
+  namespace: sentropic-preprod
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: block-standard
+  resources:
+    requests:
+      storage: 20Gi

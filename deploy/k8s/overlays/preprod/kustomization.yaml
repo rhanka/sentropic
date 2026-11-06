@@ -14,6 +14,7 @@ resources:
   - ingress.yaml
   - artifact-content-ingress.yaml
   - idp-identity-sync
+  - a4-runtime
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
 #   images:
@@ -25,5 +26,7 @@ resources:
 patches:
   - path: patch-artifact-content-config.yaml
   - path: patch-api-config.yaml
+  - path: patch-api-a4.yaml
   - path: patch-auth-idp-config.yaml
+  - path: patch-auth-idp-a4.yaml
   - path: patch-postgres-storageclass.yaml
