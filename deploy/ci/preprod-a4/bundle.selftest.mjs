@@ -6,6 +6,9 @@ const { parseAllDocuments } = createRequire(process.env.A4_YAML_PACKAGE ?? '/wor
 const load = tier => parseAllDocuments(readFileSync(`/rendered/${tier}.yaml`, 'utf8')).map(doc => doc.toJSON());
 const recovery = load('preprod'), preprod = load('preprod-a4'), prod = load('prod');
 const object = (objects, kind, name) => objects.find(object => object.kind === kind && object.metadata.name === name);
+for (const objects of [recovery, preprod]) {
+  for (const resource of objects) assert.equal(resource.metadata.namespace, 'sentropic-preprod', `${resource.kind}/${resource.metadata.name}`);
+}
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
   const pod = object(recovery, 'Deployment', name).spec.template.spec;
   const tag = name === 'ui' ? 'sentropic-ui:434fe5' : 'sentropic-api:f2313a';
