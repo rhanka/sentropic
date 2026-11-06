@@ -83,5 +83,39 @@ export function gitBindingConformance(name: string, fresh: () => Promise<GitBind
       expect(outcomes.filter(o => o.status === 'fulfilled')).toHaveLength(1);
       expect(outcomes.filter(o => o.status === 'rejected')).toHaveLength(1);
     });
+
+    it('should refuse out-of-namespace refs without an audit or receipt', async () => {
+      const store = await fresh();
+      await expect(store.write(gitWrite({ ...gitBinding(), branch: 'main' })))
+        .rejects.toMatchObject({ kind: 'git_ref_not_allowed' });
+      expect(await store.get('scope-a', gitBinding().artifactId)).toBeUndefined();
+      expect(await store.events('scope-a', gitBinding().artifactId)).toEqual([]);
+      expect((await store.write(gitWrite())).replayed).toBe(false);
+    });
+
+    it('should allow a detached branch to be reclaimed while retaining its old row', async () => {
+      const store = await fresh();
+      await store.write(gitWrite());
+      await store.write({ ...gitWrite({ ...gitBinding(), state: 'detached', version: 2, generation: 2 }, 'detach'),
+        expectedVersion: 1, event: { action: 'detach' } });
+      await store.write(gitWrite(gitBinding('22222222-2222-4222-8222-222222222222'), 'reclaim'));
+      expect(await store.get('scope-a', gitBinding().artifactId)).toMatchObject({ state: 'detached' });
+    });
+
+    it('should refuse inbound resume and retain a missing-branch condition through pause', async () => {
+      const store = await fresh();
+      await store.write(gitWrite());
+      const missing = { ...gitBinding(), state: 'diverged' as const, stateDetail: 'git_branch_missing',
+        generation: 2, version: 2 };
+      await store.write({ ...gitWrite(missing, 'missing'), expectedVersion: 1, event: { action: 'inbound' } });
+      const paused = { ...missing, state: 'paused' as const, version: 3, generation: 3 };
+      await store.write({ ...gitWrite(paused, 'pause'), expectedVersion: 2, event: { action: 'pause' } });
+      for (const action of ['resume', 'inbound'] as const) {
+        await expect(store.write({ ...gitWrite({ ...paused, state: 'attached', stateDetail: undefined,
+          version: 4 }, action), expectedVersion: 3, event: { action } }))
+          .rejects.toMatchObject({ kind: 'invalid_request' });
+      }
+      expect(await store.get('scope-a', gitBinding().artifactId)).toEqual(paused);
+    });
   });
 }
