@@ -56,6 +56,7 @@
   - [x] Add Postgres binding/receipt/event transaction and cross-process replay locking.
   - [x] Author `tests/git-release-index.integration.test.ts` for rebuild cardinality, isolation and immutability.
   - [x] Fix fixture SQL parameter types after first Postgres run; migrations applied successfully.
+  - [x] Implement scope-filtered release-index readers through the existing Postgres package export.
 - [ ] Lot 4: artifacts_get code-right projection and unchanged set_access read-only grant snapshot.
   - [x] Author MCP transition projection and frozen access-definition tests before wiring.
   - [x] Wire code-right-only artifacts_get projection; unavailable rights omit git entirely.
