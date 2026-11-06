@@ -54,16 +54,16 @@
   - `Makefile` under BR83-EX2
   - `apps/auth-idp/tsconfig.json` under BR83-EX3
   - `e2e/tests/08-chat-workspace-switch.spec.ts` under BR83-EX4
-  - `deploy/k8s/base/36-oauth-register-client-job.yaml` under BR923-EX1
+  - `deploy/k8s/base/36-oauth-register-client-job.yaml` under BROJ-EX1
   - `plan/69-BRANCH_feat-ci-consumer-contracts.md` under BRTRAIN-EX1
   - `tools/memory-mcp-l5/artifacts/**` under BRTRAIN-EX2
 
 ## Feedback Loop
-- [x] TRAIN-R1 — Consolidated review reproduced missing worker-script CSP (four failing MIME vectors); apply the application policy to asset responses, preserve HTML-only inline hashes, SVG/PDF sandbox and unchanged safe mode. Scoped regression gate required before push.
+- [x] TRAIN-R1 — Missing worker-script CSP reproduced in four MIME vectors and Chromium 148; corrected application responses block external fetch/eval/Wasm while same-origin reads work. CSP 26/26 and content 79/79 PASS; safe mode and SVG/PDF sandbox preserved.
 - [x] TRAIN-R2 — Bind JSON/form grants to the displayed scope version and reject missing/stale versions without granting a widened scope; regression 5/5 PASS after reproducing missing version binding.
 - [x] TRAIN-R3 — Retain all core integration jobs and affected owners even when missing/unselected; broaden UI validation for API runtime changes under BR83-EX1. Two regression cases failed before the fix; consumer-contract fixtures 23/23 PASS.
 - [x] TRAIN-R4 — Require existing UI build job identities and main-only deployment only on main; select IdP smoke for UI changes under BR83-EX1. Real-workflow UI/shared PR/main and API runtime cases pass; wiring fixtures 39/39 PASS.
-- [x] BR923-EX1 — #923 OAuth registration job workingDir only; reason: npm must run inside its package; impact: job startup; rollback: revert workingDir.
+- [x] BROJ-EX1 — #923 OAuth registration job workingDir only; reason: npm must run inside its package; impact: job startup; rollback: revert workingDir.
 - [x] BR83-EX1 — #921 CI classifier/contracts/tuple dispatch; reason: prove omitted consumers unchanged; impact: CI selection/verdict; rollback: revert wagon workflow edits.
 - [x] BR83-EX2 — #921 named Make entry points; reason: reproducible CI tooling gates; impact: tooling recipes; rollback: revert wagon recipes.
 - [x] BR83-EX3 — #921 IdP tsconfig test include; reason: candidate-contract static coverage; impact: test inclusion; rollback: restore prior include.
@@ -86,8 +86,9 @@
 - [x] **Lot 1 — Integration**: merge #923, then #921, then #924; keep this single plan and preserve implementation changes.
 - [x] **Lot 2 — Artifacts**: check published version below 0.2.17; regenerate root/API/selected locks, selected archive integrity, APP-P1 digest and L5 P1 once through Make.
 - [x] **Lot 3 — Scoped gates**: publishable wiring/classification, compatibility, consumer contracts, installed tuple; artifacts CSP/handler/MIME, content-host application mode, reader-grant/registry and selected packaging tuple tests.
-- [x] Local receipts: compatibility 18/18, consumer contracts 21/21, installed tuples 10/10, publishable wiring/classification 57/57; `make test-artifacts SCOPE=tests/content-` 75/75.
-- [x] Scoped host receipts through `.tmp/train/integration.mk`: application wrapper 4/4; API registry/grant/consent 31/31; selected tuple/preparation 24 passed with three installed-fixture-only tests deferred to full CI.
-- [x] Integration receipt: artifacts archive SHA-256 `89c31a33af3a6e30c38900dac3bfa4da606458a5d28276c5a07505f5f3743f70`; APP-P1 `0725ef3044cf06b04eaae5f407cc364e8c3c8ef570b6835b9aa0038fb556f34b`; L5 `e46814a6678a1bc2b9aedff17c64a2eab522689f250b040134f5de96ad7cbb5c`, packed graph 30 files/54 edges PASS.
+- [x] Local receipts: compatibility 18/18, consumer contracts 23/23, installed tuples 10/10, publishable wiring/classification 59/59; `make test-artifacts SCOPE=tests/content-` 79/79.
+- [x] Scoped host receipts through `.tmp/train/integration.mk`: application wrapper 4/4; API registry/grant/consent 33/33; selected tuple/preparation 24 passed with three installed-fixture-only tests deferred to full CI.
+- [x] Final archive after review remediation: SHA-256 `08df842f9873356e8d0c1ed834763df0bc1160544c73f4883e4446db67a763d8`; selected integrity re-pinned through Make. Root/API lock refresh, APP-P1 digest and L5 generation were not repeated.
+- [x] Integration receipt: APP-P1 `0725ef3044cf06b04eaae5f407cc364e8c3c8ef570b6835b9aa0038fb556f34b`; L5 `e46814a6678a1bc2b9aedff17c64a2eab522689f250b040134f5de96ad7cbb5c`, packed graph 30 files/54 edges PASS.
 - [ ] **Lot 4 — Review and CI**: consolidated final-diff review, mechanical scope/branch gates; push review-ready head, open one READY PR, watch attempt 1 and fix evidenced root causes.
 - [ ] **Lot 5 — Handoff**: report `.tmp/rv/train-2026-11-06.md`; clean test volumes; leave train unmerged and wagons open for conductor.
