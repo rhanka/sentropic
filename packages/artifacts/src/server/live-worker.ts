@@ -1,4 +1,4 @@
-import { persistLiveOverlay, readLiveOverlay } from './live-drafts.js';
+import { expireLiveDraft, persistLiveOverlay, readLiveOverlay } from './live-drafts.js';
 import type { LiveIdentity } from './live-store.js';
 import type { LiveServiceDeps } from './live-contracts.js';
 
@@ -26,10 +26,12 @@ export async function settleLiveWorker(input: { deps: LiveServiceDeps; identity:
         const record = tx.record; const runtime = record?.runtime;
         if (!record || !runtime || ack.liveSessionId !== runtime.liveSessionId || ack.leaseEpoch !== runtime.leaseEpoch ||
           ack.revision !== record.revision || !['REVIVING', 'RUNNING'].includes(runtime.phase)) return;
+        const at = (deps.now ?? Date.now)();
+        if (expireLiveDraft(tx, at)) return;
         if (runtime.renewOnReady && record.changedPaths) {
           const overlay = await readLiveOverlay(tx, deps.keys);
           const renewed = await persistLiveOverlay(tx, deps.keys, { identity, expectedRevision: record.revision,
-            baseHeadSha: record.baseHeadSha, baseTreeSha: record.baseTreeSha, liveTreeSha: record.liveTreeSha, overlay }, now);
+            baseHeadSha: record.baseHeadSha, baseTreeSha: record.baseTreeSha, liveTreeSha: record.liveTreeSha, overlay }, at, true, true);
           // Source revision remains fenced to the worker ACK; reauthentication is handled by the vault.
           result.draftExpiresAt = renewed.expiresAt;
         }
