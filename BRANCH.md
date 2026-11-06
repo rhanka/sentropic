@@ -20,6 +20,7 @@
   - `scripts/ci/ci-static.test.mjs`
   - `scripts/ci/ci-expected-results.mjs`
   - `scripts/ci/ci-expected-results.test.mjs`
+  - `scripts/ci/ci-performance-report.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -33,7 +34,7 @@
 ## Feedback Loop
 - [x] BR85a-EX1 — Owner authorized CI caching/sharding requires Make entry points. Impact: additive CI recipes and host scope-check on constrained disk; rollback: revert added include/recipes together with workflow.
 - [ ] Conductor imports this mergeable plan and delivery evidence into Track as designated single writer.
-- [ ] Coordinate through git with `origin/test/ci-ten-minute-proof` when published; preserve measurement and optimization changes on rebase.
+- [x] Rebased onto `origin/test/ci-ten-minute-proof` at `791150e53`; retained captures, campaign checks and all existing qualifications; no package source/version/lock changes, so post-rebase package publication gate is not triggered.
 
 ## AI Flaky tests
 - [x] No exception, increased timeout or retry authorized.
@@ -47,9 +48,9 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read common/master/workflow/testing/template and harness rules; mechanical harness branch check passed.
 - [x] Lot 1: add exact-toolbox compiler/linter Make recipes with mounted incremental caches; split API/IdP/web checks and retain static release join.
-- [ ] Lot 1 gate: `scripts/ci/ci-static.test.mjs`, `scripts/ci/ci-dag.test.mjs`, `scripts/ci/ci-expected-results.test.mjs` validate complete expected membership and cache isolation.
+- [x] Lot 1 gate: `scripts/ci/ci-static.test.mjs`, `scripts/ci/ci-dag.test.mjs`, `scripts/ci/ci-expected-results.test.mjs` pass; incremental cache mounts remain separate from toolbox sources and verdicts.
 - [x] Lot 2: shard budget, static/package/consumer, unit, integration and activation qualifications without altering suite membership; require all shards in artifact join and final gate.
-- [ ] Lot 2 gate: fixture failures, missing/skipped/cancelled shards block promotion; all prior Make commands retained.
+- [x] Lot 2 gate: fixture failures, missing/skipped/cancelled shards block promotion; all prior qualifications retained; `test-ci-performance-report` passes after rebasing BR-84.
 - [ ] Lot 3: scope check per atomic make commit; push branch; obtain fresh PR CI timing run; inspect logs and fix regressions.
 - [ ] Lot 3 gate: record run ID, SHA, attempt, wall time, per-job durations, cache results and remaining bottlenecks in `.tmp/rv/ci10-a.md`.
 - [ ] Cleanup: `make down-volumes ENV=test-ci10-a`; disk-hygiene if available; no root-owned file removal.

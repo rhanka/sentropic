@@ -1020,7 +1020,7 @@ test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
 CI_PROOF_DIR ?= tmp/ci-performance
 CI_PROOF_REF ?= $(shell git branch --show-current)
 CI_PROOF_INPUT ?= spec/ci-cd-ten-minutes/runs.json
-.PHONY: ci-performance-capture ci-performance-report test-ci-performance-report ci-performance-dispatch ci-static-api
+.PHONY: ci-performance-capture ci-performance-report test-ci-performance-report ci-performance-dispatch
 ci-performance-retain: ## Retain sanitized API captures as the versioned report input
 	@mkdir -p spec/ci-cd-ten-minutes
 	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --collect $(CI_PROOF_DIR) > "$(CI_PROOF_INPUT).new"
@@ -1041,11 +1041,6 @@ ci-performance-report: ## Report retained real-run measurements; REQUIRE_PROOF=1
 	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --input $(CI_PROOF_INPUT) $(if $(filter 1,$(REQUIRE_PROOF)),--require-proof) $(if $(filter 1,$(CI_PROOF_JSON)),--json)
 test-ci-performance-report: ## Reject incomplete, failed, rerun and undersampled performance claims
 	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-performance-report.test.mjs'
-ci-static-api: ci-test-env ## Run complete API/IdP compiler and API linter programs on the exact qualified toolbox
-	@docker run --rm --pull=never --network none -w /workspace/api $(API_TOOL_IMAGE) npm run typecheck
-	@docker run --rm --pull=never --network none -w /workspace $(API_TOOL_IMAGE) ./node_modules/.bin/tsc --noEmit --project apps/auth-idp/tsconfig.json
-	@docker run --rm --pull=never --network none -w /workspace/api $(API_TOOL_IMAGE) npm run lint
-
 test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
 
