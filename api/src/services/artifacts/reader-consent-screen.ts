@@ -53,6 +53,7 @@ export function renderConsentScreen(params: ConsentScreenParams): string {
 <form method="post" action="grant">
 <input type="hidden" name="artifactId" value="${artifactId}">
 <input type="hidden" name="scopeId" value="${scopeId}">
+<input type="hidden" name="scopeVersion" value="${scopeVersion}">
 <button type="submit">Allow access</button>
 </form>
 ${support}
