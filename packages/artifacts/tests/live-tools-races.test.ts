@@ -78,3 +78,28 @@ it('should refuse no-op commits and allow deleting an uncommitted new file', asy
   await w.write({ deletes: ['ui/new.ts'] });
   expect((await w.status()).dirty).toBe(false);
 });
+it('should retain one commit intent when a concurrent retry loses the forge CAS', async () => {
+  const w = liveWitness(); const files = [{ path: 'ui/a.ts', text: 'concurrent commit' }];
+  const written = await w.write({ files });
+  const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; });
+    return { promise, resolve }; };
+  const entered = deferred(); const raced = deferred(); const advanced = deferred(); const finish = deferred();
+  const committedSha = 'c'.repeat(40);
+  w.git.commit.mockImplementationOnce(async () => {
+    entered.resolve(); await raced.promise;
+    w.setHead(committedSha); advanced.resolve(); await finish.promise;
+    return { commitSha: committedSha, treeSha: written.liveTreeSha };
+  }).mockImplementationOnce(async () => {
+    raced.resolve(); await advanced.promise; throw new ArtifactOperationError('git_head_moved');
+  });
+  const args = { files, expectedHeadSha: written.baseHeadSha, message: 'One commit', idempotencyKey: 'concurrent' };
+  const first = w.call('git_commit', args);
+  await entered.promise;
+  const second = await w.call('git_commit', args).then(result => result, error => error);
+  finish.resolve();
+  await expect(first).resolves.toMatchObject({ commitSha: committedSha });
+  expect(second).toMatchObject({ kind: 'git_live_conflict', details: { publicDetails: { reason: 'commit_indeterminate' } } });
+  expect(await w.call('git_commit', args)).toMatchObject({ commitSha: committedSha, replayed: true });
+  expect((await w.status()).dirty).toBe(false);
+  expect(w.git.commit).toHaveBeenCalledTimes(2);
+});

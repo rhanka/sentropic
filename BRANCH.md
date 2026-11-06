@@ -84,6 +84,8 @@
 
 ## Feedback Loop
 
+- [x] TRAIN0218-LIVE-R3: retain a durable commit intent when the same command's concurrent forge CAS loses, and return the existing indeterminate outcome for reconciliation. Deferred two-request regression fails before, passes after with winner finalization, clean draft and replay; source freeze/lost-response coverage retained. Scoped artifacts 108/108 including Postgres 11/11, build and lint pass (three unchanged warnings). Rollback restores this catch classification and regression.
+
 - [x] TRAIN0218-LIVE-R2: reject registry authority-like paths and assign the admitted pathname on a fixed relay URL, preventing relative-URL authority replacement. Matching-SRI transport-spy regression fails before and passes after with zero outbound calls; ordinary relay fetch/integrity checks retained. Live suite 61/61, strict types and scoped lint pass. Rollback restores these adapter/test lines.
 
 - [x] TRAIN0218-LIVE-R1: preserve the exact session HMR path and approved token upstream. The real-authorizer/path-sensitive native upgrade and endpoint assertions fail before (2/60) and pass after; credential stripping and immediate revocation remain checked. Combined live suite 61/61, strict types and scoped lint pass. Rollback restores the proxy/test change; production gates remain.
