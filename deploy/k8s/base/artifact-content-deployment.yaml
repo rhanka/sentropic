@@ -34,7 +34,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: artifact-content
-          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          image: ghcr.io/rhanka/sentropic-api:main
           imagePullPolicy: Always
           workingDir: /workspace
           command: [node, apps/artifact-content/dist/index.js]
