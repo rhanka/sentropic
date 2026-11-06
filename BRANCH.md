@@ -43,13 +43,14 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read binding contracts, create isolated worktree and mechanically check branch.
-- [ ] Lot 1 — Tests first: live-draft conformance (memory/Postgres), live service and frozen catalogue.
+- [x] Lot 1 — Tests first: live-draft conformance (memory/Postgres), live service and frozen catalogue.
   - [x] Specify shared vault durability, CAS, cap, replay and expiry behaviors before implementation.
-- [x] Lot 2 — Encrypted immutable drafts, atomic pointers/results and TTL tombstones; memory 5/5 and Postgres 6/6.
-- [ ] Lot 3 — Five tools, typed failures, source policy, exact snapshot commit and transport wiring.
+- [x] Lot 2 — Encrypted immutable drafts, atomic pointers/results, TTL tombstones, key rotation and collection; memory 9/9 and Postgres 11/11.
+- [x] Lot 3 — Five tools, typed failures, source policy, exact snapshot commit and transport wiring.
   - [x] Five definitions appended after G0; service snapshot/recipe, A1 refusal and drift/reset tests pass 4/4.
 - [ ] Lot 4 — Scoped tests, typecheck/lint, evidence and branch push.
-  - [ ] tests/live-drafts.test.ts and tests/live-drafts.integration.test.ts.
-  - [ ] tests/live-tools.test.ts and tests/live-tools-transport.test.ts.
-  - [ ] tests/tools-list-snapshot.test.ts; deliberate 24 to 35 catalogue extension.
+  - [x] tests/live-drafts.test.ts and tests/live-drafts.integration.test.ts.
+  - [x] tests/live-tools.test.ts, live-tools-races.test.ts, live-tools-pages.test.ts, live-tree.test.ts, live-body.test.ts and live-tools-transport.test.ts.
+  - [x] tests/tools-list-snapshot.test.ts; deliberate 24 to 35 catalogue extension; all 24 original definitions unchanged.
+  - [x] Scoped memory/transport/profile/GitPort verification: 269 tests pass; Postgres 11 pass; typecheck and changed-file lint pass.
   - [ ] Run make down-volumes ENV=test-live-tools and disk-hygiene when available.
