@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { assertConfig } from './publish-image.mjs';
 import { publicImage } from './public-image.mjs';
 
@@ -39,4 +43,23 @@ test('should reject private packages, corrupt bytes and a changed pinned digest'
 test('should reject an external registry or a package outside the approved three', async () => {
   await assert.rejects(publicImage('registry.example/sentropic-api:abcdef'), /Expected a public/);
   await assert.rejects(publicImage('ghcr.io/rhanka/other:abcdef'), /Expected a public/);
+});
+
+test('should reject a retired registry in hidden tracked files without printing file contents', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'registry-guard-'));
+  const guard = resolve('scripts/ci/check-image-registry.mjs');
+  try {
+    mkdirSync(join(dir, 'bin')); mkdirSync(join(dir, '.github'));
+    writeFileSync(join(dir, 'bin/git'), `#!${process.execPath}\nprocess.stdout.write('.github/fixture.yaml\\0');\n`, { mode: 0o755 });
+    const file = join(dir, '.github/fixture.yaml');
+    const run = () => spawnSync(process.execPath, [guard], { cwd: dir,
+      env: { ...process.env, PATH: `${dir}/bin:${process.env.PATH}` }, encoding: 'utf8' });
+    writeFileSync(file, 'image: ghcr.io/rhanka/sentropic-api:main\n');
+    assert.equal(run().status, 0);
+    writeFileSync(file, `private-content ${['rg', 'fr-par', 'scw', 'cloud'].join('.')}/old\n`);
+    const denied = run();
+    assert.equal(denied.status, 1);
+    assert.match(denied.stderr, /\.github\/fixture.yaml/);
+    assert.doesNotMatch(denied.stderr, /private-content/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
