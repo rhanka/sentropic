@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 -include .env
 # Public image namespace is independent of legacy local/Actions configuration.
-export REGISTRY := ghcr.io/rhanka
+export REGISTRY := $(if $(filter local ghcr.io/rhanka,$(REGISTRY)),$(REGISTRY),ghcr.io/rhanka)
 
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
@@ -761,6 +761,7 @@ publish-api-image: docker-login
 	@echo "▶ Pushing api image to registry"
 	@$(MAKE) verify-api-image ENV=$(ENV)
 	@bash scripts/publish-api-image.sh
+	@node scripts/ci/publish-image.mjs api
 
 .PHONY: publish-api-main-image
 publish-api-main-image: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
@@ -777,7 +778,7 @@ pull-ui-image:
 
 publish-ui-image: docker-login
 	@echo "▶ Pushing ui image to registry"
-	@docker push $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)
+	@node scripts/ci/publish-image.mjs ui
 
 check-e2e-image:
 	@echo "▶ Checking if image $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) exists"
@@ -789,7 +790,7 @@ pull-e2e-image:
 
 publish-e2e-image: docker-login
 	@echo "▶ Pushing e2e image to registry "
-	@docker push $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)
+	@node scripts/ci/publish-image.mjs e2e
 
 .PHONY: check-ci-version-filters
 check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every API_VERSION/UI_VERSION hash input
