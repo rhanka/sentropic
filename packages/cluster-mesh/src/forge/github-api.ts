@@ -60,9 +60,10 @@ export const createGitHubAppApi = (input: {
       if (typeof repository.full_name !== 'string') throw unavailable();
       return { token: response.token, expiresAt: response.expires_at, permissions: response.permissions,
         repositoryIds: [id], locator: repository.full_name };
-    } catch (error) {
+    } catch {
       try { await revokeToken(response.token); } catch { /* Remains unleased and never leaves custody. */ }
-      throw error instanceof GitAppAccessLostError ? error : unavailable();
+      // A refused mint response does not establish loss of the App installation.
+      throw unavailable();
     }
   };
   return {
