@@ -3643,7 +3643,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report ENV=test-ci-capacity
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report test-ci-static ENV=test-ci-capacity
       - name: Qualify provider boundary, browser membership and live receipts
         run: make test-ci-provider-fixtures test-ci-browser-shards test-ci-live-provider-receipt test-ci-dev-image-pin check-e2e-inventory ENV=test-ci-capacity
       - name: Qualify artifact dispatch and fail-closed scan joins
