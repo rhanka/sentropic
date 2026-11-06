@@ -41,6 +41,7 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-BYTES — Always publish the transported tested UI artifact, refuse config-digest collisions for all three images, promote aliases from the loaded image ID, and retain registry manifest/config receipts. The original API collision guard remains active.
 - [x] GHCR-DELIVERY — CI registry is explicit, publishers alone receive GITHUB_TOKEN packages:write, all steady-state private-registry credentials and pull-secret creation are removed; public pulls are anonymous.
 - [x] GHCR-REF3 — Security qualification evidence, operator runbook, infrastructure fixture and archived registry URLs now name GHCR.
 - [x] GHCR-REF2 — Base workloads, both tier overlays, recovery pins and sync CronJobs now use GHCR; historical baseline URLs follow the owner-requested repository-wide removal.
