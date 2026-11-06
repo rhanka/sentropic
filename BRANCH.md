@@ -77,6 +77,7 @@
   - [x] Permit only Vite's ephemeral HMR query token at the exact endpoint and pin its internal allowed host.
   - [x] Document host integrations and distinguish fake acceptance from production qualification.
   - [x] Normalize malformed cache receipts and lock records to closed admission errors.
+  - [x] Keep the lost-response fake's original implementation separate from its spy wrapper.
 - [ ] Lot 5: authenticated content proxy, exact HMR endpoint, live-only CSP and egress policy.
   - [x] Add separate live consent/path gate, credential-stripping proxy, bounded responses and scoped egress.
   - [x] Authenticate the exact same-origin HMR upgrade and disconnect tunnels on live authority changes.
