@@ -69,4 +69,5 @@
 - [ ] Lot 6: scoped fake Kubernetes/forge/cache/publication race tests and content proxy tests.
   - [x] Add an isolated transactional fake store, Kubernetes Core fake and forge/worker fixture.
   - [x] Cover exact revive, idle threshold/activity, dirty conflicts, divergence and B2 publication counterexamples.
+  - [x] Exercise wake/build/finalization races, uncertain termination, interrupted work and store failures.
 - [ ] Lot 7: record evidence in `.tmp/rv/live-pod.md`, push without PR and remove test volumes.
