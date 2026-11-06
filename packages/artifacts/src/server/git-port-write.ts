@@ -41,7 +41,15 @@ export function gitWriter(options: GitPortOptions, sessions: ReturnType<typeof g
     if (!validIdentity(author)) throw new ArtifactOperationError('access_denied');
     if (!validIdentity(options.committer)) throw new ArtifactOperationError('provider_unavailable');
     const session = await sessions.open(repo);
-    const head = () => session.call((forge, context) => forge.resolve(context, target.branch));
+    const head = async () => {
+      try { return await session.call((forge, context) => forge.resolve(context, target.branch)); }
+      catch (error) {
+        if (error instanceof GitForgeError && error.code === 'missing') {
+          throw new ArtifactOperationError('git_branch_missing', { publicDetails: { branch: target.branch } });
+        }
+        throw error;
+      }
+    };
     const moved = (actualHeadSha: string) => new ArtifactOperationError('git_head_moved', {
       publicDetails: { expectedHeadSha, actualHeadSha },
     });
@@ -63,13 +71,15 @@ export function gitWriter(options: GitPortOptions, sessions: ReturnType<typeof g
       { parentSha: expectedHeadSha, treeSha, message, author, committer: options.committer, createdAt: input.createdAt }));
     assertGitSha(commitSha);
     if (!await options.authorize(target, true)) throw new ArtifactOperationError('access_denied');
-    try { await session.call((forge, context) => forge.advance(context, target.branch, expectedHeadSha, commitSha)); }
+    let submitted = false;
+    try { await session.call((forge, context) => { submitted = true; return forge.advance(context, target.branch, expectedHeadSha, commitSha); }); }
     catch (error) {
+      if (!submitted) throw error;
       if (error instanceof GitForgeError && error.code === 'conflict') {
         const actual = (await head()).sha;
         throw actual === expectedHeadSha ? new ArtifactOperationError('git_ref_not_allowed') : moved(actual);
       }
-      // Any other failure after submission is indeterminate, including transport/expiry failures.
+      // A transport failure after submission cannot prove whether the ref advanced.
       throw new GitPortAdvanceUnknown();
     }
     return { commitSha, treeSha };

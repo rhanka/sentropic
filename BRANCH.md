@@ -4,7 +4,7 @@
 - [ ] Deliver the G0 FROZEN v3 GitPort with enrolled cluster-mesh leases and fake-forge acceptance for the 0.2.18 train.
 
 ## Scope / Guardrails
-- [x] Branch `feat/git-artifact-sg2`; worktree `tmp/worktrees/sg2`; initial base `origin/main`, rebase onto `train/artifacts-0.2.18` when available.
+- [x] Branch `feat/git-artifact-sg2`; worktree `tmp/worktrees/sg2`; base `train/artifacts-0.2.18` at `c107f6abd`; rebase reports up to date.
 - [x] Binding contract SHA-256 `4c405c8f49e9d242d65eebe35a14a45e4826afc0007e9f94a7fe21d7404e21ba`; live owner decisions supersede CI execution.
 - [x] Docker via docker-slot.sh; make only; no Python, secrets in outputs or attribution trailers.
 - [x] Ports `API_PORT=9590 UI_PORT=5790 MAILDEV_UI_PORT=1690 ENV=test-sg2`; ENV always last.
@@ -60,6 +60,7 @@
   - [x] Add fake-HTTP protocol tests, complete-tree refusal, object hashing and sanitized driver failures.
   - [x] Add read-budget/binary/symlink boundaries and a test-only witness adapter that remains off without enrolled host input.
   - [x] Cover ancestor rewinds, commit inspection, readable main refs and byte-exact BOM handling.
+  - [x] Distinguish a missing branch, an unavailable forge and a lease that expired before ref submission.
 - [ ] Lot 3: GitHub transport, SHA-pinned directory pagination, commit objects and atomic conditional ref advance.
   - [x] Add bounded nonrecursive tree traversal with fixed-SHA resolution and symlink/gitlink refusal.
   - [x] Add MAC-bound caller/scope/SHA pagination, UTF-8/base64 reads and explicit omission reasons across the total budget.
