@@ -47,11 +47,11 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read binding rules and contract; mechanically verify branch; retrieve Immo PR #1012 descriptor.
-- [ ] **Lot 1 — Descriptor and typed refusals**
-  - [ ] Closed descriptor, safe paths, named script, missing lock/script, receipt types and exported validator.
-- [ ] **Lot 2 — Locked dependency and install policy**
-  - [ ] Refuse external dependencies and registry escapes; allow pinned repository workspace links.
-  - [ ] Host-owned exact package/version/integrity allowlist; `npm ci --ignore-scripts` default.
+- [x] **Lot 1 — Descriptor and typed refusals**
+  - [x] Closed descriptor, safe paths, named script, missing lock/script, receipt types and exported validator.
+- [x] **Lot 2 — Locked dependency and install policy**
+  - [x] Refuse external dependencies and registry escapes; allow pinned repository workspace links.
+  - [x] Host-owned exact package/version/integrity allowlist; `npm ci --ignore-scripts` default.
 - [ ] **Lot 3 — Validation and handoff**
   - [ ] `make test-artifacts SCOPE=tests/build-contract.test.ts ENV=test-gb1` (includes package compilation).
   - [ ] `make lint-artifacts ENV=test-gb1`; frozen tools/list regression.

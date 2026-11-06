@@ -67,6 +67,10 @@
     },
     "./sql/*": "./sql/*",
     "./migrations/*": "./migrations/*",
+    "./server/build-contract": {
+      "types": "./dist/server/build-contract.d.ts",
+      "import": "./dist/server/build-contract.js"
+    },
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
       "import": "./dist/server/ports.js"
