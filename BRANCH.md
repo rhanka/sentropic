@@ -34,6 +34,7 @@
 - [x] Track single-writer: this file is the mergeable source for conductor import; this lane does not write `.track/`.
 - [x] Review: one consolidated review on the train per owner wagon rule.
 - [ ] Train branch absent at initialization; rebase and target it before handoff.
+- [ ] GB1-TRAIN — owner: train integration conductor; remote train absent, inherited-bump rule and train PR CI admission unresolved; see `.tmp/rv/train-0218.md`. Acceptance: push the qualified train, rebase GB1, open one READY train-targeted PR and pass ordinary CI.
 
 ## AI Flaky tests
 - [x] No provider-dependent tests or accepted flakes.
@@ -57,5 +58,7 @@
   - [x] Tightened script names, pinned closure and receipt types; corrected compile-time failure mapping.
   - [x] Scoped acceptance: 36 tests passed with package compilation; lint passed with zero errors.
   - [x] `make test-artifacts SCOPE=tests/build-contract.test.ts ENV=test-gb1` (includes package compilation).
-  - [x] `make lint-artifacts ENV=test-gb1`; frozen tools/list regression.
-  - [ ] Cleanup `make down-volumes ENV=test-gb1`; push; one READY PR; CI green; report `.tmp/rv/gb1.md`.
+  - [x] `make lint-artifacts ENV=test-gb1`: zero errors, three warnings in the untouched lot2 test file.
+  - [x] Frozen tools/list regression: 1/1 passed; provider-failures regression: 100/100 passed.
+  - [x] Cleanup `make down-volumes ENV=test-gb1`; implementation pushed; report `.tmp/rv/gb1.md`.
+  - [ ] One READY PR targeting the train and ordinary CI green, after GB1-TRAIN resolves.
