@@ -69,6 +69,7 @@
   - [x] V2 cascade and injected atomic rollback pass; committed HTTP deletion returns 200 with explicit delivery_pending/complete=false until outbox delivery; four negative continuation tests pass.
   - [x] `remote-revocation.test.ts` restores account/profile/fence snapshots through the privileged fixture path; normal account creation continues refusing retired ids. Refused-delivery cases retain an empty private starting state and unchanged assertions.
   - [x] Review P1/P2: pass the verified continuation into both V2 authorization phases, recheck credential/epoch/expiry under lock, and reject stale deactivation credentials before mutation; forced refresh and active-DELETE races qualified.
+  - [x] Eight self-deletion regressions pass, including proof expiry after admission and after V2 reservation; original lifecycle assertions now exercise real account authentication.
 - [x] **Lot 2 — RC1 revocation fence**
   - [x] Restored issuer private authority mint/rotation after acknowledged CM commit, local revocation closure and private signing fence.
   - [x] All 35 remote-session tests pass; private-session and integrity units pass. Refused-revocation fixtures must explicitly start without private authority.
