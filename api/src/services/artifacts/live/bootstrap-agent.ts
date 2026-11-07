@@ -8,6 +8,7 @@
 import { DEPENDENCY_OPS_SOURCE } from './bootstrap-deps';
 import { FILE_OPS_SOURCE } from './bootstrap-files';
 import { MATERIALIZE_OPS_SOURCE } from './bootstrap-materialize';
+import { PROCESS_OPS_SOURCE } from './bootstrap-procs';
 
 const CORE_SOURCE = String.raw`
 import * as agentFs from 'node:fs/promises';
@@ -139,7 +140,8 @@ export function createAgent(options) {
       const entry = ctx.ops[request.op];
       const args = agentRecord(request.args, entry.args);
       agentFence(ctx.state, request.fence);
-      try { return await (entry.immediate ? entry.run(args) : serial(() => entry.run(args))); }
+      const fence = { ...request.fence };
+      try { return await (entry.immediate ? entry.run(args, fence) : serial(() => entry.run(args, fence))); }
       catch (error) {
         if (error instanceof AgentError) throw error;
         throw new AgentError('failed', error && error.code === 'EEXIST' ? 'duplicate_path' : 'io_error');
@@ -150,4 +152,5 @@ export function createAgent(options) {
 
 `;
 
-export const AGENT_SOURCE = CORE_SOURCE + FILE_OPS_SOURCE + DEPENDENCY_OPS_SOURCE + MATERIALIZE_OPS_SOURCE;
+export const AGENT_SOURCE = CORE_SOURCE + FILE_OPS_SOURCE + DEPENDENCY_OPS_SOURCE + MATERIALIZE_OPS_SOURCE
+  + PROCESS_OPS_SOURCE;
