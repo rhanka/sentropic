@@ -83,7 +83,7 @@ Mount the shipped cluster-mesh GitHub App router on the Sentropic public origin 
 - [ ] **Lot 3 — s-archi review fixes (`.tmp/rv/reviews/w1-alive-w1-26209d5f.md`, R1–R5)**
   - [x] R1 custody fail-closed: the mount gate refuses an absent, blank or dev-seed `SECRET_ENCRYPTION_KEY` (`isProvisionedSecretEncryptionKey`); the shared `v1` fallback is unchanged.
   - [x] R3+R4 host: public mount `/api/v1/github-app/*` translated onto the frozen package root; required enroll target (no `targets[0]` default); landing lists both registry targets; callbacks, redirects and form actions republished on the public mount; broker identity via a stripped per-request token header.
-  - [ ] R2+R4 edge: product `secureHeaders` skipped on `isGitHubAppPath`; ui nginx location `^/api/v1/github-app` with `access_log off` and error log at `crit`.
+  - [x] R2+R4 edge: product `secureHeaders` skipped on `isGitHubAppPath`; ui nginx location `^/api/v1/github-app` with `access_log off` and error log at `crit`.
   - [ ] R5 wiring: host spec moved to `api/tests/unit/services/cluster-mesh/github-app-host.test.ts` (unit suite, wired in CI).
   - [ ] Tests: host unit spec (custody gate, explicit target, public mount, headers, chunked broker body); product mount test `api/tests/api/github-app-product-mount.test.ts` (real app, admin_app session, CSP/referrer, both targets, gate refusal); store overlap forced through `pg_blocking_pids` with the deterministic 40001 refusal.
   - [ ] Local runs: none (host disk above 90%, no local image build); CI gate on `ENV=test-w1-fix`: typecheck-api, lint-api, the unit host spec, and the endpoints product-mount and store specs.
