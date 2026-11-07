@@ -1,87 +1,71 @@
-/** Pod agent section: source staging, host files, admitted overlays, clear and terminate. */
+/** Pod agent section: terminate, clear, source staging, host files and the atomic draft overlay (W3 ops). */
 export const FILE_OPS_SOURCE = String.raw`
 AGENT_SECTIONS.push(function fileOps(ctx) {
   const { state, at } = ctx;
-  ctx.resets.push(() => { state.staged = new Map(); state.stagedBytes = 0; state.revision = null; });
-  ctx.resets[0]();
+  ctx.resets.push(['/workspace', () => { state.staged = null; state.revision = null; }]);
+  state.staged = null;
   ctx.define('terminate', [], async () => {
     if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
     return { treeGone: true };
   }, true);
   ctx.define('clear', ['paths'], async ({ paths }) => {
-    if (!Array.isArray(paths) || paths.length !== AGENT_ROOTS.length || AGENT_ROOTS.some((r) => !paths.includes(r))) {
-      agentFail('failed', 'invalid_path');
-    }
+    if (!Array.isArray(paths) || paths.length === 0 || new Set(paths).size !== paths.length
+      || paths.some((p) => !AGENT_ROOTS.includes(p))) agentFail('failed', 'invalid_path');
     if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
-    for (const dir of AGENT_ROOTS) {
+    for (const dir of paths) {
       for (const name of await agentFs.readdir(at(dir))) {
         await agentUnlock(at(dir + '/' + name));
         await agentFs.rm(at(dir + '/' + name), { recursive: true, force: true });
       }
     }
-    for (const reset of ctx.resets) reset();
-    return {};
+    ctx.reset(paths);
+    return { cleared: [...paths] };
   });
-  ctx.define('stage', ['files'], async ({ files }) => {
-    if (!Array.isArray(files) || files.length === 0) agentFail('failed', 'invalid_args');
-    const batch = new Map(); let bytes = state.stagedBytes;
-    for (const file of files) {
-      agentRecord(file, ['path', 'mode', 'contentBase64']);
-      const path = agentSourcePath(file.path);
-      if (file.mode !== 0o644 && file.mode !== 0o755) agentFail('failed', 'invalid_mode');
-      if (state.staged.has(path) || batch.has(path)) agentFail('failed', 'duplicate_path');
-      const data = agentBytes(file.contentBase64, AGENT_LIMITS.fileBytes);
-      bytes += data.length;
-      if (bytes > AGENT_LIMITS.stageBytes || state.staged.size + batch.size >= AGENT_LIMITS.stageFiles) agentFail('limit', 'limit_exceeded');
-      batch.set(path, { mode: file.mode, data });
-    }
-    for (const [path, file] of batch) {
-      await agentNoLinks(at, '/workspace', path);
-      const target = at('/workspace/' + path);
-      await agentFs.mkdir(agentPath.dirname(target), { recursive: true });
-      await agentFs.writeFile(target, file.data, { flag: 'wx', mode: file.mode });
-      await agentFs.chmod(target, file.mode);
-      state.staged.set(path, [file.mode, agentSha(file.data)]);
-    }
-    state.stagedBytes = bytes;
-    return { files: state.staged.size, stagedDigest: agentDigest(state.staged) };
+  ctx.define('stage', ['transfer', 'treeDigest', 'headSha', 'treeSha'], async ({ transfer, treeDigest, headSha, treeSha }) => {
+    if (!AGENT_SHA.test(String(headSha)) || !AGENT_SHA.test(String(treeSha))) agentFail('failed', 'invalid_args');
+    const set = await ctx.commitTransfer(transfer, treeDigest, 'workspace');
+    try {
+      if (state.staged) agentFail('failed', 'already_staged');
+      if (set.files.length === 0) agentFail('failed', 'invalid_args');
+      for (const file of set.files) agentSourcePath(file.path);
+      for (const file of set.files) await ctx.place(file, '/workspace');
+    } finally { await set.dispose(); }
+    state.staged = { headSha, treeSha };
+    return { treeDigest };
   });
   ctx.define('hostFile', ['path', 'source'], async ({ path, source }) => {
     if (!AGENT_HOST_FILES.includes(path)) agentFail('failed', 'invalid_path');
-    if (typeof source !== 'string' || Buffer.byteLength(source) > AGENT_LIMITS.hostFileBytes) agentFail('limit', 'limit_exceeded');
+    if (typeof source !== 'string' || Buffer.byteLength(source) > 65536) agentFail('limit', 'limit_exceeded');
     const data = Buffer.from(source, 'utf8');
     // Rewriting an identical live config would make Vite restart its server and drop HMR clients.
     const info = await agentFs.lstat(at(path)).catch(() => null);
-    if (info && info.isFile() && (await agentFs.readFile(at(path))).equals(data)) return {};
-    await agentAtomicWrite(at(path), data, 0o644);
-    return {};
+    if (!(info && info.isFile() && (await agentFs.readFile(at(path))).equals(data))) await agentAtomicWrite(at(path), data, 0o644);
+    return { sha256: agentSha(data) };
   });
-  /** Applies admitted text: the supervisor sends the writes/deletes that make the tree equal base + overlay. */
-  ctx.define('overlay', ['revision', 'files', 'deletes'], async ({ revision, files, deletes }) => {
+  /** Every create/replace/delete of this revision is validated before the first rename, then applied. */
+  ctx.define('overlay', ['transfer', 'treeDigest', 'deletes', 'revision', 'generation', 'baseHeadSha', 'treeSha'], async (args, fence) => {
+    const { transfer, treeDigest, deletes, revision } = args;
     if (!(typeof revision === 'string' && AGENT_ID.test(revision)) && !Number.isSafeInteger(revision)) agentFail('failed', 'invalid_revision');
-    if (!Array.isArray(files) || !Array.isArray(deletes) || files.length + deletes.length > AGENT_LIMITS.overlayPaths) agentFail('limit', 'limit_exceeded');
-    const seen = new Set(); const writes = []; let bytes = 0;
-    const claim = (path) => { agentSourcePath(path); if (seen.has(path)) agentFail('failed', 'duplicate_path'); seen.add(path); };
-    for (const file of files) {
-      agentRecord(file, ['path', 'contentBase64']); claim(file.path);
-      const data = agentBytes(file.contentBase64, AGENT_LIMITS.overlayBytes);
-      if ((bytes += data.length) > AGENT_LIMITS.overlayBytes) agentFail('limit', 'limit_exceeded');
-      writes.push([file.path, data]);
+    if (args.generation !== fence.generation) agentFail('fenced', 'stale_fence');
+    if (!AGENT_SHA.test(String(args.baseHeadSha)) || !AGENT_SHA.test(String(args.treeSha)) || !Array.isArray(deletes)) {
+      agentFail('failed', 'invalid_args');
     }
-    for (const path of deletes) claim(path);
-    for (const path of seen) {
-      await agentNoLinks(at, '/workspace', path);
-      const info = await agentFs.lstat(at('/workspace/' + path)).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
-      if (info && !info.isFile()) agentFail('failed', 'invalid_path');
-    }
-    for (const [path, data] of writes) {
-      const target = at('/workspace/' + path);
-      const info = await agentFs.lstat(target).catch(() => null);
-      await agentAtomicWrite(target, data, info ? info.mode & 0o777 : 0o644);
-    }
-    for (const path of deletes) await agentFs.rm(at('/workspace/' + path), { force: true });
+    const set = await ctx.commitTransfer(transfer, treeDigest, 'overlay');
+    try {
+      if (!state.staged) agentFail('failed', 'phase_refused');
+      if (set.files.length + deletes.length > 255) agentFail('limit', 'limit_exceeded');
+      const seen = new Set();
+      for (const path of [...set.files.map((f) => f.path), ...deletes]) {
+        agentSourcePath(path);
+        if (seen.has(path)) agentFail('failed', 'duplicate_path');
+        seen.add(path);
+        await ctx.checkTarget('/workspace', path, true);
+      }
+      for (const file of set.files) await ctx.move(file, '/workspace');
+      for (const path of deletes) await agentFs.rm(at('/workspace/' + path), { force: true });
+    } finally { await set.dispose(); }
     state.revision = revision;
-    return { revision };
+    return { revision, treeDigest };
   });
 });
 `;
