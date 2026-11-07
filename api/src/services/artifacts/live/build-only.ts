@@ -26,7 +26,7 @@ async function buildUnderGate(ports: LivePorts, key: LiveKey, jobId: string, bin
       phase: 'BUILD_PROVISIONING' as const, leaseEpoch: (previous?.runtime.leaseEpoch ?? 0) + 1,
       rowVersion: previous?.runtime.rowVersion ?? 0, podUid: null, podName: podName(key),
       sourceRevision: draft.revision, appliedRevision: null, baseHeadSha: draft.baseHeadSha, liveTreeSha: draft.treeSha,
-      lastAccessAt: ports.now(), maximumLifetimeAt: ports.now() + 3_600_000,
+      lastAccessAt: ports.now(),
       routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1, invitationEpoch: 0, invitationExpiresAt: null,
       pendingWake: false, attempt: null };
     unit.save({ runtime, progress: previous?.progress.generation === binding.generation ? previous.progress : {
@@ -64,7 +64,7 @@ async function buildUnderGate(ports: LivePorts, key: LiveKey, jobId: string, bin
       assertFence(unit.state, runtime);
       const current = await currentBinding(ports, key, runtime.generation);
       if (unit.state.runtime.phase !== 'VERIFYING' || unit.state.runtime.pendingWake
-        || !await ports.forge.reachable(key, job.headSha) || ports.now() >= runtime.maximumLifetimeAt) conflict('stale_fence');
+        || !await ports.forge.reachable(key, job.headSha)) conflict('stale_fence');
       if (current.releaseId !== job.expectedReleaseId) throw new LiveError('pointer_conflict');
       const published = await ports.publication.commit(unit, key, unit.state.runtime.attempt!);
       publicationBaseline(unit.state.progress, published.releaseId);

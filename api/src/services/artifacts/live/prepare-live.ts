@@ -28,7 +28,7 @@ export async function prepareLive(ports: LivePorts, key: LiveKey, runtime: LiveR
   if (await ports.forge.head(key) !== head) throw new LiveError('git_head_moved');
   const live = await transition(ports, key, runtime, state => {
     if (state.runtime.phase !== 'REVIVING' || ready.revision !== state.runtime.sourceRevision
-      || ready.routeEpoch !== state.runtime.routeEpoch || ports.now() >= state.runtime.maximumLifetimeAt) conflict('stale_fence');
+      || ready.routeEpoch !== state.runtime.routeEpoch) conflict('stale_fence');
     state.runtime.phase = 'LIVE'; state.runtime.appliedRevision = ready.revision; state.runtime.pendingWake = false;
   });
   await ports.routes.ready(key, live);
