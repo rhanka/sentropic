@@ -1,3 +1,4 @@
+import type { ArtifactBuildTuple } from '@sentropic/artifacts/server/build-contract';
 /** A-LIVE records are host state, never tool definitions or release-profile keys. */
 export interface LiveKey { storageScopeId: string; artifactId: string }
 /** BUILD_QUEUED: the live stopped, the pod is prepared and its clean build waits durably in the node queue. */
@@ -24,6 +25,8 @@ export interface LiveAttempt {
   leaseEpoch: number; routeEpoch: number; expectedReleaseId: string | null;
   progressSeq: number; baselineSeq: number; initial: boolean;
   kind: 'idle' | 'explicit'; candidateDigest?: string;
+  /** Server-side §8.4 evidence join, set with the candidate digest. */
+  evidence?: ArtifactBuildTuple;
 }
 export interface LiveState { runtime: LiveRuntime; progress: PublicationProgress }
 /** A-LIVE Amendment 1: idle strictly after 900 s of server time since lastAccessAt. There is no absolute lifetime. */
