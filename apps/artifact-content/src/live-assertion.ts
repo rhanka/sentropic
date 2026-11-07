@@ -17,12 +17,13 @@ const MAX_SKEW_SECONDS = 30;
 export interface LiveAssertionClaims {
   v: 1; kid: string; host: string; artifactId: string; storageScopeId: string; sessionId: string;
   generation: number; routeEpoch: number; podUid: string; podName: string; sourceRevision: number;
-  principalId: string; iat: number; exp: number;
+  principalId: string; role: 'binding_owner' | 'invitee'; invitationId: string; invitationEpoch: number; invitationExp: number;
+  iat: number; exp: number;
 }
 const FIELDS: Record<keyof LiveAssertionClaims, 'string' | 'number'> = {
   v: 'number', kid: 'string', host: 'string', artifactId: 'string', storageScopeId: 'string', sessionId: 'string',
   generation: 'number', routeEpoch: 'number', podUid: 'string', podName: 'string', sourceRevision: 'number',
-  principalId: 'string', iat: 'number', exp: 'number',
+  principalId: 'string', role: 'string', invitationId: 'string', invitationEpoch: 'number', invitationExp: 'number', iat: 'number', exp: 'number',
 };
 const mac = (key: Uint8Array, body: string) => createHmac('sha256', key).update(`v1.${body}`).digest();
 
@@ -30,6 +31,13 @@ export function signLiveAssertion(claims: LiveAssertionClaims, key: Uint8Array):
   if (key.length < MIN_KEY_BYTES) throw new Error('Live assertion key must contain at least 32 bytes');
   const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
   return `v1.${body}.${mac(key, body).toString('base64url')}`;
+}
+const INVITATION_ID = /^[A-Za-z0-9_-]{1,128}$/;
+/** Owner claims carry no invitation; an invitee claim must name a live invitation that outlasts the assertion. */
+function validRole(c: LiveAssertionClaims, now: number) {
+  if (c.role === 'binding_owner') return c.invitationId === '' && c.invitationEpoch === 0 && c.invitationExp === 0;
+  return c.role === 'invitee' && INVITATION_ID.test(c.invitationId) && c.invitationEpoch >= 1
+    && c.invitationExp > now && c.exp <= c.invitationExp;
 }
 export interface VerifyOptions { key(kid: string): Uint8Array | undefined; now(): number }
 export function verifyLiveAssertion(token: string, options: VerifyOptions): LiveAssertionClaims | undefined {
@@ -47,6 +55,7 @@ export function verifyLiveAssertion(token: string, options: VerifyOptions): Live
   const given = Buffer.from(parts[2], 'base64url'); const expected = mac(key, parts[1]);
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return;
   const now = options.now() / 1000;
+  if (!validRole(claims, now)) return;
   if (claims.exp <= now || claims.iat > now + MAX_SKEW_SECONDS || claims.exp - claims.iat > MAX_ASSERTION_SECONDS) return;
   return claims;
 }
@@ -54,11 +63,14 @@ export function verifyLiveAssertion(token: string, options: VerifyOptions): Live
 /** In-memory revocation state pushed by the host/controller; watchers close live sockets immediately. */
 export function createLiveFences() {
   const floors = new Map<string, { generation: number; routeEpoch: number }>();
+  const invitationFloors = new Map<string, number>(); // `${artifactId}/${invitationId}` -> minimum live epoch
   const revoked = new Map<string, number>(); // `${artifactId}/${sessionId}` -> forget-after (ms)
   const watchers = new Map<string, Set<{ route: LiveRoute; close(): void }>>();
   const stale = (route: LiveRoute) => {
     const floor = floors.get(route.artifactId);
-    return revoked.has(`${route.artifactId}/${route.sessionId}`) || (!!floor
+    const invitationFloor = route.invitationId ? invitationFloors.get(`${route.artifactId}/${route.invitationId}`) : undefined;
+    return revoked.has(`${route.artifactId}/${route.sessionId}`)
+      || (invitationFloor !== undefined && (route.invitationEpoch ?? 0) < invitationFloor) || (!!floor
       && (route.generation < floor.generation || (route.generation === floor.generation && route.routeEpoch < floor.routeEpoch)));
   };
   const sweep = (artifactId: string) => {
@@ -70,6 +82,12 @@ export function createLiveFences() {
       const now = Date.now();
       for (const [key, until] of revoked) if (until <= now) revoked.delete(key);
       revoked.set(`${input.artifactId}/${input.sessionId}`, input.forgetAfter ?? now + MAX_ASSERTION_SECONDS * 1000);
+      sweep(input.artifactId);
+    },
+    /** Invitation revocation: the host bumps the epoch; every older assertion and open socket for it is refused/closed. */
+    revokeInvitation(input: { artifactId: string; invitationId: string; epoch: number }) {
+      const id = `${input.artifactId}/${input.invitationId}`;
+      invitationFloors.set(id, Math.max(input.epoch, invitationFloors.get(id) ?? 0));
       sweep(input.artifactId);
     },
     fence(input: { artifactId: string; generation: number; routeEpoch: number }) {
@@ -115,7 +133,9 @@ export function createHostAssertionLive(options: HostAssertionLiveOptions): Live
         || claims.artifactId !== artifactId || claims.podName !== podName(claims)) return;
       const route: LiveRoute = { storageScopeId: claims.storageScopeId, artifactId, sessionId: claims.sessionId,
         generation: claims.generation, routeEpoch: claims.routeEpoch, podUid: claims.podUid, podName: claims.podName,
-        expiresAt: claims.exp * 1000, sourceRevision: claims.sourceRevision };
+        expiresAt: (claims.role === 'invitee' ? Math.min(claims.exp, claims.invitationExp) : claims.exp) * 1000,
+        sourceRevision: claims.sourceRevision, principalId: claims.principalId, role: claims.role,
+        ...(claims.role === 'invitee' ? { invitationId: claims.invitationId, invitationEpoch: claims.invitationEpoch } : {}) };
       return options.fences.isCurrent(route) ? route : undefined;
     },
     current: async route => options.fences.isCurrent(route),
