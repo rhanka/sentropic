@@ -4,13 +4,14 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { digest, validate } from './image-receipt.mjs';
+import { archiveConfigDigest, digest, validate } from './image-receipt.mjs';
+import { createHash } from 'node:crypto';
 
 const id = `sha256:${'a'.repeat(64)}`;
 const expected = { schema: 1, kind: 'api', ref: 'registry/api:test', sourceSha: 'source',
   inputTree: 'tree', workflowDigest: id, runId: '42', architecture: 'linux/amd64',
   cacheScope: 'br78-v1-api-linux/amd64', profile: {} };
-const receipt = { ...expected, imageId: id, archiveDigest: id, producer: { job: 'build-api-image', attempt: '1' } };
+const receipt = { ...expected, imageId: id, configDigest: id, archiveDigest: id, producer: { job: 'build-api-image', attempt: '1' } };
 
 test('should accept an exact producer receipt', () => assert.equal(validate(receipt, expected), receipt));
 test('should reject a receipt written by the wrong producer', () => {
@@ -23,7 +24,7 @@ for (const key of Object.keys(expected)) {
     assert.throws(() => validate({ ...receipt, [key]: 'wrong' }, expected), new RegExp(key));
   });
 }
-for (const key of ['imageId', 'archiveDigest', 'producer']) {
+for (const key of ['imageId', 'configDigest', 'archiveDigest', 'producer']) {
   test(`should reject malformed ${key}`, () => {
     assert.throws(() => validate({ ...receipt, [key]: '' }, expected));
   });
@@ -42,10 +43,16 @@ test('should verify transported bytes and the loaded image before reuse', async 
     const { mkdirSync } = await import('node:fs');
     mkdirSync(join(scratch, '.github/workflows'), { recursive: true });
     writeFileSync(join(scratch, '.github/workflows/ci.yml'), 'workflow');
-    writeFileSync(archive, 'transported bytes');
+    const config = '{"created":"2026-11-07T06:37:51Z","architecture":"amd64"}';
+    const configId = createHash('sha256').update(config).digest('hex');
+    writeFileSync(join(scratch, `${configId}.json`), config);
+    writeFileSync(join(scratch, 'manifest.json'), JSON.stringify([{ Config: `${configId}.json` }]));
+    execFileSync('tar', ['-cf', archive, '-C', scratch, 'manifest.json', `${configId}.json`]);
     writeFileSync(join(scratch, 'git'), `#!${process.execPath}\nconsole.log(process.argv.at(-1)==='HEAD'?'source':'tree');\n`, { mode: 0o755 });
     writeFileSync(join(scratch, 'docker'), `#!${process.execPath}\nconsole.log(process.env.TEST_IMAGE_ID || '${id}');\n`, { mode: 0o755 });
     run('write');
+    assert.equal(JSON.parse(readFileSync(file)).configDigest, `sha256:${configId}`);
+    assert.notEqual(JSON.parse(readFileSync(file)).configDigest, id);
     assert.match(run('verify'), /Verified api/);
     assert.match(run('loaded'), /Verified api/);
     assert.throws(() => run('loaded', { TEST_IMAGE_ID: `sha256:${'b'.repeat(64)}` }), /Loaded image identity mismatch/);
@@ -59,4 +66,22 @@ test('should verify transported bytes and the loaded image before reuse', async 
     assert.throws(() => run('verify'), /ENOENT/);
     assert.notEqual(await digest(archive), receipt.archiveDigest);
   } finally { rmSync(scratch, { recursive: true, force: true }); }
+});
+
+test('should hash OCI blob config bytes independently of the manifest image ID', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oci-config-'));
+  try {
+    const config = '{"architecture":"amd64","os":"linux"}';
+    const hash = createHash('sha256').update(config).digest('hex');
+    execFileSync('mkdir', ['-p', join(dir, 'blobs/sha256')]);
+    writeFileSync(join(dir, `blobs/sha256/${hash}`), config);
+    const entry = { Config: `blobs/sha256/${hash}` };
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify([entry]));
+    const archive = join(dir, 'image.tar');
+    execFileSync('tar', ['-cf', archive, '-C', dir, 'manifest.json', 'blobs']);
+    assert.equal(archiveConfigDigest(archive), `sha256:${hash}`);
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify([entry, entry]));
+    execFileSync('tar', ['-cf', archive, '-C', dir, 'manifest.json', 'blobs']);
+    assert.throws(() => archiveConfigDigest(archive), /one saved image config/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

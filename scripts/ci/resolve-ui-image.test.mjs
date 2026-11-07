@@ -49,7 +49,8 @@ async function fixture(run, initial = {}) {
     const state = () => JSON.parse(readFileSync('state.json'));
     const calls = () => readFileSync('calls.jsonl', 'utf8').trim().split('\n').map(JSON.parse);
     const qualify = () => writeFileSync('ui-image.json', JSON.stringify({ kind: 'ui',
-      ref: 'ghcr.io/rhanka/sentropic-ui:abcdef', imageId: state().localId, sourceSha: 'source', runId: '123', producer: { attempt: '1' } }));
+      ref: 'ghcr.io/rhanka/sentropic-ui:abcdef', imageId: state().localId, configDigest: digest(state().localConfig),
+      sourceSha: 'source', runId: '123', producer: { attempt: '1' } }));
     const publicFetch = async url => {
       if (url.includes('/token?')) return Response.json({ token: 'fixture' });
       const bytes = JSON.stringify(state().remote);

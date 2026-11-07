@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { request } from 'node:http';
 import { createProviderServer, fixtureKey, installProviderBoundary, journeyResponse } from './provider-server.mjs';
 
 async function fixture(t, respond) {
@@ -112,6 +113,32 @@ test('should reject invalid outbound request shapes and unknown model routes', a
   assert.equal((await post({ model: 'unexpected-model' })).status, 400);
   assert.equal(receipt.failedRequests, 2);
   assert.equal(receipt.calls, 0);
+});
+
+test('should account for cancellation while reading a provider request body without hiding invalid requests', async t => {
+  const { server, url, post, receipt } = await fixture(t);
+  const incoming = once(server, 'request');
+  const client = request(`${url}/v1/chat/completions`, { method: 'POST', headers: {
+    authorization: `Bearer ${fixtureKey}`, 'content-length': 1000,
+  } });
+  client.on('error', () => {});
+  client.flushHeaders();
+  const [req] = await incoming;
+  const data = once(req, 'data');
+  client.write('{"model":');
+  await data;
+  const closed = new Promise(resolve => req.once('close', resolve));
+  client.destroy();
+  await closed;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(req.aborted, true);
+  assert.equal(receipt.failedRequests, 0);
+  assert.equal(receipt.cancelled, 1);
+  assert.equal(receipt.calls, 0);
+  assert.equal((await post({})).status, 200);
+  assert.equal((await post({ messages: [] })).status, 400);
+  assert.equal(receipt.failedRequests, 1);
+  assert.equal(receipt.failures[0].reason, 'Expected model and messages');
 });
 
 test('should preserve request bytes and abort signal while forbidding real egress', async () => {
