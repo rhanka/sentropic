@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.21
+
+- Add the GB1 build validators on `@sentropic/artifacts/server/build-contract`: full dependency
+  integrity coverage with a sealed host integrity map (`dependency_integrity_missing`,
+  `dependency_integrity_mismatch`), script-package qualification rows, the mandatory
+  builder-attested receipt schema and verifier (§8.4 join, served-byte anti-repack), and the
+  candidate output ceiling gate (`dist_over_limits`). Tarball-bundled dependencies are exempt
+  from the lock closure check. Additive; no new export path.
+- The live runtime record follows A-LIVE Amendment 1: `idleDeadline` is 900 s after the last
+  access and the absolute `maximumLifetimeAt` is removed.
+- `@sentropic/artifacts/live-host` is unchanged (HostLedger and AcceptOptions frozen).
+
 ## 0.2.20
 
 - Add the `@sentropic/artifacts/live-host` subpath: single live-host candidate digest with pinned vectors,
