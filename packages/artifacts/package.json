@@ -79,6 +79,10 @@
       "types": "./dist/server/consent.d.ts",
       "import": "./dist/server/consent.js"
     },
+    "./server/mime": {
+      "types": "./dist/server/mime.d.ts",
+      "import": "./dist/server/mime.js"
+    },
     "./server/reader-store": {
       "types": "./dist/server/reader-store.d.ts",
       "import": "./dist/server/reader-store.js"
