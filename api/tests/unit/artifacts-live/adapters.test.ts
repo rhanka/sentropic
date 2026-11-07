@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { fixture, key } from './fixture';
+import { fixture, key, placement } from './fixture';
 import { createLiveWorker, type QualifiedSupervisor } from '../../../src/services/artifacts/live/worker';
 import { withinPhase } from '../../../src/services/artifacts/live/deadline';
 import { fetchLockedTarball } from '../../../src/services/artifacts/live/npm-relay';
@@ -12,7 +12,7 @@ describe('trusted live adapters', () => {
     const f = fixture(); const runtime = await f.controller.start(key);
     const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'dev', 'build', 'verify']
       .map(name => [name, vi.fn(async () => name === 'build' ? { candidateDigest: 'digest' } : undefined)])) as unknown as QualifiedSupervisor;
-    const worker = createLiveWorker(supervisor);
+    const worker = createLiveWorker(supervisor, placement);
     const source = await f.ports.forge.snapshot(key, 'B'); const cache = await f.ports.cache.acquire(source, runtime);
     await worker.prepare(runtime, source, cache); await worker.live(runtime);
     expect(supervisor.dependencies).toHaveBeenCalledWith(runtime, cache, { readOnly: true, verifyHash: true });
