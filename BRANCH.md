@@ -48,5 +48,6 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 1: wagons cherry-picked onto main without conflict.
 - [x] Lot 2: scoped checks green (ci-dag 10/10, unit-graph 7/7, expected-results 28/28, api-tool-cache 6/6, ci-static 3/3).
-- [ ] Lot 3: push, open PR, GLM review.
+- [x] Lot 3: push, open PR, GLM review.
+- [x] Review B1: pin the exact longest-first wave and the complete endpoint set (performance-report 8/8).
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
