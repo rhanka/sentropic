@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { LiveAttempt, LiveKey, LiveRuntime, LiveState } from './records';
+import type { LiveAttempt, LiveKey, LivePhase, LiveRuntime, LiveState } from './records';
 import type { LiveAdmission } from './admission';
 import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
@@ -7,7 +7,7 @@ import type { CacheIdentity, CacheReceipt } from './cache';
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
   /** Every runtime that is not DORMANT (this environment): the scheduler set and the admission slots after a restart. */
-  active(): Promise<Array<{ key: LiveKey; ownerId: string }>>;
+  active(): Promise<Array<{ key: LiveKey; ownerId: string; phase: LivePhase }>>;
   /** Serializes one binding across API replicas. Exceptions roll back state AND release writes. */
   transaction<T>(key: LiveKey, work: (unit: {
     state: LiveState | undefined; save(state: LiveState): void; client?: PoolClient;
@@ -31,7 +31,8 @@ export interface LivePorts {
   store: LiveStore;
   /** Live pod slots (r3.5: four on one d2-4 node) shared fairly by users; refusal is `builder_unavailable`. */
   admission: LiveAdmission;
-  /** Per-node gate: every heavy phase (cold revive, wake, crash restore, clean build) runs one at a time. */
+  /** Node client of the cluster-mesh heavy-phase queue: install, pre-bundle, dev start and clean build are admitted in
+   * strict FIFO under the node memory budget (cold revive, wake, crash restore and builds alike). */
   heavy: LiveHeavyGate;
   /** Host-owned invitation fence of the binding generation: a monotonic revocation epoch (an invitation is valid only
    * when issued at the current epoch) and the earliest live invitation expiry. */
@@ -65,6 +66,8 @@ export interface LivePorts {
   worker: {
     prepare(runtime: LiveRuntime, source: SourceSnapshot, cache: CacheReceipt): Promise<void>;
     restore(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
+    /** Vite dependency pre-bundle in the pod, a separate supervisor op that must precede `live` in every pod. */
+    prebundle(runtime: LiveRuntime): Promise<void>;
     live(runtime: LiveRuntime): Promise<{ revision: string; routeEpoch: number }>;
     quiesce(runtime: LiveRuntime): Promise<void>;
     /** Removes ALL writable phase residue, including dependency overlays and old output. */

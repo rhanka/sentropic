@@ -19,7 +19,7 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
       return rows.flatMap(row => {
         const { runtime } = JSON.parse(row.value) as LiveState;
         const [storageScopeId, artifactId] = JSON.parse(row.key) as [string, string];
-        return runtime.phase === 'DORMANT' ? [] : [{ key: { storageScopeId, artifactId }, ownerId: runtime.ownerId }];
+        return runtime.phase === 'DORMANT' ? [] : [{ key: { storageScopeId, artifactId }, ownerId: runtime.ownerId, phase: runtime.phase }];
       });
     },
     async transaction(key, work) {
