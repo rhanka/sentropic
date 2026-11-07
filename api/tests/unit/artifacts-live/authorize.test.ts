@@ -37,11 +37,11 @@ describe('live authority: the binding owner is the acting user (plan Δ4)', () =
     await expect(f.controller.authorize(key, owner, 'read')).rejects.toMatchObject({ reason: 'stale_session' });
   });
   it('should take edits from the binding owner only and let invited foreground viewing extend the session', async () => {
-    const f = fixture(); const live = await f.controller.start(key); f.invitation.epoch = 1; f.advance(600_001);
+    const f = fixture(); const live = await f.controller.start(key); f.invitation.epoch = 1; f.advance(900_001);
     await expect(f.controller.activity(key, live.sessionId, 'edit', bob(1, 9_000_000))).rejects.toMatchObject({ code: 'access_denied' });
     await expect(f.controller.activity(key, live.sessionId, 'read', { principalId: 'carol' })).rejects.toMatchObject({ code: 'access_denied' });
     await f.controller.activity(key, live.sessionId, 'foreground', bob(1, 9_000_000));
-    await f.controller.idle(key); expect(f.ports.worker.build).not.toHaveBeenCalled();
+    await f.controller.reap(key); expect(f.ports.worker.build).not.toHaveBeenCalled();
   });
   it('should queue a second user fairly on a full worker and admit them before a repeat user', async () => {
     const f = fixture(); const other = { ...key, artifactId: 'artifact-bob' }; const again = { ...key, artifactId: 'artifact-owner-2' };
