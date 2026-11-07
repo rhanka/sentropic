@@ -13,11 +13,10 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
   if (draft.generation !== binding.generation) conflict('stale_fence');
   // A build pod takes a live slot (a refusal writes no state); its clean build then waits in the node queue.
   await ports.admission.acquire(key, binding.ownerId);
-  try { return await buildPod(ports, key, jobId, binding, job, draft); }
+  try { return await buildPod(ports, key, jobId, binding, draft); }
   catch (error) { await releaseIfDormant(ports, key); throw error; }
 }
-async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding,
-  job: { headSha: string; expectedReleaseId: string | null }, draft: DraftSnapshot) {
+async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding, draft: DraftSnapshot) {
   let runtime = await ports.store.transaction(key, async unit => {
     if (unit.state && unit.state.runtime.phase !== 'DORMANT') conflict('pending_publication');
     const previous = unit.state;

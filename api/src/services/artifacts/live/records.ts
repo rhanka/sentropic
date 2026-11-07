@@ -25,7 +25,7 @@ export interface LiveAttempt {
   leaseEpoch: number; routeEpoch: number; expectedReleaseId: string | null;
   progressSeq: number; baselineSeq: number; initial: boolean;
   kind: 'idle' | 'explicit'; candidateDigest?: string;
-  /** Server-side §8.4 evidence join, set with the candidate digest. */
+  /** Server-side §8.4 evidence join from the pinned inputs; publication requires it with the candidate digest. */
   evidence?: ArtifactBuildTuple;
 }
 export interface LiveState { runtime: LiveRuntime; progress: PublicationProgress }
