@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { Context } from 'hono';
 import { BUILD_ONLY_PHASES, createBuildJobs, runStaleMs, type BuildJobRecord, type RecordStore } from '../../../src/services/artifacts/live/build-jobs';
 import { PHASE_DEADLINE_MS } from '../../../src/services/artifacts/live/deadline';
 import { createHostBuildApi } from '../../../src/services/artifacts/live/host-build-api';
@@ -16,8 +17,8 @@ function memoryStore(): RecordStore {
 function setup(build = vi.fn(async () => {})) {
   let now = 0; let n = 0; const background: Promise<void>[] = [];
   const jobs = createBuildJobs(memoryStore(), () => now, () => `token-${++n}`, STALE);
-  const authenticate = vi.fn(async (request: Request) =>
-    request.headers.get('x-test-host') === 'immo' ? { hostId: 'immo', storageScopeId: 'scope-immo' } : null);
+  const authenticate = vi.fn((c: Context) =>
+    c.req.header('x-test-host') === 'immo' ? { hostId: 'immo', storageScopeId: 'scope-immo' } : null);
   const app = createHostBuildApi({ authenticate, jobs, build, schedule: work => { background.push(work()); } });
   const post = (body: unknown, host = 'immo') => app.request('/v1/builds', { method: 'POST',
     headers: { 'content-type': 'application/json', 'x-test-host': host }, body: typeof body === 'string' ? body : JSON.stringify(body) });
@@ -31,9 +32,9 @@ const HEAVY_WAIT_MS = 60_000;
 const STALE = runStaleMs(HEAVY_WAIT_MS);
 
 describe('host build API (M3-B)', () => {
-  it('refuses an unauthenticated host before reading the body', async () => {
+  it('refuses a service client bound to no host before reading the body', async () => {
     const s = setup(); const response = await s.post({ artifactId: 'artifact-a', jobId: 'job-1' }, 'other');
-    expect(response.status).toBe(401); expect(s.build).not.toHaveBeenCalled();
+    expect(response.status).toBe(403); expect(await response.json()).toEqual({ error: 'host_not_bound' }); expect(s.build).not.toHaveBeenCalled();
   });
   it('accepts only an artifact and a job id: the scope comes from the host identity, never a caller SHA', async () => {
     const s = setup();
@@ -89,7 +90,7 @@ describe('host build API (M3-B)', () => {
   });
   it('keeps job status scoped to the authenticated host', async () => {
     const s = setup(); await s.post({ artifactId: 'artifact-a', jobId: 'job-1' }); await s.settle();
-    expect((await s.status('job-1', 'other')).status).toBe(401);
+    expect((await s.status('job-1', 'other')).status).toBe(403);
     expect((await s.status('job-2')).status).toBe(404);
   });
   it('fails a run that ended without publication, so the host can re-admit it', async () => {
