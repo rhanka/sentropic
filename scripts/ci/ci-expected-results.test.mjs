@@ -58,7 +58,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 24);
+  assert.equal(validators.length, 25);
   assert.equal(independentValidators(workflow), true);
   for (const [name, job] of validators) {
     const consumers = ['validate-cluster-mesh', 'validate-llm-mesh', 'validate-llm-gateway'];
