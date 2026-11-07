@@ -10,18 +10,21 @@ import { createInClusterKubernetes } from './kubernetes';
 import { createLiveWorker, type QualifiedSupervisor } from './worker';
 import { createLiveController } from './controller';
 import { fetchLockedTarball } from './npm-relay';
+import type { BuilderPlacement } from './placement';
 
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
  * AL-T supplies authenticated owner operations; AL-D supplies the encrypted draft port;
  * SG4 supplies transactional publication; qualified GB4 supplies bootstrap/supervisor transport.
+ * `placement` comes from per-environment configuration (`builderPlacement(process.env)`), never a constant.
  */
 export function createArtifactLiveService(options: Pick<LivePorts,
   'binding' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'> & {
-    pool: Pool; bootstrap: string; supervisor: QualifiedSupervisor; cacheBlobs: PrivateCacheBlobs;
+    pool: Pool; bootstrap: string; supervisor: QualifiedSupervisor; cacheBlobs: PrivateCacheBlobs; placement: BuilderPlacement;
     cache: Pick<CachePorts, 'signingKey' | 'evidence' | 'cleanInstall'>;
   }) {
   const cache = createDependencyCache({ ...options.cache, fetch: fetchLockedTarball,
     storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) });
   return createLiveController({ ...options, cache, store: createPostgresLiveStore(options.pool),
-    pods: createBuilderPods(createInClusterKubernetes(), options.bootstrap), worker: createLiveWorker(options.supervisor) });
+    pods: createBuilderPods(createInClusterKubernetes(options.placement), options.bootstrap, options.placement),
+    worker: createLiveWorker(options.supervisor, options.placement) });
 }
