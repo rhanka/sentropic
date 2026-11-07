@@ -42,7 +42,7 @@ export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch
 }
 
 export function createProviderServer({ respond = journeyResponse } = {}) {
-  const receipt = { calls: 0, failedRequests: 0, cancelled: 0, models: {}, requests: [] };
+  const receipt = { calls: 0, failedRequests: 0, cancelled: 0, models: {}, requests: [], failures: [] };
   const server = createServer(async (req, res) => {
     if (req.url === '/health') return res.end('ok');
     if (req.url === '/receipt') {
@@ -142,7 +142,14 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       ended = true;
       res.end('data: [DONE]\n\n');
     } catch (error) {
+      // Node rejects the body iterator when the caller aborts an incomplete
+      // upload. Account for it like a cancelled response, not invalid JSON.
+      if (req.aborted && !req.complete && error.code === 'ECONNRESET') {
+        receipt.cancelled++;
+        return;
+      }
       receipt.failedRequests++;
+      receipt.failures.push({ endpoint: req.url?.split('?')[0], code: error.code ?? null, reason: error.message });
       res.writeHead(400, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: { message: error.message } }));
     }
