@@ -5,7 +5,8 @@ import { LiveError } from '../../../src/services/artifacts/live/records';
 import { DIST, fakePod, runtime, text } from './supervisor-pod';
 
 const unavailable = { code: 'builder_unavailable' };
-const source = { headSha: 'h', treeSha: 't', lockfile: Buffer.from('{"lockfileVersion":3}'), cacheIdentity: {} as never, stagingRef: 'ref-h' };
+const source = { headSha: 'h', treeSha: 't', lockfile: Buffer.from('{"lockfileVersion":3}'), cacheIdentity: {} as never, stagingRef: 'ref-h',
+  gb1: { subPath: '', files: {} } };
 const cache = { key: 'k', treeSha256: 'f'.repeat(64) } as never;
 const limits = { files: 255, fileBytes: 16777216, totalBytes: 67108864 } as const;
 const attempt = { id: 'att-1', headSha: 'h', treeSha: 't' } as never;
@@ -47,14 +48,14 @@ describe('supervisor staging and projection', () => {
   });
   it('should project the exact draft revision atomically with its deletions and bounded overlay', async () => {
     const pod = fakePod();
-    const draft = { generation: 1, revision: 8, baseHeadSha: 'h', treeSha: 'd', dirty: true };
+    const draft = { generation: 1, revision: 'r8', baseHeadSha: 'h', treeSha: 'd', dirty: true };
     await pod.supervisor.overlay(runtime, draft);
-    expect(pod.bodies[1]).toMatchObject({ op: 'overlay', args: { revision: 8, generation: 1, baseHeadSha: 'h', deletes: ['ui/old.ts'] } });
+    expect(pod.bodies[1]).toMatchObject({ op: 'overlay', args: { revision: 'r8', generation: 1, baseHeadSha: 'h', deletes: ['ui/old.ts'] } });
     pod.sources.draft = async () => ({ files: Array.from({ length: 255 }, (_, i) => text(`f${i}`, 'x')), deletes: ['g'] });
     await expect(pod.supervisor.overlay(runtime, draft)).rejects.toMatchObject({ code: 'limit_exceeded' });
     pod.sources.draft = async () => ({ files: [text('a', 'x')], deletes: ['a'] });
     await expect(pod.supervisor.overlay(runtime, draft)).rejects.toMatchObject(unavailable);
-    const moved = fakePod({ overlay: body => ({ revision: 9, treeDigest: body.args.treeDigest }) });
+    const moved = fakePod({ overlay: body => ({ revision: 'r9', treeDigest: body.args.treeDigest }) });
     await expect(moved.supervisor.overlay(runtime, draft)).rejects.toMatchObject(unavailable);
   });
 });

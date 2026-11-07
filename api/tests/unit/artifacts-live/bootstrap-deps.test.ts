@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createDependencyCache, type CacheObject, type DependencyFile } from '../../../src/services/artifacts/live/cache';
 import { BUILDER_IMAGE, INSTALL_RECIPE, artifactEnvironment } from '../../../src/services/artifacts/live/recipes';
 import { fakeSpawn, file, harness, type Spawned } from './bootstrap-harness';
+import { gb1Descriptor } from './fixture';
 
 type Pod = Awaited<ReturnType<typeof harness>>;
 const HEAD = 'a'.repeat(40);
@@ -78,28 +79,34 @@ describe('pod bootstrap agent: offline install and dependency materialization', 
 
   it('should round-trip a clean install through the trusted cache and materialize it read-only with lockfile links', async () => {
     const pod = await harness({ spawn: fakeSpawn([], npmCi) });
-    const objects = new Map<string, CacheObject>();
+    const objects = new Map<string, CacheObject>(); const blobs = new Map<string, Uint8Array>();
     const cache = createDependencyCache({ signingKey: () => new Uint8Array(32).fill(7),
-      evidence: async lockSha256 => ({ lockSha256, digest: 'e'.repeat(64), approved: [], disabledHooks: [] }),
       fetch: async pin => (pin.path.endsWith('vite') ? tgz.vite : tgz.x),
-      cleanInstall: async ({ tarballs: pins }) => {
+      cleanInstall: async ({ tarballs: pins, sink }) => {
         expect(await pod.send('clear', { paths: ['/tmp'] })).toEqual({ cleared: ['/tmp'] });
-        const staged = pins.map((t, index) => ({ file: file(`${index}.tgz`, Buffer.from(t.bytes), 0o444), integrity: t.pin.integrity }));
+        const staged = [];
+        for await (const t of pins) staged.push({ file: file(`${staged.length}.tgz`, Buffer.from(t.bytes), 0o444), integrity: t.pin.integrity });
         expect(await install(pod, source, staged)).toEqual({ exitCode: 0 });
         const exported = await snapshot(pod, 'dependencies');
         await pod.send('clear', { paths: ['/tmp'] });
-        return { runId: 'run-1', files: exported.map(f => ({ path: f.path, type: 'file' as const,
-          mode: f.mode & 0o111 ? 365 as const : 292 as const, bytes: f.bytes.toString('base64') })) };
+        for (const f of exported) await sink({ path: f.path, mode: f.mode & 0o111 ? 365 : 292, bytes: f.bytes });
+        return { runId: 'run-1' };
       },
       storage: { read: async key => objects.get(key), admit: async (key, object) => { objects.set(key, object); return object; },
-        quarantine: async () => undefined } });
+        quarantine: async () => undefined, putFile: async (digest, bytes) => { blobs.set(digest, bytes); },
+        getFile: async digest => blobs.get(digest) } });
     const identity = { storageScopeId: 's', repoId: 'r', lockSha256: createHash('sha256').update(lock).digest('hex'), platform: 'linux-x64',
-      nodeVersion: '24', npmVersion: '11', image: BUILDER_IMAGE, policyRevision: 'p1', workspaceTopology: 'ui', integrityDigest: 'e'.repeat(64) };
-    const receipt = await cache.acquire({ lockfile: lock, cacheIdentity: identity, stagingRef: 'ref' });
-    const files: readonly DependencyFile[] = await cache.materialize(receipt);
+      nodeVersion: '24', npmVersion: '11', image: BUILDER_IMAGE, policyRevision: 'p1', workspaceTopology: 'ui', integrityDigest: createHash('sha256').digest('hex') };
+    // GB1 at the pinned commit: no script entry in the lock, so no qualification file (digest of zero bytes).
+    const gb1 = { subPath: '', files: { 'sentropic.artifact.json': gb1Descriptor, 'package-lock.json': lock.toString(),
+      'ui/package.json': '{"name":"ui"}',
+      'package.json': JSON.stringify({ name: 'root', workspaces: ['ui'], scripts: { 'build:artifact': 'vite build' } }) } };
+    const receipt = await cache.acquire({ lockfile: lock, cacheIdentity: identity, stagingRef: 'ref', gb1 });
+    const files: DependencyFile[] = [];
+    for await (const f of cache.materialize(receipt)) files.push(f);
     expect(files.map(f => [f.path, f.mode])).toEqual([['node_modules/vite/bin/vite.js', 365], ['node_modules/vite/package.json', 292],
       ['ui/node_modules/x/index.js', 292]]);
-    const tree = files.map(f => file(f.path, Buffer.from(f.bytes, 'base64'), f.mode === 365 ? 0o555 : 0o444));
+    const tree = files.map(f => file(f.path, Buffer.from(f.bytes), f.mode === 365 ? 0o555 : 0o444));
     const fresh = await harness();
     const materialize = async (entries = tree) => fresh.send('dependencies', { ...await fresh.transfer('dependencies', entries),
       cacheKey: receipt.key, cacheTree: receipt.treeSha256, readOnly: true });
