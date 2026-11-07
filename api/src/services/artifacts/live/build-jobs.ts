@@ -2,7 +2,8 @@ import type { Handoff, HandoffReceipt } from './handoff';
 import type { LiveKey } from './records';
 import type { HandoffOutcomes } from './handoff-publication';
 
-/** Above the pod deadline (3600 s) plus teardown: a run older than this is presumed dead and can be re-admitted. */
+/** Above the longest build-only run (each phase bounded by withinPhase, the runtime by its lifetime) plus teardown:
+ * a run older than this is presumed dead and can be re-admitted. */
 export const RUN_STALE_MS = 3_900_000;
 /** Builder-side job ledger of the host build API. One run token per admission; only the current run may fail it. */
 export interface BuildJobRecord {
