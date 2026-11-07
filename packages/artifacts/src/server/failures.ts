@@ -12,7 +12,7 @@ export type ArtifactErrorKind =
   | 'git_binding_conflict' | 'git_repo_not_registered' | 'git_ref_not_allowed'
   | 'git_head_moved' | 'git_path_refused' | 'git_branch_missing'
   | 'build_descriptor_invalid' | 'build_script_missing' | 'lock_missing'
-  | 'dep_outside_lock' | 'install_script_not_allowlisted';
+  | 'dep_outside_lock' | 'install_script_not_allowlisted' | 'dist_over_limits';
 
 /** Optimistic-concurrency payload: the caller re-reads and merges against this. */
 export interface ArtifactConflictDetails {
@@ -65,7 +65,7 @@ export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'va
   | LiveErrorCode
   | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required'
   | 'build_descriptor_invalid' | 'build_script_missing' | 'lock_missing'
-  | 'dep_outside_lock' | 'install_script_not_allowlisted'
+  | 'dep_outside_lock' | 'install_script_not_allowlisted' | 'dist_over_limits'
   | 'git_path_refused' | 'git_branch_missing' | 'git_ref_not_allowed' | 'git_repo_not_registered';
   readonly retriable: false;
 }
@@ -138,7 +138,7 @@ const DOMAIN_STATUS = {
   not_found: 404, gone: 410, release_unavailable: 410, limit_exceeded: 413, unprocessable: 422, verification_failed: 422, edit_mismatch: 422,
   precondition_required: 428,
   build_descriptor_invalid: 422, build_script_missing: 422, lock_missing: 422,
-  dep_outside_lock: 422, install_script_not_allowlisted: 422,
+  dep_outside_lock: 422, install_script_not_allowlisted: 422, dist_over_limits: 422,
   git_path_refused: 422, git_branch_missing: 422, git_ref_not_allowed: 422, git_repo_not_registered: 422,
 } as const;
 
