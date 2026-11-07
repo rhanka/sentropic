@@ -11,7 +11,7 @@ function setup(options: { lose?: number; fail?: boolean } = {}) {
   const publish = vi.fn(async (_c, uploaded: readonly CandidateFile[]) =>
     ({ releaseId: 'release-A', manifestDigest: 'm', storedDigest: candidateDigest(uploaded) }));
   let lose = options.lose ?? 0;
-  const host: RemoteHost = { job: vi.fn(async () => ({ headSha: 'A', expectedReleaseId: 'release-B' })),
+  const host: RemoteHost = { job: vi.fn(async (_key, jobId: string) => ({ jobId, generation: 1, headSha: 'A', expectedReleaseId: 'release-B' })),
     accept: vi.fn(async (_key, handoff, uploaded) => {
       order.push('accept');
       if (options.fail) throw new Error('ECONNRESET');
