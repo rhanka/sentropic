@@ -4,9 +4,11 @@ export const ARTIFACT_PUBLIC_ENV = Object.freeze({
   VITE_ARTIFACT_MODE: '1', VITE_API_BASE_URL: '/__app',
   VITE_BASEMAP_TILE_URL: '/__artifacts/tiles/v1/osm/{z}/{x}/{y}',
 });
+/** Host-owned V8 heap cap for every worker Node process (4 live pods per d2-4 node). It never caps esbuild's native memory. */
+export const NODE_HEAP_OPTIONS = '--max-old-space-size=384';
 /** Construct from zero. Never inherit API, forge, npm credentials or branch-controlled config. */
 export function artifactEnvironment() {
-  return { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/tmp/home', TMPDIR: '/tmp',
+  return { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/tmp/home', TMPDIR: '/tmp', NODE_OPTIONS: NODE_HEAP_OPTIONS,
     npm_config_userconfig: '/tmp/host-npmrc', npm_config_globalconfig: '/tmp/host-global-npmrc',
     npm_config_cache: '/tmp/npm-cache', npm_config_registry: NPM_RELAY,
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
@@ -22,11 +24,26 @@ export const LIVE_RECIPE = Object.freeze({
   executable: '/usr/local/bin/node', args: ['/workspace/node_modules/vite/bin/vite.js',
     '--config', '/tmp/artifact-vite.config.mjs', '--host', '127.0.0.1', '--port', String(LIVE_UPSTREAM_PORT), '--strictPort'], timeoutMs: 300_000,
 });
-/** Runs in the worker pod only; its output stays in the pod's /tmp/vite-cache and never enters the dependency cache. */
+/** Runs inside the worker pod before the dev server. Its output stays in the pod's emptyDir cacheDir
+ * (/tmp/vite-cache) and never enters the shared dependency cache. */
 export const PREBUNDLE_RECIPE = Object.freeze({
-  executable: '/usr/local/bin/node', args: ['/workspace/node_modules/vite/bin/vite.js', 'optimize',
-    '--config', '/tmp/artifact-vite.config.mjs'], timeoutMs: 300_000,
+  executable: '/usr/local/bin/node', args: ['/tmp/artifact-vite-prebundle.mjs'], timeoutMs: 300_000,
 });
+/** Host-owned pre-bundle driver. It runs Vite's dev pipeline with the live config (plugin buildStart hooks
+ * included, so plugin cache metadata matches the dev server) but no HTTP, watcher or module transforms,
+ * and exits once the optimizer commits deps/_metadata.json. `vite optimize` skips buildStart, so
+ * vite-plugin-svelte would force a full re-optimization on the dev server's first render. */
+export const LIVE_PREBUNDLE_SCRIPT = `import { existsSync } from 'node:fs';
+import { createServer } from '/workspace/node_modules/vite/dist/node/index.js';
+const server = await createServer({configFile:'/tmp/artifact-vite.config.mjs', mode:'development',
+  server:{middlewareMode:true, ws:false, watch:null}, optimizeDeps:{holdUntilCrawlEnd:false}});
+try {
+  for (let i = 0; !existsSync('/tmp/vite-cache/deps/_metadata.json'); i++) {
+    if (i >= 1100) throw new Error('Pre-bundle did not commit');
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+} finally { await server.close(); }
+process.exit(0);`;
 export const BUILD_RECIPE = Object.freeze({
   executable: '/usr/local/bin/npm', args: ['--ignore-scripts', '--offline', 'run', 'build:artifact'], timeoutMs: 300_000,
 });
