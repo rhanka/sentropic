@@ -16,6 +16,7 @@
   - `api/tests/unit/artifacts-live/**`
   - `packages/artifacts/tests/live-tools-multiuser.test.ts`
   - `packages/artifacts/tests/fixtures/live-world.ts`
+  - `packages/cluster-mesh/tests/heavy-phase-queue.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -29,10 +30,13 @@
   - `packages/artifacts/src/server/live-store.ts` (BRW8-EX1)
   - `packages/artifacts/src/server/live-mutations.ts` (BRW8-EX1)
   - `packages/artifacts/src/server/live-read.ts` (BRW8-EX1)
+  - `packages/cluster-mesh/src/runtime/heavy-phase-queue.ts` (BRW8-EX2)
+  - `packages/cluster-mesh/src/index.ts` (BRW8-EX2)
 
 ## Feedback Loop
 - [x] attention: the A-LIVE §3.3 contract keeps live_status owner-only, while plan Δ4 lists live_status for invitees; the contract wins and the package is unchanged.
 - [x] BRW8-EX1: the package LiveService runtime record follows A-LIVE Amendment 1 (idleDeadline = lastAccessAt + 900 s, maximumLifetimeAt removed); impact: three package server files, no export or version change; rollback: revert the BRW8-EX1 commit.
+- [x] BRW8-EX2: owner decision « Cluster mesh gère la file »; cluster-mesh had no heavy-phase queue, so it gains a durable FIFO with memory-budget admission and status (one module, one root export); impact: no version, package.json or lock change; rollback: revert the BRW8-EX2 commits.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -54,4 +58,8 @@
 - [x] Lot 8: admission survives an API restart, capacity from per-env config, bridge.stop lease fence, bounded opaque revision (review R1/R2).
 - [x] Lot 9: package live idle deadline at 900 s with no absolute lifetime (BRW8-EX1).
 - [x] Lot 10: scoped checks green after the review and Amendment 1 (tsc and eslint live scope, api artifacts-live 104/104, package live-tools 18/18).
+- [ ] Lot 11: cluster-mesh durable FIFO heavy-phase queue under the node memory budget (BRW8-EX2).
+- [ ] Lot 12: heavy gate as a queue client for install, pre-bundle, dev and build; 4-live admission; queued status.
+- [ ] Lot 13: idle build waits durably in BUILD_QUEUED after its live stops.
+- [ ] Lot 14: scoped checks green after the queue.
 - [ ] Lot N: train integration CI green on the exact head.
