@@ -11,9 +11,9 @@ export const MAX_REPLY_BYTES = 2 * 1024 * 1024;
 export const FRAME_TTL_MS = 30_000;
 const CLOCK_SKEW_MS = 5_000;
 export type SupervisorOp = 'phase' | 'terminate' | 'clear' | 'put' | 'stage' | 'dependencies' | 'install'
-  | 'overlay' | 'hostFile' | 'dev' | 'build' | 'snapshot';
+  | 'overlay' | 'hostFile' | 'prebundle' | 'dev' | 'build' | 'snapshot';
 const OPS: ReadonlySet<string> = new Set<SupervisorOp>(['phase', 'terminate', 'clear', 'put', 'stage', 'dependencies',
-  'install', 'overlay', 'hostFile', 'dev', 'build', 'snapshot']);
+  'install', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'snapshot']);
 /** Durable controller fence plus the leased pod identity; the pod refuses any fence older than one it has seen. */
 export interface FrameFence {
   generation: number; sessionId: string; leaseEpoch: number; routeEpoch: number; podName: string; podUid: string;

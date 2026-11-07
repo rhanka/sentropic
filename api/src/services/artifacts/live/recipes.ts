@@ -12,6 +12,22 @@ export function artifactEnvironment() {
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
     npm_config_update_notifier: 'false', ...ARTIFACT_PUBLIC_ENV };
 }
+/** Decision 07/11 (b): a 384 V8 heap for install, pre-bundle and live; 1024 for the clean build only. */
+export const NODE_HEAP_OPTIONS = '--max-old-space-size=384';
+export const NODE_BUILD_HEAP_OPTIONS = '--max-old-space-size=1024';
+/** Decision 07/11 (d), owned by W4: the live dev server and its pre-bundle see the base, its public VITE_* and heap 384. */
+export function liveEnvironment() {
+  return { ...artifactEnvironment(), NODE_OPTIONS: NODE_HEAP_OPTIONS };
+}
+/** Decision 07/11 (d), owned by W4: the clean build drops VITE_BASEMAP_TILE_URL (the repository wrapper owns it), heap 1024. */
+export function buildEnvironment() {
+  const { VITE_BASEMAP_TILE_URL: _tiles, ...base } = artifactEnvironment();
+  return { ...base, NODE_OPTIONS: NODE_BUILD_HEAP_OPTIONS };
+}
+/** Pod-side Vite dependency pre-bundle; the bootstrap writes its frozen script, never a host file. */
+export const PREBUNDLE_RECIPE = Object.freeze({
+  executable: '/usr/local/bin/node', args: ['/tmp/artifact-vite-prebundle.mjs'], timeoutMs: 300_000,
+});
 export const INSTALL_RECIPE = Object.freeze({
   executable: '/usr/local/bin/npm', args: ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], timeoutMs: 300_000,
 });
