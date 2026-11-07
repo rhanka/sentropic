@@ -7,6 +7,7 @@ import { gitBinding, gitWrite } from './fixtures/git-binding-conformance.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 const directory = new URL('../migrations/', import.meta.url);
+const migrations = readdirSync(directory).filter(f => f.endsWith('.sql')).sort();
 const apply = async (file: string) => {
   await pool.query(readFileSync(new URL(file, directory), 'utf8'));
   await pool.query('INSERT INTO rollback_host_journal(name) VALUES ($1)', [file]);
@@ -15,7 +16,7 @@ beforeAll(async () => {
   await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
   // A host-owned journal survives application rollback along with the schema.
   await pool.query('CREATE TEMP TABLE rollback_host_journal(name TEXT PRIMARY KEY)');
-  for (const file of readdirSync(directory).filter(f => f.endsWith('.sql') && f < '0010').sort()) await apply(file);
+  for (const file of migrations.filter(f => f < '0010')) await apply(file);
 });
 afterAll(async () => { await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE'); await pool.end(); });
 
@@ -31,10 +32,14 @@ describe('0010 application rollback with retained additive schema', () => {
       authorPrincipalId: null, parentReleaseId: null, revertedFromReleaseId: null };
     await oldStore.putRelease(oldRelease);
     expect(await oldStore.compareAndSwapCurrent(artifactId, null, oldRelease.releaseId)).toBe(true);
-    await apply('0010_git_bindings.sql');
+    // The forward application needs every Git-era migration, 0010 included.
+    for (const file of migrations.filter(f => f >= '0010')) await apply(file);
     const bindings = createPostgresGitBindingStore(pool);
     const binding = gitBinding(artifactId);
-    await bindings.write(gitWrite(binding));
+    await bindings.reserveAttachIntent({ storageScopeId: 'scope-a', artifactId, actorId: 'alice', idempotencyKey: 'attach',
+      commandHash: 'attach', repoId: 'repo-a', branch: binding.branch, baseCommitSha: 'a'.repeat(40),
+      createdAt: '2026-11-05T00:00:00.000Z' });
+    await bindings.write({ ...gitWrite(binding), event: { action: 'attach', branchCreated: true } });
     // Quiesce Git writes before restoring the previous non-Git application.
     await bindings.write({ ...gitWrite({ ...binding, state: 'detached', version: 2, generation: 2 }, 'detach'),
       expectedVersion: 1, event: { action: 'detach' } });
@@ -50,6 +55,7 @@ describe('0010 application rollback with retained additive schema', () => {
       receipts: (await pool.query('SELECT * FROM artifacts.idempotency_keys ORDER BY key')).rows,
       index: (await pool.query('SELECT * FROM artifacts.git_release_index')).rows,
       provenance: (await pool.query('SELECT git_commit FROM artifacts.releases WHERE id=$1', [gitReleaseId])).rows,
+      intents: (await pool.query('SELECT * FROM artifacts.git_attach_intents')).rows,
       journal: (await pool.query('SELECT name FROM rollback_host_journal ORDER BY name')).rows,
     });
     const beforeRollback = await retained();
@@ -69,7 +75,9 @@ describe('0010 application rollback with retained additive schema', () => {
     expect((await pool.query('SELECT git_commit FROM artifacts.releases WHERE id=$1', [next.releaseId])).rows)
       .toEqual([{ git_commit: null }]);
     expect(await retained()).toEqual(beforeRollback);
-    expect(beforeRollback.journal).toHaveLength(10);
+    expect(beforeRollback.journal).toHaveLength(migrations.length);
+    expect(beforeRollback.intents).toHaveLength(1);
+    expect(beforeRollback.events[0]).toMatchObject({ action: 'attach', branchCreated: true });
     for (const table of ['git_binding_events', 'git_release_index']) {
       for (const sql of [`UPDATE artifacts.${table} SET artifact_id=artifact_id`,
         `DELETE FROM artifacts.${table}`, `TRUNCATE artifacts.${table}`]) {
