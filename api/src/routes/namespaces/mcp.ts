@@ -1,5 +1,6 @@
 import {
   createMcpAuth,
+  McpAuthError,
   legacyProtectedResourceMetadataPath,
   MCP_SCOPES,
   PROTECTED_RESOURCE_METADATA_PATH,
@@ -25,11 +26,12 @@ import { env } from '../../config/env';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createGmailConnectorHost } from '../../services/connector-host/gmail';
 import { createGoogleConnectorHost } from '../../services/connector-host/google-drive';
-import { resolveDefaultWorkspaceId } from '../../services/workspace-access';
+import { getWorkspaceRole, resolveDefaultWorkspaceId } from '../../services/workspace-access';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { resolveOAuthIssuer } from '../auth/oauth';
 import { artifactHostEnabled, productArtifactTransport } from '../../services/artifacts/instance';
 import { artifactCredential } from '../../services/artifacts/credentials';
+import { createConnectorAdmission, resolveMemberWorkspace, type WorkspaceMembershipPorts } from '../../services/mcp/client-policy';
 import { createRegistryDispatchRouter } from '../../services/mcp/registry-dispatch';
 
 await productArtifactTransport.ready;
@@ -93,10 +95,20 @@ const createAuthPort = (): McpHonoOptions['auth'] => {
   };
 };
 
+const membershipPorts: WorkspaceMembershipPorts = {
+  defaultWorkspaceId: resolveDefaultWorkspaceId,
+  role: getWorkspaceRole,
+};
+
+// One identity contract for every MCP path (A4): sub and tid are required, and a refusal
+// carries the same RFC 6750 challenge (WWW-Authenticate with resource_metadata).
+const missingTenantError = () =>
+  new McpAuthError(403, 'invalid_token', 'Tenant (tid) is required.');
+
 const resolveDriver = async (request: McpInvocation) => {
-  const workspaceId = request.workspaceRef
-    ?? await resolveDefaultWorkspaceId(request.principal.sub)
-    ?? '';
+  const member = await resolveMemberWorkspace(request.principal.sub, request.workspaceRef, membershipPorts);
+  if (!member.ok) throw new Error('workspace_forbidden');
+  const workspaceId = member.workspaceId;
   const sessionUser = { userId: request.principal.sub, workspaceId };
   const driver = request.connectorId === 'google-drive'
     ? createGoogleConnectorHost({ sessionUser })
@@ -126,6 +138,11 @@ const connector: McpConnectorPort = {
     return resolved.driver.readResource(resolved.request);
   },
 };
+
+export const authorizeConnectorInvocation = createConnectorAdmission(
+  membershipPorts,
+  () => authorizeProductMcpInvocation(),
+);
 
 export const productMcpPorts = { createAuthPort, connector, isEnabled };
 
@@ -214,12 +231,14 @@ export const productMcpModule: ClusterMeshHonoNamespaceModule = {
         try {
           const verified = await auth.verify(context.req.raw, { requiredScopes: scopes });
           const jti = verified.claims.jti;
-          if (!verified.sub || !verified.tid || typeof jti !== 'string' || !jti) {
-            return context.json({ error: 'access_denied' }, 403);
+          if (!verified.sub || !verified.tid) return auth.challenge(missingTenantError());
+          if (typeof jti !== 'string' || !jti) {
+            return auth.challenge(new McpAuthError(403, 'invalid_token', 'Token identifier (jti) is required.'));
           }
-          const workspaceId = requestedWorkspace ?? context.req.query('workspace_id')
-            ?? await resolveDefaultWorkspaceId(verified.sub) ?? '';
-          return { workspaceId, scopes: verified.scopes, identity: {
+          const member = await resolveMemberWorkspace(
+            verified.sub, requestedWorkspace ?? context.req.query('workspace_id'), membershipPorts);
+          if (!member.ok) return context.json({ error: 'access_denied' }, 403);
+          return { workspaceId: member.workspaceId, scopes: verified.scopes, identity: {
             subject: verified.sub, tenantId: verified.tid, clientId: verified.clientId,
             credentialId: artifactCredential('oauth', jti, verified.jkt, scopes),
           } };
@@ -231,7 +250,7 @@ export const productMcpModule: ClusterMeshHonoNamespaceModule = {
       connector,
       enabled: isEnabled,
       invocation: {
-        authorize: authorizeProductMcpInvocation,
+        authorize: authorizeConnectorInvocation,
       },
     }));
     return router;
