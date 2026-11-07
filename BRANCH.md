@@ -6,7 +6,7 @@
 ## Scope / Guardrails
 - [x] Branch feat/artifacts-live-host from origin/main 3f1027496; worktree tmp/worktrees/artifacts-live-host; ENV=test-live-host.
 - [x] Architect decision: .tmp/rv/reviews/batch-w3-w5-w7-netpol.md (W3 item 3, W7 changes 1-5).
-- [x] Sources: feat/alive-w3 97848a16f (candidateManifestDigest), feat/alive-w7 c84d84a36 (handoff), feat/alive-w9 eda8d7a19 (assertion).
+- [x] Sources: feat/alive-w3 97848a16f (candidateManifestDigest), feat/alive-w7 1dd2155a4 (handoff, host recheck), feat/alive-w9 148ae6092 + live-format WIP (assertion, control, fence), feat/alive-w8 84571090e (opaque string revisions).
 - [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling; never ENV=dev.
 - [x] Wagon: push the branch, no PR, no version bump, no CHANGELOG, lock or manifest regeneration (train 1a owns them).
 - [x] Existing exports unchanged; pure Node crypto, no new dependency.
@@ -41,7 +41,7 @@
 - [x] **Lot 1 — Candidate digest**
   - [x] One `candidateDigest` with §8.3 ceilings, safe paths, no file/directory conflict, pinned test vectors.
 - [ ] **Lot 2 — SG4b handoff**
-  - [ ] `kid` in claims and receipt; key resolvers for rotation overlap; Ed25519 only.
+  - [x] `kid` in claims and receipt; key resolvers for rotation overlap; Ed25519 only.
   - [ ] Typed §8.3 final recheck inside the host transaction, every item tested.
 - [ ] **Lot 3 — Live assertion and control**
   - [ ] Prefix-bound HMAC formats moved from W9, pinned token vector.
