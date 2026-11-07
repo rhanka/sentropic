@@ -51,4 +51,5 @@
 - [x] Lot 3: push, open PR, GLM review.
 - [x] Review B1: pin the exact longest-first wave and the complete endpoint set (performance-report 8/8).
 - [x] Review M3: a deps miss or a failed thin build falls back to the full toolbox build with a warning; full-build failure stays fatal (api-tool-cache 11/11, api-tooling layers, disk-hygiene).
+- [x] Review L4: the deps record names its tooldeps identity; a stale or malformed record is refused and truncated (api-tool-cache 13/13).
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.

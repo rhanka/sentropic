@@ -18,6 +18,10 @@ export function pinnedRef(repo, repoDigests) {
   return match;
 }
 
+// The recorded dependency base names the identity it was pinned for, so a build for another
+// dependency identity (a stale local record) can refuse it instead of inheriting old bytes.
+export const depsRecord = (tag, ref) => `${tag} ${ref}`;
+
 export function manifestLabels({ tag, imageId, lockDigest, architecture }) {
   return { schema: SCHEMA, tag, imageId, lockDigest, architecture };
 }
@@ -42,7 +46,7 @@ export async function main([mode, repo, tag, ref]) {
   if (mode === 'pin') {
     // Only valid after a successful verified pull: the local image must still be the recorded one.
     const raw = JSON.parse(docker('image', 'inspect', `${repo}:${tag}`, '--format', '{{json .RepoDigests}}'));
-    console.log(pinnedRef(repo, raw));
+    console.log(depsRecord(tag, pinnedRef(repo, raw)));
     return;
   }
   if (mode === 'push') {

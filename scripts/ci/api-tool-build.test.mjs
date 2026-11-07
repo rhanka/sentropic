@@ -4,8 +4,12 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildToolbox, depsBase, main, thinArgs } from './api-tool-build.mjs';
+import { depsRecord } from './api-tool-registry.mjs';
 
-const ref = `ghcr.io/rhanka/sentropic-ci-toolbox-deps@sha256:${'d'.repeat(64)}`;
+const repo = 'ghcr.io/rhanka/sentropic-ci-toolbox-deps';
+const ref = `${repo}@sha256:${'d'.repeat(64)}`;
+const tag = `tooldeps-${'c'.repeat(64)}`;
+const identity = { tag, repo };
 const recorder = results => {
   const calls = [];
   const warnings = [];
@@ -13,9 +17,9 @@ const recorder = results => {
 };
 
 test('should build the full toolbox without a warning in cold mode and warn on a registry miss', () => {
-  assert.deepEqual(depsBase(null), { ref: null });
-  assert.match(depsBase('\n').warning, /registry miss/);
-  assert.deepEqual(depsBase(`${ref}\n`), { ref });
+  assert.deepEqual(depsBase(null, identity), { ref: null });
+  assert.match(depsBase('\n', identity).warning, /registry miss/);
+  assert.deepEqual(depsBase(`${depsRecord(tag, ref)}\n`, identity), { ref });
   const run = recorder([true]);
   assert.equal(buildToolbox({ ref: null, build: run.build, warn: run.warn }), 'full');
   assert.deepEqual(run.calls, [[]]);
@@ -57,8 +61,8 @@ test('should run the real build command and fall back when the thin build proces
   const command = [process.execPath, '-e', fake, '--', '--target', 'ci-tools', '-t', 'toolbox:tag', '.'];
   const lines = [];
   t.mock.method(console, 'log', line => lines.push(line));
-  writeFileSync(file, `${ref}\n`);
-  main([file, '--', ...command]);
+  writeFileSync(file, `${depsRecord(tag, ref)}\n`);
+  main([file, tag, repo, '--', ...command]);
   assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), [
     `--target ci-tools -t toolbox:tag ${thinArgs(ref).join(' ')} .`,
     '--target ci-tools -t toolbox:tag .',
@@ -67,9 +71,31 @@ test('should run the real build command and fall back when the thin build proces
   assert.ok(lines.includes('Toolbox build mode: full'));
   writeFileSync(file, '');
   writeFileSync(log, '');
-  main([file, '--', ...command]);
+  main([file, tag, repo, '--', ...command]);
   assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['--target ci-tools -t toolbox:tag .']);
   assert.ok(lines.some(line => line.startsWith('::warning::No verified toolbox dependency base')));
   const failing = [process.execPath, '-e', 'process.exit(1)', '--', '.'];
-  assert.throws(() => main([join(dir, 'absent'), '--', ...failing]), /Full toolbox build failed/);
+  assert.throws(() => main([join(dir, 'absent'), tag, repo, '--', ...failing]), /Full toolbox build failed/);
+  assert.throws(() => main([file, `tool-${'c'.repeat(64)}`, repo, '--', ...failing]), /Usage/);
+});
+
+test('should refuse a stale or malformed dependency record and never build a new identity on an old base', t => {
+  const other = `tooldeps-${'e'.repeat(64)}`;
+  for (const record of [depsRecord(other, ref), ref, depsRecord(tag, `ghcr.io/other/x@sha256:${'d'.repeat(64)}`), `${depsRecord(tag, ref)} extra`]) {
+    const base = depsBase(record, identity);
+    assert.equal(base.ref, null, record);
+    assert.equal(base.stale, true);
+    assert.match(base.warning, /does not match tooldeps-c+; discarding it/);
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'api-tool-build-stale-'));
+  const file = join(dir, 'deps-ref');
+  const log = join(dir, 'builds.log');
+  writeFileSync(file, `${depsRecord(other, ref)}\n`);
+  const lines = [];
+  t.mock.method(console, 'log', line => lines.push(line));
+  const fake = "require('fs').appendFileSync(process.argv[1], process.argv.slice(2).join(' ')+'\\n')";
+  main([file, tag, repo, '--', process.execPath, '-e', fake, '--', log, '.']);
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['.']);
+  assert.equal(readFileSync(file, 'utf8'), '');
+  assert.ok(lines.some(line => line.startsWith('::warning::Recorded toolbox dependency base does not match')));
 });

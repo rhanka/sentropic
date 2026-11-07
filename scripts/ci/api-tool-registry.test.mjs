@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { manifestLabels, validateManifest, pinnedRef, TAG } from './api-tool-registry.mjs';
+import { depsRecord, manifestLabels, validateManifest, pinnedRef, TAG } from './api-tool-registry.mjs';
 
 const hash = `sha256:${'a'.repeat(64)}`;
 const tag = `tool-${'b'.repeat(64)}`;
@@ -29,4 +29,9 @@ test('should pin a pulled image to the repository manifest digest only', () => {
   assert.equal(pinnedRef(repo, ['ghcr.io/other/x@sha256:' + 'e'.repeat(64), digestRef]), digestRef);
   assert.throws(() => pinnedRef(repo, []), /no digest/);
   assert.throws(() => pinnedRef(repo, [`${repo}@sha256:short`]), /no digest/);
+});
+
+test('should record the pinned dependency base with the identity it was pinned for', () => {
+  const ref = `ghcr.io/rhanka/sentropic-ci-toolbox-deps@sha256:${'d'.repeat(64)}`;
+  assert.equal(depsRecord(`tooldeps-${'c'.repeat(64)}`, ref), `tooldeps-${'c'.repeat(64)} ${ref}`);
 });

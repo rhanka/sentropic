@@ -821,7 +821,7 @@ ci-build-api-tool:
 # A recorded, verified dependency digest (pull-api-tool-deps-registry) makes this a thin source build;
 # a miss, cold mode or a failed thin build runs the full toolbox build (scripts/ci/api-tool-build.mjs).
 ci-build-api-tool-target:
-	@$(DISK_HYGIENE_GUARD) && node scripts/ci/api-tool-build.mjs $(API_TOOL_DEPS_REF_FILE) -- $(CI_IMAGE_BUILDX) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
+	@$(DISK_HYGIENE_GUARD) && node scripts/ci/api-tool-build.mjs $(API_TOOL_DEPS_REF_FILE) $(API_TOOL_DEPS_VERSION) $(API_TOOL_DEPS_REGISTRY_IMAGE) -- $(CI_IMAGE_BUILDX) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
 ci-build-ui:
 	@node scripts/ci/resolve-ui-image.mjs $(ENV)
 ci-build-ui-target:
