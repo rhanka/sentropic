@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fixture, key } from './fixture';
+import { fixture, key, owner } from './fixture';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -10,18 +10,20 @@ describe('live crash and wake fences', () => {
     const f = fixture(); await f.controller.start(key); f.binding.healthy = false;
     await f.controller.reconcile(key); expect(f.objects.size).toBe(0); expect(f.ports.worker.build).not.toHaveBeenCalled();
   });
-  it('should confirm a disappeared pod before allowing a new worker', async () => {
+  it('should confirm a disappeared pod deleted before its fenced replacement restores the draft', async () => {
     const f = fixture(); const live = await f.controller.start(key); f.objects.delete('pods' + live.podName);
-    await f.controller.reconcile(key); expect((await f.state())?.runtime.phase).toBe('DORMANT');
-    expect(f.core.create).toHaveBeenCalledTimes(2);
-    await f.controller.start(key); expect(f.core.create).toHaveBeenCalledTimes(4);
+    await f.controller.reconcile(key);
+    expect(vi.mocked(f.core.waitDeleted).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(f.core.create).mock.invocationCallOrder[2]);
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'LIVE', crashRestores: 1 }); expect(f.core.create).toHaveBeenCalledTimes(4);
   });
   it('should cancel an idle build before restoring the saved draft in the same pod', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     const entered = deferred<void>(); const output = deferred<{ candidateDigest: string }>();
     f.ports.worker.build = vi.fn(async () => { entered.resolve(); return output.promise; });
+    // Quiesce terminates the build process tree, which ends the build holding the heavy-phase gate.
+    f.ports.worker.quiesce = vi.fn(async () => { output.resolve({ candidateDigest: 'stale' }); });
     f.advance(600_001); const idle = f.controller.idle(key); await entered.promise;
-    await f.controller.wake(key); output.resolve({ candidateDigest: 'stale' }); await idle;
+    await f.controller.wake(key); await idle;
     expect((await f.state())?.runtime).toMatchObject({ phase: 'LIVE', podUid: live.podUid });
     expect(f.core.create).toHaveBeenCalledTimes(2); expect(f.published).toEqual([]);
     expect(f.ports.worker.restore).toHaveBeenCalledTimes(2);
@@ -67,7 +69,7 @@ describe('live crash and wake fences', () => {
   });
   it('should reap the absolute lifetime without publishing an active session', async () => {
     const f = fixture(); const live = await f.controller.start(key); f.advance(3_500_000);
-    await f.controller.activity(key, live.sessionId, 'read'); f.advance(100_000); await f.controller.reap(key);
+    await f.controller.activity(key, live.sessionId, 'read', owner); f.advance(100_000); await f.controller.reap(key);
     expect(f.objects.size).toBe(0); expect(f.ports.worker.build).not.toHaveBeenCalled();
   });
 });
