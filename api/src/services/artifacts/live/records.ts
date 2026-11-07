@@ -1,6 +1,7 @@
 /** A-LIVE records are host state, never tool definitions or release-profile keys. */
 export interface LiveKey { storageScopeId: string; artifactId: string }
-export type LivePhase = 'DORMANT' | 'REVIVING' | 'LIVE' | 'QUIESCING' | 'BUILD_PROVISIONING'
+/** BUILD_QUEUED: the live stopped, the pod is prepared and its clean build waits durably in the node queue. */
+export type LivePhase = 'DORMANT' | 'REVIVING' | 'LIVE' | 'QUIESCING' | 'BUILD_PROVISIONING' | 'BUILD_QUEUED'
   | 'BUILDING' | 'VERIFYING' | 'PUBLISHING' | 'SAVING' | 'DECOMMISSIONING' | 'RECOVERING' | 'FAILED';
 export interface LiveRuntime {
   generation: number; ownerId: string; sessionId: string; phase: LivePhase;
