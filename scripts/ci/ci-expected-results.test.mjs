@@ -70,7 +70,7 @@ test('should keep validators independent without static capacity mutexes', () =>
     assert.ok(!job.concurrency?.group.startsWith('ci-capacity-'), name);
   }
   assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
-  assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 5);
+  assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 6);
 });
 
 test('should reject validator serialization beyond the immutable candidate producer', () => {
