@@ -5,6 +5,7 @@ resources:
   - ../../base
   - ingress.yaml
   - artifact-content-ingress.yaml
+  - artifact-content-live-edge-networkpolicy.yaml
   - idp-identity-sync
 # Pins the live OVH storage class on the postgres StatefulSet, mirroring
 # overlays/preprod (#474). Without it the prod overlay cannot converge at all.
