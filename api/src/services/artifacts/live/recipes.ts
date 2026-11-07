@@ -1,18 +1,22 @@
 export const NPM_RELAY = 'http://npm-relay.npm-relay.svc.cluster.local:4873/';
 export const BUILDER_IMAGE = 'docker.io/library/node@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198bcb09fb998f7dcbf68';
-export const ARTIFACT_PUBLIC_ENV = Object.freeze({
-  VITE_ARTIFACT_MODE: '1', VITE_API_BASE_URL: '/__app',
-  VITE_BASEMAP_TILE_URL: '/__artifacts/tiles/v1/osm/{z}/{x}/{y}',
-});
+/** VITE_BASEMAP_TILE_URL is owned by the repository build wrapper (owner decision 2026-11-07); the host never passes it. */
+export const ARTIFACT_PUBLIC_ENV = Object.freeze({ VITE_ARTIFACT_MODE: '1', VITE_API_BASE_URL: '/__app' });
 /** Host-owned V8 heap cap for every worker Node process (4 live pods per d2-4 node). It never caps esbuild's native memory. */
 export const NODE_HEAP_OPTIONS = '--max-old-space-size=384';
-/** Construct from zero. Never inherit API, forge, npm credentials or branch-controlled config. */
+/** The clean build alone needs a 1 GiB heap (immo measured: heap OOM at 384 and 768); its pod limit is 1536Mi. */
+export const NODE_BUILD_HEAP_OPTIONS = '--max-old-space-size=1024';
+/** Construct from zero. Never inherit API, forge, npm credentials or branch-controlled config. No registry: W2 offline. */
 export function artifactEnvironment() {
   return { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/tmp/home', TMPDIR: '/tmp', NODE_OPTIONS: NODE_HEAP_OPTIONS,
     npm_config_userconfig: '/tmp/host-npmrc', npm_config_globalconfig: '/tmp/host-global-npmrc',
-    npm_config_cache: '/tmp/npm-cache', npm_config_registry: NPM_RELAY,
+    npm_config_cache: '/tmp/npm-cache', npm_config_offline: 'true',
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
     npm_config_update_notifier: 'false', ...ARTIFACT_PUBLIC_ENV };
+}
+/** Clean build only: the same host environment with the build heap. */
+export function buildEnvironment() {
+  return { ...artifactEnvironment(), NODE_OPTIONS: NODE_BUILD_HEAP_OPTIONS };
 }
 /** W2 static deny: verified tarballs are staged in the npm cache; the relay is never contacted from a pod. */
 export const INSTALL_RECIPE = Object.freeze({
