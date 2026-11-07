@@ -1633,24 +1633,6 @@ jobs:
       - name: Build API image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make ci-build-api ENV=test-ci-images
-      - name: Test image receipt integrity and input guards
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-image-receipts ENV=test-ci-images
-      - name: Verify npm CLI and cache are absent from the production runtime
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-api-runtime ENV=test-ci-api
-      - name: Test publish-api-image tag-collision guard
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-api-tag-guard ENV=test-ci-api
-      - name: Test pgbackup restore isolation guards
-        if: needs.changes.outputs.global == 'true'
-        run: make test-pgbackup-restore-isolation ENV=test-ci-restore-guard
-      - name: Test canonical API image artifact
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-api-image-canonical ENV=test-ci-api
-      - name: Verify the production artifact content entrypoint
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-artifact-content-image ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
@@ -1667,7 +1649,39 @@ jobs:
           include-hidden-files: true
           compression-level: 0
 
-  build-api-tool-image:
+  # Guards run in parallel with the consumers of the uploaded image; ci-gate and
+  # publish-api-image both require this job, so an unguarded image never ships.
+  api-image-guards:
+    runs-on: ubuntu-latest
+    needs: [changes, build-api-image]
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - uses: actions/download-artifact@v7
+        with:
+          name: api-image
+          path: .
+      - name: Load and verify the transported API image
+        run: make load-api ENV=test-ci-api
+      - name: Test image receipt integrity and input guards
+        run: make test-ci-image-receipts ENV=test-ci-images
+      - name: Verify npm CLI and cache are absent from the production runtime
+        run: make test-ci-api-runtime ENV=test-ci-api
+      - name: Test publish-api-image tag-collision guard
+        run: make test-ci-api-tag-guard ENV=test-ci-api
+      - name: Test pgbackup restore isolation guards
+        if: needs.changes.outputs.global == 'true'
+        run: make test-pgbackup-restore-isolation ENV=test-ci-restore-guard
+      - name: Test canonical API image artifact
+        run: make test-ci-api-image-canonical ENV=test-ci-api
+      - name: Verify the production artifact content entrypoint
+        run: make test-artifact-content-image ENV=test-ci-api
+
+  # Pure qualification of the toolbox inputs: it does not feed the image, so it
+  # runs beside the consumers; ci-gate requires it.
+  api-tool-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
@@ -1679,6 +1693,21 @@ jobs:
         run: make test-ci-api-tooling ENV=test-ci-api
       - name: Qualify measured unit membership, dependency gates and archive validation
         run: make test-ci-unit-shards test-ci-unit-graph test-ci-api-tool-cache ENV=test-ci-api
+
+  build-api-tool-image:
+    runs-on: ubuntu-latest
+    # Pull-only registry access: this job runs PR code and never holds a write scope.
+    # Publication is the main-only successor api-tool-registry-publish.
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    needs: [changes]
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
       - name: Compute complete toolbox cache identity
         id: toolbox-key
         run: make -s api-tool-cache-key ENV=test-ci-api >> "$GITHUB_OUTPUT"
@@ -1692,9 +1721,21 @@ jobs:
       - name: Verify and load cached toolbox
         if: steps.toolbox-cache.outputs.cache-hit == 'true'
         run: make load-api-tool-cache ENV=test-ci-api
+      - name: Log in to GHCR
+        if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull prebuilt toolbox by content identity
+        id: toolbox-registry
+        if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
+        run: |
+          if make pull-api-tool-registry ENV=test-ci-api; then echo "hit=true" >> "$GITHUB_OUTPUT"; else echo "hit=false" >> "$GITHUB_OUTPUT"; fi
       - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - name: Build CI toolbox
-        if: steps.toolbox-cache.outputs.cache-hit != 'true'
+        if: steps.toolbox-cache.outputs.cache-hit != 'true' && steps.toolbox-registry.outputs.hit != 'true'
         run: make ci-build-api-tool ENV=test-ci-images
       - name: Verify toolbox runner and compiler interfaces
         run: make test-ci-api-tool-runtime ENV=test-ci-api
@@ -1718,6 +1759,41 @@ jobs:
         with:
           path: .tmp/api-tool-cache
           key: ${{ steps.toolbox-cache.outputs.cache-primary-key }}
+
+  # Main-only successor: publishes the exact bytes the producer already verified.
+  # It runs no PR code and is the only toolbox job holding packages:write.
+  api-tool-registry-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    needs: [changes, build-api-tool-image]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Download verified CI toolbox
+        if: env.CI_IMAGE_CACHE == '1'
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load verified CI toolbox
+        if: env.CI_IMAGE_CACHE == '1'
+        run: make load-api-tool ENV=test-ci-api
+      - name: Log in to GHCR
+        if: env.CI_IMAGE_CACHE == '1'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish prebuilt toolbox
+        if: env.CI_IMAGE_CACHE == '1'
+        run: make push-api-tool-registry ENV=test-ci-api
 
   test-api-unit-integration:
     runs-on: ubuntu-latest
@@ -2073,17 +2149,20 @@ jobs:
         with:
           name: ui-image
           path: .
-      - name: Load API image from artifact
-        run: make load-api
-      - name: Load UI image from artifact
-        run: make load-ui
       - name: Download E2E image artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: e2e-image
           path: .
-      - name: Load exact E2E image
-        run: make load-e2e ENV=e2e-ci
+      - name: Load API, UI and exact E2E images in parallel
+        run: |
+          # Each load verifies its receipt; any failed load fails the step.
+          make load-api & api=$!
+          make load-ui & ui=$!
+          make load-e2e ENV=e2e-ci & e2e=$!
+          status=0
+          for pid in "$api" "$ui" "$e2e"; do wait "$pid" || status=1; done
+          exit "$status"
       - name: Test e2e API & UI (shard ${{ matrix.shard }})
         env:
           E2E_SHARD: ${{ matrix.shard }}
@@ -2094,6 +2173,14 @@ jobs:
       - name: Require isolated provider traffic
         if: always()
         run: make ci-provider-receipt ENV=e2e-ci
+      - name: Start the browser test stack shutdown
+        if: always()
+        # The provider receipt above needs the live stack; once it is collected the
+        # same make down runs detached so it overlaps the artifact upload.
+        run: |
+          mkdir -p .tmp
+          rm -f .tmp/e2e-down.status
+          setsid bash -c 'make down ENV=e2e-ci > .tmp/e2e-down.log 2>&1; echo $? > .tmp/e2e-down.status' > /dev/null 2>&1 < /dev/null &
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -2103,9 +2190,21 @@ jobs:
             .tmp/ci-provider/
           include-hidden-files: true
           if-no-files-found: error
-      - name: Stop the browser test stack
+      - name: Confirm the browser test stack shutdown
         if: always()
-        run: make down ENV=e2e-ci
+        # Bounded wait (60s, after the artifact upload): a nonzero shutdown fails the
+        # job; only a shutdown still running after 60s is left to runner teardown.
+        run: |
+          for _ in $(seq 1 60); do
+            [ -f .tmp/e2e-down.status ] && break
+            sleep 1
+          done
+          if [ ! -f .tmp/e2e-down.status ]; then
+            echo "::warning::browser stack shutdown still running; runner teardown completes it"
+            exit 0
+          fi
+          cat .tmp/e2e-down.log
+          [ "$(cat .tmp/e2e-down.status)" = 0 ]
 
   e2e-vscode:
     runs-on: ubuntu-latest
@@ -2493,6 +2592,7 @@ jobs:
           fi
           printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
           chmod 600 kubeconfig.yaml
+          echo "Backup target API server: $(KUBECONFIG="$PWD/kubeconfig.yaml" kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
           make db-backup-prod KUBECONFIG="$PWD/kubeconfig.yaml" ENV=test-ci-restore
       - name: Test restore and smoke tests
         run: |
@@ -2552,12 +2652,14 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    needs: [changes, api-image-guards, api-tool-qualification, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') &&
       needs.changes.result == 'success' &&
+      needs.api-image-guards.result == 'success' &&
+      needs.api-tool-qualification.result == 'success' &&
       needs.typecheck-lint-api.result == 'success' &&
       needs.typecheck-lint-ui.result == 'success' &&
       needs.security-sast-sca.result == 'success' &&
@@ -3590,7 +3692,10 @@ jobs:
       - validate-harness
       - validate-live-speech
       - build-api-image
+      - api-image-guards
       - build-api-tool-image
+      - api-tool-qualification
+      - api-tool-registry-publish
       - test-api-unit-integration
       - test-api-sut
       - test-api-ai
@@ -3691,7 +3796,7 @@ jobs:
       validate-mcp-auth, validate-mcp-platform, validate-connector-host, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
-      validate-artifacts, artifacts-qualification, validate-harness, build-api-image, build-api-tool-image,
+      validate-artifacts, artifacts-qualification, validate-harness, build-api-image, api-image-guards, build-api-tool-image, api-tool-qualification, api-tool-registry-publish,
       test-api-unit-integration, test-api-sut, test-api-ai, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-code-api, security-code-ui, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
