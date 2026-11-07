@@ -43,8 +43,11 @@ The host supplies these mandatory integrations:
   fence; the host runs `acceptHandoff`, whose recheck covers every §8.3 item.
   Keys carry a `kid`, so builder and receipt keys rotate with an overlap.
   `createHttpRemoteHost` is the builder-side `RemoteHost` over the live-host
-  `HOST_BUILD_PATHS` (https base URL from the host configuration): a closed
-  refusal rejects with `LiveHostError`, any other failure is an unknown outcome.
+  `HOST_BUILD_PATHS`: a closed refusal rejects with `LiveHostError`, any other
+  failure is an unknown outcome. `builderRemoteHost(process.env)` reads the https
+  base from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (no secret); preprod is
+  `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls
+  `<base>/live-host/v1/job` and `<base>/live-host/v1/handoff`.
 - The API is mounted under `/api/v1/artifacts/builder` (`createBuilderMount`)
   behind `createRequireServiceAuth` with the `artifacts:builder` scope. The
   verified client maps to its host identity through
@@ -113,6 +116,27 @@ Dependency cache keys include the exact lock SHA-256 plus scope/repository,
 toolchain/image, platform, options/policy, workspace and integrity evidence.
 The host authenticates receipts and verifies safe tree hashes at every use.
 Missing integrity, including script-package literal pins, blocks admission.
+
+## GB1 qualification file
+
+`qualifyBuild` runs GB1 on the forge snapshot of the pinned commit
+(`SourceSnapshot.gb1`: descriptor, manifests, lock, the host-sealed integrity
+map) through the W5 port `validateArtifactBuild`. It reads
+`artifact-build/gb1-qualification.json` at the repository root:
+
+    {"v":1,"lockSha256":"<hex>","postinstallAllowlist":[],
+     "scriptQualification":[{"package","version","integrity"}]}
+
+The file is at most 64 KiB with closed keys; its rows enter W5 as disabled hooks
+with an empty execution allowlist. Refusals: a malformed file
+(`build_descriptor_invalid`/`qualification_invalid`), then
+`install_script_not_allowlisted` with `execution_allowlist_not_empty`,
+`qualification_lock_mismatch`, `qualification_rows_mismatch` (the rows do not
+exactly cover the lock script entries) or `qualification_missing` (no file while
+the lock has script entries). The SHA-256 of the file bytes is the
+`IntegrityEvidence` digest, which must equal the cache identity
+`integrityDigest`; a lock without script entries and no file digests zero bytes.
+The cache inventory is the W5 coverage: literal SRI or the sealed map.
 
 ## SG4b handoff keys
 
