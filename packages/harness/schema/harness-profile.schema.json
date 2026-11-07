@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentropic.dev/harness/harness-profile.schema.json",
+  "title": "Harness repository profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "forbiddenPathDefaults", "exceptionIdPattern", "conditionalRequiresException", "branchMatch"],
+  "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "forbiddenPathDefaults": { "$ref": "#/$defs/globs" },
+    "allowedPathDefaults": { "$ref": "#/$defs/globs" },
+    "conditionalPathDefaults": { "$ref": "#/$defs/globs" },
+    "exceptionIdPattern": { "$ref": "#/$defs/regex" },
+    "conditionalRequiresException": { "type": "boolean" },
+    "branchMatch": { "enum": ["exact", "prefix"] },
+    "branchMd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "allowedHeading", "forbiddenHeading", "conditionalHeading", "planHeading"],
+      "properties": {
+        "file": { "$ref": "#/$defs/path" },
+        "allowedHeading": { "$ref": "#/$defs/heading" },
+        "forbiddenHeading": { "$ref": "#/$defs/heading" },
+        "conditionalHeading": { "$ref": "#/$defs/heading" },
+        "planHeading": { "$ref": "#/$defs/heading" }
+      }
+    },
+    "commitMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forbiddenPatterns"],
+      "properties": {
+        "requiredPattern": { "$ref": "#/$defs/regex" },
+        "forbiddenPatterns": { "type": "array", "items": { "$ref": "#/$defs/regex" } }
+      }
+    }
+  },
+  "$defs": {
+    "globs": { "type": "array", "items": { "$ref": "#/$defs/path" } },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)\\S.*$"
+    },
+    "regex": { "type": "string", "minLength": 1, "format": "regex" },
+    "heading": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" }
+  }
+}
