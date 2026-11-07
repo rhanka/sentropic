@@ -8,6 +8,7 @@ import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/art
 import { createPrivateArtifactStorage } from '../../../api/src/services/artifacts/lifecycle';
 import { createContentRuntime } from './runtime';
 import { createLiveUpgrade } from './live-upgrade';
+import { liveFromEnv } from './live-config';
 import type { LiveProxy } from './live';
 
 /** TLS terminates at the dedicated W3.d ingress; Host is validated, forwarded identity is ignored. */
@@ -19,6 +20,7 @@ export async function startContentServer(options: {
   const enabled = () => env.APP_ARTIFACT_CONTENT_ENABLED === '1';
   const port = options.port ?? Number(env.ARTIFACT_CONTENT_PORT ?? '8791');
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid content port');
+  let live = options.live;
   let pool: Pool | undefined;
   let s3: S3Client | undefined;
   let handle: (request: Request) => Promise<Response> = async () => new Response(null, {
@@ -34,6 +36,7 @@ export async function startContentServer(options: {
       const connectionString = required('DATABASE_URL');
       const baseDomain = required('APP_ARTIFACT_CONTENT_BASE_DOMAIN');
       const keyFile = required('APP_ARTIFACT_CONTENT_SIGNING_KEY_FILE');
+      live ??= liveFromEnv(env, baseDomain);
       const signingSecret = () => readFileSync(keyFile);
       if (signingSecret().length < 32) throw new Error('Dedicated content signing key must contain at least 32 bytes');
       const bucket = required('APP_ARTIFACT_S3_BUCKET');
@@ -43,7 +46,7 @@ export async function startContentServer(options: {
         } });
       const storage = await createPrivateArtifactStorage({ client: s3, bucket });
       pool = new Pool({ connectionString, max: 10 });
-      const runtime = createContentRuntime({ pool, baseDomain, signingSecret, enabled, live: options.live,
+      const runtime = createContentRuntime({ pool, baseDomain, signingSecret, enabled, live,
         profileDigest: compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE).profileDigest,
         blobs: { getBlob: key => storage.blobs.getBlob(key) } });
       handle = request => {
@@ -62,8 +65,8 @@ export async function startContentServer(options: {
       url.protocol = 'https:';
       return handle(new Request(url, request));
     } }) as Server;
-    if (options.live && env.APP_ARTIFACT_CONTENT_BASE_DOMAIN) {
-      server.on('upgrade', createLiveUpgrade({ live: options.live,
+    if (live && env.APP_ARTIFACT_CONTENT_BASE_DOMAIN) {
+      server.on('upgrade', createLiveUpgrade({ live,
         baseDomain: env.APP_ARTIFACT_CONTENT_BASE_DOMAIN, enabled }));
     }
     server.once('close', () => { void pool?.end(); s3?.destroy(); });
