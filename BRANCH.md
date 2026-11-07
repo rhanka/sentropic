@@ -24,7 +24,10 @@ Mount the shipped cluster-mesh GitHub App router on the Sentropic public origin 
   - `api/src/app.ts`
   - `api/src/config/env.ts`
   - `api/src/db/control-schema.ts`
-  - `api/tests/services/cluster-mesh/github-app-host.spec.ts`
+  - `api/tests/unit/services/cluster-mesh/github-app-host.test.ts`
+  - `api/tests/api/github-app-product-mount.test.ts`
+  - `api/src/services/secret-crypto.ts`
+  - `ui/nginx/default.conf`
   - `api/tests/api/github-app-envelope-store.spec.ts`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -56,7 +59,7 @@ Mount the shipped cluster-mesh GitHub App router on the Sentropic public origin 
 - Rationale: one orthogonal lot (SG0-app host composition); wagon branch consumed by the train integration lane.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: no UAT in this lane. Deployment and the owner enrollment gesture (`<sentropic origin>/github-app`) wait for the GB4-P go and the M2-G runbook; nothing here deploys or activates.
+- **Mono-branch**: no UAT in this lane. Deployment and the owner enrollment gesture (`<sentropic origin>/api/v1/github-app`) wait for the GB4-P go and the M2-G runbook; nothing here deploys or activates.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
@@ -77,6 +80,13 @@ Mount the shipped cluster-mesh GitHub App router on the Sentropic public origin 
   - [x] `api/src/config/env.ts` — `GITHUB_APP_PUBLIC_BASE_URL`, `GITHUB_APP_TARGETS_JSON`, `GITHUB_APP_BROKER_BINDINGS_JSON`.
   - [x] `api/src/app.ts` — public mount at `/github-app` and http log suppression for `isGitHubAppPath`.
   - [ ] Lot gate (CI): `make typecheck-api ENV=test-alive-w1`, `make lint-api ENV=test-alive-w1`, `make test-api-unit SCOPE=tests/api/github-app-envelope-store.spec.ts ENV=test-alive-w1`, `make test-api-unit SCOPE=tests/services/cluster-mesh/github-app-host.spec.ts ENV=test-alive-w1` — blocked locally by the disk rule; run on the CI/train lane or when the host drops below 90%.
+- [ ] **Lot 3 — s-archi review fixes (`.tmp/rv/reviews/w1-alive-w1-26209d5f.md`, R1–R5)**
+  - [x] R1 custody fail-closed: the mount gate refuses an absent, blank or dev-seed `SECRET_ENCRYPTION_KEY` (`isProvisionedSecretEncryptionKey`); the shared `v1` fallback is unchanged.
+  - [ ] R3+R4 host: public mount `/api/v1/github-app/*` translated onto the frozen package root; required enroll target (no `targets[0]` default); landing lists both registry targets; callbacks, redirects and form actions republished on the public mount; broker identity via a stripped per-request token header.
+  - [ ] R2+R4 edge: product `secureHeaders` skipped on `isGitHubAppPath`; ui nginx location `^/api/v1/github-app` with `access_log off` and error log at `crit`.
+  - [ ] R5 wiring: host spec moved to `api/tests/unit/services/cluster-mesh/github-app-host.test.ts` (unit suite, wired in CI).
+  - [ ] Tests: host unit spec (custody gate, explicit target, public mount, headers, chunked broker body); product mount test `api/tests/api/github-app-product-mount.test.ts` (real app, admin_app session, CSP/referrer, both targets, gate refusal); store overlap forced through `pg_blocking_pids` with the deterministic 40001 refusal.
+  - [ ] Local runs: none (host disk above 90%, no local image build); CI gate on `ENV=test-w1-fix`: typecheck-api, lint-api, the unit host spec, and the endpoints product-mount and store specs.
 - [ ] **Lot N — Final validation**
   - [ ] Scoped tests green (CI).
   - [x] `make scope-check` (PASS C2) before every commit: c1 store lot, c2 host lot, c3 wiring, c4 docs.

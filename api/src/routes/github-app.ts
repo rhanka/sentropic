@@ -26,10 +26,11 @@ import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthServiceResource
  * (`https://api.github.com`, service-scope trusted adapter), the control-stream
  * Postgres envelope store and the invalidation bus.
  *
- * Code only — the mount is inert until the three env vars are provisioned and
- * deployment happens after the GB4-P go (A-LIVE §10). A disabled or broken
- * composition mounts NOTHING and logs a single sanitized reason code: no
- * half-open enrollment surface is ever exposed.
+ * Code only — the mount is inert until the GitHub App env vars and a
+ * provisioned `SECRET_ENCRYPTION_KEY` are present (never the committed dev
+ * seed) and deployment happens after the GB4-P go (A-LIVE §10). A disabled or
+ * broken composition mounts NOTHING and logs a single sanitized reason code:
+ * no half-open enrollment surface is ever exposed.
  */
 const buildServiceAuthPorts = (): ServiceAuthPorts => {
   const ports = getSentropicOAuthPorts();
@@ -61,6 +62,7 @@ export const createProductGitHubAppRouter = (): Hono | null => {
       GITHUB_APP_PUBLIC_BASE_URL: env.GITHUB_APP_PUBLIC_BASE_URL,
       GITHUB_APP_TARGETS_JSON: env.GITHUB_APP_TARGETS_JSON,
       GITHUB_APP_BROKER_BINDINGS_JSON: env.GITHUB_APP_BROKER_BINDINGS_JSON,
+      SECRET_ENCRYPTION_KEY: env.SECRET_ENCRYPTION_KEY,
     });
     if (!settled.enabled) {
       logger.warn({ code: settled.disabledReason }, 'github_app_composition_disabled');
