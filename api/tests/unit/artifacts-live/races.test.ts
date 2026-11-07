@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fixture, key, owner } from './fixture';
+import { fixture, key } from './fixture';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

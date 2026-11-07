@@ -1,5 +1,5 @@
 import type { LiveBinding, LivePorts } from './ports';
-import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
+import { conflict, LiveError, liveRevision, type LiveKey, type LiveRuntime } from './records';
 import { currentBinding } from './transitions';
 
 /** The viewer authenticated by the host gate (A-LIVE §8.2). The host owns invitations (§9): it supplies one only after
@@ -18,7 +18,8 @@ export function liveRole(runtime: LiveRuntime, binding: LiveBinding, actor: Live
   return 'invitee';
 }
 
-/** Route grant the host signs into its live assertion: the W9 claims without kid, host, iat and exp. */
+/** Route grant the host signs into its live assertion: the W9 claims without kid, host, iat and exp. `sourceRevision`
+ * is an opaque string of at most LIVE_REVISION_MAX_LENGTH characters (the live-host assertion types it as a string). */
 export async function authorizeLive(ports: LivePorts, key: LiveKey, actor: LiveActor, access: 'read' | 'write') {
   const binding = await currentBinding(ports, key);
   const runtime = (await ports.store.read(key))?.runtime;
@@ -30,6 +31,6 @@ export async function authorizeLive(ports: LivePorts, key: LiveKey, actor: LiveA
   const invitee = role === 'invitee' ? actor.invitation! : null;
   return { storageScopeId: key.storageScopeId, artifactId: key.artifactId, sessionId: runtime.sessionId,
     generation: runtime.generation, routeEpoch: runtime.routeEpoch, podUid: runtime.podUid, podName: runtime.podName,
-    sourceRevision: runtime.appliedRevision, principalId: actor.principalId, role, invitationId: invitee?.id ?? '',
+    sourceRevision: liveRevision(runtime.appliedRevision), principalId: actor.principalId, role, invitationId: invitee?.id ?? '',
     invitationEpoch: invitee ? fence.epoch : 0, invitationExp: invitee ? Math.floor(invitee.expiresAt / 1000) : 0 };
 }

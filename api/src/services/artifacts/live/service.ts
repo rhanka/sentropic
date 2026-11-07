@@ -6,6 +6,7 @@ import { createPostgresCacheStorage } from './cache-storage';
 import { createDependencyCache } from './cache';
 import { createPostgresLiveStore } from './postgres';
 import { createPostgresHeavyGate } from './heavy';
+import { createFairAdmission } from './admission';
 import { createBuilderPods } from './pods';
 import { createInClusterKubernetes } from './kubernetes';
 import { createLiveWorker, type QualifiedSupervisor } from './worker';
@@ -18,15 +19,19 @@ import { fetchLockedTarball } from './npm-relay';
  */
 export function createArtifactLiveService(options: Pick<LivePorts,
   'binding' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
-  | 'admission' | 'invitations'> & {
+  | 'invitations'> & {
     pool: Pool; bootstrap: string; supervisor: QualifiedSupervisor; cacheBlobs: PrivateCacheBlobs;
     /** Builder node (the r3.5 d2-4 pool) and the longest wait for its heavy-phase slot. */
     heavyGate: { node: string; maxWaitMs: number };
+    /** Live pod slots of this environment, from per-environment configuration (preprod plus prod at most the node's 4). */
+    admission: { capacity: number; waiterTtlMs: number };
     cache: Pick<CachePorts, 'signingKey' | 'evidence' | 'cleanInstall'>;
   }) {
   const cache = createDependencyCache({ ...options.cache, fetch: fetchLockedTarball,
     storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) });
-  return createLiveController({ ...options, cache, store: createPostgresLiveStore(options.pool),
+  const store = createPostgresLiveStore(options.pool);
+  const admission = createFairAdmission({ ...options.admission, now: options.now, holders: () => store.active() });
+  return createLiveController({ ...options, cache, store, admission,
     heavy: createPostgresHeavyGate(options.pool, options.heavyGate),
     pods: createBuilderPods(createInClusterKubernetes(), options.bootstrap), worker: createLiveWorker(options.supervisor) });
 }
