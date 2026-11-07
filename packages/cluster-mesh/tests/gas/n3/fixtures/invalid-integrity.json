@@ -1,0 +1,119 @@
+{
+  "contract": "airbus-dossier-publish/1.0.0",
+  "artifact": {
+    "id": "o7-hello-dossier",
+    "version": 1,
+    "title": "O7 hello dossier",
+    "createdAt": "2026-11-07T12:00:00Z"
+  },
+  "producer": {
+    "tool": "claude-code",
+    "llmRoute": "vertex-direct",
+    "model": "claude-opus-4-6"
+  },
+  "residency": {
+    "classification": "airbus-internal",
+    "egress": "none"
+  },
+  "payload": {
+    "schemaId": "urn:sentropic:focus:DecisionDossierDocument:1.0.0",
+    "render": {
+      "contract": "1.0",
+      "mode": "snapshot",
+      "root": {
+        "id": "root",
+        "component": "DecisionDossier",
+        "document": {
+          "ref": "decision:dossier-format",
+          "subject": "Présentation des dossiers de décision",
+          "title": "tampered",
+          "hash": "draft:replace-with-source-hash",
+          "cursor": "draft:1",
+          "readability": {
+            "ownerRequestQuote": "Chaque dossier de décision doit utiliser Focus et montrer notre écosystème.",
+            "stakes": "Le propriétaire doit comprendre les choix et leurs effets sans dépendre d'un service en ligne.",
+            "stakesLevel": "medium",
+            "readingBudgetMinutes": 4,
+            "glossary": [
+              {
+                "term": "JUDGMENT",
+                "definition": "Appréciation du présentateur, distincte d'un fait vérifié."
+              }
+            ]
+          },
+          "sections": [
+            {
+              "kind": "prose",
+              "id": "context",
+              "targetRef": "context",
+              "markdown": "Exemple à remplacer avant présentation. Demande illustrative datée du 17 octobre 2026, source : ce modèle. Les dossiers doivent rester lisibles sur téléphone et transmissibles en un fichier."
+            },
+            {
+              "kind": "question",
+              "id": "format",
+              "targetRef": "format",
+              "question": "Quel format adopter pour les prochains dossiers ?",
+              "context": "Un fichier portable garde les schémas et les options disponibles hors connexion. Une page hébergée simplifie les mises à jour mais demande une connexion.",
+              "recommendedAnswer": "Le fichier portable répond à la demande de partage et de lecture hors connexion.",
+              "recommendedOptionId": "portable",
+              "readingTimeMinutes": 1,
+              "state": "open"
+            },
+            {
+              "kind": "optionSet",
+              "id": "formats",
+              "targetRef": "formats",
+              "questionId": "format",
+              "title": "Formats possibles",
+              "options": [
+                {
+                  "kind": "option",
+                  "id": "portable",
+                  "targetRef": "portable",
+                  "label": "Fichier portable",
+                  "body": "Coût : une compilation par version. Retour : régénérer le fichier précédent.",
+                  "consequence": "Lecture hors connexion ; chaque révision demande un nouveau fichier.",
+                  "annotation": "none"
+                },
+                {
+                  "kind": "option",
+                  "id": "hosted",
+                  "targetRef": "hosted",
+                  "label": "Page hébergée",
+                  "body": "Coût : maintenir un hébergement. Retour : exporter une copie locale.",
+                  "consequence": "Une adresse toujours à jour ; la lecture dépend du service et du réseau.",
+                  "annotation": "none"
+                }
+              ]
+            },
+            {
+              "kind": "diagram",
+              "id": "ecosystem",
+              "targetRef": "ecosystem",
+              "syntax": "mermaid",
+              "source": "ecosystem:overview",
+              "alt": "Les applications composent coordination, modèles, mémoire et composants visuels."
+            },
+            {
+              "kind": "prose",
+              "id": "rationale",
+              "targetRef": "rationale",
+              "questionId": "format",
+              "markdown": "[JUDGMENT] Le fichier portable respecte mieux la demande. Objection : les copies vieillissent ; une publication centrale gagnerait si la mise à jour instantanée devenait prioritaire. Risque : dans six mois, des copies obsolètes circulent. Intérêt du présentateur : compiler est simple ; intérêt du propriétaire : lire partout. Critère attendu : ouvrir le dossier hors connexion sur téléphone. Répondre avec le nom du format choisi."
+            }
+          ],
+          "interactions": [],
+          "provenance": {
+            "source": "example:replace-with-dated-owner-request",
+            "readAt": "2026-10-17T00:00:00Z"
+          },
+          "amendmentTrace": []
+        }
+      }
+    }
+  },
+  "integrity": {
+    "canonicalization": "jcs-rfc8785",
+    "payloadSha256": "976dea8e7476ed4d336b08cc10bf1d4e239db939115c9c99bf77a89a8d1fc9ad"
+  }
+}

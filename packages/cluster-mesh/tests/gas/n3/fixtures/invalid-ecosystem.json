@@ -1,0 +1,109 @@
+{
+  "contract": "airbus-dossier-publish/1.0.0",
+  "artifact": {
+    "id": "s1-hello",
+    "version": 1,
+    "title": "S1 — premier dossier publié sur Apps Script",
+    "createdAt": "2026-11-07T18:00:00Z"
+  },
+  "producer": {
+    "tool": "claude-code",
+    "llmRoute": "none"
+  },
+  "residency": {
+    "classification": "airbus-internal",
+    "egress": "none"
+  },
+  "payload": {
+    "schemaId": "urn:sentropic:focus:DecisionDossierDocument:1.0.0",
+    "render": {
+      "contract": "1.0",
+      "mode": "snapshot",
+      "root": {
+        "id": "root",
+        "component": "DecisionDossier",
+        "document": {
+          "ref": "decision:s1-hello",
+          "subject": "Valider la chaîne de publication des dossiers sur Apps Script",
+          "title": "S1 — la chaîne de publication fonctionne-t-elle ?",
+          "hash": "draft:s1-hello-1",
+          "cursor": "draft:1",
+          "readability": {
+            "ownerRequestQuote": "Dans l’environnement Airbus il faudra pouvoir créer un dossier de décision depuis Claude Code et le publier sur Apps Script.",
+            "stakes": "Prouver que le dossier s'affiche dans Airbus, hors connexion externe, avec l'identité Airbus du lecteur.",
+            "stakesLevel": "low",
+            "readingBudgetMinutes": 2,
+            "glossary": [
+              {
+                "term": "S1",
+                "definition": "Premier essai de la chaîne : un seul dossier, publié dans une page interne Airbus."
+              }
+            ]
+          },
+          "sections": [
+            {
+              "kind": "prose",
+              "id": "context",
+              "targetRef": "context",
+              "markdown": "Dossier de test du 7 novembre 2026. Il est construit sur le poste, validé, puis servi par la web app Apps Script réservée au domaine Airbus."
+            },
+            {
+              "kind": "question",
+              "id": "s1-ok",
+              "targetRef": "s1-ok",
+              "question": "Ce dossier s'affiche-t-il correctement dans la web app ?",
+              "context": "Critère : la page s'ouvre avec votre compte Airbus, sans appel réseau externe, et le schéma ci-dessous est visible.",
+              "recommendedAnswer": "Oui, si la page et le schéma s'affichent.",
+              "recommendedOptionId": "ok",
+              "readingTimeMinutes": 1,
+              "state": "open"
+            },
+            {
+              "kind": "optionSet",
+              "id": "verdict",
+              "targetRef": "verdict",
+              "questionId": "s1-ok",
+              "title": "Verdict",
+              "options": [
+                {
+                  "kind": "option",
+                  "id": "ok",
+                  "targetRef": "ok",
+                  "label": "Affichage correct",
+                  "consequence": "On passe à l’essai suivant : plusieurs dossiers et plusieurs versions.",
+                  "annotation": "none"
+                },
+                {
+                  "kind": "option",
+                  "id": "ko",
+                  "targetRef": "ko",
+                  "label": "Affichage incorrect",
+                  "consequence": "On corrige la chaîne avant l’essai suivant.",
+                  "annotation": "none"
+                }
+              ]
+            },
+            {
+              "kind": "diagram",
+              "id": "flow",
+              "targetRef": "flow",
+              "syntax": "mermaid",
+              "source": "ecosystem:overview",
+              "alt": "Claude Code produit le dossier, qui est validé, construit, versionné dans GitLab, poussé par clasp et servi par la web app."
+            }
+          ],
+          "interactions": [],
+          "provenance": {
+            "source": "owner-request:2026-11-07",
+            "readAt": "2026-11-07T18:00:00Z"
+          },
+          "amendmentTrace": []
+        }
+      }
+    }
+  },
+  "integrity": {
+    "canonicalization": "jcs-rfc8785",
+    "payloadSha256": "3f8f7c776b7712ab2a99e063488a306bb3180df9777574a15f22d20223380fb5"
+  }
+}
