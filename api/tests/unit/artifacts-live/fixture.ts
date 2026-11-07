@@ -5,12 +5,14 @@ import { createLiveController } from '../../../src/services/artifacts/live/contr
 import { createBuilderPods, type KubernetesCore } from '../../../src/services/artifacts/live/pods';
 import type { CacheReceipt } from '../../../src/services/artifacts/live/cache';
 import { createFairAdmission } from '../../../src/services/artifacts/live/admission';
-import { createHeavyGate } from '../../../src/services/artifacts/live/heavy';
+import { createHeavyPhaseQueue, createMemoryHeavyPhaseQueueStore, PROVISIONAL_HEAVY_PHASE_COSTS_MIB } from '@sentropic/cluster-mesh';
+import { createQueuedHeavyGate, liveHolds } from '../../../src/services/artifacts/live/heavy';
 
 export const key = { storageScopeId: 'scope-a', artifactId: 'artifact-a' };
 export const owner = { principalId: 'owner' };
 const idOf = (k: LiveKey) => `${k.storageScopeId}/${k.artifactId}`;
-export function fixture(options: { capacity?: number } = {}) {
+/** `budgetMiB` defaults to a node with room for every phase; pass 1706 for one d2-4 (s-archi 07/11 15:05). */
+export function fixture(options: { capacity?: number; budgetMiB?: number; maxWaitMs?: number } = {}) {
   const states = new Map<string, LiveState>(); const drafts = new Map<string, DraftSnapshot>();
   const owners = new Map<string, string>();
   let tail = Promise.resolve(); let sequence = 0; let now = 0;
@@ -43,7 +45,7 @@ export function fixture(options: { capacity?: number } = {}) {
   const store: LiveStore = {
     read: async k => structuredClone(states.get(idOf(k))),
     active: async () => [...states].filter(([, state]) => state.runtime.phase !== 'DORMANT')
-      .map(([id, state]) => ({ key: keys.get(id)!, ownerId: state.runtime.ownerId })),
+      .map(([id, state]) => ({ key: keys.get(id)!, ownerId: state.runtime.ownerId, phase: state.runtime.phase })),
     async transaction(k, work) {
       const previous = tail; let unlock!: () => void;
       tail = new Promise<void>(resolve => { unlock = resolve; }); await previous;
@@ -57,6 +59,8 @@ export function fixture(options: { capacity?: number } = {}) {
       finally { unlock(); }
     },
   };
+  const queue = createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => now, budget: {
+    budgetMiB: options.budgetMiB ?? 100_000, podBaseMiB: 40, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 36_000_000 } });
   const ports: LivePorts = {
     store, now: () => now, id: () => `id-${++sequence}`,
     binding: vi.fn(async k => ({ ...binding, ownerId: owners.get(idOf(k)) ?? binding.ownerId })),
@@ -68,7 +72,8 @@ export function fixture(options: { capacity?: number } = {}) {
       advanceClean: vi.fn(async (k, _expected, headSha) => {
         const next = { ...draftOf(k), baseHeadSha: headSha, treeSha: `tree-${headSha}` }; drafts.set(idOf(k), next); return next;
       }) },
-    admission, heavy: createHeavyGate({ maxWaitMs: 60_000 }),
+    admission, heavy: createQueuedHeavyGate({ queue, node: 'd2-4-a', maxWaitMs: options.maxWaitMs ?? 2_000, pollMs: 1,
+      renewMs: 1_000, holds: () => liveHolds(store) }),
     invitations: { current: vi.fn(async () => ({ ...invitation })) },
     pods: createBuilderPods(core, 'setInterval(() => {}, 1000)'),
     cache: { acquire: vi.fn(async () => ({ key: 'cache' } as CacheReceipt)) },
@@ -76,6 +81,7 @@ export function fixture(options: { capacity?: number } = {}) {
       clean: vi.fn(async () => { events.push('clean'); }),
       prepare: vi.fn(async (_runtime, source) => { events.push(`prepare:${source.headSha}`); }),
       restore: vi.fn(async () => { events.push('restore'); }),
+      prebundle: vi.fn(async () => undefined),
       live: vi.fn(async runtime => ({ revision: runtime.sourceRevision, routeEpoch: runtime.routeEpoch })),
       quiesce: vi.fn(async () => { events.push('quiesce'); }),
       build: vi.fn(async () => { events.push('build'); return { candidateDigest: 'candidate' }; }),
@@ -90,6 +96,6 @@ export function fixture(options: { capacity?: number } = {}) {
     }) },
   };
   return { ports, controller: createLiveController(ports), binding, core, objects, events, published, owners,
-    invitation, admission, advance(ms: number) { now += ms; }, draft: (k: LiveKey = key) => draftOf(k),
+    invitation, admission, queue, advance(ms: number) { now += ms; }, draft: (k: LiveKey = key) => draftOf(k),
     state: (k: LiveKey = key) => store.read(k) };
 }
