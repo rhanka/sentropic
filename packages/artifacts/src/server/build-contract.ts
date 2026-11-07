@@ -1,5 +1,6 @@
 import { ArtifactOperationError } from './failures.js';
 import { validateBuildDependencies } from './build-dependencies.js';
+import { lockfileSha256, sha256Hex, type HostIntegrityMap } from './build-integrity.js';
 
 /** Frozen G0 v3 §4.1 fields. Install permissions belong to the host. */
 export interface ArtifactBuildDescriptor {
@@ -20,6 +21,10 @@ export interface ArtifactBuildSnapshot {
   readonly subPath: string;
   readonly files: Readonly<Record<string, string>>;
   readonly postinstallAllowlist?: readonly PostinstallAllowlistEntry[];
+  /** Host qualification rows for disabled hooks (A-LIVE §7.3); never an execution grant. */
+  readonly scriptQualification?: readonly PostinstallAllowlistEntry[];
+  /** Host-sealed integrity map for entries lacking literal SRI (A-LIVE §7.2). */
+  readonly integrityMap?: HostIntegrityMap;
   readonly allowedRegistries?: readonly string[];
 }
 export interface ArtifactBuildTuple {
@@ -64,7 +69,8 @@ const join = (root: string, path: string): string => root ? `${root}/${path}` : 
 export function validateArtifactBuild(snapshot: ArtifactBuildSnapshot) {
   const invalid = (): never => { throw new ArtifactOperationError('build_descriptor_invalid'); };
   if (snapshot.subPath !== '' && !buildPath(snapshot.subPath)) invalid();
-  const value = buildJson(snapshot.files[join(snapshot.subPath, 'sentropic.artifact.json')]);
+  const descriptorText = snapshot.files[join(snapshot.subPath, 'sentropic.artifact.json')];
+  const value = buildJson(descriptorText);
   const fields = ['version', 'buildScript', 'outputDir', 'lockfilePath', 'entry', 'publicEnvNames'];
   if (Object.keys(value).some(key => !fields.includes(key)) || value.version !== 1
     || typeof value.buildScript !== 'string' || !/^[A-Za-z0-9:_-]+$/.test(value.buildScript)
@@ -80,16 +86,19 @@ export function validateArtifactBuild(snapshot: ArtifactBuildSnapshot) {
     ? manifest.scripts[descriptor.buildScript] : undefined;
   if (typeof script !== 'string' || !script.trim()) throw new ArtifactOperationError('build_script_missing');
   if (!Object.hasOwn(snapshot.files, descriptor.lockfilePath)) throw new ArtifactOperationError('lock_missing');
-  const lock = buildJson(snapshot.files[descriptor.lockfilePath]);
+  const lockText = snapshot.files[descriptor.lockfilePath];
+  const lock = buildJson(lockText);
   const installDirectory = descriptor.lockfilePath.includes('/')
     ? descriptor.lockfilePath.slice(0, descriptor.lockfilePath.lastIndexOf('/')) : '';
   if (installDirectory && snapshot.subPath !== installDirectory
     && !snapshot.subPath.startsWith(`${installDirectory}/`)) invalid();
-  const postinstall = validateBuildDependencies(snapshot, lock, installDirectory);
+  const lockfileDigest = lockfileSha256(lockText);
+  const evidence = validateBuildDependencies(snapshot, lock, installDirectory, lockfileDigest);
   return {
-    descriptor, installDirectory, scriptDirectory: snapshot.subPath,
+    descriptor, descriptorDigest: sha256Hex(descriptorText), lockfileDigest,
+    installDirectory, scriptDirectory: snapshot.subPath,
     install: { command: 'npm', args: ['ci', '--ignore-scripts'] },
     build: { command: 'npm', args: ['run', descriptor.buildScript] },
-    postinstall,
+    ...evidence,
   } as const;
 }
