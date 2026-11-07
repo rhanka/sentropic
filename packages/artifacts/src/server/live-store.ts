@@ -2,6 +2,8 @@ import { createKeyMutex } from './ports.js';
 import { ArtifactOperationError } from './failures.js';
 
 export interface LiveIdentity { storageScopeId: string; artifactId: string; bindingGeneration: number }
+/** A-LIVE Amendment 1: idle strictly after 900 s since the last qualifying access; there is no absolute lifetime. */
+export const LIVE_IDLE_THRESHOLD_MS = 900_000;
 export interface LiveOverlayEntry { path: string; text: string | null; mode: string }
 export interface LiveRuntimeState {
   liveSessionId: string;
@@ -9,7 +11,7 @@ export interface LiveRuntimeState {
     'VERIFYING' | 'PUBLISHING' | 'SAVING' | 'DECOMMISSIONING' | 'RECOVERING' | 'FAILED';
   leaseEpoch: number; routeEpoch: number; rowVersion: number; ownerId: string; podUid: string | null;
   sourceRevision: string; baseHeadSha: string; liveTreeSha: string;
-  idleDeadline: string; maximumLifetimeAt: string; activeAttemptId: string | null; stateDetail: string | null;
+  idleDeadline: string; activeAttemptId: string | null; stateDetail: string | null;
   appliedRevision: string | null; lastAccessAt: string; pendingWake: boolean;
   origin?: 'implicit' | 'explicit'; renewOnReady?: boolean;
 }
