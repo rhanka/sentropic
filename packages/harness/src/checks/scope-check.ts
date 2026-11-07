@@ -9,6 +9,8 @@ export interface ScopeCheckInput {
   profile: HarnessProfile;
   /** Exception ids declared in the BRANCH.md (e.g. parser `exceptions`). */
   declaredExceptions?: string[];
+  /** Optional commit text; absent means commit guards are not run. */
+  commitMessage?: string;
   bypass?: { reason: string };
 }
 
@@ -24,6 +26,17 @@ export function checkScope(input: ScopeCheckInput): CheckResult {
   const { stagedFiles, boundary, profile, declaredExceptions = [] } = input;
   const hasValidException = declaredExceptions.some((id) => profile.exceptionIdPattern.test(id));
   const violations: Violation[] = [];
+  if (input.commitMessage !== undefined && profile.commitMessage) {
+    const { requiredPattern, forbiddenPatterns } = profile.commitMessage;
+    if (requiredPattern !== undefined && !new RegExp(requiredPattern).test(input.commitMessage)) {
+      violations.push({ code: 'C2', message: 'commit message does not match required pattern', severity: 'advisory' });
+    }
+    for (const pattern of forbiddenPatterns) {
+      if (new RegExp(pattern).test(input.commitMessage)) {
+        violations.push({ code: 'C2', message: `commit message matches forbidden pattern: ${pattern}`, severity: 'advisory' });
+      }
+    }
+  }
   for (const path of stagedFiles) {
     const cls = classifyPath(path, boundary, profile);
     if (cls === 'forbidden') {

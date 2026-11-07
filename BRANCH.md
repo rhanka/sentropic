@@ -51,4 +51,5 @@
   - [x] Define the published JSON Schema and optional runtime policy fields.
   - [x] Validate directly against that schema and expose typed configuration errors.
 - [ ] **Lot 3 — Kernel and CLI**: profile path defaults, BRANCH conventions, commit guards; shared resolver for check/verify/audit/init; targeted tests and typecheck.
+  - [x] Consume profile path defaults, branch conventions and optional commit guards in C2.
 - [ ] **Lot 4 — Documentation and handoff**: README Rust + Node example, scoped regressions, mechanical scope gate, push branch only, report `.tmp/rv/harness-profile-file.md`, remove test volumes.
