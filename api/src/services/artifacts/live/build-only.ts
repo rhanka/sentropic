@@ -12,12 +12,12 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
   if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
   const draft = await ports.drafts.current(key, binding.generation);
   if (draft.generation !== binding.generation) conflict('stale_fence');
-  // A build pod takes a live slot, and the clean build is a heavy phase; a refusal at either gate writes no state.
+  // A build pod takes a live slot (a refusal writes no state); its clean build then waits in the node queue.
   await ports.admission.acquire(key, binding.ownerId);
-  try { return await ports.heavy.run(key, 'explicit_build', () => buildUnderGate(ports, key, jobId, binding, job, draft)); }
+  try { return await buildPod(ports, key, jobId, binding, job, draft); }
   catch (error) { await releaseIfDormant(ports, key); throw error; }
 }
-async function buildUnderGate(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding,
+async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding,
   job: { headSha: string; expectedReleaseId: string | null }, draft: DraftSnapshot) {
   let runtime = await ports.store.transaction(key, async unit => {
     if (unit.state && unit.state.runtime.phase !== 'DORMANT') conflict('pending_publication');
@@ -39,6 +39,7 @@ async function buildUnderGate(ports: LivePorts, key: LiveKey, jobId: string, bin
   try {
     await checkpoint(ports, key, runtime);
     const pod = await ports.pods.ensure(key, runtime);
+    await ports.heavy.hold(runtime.podName, { pod: true });
     runtime = await transition(ports, key, runtime, state => { state.runtime.podUid = pod.uid; });
     const source = await ports.forge.snapshot(key, job.headSha);
     if (source.headSha !== job.headSha) throw new LiveError('git_head_moved');
@@ -53,7 +54,8 @@ async function buildUnderGate(ports: LivePorts, key: LiveKey, jobId: string, bin
     await ports.worker.clean(runtime);
     const cache = await withinPhase(ports.cache.acquire(source, runtime));
     await ports.worker.prepare(runtime, source, cache);
-    const candidate = await withinPhase(ports.worker.build(runtime, runtime.attempt!));
+    const building = runtime;
+    const candidate = await ports.heavy.run(building.podName, 'build', () => withinPhase(ports.worker.build(building, building.attempt!)));
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.phase !== 'BUILDING' || state.runtime.pendingWake) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt!.candidateDigest = candidate.candidateDigest;
