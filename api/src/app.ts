@@ -5,6 +5,7 @@ import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
 import { logger } from './logger';
 import { createRemoteEvidenceRouter } from './routes/auth/remote-evidence';
+import { createProductArtifactBuilderRouter } from './routes/artifacts-builder';
 import { remoteRevocationError } from './services/auth/remote-revocation-error';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
@@ -434,6 +435,11 @@ app.use('*', async (c, next) => {
 // api/src/middleware/auth-rate-limiters.ts. Order matters; the helper owns it.
 applyAuthRateLimiters(app);
 app.route('/api/v1/auth/session/remote-action-evidence', createRemoteEvidenceRouter({ role: 'product' }));
+// A-LIVE W7 (M3-B): builder host build API under /api/v1/artifacts/builder, behind
+// the artifacts:builder S2S guard and the default-deny host bindings. Code only
+// until the GB4-P go (A-LIVE §10): no builder service is composed here, so a bound
+// host gets 503 builder_unavailable and any other caller is refused.
+app.route('/', createProductArtifactBuilderRouter(null));
 
 app.route('/.well-known', createOAuthWellKnownProjection({
   compositionRoot: 'product',

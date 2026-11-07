@@ -28,13 +28,15 @@
   - `api/drizzle/*.sql` (none planned: the handoff ledger reuses `control.artifact_host_kv`)
   - `.github/workflows/**`
   - `packages/artifacts/src/server/live-{store,mutations,read}.ts`, `packages/artifacts/tests/**` (BRW7-EX1: through the W8 merge only)
+  - `api/src/routes/artifacts-builder.ts`, `api/src/app.ts`, `api/src/config/env.ts`, `ui/nginx/default.conf` (BRW7-EX2: product builder mount only)
 
 ## Feedback Loop
 - [x] BRW7-EX1: wagon feat/alive-w8 @ edeb219a0 merged so the builder service composes its admission, heavy gate and invitations (s-archi batch 2, W7 item 5); impact: W8's files, its BRW8-EX1 package files included, enter this branch through the merge only, no W7 commit edits `packages/**`; rollback: revert the merge commit.
+- [x] BRW7-EX2: product mount of the host build API under `/api/v1/artifacts/builder` (s-archi W7 builder mount, 07/11 15:25); impact: one route module, one `app.route` line, one optional env value and one ui nginx location without logs, inert until a builder service is composed (GB4-P); rollback: revert the mount commit.
 - [x] `resolved` (s-archi batch review, W3 dae5b0f0a): W3 seals the snapshot into `SupervisorSources.candidate`; W7 provides that sink (`createCandidateStore`), which is also its `CandidateExport`.
 - [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
 - [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).
-- [ ] `attention`: live-host 78e85ffb7 has no `index.ts` and no `./live-host` export yet; W7 imports the architect-named subpath.
+- [x] `resolved`: live-host 8ce4700e4 exports `./live-host` (`index.ts`, fa651158b); W7 imports only that subpath.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Multi-branch** (wagon merged by the train integration lane)
@@ -61,8 +63,8 @@
   - [x] Run staleness = heavy-gate wait plus the four bounded build-only phases (20 min), not a pod lifetime.
   - [x] Host identity from the `artifacts:builder` service client and `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` (default deny).
   - [x] Builder handoff signing key and host receipt key ring from fixed env names, with a documented rotation cycle.
-  - [ ] Mount under `/api/v1/artifacts/builder` behind `createRequireServiceAuth`; ui nginx location without access log.
-  - [ ] Pod spec keeps main's resources and env (pod-4live owns them); namespace, placement and no `activeDeadlineSeconds` only.
+  - [x] Mount under `/api/v1/artifacts/builder` behind `createRequireServiceAuth`; ui nginx location without access log.
+  - [x] Pod spec keeps main's resources and env (pod-4live owns them); namespace, placement and no `activeDeadlineSeconds` only.
 - [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
   - [x] Push the wagon; report .tmp/rv/alive-W3-W7.md; `make down-volumes ENV=test-alive-w7`.
