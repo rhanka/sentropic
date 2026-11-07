@@ -33,6 +33,7 @@ import { readArtifactSource } from './server/source-read.js';
 import { artifactSummary } from './server/summary.js';
 import { projectGitBinding, type GitProjectionPorts } from './server/git-projection.js';
 import type { LiveService } from './server/live-contracts.js';
+import type { GitToolService } from './server/git-tools-contracts.js';
 import { isLiveBodyStream, readBoundedLiveJson } from './server/live-body.js';
 import { LiveCommitUnknownError } from './server/live-commit-outcome.js';
 import { artifactVersions } from './server/versions.js';
@@ -64,6 +65,8 @@ export function errorBody(status: number): { error: string } {
 export interface HttpAppDeps {
   /** AL-T/AL-D: trusted service; absence is a closed capability refusal. */
   live?: LiveService;
+  /** SG3: fetch_app_source, git_attach and git_publish executors; absence is a closed capability refusal. */
+  gitTools?: GitToolService;
   /** SG1: host repository code access, independent of page/source grants. */
   git?: GitProjectionPorts;
   /** Trusted mapping of host wrapper errors; causes remain private. Also bind on the coordinator. */
@@ -139,11 +142,14 @@ export function assertArtifactsTransportProfile(value: unknown): asserts value i
     'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_publish_bundle',
     'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2',
     'artifacts_revoke_reader_consent', 'artifacts_git_commit', 'artifacts_live_write',
-    'artifacts_live_read', 'artifacts_live_reset', 'artifacts_live_status', 'artifacts_live_control'];
+    'artifacts_live_read', 'artifacts_live_reset', 'artifacts_live_status', 'artifacts_live_control',
+    'artifacts_fetch_app_source', 'artifacts_git_attach', 'artifacts_git_publish'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
 }
+
+const GIT_TOOL_CAPABILITIES: readonly string[] = ['artifacts_fetch_app_source', 'artifacts_git_attach', 'artifacts_git_publish'];
 
 export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   assertArtifactsTransportProfile(deps.profile);
@@ -626,6 +632,14 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           }
         }
         const normalized = profile.validate(capability, args, request.idempotencyKey, { deferPrecondition: true });
+        if (GIT_TOOL_CAPABILITIES.includes(capability)) {
+          if (!deps.gitTools) throw new ArtifactOperationError('capability_unselected');
+          phase = 'dispatch';
+          const result = await deps.gitTools.execute(operation, normalized, invocation);
+          return { ok: true, invocationId: invocation.invocationId,
+            commitState: operation === 'fetch_app_source' ? 'not_committed' : 'committed',
+            replayed: result.replayed === true, result: { status: 200, body: result } };
+        }
         if (capability.startsWith('artifacts_live_') || capability === 'artifacts_git_commit') {
           if (!deps.live) throw new ArtifactOperationError('capability_unselected');
           phase = 'dispatch';
