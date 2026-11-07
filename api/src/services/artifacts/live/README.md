@@ -42,6 +42,14 @@ The host supplies these mandatory integrations:
   The builder resolves only the host's pending job and registers its attempt
   fence; the host runs `acceptHandoff`, whose recheck covers every §8.3 item.
   Keys carry a `kid`, so builder and receipt keys rotate with an overlap.
+- The API is mounted under `/api/v1/artifacts/builder` (`createBuilderMount`)
+  behind `createRequireServiceAuth` with the `artifacts:builder` scope. The
+  verified client maps to its host identity through
+  `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` = `[{clientId, hostId, storageScopeId}]`
+  (owner sentropic). An absent or invalid value binds nothing (default deny).
+  The ui nginx keeps this path out of its access and error logs.
+- A host build run is presumed dead after its heavy-gate wait plus the four
+  bounded build-only phases (`runStaleMs`), then it can be re-admitted.
 - `builderPlacement(process.env)` supplies the per-environment worker namespace
   and service domain; there is no namespace constant.
 - The content host supplies separate live authorization/currentness and the
@@ -102,6 +110,32 @@ Dependency cache keys include the exact lock SHA-256 plus scope/repository,
 toolchain/image, platform, options/policy, workspace and integrity evidence.
 The host authenticates receipts and verifies safe tree hashes at every use.
 Missing integrity, including script-package literal pins, blocks admission.
+
+## SG4b handoff keys
+
+`builderKeys(process.env)` reads two values from the API environment secret
+(never git, never logs; the owner `.env` names them only):
+
+- `ARTIFACT_BUILDER_HANDOFF_SIGNING_KEY_JSON` = `{"kid","privateKey"}`: the
+  builder's current Ed25519 key, PKCS#8 DER in base64. It signs the handoff and
+  the host job request. The content host receives `builderPublicKey(...)`: the
+  kid and the SPKI public key only.
+- `ARTIFACT_BUILDER_HOST_RECEIPT_KEYS_JSON` = `[{"kid","publicKey"}]`: the
+  content host's receipt public keys (SPKI DER, base64), at most 4 entries.
+
+An absent or invalid value refuses to compose the builder service.
+
+Rotation cycle: every 90 days, and at once on a suspected exposure.
+
+1. Builder key: generate a new pair and a new kid, then send the public key and
+   kid to the host. The host adds them next to the old kid.
+2. Once the host confirms, replace the signing value and restart the API.
+3. The host drops the old kid when no handoff signed with it is still valid
+   (10-minute handoff lifetime).
+4. Host receipt key: the host sends its new kid and public key. Sentropic adds
+   them to the ring before the host switches. It removes the old kid after the
+   host confirms the switch plus one handoff lifetime, because a resend may
+   still return a receipt signed with the old kid.
 
 Fake Kubernetes/forge tests live under `api/tests/unit/artifacts-live`; live
 proxy/upgrade tests live under `apps/artifact-content/tests/live*`. They cover
