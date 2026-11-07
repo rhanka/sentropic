@@ -26,6 +26,7 @@ fail=0
 
 # Extract the space-separated path list embedded in an `export <VAR> ?= $(shell echo "...")` line.
 hash_inputs() {
+  if [ "$1" = UI_VERSION ]; then bash scripts/ci/ui-image-version.sh --paths; return; fi
   sed -n "s/^export $1[[:space:]]*?=.*echo \"\([^\"]*\)\".*/\1/p" "$MAKEFILE" | tr ' ' '\n' | sed '/^$/d'
 }
 
