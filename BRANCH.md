@@ -7,6 +7,7 @@
 - [x] Wagon branch `feat/alive-w3` from origin/main, worktree `tmp/worktrees/alive-w3`, no PR; the train integration lane merges it.
 - [x] ENV=test-alive-w3; never ENV=dev; make-only, Docker-first; no Python; no image build while the host disk is above 90%.
 - [x] No version bump, lock, fixture or manifest regeneration (OPTIM 2026-11-03); scoped local tests only, full suites in the train CI.
+- [x] Depends on wagon `feat/artifacts-live-host` for the `@sentropic/artifacts/live-host` subpath; the train carries both.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -48,4 +49,5 @@
 - [x] Lot 1: signed bounded frame (Ed25519, public key for the pod spec) and bounded transfer/snapshot reader, tests first.
 - [x] Lot 2: `createSupervisorTransport` implementing every `QualifiedSupervisor` method, tests first.
 - [x] Lot 3: offline clean install over the transport (tarballs staged into the pod npm cache, `npm ci --offline`), tests first.
-- [x] Lot 4: README transport section; scoped tests and typecheck green; branch pushed.
+- [ ] Lot 4: README transport section; scoped tests and typecheck green; branch pushed.
+- [ ] Lot 5: final pass: the single `candidateDigest` of `@sentropic/artifacts/live-host` replaces `candidateManifestDigest` (tests first); immo installed tree measured against `TREE_LIMITS`.

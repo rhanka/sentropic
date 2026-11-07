@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHUNK_BYTES, OUTPUT_LIMITS, candidateManifestDigest, putFrames, readSnapshot, treeDigest,
+import { CHUNK_BYTES, OUTPUT_LIMITS, putFrames, readSnapshot, treeDigest,
   type TransferFile } from '../../../src/services/artifacts/live/supervisor-transfer';
 import { MAX_FRAME_BYTES } from '../../../src/services/artifacts/live/supervisor-frame';
 
@@ -31,13 +31,11 @@ describe('supervisor transfer', () => {
       [file('x', 1, 0o777)], [file('a\\b', 1)]]) expect(() => treeDigest(bad, OUTPUT_LIMITS, fail)).toThrow('invalid');
     expect(() => treeDigest([file('x', OUTPUT_LIMITS.fileBytes + 1)], OUTPUT_LIMITS, fail)).toThrow('limit');
   });
-  it('should read a paged stable output snapshot and digest it as the candidate manifest', async () => {
+  it('should reassemble a paged stable output snapshot in order', async () => {
     const big = Buffer.alloc(10, 1);
     const files = await readSnapshot(pages([entry('index.html', Buffer.from('<p>')), entry('a.js', big.subarray(0, 4), 0, 10),
       entry('a.js', big.subarray(4), 4, 10)]), OUTPUT_LIMITS, 'refuse', fail);
     expect(files.map(f => [f.path, f.bytes.length])).toEqual([['index.html', 3], ['a.js', 10]]);
-    expect(candidateManifestDigest(files)).toMatch(/^[a-f0-9]{64}$/);
-    expect(candidateManifestDigest([...files].reverse())).toBe(candidateManifestDigest(files));
   });
   it('should refuse links, special files, escapes, duplicates, gaps and limit overflow before any upload', async () => {
     const one = Buffer.from('x');
