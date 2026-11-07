@@ -268,77 +268,122 @@ describe('SG0-app host config resolution', () => {
 describe('SG0-app host routes: owner gesture', () => {
   it('should refuse non-owner sessions and unknown target keys without disclosing locators', async () => {
     const harness = createHarness();
-    const refusedMember = await harness.request('/github-app', { headers: sessionHeaders('member-1') });
+    const refusedMember = await harness.request(ROOT, { headers: sessionHeaders('member-1') });
     expect(refusedMember.status).toBe(403);
     expect(await refusedMember.json()).toEqual({ error: 'access_denied' });
-    const refusedTarget = await harness.request('/github-app?target=octocat%2Fhello', { headers: sessionHeaders() });
+    const refusedTarget = await harness.request(`${ROOT}?target=octocat%2Fhello`, { headers: sessionHeaders() });
     expect(refusedTarget.status).toBe(403);
     expect(await refusedTarget.text()).not.toContain('radar-immobilier');
   });
 
-  it('should enroll the default target through single-use manifest and install callbacks', async () => {
+  it('should list every registry target on the landing page with its target in the form action', async () => {
     const harness = createHarness();
-    const landing = await harness.request('/github-app', { headers: sessionHeaders() });
+    const landing = await harness.request(ROOT, { headers: sessionHeaders() });
     expect(landing.status).toBe(200);
-    expect(await landing.text()).toContain('Enroll rhanka/radar-immobilier');
-    const outcome = await enroll(harness);
-    if (!(await isEnrollOutcome(outcome))) throw new Error('owner flow failed');
+    expect(landing.headers.get('content-security-policy')).toContain(GITHUB_FORM_ACTION);
+    expect(landing.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(landing.headers.get('cache-control')).toBe('no-store');
+    const html = await landing.text();
+    expect(html).toContain(`action="${ROOT}/enroll?target=radar-immobilier"`);
+    expect(html).toContain(`action="${ROOT}/enroll?target=sentropic"`);
+    expect(html).toContain('Enroll rhanka/radar-immobilier');
+    expect(html).toContain('Enroll rhanka/sentropic');
+    const narrowed = await (await harness.request(`${ROOT}?target=sentropic`, { headers: sessionHeaders() })).text();
+    expect(narrowed).toContain('Enroll rhanka/sentropic');
+    expect(narrowed).not.toContain('radar-immobilier');
+  });
+
+  it('should refuse an enroll POST whose target is absent or unknown instead of defaulting', async () => {
+    const harness = createHarness();
+    for (const path of [`${ROOT}/enroll`, `${ROOT}/enroll?target=`, `${ROOT}/enroll?target=octocat`]) {
+      const refused = await harness.request(path, { method: 'POST', headers: enrollPostHeaders() });
+      expect(refused.status).toBe(403);
+      expect(refused.headers.get('location')).toBeNull();
+      expect(await refused.json()).toEqual({ error: 'access_denied' });
+    }
+  });
+
+  it.each([
+    ['radar-immobilier', 'repo-immo', 'scope-immo'],
+    ['sentropic', 'repo-app', 'scope-app'],
+  ] as const)('should enroll %s through single-use callbacks on the public mount', async (target, repoId, storageScopeId) => {
+    const harness = createHarness();
+    const outcome = await enroll(harness, target);
     expect(outcome.ref).toMatch(/^enroll_[0-9a-f-]{36}$/);
-    expect(outcome.status!.status).toBe(200);
-    expect(await outcome.status!.json()).toMatchObject({ state: 'ready', repoId: 'repo-immo', storageScopeId: 'scope-immo' });
+    expect(outcome.begin.headers.get('location')).toBe(`${BASE}${ROOT}/${outcome.ref}`);
+    expect(outcome.installed.headers.get('location')).toBe(`${ROOT}/${outcome.ref}/status`);
+    expect(outcome.status.status).toBe(200);
+    expect(await outcome.status.json()).toMatchObject({ state: 'ready', repoId, storageScopeId });
+    // Ref routes resolve their target durably, without any query.
+    const reRead = await harness.request(`${ROOT}/${outcome.ref}/status`, { headers: sessionHeaders() });
+    expect(await reRead.json()).toMatchObject({ state: 'ready', repoId });
+  });
+
+  it('should publish the GitHub callback URLs and the manifest form headers on the public mount', async () => {
+    const harness = createHarness();
+    const ref = refOf(await beginEnroll(harness, 'sentropic'));
+    const prompt = await harness.request(`${ROOT}/${ref}`, { headers: sessionHeaders() });
+    expect(prompt.status).toBe(200);
+    expect(prompt.headers.get('content-security-policy')).toContain(GITHUB_FORM_ACTION);
+    expect(prompt.headers.get('referrer-policy')).toBe('no-referrer');
+    const html = await prompt.text();
+    expect(html).toContain('action="https://github.com/settings/apps/new?state=');
+    for (const callback of ['manifest', 'installation', 'events']) {
+      expect(html).toContain(`${BASE}${ROOT}/${ref}/${callback}`);
+    }
+    expect(html).not.toContain(`${BASE}/github-app/`);
+  });
+
+  it('should republish the rotation form actions on the public mount and never serve the package root', async () => {
+    const harness = createHarness();
+    const outcome = await enroll(harness);
+    const rotation = await harness.request(`${ROOT}/${outcome.ref}/rotation`, { headers: sessionHeaders() });
+    expect(rotation.status).toBe(200);
+    const html = await rotation.text();
+    for (const action of ['key', 'webhook-stage', 'webhook-switch', 'webhook-retire', 'revoke']) {
+      expect(html).toContain(`action="${ROOT}/${outcome.ref}/${action}"`);
+    }
+    expect(html).not.toContain('action="/github-app/');
+    expect((await harness.request('/github-app', { headers: sessionHeaders() })).status).toBe(404);
+    expect((await harness.request(`/github-app/${outcome.ref}/status`, { headers: sessionHeaders() })).status).toBe(404);
   });
 
   it('should refuse replayed, expired and cross-owner callbacks before the forge is called', async () => {
     const harness = createHarness();
-    const begin = await harness.request('/github-app/enroll?target=radar-immobilier', { method: 'POST', headers: enrollPostHeaders() });
+    const begin = await beginEnroll(harness);
     expect(begin.status).toBe(303);
-    const ref = new URL(begin.headers.get('location')!, config.publicBaseUrl).pathname.replace(/^\/github-app\//, '');
-    const prompt = await harness.request(`/github-app/${ref}`, { headers: sessionHeaders() });
+    const ref = refOf(begin);
+    const prompt = await harness.request(`${ROOT}/${ref}`, { headers: sessionHeaders() });
     const manifestState = /state=([0-9a-f-]{36})/.exec(await prompt.text())![1];
-    const convert = () => harness.request(`/github-app/${ref}/manifest?state=${manifestState}&code=fake-manifest-code`,
+    const convert = () => harness.request(`${ROOT}/${ref}/manifest?state=${manifestState}&code=fake-manifest-code`,
       { headers: sessionHeaders() });
     expect((await convert()).status).toBe(303);
     const replay = await convert();
     expect(replay.status).toBe(403);
     expect(await replay.json()).toEqual({ error: 'access_denied' });
 
-    const freshBegin = await harness.request('/github-app/enroll?target=radar-immobilier', { method: 'POST', headers: enrollPostHeaders() });
-    expect(freshBegin.status).toBe(303);
-    const freshRef = new URL(freshBegin.headers.get('location')!, config.publicBaseUrl).pathname.replace(/^\/github-app\//, '');
-    const freshPrompt = await harness.request(`/github-app/${freshRef}`, { headers: sessionHeaders() });
+    const freshRef = refOf(await beginEnroll(harness));
+    const freshPrompt = await harness.request(`${ROOT}/${freshRef}`, { headers: sessionHeaders() });
     const freshState = /state=([0-9a-f-]{36})/.exec(await freshPrompt.text())![1];
     harness.forge.advance(700_000);
-    const expired = await harness.request(`/github-app/${freshRef}/manifest?state=${freshState}&code=fake-manifest-code`,
+    const expired = await harness.request(`${ROOT}/${freshRef}/manifest?state=${freshState}&code=fake-manifest-code`,
       { headers: sessionHeaders() });
     expect(expired.status).toBe(403);
     expect(await expired.json()).toEqual({ error: 'access_denied' });
 
-    const foreignOwner = await harness.request(`/github-app/${freshRef}`, { headers: sessionHeaders('owner-2') });
+    const foreignOwner = await harness.request(`${ROOT}/${freshRef}`, { headers: sessionHeaders('owner-2') });
     expect(foreignOwner.status).toBe(403);
     expect(await foreignOwner.json()).toEqual({ error: 'access_denied' });
   });
 
-  it('should enroll the second registry target and keep its ref routes resolvable without a query', async () => {
-    const harness = createHarness();
-    const outcome = await enroll(harness, 'sentropic');
-    if (!(await isEnrollOutcome(outcome))) throw new Error('owner flow failed');
-    expect(outcome.ref).toMatch(/^enroll_[0-9a-f-]{36}$/);
-    expect(outcome.status!.status).toBe(200);
-    expect(await outcome.status!.json()).toMatchObject({ state: 'ready', repoId: 'repo-app', storageScopeId: 'scope-app' });
-    const reRead = await harness.request(`/github-app/${outcome.ref}/status`, { headers: sessionHeaders() });
-    expect(reRead.status).toBe(200);
-    expect(await reRead.json()).toMatchObject({ state: 'ready' });
-  });
-
   it('should refuse cross-origin owner mutations and forged webhook deliveries', async () => {
     const harness = createHarness();
-    const begin = await harness.request('/github-app/enroll', { method: 'POST',
+    const begin = await harness.request(`${ROOT}/enroll?target=radar-immobilier`, { method: 'POST',
       headers: { ...sessionHeaders(), origin: 'https://evil.example' } });
     expect(begin.status).toBe(403);
     expect(await begin.json()).toEqual({ error: 'access_denied' });
     const installed = await enroll(harness);
-    if (!(await isEnrollOutcome(installed))) throw new Error('owner flow failed');
-    const forged = await harness.request(`/github-app/${installed.ref}/events`, {
+    const forged = await harness.request(`${ROOT}/${installed.ref}/events`, {
       method: 'POST', headers: { 'x-github-delivery': randomUUID(), 'x-github-event': 'installation' },
       body: JSON.stringify({ action: 'deleted', installation: { id: 500 } }),
     });
@@ -346,9 +391,6 @@ describe('SG0-app host routes: owner gesture', () => {
     expect(await forged.json()).toEqual({ error: 'access_denied' });
   });
 });
-
-const isEnrollOutcome = (value: EnrollOutcome | Response): value is EnrollOutcome =>
-  (value as EnrollOutcome).ref !== undefined;
 
 describe('SG0-app host routes: broker leases', () => {
   it('should mint a lease only for the bound service identity and repository', async () => {
