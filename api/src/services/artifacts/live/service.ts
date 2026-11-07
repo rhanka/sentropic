@@ -1,3 +1,4 @@
+import type { Context } from 'hono';
 import type { Pool } from 'pg';
 import type { LivePorts } from './ports';
 import type { CachePorts } from './cache';
@@ -46,7 +47,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
  * the host build API. Nothing listens or runs until the host composition mounts `api` and supplies `schedule`. */
 export function createBuilderService(options: Omit<Parameters<typeof createArtifactLiveService>[0], 'publication'> & {
   host: RemoteHost; candidates: CandidateExport; signingKey(): SigningKey; hostKeys: KeyResolver;
-  authenticate(request: Request): Promise<HostIdentity | null>; schedule(work: () => Promise<void>): void;
+  /** `hostAuthenticator(parseBuilderHostBindings(...))` over the S2S guard of the builder mount. */
+  authenticate(c: Context): HostIdentity | null; schedule(work: () => Promise<void>): void;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
     runStaleMs(options.heavyGate.maxWaitMs));
