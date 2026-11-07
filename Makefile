@@ -2441,7 +2441,7 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 
 .PHONY: install-internal-packages
 install-internal-packages: ## Install workspace deps and link internal packages into node_modules (no api/ui)
-	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(ARTIFACTS_RUN_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/mcp-platform --workspace=packages/artifacts --include-workspace-root --ignore-scripts --no-audit --no-fund'
+	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(ARTIFACTS_RUN_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/mcp-platform --workspace=packages/connector-host --workspace=packages/artifacts --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
 .PHONY: build-contracts
 build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
@@ -4811,14 +4811,14 @@ test-mcp-connector-googlecalendar: ## Run @sentropic/mcp-connector-googlecalenda
 
 # ---- BR-72 DEPTH Lot 2 — connector-AGNOSTIC broker proof (private, not published, BR72-EX1) ----
 .PHONY: typecheck-connector-host
-typecheck-connector-host: ## Run @sentropic/connector-host type checks
+typecheck-connector-host: install-internal-packages ## Run @sentropic/connector-host type checks
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node@22.10.10 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/connector-host $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/connector-host $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node@22.10.10 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../mcp-platform node_modules/@sentropic/mcp-platform; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/connector-host $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-connector-host
-test-connector-host: ## Run hermetic @sentropic/connector-host tests (requires ENV=test-*)
+test-connector-host: install-internal-packages ## Run hermetic @sentropic/connector-host tests (requires ENV=test-*)
 	@if [ -z "$(ENV)" ] || [ "$(ENV)" = "$${ENV#test-}" ]; then echo "❌ Error: ENV=test-* is required"; exit 1; fi
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node@22.10.10 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/connector-host $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
