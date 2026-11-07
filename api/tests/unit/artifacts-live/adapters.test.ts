@@ -25,6 +25,7 @@ describe('trusted live adapters', () => {
     expect(supervisor.phase).toHaveBeenCalledWith(runtime, 'offline');
     // The bootstrap writes its frozen pre-bundle script: the only host file stays the live Vite config.
     expect(calls.slice(-3)).toEqual(['hostFile', 'prebundle', 'dev']);
+    // FIX3: prebundle and dev see the W4 base (heap 384); the clean build alone sees buildEnvironment() (heap 1024).
     expect(supervisor.prebundle).toHaveBeenCalledWith(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
     expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, artifactEnvironment());
     expect(supervisor.hostFile).toHaveBeenCalledOnce();
@@ -34,6 +35,7 @@ describe('trusted live adapters', () => {
     expect(vi.mocked(supervisor.prebundle).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(supervisor.dev).mock.invocationCallOrder[0]);
     await worker.build(runtime, { id: 'attempt' } as never);
     expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, buildEnvironment());
+    expect(vi.mocked(supervisor.build).mock.calls[0][3]).toMatchObject({ NODE_OPTIONS: '--max-old-space-size=1024' });
     expect(supervisor.terminate).toHaveBeenCalledWith(runtime);
     await worker.renew(runtime); expect(supervisor.renew).toHaveBeenCalledWith(runtime);
   });
