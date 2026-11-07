@@ -4,7 +4,8 @@ import { acceptHandoff, candidateDigest, LiveHostError, type AttemptFence, type 
   type HandoffReceipt, type HostRecheckView, type KeyResolver } from '@sentropic/artifacts/live-host';
 import { createHandoffPublication, type RemoteHost } from '../../../src/services/artifacts/live/handoff-publication';
 import { BUILDER_IMAGE } from '../../../src/services/artifacts/live/recipes';
-import { fixture, key } from './fixture';
+import { sha256 } from '../../../src/services/artifacts/live/integrity';
+import { fixture, gb1Descriptor, key } from './fixture';
 
 const builder = generateKeyPairSync('ed25519'); const host1 = generateKeyPairSync('ed25519'); const host2 = generateKeyPairSync('ed25519');
 const builderKeys = (kid: string) => (kid === 'builder-1' ? builder.publicKey : undefined);
@@ -55,7 +56,7 @@ describe('builder-side SG4b publication port', () => {
     expect(s.order).toEqual(['intend', 'accept']);
     const [, handoff] = vi.mocked(s.host.accept).mock.calls[0];
     expect(handoff.claims).toMatchObject({ kid: 'builder-1', jobId: 'job-1', kind: 'explicit', commitSha: 'A', treeSha: 'tree-A',
-      generation: 1, ...s.fences.get('job-1'), tuple: { commitSha: 'A', treeSha: 'tree-A', descriptorDigest: 'descriptor-A',
+      generation: 1, ...s.fences.get('job-1'), tuple: { commitSha: 'A', treeSha: 'tree-A', descriptorDigest: sha256(gb1Descriptor),
         lockfileDigest: 'lock-sha', builderImageDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/), nodeVersion: 'v24', npmVersion: '11' } });
     expect(Object.keys(handoff.claims.tuple.publicEnvHashes)).toContain('VITE_ARTIFACT_MODE');
     expect(s.recorded).toEqual([expect.objectContaining({ kid: 'host-1', releaseId: 'release-A' })]);
