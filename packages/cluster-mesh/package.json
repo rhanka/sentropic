@@ -248,7 +248,7 @@
     "@sentropic/events": "^0.2.0",
     "@sentropic/mcp-platform": ">=0.4.0 <0.5.0",
     "@stablelib/sha256": "2.0.1",
-    "hono": "^4.13.16"
+    "hono": "^4.10.7"
   },
   "peerDependencies": {
     "@sentropic/design-system-svelte": "^0.34.0",
