@@ -79,12 +79,17 @@ jobs:
             d="$(cat /tmp/f)"; echo "path: $d"
             test "$(node -p "require(\"$d/package.json\").version")" = "'"$PATCHED_VERSION"'"
             echo "version: $(node -p "require(\"$d/package.json\").version")"
-            cd /workspace/api && (npm ls @hono/node-server 2>&1 || true)
+            # npm is absent from the runtime image; resolve the module the way the app does.
+            cd /workspace/api
+            case "$(node -p "require.resolve(\"@hono/node-server\")")" in "$d"/*) ;; *) echo "resolves outside $d"; exit 1;; esac
+            echo "resolves from /workspace/api: $(node -p "require.resolve(\"@hono/node-server\")")"
           '
           docker image inspect --format '{{json .Config.Labels}} user={{.Config.User}} entry={{.Config.Entrypoint}} cmd={{.Config.Cmd}} wd={{.Config.WorkingDir}}' "$img"
           base="${IMAGE_REPO}@${{ matrix.base_digest }}"
           for f in User Entrypoint Cmd WorkingDir Env; do
             a="$(docker image inspect --format "{{json .Config.$f}}" "$base")"; b="$(docker image inspect --format "{{json .Config.$f}}" "$img")"
+            # an empty base User means root (uid 0); the derived image states it explicitly
+            [ "$f" = User ] && [ "$a" = '""' ] && a='"root"'
             [ "$a" = "$b" ] || { echo "config drift on $f: $a vs $b"; exit 1; }
           done
           echo "runtime config identical to base"
