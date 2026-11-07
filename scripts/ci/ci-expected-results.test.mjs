@@ -22,8 +22,9 @@ test('should select API and E2E gates for global changes on every pull request',
     assert.ok(members.length > 0 && members.every((row) => row.selected === true));
   }
   assert.equal(expected.find((row) => row.job === 'validate-llm-mesh').selected, true);
-  for (const { lane } of workflow.jobs['validate-cluster-mesh'].strategy.matrix.include) {
-    assert.equal(expected.find(row => row.job === `validate-cluster-mesh (${lane})`)?.selected, true, lane);
+  for (const member of workflow.jobs['validate-cluster-mesh'].strategy.matrix.include) {
+    const job = `validate-cluster-mesh (${Object.values(member).join(', ')})`;
+    assert.equal(expected.find(row => row.job === job)?.selected, true, job);
   }
 });
 
@@ -71,6 +72,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   }
   assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 20);
   assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 6);
+  assert.equal(workflow.jobs['validate-cluster-mesh'].strategy['max-parallel'], 7);
 });
 
 test('should reject validator serialization beyond the immutable candidate producer', () => {
