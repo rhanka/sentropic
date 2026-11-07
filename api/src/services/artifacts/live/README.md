@@ -24,8 +24,10 @@ The host supplies these mandatory integrations:
 - The trusted supervisor implements bounded staging/process transport, complete
   process-tree termination, monotonic route fencing, atomic source projection,
   read-only verified dependency materialization and phase-fenced networking.
-  Before the dev server it runs the host pre-bundle script to completion in
-  the pod; its output stays in the emptyDir cacheDir, never the shared cache.
+  Before the dev server it runs the separate `prebundle` heavy phase: the pod
+  bootstrap writes its frozen host pre-bundle script itself (no host file) and
+  runs it to completion; its output stays in the emptyDir cacheDir, never the
+  shared cache.
   Bootstrap and this transport must be qualified together under GB4. An empty
   bootstrap, arbitrary shell or Kubernetes exec fallback is not provided.
 - The clean installer starts from the supplied verified source/lock in a fresh
