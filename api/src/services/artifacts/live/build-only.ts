@@ -3,6 +3,7 @@ import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey } f
 import { podName } from './pods';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { withinPhase } from './deadline';
+import { buildEvidence } from './evidence';
 
 /** Explicit historical publication uses one clean pod; dormant drafts never enter this worker. */
 export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
@@ -48,6 +49,7 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.phase !== 'BUILDING' || state.runtime.pendingWake) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt!.candidateDigest = candidate.candidateDigest;
+      state.runtime.attempt!.evidence = buildEvidence(source, cache);
     });
     await ports.worker.verify(runtime, runtime.attempt!);
     await observeHead(ports, key, runtime);
@@ -57,7 +59,7 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
       if (unit.state.runtime.phase !== 'VERIFYING' || unit.state.runtime.pendingWake
         || !await ports.forge.reachable(key, job.headSha) || ports.now() >= runtime.maximumLifetimeAt) conflict('stale_fence');
       if (current.releaseId !== job.expectedReleaseId) throw new LiveError('pointer_conflict');
-      const published = await ports.publication.commit(unit, key, unit.state.runtime.attempt!);
+      const published = await ports.publication.commit(unit, key, unit.state.runtime.attempt!, unit.state.runtime);
       publicationBaseline(unit.state.progress, published.releaseId);
       unit.state.runtime.phase = 'SAVING'; return structuredClone(unit.state.runtime);
     });
