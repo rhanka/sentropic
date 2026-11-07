@@ -45,5 +45,5 @@
 - [x] Lot 1: recipes (offline install, loopback Vite, pre-bundle driver, host-owned NODE_OPTIONS), tests first.
 - [x] Lot 2: frame verification, replay window, pod-bound fence and liveness lease, tests first.
 - [x] Lot 3: W3 transfers (`put` + commit) for stage, overlay, dependencies and install, tests first.
-- [ ] Lot 4: processes (`dev` with pre-bundle, `build`, `snapshot`, process-group termination), tests first.
+- [x] Lot 4: processes (`dev` with pre-bundle, `build`, `snapshot`, process-group termination), tests first.
 - [ ] Lot 5: :5173 listener and pod entry (`createBootstrapSource`), tests first; scoped tests and typecheck green; branch pushed.
