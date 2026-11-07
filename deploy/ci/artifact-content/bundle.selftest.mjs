@@ -86,7 +86,7 @@ function checkRoutes(objects, tier) {
   assert.equal(object(objects, 'Ingress', 'sentropic').spec.rules[0].host, domain);
   assert.equal(object(objects, 'Ingress', 'sentropic').spec.rules[0].http.paths[0].backend.service.name, 'ui');
 }
-function checkNetwork(objects) {
+function checkNetwork(objects, tier) {
   const network = object(objects, 'NetworkPolicy', 'artifact-content').spec;
   assert.deepEqual(network, {
     podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress', 'Egress'],
@@ -104,12 +104,20 @@ function checkNetwork(objects) {
   const pg = object(objects, 'NetworkPolicy', 'allow-artifact-content-to-postgres').spec;
   assert.deepEqual(pg, { podSelector: { matchLabels: component('postgres') }, policyTypes: ['Ingress'],
     ingress: [{ from: [{ podSelector: { matchLabels: component('artifact-content') } }], ports: [{ protocol: 'TCP', port: 5432 }] }] });
+  // A-LIVE W9 live edge: only the same-environment immo content host (radar-api reader pods).
+  const immo = tier === 'prod' ? 'radar-immobilier' : 'radar-immobilier-preprod';
+  assert.deepEqual(object(objects, 'NetworkPolicy', 'allow-immo-content-host-to-artifact-content').spec, {
+    podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress'],
+    ingress: [{ from: [{ namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': immo } },
+      podSelector: { matchLabels: { 'app.kubernetes.io/name': 'radar-immobilier', 'app.kubernetes.io/component': 'api' } } }],
+    ports: [{ protocol: 'TCP', port: 8791 }] }] });
 }
+const liveEdge = values => object(values, 'NetworkPolicy', 'allow-immo-content-host-to-artifact-content').spec;
 for (const tier of ['prod', 'preprod']) {
   const objects = load(`/rendered/${tier}.yaml`);
   check(`${tier}: real host parser denies reserved wildcard labels`, () => checkReservedHosts(objects));
   const preservedImages = tier === 'prod' ? prodPins : undefined;
-  const qualify = (values, images = preservedImages) => { checkWorkload(values, tier, images); checkRoutes(values, tier); checkNetwork(values); };
+  const qualify = (values, images = preservedImages) => { checkWorkload(values, tier, images); checkRoutes(values, tier); checkNetwork(values, tier); };
   check(`${tier}: closed workload, TLS routes, scoped network and restore access`, () => qualify(objects));
   check(`${tier}: one digest replacement covers API, IdP and content`, () => {
     const pinned = load(`/rendered/${tier}-pinned.yaml`);
@@ -149,6 +157,13 @@ for (const tier of ['prod', 'preprod']) {
   deny('builder egress without binding isolation', o => { delete object(o, 'NetworkPolicy', 'artifact-content').spec.egress[0].to[0].podSelector; });
   deny('builder egress on another port', o => { object(o, 'NetworkPolicy', 'artifact-content').spec.egress[0].ports[0].port = 8787; });
   deny('unrestricted object-store egress', o => { object(o, 'NetworkPolicy', 'artifact-content').spec.egress.push({}); });
+  deny('live edge from the other environment content host', o => {
+    liveEdge(o).ingress[0].from[0].namespaceSelector.matchLabels['kubernetes.io/metadata.name'] = tier === 'prod' ? 'radar-immobilier-preprod' : 'radar-immobilier';
+  });
+  deny('live edge from every immo pod', o => { delete liveEdge(o).ingress[0].from[0].podSelector; });
+  deny('live edge from any namespace', o => { delete liveEdge(o).ingress[0].from[0].namespaceSelector; });
+  deny('live edge on another port', o => { liveEdge(o).ingress[0].ports[0].port = 5173; });
+  deny('missing live edge', o => { o.splice(o.findIndex(v => v.metadata.name === 'allow-immo-content-host-to-artifact-content'), 1); });
   deny('missing content wildcard TLS', o => { object(o, 'Ingress', 'artifact-content').spec.tls[0].hosts.pop(); });
   deny('second pinned wildcard host', o => {
     const d = object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_CONTENT_BASE_DOMAIN;
@@ -167,6 +182,20 @@ check('reject an extra policy opening content across namespaces', () => {
   copy.push({ kind: 'NetworkPolicy', metadata: { name: 'accidental-open', namespace: 'sentropic' },
     spec: { podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress'], ingress: [{}] } });
   assert.throws(() => checkConnectivity(copy));
+});
+for (const [ns, peer] of [['sentropic', 'radar-immobilier-preprod'], ['sentropic-preprod', 'radar-immobilier']]) {
+  check(`reject an extra policy admitting ${peer} into ${ns} content`, () => {
+    const copy = structuredClone(combined);
+    const extra = structuredClone(copy.find(o => o.metadata.namespace === ns && o.metadata.name === 'allow-immo-content-host-to-artifact-content'));
+    extra.metadata.name = 'accidental-live-edge';
+    extra.spec.ingress[0].from[0].namespaceSelector.matchLabels['kubernetes.io/metadata.name'] = peer;
+    copy.push(extra);
+    assert.throws(() => checkConnectivity(copy), /cross-environment live edge denied/);
+  });
+}
+check('reject a content set without the live edge', () => {
+  const copy = combined.filter(o => o.metadata.name !== 'allow-immo-content-host-to-artifact-content');
+  assert.throws(() => checkConnectivity(copy), /must reach the live edge/);
 });
 check('both environments: no rendered policy widens the default-deny', () => checkNoOpenPolicy(combined));
 check('reject an allow-all rule beside the default-deny', () => {
