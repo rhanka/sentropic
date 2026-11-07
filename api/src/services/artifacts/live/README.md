@@ -59,6 +59,7 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   limit fails `limit`. Put frames are emitted as soon as one fills, and a
   streamed tree whose source fails part-way is never committed.
 - Ops and required echo: `phase {phase}` → phase; `terminate` → `treeGone: true`;
+  `renew {}` → `renewed: true`;
   `clear {paths}` → `cleared`; `stage`/`overlay`/`dependencies` → `treeDigest`
   (+ `revision`, + `readOnly: true`); `hostFile {path, source}` → `sha256`, with
   `path` one of the three host-owned files `/tmp/artifact-vite.config.mjs`,
@@ -72,9 +73,13 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   no host file carries it. `dev` refuses with `failed` until a pre-bundle has
   run. The worker sends the live Vite config, then `prebundle`, then `dev`.
 - Environments: the supervisor refuses, before sending, a `prebundle` or `dev`
-  whose environment is not `liveEnvironment()` and a `build` whose environment
-  is not `buildEnvironment()` (heap 1024, no `VITE_BASEMAP_TILE_URL`). W4 owns
-  both functions in `recipes.ts`.
+  whose environment is not `artifactEnvironment()` (heap 384) and a `build`
+  whose environment is not `buildEnvironment()` (heap 1024). W4 is the sole
+  author of both functions and of every recipe in `recipes.ts`.
+- Liveness: `renew` is fenced like every op and has no side effect; the pod
+  renews its liveness lease on the frame and answers at once, so a renewal never
+  cancels or waits for an in-flight command. The controller sends it at least
+  every 60 s outside DORMANT.
 - `snapshot { root: 'output' | 'dependencies', cursor }` →
   `{ entries: [{ path, type, mode, size, offset, data }], next }`. Output accepts
   regular files only, requires `index.html` and enforces 255 files / 16 MiB /
