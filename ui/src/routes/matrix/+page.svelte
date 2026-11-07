@@ -18,7 +18,7 @@
   import { API_BASE_URL } from '$lib/config';
   import { fetchInitiatives } from '$lib/stores/initiatives';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, selectedWorkspace } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, selectedWorkspace, workspaceScope } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
   import { Info, Eye, Trash2, AlertTriangle, Plus, Upload, Star, X, Lock } from '@lucide/svelte';
@@ -26,6 +26,7 @@
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { AUTOSAVE_DEBOUNCE_MS } from '$lib/constants/autosave';
   import { buildLockScopeKey } from '$lib/utils/lock-scope';
+  import { createKeyedReload, folderScopeKey } from '$lib/utils/keyed-reload';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -232,7 +233,8 @@
   };
 
   onMount(async () => {
-    await loadMatrix();
+    await syncMatrix();
+    mounted = true;
     streamHub.set(HUB_KEY, (evt: any) => {
       if (evt?.type !== 'folder_update') return;
       const folderId: string = evt.folderId;
@@ -447,18 +449,42 @@
     }
   }
 
- const loadMatrix = async () => {
-    if (!$currentFolderId) {
-      addToast({
-        type: 'info',
-        message: get(_)('matrix.pleaseSelectFolder')
-      });
+  const matrixReload = createKeyedReload();
+  let mounted = false;
+  let lastFolderId: string | null = null;
+
+  // Load once per (folder, workspace scope) key. The root layout wipes
+  // currentFolderId and the shared stores when the scope changes after
+  // hydration, so the remembered folder id is re-applied and the matrix reloaded.
+  const syncMatrix = async (notifyNoFolder = true) => {
+    const folderId = $currentFolderId ?? lastFolderId;
+    if (!folderId) {
+      if (notifyNoFolder) {
+        addToast({
+          type: 'info',
+          message: get(_)('matrix.pleaseSelectFolder')
+        });
+      }
       return;
     }
+    const key = folderScopeKey(folderId, $workspaceScope.selectedId);
+    if (!matrixReload.needsReload(key)) return;
+    lastFolderId = folderId;
+    if ($currentFolderId !== folderId) currentFolderId.set(folderId);
+    await loadMatrix(folderId, matrixReload.begin(key));
+  };
 
+  $: if (mounted) {
+    void $currentFolderId;
+    void $workspaceScope.selectedId;
+    void syncMatrix(false);
+  }
+
+  const loadMatrix = async (folderId: string, token: number) => {
     isLoading = true;
     try {
-      const folder = await apiGet(`/folders/${$currentFolderId}`);
+      const folder = await apiGet(`/folders/${folderId}`);
+      if (!matrixReload.isCurrent(token)) return;
       currentFolderName = folder.name || '';
 
       const rawMatrix = folder.matrixConfig ?? folder.matrix_config;
@@ -476,13 +502,14 @@
         });
       }
     } catch (error) {
+      if (!matrixReload.isCurrent(token)) return;
       console.error('Failed to load matrix:', error);
       addToast({
         type: 'error',
         message: get(_)('matrix.loadError')
       });
     } finally {
-      isLoading = false;
+      if (matrixReload.isCurrent(token)) isLoading = false;
     }
   };
 
