@@ -3,9 +3,7 @@ import type { LiveAttempt, LiveKey, LivePhase, LiveRuntime, LiveState } from './
 import type { LiveAdmission } from './admission';
 import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
-import type { AttemptFence } from './host-recheck';
-/** Host-resolved pending job (G0 v3 §2.6). */
-export interface HostJob { jobId: string; generation: number; headSha: string; expectedReleaseId: string | null }
+import type { AttemptFence, HostJob } from '@sentropic/artifacts/live-host';
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
