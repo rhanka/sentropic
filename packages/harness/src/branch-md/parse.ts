@@ -2,6 +2,8 @@
 // title, scope buckets (Allowed/Forbidden/Conditional path globs), exception ids, and lots.
 // Malformed/partial input yields empty fields — never throws.
 
+import type { HarnessProfile } from '../profile/profile.js';
+
 export interface ParsedLotItem {
   text: string;
   checked: boolean;
@@ -31,7 +33,11 @@ function backtickGlobs(line: string): string[] {
   return out;
 }
 
-export function parseBranchMd(text: string): ParsedBranchMd {
+export function parseBranchMd(text: string, profile?: HarnessProfile): ParsedBranchMd {
+  const conventions = profile?.branchMd;
+  const exception = profile
+    ? new RegExp('\\b(?:' + profile.exceptionIdPattern.source.replace(/^\^/, '').replace(/\$$/, '') + ')\\b', 'g')
+    : EXCEPTION;
   const lines = text.split(/\r?\n/);
   const result: ParsedBranchMd = {
     title: '',
@@ -62,11 +68,13 @@ export function parseBranchMd(text: string): ParsedBranchMd {
   };
 
   for (const line of lines) {
-    for (const m of line.matchAll(EXCEPTION)) result.exceptions.push(m[0]);
+    for (const m of line.matchAll(exception)) result.exceptions.push(m[0]);
 
     if (/^##\s+/.test(line)) {
       bucket = null;
-      inPlan = /plan\s*\/\s*todo/i.test(line);
+      inPlan = conventions
+        ? line.toLowerCase().includes(conventions.planHeading.toLowerCase())
+        : /plan\s*\/\s*todo/i.test(line);
       currentLot = null;
       continue;
     }
@@ -76,17 +84,17 @@ export function parseBranchMd(text: string): ParsedBranchMd {
     // closing `**` is NOT adjacent to "Paths". Match the prefix only (as Conditional
     // already did) — otherwise Allowed/Forbidden silently parse to empty on every
     // real BRANCH.md and in-scope files wrongly classify as `unknown`.
-    if (/\*\*Allowed Paths/i.test(line)) {
+    if (line.toLowerCase().includes('**' + (conventions?.allowedHeading ?? 'Allowed Paths').toLowerCase())) {
       bucket = 'allowed';
       pushBucket(backtickGlobs(line));
       continue;
     }
-    if (/\*\*Forbidden Paths/i.test(line)) {
+    if (line.toLowerCase().includes('**' + (conventions?.forbiddenHeading ?? 'Forbidden Paths').toLowerCase())) {
       bucket = 'forbidden';
       pushBucket(backtickGlobs(line));
       continue;
     }
-    if (/\*\*Conditional Paths/i.test(line)) {
+    if (line.toLowerCase().includes('**' + (conventions?.conditionalHeading ?? 'Conditional Paths').toLowerCase())) {
       bucket = 'conditional';
       pushBucket(backtickGlobs(line));
       continue;

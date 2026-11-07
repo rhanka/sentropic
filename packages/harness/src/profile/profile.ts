@@ -12,6 +12,19 @@ export interface HarnessProfile {
   id: string;
   /** Globs forbidden by default unless a BRANCH.md explicitly Allows them (C2). */
   forbiddenPathDefaults: string[];
+  /** Default scope buckets, used after explicit BRANCH.md scope declarations. */
+  allowedPathDefaults?: string[];
+  conditionalPathDefaults?: string[];
+  /** Optional repository-owned plan conventions (defaults retain the canonical parser). */
+  branchMd?: {
+    file: string;
+    allowedHeading: string;
+    forbiddenHeading: string;
+    conditionalHeading: string;
+    planHeading: string;
+  };
+  /** ECMAScript regex sources, checked only when a commit message is supplied. */
+  commitMessage?: { requiredPattern?: string; forbiddenPatterns: string[] };
   /** Grammar of a valid scope-exception id in BRANCH.md (C2 conditional binding). */
   exceptionIdPattern: RegExp;
   /** When true, a Conditional path may be touched only if a matching exception id exists (C2). */
