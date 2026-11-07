@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHostAssertionLive, createLiveFences } from '../src/live-assertion';
 import {
-  ASSERTION_HEADER, CONTROL_HEADER, createHostAssertionLive, createLiveFences, signLiveAssertion, signLiveControl,
-  verifyLiveAssertion, verifyLiveControl, type LiveControlClaims,
-  type LiveAssertionClaims,
-} from '../src/live-assertion';
+  ASSERTION_HEADER, CONTROL_HEADER, FENCE_HEADER, signLiveAssertion, signLiveControl, signLiveFence,
+  verifyLiveAssertion, verifyLiveControl, type LiveAssertionClaims, type LiveControlClaims, type LiveFenceClaims,
+} from '../src/live-format';
 import { createContentHost } from '../src/host';
-import { createLiveProxy, LIVE_CONTROL_PATH } from '../src/live';
+import { createLiveProxy, LIVE_CONTROL_PATH, LIVE_FENCE_PATH } from '../src/live';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 
 const artifactId = '11111111-1111-4111-8111-111111111111';
@@ -13,6 +13,7 @@ const pagesDomain = 'pages.immo.example';
 const host = `${artifactId}.${pagesDomain}`;
 const origin = `https://${host}`;
 const key = Buffer.alloc(32, 7);
+const controllerKey = Buffer.alloc(32, 5);
 const t0 = 1_000_000;
 function claims(over: Partial<LiveAssertionClaims> = {}): LiveAssertionClaims {
   const base = { v: 1 as const, kid: 'immo-1', host, artifactId, storageScopeId: 'scope', sessionId: 'session',
@@ -27,6 +28,7 @@ function fixture(time = { now: t0 }) {
   const admittedPath = vi.fn(async () => true);
   const live = createHostAssertionLive({ hosts: [{ pagesDomain, keyIds: ['immo-1'] }],
     key: kid => kid === 'immo-1' ? key : undefined, fences, admittedPath, now: () => time.now,
+    controller: { keyIds: ['sentropic-1'], key: kid => kid === 'sentropic-1' ? controllerKey : undefined },
     fetch: vi.fn(async () => new Response('<html>x</html>', { headers: { 'content-type': 'text/html' } })) });
   const proxy = createLiveProxy(live);
   const req = (token: string | undefined, path = '/', init: RequestInit = {}) => new Request(origin + path,
@@ -118,7 +120,7 @@ describe('host assertion live edge', () => {
   });
   it('should delegate source admission to the host manifest port', async () => {
     const f = fixture(); f.admittedPath.mockResolvedValueOnce(false);
-    expect(await f.proxy.fetch(f.req(sign(), '/src/secret.ts'), artifactId)).toHaveProperty('status', 404);
+    expect(await f.proxy.fetch(f.req(sign(), '/src/secret.ts'), artifactId)).toBeUndefined(); // the pages host answers 404
     expect(f.live.fetch).not.toHaveBeenCalled();
   });
   it('should authorize the websocket upgrade from the assertion on the exact endpoint', async () => {
@@ -140,7 +142,7 @@ describe('invitee role (multi-user live)', () => {
     expect(owner).toMatchObject({ role: 'binding_owner', principalId: 'owner' }); expect(owner.invitationId).toBeUndefined();
   });
   it('should cap the route lifetime at the invitation expiry', async () => {
-    const f = fixture(); const route = (await f.live.authorize(f.req(sign(invitee({ invitationExp: t0 / 1000 + 100 }))), artifactId))!;
+    const f = fixture(); const route = (await f.live.authorize(f.req(sign(invitee({ invitationExp: t0 / 1000 + 100, exp: t0 / 1000 + 100 }))), artifactId))!;
     expect(route.expiresAt).toBe(t0 + 100_000);
   });
   it.each([
@@ -170,7 +172,7 @@ describe('invitee role (multi-user live)', () => {
     f.fences.fence({ artifactId, generation: 2, routeEpoch: 1 }); expect(close).toHaveBeenCalledTimes(1);
   });
   it('should expire an invitee through the proxy validity check', async () => {
-    const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee({ invitationExp: t0 / 1000 + 100 }))), artifactId))!;
+    const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee({ invitationExp: t0 / 1000 + 100, exp: t0 / 1000 + 100 }))), artifactId))!;
     expect(await f.proxy.valid(guest)).toBe(true); f.time.now = t0 + 101_000; expect(await f.proxy.valid(guest)).toBe(false);
   });
   it('should authorize the invitee websocket upgrade and serve HTML to the invitee', async () => {
@@ -206,23 +208,19 @@ describe('session-bound live authorization record', () => {
 });
 
 const control = (over: Partial<LiveControlClaims> = {}): LiveControlClaims => ({ v: 1, kid: 'immo-1', host, artifactId,
-  op: 'revoke_invitation', sessionId: '', invitationId: 'inv-1', epoch: 2, generation: 0, routeEpoch: 0,
-  iat: t0 / 1000, exp: t0 / 1000 + 60, ...over });
+  op: 'revoke_invitation', sessionId: '', invitationId: 'inv-1', epoch: 2, iat: t0 / 1000, exp: t0 / 1000 + 60, ...over });
 const post = (token?: string, path = LIVE_CONTROL_PATH, method = 'POST') => new Request(origin + path,
   { method, headers: token ? { [CONTROL_HEADER]: token } : {} });
-describe('signed host control port', () => {
-  it('should close sockets on a signed invitation revocation, fence and session revocation', async () => {
+describe('host push path: signed revocation', () => {
+  it('should close sockets on a signed invitation revocation and refuse a revoked session', async () => {
     const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
     const owner = (await f.live.authorize(f.req(sign()), artifactId))!;
     const closeGuest = vi.fn(); const closeOwner = vi.fn(); f.live.watch(guest, closeGuest); f.live.watch(owner, closeOwner);
     expect((await f.live.control(post(signLiveControl(control(), key)), artifactId))?.status).toBe(204);
     expect(closeGuest).toHaveBeenCalledTimes(1); expect(closeOwner).not.toHaveBeenCalled();
-    const fence = control({ op: 'fence', invitationId: '', epoch: 0, generation: 1, routeEpoch: 2 });
-    expect((await f.live.control(post(signLiveControl(fence, key)), artifactId))?.status).toBe(204);
-    expect(closeOwner).toHaveBeenCalledTimes(1);
-    const stop = control({ op: 'revoke_session', sessionId: 'session-2', invitationId: '', epoch: 0 });
+    const stop = control({ op: 'revoke_session', sessionId: 'session', invitationId: '', epoch: 0 });
     expect((await f.live.control(post(signLiveControl(stop, key)), artifactId))?.status).toBe(204);
-    expect(await f.live.authorize(f.req(sign(claims({ sessionId: 'session-2', generation: 2 }))), artifactId)).toBeUndefined();
+    expect(closeOwner).toHaveBeenCalledTimes(1); expect(await f.live.authorize(f.req(sign()), artifactId)).toBeUndefined();
     expect(verifyLiveControl(signLiveControl(stop, key), { key: () => key, now: () => t0 })).toEqual(stop);
   });
   it.each([
@@ -230,6 +228,8 @@ describe('signed host control port', () => {
     ['a GET', () => post(signLiveControl(control(), key), LIVE_CONTROL_PATH, 'GET')],
     ['a query string', () => post(signLiveControl(control(), key), `${LIVE_CONTROL_PATH}?x=1`)],
     ['an assertion used as control', () => post(sign())],
+    ['a controller fence used as control', () => post(signLiveFence(fence(), key))],
+    ['a controller key', () => post(signLiveControl(control({ kid: 'sentropic-1' }), controllerKey))],
     ['a wrong host', () => post(signLiveControl(control({ host: `x.${pagesDomain}` }), key))],
     ['a wrong artifact', () => post(signLiveControl(control({ artifactId: '22222222-2222-4222-8222-222222222222' }), key))],
     ['an unlisted key id', () => post(signLiveControl(control({ kid: 'other' }), key))],
@@ -237,7 +237,7 @@ describe('signed host control port', () => {
     ['an invitation revocation naming a session', () => post(signLiveControl(control({ sessionId: 'session' }), key))],
     ['epoch zero', () => post(signLiveControl(control({ epoch: 0 }), key))],
     ['a fractional epoch', () => post(signLiveControl(control({ epoch: 1.5 }), key))],
-    ['an unknown op', () => post(signLiveControl(control({ op: 'grant' as never }), key))],
+    ['a fence op from the host', () => post(signLiveControl(control({ op: 'fence' as never, invitationId: '', epoch: 0 }), key))],
     ['an expired message', () => post(signLiveControl(control({ exp: t0 / 1000 }), key))],
     ['an over-long message', () => post(signLiveControl(control({ exp: t0 / 1000 + 301 }), key))],
   ])('should refuse %s with no effect', async (_name, build) => {
@@ -245,6 +245,45 @@ describe('signed host control port', () => {
     const close = vi.fn(); f.live.watch(guest, close);
     expect(await f.live.control(build(), artifactId)).toBeUndefined();
     expect(close).not.toHaveBeenCalled(); expect(await f.live.current(guest)).toBe(true);
+  });
+});
+
+function fence(over: Partial<LiveFenceClaims> = {}): LiveFenceClaims {
+  return { v: 1, kid: 'sentropic-1', artifactId, generation: 1, routeEpoch: 2, iat: t0 / 1000, exp: t0 / 1000 + 60, ...over };
+}
+const internal = 'https://artifact-content.sentropic.svc.cluster.local:8791';
+const push = (token?: string, base = internal, path = LIVE_FENCE_PATH, init: { method?: string; headers?: Headers } = {}) => {
+  const headers = init.headers ?? new Headers(token ? { [FENCE_HEADER]: token } : {});
+  return new Request(base + path, { method: init.method ?? 'POST', headers });
+};
+describe('controller push path: signed generation and route-epoch fences', () => {
+  it('should close older routes and refuse them afterwards', async () => {
+    const f = fixture(); const owner = (await f.live.authorize(f.req(sign()), artifactId))!;
+    const close = vi.fn(); f.live.watch(owner, close);
+    expect((await f.live.fence(push(signLiveFence(fence(), controllerKey))))?.status).toBe(204);
+    expect(close).toHaveBeenCalledTimes(1); expect(await f.live.current(owner)).toBe(false);
+    expect(await f.live.authorize(f.req(sign(claims({ sessionId: 'session-2', routeEpoch: 2 }))), artifactId)).toBeDefined();
+  });
+  it.each([
+    ['no token', () => push()],
+    ['a GET', () => push(signLiveFence(fence(), controllerKey), internal, LIVE_FENCE_PATH, { method: 'GET' })],
+    ['a query string', () => push(signLiveFence(fence(), controllerKey), internal, `${LIVE_FENCE_PATH}?x=1`)],
+    ['a duplicate header', () => {
+      const headers = new Headers(); const token = signLiveFence(fence(), controllerKey);
+      headers.append(FENCE_HEADER, token); headers.append(FENCE_HEADER, token);
+      return push(undefined, internal, LIVE_FENCE_PATH, { headers });
+    }],
+    ['a pages-domain host', () => push(signLiveFence(fence(), controllerKey), origin)],
+    ['a host key', () => push(signLiveFence(fence({ kid: 'immo-1' }), key))],
+    ['a host control used as fence', () => push(signLiveControl(control(), controllerKey))],
+    ['an unlisted controller key id', () => push(signLiveFence(fence({ kid: 'other' }), controllerKey))],
+    ['generation zero', () => push(signLiveFence(fence({ generation: 0 }), controllerKey))],
+    ['an over-long message', () => push(signLiveFence(fence({ exp: t0 / 1000 + 301 }), controllerKey))],
+  ])('should refuse %s with no effect', async (_name, build) => {
+    const f = fixture(); const owner = (await f.live.authorize(f.req(sign()), artifactId))!;
+    const close = vi.fn(); f.live.watch(owner, close);
+    expect(await f.live.fence(build())).toBeUndefined();
+    expect(close).not.toHaveBeenCalled(); expect(await f.live.current(owner)).toBe(true);
   });
 });
 
@@ -263,9 +302,16 @@ describe('content host routing for the pages domain', () => {
     expect((await h.fetch(f.req(undefined, '/_reader/nonce'))).status).toBe(404);
     expect((await h.fetch(new Request(`https://${artifactId}.unknown.example/`, { headers: { [ASSERTION_HEADER]: sign() } }))).status).toBe(404);
   });
-  it('should route the signed control port on the pages domain', async () => {
+  it('should route the host push path on the pages domain only', async () => {
     const f = fixture(); const h = hostFor(f.proxy);
     expect((await h.fetch(post(signLiveControl(control(), key)))).status).toBe(204);
     expect((await h.fetch(post())).status).toBe(404);
+  });
+  it('should route the controller push path on the internal Host only, never on a public content host', async () => {
+    const f = fixture(); const h = hostFor(f.proxy); const token = signLiveFence(fence(), controllerKey);
+    expect((await h.fetch(push(token, 'https://content.example.test'))).status).toBe(404);
+    expect((await h.fetch(push(token, 'https://x.content.example.test'))).status).toBe(404);
+    expect((await h.fetch(push(token))).status).toBe(204);
+    expect((await h.fetch(push())).status).toBe(404);
   });
 });
