@@ -32,7 +32,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     heavyGate: { node: string; maxWaitMs: number };
     /** Live pod slots of this environment, from per-environment configuration (preprod plus prod at most the node's 4). */
     admission: { capacity: number; waiterTtlMs: number };
-    cache: Pick<CachePorts, 'signingKey' | 'evidence' | 'cleanInstall'>;
+    cache: Pick<CachePorts, 'signingKey' | 'cleanInstall'>;
   }) {
   const cache = createDependencyCache({ ...options.cache, fetch: fetchLockedTarball,
     storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) });
