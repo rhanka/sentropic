@@ -4,7 +4,7 @@ import type { CacheReceipt, DependencyFile } from './cache';
 import { safeDependencyPath } from './integrity';
 import type { DraftSnapshot, SourceSnapshot } from './ports';
 import { conflict, LiveError, type LiveAttempt, type LiveRuntime } from './records';
-import { BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, liveEnvironment, PREBUNDLE_RECIPE } from './recipes';
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, PREBUNDLE_RECIPE } from './recipes';
 import type { QualifiedSupervisor } from './worker';
 import { createSupervisorChannel, failure, type ChannelOptions } from './supervisor-channel';
 import { createCleanInstall } from './supervisor-install';
@@ -99,13 +99,15 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if ((await call(runtime, 'hostFile', { path, source })).sha256 !== sha256(source)) unavailable();
     },
     /** Recipes cross the wire by name only; the bootstrap runs its frozen copy (and frozen script) with the host-owned
-     * environment. The pre-bundle runs to completion with the live environment; the pod's `dev` refuses until it has. */
+     * environment. W4 is the sole author of both environments: `artifactEnvironment()` for the pre-bundle and `dev`,
+     * `buildEnvironment()` for the build. The pre-bundle runs to completion; the pod's `dev` refuses until it has. */
     async prebundle(runtime, command, env) {
-      if (!same(command, PREBUNDLE_RECIPE) || !same(env, liveEnvironment())) unavailable();
+      if (!same(command, PREBUNDLE_RECIPE) || !same(env, artifactEnvironment())) unavailable();
       if ((await call(runtime, 'prebundle', { recipe: 'prebundle' })).prebundled !== true) unavailable();
+      return { prebundled: true };
     },
     async dev(runtime, command, env) {
-      if (!same(command, LIVE_RECIPE) || !same(env, liveEnvironment())) unavailable();
+      if (!same(command, LIVE_RECIPE) || !same(env, artifactEnvironment())) unavailable();
       const data = await call(runtime, 'dev', { recipe: 'live' });
       if (data.routeEpoch !== runtime.routeEpoch) return Number.isSafeInteger(data.routeEpoch) ? conflict('stale_fence') : unavailable();
       if (typeof data.revision !== typeof runtime.sourceRevision) unavailable();
