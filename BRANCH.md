@@ -29,7 +29,7 @@
   - `.github/workflows/**`
 
 ## Feedback Loop
-- [x] `resolved` (s-archi batch review): W3's `QualifiedSupervisor` exposes the verified snapshot export; W7 consumes it and keeps no own port once W3 lands it.
+- [x] `resolved` (s-archi batch review, W3 dae5b0f0a): W3 seals the snapshot into `SupervisorSources.candidate`; W7 provides that sink (`createCandidateStore`), which is also its `CandidateExport`.
 - [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
 - [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).
 - [ ] `attention`: live-host 78e85ffb7 has no `index.ts` and no `./live-host` export yet; W7 imports the architect-named subpath.
