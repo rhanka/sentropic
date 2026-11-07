@@ -1,52 +1,84 @@
-# Feature: Train 3 2026-11-07 (UI folder reload, SCA gate hardening, builder pool d2-4, Track flake item)
+# Feature: SG0-app host composition on the Sentropic public origin (A-LIVE W1 / M2-S)
 
 ## Objective
-- [ ] One train, one PR, one CI: fix the folders/[id] use-case list reload race, harden the SCA gate (4 LOW findings of the #940 review), schedule live builder pods on the artifact-builders pool, and record the e2e flake in Track.
-- [x] Wagons: fix/ui-folder-usecase-reload, chore/sca-gate-lows, feat/artifact-builder-pool-d2-4, chore/track-e2e-usecase-flake (cherry-picked onto main 2d06ba7eb without conflict).
+Mount the shipped cluster-mesh GitHub App router on the Sentropic public origin with a durable Postgres enrollment store, `secret-crypto:v1` custody, owner-session `resolveOwner`, service-identity `authenticateBroker`, the frozen two-repo target registry, and log suppression. Code only — merge and activation wait for the GB4-P go (A-LIVE §10).
+
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Scope / Guardrails
-- [x] Branch train/2026-11-07-ci10-c; worktree tmp/worktrees/train3; ENV=test-ci10-train3.
-- [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling.
-- [x] Scoped local checks only; full suites run in the PR CI.
-- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Scope limited to SG0-app host composition (`resolveOwner`, `authenticateBroker`, durable shared store, custody key, HTTPS public mount, target registry, log suppression) as defined in plan lot M2-S.
+- One migration file max; this branch adds exactly one control migration (`api/drizzle/control/0021_github_app_enrollments.sql`).
+- Make-only workflow, no direct Docker commands; no host npm.
+- Root workspace `~/src/sentropic` is reserved for the user (`ENV=dev`); this lane works in the `tmp/worktrees/alive-w1` worktree.
+- Automated test campaigns on `ENV=test-alive-w1`, never on root `dev`.
+- Host disk above 90%: no local image build this session (owner disk rule 06/11); scoped test runs are deferred to the CI per that rule.
+- In every `make` command, `ENV=<env>` is passed as the last argument.
+- All new text in English.
+- Wagon model: branch pushed only, no PR; the train integration lane merges.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `api/src/services/cluster-mesh/github-app-host.ts`
+  - `api/src/services/cluster-mesh/github-app-envelope-store.ts`
+  - `api/src/routes/github-app.ts`
+  - `api/src/app.ts`
+  - `api/src/config/env.ts`
+  - `api/src/db/control-schema.ts`
+  - `api/tests/services/cluster-mesh/github-app-host.spec.ts`
+  - `api/tests/api/github-app-envelope-store.spec.ts`
   - `BRANCH.md`
-  - `ui/src/lib/utils/keyed-reload.ts`
-  - `ui/src/routes/folders/[id]/+page.svelte`
-  - `ui/tests/utils/keyed-reload.test.ts`
-  - `scripts/security/sca-gate.mjs`
-  - `scripts/security/sca-gate.test.mjs`
-  - `.security/vulnerability-register.yaml`
-  - `api/src/services/artifacts/live/pods.ts`
-  - `api/tests/unit/artifacts-live/pods.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/*/src/**`
-  - `api/drizzle/*.sql`
-  - `.github/workflows/ci.yml`
-- **Conditional Paths (allowed with declared exception)**:
-  - `.track/**` under BR86-EX1.
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/**` (cluster-mesh SG0-app core and its contract tests are frozen on this lane)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/control/*.sql` + `api/drizzle/control/meta/_journal.json` (max 1 file; BR86-EX1 below)
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare exception ID `BR86-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [x] BR86-EX1: Track writer commit for the e2e use-case flake bug item 01M6VD98F8SY5WYQ186GV4F66A. Rollback: revert the Track commit.
-- [ ] Acceptance: exact-head CI green; e2e 06-usecase passes; no gate weakened.
+- `BR86-EX1` (declared before writing): one control migration `api/drizzle/control/0021_github_app_enrollments.sql` plus its journal entry `api/drizzle/control/meta/_journal.json`.
+  - Reason: `GitAppEnvelopeStore` requires a durable, replica-shared store with a unique enrollment reference (`OP6 §2.7`, `G0 v3 §2.7`); the control stream is where cluster-mesh host tables live (precedent `control.cluster_mesh_*`).
+  - Number scan: rescanned all `origin/*` refs before writing; `0016`–`0019` exist only on remote heads of #677's stream, `0020` only in stale refs predating the `0012_app_artifact_host` renumber; `0021` is free everywhere.
+  - Impact/rollback: additive single table; `make down-volumes ENV=<env>` and journal-file revert remove it cleanly.
+- `attention`: host disk usage read 91–92% all session; the owner rule (06/11) forbids new local image builds above 90%, and no local sentropic-api image exists, so local `make up`/`test-api-unit` runs are impossible this session. Scoped tests were authored and pushed for the CI (final gate is the branch CI / train integration).
+- `attention`: `authenticateBroker` trusts `createRequireServiceAuth` (mcp-auth) + a server-side client-id → `{ storageScopeId, repoId }` binding; the immo host service client credential itself is provisioned out-of-band (secret bundle, not this lane). Immo's binding values and target scope/repo ids come from `GITHUB_APP_TARGETS_JSON` / `GITHUB_APP_BROKER_BINDINGS_JSON` at deploy time; none is committed.
 
 ## AI Flaky tests
-- [x] No flaky allowance, timeout increase or new skip.
+- Not applicable this session (no local test run; see Feedback Loop). CI failures to be triaged by the train integration lane against the recorded signatures.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [x] **Multi-branch**
-- [x] Rationale: four independent wagons integrated into one dated train with one CI.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- Rationale: one orthogonal lot (SG0-app host composition); wagon branch consumed by the train integration lane.
 
 ## UAT Management (in orchestration context)
-- [ ] Exact-head pull_request CI result retained in the PR.
+- **Mono-branch**: no UAT in this lane. Deployment and the owner enrollment gesture (`<sentropic origin>/github-app`) wait for the GB4-P go and the M2-G runbook; nothing here deploys or activates.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: wagons cherry-picked onto main without conflict.
-- [x] Lot 2: scoped checks green (sca-gate unit 14/14, ui keyed-reload 2/2; pods test 5/5 recorded by its wagon).
-- [ ] Lot 3: push, open PR, review.
-- [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `COMMON-RULES.md`, `rules/workflow.md`, `rules/testing.md`, plan `M2-S`, `G0 v3 §2.7`, `A-LIVE v2 §6/§10`, immo reservations R1–R5.
+  - [x] Worktree `tmp/worktrees/alive-w1`, branch `feat/alive-w1` from `origin/main` (`3f1027496`).
+  - [x] `harness check branch` PASS.
+  - [x] Environment mapping: `test-alive-w1` (API_PORT 8799, UI_PORT 5199, MAILDEV_UI_PORT 1099); make commands end with `ENV=test-alive-w1`.
+  - [x] Control migration number rescan (see BR86-EX1).
+- [x] **Lot 1 — Durable store + migration (tests first)**
+  - [x] `api/tests/api/github-app-envelope-store.spec.ts` — real-Postgres store contract: ref-uniqueness, durable round-trip across store instances, serialized per-ref transactions, rollback of failed actions.
+  - [x] `api/src/db/control-schema.ts` — `control.github_app_enrollments` table entry.
+  - [x] `api/drizzle/control/0021_github_app_enrollments.sql` + `api/drizzle/control/meta/_journal.json` (single migration, unique enrollment reference via PK).
+  - [x] `api/src/services/cluster-mesh/github-app-envelope-store.ts` — `GitAppEnvelopeStore` + ref→target mapping (`record`/`lookup`).
+- [x] **Lot 2 — Host composition router (tests first)**
+  - [x] `api/tests/services/cluster-mesh/github-app-host.spec.ts` — frozen registry/config resolution, owner flow with single-use callback states and replay/cross-owner refusal, broker leases bound to the authenticated service identity, forbidden permissions refused with revocation, owner revocation closing leases, durable ref→target resolution on ref routes, path fence for log suppression.
+  - [x] `api/src/services/cluster-mesh/github-app-host.ts` — `resolveGitHubAppHostConfig`, `createGitHubAppHostRouter` (custody through `secret-crypto:v1`, enrollment, adapters target mapping, invalidation bus).
+  - [x] `api/src/routes/github-app.ts` — product wiring: CM owner session (`authenticateCmHttpRequest`), service S2S broker (`createRequireServiceAuth`, scope `github-app:broker`, client-id bound tuple), real `createGitHubAppApi` egress to `https://api.github.com`.
+  - [x] `api/src/config/env.ts` — `GITHUB_APP_PUBLIC_BASE_URL`, `GITHUB_APP_TARGETS_JSON`, `GITHUB_APP_BROKER_BINDINGS_JSON`.
+  - [x] `api/src/app.ts` — public mount at `/github-app` and http log suppression for `isGitHubAppPath`.
+  - [ ] Lot gate (CI): `make typecheck-api ENV=test-alive-w1`, `make lint-api ENV=test-alive-w1`, `make test-api-unit SCOPE=tests/api/github-app-envelope-store.spec.ts ENV=test-alive-w1`, `make test-api-unit SCOPE=tests/services/cluster-mesh/github-app-host.spec.ts ENV=test-alive-w1` — blocked locally by the disk rule; run on the CI/train lane or when the host drops below 90%.
+- [ ] **Lot N — Final validation**
+  - [ ] Scoped tests green (CI).
+  - [x] `make scope-check` (PASS C2) before every commit: c1 store lot, c2 host lot, c3 wiring, c4 docs.
+  - [x] `make down-volumes ENV=test-alive-w1` once any local stack exists (none started this session).
+  - [x] Push wagon `feat/alive-w1`; report to the conductor in `.tmp/rv/alive-W3-W7.md`; no PR, no CI polling.
