@@ -11,6 +11,19 @@
 import { assertConsentScopeId, decideGateB, type FreshRights, type GateBDecision } from './consent.js';
 import type { ArtifactReaderStore } from './reader-store.js';
 
+export { consentScreenPath, renderConsentScreen, type ConsentScreenParams } from './consent-screen.js';
+
+/** Stable first-party grant refusal; hosts return this body with HTTP 403. */
+export interface ReaderConsentRequired {
+  code: 'reader_consent_required';
+  scopeId: string;
+  retryable: false;
+}
+
+export function readerConsentRequired(scopeId: string): ReaderConsentRequired {
+  return { code: 'reader_consent_required', scopeId, retryable: false };
+}
+
 export interface ConsentGrantInput {
   readerAccountId: string;
   artifactId: string;

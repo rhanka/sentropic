@@ -1,5 +1,5 @@
 /**
- * J1.3b — neutral host-parameterizable reader consent screen (generic grant
+ * Neutral host-parameterizable reader consent screen (generic grant
  * contract). No tenant strings: brand, title and support URL come from the
  * host declaration. The single prescribed navigation from a typed 403 is
  * `consentScreenPath(artifactId, scopeId, workspaceId)`; the screen posts once to the
