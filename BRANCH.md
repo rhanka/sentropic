@@ -46,7 +46,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline**: mandatory reads, isolated worktree, mechanical `harness check branch`; reuse existing Node image only.
-- [ ] **Lot 1 — Tests first**: new `tests/cli/profile-file.spec.ts` and `tests/profile/profile-file.spec.ts`; red evidence for loading, discovery, precedence, strict validation and built-in regression matrices.
+- [x] **Lot 1 — Tests first**: new `tests/cli/profile-file.spec.ts` and `tests/profile/profile-file.spec.ts`; red evidence for loading, discovery, precedence, strict validation and built-in regression matrices.
 - [ ] **Lot 2 — Profile format**: JSON Schema, typed validation errors, serializable built-ins, file loader and root discovery; no dependency changes.
 - [ ] **Lot 3 — Kernel and CLI**: profile path defaults, BRANCH conventions, commit guards; shared resolver for check/verify/audit/init; targeted tests and typecheck.
 - [ ] **Lot 4 — Documentation and handoff**: README Rust + Node example, scoped regressions, mechanical scope gate, push branch only, report `.tmp/rv/harness-profile-file.md`, remove test volumes.
