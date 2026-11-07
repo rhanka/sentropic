@@ -4,13 +4,13 @@
 // `VerificationRun`: `verify` is the category-level roll-up over the available static checks (the
 // canonical VerificationRun producer); `audit` diffs the repo against the active profile; `init`
 // scaffolds a profile descriptor so the same C1/C2 kernel can run against ANY repo. Pure: the only
-// IO is reading the `--branch-md` file (shared with `check scope`); no git/docker/fs writes.
+// IO is reading profile/plan files (shared with `check scope`); no git/docker/fs writes.
 
 import { toVerificationRun } from '../run/emit.js';
 import type { NamedCheck } from '../run/emit.js';
 import { checkBranch } from '../checks/branch-check.js';
-import { sentropicProfile } from '../profile/sentropic.js';
-import { stubProfile } from '../profile/stub.js';
+import { resolveProfile } from '../profile/resolve.js';
+import { toProfileDocument } from '../profile/document.js';
 import type { HarnessProfile } from '../profile/profile.js';
 import type { VerificationCategory } from '../artifacts/verification-run.js';
 import { scopeFromFlags } from './scope.js';
@@ -28,10 +28,6 @@ function isMechanicalVerb(v: string | undefined): v is MechanicalVerb {
 
 function isCategory(s: string): s is VerificationCategory {
   return (CATEGORIES as readonly string[]).includes(s);
-}
-
-function resolveProfile(flags: Record<string, FlagValue>): HarnessProfile {
-  return str(flags.profile) === 'stub' ? stubProfile : sentropicProfile;
 }
 
 function runContext(flags: Record<string, FlagValue>, category: VerificationCategory, command: string) {
@@ -55,7 +51,7 @@ function staticChecks(
   out: (s: string) => void,
 ): NamedCheck[] | null {
   const checks: NamedCheck[] = [];
-  if (flags['staged-files'] !== undefined || flags['branch-md'] !== undefined) {
+  if (flags['staged-files'] !== undefined || flags['branch-md'] !== undefined || flags['commit-message'] !== undefined) {
     const outcome = scopeFromFlags(flags, profile);
     if (outcome.unreadable !== undefined) {
       out(`harness: cannot read plan file: ${outcome.unreadable}`);
@@ -106,21 +102,12 @@ export function handleMechanicalVerb(
   const profile = resolveProfile(flags);
 
   if (verb === 'init') {
-    const descriptor = {
-      id: profile.id,
-      forbiddenPathDefaults: profile.forbiddenPathDefaults,
-      exceptionIdPattern: profile.exceptionIdPattern.source,
-      conditionalRequiresException: profile.conditionalRequiresException,
-      branchMatch: profile.branchMatch,
-    };
+    const descriptor = toProfileDocument(profile);
     if (flags.json === true) {
       out(JSON.stringify(descriptor, null, 2));
     } else {
       out(`harness init — profile '${descriptor.id}' (edit and commit as harness.profile.json):`);
-      out(`  forbiddenPathDefaults: ${descriptor.forbiddenPathDefaults.join(', ') || '(none)'}`);
-      out(`  exceptionIdPattern: ${descriptor.exceptionIdPattern}`);
-      out(`  conditionalRequiresException: ${descriptor.conditionalRequiresException}`);
-      out(`  branchMatch: ${descriptor.branchMatch}`);
+      out(JSON.stringify(descriptor, null, 2));
     }
     return 0;
   }
