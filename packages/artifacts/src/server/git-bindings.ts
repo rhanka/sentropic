@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { ArtifactOperationError } from './failures.js';
 import { createKeyMutex } from './ports.js';
 import { isAllowedGitBranch } from './git-registry.js';
-import type { GitBinding, GitBindingEvent, GitBindingStore, GitBindingWrite } from './git-contracts.js';
+import { isGitSha } from './git-port-policy.js';
+import type { GitAttachIntent, GitBinding, GitBindingEvent, GitBindingStore, GitBindingWrite } from './git-contracts.js';
 export type * from './git-contracts.js';
 
 export function gitBindingReceiptKey(input: GitBindingWrite): string {
@@ -33,6 +34,9 @@ export function validateGitBindingWrite(before: GitBinding | undefined, input: G
   const action = input.event.action;
   const active = before !== undefined && before.state !== 'detached';
   const configuring = action === 'attach' && active;
+  if (input.event.branchCreated !== undefined && (input.event.branchCreated !== true || action !== 'attach' || active)) {
+    throw new ArtifactOperationError('invalid_request');
+  }
   const transition = action === 'attach' ? (configuring ? next.state === before.state : next.state === 'attached')
     : action === 'pause' ? active && next.state === 'paused'
     : action === 'resume' ? before?.state === 'paused' && next.state === 'attached' &&
@@ -69,14 +73,24 @@ export function gitBindingEvent(input: GitBindingWrite): GitBindingEvent {
   return { id: randomUUID(), artifactId: input.binding.artifactId, storageScopeId: input.binding.storageScopeId,
     actorId: input.actorId, action: input.event.action, beforeSha: input.event.beforeSha,
     afterSha: input.event.afterSha, deliveryId: input.event.deliveryId,
-    invocationId: input.event.invocationId, createdAt: input.binding.updatedAt };
+    invocationId: input.event.invocationId, ...(input.event.branchCreated ? { branchCreated: true } : {}),
+    createdAt: input.binding.updatedAt };
 }
+/** Shared attach-intent admission for every adapter, before the put-if-absent. */
+export function validateGitAttachIntent(intent: GitAttachIntent): void {
+  if (!isAllowedGitBranch(intent.branch) || !intent.idempotencyKey.trim() || !intent.commandHash || !intent.actorId ||
+    !intent.storageScopeId || !intent.artifactId || !intent.repoId || !isGitSha(intent.baseCommitSha)) {
+    throw new ArtifactOperationError('invalid_request');
+  }
+}
+const intentKey = (scope: string, actorId: string, key: string) => JSON.stringify([scope, actorId, key]);
 
 /** Atomic single-process fake tenant. Outputs never expose mutable internal records. */
 export function createMemoryGitBindingStore(): GitBindingStore {
   const rows = new Map<string, GitBinding>();
   const audit: GitBindingEvent[] = [];
   const receipts = new Map<string, { hash: string; binding: GitBinding }>();
+  const intents = new Map<string, GitAttachIntent>();
   const mutex = createKeyMutex();
   return {
     async get(scope, id) {
@@ -85,6 +99,16 @@ export function createMemoryGitBindingStore(): GitBindingStore {
     },
     async events(scope, id) {
       return structuredClone(audit.filter(event => event.storageScopeId === scope && event.artifactId === id));
+    },
+    async reserveAttachIntent(intent) {
+      validateGitAttachIntent(intent);
+      const key = intentKey(intent.storageScopeId, intent.actorId, intent.idempotencyKey);
+      if (!intents.has(key)) intents.set(key, structuredClone(intent));
+      return structuredClone(intents.get(key)!);
+    },
+    async attachIntent(scope, actorId, idempotencyKey) {
+      const intent = intents.get(intentKey(scope, actorId, idempotencyKey));
+      return intent && structuredClone(intent);
     },
     async write(input) {
       const snapshot = structuredClone(input);

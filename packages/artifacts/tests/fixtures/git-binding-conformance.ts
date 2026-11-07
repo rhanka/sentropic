@@ -139,6 +139,29 @@ export function gitBindingConformance(name: string, fresh: () => Promise<GitBind
         expectedVersion: 3, event: { action: 'pause' } })).rejects.toMatchObject({ kind: 'invalid_request' });
     });
 
+    it('should persist branchCreated on a creating attach only and keep attach intents put-if-absent', async () => {
+      const store = await fresh();
+      const binding = gitBinding();
+      await store.write({ ...gitWrite(binding), event: { action: 'attach', branchCreated: true } });
+      const configure = { ...gitWrite({ ...binding, autoPublish: true, version: 2 }, 'configure'), expectedVersion: 1,
+        event: { action: 'attach' as const, branchCreated: true as const } };
+      await expect(store.write(configure)).rejects.toMatchObject({ kind: 'invalid_request' });
+      await store.write({ ...configure, event: { action: 'attach' } });
+      const events = await store.events('scope-a', binding.artifactId);
+      expect(events[0]).toMatchObject({ action: 'attach', branchCreated: true });
+      expect(events[1]).not.toHaveProperty('branchCreated');
+      const intent = { storageScopeId: 'scope-a', artifactId: binding.artifactId, actorId: 'alice', idempotencyKey: 'k',
+        commandHash: 'h1', repoId: 'repo-a', branch: binding.branch, baseCommitSha: 'a'.repeat(40),
+        createdAt: '2026-11-05T00:00:00.000Z' };
+      expect(await store.attachIntent('scope-a', 'alice', 'k')).toBeUndefined();
+      expect(await store.reserveAttachIntent(intent)).toEqual(intent);
+      expect(await store.reserveAttachIntent({ ...intent, commandHash: 'h2', baseCommitSha: 'b'.repeat(40) })).toEqual(intent);
+      expect(await store.attachIntent('scope-b', 'alice', 'k')).toBeUndefined();
+      expect(await store.attachIntent('scope-a', 'bob', 'k')).toBeUndefined();
+      await expect(store.reserveAttachIntent({ ...intent, idempotencyKey: 'k2', branch: 'main' }))
+        .rejects.toMatchObject({ kind: 'invalid_request' });
+    });
+
     it('should update the existing target with CAS without creating another binding epoch', async () => {
       const store = await fresh();
       await store.write(gitWrite());
