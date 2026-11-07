@@ -16,6 +16,7 @@
   - `scripts/ci/**`
   - `scripts/test-artifact-content-image.sh`
   - `Makefile`
+  - `api/tests/unit/auth/oauth-state-adapter.test.ts`
   - `.github/workflows/ci.yml`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
@@ -30,6 +31,7 @@
 ## Feedback Loop
 - [x] BR85-EX1: image guards job, toolbox qualification job, GHCR toolbox pull and main-only push (job-level packages: write), e2e image loads and shutdown. Rollback: revert the workflow and wiring tests together.
 - [x] BR85-EX2: toolbox registry pull and push targets in the Makefile. Rollback: restore recipes.
+- [x] BR85-EX3: test-only fix of the oauth-state-adapter race test (main red after the security train, Postgres 40001): run() goes through withSerializationRetry like production; assertions unchanged. Rollback: revert fa7ac7f8e.
 - [ ] Acceptance: exact-head CI wall time retained in .tmp/rv/train-ci10-b.md on three runs.
 
 ## AI Flaky tests
