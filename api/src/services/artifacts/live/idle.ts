@@ -2,6 +2,7 @@ import type { LivePorts } from './ports';
 import { assertFence, automaticEligible, conflict, LiveError, publicationBaseline, type LiveKey } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { withinPhase } from './deadline';
+import { buildEvidence } from './evidence';
 
 export async function idleBuild(ports: LivePorts, key: LiveKey) {
   const binding = await currentBinding(ports, key);
@@ -38,6 +39,7 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING' || state.runtime.attempt?.id !== attempt.id) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt.candidateDigest = candidate.candidateDigest;
+      state.runtime.attempt.evidence = buildEvidence(source, cache);
     });
     await ports.worker.verify(runtime, runtime.attempt!);
     const finalHead = await observeHead(ports, key, runtime);
@@ -52,7 +54,7 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
       if (current.autoPublish && current.automaticAuthorized && automaticEligible(state.progress, attempt, current.releaseCommit)) {
         state.runtime.phase = 'PUBLISHING';
         // The row lock serializes finalization vs wake. Publication and baseline consumption roll back together.
-        const published = await ports.publication.commit(unit, key, state.runtime.attempt);
+        const published = await ports.publication.commit(unit, key, state.runtime.attempt, state.runtime);
         publicationBaseline(state.progress, published.releaseId);
       }
       state.runtime.phase = 'SAVING';
