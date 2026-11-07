@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { candidateDigest } from '@sentropic/artifacts/live-host';
 import type { CacheReceipt, DependencyFile } from './cache';
 import { safeDependencyPath } from './integrity';
 import type { DraftSnapshot, SourceSnapshot } from './ports';
@@ -7,7 +8,7 @@ import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE } from './recipes';
 import type { QualifiedSupervisor } from './worker';
 import { createSupervisorChannel, failure, type ChannelOptions } from './supervisor-channel';
 import { createCleanInstall } from './supervisor-install';
-import { OUTPUT_LIMITS, TREE_LIMITS, candidateManifestDigest, type TransferFile } from './supervisor-transfer';
+import { OUTPUT_LIMITS, TREE_LIMITS, type TransferFile } from './supervisor-transfer';
 
 /** Trusted byte sources: the pod has no egress (W2 §1), so the supervisor pushes every byte it needs. */
 export interface SupervisorSources {
@@ -40,10 +41,11 @@ const cacheFailure = failure('dependency_cache_invalid');
 export function createSupervisorTransport(options: SupervisorOptions) {
   const core = createSupervisorChannel(options);
   const { call, transfer, snapshot } = core;
+  /** The stable output with the single shared candidate digest; a set that digest refuses is an invalid output. */
   async function output(runtime: LiveRuntime) {
     const files = await snapshot(runtime, 'output', OUTPUT_LIMITS, 'refuse', outputFailure);
     if (!files.some(file => file.path === OUTPUT_ENTRY)) unavailable('output_invalid');
-    return files;
+    try { return { files, digest: candidateDigest(files) }; } catch { return unavailable('output_invalid'); }
   }
   async function terminate(runtime: LiveRuntime) {
     if ((await call(runtime, 'terminate', {})).treeGone !== true) unavailable();
@@ -107,14 +109,13 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       const data = await call(runtime, 'build', { recipe: 'build', attemptId: attempt.id, headSha: attempt.headSha, treeSha: attempt.treeSha });
       if (data.exitCode !== 0) unavailable('build_failed');
       await terminate(runtime);
-      const files = await output(runtime);
-      const candidateDigest = candidateManifestDigest(files);
-      await options.sources.candidate({ runtime, attempt, candidateDigest, files });
-      return { candidateDigest };
+      const { files, digest } = await output(runtime);
+      await options.sources.candidate({ runtime, attempt, candidateDigest: digest, files });
+      return { candidateDigest: digest };
     },
     async verify(runtime, attempt, limits) {
       if (!same(limits, OUTPUT_LIMITS) || typeof attempt.candidateDigest !== 'string' || !DIGEST.test(attempt.candidateDigest)) unavailable();
-      if (candidateManifestDigest(await output(runtime)) !== attempt.candidateDigest) unavailable('output_changed');
+      if ((await output(runtime)).digest !== attempt.candidateDigest) unavailable('output_changed');
     },
   };
   return { ...supervisor, cleanInstall: createCleanInstall(core, options.sources.source) };

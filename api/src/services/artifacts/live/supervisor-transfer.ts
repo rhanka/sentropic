@@ -37,10 +37,6 @@ export function treeDigest(files: readonly TransferFile[], limits: TreeLimits, f
   checkTree(files, limits, fail);
   return sha256(JSON.stringify(files.map(f => [f.path, f.mode, f.bytes.byteLength, sha256(f.bytes)]).sort(byPath)));
 }
-/** Canonical candidate manifest digest: [path, size, sha256] sorted by path. Upload re-verification uses the same form. */
-export function candidateManifestDigest(files: readonly TransferFile[]) {
-  return sha256(JSON.stringify(files.map(f => [f.path, f.bytes.byteLength, sha256(f.bytes)]).sort(byPath)));
-}
 /** Bounded put frames; a file larger than one chunk spans frames by offset. */
 export function putFrames(transfer: string, target: TransferTarget, files: readonly TransferFile[]) {
   const frames: { transfer: string; target: TransferTarget; entries: Record<string, unknown>[] }[] = [];
