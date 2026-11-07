@@ -2,6 +2,7 @@ import { ArtifactOperationError } from './failures.js';
 import { assertGitReadRef, assertGitSha } from './git-port-policy.js';
 import type { GitPortTarget } from './git-port.js';
 import type { GitToolInvocation, GitToolsDeps } from './git-tools-contracts.js';
+import { requireCodeRight } from './git-tools-publish.js';
 
 const missing = (error: unknown) => error instanceof ArtifactOperationError &&
   ['not_found', 'git_path_refused'].includes(error.kind);
@@ -24,9 +25,7 @@ export async function fetchAppSource(deps: GitToolsDeps, args: Record<string, an
   }
   const repoId: string = binding?.repoId ?? args.repoId;
   if (repoId === undefined) throw new ArtifactOperationError('git_not_attached');
-  const allowed = await deps.codeRights.canReadCode({ storageScopeId: scope, repoId, actorId: inv.actorId })
-    .then(value => value === true, () => false);
-  if (!allowed) throw new ArtifactOperationError('access_denied');
+  await requireCodeRight(deps, inv, repoId);
   if (args.artifactId !== undefined && (!binding || binding.state === 'detached')) {
     throw new ArtifactOperationError('git_not_attached');
   }
