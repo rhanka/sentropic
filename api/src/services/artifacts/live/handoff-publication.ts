@@ -1,10 +1,10 @@
-import type { KeyObject } from 'node:crypto';
-import { candidateDigest, HandoffError, sealHandoff, verifyReceipt, type CandidateFile, type Handoff, type HandoffReceipt } from './handoff';
+import { candidateDigest, LiveHostError, sealHandoff, verifyReceipt, type CandidateFile, type Handoff, type HandoffReceipt,
+  type KeyResolver, type SigningKey } from '@sentropic/artifacts/live-host';
 import { LiveError, type LiveAttempt, type LiveKey, type LiveRuntime } from './records';
 import type { LivePorts } from './ports';
 
 /** The remote host (D0) resolves its own admitted jobs and runs step 2 of the handoff (A-LIVE §8.4).
- * A host refusal rejects with HandoffError; any other rejection is a transport failure with an unknown outcome. */
+ * A host refusal rejects with LiveHostError; any other rejection is a transport failure with an unknown outcome. */
 export interface RemoteHost {
   job: LivePorts['publication']['job'];
   accept(key: LiveKey, handoff: Handoff, files: readonly CandidateFile[]): Promise<HandoffReceipt>;
@@ -18,7 +18,8 @@ export interface HandoffOutcomes {
 }
 export function createHandoffPublication(options: {
   host: RemoteHost; candidates: CandidateExport; outcomes: HandoffOutcomes;
-  signingKey(): KeyObject; hostKey(): KeyObject; now(): number; resends?: number;
+  /** Current builder key; its kid is sealed in the claims. `hostKeys` resolves the receipt kid (rotation overlap). */
+  signingKey(): SigningKey; hostKeys: KeyResolver; now(): number; resends?: number;
 }): LivePorts['publication'] {
   return {
     job: (key, jobId, fence) => options.host.job(key, jobId, fence),
@@ -37,11 +38,11 @@ export function createHandoffPublication(options: {
       for (let tries = 0; !receipt; tries++) {
         try { receipt = await options.host.accept(key, handoff, files); }
         catch (error) {
-          if (error instanceof HandoffError) throw new LiveError('builder_unavailable', 'publication_refused');
+          if (error instanceof LiveHostError) throw new LiveError('builder_unavailable', 'publication_refused');
           if (tries >= (options.resends ?? 2)) throw new LiveError('builder_unavailable', 'publication_indeterminate');
         }
       }
-      try { verifyReceipt(receipt, options.hostKey(), handoff.claims); }
+      try { verifyReceipt(receipt, options.hostKeys, handoff.claims); }
       catch { throw new LiveError('builder_unavailable', 'receipt_invalid'); }
       return { releaseId: (await options.outcomes.record(key, receipt)).releaseId };
     },
