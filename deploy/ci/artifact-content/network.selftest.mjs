@@ -78,6 +78,11 @@ export function checkConnectivity(objects) {
     for (const protocol of ['TCP', 'UDP']) assert(apiEgress(dns, 53, protocol), 'API must keep DNS');
     assert(reachable(api, pod(namespace, 'postgres'), 5432), 'API must keep its PostgreSQL');
     assert(reachable(api, pod(namespace, 'auth-idp'), 8787), 'API must keep the IdP revocation path');
+    // SG4b handoff: the builder calls the same-environment immo host (immo.sent-tech.ca or
+    // preprod.immo.sent-tech.ca) on TCP 443 through the platform Traefik LoadBalancer. In-cluster,
+    // kube-proxy short-circuits the LB address to the Traefik pods' websecure port 8443, so both hops count.
+    assert(apiEgress({ namespace: 'external', labels: {} }, 443), 'SG4b handoff must reach the immo ingress LB on 443');
+    assert(reachable(api, traefik, 8443), 'SG4b handoff must reach the in-cluster immo ingress (Traefik websecure 8443)');
   }
 }
 // The operator-owned default-deny is not rendered here; no rendered policy may widen it to a whole
