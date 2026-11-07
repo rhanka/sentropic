@@ -140,15 +140,18 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   assert.equal(out.manifest_guard, '${{ steps.filter.outputs.manifest_guard }}');
 });
 
-test('dedicated manifest_guard filter: only exact image guards also select global qualification', () => {
+test('dedicated manifest_guard filter: only exact image and consumer-policy guards select global qualification', () => {
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
-  const imageGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs',
+  const globalGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs',
+    'scripts/ci/compatibility-classifier.mjs', 'scripts/ci/compatibility-classifier.test.mjs',
+    'scripts/ci/consumer-contracts.mjs', 'scripts/ci/consumer-contracts.test.mjs',
+    'scripts/ci/consumer-boundaries.json',
     'scripts/ci/resolve-ui-image.mjs', 'scripts/ci/resolve-ui-image.test.mjs',
     'scripts/ci/ui-image-version.sh', 'scripts/ci/ui-image-version.test.sh'];
   const apiLockInputs = ['scripts/ci/locked-tools.mjs', 'scripts/ci/tool-locks.json'];
   assert.deepEqual(filters.api.filter(g => g.startsWith('scripts/ci')), apiLockInputs);
-  assert.deepEqual(filters.global.filter(g => g.startsWith('scripts/ci')), imageGuards);
+  assert.deepEqual(filters.global.filter(g => g.startsWith('scripts/ci')), globalGuards);
   const candidateGuards = ['package-candidate.mjs', 'package-candidate.test.mjs', 'package-qualification-dag.test.mjs',
     'publishable-manifests.mjs', 'publishable-manifests.test.mjs', 'publishable-pack.test.mjs',
     'qualify-published-install.mjs', 'qualify-published-install.test.mjs'].map(name => `scripts/ci/${name}`);
@@ -156,7 +159,7 @@ test('dedicated manifest_guard filter: only exact image guards also select globa
   for (const [name, globs] of Object.entries(filters)) {
     if (name === 'manifest_guard') continue;
     for (const glob of globs.filter(g => g.startsWith('scripts/ci'))) {
-      assert.ok(name === 'global' && imageGuards.includes(glob)
+      assert.ok(name === 'global' && globalGuards.includes(glob)
         || name === 'api' && apiLockInputs.includes(glob)
         || name === 'ui' && apiLockInputs.includes(glob)
         || name === 'package_candidates' && candidateGuards.includes(glob), `${name} must not include ${glob}`);
@@ -860,6 +863,20 @@ test('consumer contracts: real UI dispatch qualifies PRs and retains main delive
       changes: { ui: 'true' }, event: 'pull_request', ref: 'refs/pull/1/merge' });
     assert.equal(result.ok, true, result.problems.join('; '));
   }
+});
+
+test('consumer contracts: Kubernetes-only dispatch requires manifest validation without application rebuilds', () => {
+  const { kind } = classifyCompatibility({ files: ['BRANCH.md',
+    'deploy/k8s/overlays/prod/kustomization.yaml', 'deploy/ci/artifact-content/bundle-checks.mjs'] });
+  assert.equal(kind, 'deployment-only');
+  const installed = Object.fromEntries(['api', 'ui'].map(appDir => [appDir, tupleForApp({ root, appDir })]));
+  const input = { kind, boundaries: loadBoundaries(path.join(root, 'scripts/ci/consumer-boundaries.json')),
+    workflow: ci, workflowText: fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8'),
+    tuples: { before: installed, after: structuredClone(installed) }, event: 'pull_request' };
+  const result = verifyDispatch({ ...input, changes: { idp_sync: 'true', global: 'false', api: 'false', ui: 'false' } });
+  assert.equal(result.ok, true, result.problems.join('; '));
+  assert.deepEqual(result.required.map(row => row.identity), ['validate-idp-sync']);
+  assert.equal(verifyDispatch({ ...input, changes: { idp_sync: 'false' } }).ok, false);
 });
 
 test('consumer contracts: API runtime changes select the complete integration set', () => {

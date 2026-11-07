@@ -20,6 +20,23 @@ const boundaries = loadBoundaries(path.join(root, 'scripts', 'ci', 'consumer-bou
 const jobs = (verdict) => verdict.required.filter((row) => row.kind === 'job').map((row) => row.identity);
 const tests = (verdict) => verdict.required.filter((row) => row.kind === 'test').map((row) => row.identity);
 
+test('should require manifest validation and identical installed tuples for deployment-only changes', () => {
+  const workflow = { jobs: { changes: {}, 'ci-gate': { needs: ['validate-idp-sync'] },
+    'validate-idp-sync': { if: "needs.changes.outputs.idp_sync == 'true'" } } };
+  const tuples = { before: { api: { digest: 'api' }, ui: { digest: 'ui' } },
+    after: { api: { digest: 'api' }, ui: { digest: 'ui' } } };
+  const input = { kind: 'deployment-only', boundaries, workflow, tuples, changes: { idp_sync: 'true' } };
+  const good = verifyDispatch(input);
+  assert.equal(good.ok, true, JSON.stringify(good.problems));
+  assert.deepEqual(jobs(good), ['validate-idp-sync']);
+  assert.equal(verifyDispatch({ ...input, changes: { idp_sync: 'false' } }).ok, false);
+  assert.equal(verifyDispatch({ ...input, workflow: { jobs: {} } }).ok, false);
+  for (const evidence of [null, {}, { before: {}, after: {} },
+    { ...tuples, after: { ...tuples.after, api: { digest: 'changed' } } }]) {
+    assert.equal(verifyDispatch({ ...input, tuples: evidence }).ok, false, JSON.stringify(evidence));
+  }
+});
+
 test('should load 43 inventoried components with owning validations', () => {
   assert.equal(boundaries.components.length, 43);
   const kinds = new Set(boundaries.components.map((row) => row.kind));
