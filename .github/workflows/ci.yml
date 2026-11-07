@@ -1696,11 +1696,12 @@ jobs:
 
   build-api-tool-image:
     runs-on: ubuntu-latest
-    # packages:write is scoped to this job; the only push step runs on push to main.
+    # Pull-only registry access: this job runs PR code and never holds a write scope.
+    # Publication is the main-only successor api-tool-registry-publish.
     permissions:
       contents: read
       actions: read
-      packages: write
+      packages: read
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     steps:
@@ -1738,9 +1739,6 @@ jobs:
         run: make ci-build-api-tool ENV=test-ci-images
       - name: Verify toolbox runner and compiler interfaces
         run: make test-ci-api-tool-runtime ENV=test-ci-api
-      - name: Publish prebuilt toolbox (main only, after interface verification)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.CI_IMAGE_CACHE == '1' && steps.toolbox-registry.outputs.hit != 'true'
-        run: make push-api-tool-registry ENV=test-ci-api
       - name: Save CI toolbox
         run: make save-api-tool ENV=test-ci-api
       - name: Prepare verified toolbox cache
@@ -1761,6 +1759,41 @@ jobs:
         with:
           path: .tmp/api-tool-cache
           key: ${{ steps.toolbox-cache.outputs.cache-primary-key }}
+
+  # Main-only successor: publishes the exact bytes the producer already verified.
+  # It runs no PR code and is the only toolbox job holding packages:write.
+  api-tool-registry-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    needs: [changes, build-api-tool-image]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Download verified CI toolbox
+        if: env.CI_IMAGE_CACHE == '1'
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load verified CI toolbox
+        if: env.CI_IMAGE_CACHE == '1'
+        run: make load-api-tool ENV=test-ci-api
+      - name: Log in to GHCR
+        if: env.CI_IMAGE_CACHE == '1'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish prebuilt toolbox
+        if: env.CI_IMAGE_CACHE == '1'
+        run: make push-api-tool-registry ENV=test-ci-api
 
   test-api-unit-integration:
     runs-on: ubuntu-latest
@@ -3660,6 +3693,7 @@ jobs:
       - api-image-guards
       - build-api-tool-image
       - api-tool-qualification
+      - api-tool-registry-publish
       - test-api-unit-integration
       - test-api-sut
       - test-api-ai
@@ -3760,7 +3794,7 @@ jobs:
       validate-mcp-auth, validate-mcp-platform, validate-connector-host, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
-      validate-artifacts, artifacts-qualification, validate-harness, build-api-image, api-image-guards, build-api-tool-image, api-tool-qualification,
+      validate-artifacts, artifacts-qualification, validate-harness, build-api-image, api-image-guards, build-api-tool-image, api-tool-qualification, api-tool-registry-publish,
       test-api-unit-integration, test-api-sut, test-api-ai, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-code-api, security-code-ui, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
