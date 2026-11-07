@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { fixture, key } from './fixture';
+import { fixture, key, placement } from './fixture';
 import { createLiveWorker, type QualifiedSupervisor } from '../../../src/services/artifacts/live/worker';
 import { withinPhase } from '../../../src/services/artifacts/live/deadline';
 import { fetchLockedTarball } from '../../../src/services/artifacts/live/npm-relay';
@@ -18,7 +18,7 @@ describe('trusted live adapters', () => {
       'build', 'verify', 'renew'].map(name => [name, vi.fn(async () => { calls.push(name); return name === 'build' ? { candidateDigest: 'digest' }
         : name === 'prebundle' ? { prebundled: true } : undefined; })]),
     ) as unknown as QualifiedSupervisor;
-    const worker = createLiveWorker(supervisor);
+    const worker = createLiveWorker(supervisor, placement);
     const source = await f.ports.forge.snapshot(key, 'B'); const cache = await f.ports.cache.acquire(source, runtime);
     await worker.prepare(runtime, source, cache); await worker.prebundle(runtime); await worker.live(runtime);
     expect(supervisor.dependencies).toHaveBeenCalledWith(runtime, cache, { readOnly: true, verifyHash: true });
@@ -44,7 +44,7 @@ describe('trusted live adapters', () => {
     const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'verify']
       .map(name => [name, vi.fn(async () => { calls.push(name); })])) as unknown as QualifiedSupervisor;
     const previous = process.env.NODE_OPTIONS; process.env.NODE_OPTIONS = '--max-old-space-size=8192';
-    try { const worker = createLiveWorker(supervisor); await worker.prebundle(runtime); await worker.live(runtime); }
+    try { const worker = createLiveWorker(supervisor, placement); await worker.prebundle(runtime); await worker.live(runtime); }
     finally { if (previous === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = previous; }
     expect(calls).toEqual(['hostFile', 'prebundle', 'dev']); expect(supervisor.dependencies).not.toHaveBeenCalled();
     // The bootstrap embeds the frozen pre-bundle script; only the Vite config crosses as a host file.
@@ -56,7 +56,7 @@ describe('trusted live adapters', () => {
     expect(LIVE_PREBUNDLE_SCRIPT).toContain("configFile:'/tmp/artifact-vite.config.mjs'");
     expect(LIVE_PREBUNDLE_SCRIPT).toContain("existsSync('/tmp/vite-cache/deps/_metadata.json')");
     expect(LIVE_PREBUNDLE_SCRIPT).not.toContain('/dependencies');
-    expect(liveViteConfig(runtime.sessionId, runtime.podName)).toContain("cacheDir:'/tmp/vite-cache'");
+    expect(liveViteConfig(runtime.sessionId, runtime.podName, placement)).toContain("cacheDir:'/tmp/vite-cache'");
     for (const env of [artifactEnvironment(), vi.mocked(supervisor.dev).mock.calls[0][2]]) {
       expect(env.NODE_OPTIONS).toBe(NODE_HEAP_OPTIONS);
     }
