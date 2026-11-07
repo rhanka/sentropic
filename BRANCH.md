@@ -36,6 +36,8 @@
 - [x] `resolved` (s-archi batch review, W3 dae5b0f0a): W3 seals the snapshot into `SupervisorSources.candidate`; W7 provides that sink (`createCandidateStore`), which is also its `CandidateExport`.
 - [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
 - [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).
+- [ ] `attention`: `bootstrap: createBootstrapSource(supervisorPublicKey(key))` needs W4 `bootstrap.ts` and W3 `supervisor-frame.ts`; their `recipes.ts` conflict (W3 `liveEnvironment` vs W4) is a train arbitration, so W7 keeps the `bootstrap` string port.
+- [ ] `attention`: product `createBuilderService` composition waits for the AL-T/AL-D ports, the W3+W9 supervisor transport and the host base URL config; until then the mount answers 503 `builder_unavailable` to a bound host.
 - [x] `resolved`: live-host 8ce4700e4 exports `./live-host` (`index.ts`, fa651158b); W7 imports only that subpath.
 
 ## Orchestration Mode (AI-selected)
@@ -59,7 +61,7 @@
   - [x] `createBuilderService`: controller, SG4b publication, Postgres job ledger and host build API; nothing started.
   - [x] Postgres job ledger in the existing host KV (`createPostgresBuildJobStore`), sharing the live store row lock.
   - [x] Live recipe path stays `ui/vite.config.ts`: the only contract value (immo R1/R2); no new config invented.
-- [ ] **Lot 4 — s-archi builder mount (decisions 07/11 15:00-15:25)**
+- [x] **Lot 4 — s-archi builder mount (decisions 07/11 15:00-15:25)**
   - [x] Run staleness = heavy-gate wait plus the four bounded build-only phases (20 min), not a pod lifetime.
   - [x] Host identity from the `artifacts:builder` service client and `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` (default deny).
   - [x] Builder handoff signing key and host receipt key ring from fixed env names, with a documented rotation cycle.
