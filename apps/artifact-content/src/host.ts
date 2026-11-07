@@ -3,7 +3,7 @@ import { createContentHandler, type ContentHandlerDeps } from '@sentropic/artifa
 import { contentHeaders, GRANT_COOKIE_NAME, grantCookie, parseGrantCookie, type ContentMode } from '@sentropic/artifacts/content/headers';
 import { CONTENT_GRANT_TTL_SECONDS, type ContentGrantClaims, type GrantSigner, type TicketRecord } from '@sentropic/artifacts/content/grants';
 import { parseContentHost } from '@sentropic/artifacts/content/routing';
-import type { LiveProxy } from './live';
+import { LIVE_CONTROL_PATH, LIVE_FENCE_PATH, type LiveProxy } from './live';
 
 export interface ContentActivationInput { flowId: string; ticketId: string; nonce: string; targetOrigin: string }
 export interface ContentHostOptions {
@@ -61,11 +61,16 @@ export function createContentHost(options: ContentHostOptions) {
     const releaseOrigin = parseContentHost(url.host, options.baseDomain);
     const liveOrigin = releaseOrigin ? undefined : options.live?.origin(url.host);
     const origin = releaseOrigin ?? liveOrigin;
+    // Controller fences arrive on the internal service Host only, never on a public content or pages host.
+    const publicHost = url.hostname === options.baseDomain || url.hostname.endsWith(`.${options.baseDomain}`);
+    if (!origin && !publicHost && url.pathname === LIVE_FENCE_PATH && options.enabled() && options.live
+      && (!request.headers.has('host') || request.headers.get('host') === url.host)) return await options.live.fence(request) ?? fail(404);
     if (!options.enabled() || url.protocol !== 'https:' || url.port || !origin ||
       (request.headers.has('host') && request.headers.get('host') !== url.host)) return fail(404);
     const cookies = request.headers.get('cookie') ?? '';
     if (cookies.length > 4096) return fail(400);
     if (request.headers.has('service-worker')) return fail(404);
+    if (liveOrigin && url.pathname === LIVE_CONTROL_PATH) return await options.live?.control(request, origin.id) ?? fail(404);
     const live = await options.live?.fetch(request, origin.id);
     if (live) return live;
     // A host-owned pages domain serves live routes only: no release, reader or activation path exists there.
