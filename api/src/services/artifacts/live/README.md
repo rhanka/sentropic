@@ -108,6 +108,14 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   publication, must use this same scoped runtime lock and `publicationBaseline`
   after a final verified head observation. Never infer initial eligibility from
   a missing release pointer; branch publication history supplies that flag.
+- For a remote host (D0), `createBuilderService` composes the host build API
+  (`POST /v1/builds`, `GET /v1/builds/:artifactId/:jobId`), the Postgres job
+  ledger and the A-LIVE §8.4 SG4b handoff from `@sentropic/artifacts/live-host`.
+  The builder resolves only the host's pending job and registers its attempt
+  fence; the host runs `acceptHandoff`, whose recheck covers every §8.3 item.
+  Keys carry a `kid`, so builder and receipt keys rotate with an overlap.
+- `builderPlacement(process.env)` supplies the per-environment worker namespace
+  and service domain; there is no namespace constant.
 - The content host supplies separate live authorization/currentness and the
   staged-source/dependency path manifest to `createLiveProxy`. Inject that proxy
   into `startContentServer` for HTTP and websocket handling. Release grants do
