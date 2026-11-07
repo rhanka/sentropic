@@ -32,6 +32,7 @@
 - [x] BR85-EX1: image guards job, toolbox qualification job, GHCR toolbox pull and main-only push (job-level packages: write), e2e image loads and shutdown. Rollback: revert the workflow and wiring tests together.
 - [x] BR85-EX2: toolbox registry pull and push targets in the Makefile. Rollback: restore recipes.
 - [x] BR85-EX3: test-only fix of the oauth-state-adapter race test (main red after the security train, Postgres 40001): run() goes through withSerializationRetry like production; assertions unchanged. Rollback: revert fa7ac7f8e.
+- [x] Investigation: run 42384565117 failed only on e2e 06-usecase.spec.ts:93 (shard 6, 1 of 55); same e2e harness passed on runs 42380173023 and 42383767925; same-family flake predates this train (run 42341356424, 05-usecase-detail SSE). Fresh run requested by head change; root cause in .tmp/rv/e2e-usecase-flake.md.
 - [ ] Acceptance: exact-head CI wall time retained in .tmp/rv/train-ci10-b.md on three runs.
 
 ## AI Flaky tests
