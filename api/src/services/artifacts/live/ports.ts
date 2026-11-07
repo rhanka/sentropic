@@ -1,5 +1,7 @@
 import type { PoolClient } from 'pg';
 import type { LiveAttempt, LiveKey, LiveRuntime, LiveState } from './records';
+import type { LiveAdmission } from './admission';
+import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
 
 export interface LiveStore {
@@ -16,7 +18,7 @@ export interface LiveBinding {
   initialUnpublishedBranchEligible: boolean;
 }
 export interface DraftSnapshot {
-  generation: number; revision: number; baseHeadSha: string; treeSha: string; dirty: boolean;
+  generation: number; revision: string; baseHeadSha: string; treeSha: string; dirty: boolean;
 }
 export interface SourceSnapshot {
   headSha: string; treeSha: string; lockfile: Uint8Array; cacheIdentity: CacheIdentity;
@@ -25,6 +27,13 @@ export interface SourceSnapshot {
 }
 export interface LivePorts {
   store: LiveStore;
+  /** Live pod slots (r3.5: four on one d2-4 node) shared fairly by users; refusal is `builder_unavailable`. */
+  admission: LiveAdmission;
+  /** Per-node gate: every heavy phase (cold revive, wake, crash restore, clean build) runs one at a time. */
+  heavy: LiveHeavyGate;
+  /** Host-owned invitation fence of the binding generation: a monotonic revocation epoch (an invitation is valid only
+   * when issued at the current epoch) and the earliest live invitation expiry. */
+  invitations: { current(key: LiveKey, generation: number): Promise<{ epoch: number; expiresAt: number | null }> };
   now(): number;
   id(): string;
   /** Rechecks binding policy, owner/code rights, generation and sandbox qualification. */
@@ -54,7 +63,7 @@ export interface LivePorts {
   worker: {
     prepare(runtime: LiveRuntime, source: SourceSnapshot, cache: CacheReceipt): Promise<void>;
     restore(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
-    live(runtime: LiveRuntime): Promise<{ revision: number; routeEpoch: number }>;
+    live(runtime: LiveRuntime): Promise<{ revision: string; routeEpoch: number }>;
     quiesce(runtime: LiveRuntime): Promise<void>;
     /** Removes ALL writable phase residue, including dependency overlays and old output. */
     clean(runtime: LiveRuntime): Promise<void>;

@@ -44,6 +44,20 @@ The host supplies these mandatory integrations:
   interrupted intents only after the previous executor is fenced. `reap`
   enforces the absolute lifetime without forcing an early publication.
 
+The package `LiveService` owns the revision model: revisions are opaque strings
+and an edit is acknowledged once durable. `createLiveWorkerBridge` implements its
+`LiveWorkerPort`: it wakes an idle attempt, then projects the durable draft and
+reports `ready` only when the worker applied that exact revision.
+
+Authority is the binding owner, i.e. the acting user. `authorize` returns the
+route grant the host signs into its live assertion: writes for the binding owner
+only, reads for the owner or an unexpired invitee of the current invitation
+epoch. Pod slots are admitted fairly across users. One heavy phase at a time
+runs per node (`createPostgresHeavyGate`): cold revive, wake, crash restore and
+the idle or explicit clean build; HMR projection never waits for it. An
+OOM-killed or evicted LIVE pod is replaced, after confirmed deletion, by a
+fenced revive of the acknowledged draft, at most twice in a row.
+
 Idle builds always use the last verified commit and the existing pod, never
 the dirty draft. A conflict/divergence skips the build. An unchanged head still
 builds, while publication additionally requires autoPublish, current policy,
