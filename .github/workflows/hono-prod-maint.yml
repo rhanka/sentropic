@@ -88,6 +88,10 @@ jobs:
             docker run -d --name app --network sutnet --env-file sut.env -e PORT=8080 -p 18080:8080 sut
             OK=/api/v1/health PREFIX=api
           else
+            # The IdP does not run migrations (the api owns them): migrate the SUT database first.
+            docker run -d --name migrate --network sutnet --env-file sut.env -e PORT=8081 -p 18081:8081 sut
+            for i in $(seq 1 90); do curl -fsS http://127.0.0.1:18081/api/v1/health -o /dev/null && break; sleep 2; done
+            docker rm -f migrate >/dev/null
             docker run -d --name app --network sutnet --env-file sut.env -e IDP_PORT=8080 -p 18080:8080 -w /workspace --entrypoint node sut apps/auth-idp/dist/index.js
             OK=/.well-known/openid-configuration PREFIX=_app
           fi
