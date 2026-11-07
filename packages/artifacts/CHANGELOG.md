@@ -8,6 +8,11 @@
   GitPort and build executor ports; a missing port is a closed 503 refusal.
 - `assertArtifactsTransportProfile` admits the three tools. Existing catalogue
   entries are byte-identical; `artifacts_list_app_sources` stays unrouted.
+- `git_attach` checks the current code right on every path before any registry or
+  forge call, and admits every executor through the host build port at attach.
+- Additive migration `0012_git_attach_intents.sql`: a durable attach intent written
+  before `createBranch` keeps a crash retry deterministic, and the attach event of a
+  created branch carries `branchCreated: true` (A-LIVE v2 §5.3.1).
 - The served authoring guide describes the git-backed path and the current caps.
 
 ## 0.2.18
