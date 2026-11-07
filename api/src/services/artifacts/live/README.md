@@ -264,6 +264,21 @@ Rotation cycle: every 90 days, and at once on a suspected exposure.
    host confirms the switch plus one handoff lifetime, because a resend may
    still return a receipt signed with the old kid.
 
+## Supervisor frame key
+
+`supervisorKey(process.env)` reads `ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON` =
+`{"kid","privateKey"}` (Ed25519, PKCS#8 DER in base64; owner sentropic) from the
+API environment secret. An absent or invalid value refuses to compose the live
+service. `composeSupervisor` derives both halves from this one key: the W3
+transport signs every frame with it, and the pod bootstrap is
+`createBootstrapSource(supervisorPublicKey(key))`, so the pod spec carries the
+public key only and refuses a frame sealed with any other key.
+
+Rotation: a single active key. Replace the value only after every live pod has
+stopped, then restart the API; the new key applies at the next revive, because
+each pod keeps the public key of the bootstrap it started with. Rotate on the
+owner's cycle, and at once on a suspected exposure.
+
 Fake Kubernetes/forge tests live under `api/tests/unit/artifacts-live`; live
 proxy/upgrade tests live under `apps/artifact-content/tests/live*`. They cover
 controller behavior and native local HMR tunneling. They do not establish

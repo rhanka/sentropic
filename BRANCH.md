@@ -39,9 +39,9 @@
 - [x] `resolved` (s-archi batch review, W3 dae5b0f0a): W3 seals the snapshot into `SupervisorSources.candidate`; W7 provides that sink (`createCandidateStore`), which is also its `CandidateExport`.
 - [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
 - [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).
-- [ ] `attention`: `bootstrap: createBootstrapSource(supervisorPublicKey(key))` needs W4 `bootstrap.ts` and W3 `supervisor-frame.ts`; their `recipes.ts` conflict (W3 `liveEnvironment` vs W4) is a train arbitration, so W7 keeps the `bootstrap` string port.
+- [x] `resolved` (FIX5): W4 and W3 merged (BRW7-EX1 re-merge, BRW7-EX4); the bootstrap is composed from the supervisor key, no `bootstrap` string port.
 - [ ] `attention`: a lock without script entries and no qualification file digests zero bytes as its `IntegrityEvidence` digest; s-archi to confirm (16:00 §1 names no digest for the absent file).
-- [ ] `attention`: product `createBuilderService` composition waits for the AL-T/AL-D ports, the W3+W9 supervisor transport and an AL-T forge port supplying `SourceSnapshot.gb1` (host base URL now `ARTIFACT_BUILDER_REMOTE_HOST_URL`); until then the mount answers 503 `builder_unavailable` to a bound host.
+- [ ] `attention`: product `createBuilderService` composition waits for the AL-T/AL-D ports (`sources.source`, `sources.draft`), the W9 relay `channel` and an AL-T forge port supplying `SourceSnapshot.gb1` (host base URL now `ARTIFACT_BUILDER_REMOTE_HOST_URL`); until then the mount answers 503 `builder_unavailable` to a bound host.
 - [x] `resolved`: live-host 8ce4700e4 exports `./live-host` (`index.ts`, fa651158b); W7 imports only that subpath.
 
 ## Orchestration Mode (AI-selected)
@@ -80,6 +80,11 @@
   - [x] Key env names and rotation documented with the remote host and the qualification file.
 - [x] **Lot 6 — s-archi 16:35 (job resolution retry)**
   - [x] A 409 `job_not_pending` on the first job resolution is retried freshly signed (6 tries, 250 ms to 4 s, 7.75 s), then fails for good; every other answer is handled as is.
+- [x] **Lot 7 — s-archi 16:40 FIX5 (supervisor frame key)**
+  - [x] `ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON` = `{kid, privateKey}` (Ed25519 PKCS#8) read by `supervisorKey`, refused when absent or invalid.
+  - [x] `composeSupervisor`: the same key signs every W3 frame and yields `createBootstrapSource(supervisorPublicKey(key))`.
+  - [x] Live service composes transport, bootstrap, cache install/stream and the candidate holder (sink and SG4b export).
+  - [x] Single active key, rotated only after the live pods stop; it applies at the next revive (README).
 - [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
   - [x] Push the wagon; report .tmp/rv/alive-W3-W7.md; `make down-volumes ENV=test-alive-w7`.
