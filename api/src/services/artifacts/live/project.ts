@@ -1,11 +1,12 @@
 import type { LivePorts } from './ports';
-import { assertFence, conflict, LiveError, type LiveKey } from './records';
+import { assertFence, conflict, LiveError, liveRevision, type LiveKey } from './records';
 import { currentBinding, failed, observeHead, transition } from './transitions';
 import { withinPhase } from './deadline';
 import { revive } from './revive';
 
 /** Called after AL-D commits an admitted revision/result. Replays cannot reproject an older draft. */
-export async function projectRevision(ports: LivePorts, key: LiveKey, revision: string) {
+export async function projectRevision(ports: LivePorts, key: LiveKey, durableRevision: string) {
+  const revision = liveRevision(durableRevision);
   const binding = await currentBinding(ports, key);
   const draft = await ports.drafts.current(key, binding.generation);
   if (draft.revision !== revision) throw new LiveError('git_live_revision_moved');
