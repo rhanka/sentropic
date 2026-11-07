@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   candidateDigest, HOST_BUILD_PATHS, LiveHostError, parseHandoffRequest, sealHandoff, verifyJobRequest, type HandoffReceipt,
 } from '@sentropic/artifacts/live-host';
-import { BUILDER_REMOTE_HOST_ENV, builderRemoteHost, createHttpRemoteHost } from '../../../src/services/artifacts/live/remote-host';
+import { BUILDER_REMOTE_HOST_ENV, builderRemoteHost, createHttpRemoteHost, JOB_NOT_PENDING_BACKOFF_MS } from '../../../src/services/artifacts/live/remote-host';
 
 const builder = { kid: 'builder-1', key: generateKeyPairSync('ed25519').privateKey };
 const builderKeys = (kid: string) => (kid === 'builder-1' ? createPublicKey(builder.key) : undefined);
@@ -46,9 +46,45 @@ describe('HTTP remote host (live-host host build paths)', () => {
     expect(await s.host.accept(key, handoff, files)).toEqual(receipt);
   });
   it('rejects a closed host refusal with LiveHostError, so the publication never resends it', async () => {
-    const s = setup(() => json(409, { v: 1, error: 'handoff_mismatch', reason: 'job_not_pending' }));
+    const s = setup(() => json(409, { v: 1, error: 'handoff_mismatch', reason: 'attempt_fenced' }));
     const error = await s.host.job(key, 'job-1', fence).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(LiveHostError); expect(error).toMatchObject({ code: 'handoff_mismatch', reason: 'job_not_pending' });
+    expect(error).toBeInstanceOf(LiveHostError); expect(error).toMatchObject({ code: 'handoff_mismatch', reason: 'attempt_fenced' });
+  });
+  it('retries a 409 job_not_pending freshly signed, so a job that becomes pending after 2 refusals is built', async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const s = setup((_path, body) => {
+        expect(verifyJobRequest(body, { scopeId: 'scope-a', builderKeys, now: 1_000 })).toMatchObject({ jobId: 'job-1', fence });
+        return ++calls <= 2 ? json(409, { v: 1, error: 'handoff_mismatch', reason: 'job_not_pending' }) : json(200, { v: 1, job: hostJob });
+      });
+      const resolved = s.host.job(key, 'job-1', fence);
+      await vi.advanceTimersByTimeAsync(249); expect(s.fetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(750); expect(await resolved).toEqual(hostJob); expect(s.fetch).toHaveBeenCalledTimes(3);
+    } finally { vi.useRealTimers(); }
+  });
+  it('fails for good after 6 tries over 7.75 s when the job never becomes pending', async () => {
+    vi.useFakeTimers();
+    try {
+      const s = setup(() => json(409, { v: 1, error: 'handoff_mismatch', reason: 'job_not_pending' }));
+      expect(JOB_NOT_PENDING_BACKOFF_MS).toEqual([250, 500, 1_000, 2_000, 4_000]);
+      const failure = s.host.job(key, 'job-1', fence).catch((caught: unknown) => caught);
+      await vi.advanceTimersByTimeAsync(7_749); expect(s.fetch).toHaveBeenCalledTimes(5);
+      await vi.advanceTimersByTimeAsync(1); const error = await failure;
+      expect(s.fetch).toHaveBeenCalledTimes(6);
+      expect(error).toBeInstanceOf(LiveHostError); expect(error).toMatchObject({ code: 'handoff_mismatch', reason: 'job_not_pending' });
+    } finally { vi.useRealTimers(); }
+  });
+  it('handles every other job or handoff answer as is, without a retry', async () => {
+    for (const answer of [() => json(409, { v: 1, error: 'handoff_mismatch', reason: 'attempt_fenced' }),
+      () => json(422, { v: 1, error: 'handoff_mismatch', reason: 'job_not_pending' }), () => json(409, { v: 1, error: 'request_invalid' })]) {
+      const s = setup(answer);
+      expect(await s.host.job(key, 'job-1', fence).catch((caught: unknown) => caught)).toBeInstanceOf(LiveHostError);
+      expect(s.fetch).toHaveBeenCalledTimes(1);
+    }
+    const s = setup(() => json(409, { v: 1, error: 'handoff_mismatch', reason: 'job_not_pending' }));
+    expect(await s.host.accept(key, handoff, files).catch((caught: unknown) => caught)).toBeInstanceOf(LiveHostError);
+    expect(s.fetch).toHaveBeenCalledTimes(1);
   });
   it('treats any other answer as a transport failure with an unknown outcome', async () => {
     for (const answer of [() => new Response('oops', { status: 502 }), () => json(500, { v: 1, error: 'free text' }),
