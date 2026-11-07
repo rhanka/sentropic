@@ -73,6 +73,10 @@
 - [x] BR90-EX8 (h2a CLI OAuth client): `@sentropic/auth-hono` RFC 8252 §7.3 port-less loopback redirect matching for public clients; patch bump 0.18.0 to 0.18.1 keeps every `^0.18.0` consumer range (the package has no changelog). Rollback: revert the commit and the bump together.
 - [x] BR90-EX9: root and api lock workspace entries follow the three version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1; registry latest 0.2.20, 0.25.0, 0.18.0). Rollback: revert with the bumps.
 - [x] BR90-EX10: the cluster-mesh selected packaging fixture follows the candidate tuple: cluster-mesh archive dev.15, same-PR BLOCK siblings artifacts 0.2.21 (guarded sha256 `a8919b4780fa34414ebc664e9ecae57f4efcef25793125bf305b441abad6895b`) and auth-hono 0.18.1 (sha256 `f469a751e6d31b4f2d9b73ed80f1654e3d72198838bfe9783fa5eca0b65b2923`) through `make pack-candidate-siblings` (CI-equivalent pull_request context) and `refresh-lazy-package-lock`; tuple-spec integrity pin updated. Rollback: revert with the bump.
+- [x] `attention`: `ARTIFACTS_PROVIDER_VERSION` stays 0.2.20: tool definitions are byte-stable, so the APP-P1 manifest digest pin `6faa661d…` and existing approvals stay valid (no APP-P1 repin in this train).
+- [x] `acknowledge`: W7 (BRW7-EX1, BRW7-EX4) merged W3, W4, W5 and W8; its merge resolutions are carried as two train commits (8.4 evidence at BUILD_QUEUED; W3/W4/W8 tests on string revisions, the streaming cache and the builder placement).
+- [ ] `attention`: W4 `api/tests/unit/artifacts-live/bootstrap-server.test.ts:31,34` implicit any under strict test typing (`make typecheck-api` covers `src` only); owner W4.
+- [ ] `attention`: not run locally (no API or UI image at 92% disk): API unit and endpoint suites (W1 github-app, L1 MCP client policy and allowlist, OAuth register client, service client provisioning, builder mount), `make typecheck-api`, `make lint-api`, the ui nginx test and artifact-content `process`/`runtime` tests; the PR CI covers them.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -93,6 +97,6 @@
 - [x] Lot 5: W8 cherry-picked; worker.ts = W8 structure + W3 signatures + W4 environments; `make test-cluster-mesh SCOPE=tests/heavy-phase-queue.spec.ts` 7/7.
 - [x] Lot 6: W7 (FIX5) cherry-picked with its W3/W4/W5/W8 merge resolutions carried; recipes.ts placement, pods.ts namespace/placement; artifacts-live 258/258 and live src tsc clean.
 - [x] Lot 7: W9 cherry-picked on the live-host subpath; artifact-content live vitest 157/157, tsc clean, `make test-artifact-content-manifests` 145 PASS.
-- [x] Lot 8: version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1), lock workspace entries, selected fixture candidate archive name.
+- [x] Lot 8: version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1), lock workspace entries, selected fixture repin; `make test-artifacts` 967/967, `make typecheck-artifacts`, `make typecheck-cluster-mesh`, `make test-cluster-mesh SCOPE=tests/packaging` 85 pass, `test-lazy-package` with sibling receipts 136/136, `make test-publishable-manifests` 133/133.
 - [ ] Lot 9: push, open PR, GLM review of the full diff.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
