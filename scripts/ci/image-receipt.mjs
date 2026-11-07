@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { createReadStream, readFileSync, writeFileSync } from 'node:fs';
+import { createReadStream, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export async function digest(file) {
@@ -9,11 +11,33 @@ export async function digest(file) {
   return `sha256:${hash.digest('hex')}`;
 }
 
+// Docker's containerd store can expose a manifest digest as .Id. Read the
+// actual config bytes from docker save instead of assuming .Id is a config.
+export function archiveConfigDigest(archive) {
+  const entries = JSON.parse(execFileSync('tar', ['-xOf', archive, 'manifest.json'], { encoding: 'utf8' }));
+  const config = entries.length === 1 && entries[0].Config;
+  if (!/^(?:[a-f0-9]{64}\.json|blobs\/sha256\/[a-f0-9]{64})$/.test(config ?? '')) {
+    throw Error('Expected one saved image config');
+  }
+  const bytes = execFileSync('tar', ['-xOf', archive, config]);
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
+export function localConfigDigest(ref, env = process.env) {
+  const dir = mkdtempSync(join(tmpdir(), 'tested-image-config-'));
+  try {
+    const archive = join(dir, 'image.tar');
+    execFileSync('docker', ['image', 'save', '--output', archive, ref], { env });
+    return archiveConfigDigest(archive);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
 export function validate(receipt, expected) {
   for (const [key, value] of Object.entries(expected)) {
     if (JSON.stringify(receipt[key]) !== JSON.stringify(value)) throw Error(`Image receipt mismatch: ${key}`);
   }
   if (!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)) throw Error('Invalid image ID');
+  if (!/^sha256:[a-f0-9]{64}$/.test(receipt.configDigest)) throw Error('Invalid config digest');
   if (!/^sha256:[a-f0-9]{64}$/.test(receipt.archiveDigest)) throw Error('Invalid archive digest');
   if (!receipt.producer?.job || !receipt.producer?.attempt) throw Error('Missing producer identity');
   const producer = { api: 'build-api-image', 'api-tool': 'build-api-tool-image', ui: 'build-ui', e2e: 'build-e2e' }[expected.kind];
@@ -46,7 +70,7 @@ export async function main([mode, kind, ref, archive, file]) {
   }
   const expected = await context(kind, ref);
   if (mode === 'write') {
-    const receipt = { ...expected, imageId: imageId(ref), archiveDigest: await digest(archive),
+    const receipt = { ...expected, imageId: imageId(ref), configDigest: archiveConfigDigest(archive), archiveDigest: await digest(archive),
       producer: { job: process.env.GITHUB_JOB || 'local', attempt: process.env.GITHUB_RUN_ATTEMPT || 'local' } };
     validate(receipt, expected);
     writeFileSync(file, `${JSON.stringify(receipt, null, 2)}\n`);
