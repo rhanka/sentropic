@@ -15,36 +15,6 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
   ctx.resets.push(reset); reset();
   const trusted = () => { if (state.tainted || state.phase !== 'stopped') agentFail('failed', 'phase_refused'); };
 
-  ctx.define('tarballs', ['entries'], async ({ entries }) => {
-    trusted();
-    if (!Array.isArray(entries) || entries.length === 0) agentFail('failed', 'invalid_args');
-    if (state.tarballs + entries.length > DEP.tarballs) agentFail('limit', 'limit_exceeded');
-    const prepared = [];
-    for (const entry of entries) {
-      agentRecord(entry, ['integrity', 'contentBase64']);
-      const match = /^(sha256|sha384|sha512)-([A-Za-z0-9+/]+={0,2})$/.exec(typeof entry.integrity === 'string' ? entry.integrity : '');
-      if (!match) agentFail('failed', 'integrity_missing');
-      const data = agentBytes(entry.contentBase64, AGENT_LIMITS.fileBytes);
-      const expected = Buffer.from(match[2], 'base64');
-      if (!agentHash(match[1]).update(data).digest().equals(expected)) agentFail('failed', 'integrity_mismatch');
-      const hex = expected.toString('hex');
-      prepared.push({ algo: match[1], expected, data,
-        target: at(CONTENT + match[1] + '/' + hex.slice(0, 2) + '/' + hex.slice(2, 4) + '/' + hex.slice(4)) });
-    }
-    for (const item of prepared) {
-      await agentFs.mkdir(agentPath.dirname(item.target), { recursive: true });
-      try { await agentFs.writeFile(item.target, item.data, { flag: 'wx', mode: 0o444 }); }
-      catch (error) {
-        if (!error || error.code !== 'EEXIST') throw error;
-        if (!agentHash(item.algo).update(await agentFs.readFile(item.target)).digest().equals(item.expected)) {
-          agentFail('failed', 'integrity_mismatch');
-        }
-      }
-    }
-    state.tarballs += prepared.length;
-    return { stored: prepared.length };
-  });
-
   async function listInstalled() {
     const out = []; let total = 0;
     const walk = async (rel) => {
@@ -83,22 +53,6 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
     if (await ctx.runToExit(ctx.recipes.INSTALL, '/dependencies') !== 0) agentFail('failed', 'install_failed');
     state.installed = await listInstalled();
     return { files: state.installed.length, bytes: state.installed.reduce((n, f) => n + f.size, 0) };
-  });
-  ctx.define('export', ['offset'], async ({ offset }) => {
-    trusted();
-    const list = state.installed;
-    if (!list) agentFail('failed', 'not_installed');
-    if (!Number.isSafeInteger(offset) || offset < 0 || offset > list.length) agentFail('failed', 'invalid_args');
-    const files = []; let bytes = 0; let index = offset;
-    for (; index < list.length && files.length < DEP.exportFiles; index++) {
-      const entry = list[index];
-      if (files.length > 0 && bytes + entry.size > DEP.exportBytes) break;
-      const data = await agentFs.readFile(at('/dependencies/' + entry.path));
-      if (data.length !== entry.size) agentFail('failed', 'unstable_tree');
-      bytes += data.length;
-      files.push({ path: entry.path, type: 'file', mode: entry.mode, bytes: data.toString('base64') });
-    }
-    return { files, next: index < list.length ? index : null };
   });
 });
 `;
