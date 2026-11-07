@@ -4,6 +4,7 @@ import type { LiveAdmission } from './admission';
 import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
 import type { AttemptFence, HostJob } from '@sentropic/artifacts/live-host';
+import type { Gb1Source } from './gb1-qualification';
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
@@ -27,8 +28,8 @@ export interface SourceSnapshot {
   headSha: string; treeSha: string; lockfile: Uint8Array; cacheIdentity: CacheIdentity;
   /** Trusted, path-filtered staging reference. No forge credentials or environment files. */
   stagingRef: string;
-  /** GB1 descriptor digest validated at this exact commit. */
-  descriptorDigest: string;
+  /** GB1 inputs read at this exact commit, qualified by the builder (`qualifyBuild`), never trusted as a digest. */
+  gb1: Gb1Source;
 }
 export interface LivePorts {
   store: LiveStore;

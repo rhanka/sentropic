@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { integrityInventory, safeDependencyPath, sha256, verifySri, type IntegrityEvidence, type IntegrityPin } from './integrity';
+import { safeDependencyPath, sha256, verifySri, type IntegrityPin } from './integrity';
+import { integrityEvidence, qualifyBuild, type Gb1Source } from './gb1-qualification';
 import { LiveError, type LiveRuntime } from './records';
 import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY } from './recipes';
 import { TREE_LIMITS } from './supervisor-transfer';
@@ -19,7 +20,6 @@ export interface CacheReceipt {
 export interface CacheObject { receipt: CacheReceipt; manifest: readonly DependencyEntry[] }
 export interface CachePorts {
   signingKey(): Uint8Array;
-  evidence(lockSha256: string): Promise<IntegrityEvidence>;
   /** Downloads exact pinned tarballs through this relay; redirects/alternate registries are forbidden. */
   fetch(pin: IntegrityPin, relay: typeof NPM_RELAY): Promise<Uint8Array>;
   /** Fresh empty install directory, fixed npm config, verified tarballs read one at a time, no branch .npmrc or hooks.
@@ -87,12 +87,14 @@ export function createDependencyCache(ports: CachePorts) {
     } catch { return invalid(); }
   }
   return {
-    async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string }, runtime?: LiveRuntime) {
+    async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
+      runtime?: LiveRuntime) {
       const identity = source.cacheIdentity;
       if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
-      const evidence = await ports.evidence(identity.lockSha256);
-      if (evidence.digest !== identity.integrityDigest) invalid();
-      const inventory = integrityInventory(source.lockfile, evidence);
+      // GB1 at the pinned commit (W5 port); the qualification file digest is the identity's integrity digest.
+      const evidence = integrityEvidence(qualifyBuild(source.gb1));
+      if (evidence.lockSha256 !== identity.lockSha256 || evidence.digest !== identity.integrityDigest) invalid();
+      const { inventory } = evidence;
       const key = cacheKey(identity);
       const existing = await read(key);
       if (existing) {
