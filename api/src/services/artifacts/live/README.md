@@ -26,6 +26,74 @@ The host supplies these mandatory integrations:
   read-only verified dependency materialization and phase-fenced networking.
   Bootstrap and this transport must be qualified together under GB4. An empty
   bootstrap, arbitrary shell or Kubernetes exec fallback is not provided.
+  `createSupervisorTransport` (below) is that transport; pass it as `supervisor`
+  and its `cleanInstall` as the dependency cache `cleanInstall`; its
+  `sources.dependencies` is the dependency cache `materialize` stream.
+
+## Supervisor transport
+
+Workers have no egress in any phase (W2 static deny), so the supervisor pushes
+every byte over the only worker ingress, TCP :5173, relayed by `artifact-content`
+through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
+
+- Frame: 64-byte Ed25519 signature, then the exact UTF-8 JSON body
+  `{ v: 1, id, op, fence, issuedAt, expiresAt, args }`; at most 2 MiB; delivery
+  window 30 s, clock skew 5 s, closed op set. `fence` = generation, sessionId,
+  leaseEpoch, routeEpoch, podName, podUid. The private key stays in the API; the
+  pod spec carries `supervisorPublicKey(key)` (SPKI DER, base64), never a secret.
+  `openFrame` is the reference pod check, run before any operation.
+- Pod duties (bootstrap): keep the highest fence per pod and refuse an older one
+  (generation, lease, route; equality requires the same session and pod UID);
+  keep a bounded set of frame ids seen within the delivery window and refuse a
+  replay. The bootstrap owns :5173 in every phase; only in the live phase it
+  forwards live HTTP and HMR to Vite on loopback, and serves nothing else.
+- Reply: `{ id, ok, code?, data? }`, at most 2 MiB; `code` is `fenced`, `limit`,
+  `integrity` or `failed`. Pod text is never read.
+- Trees: `put { transfer, target, entries: [{ path, mode, size, offset, data }] }`,
+  then one commit op carrying `{ transfer, treeDigest }`. `treeDigest` is the
+  sha256 of the JSON list `[path, mode, size, sha256]` sorted by path; the pod
+  recomputes it and applies the whole set atomically or nothing. Limits: staged
+  source, install source and dependency trees 65,536 files / 64 MiB per file /
+  1 GiB (`TREE_LIMITS`, decision 07/11 (a)); an overlay 255 paths / 1 MiB per
+  file / 8 MiB; the tarball set 64 MiB per tarball / 512 MiB. A tree over a
+  limit fails `limit`. Put frames are emitted as soon as one fills, and a
+  streamed tree whose source fails part-way is never committed.
+- Ops and required echo: `phase {phase}` → phase; `terminate` → `treeGone: true`;
+  `renew {}` → `renewed: true`;
+  `clear {paths}` → `cleared`; `stage`/`overlay`/`dependencies` → `treeDigest`
+  (+ `revision`, + `readOnly: true`); `hostFile {path, source}` → `sha256`, with
+  `path` one of the three host-owned files `/tmp/artifact-vite.config.mjs`,
+  `/tmp/host-npmrc`, `/tmp/host-global-npmrc` (never the workspace), ≤ 64 KiB;
+  `prebundle {recipe: 'prebundle'}` → `prebundled: true`; `dev {recipe: 'live'}`
+  → `revision`, `routeEpoch`; `build {recipe: 'build'}` and
+  `install {recipe: 'install', tarballs}` → `exitCode: 0`. Recipes cross the
+  wire by name; the bootstrap runs its frozen copy with the host environment.
+- Pre-bundle (decision 07/11 15:05): a separate op, so the cluster-mesh queue
+  admits it on its own. The bootstrap writes its frozen pre-bundle script itself;
+  no host file carries it. `dev` refuses with `failed` until a pre-bundle has
+  run. The worker sends the live Vite config, then `prebundle`, then `dev`.
+- Environments: the supervisor refuses, before sending, a `prebundle` or `dev`
+  whose environment is not `artifactEnvironment()` (heap 384) and a `build`
+  whose environment is not `buildEnvironment()` (heap 1024). W4 is the sole
+  author of both functions and of every recipe in `recipes.ts`.
+- Liveness: `renew` is fenced like every op and has no side effect; the pod
+  renews its liveness lease on the frame and answers at once, so a renewal never
+  cancels or waits for an in-flight command. The controller sends it at least
+  every 60 s outside DORMANT.
+- `snapshot { root: 'output' | 'dependencies', cursor }` →
+  `{ entries: [{ path, type, mode, size, offset, data }], next }`. Output accepts
+  regular files only, requires `index.html` and enforces 255 files / 16 MiB /
+  64 MiB. The candidate digest is `candidateDigest` from
+  `@sentropic/artifacts/live-host`, the one digest the builder handoff and the
+  host verifier also use; it is computed and sealed on the trusted side after the
+  build tree is gone, and an output it refuses fails `output_invalid`.
+  `sources.candidate` receives the verified files and that digest: it is the
+  candidate export the builder service consumes, with no second port.
+- Install: tarballs are staged as `<index>.tgz` with their integrity; the
+  bootstrap re-verifies and writes them content-addressed into the npm cache, then
+  runs `INSTALL_RECIPE` = `npm ci --offline --ignore-scripts --no-audit --no-fund`,
+  with no script allowlist. A missing entry refuses with `integrity`
+  (`dependency_integrity_missing`) and makes no network attempt.
 - The clean installer starts from the supplied verified source/lock in a fresh
   directory inside the leased pod, consumes the verified tarballs through the
   fixed npm configuration, suppresses hooks and exports only dependencies. It
@@ -136,6 +204,18 @@ Dependency cache keys include the exact lock SHA-256 plus scope/repository,
 toolchain/image, platform, options/policy, workspace and integrity evidence.
 The host authenticates receipts and verifies safe tree hashes at every use.
 Missing integrity, including script-package literal pins, blocks admission.
+
+The trusted cache streams (decision 07/11 (a')), because the API runs under a
+512Mi limit. Each distinct installed file is one private object at
+`dependency-cache/v1/files/<sha256>`, shared by every entry. The Postgres
+pointer names one manifest object, `{ receipt, manifest }`, where each manifest
+row is `[path, mode, size, sha256]`. The sealed receipt tree digest is unchanged:
+the sha256 of the sorted `[path, mode, sha256]` rows. During a cold install,
+tarballs are fetched and verified one at a time. Each exported file is written
+to its object before the next snapshot page is read. `materialize` rechecks the
+seal and the manifest, then rehashes each file as it is read into put frames.
+A mismatch quarantines the entry. The API therefore holds one file (at most
+64 MiB) and one bounded frame or reply. File objects are not garbage-collected.
 
 ## GB1 qualification file
 
