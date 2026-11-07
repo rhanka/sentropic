@@ -33,6 +33,9 @@
   - `scripts/ci/consumer-locks.json`
   - `scripts/ci/tool-locks.json`
   - `scripts/security/hono-node-server*`
+  - `scripts/security/sca-gate*.mjs`
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/security-sca-daily.yml`
   - `.security/vulnerability-register.yaml`
   - `tools/memory-mcp-l5/artifacts/**`
   - `Makefile` (BRHONO-EX1, BRHONO-EX2)
@@ -46,6 +49,7 @@
 - **Exception process**:
   - [x] BRHONO-EX1: add only Docker regression/dependency verification targets to Makefile; owner-requested image proof needs reproducible checks. Rollback reverts those targets.
   - [x] BRHONO-EX2: raise the hono framework floors to ^4.13.16 in workspace manifests and resolve 4.13.17 in every lock (owner request, .tmp/rv/hono-alert-all-clients.md addendum), including the selected fixture tuple, the engram-memory consumer lock, consumer closures and resolver-level tool-locks copies; one `lock-hono-4-13-17` Makefile target applies the pinned bump. `packages/mcp-auth` keeps its ^4.10.7 peer floor and `.github/workflows` hono@4.10.7 tool specs stay (ci.yml is a forbidden path; its wiring PR owns that move). Rollback reverts the manifests, locks and target.
+  - [x] BRSCA-EX1: Makefile test-security-sca-gate targets and ci.yml/daily workflow wiring; owner asked for a real SCA gate in CI (07/11). Impact: new always-on job security-sca-gate. Rollback reverts the targets, job and workflow.
 
 ## Feedback Loop
 - [ ] Conductor, designated Track writer, imports this request and .tmp/rv/hono-cve.md; this lane maintains the mergeable source.
