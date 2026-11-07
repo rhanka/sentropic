@@ -1,7 +1,8 @@
 import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { serve, type ServerType } from '@hono/node-server';
 import { describe, expect, it, vi } from 'vitest';
-import { httpRelay, liveFromEnv, RELAY_HEADER, viteAdmittedPath, withFanOut } from '../src/live-config';
+import { httpRelay, liveFromEnv, RELAY_HEADER, viteAdmittedPath, withFanOut, withRemoteAddress } from '../src/live-config';
 import { ASSERTION_HEADER, CONTROL_HEADER, FENCE_HEADER, signLiveAssertion, signLiveFence } from '@sentropic/artifacts/live-host';
 import { LIVE_CONTROL_PATH, LIVE_FENCE_PATH, type LiveRoute } from '../src/live';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
@@ -41,6 +42,15 @@ describe('live edge composition from configuration', () => {
     const push = new Request(`https://artifact-content.internal:8791${LIVE_FENCE_PATH}`, { method: 'POST', headers: { [FENCE_HEADER]: fence } });
     expect((await live.fence(push))?.status).toBe(204);
     expect(await live.authorize(page('/src/main.tsx'), artifactId)).toBeUndefined();
+  });
+  it('should refuse every relayed copy, without effect, when no peers are configured', async () => {
+    const live = liveFromEnv(env(), base)!;
+    const fence = signLiveFence({ v: 1, kid: 'sentropic-1', artifactId, generation: 1, routeEpoch: 2, iat: now(), exp: now() + 60 }, controllerKey);
+    const push = (relayed: boolean) => withRemoteAddress(new Request(`https://artifact-content.internal:8791${LIVE_FENCE_PATH}`,
+      { method: 'POST', headers: { [FENCE_HEADER]: fence, ...(relayed ? { [RELAY_HEADER]: '1' } : {}) } }), '10.0.0.1');
+    expect(await live.fence(push(true))).toBeUndefined();
+    expect(await live.authorize(page('/src/main.tsx'), artifactId)).toBeDefined();
+    expect((await live.fence(push(false)))?.status).toBe(204);
   });
   it.each([
     ['a missing pages domain', { APP_ARTIFACT_LIVE_PAGES_DOMAINS: undefined }],
@@ -90,12 +100,39 @@ describe('fan-out across replicas', () => {
     expect((await relay.control(request(), 'a'))?.status).toBe(503);
     expect((await withFanOut(ports(), { peers: async () => { throw new Error('dns'); }, send }).fence(request()))?.status).toBe(503);
   });
-  it('should neither relay a relayed copy nor a refused push', async () => {
+  it('should neither relay a refused push nor a relayed copy, and apply a copy from a ready replica', async () => {
     const send = sender(); const inner = ports(); inner.fence.mockResolvedValueOnce(undefined);
     const relay = withFanOut(inner, { peers: async () => ['10.0.0.1'], send });
     expect(await relay.fence(request())).toBeUndefined();
-    expect((await relay.fence(request({ [RELAY_HEADER]: '1' })))?.status).toBe(204);
-    expect(send).not.toHaveBeenCalled();
+    expect((await relay.fence(withRemoteAddress(request({ [RELAY_HEADER]: '1' }), '10.0.0.1')))?.status).toBe(204);
+    expect((await relay.fence(withRemoteAddress(request({ [RELAY_HEADER]: '1' }), '::ffff:10.0.0.1')))?.status).toBe(204);
+    expect(send).not.toHaveBeenCalled(); expect(inner.fence).toHaveBeenCalledTimes(3);
+  });
+  it.each([
+    { name: 'a non-peer address', address: '10.0.0.9', marker: '1', peers: async () => ['10.0.0.1'] },
+    { name: 'no recorded address', address: undefined, marker: '1', peers: async () => ['10.0.0.1'] },
+    { name: 'a peer with another marker value', address: '10.0.0.1', marker: '1, 1', peers: async () => ['10.0.0.1'] },
+    { name: 'an unresolvable replica set', address: '10.0.0.1', marker: '1', peers: async (): Promise<string[]> => { throw new Error('dns'); } },
+  ])('should refuse a relayed copy from $name before applying it', async ({ address, marker, peers }) => {
+    const send = sender(); const inner = ports(); const relay = withFanOut(inner, { peers, send });
+    expect(await relay.control(withRemoteAddress(request({ [RELAY_HEADER]: marker }), address), 'a')).toBeUndefined();
+    expect(await relay.fence(withRemoteAddress(request({ [RELAY_HEADER]: marker }), address))).toBeUndefined();
+    expect(inner.control).not.toHaveBeenCalled(); expect(inner.fence).not.toHaveBeenCalled(); expect(send).not.toHaveBeenCalled();
+  });
+  it('should take the relayed sender from the socket address of the listener', async () => {
+    const inner = ports(); let replicas = ['127.0.0.1'];
+    const relay = withFanOut(inner, { peers: async () => replicas, send: sender() });
+    let server: ServerType | undefined;
+    await new Promise<void>(resolve => { server = serve({ hostname: '127.0.0.1', port: 0, fetch: async (incoming, bindings) =>
+      await relay.fence(withRemoteAddress(incoming, bindings.incoming.socket.remoteAddress)) ?? new Response(null, { status: 404 }) },
+    () => resolve()); });
+    try {
+      const { port } = server!.address() as AddressInfo; const push = request({ [FENCE_HEADER]: 'f1.x.y' });
+      expect(await httpRelay(port)('127.0.0.1', push, FENCE_HEADER)).toBe(true);
+      replicas = ['10.0.0.1'];
+      expect(await httpRelay(port)('127.0.0.1', push, FENCE_HEADER)).toBe(false);
+      expect(inner.fence).toHaveBeenCalledTimes(1);
+    } finally { await new Promise(resolve => server!.close(resolve)); }
   });
   it('should relay over HTTP with the original Host, the signed header and the relay marker only', async () => {
     let seen: { method?: string; url?: string; headers: IncomingHttpHeaders } | undefined;
