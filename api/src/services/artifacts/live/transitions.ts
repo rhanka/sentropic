@@ -41,9 +41,12 @@ export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRunt
   await ports.routes.revoke(key, runtime);
   try {
     await ports.worker.quiesce(runtime);
+    // The process tree is gone: the live reservation and any queued or admitted phase of this pod leave the node queue.
+    await ports.heavy.hold(runtime.podName, { live: false }); await ports.heavy.cancel(runtime.podName);
     await checkpoint(ports, key, runtime);
     runtime = await transition(ports, key, runtime, state => { state.runtime.phase = 'DECOMMISSIONING'; });
     await ports.pods.remove(key, runtime);
+    await ports.heavy.hold(runtime.podName, { pod: false });
   } catch (error) {
     await transition(ports, key, runtime, state => { state.runtime.phase = 'RECOVERING'; });
     throw error;

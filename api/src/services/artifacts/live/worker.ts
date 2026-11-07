@@ -1,7 +1,7 @@
 import type { CacheReceipt } from './cache';
 import type { DraftSnapshot, LivePorts, SourceSnapshot } from './ports';
 import type { LiveAttempt, LiveRuntime } from './records';
-import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE, liveViteConfig } from './recipes';
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, liveViteConfig } from './recipes';
 import type { BuilderPlacement } from './placement';
 
 /** GB4's bounded trusted transport; repository processes cannot invoke this interface.
@@ -16,10 +16,12 @@ export interface QualifiedSupervisor {
   dependencies(runtime: LiveRuntime, cache: CacheReceipt, options: { readOnly: true; verifyHash: true }): Promise<void>;
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
+  /** Op `prebundle { recipe: 'prebundle' }` (W3): the bootstrap writes its frozen host script; `dev` refuses before it. */
+  prebundle(runtime: LiveRuntime): Promise<{ prebundled: true }>;
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
     Promise<{ revision: string; routeEpoch: number }>;
   build(runtime: LiveRuntime, attempt: LiveAttempt, command: typeof BUILD_RECIPE,
-    env: ReturnType<typeof artifactEnvironment>): Promise<{ candidateDigest: string }>;
+    env: ReturnType<typeof buildEnvironment>): Promise<{ candidateDigest: string }>;
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
   verify(runtime: LiveRuntime, attempt: LiveAttempt, limits: { files: 255; fileBytes: 16777216; totalBytes: 67108864 }): Promise<void>;
   /** Liveness lease frame (A-LIVE Amendment 1 §3): fenced, side-effect free; W3 binds it to the op it confirms. */
@@ -38,12 +40,14 @@ export function createLiveWorker(supervisor: QualifiedSupervisor, placement: Bui
       await supervisor.phase(runtime, 'offline');
     },
     restore: (runtime, draft) => supervisor.overlay(runtime, draft),
-    async live(runtime) {
+    async prebundle(runtime) {
       await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName, placement));
-      return supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment());
+      await supervisor.prebundle(runtime);
     },
+    live: runtime => supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment()),
     async build(runtime, attempt) {
-      const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment());
+      // FIX3 (s-archi 16:40): the clean build alone runs with the W4 build heap (1024).
+      const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, buildEnvironment());
       await supervisor.terminate(runtime);
       return candidate;
     },

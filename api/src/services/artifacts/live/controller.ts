@@ -2,12 +2,11 @@ import type { LivePorts } from './ports';
 import { assertFence, conflict, type LiveKey, type LiveRuntime } from './records';
 import { crashRestore, revive } from './revive';
 import { prepareLive } from './prepare-live';
-import { idleBuild } from './idle';
+import { idleBuild, queuedBuild } from './idle';
+import { podName } from './pods';
 import { buildOnly } from './build-only';
-import { withinPhase } from './deadline';
 import { fenceInvitations } from './invitations';
 import { projectRevision } from './project';
-import { gated } from './heavy';
 import { authorizeLive, liveRole, type LiveActor } from './authorize';
 import { currentBinding, failed, teardown, transition } from './transitions';
 
@@ -31,6 +30,7 @@ export function createLiveController(ports: LivePorts) {
         if (!await fenceInvitations(ports, key)) return;
         return idleBuild(ports, key);
       }
+      if (runtime.phase === 'BUILD_QUEUED') return queuedBuild(ports, key);
       // Recovery of an in-flight operation belongs to startup after its old API executor is fenced.
     },
     start: (key: LiveKey) => revive(ports, key),
@@ -59,7 +59,7 @@ export function createLiveController(ports: LivePorts) {
         const runtime = unit.state?.runtime;
         if (!runtime || runtime.phase === 'DORMANT') return;
         if (runtime.generation !== binding.generation) conflict('stale_fence');
-        if (!['BUILD_PROVISIONING', 'QUIESCING', 'BUILDING', 'VERIFYING', 'PUBLISHING', 'SAVING'].includes(runtime.phase)) conflict('transition_busy');
+        if (!['BUILD_PROVISIONING', 'QUIESCING', 'BUILD_QUEUED', 'BUILDING', 'VERIFYING', 'PUBLISHING', 'SAVING'].includes(runtime.phase)) conflict('transition_busy');
         runtime.pendingWake = true; runtime.routeEpoch++; runtime.phase = 'REVIVING';
         runtime.appliedRevision = null; runtime.lastAccessAt = ports.now();
         return structuredClone(runtime);
@@ -70,12 +70,10 @@ export function createLiveController(ports: LivePorts) {
         // The higher phase fence cancels every older worker command, which ends a gated build, before restoring source.
         await ports.worker.quiesce(runtime);
         runtime = await transition(ports, key, runtime, state => { state.runtime.attempt = null; });
+        // A queued or admitted build of this pod leaves the node queue; the revive phases queue on their own.
+        await ports.heavy.cancel(runtime.podName);
+        return await prepareLive(ports, key, runtime);
       } catch (error) { await failed(ports, key, runtime, error); throw error; }
-      const fenced = runtime;
-      return gated(ports.heavy, key, 'wake', error => failed(ports, key, fenced, error), async () => {
-        try { return await withinPhase(prepareLive(ports, key, fenced)); }
-        catch (error) { await failed(ports, key, fenced, error); throw error; }
-      });
     },
     /** Narrow stop after code-right revocation exposes teardown fields only. Identity comes from host auth. */
     async stop(key: LiveKey, input: { ownerId: string; sessionId: string; generation: number }) {
@@ -111,6 +109,8 @@ export function createLiveController(ports: LivePorts) {
       if (!runtime || runtime.phase === 'DORMANT' || runtime.podUid === null) return false;
       await ports.worker.renew(runtime); return true;
     },
+    /** The binding's admitted or queued heavy phases (kind, position) for the live status surface. */
+    heavyStatus: (key: LiveKey) => ports.heavy.status(podName(key)),
     /** Every runtime that is not DORMANT, for the scheduler. */
     active: () => ports.store.active(),
   };

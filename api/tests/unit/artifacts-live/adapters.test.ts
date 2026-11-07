@@ -4,24 +4,31 @@ import { fixture, key, placement } from './fixture';
 import { createLiveWorker, type QualifiedSupervisor } from '../../../src/services/artifacts/live/worker';
 import { withinPhase } from '../../../src/services/artifacts/live/deadline';
 import { fetchLockedTarball } from '../../../src/services/artifacts/live/npm-relay';
-import { BUILD_RECIPE, LIVE_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
 import { createPostgresCacheStorage } from '../../../src/services/artifacts/live/cache-storage';
 import { createPostgresLiveStore } from '../../../src/services/artifacts/live/postgres';
 
 describe('trusted live adapters', () => {
   it('should force fixed offline recipes and read-only verified dependencies', async () => {
     const f = fixture(); const runtime = await f.controller.start(key);
-    const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'dev', 'build', 'verify', 'renew']
-      .map(name => [name, vi.fn(async () => name === 'build' ? { candidateDigest: 'digest' } : undefined)])) as unknown as QualifiedSupervisor;
+    const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'verify', 'renew']
+      .map(name => [name, vi.fn(async () => name === 'build' ? { candidateDigest: 'digest' }
+        : name === 'prebundle' ? { prebundled: true } : undefined)])) as unknown as QualifiedSupervisor;
     const worker = createLiveWorker(supervisor, placement);
     const source = await f.ports.forge.snapshot(key, 'B'); const cache = await f.ports.cache.acquire(source, runtime);
-    await worker.prepare(runtime, source, cache); await worker.live(runtime);
+    await worker.prepare(runtime, source, cache); await worker.prebundle(runtime); await worker.live(runtime);
     expect(supervisor.dependencies).toHaveBeenCalledWith(runtime, cache, { readOnly: true, verifyHash: true });
     expect(supervisor.phase).toHaveBeenCalledWith(runtime, 'offline');
-    expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, expect.objectContaining({ VITE_ARTIFACT_MODE: '1' }));
+    // FIX3: prebundle and dev see the W4 base (heap 384); the clean build alone sees buildEnvironment() (heap 1024).
+    expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, artifactEnvironment());
     expect(supervisor.hostFile).toHaveBeenCalledWith(runtime, '/tmp/artifact-vite.config.mjs', expect.stringContaining('clientPort:443'));
+    // The pre-bundle is its own supervisor op, after the live config and before the dev server.
+    expect(supervisor.prebundle).toHaveBeenCalledWith(runtime);
+    expect(vi.mocked(supervisor.hostFile).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(supervisor.prebundle).mock.invocationCallOrder[0]);
+    expect(vi.mocked(supervisor.prebundle).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(supervisor.dev).mock.invocationCallOrder[0]);
     await worker.build(runtime, { id: 'attempt' } as never);
-    expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, expect.anything());
+    expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, buildEnvironment());
+    expect(vi.mocked(supervisor.build).mock.calls[0][3]).toMatchObject({ NODE_OPTIONS: '--max-old-space-size=1024' });
     expect(supervisor.terminate).toHaveBeenCalledWith(runtime);
     await worker.renew(runtime); expect(supervisor.renew).toHaveBeenCalledWith(runtime);
   });
@@ -81,8 +88,8 @@ describe('trusted live adapters', () => {
     const query = vi.fn(async () => ({ rows: [row('s', 'a', 'LIVE', 'alice'), row('s', 'b', 'DORMANT', 'bob'),
       row('t', 'c', 'RECOVERING', 'carol')] }));
     expect(await createPostgresLiveStore({ query } as never).active()).toEqual([
-      { key: { storageScopeId: 's', artifactId: 'a' }, ownerId: 'alice' },
-      { key: { storageScopeId: 't', artifactId: 'c' }, ownerId: 'carol' }]);
+      { key: { storageScopeId: 's', artifactId: 'a' }, ownerId: 'alice', phase: 'LIVE' },
+      { key: { storageScopeId: 't', artifactId: 'c' }, ownerId: 'carol', phase: 'RECOVERING' }]);
     expect(query).toHaveBeenCalledWith(expect.stringContaining('control.artifact_host_kv'), ['artifact-live-runtime/v1']);
   });
 });
