@@ -25,14 +25,31 @@ test('should cache exact toolbox inputs without reusing a previous run transport
     "steps.toolbox-cache.outputs.cache-hit != 'true' && steps.toolbox-registry.outputs.hit != 'true'");
 });
 
-test('should publish the prebuilt toolbox only from main after interface verification', () => {
-  const steps = jobs['build-api-tool-image'].steps;
-  const runs = steps.map(s => s.run);
-  const publish = steps.find(s => s.run === 'make push-api-tool-registry ENV=test-ci-api');
+test('should publish the prebuilt toolbox only from a main-only successor after interface verification', () => {
+  const producer = jobs['build-api-tool-image'];
+  assert.equal(producer.permissions.packages, 'read');
+  assert.ok(!producer.steps.some(s => s.run?.includes('push-api-tool-registry')));
+  assert.match(producer.steps.find(s => s.id === 'toolbox-registry').if, /CI_IMAGE_CACHE == '1'/);
+  const publish = jobs['api-tool-registry-publish'];
+  assert.deepEqual(publish.needs, ['changes', 'build-api-tool-image']);
   assert.match(publish.if, /github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
-  assert.ok(runs.indexOf('make test-ci-api-tool-runtime ENV=test-ci-api') < runs.indexOf(publish.run));
-  assert.match(steps.find(s => s.id === 'toolbox-registry').if, /CI_IMAGE_CACHE == '1'/);
-  assert.equal(jobs['build-api-tool-image'].permissions.packages, 'write');
+  assert.equal(publish.permissions.packages, 'write');
+  const runs = publish.steps.map(s => s.run);
+  assert.ok(runs.indexOf('make load-api-tool ENV=test-ci-api') < runs.indexOf('make push-api-tool-registry ENV=test-ci-api'));
+  assert.equal(publish.steps.find(s => s.uses?.startsWith('actions/download-artifact@')).with.name, 'api-tool-image');
+  for (const name of ['ci-gate', 'ci-capacity-receipts']) assert.ok(jobs[name].needs.includes('api-tool-registry-publish'), name);
+});
+
+test('should never grant packages:write to a job that can run on pull_request', () => {
+  const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request', ref: 'refs/pull/1/merge' });
+  const selectedOnPr = new Set(expected.filter(row => row.selected).map(row => row.job.replace(/ \(.*$/, '')));
+  for (const [name, job] of Object.entries(jobs)) {
+    if (job.permissions?.packages !== 'write') continue;
+    assert.ok(!selectedOnPr.has(name), `${name} holds packages:write on pull_request`);
+  }
+  assert.ok(!selectedOnPr.has('api-tool-registry-publish'));
+  const main = workflowExpected(workflow, { changes: { global: 'true' }, event: 'push', ref: 'refs/heads/main' });
+  assert.equal(main.find(row => row.job === 'api-tool-registry-publish').selected, true);
 });
 
 test('should start independent consumer checks after selection and retain real archive dependencies', () => {
