@@ -44,6 +44,7 @@
   - `plan/70-BRANCH_test-ci-ten-minute-proof.md`
   - `docs/ci/registry-egress.md`
   - `Makefile` (BRHONO-EX1, BRHONO-EX2, BRSCA-EX1, BR84-EX2)
+  - `deploy/k8s/overlays/prod/**`, `deploy/ci/idp-identity-sync/bundle-checks.mjs`, `deploy/ci/artifact-content/bundle.selftest.mjs`, `deploy/ci/preprod-a4/bundle.selftest.mjs` (BRPIN-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -55,7 +56,8 @@
 
 ## Feedback Loop
 - [x] BRHONO-EX1: add only Docker regression/dependency verification targets to Makefile. Rollback reverts those targets.
-- [x] BRHONO-EX2: raise hono floors to ^4.13.16 and resolve 4.13.17 in every lock; one `lock-hono-4-13-17` Makefile target applies the pinned bump. `packages/mcp-auth` keeps its ^4.10.7 peer floor. Rollback reverts manifests, locks and target.
+- [x] BRHONO-EX2: resolve hono 4.13.17 in every lock and raise the ^4.13.16 floor only in private manifests (api, apps/llm-gateway, packages/connector-host); published package manifests keep their recorded hono ranges because a range change on a published version requires a version bump (CI package-candidates). One `lock-hono-4-13-17` Makefile target applies the pinned bump. Rollback reverts manifests, locks and target.
+- [x] BRPIN-EX1: pin the deployed hono-fixed prod api and auth-idp image digests in the prod overlay (and the export cronjob / self-test expectations that mirror the api pin) so a later manifest apply cannot restore the vulnerable digests. Rollback restores the previous digests recorded in .tmp/rv/hono-prod-real.md.
 - [x] BRSCA-EX1: Makefile test-security-sca-gate targets and ci.yml/daily workflow wiring; owner asked for a real SCA gate in CI (07/11). Rollback reverts targets, job and workflow.
 - [x] BR84-EX1: owner-authorized CI workflow changes (toolbox static, parallel qualification, shards); keep every gate. Rollback: revert workflow and Makefile together.
 - [x] BR84-EX2: capture, report, dispatch, dossier and toolbox targets in the Makefile. Rollback: restore recipes.
@@ -80,5 +82,8 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 1: hono fix, SCA gate and CI10 train merged on feat/ci-sca-gate.
 - [x] Lot 2: scoped make checks green (inventory 15/15, SCA gate 0 unregistered, hono lock, expected-results 28/28, ci-dag 10/10).
-- [ ] Lot 3: push, retitle PR #940, close #938 and #939.
+- [x] Lot 3: SCA gate script and make target (all locks covered, component-aware register match, mode validation, pagination, sanitized output) with unit tests for the advisory path and scheduled/PR routing.
+- [x] Lot 4: SCA CI job, daily issue workflow and register entries (daily workflow passes the validated scheduled mode).
+- [x] Lot 5: prod image digest pins and prod register entries resolved with deployment evidence.
+- [ ] Lot 6: push, retitle PR #940, close #938 and #939.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
