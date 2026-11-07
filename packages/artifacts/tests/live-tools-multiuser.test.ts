@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { liveWitness } from './fixtures/live-world.js';
+import type { LiveIdentity } from '../src/server/live-store.js';
 
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 const text = (page: { files: { path: string; text: string }[] }, path: string) => page.files.find(f => f.path === path)?.text;
@@ -35,4 +36,14 @@ it('should let an invited reader read the owner draft but never write, reset or 
     .rejects.toMatchObject({ kind: 'access_denied' });
   await expect(as('bob', 'live_reset', { ...guarded, idempotencyKey: 'bob-2' })).rejects.toMatchObject({ kind: 'access_denied' });
   expect(text(await w.call('live_read'), 'ui/a.ts')).toBe('alice draft');
+});
+it('should keep the idle deadline 900 s after the last access with no absolute lifetime (A-LIVE Amendment 1)', async () => {
+  let now = Date.parse('2026-11-08T07:00:00Z'); const w = liveWitness({ now: () => now });
+  await w.write({ files: [{ path: 'ui/a.ts', text: 'edit' }] }); await settle();
+  const identity = (w.worker.reconcile.mock.calls[0] as unknown[])[0] as LiveIdentity;
+  const runtime = async () => (await w.store.transaction(identity, async tx => tx.record!)).runtime!;
+  expect(Date.parse((await runtime()).idleDeadline) - now).toBe(900_000);
+  expect(await runtime()).not.toHaveProperty('maximumLifetimeAt');
+  now += 600_000; await w.call('live_read');
+  expect(Date.parse((await runtime()).idleDeadline) - now).toBe(900_000);
 });
