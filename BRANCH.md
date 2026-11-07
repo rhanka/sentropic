@@ -32,6 +32,7 @@
 - [x] `resolved` (s-archi batch review): W3's `QualifiedSupervisor` exposes the verified snapshot export; W7 consumes it and keeps no own port once W3 lands it.
 - [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
 - [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).
+- [ ] `attention`: live-host 78e85ffb7 has no `index.ts` and no `./live-host` export yet; W7 imports the architect-named subpath.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Multi-branch** (wagon merged by the train integration lane)
@@ -41,18 +42,19 @@
   - [x] Ed25519 single-use authorization bound to job, generation, commit, candidate, run and attempt; 10-minute lifetime.
   - [x] Host verifier: mandatory evidence, foreign scope/job, replay, expiry, altered bytes, stored-bytes re-read, response-loss replay.
   - [x] Builder publication port: anti-repack check, durable intent, bounded resend, receipt verification, idempotent record.
-- [ ] **Lot 1b — s-archi changes**
+- [x] **Lot 1b — s-archi changes**
   - [x] Builder namespace and service domain from per-environment configuration (`builderPlacement`).
   - [x] In-pod install `npm ci --offline --ignore-scripts`, no registry, no script allowlist.
   - [x] Pod spec without `activeDeadlineSeconds` (plan r3.9, A-LIVE Amendment 1, pending the immo co-signature).
   - [x] Job admission: `binding.pendingJobId === jobId` and a matching generation; monotonic host attempt fence.
   - [x] `expect()` contract: every A-LIVE §8.3 recheck, one test per refusal (`publicationRecheck`).
-  - [ ] Import `candidateDigest`, the handoff types and the verifier from `@sentropic/artifacts/live-host`; `kid` in claims and receipt; delete the api copy.
-- [ ] **Lot 2 — Host build API and builder service**
+  - [x] Import `candidateDigest`, the handoff types, the verifier and the recheck from `@sentropic/artifacts/live-host` (78e85ffb7); `kid` in claims and receipt; api copies deleted.
+- [x] **Lot 2 — Host build API and builder service**
   - [x] Authenticated host identity; job by id; asynchronous build with job-bound status (`createHostBuildApi`, `createBuildJobs`).
   - [x] Scheduler sweep (reconcile, reap, recover) stays exposed by the controller, never started here.
+  - [x] `createBuilderService`: controller, SG4b publication, Postgres job ledger and host build API; nothing started.
   - [x] Postgres job ledger in the existing host KV (`createPostgresBuildJobStore`), sharing the live store row lock.
   - [x] Live recipe path stays `ui/vite.config.ts`: the only contract value (immo R1/R2); no new config invented.
 - [ ] **Lot 3 — Gate**
-  - [ ] Scoped checks: `make -f .tmp/packets/alive-w7-ops.mk w7-check` (tsc + vitest on api/tests/unit/artifacts-live).
+  - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
   - [ ] Push the wagon; report .tmp/rv/alive-W3-W7.md.
