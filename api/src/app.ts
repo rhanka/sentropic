@@ -89,6 +89,8 @@ import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
 import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
 import { clusterMeshLiveQualificationRouter } from './routes/cluster-mesh-live-qualification';
+import { createProductGitHubAppRouter } from './routes/github-app';
+import { isGitHubAppPath } from './services/cluster-mesh/github-app-host';
 import {
   ReceiverRefusal,
   createProductSessionContentReceiver,
@@ -378,6 +380,9 @@ app.use(
 // Global HTTP logging (opt-in)
 app.use('*', async (c, next) => {
   if (!httpLogEnabled) return next();
+  // SG0-app host paths never enter http logs: refs, callback states, manifest
+  // codes and installation ids are credential-shaped (A-LIVE W1 / G0 v3 §2.7).
+  if (isGitHubAppPath(c.req.path)) return next();
   const startedAt = Date.now();
   const method = c.req.method;
   const path = c.req.path;
@@ -444,6 +449,11 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
   ...ROOT_MOUNT_REMAPS,
 } as const;
 app.route('/api/v1/cluster-mesh/qualification', clusterMeshLiveQualificationRouter);
+// A-LIVE W1 (M2-S): mounted SG0-app enrollment host on the public origin
+// (`/github-app/*`). Code only until the GB4-P go (A-LIVE §10): without its
+// three env vars the composition is absent and the origin serves nothing here.
+const productGitHubAppRouter = createProductGitHubAppRouter();
+if (productGitHubAppRouter) app.route('/', productGitHubAppRouter);
 // RC2.receiver: frozen source routes + source/browser/relay middleware separation.
 // Source-gaps stay fail-closed in product (no public direct access to the inner mount).
 app.route('/', createProductSessionContentReceiver().app);

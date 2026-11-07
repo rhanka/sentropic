@@ -163,6 +163,15 @@ const envSchema = z.object({
   CLUSTER_MESH_LEGACY_AUDIENCES: z.string().optional(),
   // Non-production A1 qualification only. Production rejects shared-secret evidence.
   CLUSTER_MESH_A1_QUALIFICATION: z.enum(['0', '1']).optional(),
+  // A-LIVE W1 / SG0-app host composition (plan lot M2-S, G0 v3 §2.7).
+  // GITHUB_APP_PUBLIC_BASE_URL is the https origin the owner gesture and the
+  // GitHub callbacks live on (origin only, no path); an https origin is also
+  // enforced fail-closed by the host resolver. TARGETS_JSON and
+  // BROKER_BINDINGS_JSON are deploy-time host registry data — no tuple,
+  // client secret or scope is committed; the frozen registry lives in code.
+  GITHUB_APP_PUBLIC_BASE_URL: z.string().optional(),
+  GITHUB_APP_TARGETS_JSON: z.string().optional(),
+  GITHUB_APP_BROKER_BINDINGS_JSON: z.string().optional(),
   // Dev/test self-S2S dogfood client (BR39d-D10)
   OAUTH_SELF_SERVICE_CLIENT_ID: z.string().optional(),
   OAUTH_SELF_SERVICE_CLIENT_SECRET: z.string().optional(),
