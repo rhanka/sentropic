@@ -326,13 +326,15 @@ test.describe('Détail des organisations', () => {
           joined = true;
           await route.continue();
         });
-        const subscribed = pageA.waitForResponse((response) => {
+        // Observe from the start, but measure SSE readiness after page bootstrap.
+        let subscribed = false;
+        pageA.on('response', (response) => {
           const url = new URL(response.url());
-          return url.pathname === '/api/v1/streams/sse' && url.searchParams.get('workspace_id') === workspaceAId && response.ok();
-        }, { timeout: 2_000 });
+          if (url.pathname === '/api/v1/streams/sse' && url.searchParams.get('workspace_id') === workspaceAId && response.ok()) subscribed = true;
+        });
         await pageA.goto(`/organizations/${encodeURIComponent(organizationId)}`);
         await snapshotCaptured;
-        await subscribed;
+        await expect.poll(() => subscribed, { timeout: 2_000 }).toBe(true);
         await pageB.goto(`/organizations/${encodeURIComponent(organizationId)}`);
         const avatarBInA = pageA.locator(`[aria-label="Verrou du document"] [title="${memberB.displayName}"]`);
         await expect(avatarBInA).toHaveCount(1, { timeout: 2_000 });
