@@ -1,7 +1,7 @@
 # Feature: A-LIVE W4 — pod bootstrap (M3-SUP, no shell, no exec)
 
 ## Objective
-- [ ] Implement the trusted worker pod bootstrap of the alive enablement plan (W4, r3.9) per A-LIVE v2 §8.1/§8.3, Amendment 1 §3 and the W2 static-deny contract: Ed25519 verification of every W3 frame with the SPKI public key from the pod spec, replay window, monotonic pod-bound fence, the :5173 listener (supervisor channel plus live HTTP/HMR to 127.0.0.1:5174 in the live phase only), fixed recipes with a zero-built env, offline install from staged tarballs, in-pod pre-bundle, process-group termination and the 30-minute liveness exit. Code only; merge and activation wait for the GB4-P go (A-LIVE §10).
+- [x] Implement the trusted worker pod bootstrap of the alive enablement plan (W4, r3.9) per A-LIVE v2 §8.1/§8.3, Amendment 1 §3 and the W2 static-deny contract: Ed25519 verification of every W3 frame with the SPKI public key from the pod spec, replay window, monotonic pod-bound fence, the :5173 listener (supervisor channel plus live HTTP/HMR to 127.0.0.1:5174 in the live phase only), fixed recipes with a zero-built env, offline install from staged tarballs, in-pod pre-bundle, process-group termination and the 30-minute liveness exit. Code only; merge and activation wait for the GB4-P go (A-LIVE §10).
 
 ## Scope / Guardrails
 - [x] Wagon branch `feat/alive-w4` from origin/main, worktree `tmp/worktrees/alive-w4`, no PR; the train integration lane merges it.
@@ -46,4 +46,4 @@
 - [x] Lot 2: frame verification, replay window, pod-bound fence and liveness lease, tests first.
 - [x] Lot 3: W3 transfers (`put` + commit) for stage, overlay, dependencies and install, tests first.
 - [x] Lot 4: processes (`dev` with pre-bundle, `build`, `snapshot`, process-group termination), tests first.
-- [ ] Lot 5: :5173 listener and pod entry (`createBootstrapSource`), tests first; scoped tests and typecheck green; branch pushed.
+- [x] Lot 5: :5173 listener and pod entry (`createBootstrapSource`), tests first; scoped tests and typecheck green; branch pushed.
