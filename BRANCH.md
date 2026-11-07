@@ -29,6 +29,7 @@
   - `packages/cluster-mesh/tests/**/package-lock.json`
   - `packages/cluster-mesh/tests/**/package.json`
   - `packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json`
+  - `packages/cluster-mesh/tests/storage/comments-deps.package-lock.json`
   - `scripts/ci/consumer-locks.json`
   - `scripts/ci/tool-locks.json`
   - `scripts/security/hono-node-server*`
