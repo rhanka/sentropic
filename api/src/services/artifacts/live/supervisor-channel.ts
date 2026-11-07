@@ -1,8 +1,8 @@
 import type { KeyObject } from 'node:crypto';
 import { conflict, LiveError, type LiveRuntime } from './records';
 import { FRAME_TTL_MS, readReply, sealFrame, type FrameFence, type SupervisorOp } from './supervisor-frame';
-import { putFrames, readSnapshot, treeDigest, type TransferFailure, type TransferFile, type TransferTarget,
-  type TreeLimits } from './supervisor-transfer';
+import { entryOf, manifestDigest, putWriter, readSnapshot, streamSnapshot, treeDigest, type TransferEntry, type TransferFailure,
+  type TransferFile, type TransferTarget, type TreeLimits } from './supervisor-transfer';
 
 /** One signed frame to the pod bootstrap on worker ingress :5173, relayed by artifact-content; raw reply bytes back. */
 export interface SupervisorChannel {
@@ -64,16 +64,34 @@ export function createSupervisorChannel(options: ChannelOptions) {
       return unavailable(); // transport detail is never surfaced
     } finally { clearTimeout(timer); set.delete(controller); }
   }
-  /** Pushes a tree in bounded put frames; the commit frame carries the digest the pod must recompute. */
+  /** Streams a tree file by file into bounded put frames, holding one file and one frame. Per-file and running limits
+   * refuse as soon as they overflow; the whole tree is checked before the digest that the commit frame carries, so a
+   * refused or interrupted tree is never committed. */
+  async function stream(runtime: LiveRuntime, target: TransferTarget, files: AsyncIterable<TransferFile> | Iterable<TransferFile>,
+    limits: TreeLimits, fail: TransferFailure) {
+    const id = options.id(); const writer = putWriter(id, target);
+    const entries: TransferEntry[] = []; let total = 0;
+    for await (const file of files) {
+      const entry = entryOf(file, fail); total += entry.size;
+      if (entries.length >= limits.files || entry.size > limits.fileBytes || total > limits.totalBytes) fail('limit');
+      entries.push(entry);
+      for (const args of writer.add(file)) await call(runtime, 'put', args);
+    }
+    for (const args of writer.end()) await call(runtime, 'put', args);
+    return { transfer: id, treeDigest: manifestDigest(entries, limits, fail) };
+  }
+  /** An in-memory tree is refused as a whole before its first put frame. */
   async function transfer(runtime: LiveRuntime, target: TransferTarget, files: readonly TransferFile[], limits: TreeLimits,
     fail: TransferFailure) {
-    const digest = treeDigest(files, limits, fail);
-    const id = options.id();
-    for (const args of putFrames(id, target, files)) await call(runtime, 'put', args);
-    return { transfer: id, treeDigest: digest };
+    treeDigest(files, limits, fail);
+    return stream(runtime, target, files, limits, fail);
   }
   const snapshot = (runtime: LiveRuntime, root: 'output' | 'dependencies', limits: TreeLimits, links: 'refuse' | 'skip',
     fail: TransferFailure) => readSnapshot(cursor => call(runtime, 'snapshot', { root, cursor }), limits, links, fail);
-  return { call, transfer, snapshot, id: options.id };
+  /** Streaming read: each finished file goes to `sink` before the next page is requested. */
+  const drain = (runtime: LiveRuntime, root: 'dependencies', limits: TreeLimits, links: 'skip', fail: TransferFailure,
+    sink: (file: TransferFile) => Promise<void>) =>
+    streamSnapshot(cursor => call(runtime, 'snapshot', { root, cursor }), limits, links, fail, sink);
+  return { call, transfer, stream, snapshot, drain, id: options.id };
 }
 export type SupervisorCore = ReturnType<typeof createSupervisorChannel>;
