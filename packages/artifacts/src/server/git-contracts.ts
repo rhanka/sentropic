@@ -46,6 +46,8 @@ export interface GitBindingEvent {
   afterSha?: string;
   deliveryId?: string;
   invocationId?: string;
+  /** A-LIVE §5.3.1: only on the attach event that verified creation of the branch; initialUnpublishedBranchEligible input. */
+  branchCreated?: true;
   createdAt: string;
 }
 export interface GitReleaseIndex {
@@ -72,13 +74,28 @@ export interface GitBindingWrite {
   actorId: string;
   idempotencyKey: string;
   commandHash: string;
-  event: Pick<GitBindingEvent, 'action' | 'beforeSha' | 'afterSha' | 'deliveryId' | 'invocationId'>;
+  event: Pick<GitBindingEvent, 'action' | 'beforeSha' | 'afterSha' | 'deliveryId' | 'invocationId' | 'branchCreated'>;
+}
+/** Written before createBranch, keyed like the replay receipt, so a same-key retry knows the branch is its own. */
+export interface GitAttachIntent {
+  storageScopeId: string;
+  artifactId: string;
+  actorId: string;
+  idempotencyKey: string;
+  commandHash: string;
+  repoId: string;
+  branch: string;
+  baseCommitSha: string;
+  createdAt: string;
 }
 export interface GitBindingStore {
   get(storageScopeId: string, artifactId: string): Promise<GitBinding | undefined>;
   /** Binding, audit and principal-scoped replay receipt commit atomically. */
   write(input: GitBindingWrite): Promise<{ binding: GitBinding; replayed: boolean }>;
   events(storageScopeId: string, artifactId: string): Promise<GitBindingEvent[]>;
+  /** Durable put-if-absent by (scope, actor, key); returns the stored intent, which wins over the input. */
+  reserveAttachIntent(intent: GitAttachIntent): Promise<GitAttachIntent>;
+  attachIntent(storageScopeId: string, actorId: string, idempotencyKey: string): Promise<GitAttachIntent | undefined>;
 }
 /** SG4 writes the index using its release-transaction client; SG1 provides the record/read port. */
 export interface GitReleaseIndexStore {

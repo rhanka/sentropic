@@ -496,6 +496,20 @@ caps may only go below it, and larger listings belong to dedicated listing
 tools. Hosts must qualify
 a 2 MiB serialized MCP result budget before selecting this capability.
 
+`POST /fetch_app_source`, `POST /git_attach` and `POST /git_publish` (G0 v3 §1.3,
+§1.4, §2.6; A-LIVE v2 S03) are dispatched through `deps.gitTools`, built with
+`createGitToolService({ bindings, registry, codeRights, git, authorize, build?,
+outputDir?, journal? })`. Each executor fails closed: no `gitTools` is
+`capability_unavailable` (503); `git_publish` without a `build` port is
+`provider_unavailable` (503); `ci` is `builder_unavailable`, and so is every
+other executor the `build` port does not admit, including the omitted `caller`
+default (without a `build` port only `caller` is admitted). Every `git_attach`
+path, pause/resume/detach included, checks the current code right before any
+registry or forge call. A branch created by attach records an intent first
+(migration `0012_git_attach_intents.sql`) and marks its attach event
+`branchCreated: true`; see `docs/git-bindings.md`.
+`artifacts_list_app_sources` stays unrouted.
+
 `POST /set_access` grants or revokes a named principal's read access, requires a
 caller `idempotencyKey`, and keeps the artifact private. Bind
 `isApprovedAccount` to the host's principal policy. `POST /delete` also requires
