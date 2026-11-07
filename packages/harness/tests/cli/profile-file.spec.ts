@@ -64,9 +64,57 @@ describe('repository-owned profiles through the CLI', () => {
   });
 
   it.each(['check', 'verify', 'audit', 'init'])('shares profile resolution with %s', (verb) => {
-    const result = capture(verb, ...(verb === 'check' ? ['scope'] : []), '--json');
+    const result = capture(verb, ...(verb === 'check' ? ['scope'] : []), '--staged-files', 'Cargo.toml', '--json');
     expect(result.code).toBe(0);
     if (verb === 'init') expect(JSON.parse(result.text)).toEqual(document);
+    else expect(JSON.parse(result.text)).toMatchObject({ result: 'fail', violations: [
+      { path: 'Cargo.toml', message: 'forbidden path touched: Cargo.toml' },
+    ] });
+  });
+
+  it('discovers profiles in worktrees where .git is a file', () => {
+    rmSync('.git', { recursive: true });
+    writeFileSync('.git', 'gitdir: /unused/worktree-metadata');
+    mkdirSync('web');
+    process.chdir(join(repo, 'web'));
+    expect(capture('check', 'scope').text).toContain('(sentbase)');
+  });
+
+  it('resolves explicit profile paths from the current directory', () => {
+    mkdirSync('web');
+    process.chdir(join(repo, 'web'));
+    expect(capture('check', 'scope', '--profile-file', '../harness.profile.json').text).toContain('(sentbase)');
+  });
+
+  it('uses root plan conventions from nested directories and honors an explicit override', () => {
+    writeFileSync('BRANCH.md', '- **Allowed Paths**: `LICENSE`\n');
+    mkdirSync('web');
+    writeFileSync('web/other.md', '- **Forbidden Paths**: `LICENSE`\n');
+    process.chdir(join(repo, 'web'));
+    expect(capture('check', 'scope', '--staged-files', 'LICENSE').text).toContain('PASS C2');
+    expect(capture('check', 'scope', '--staged-files', 'LICENSE', '--branch-md', 'other.md').text).toContain('FAIL C2');
+  });
+
+  it.each(['verify', 'audit'])('applies commit guards through %s without file inputs', (verb) => {
+    expect(JSON.parse(capture(verb, '--commit-message', 'oops', '--json').text).result).toBe('fail');
+  });
+
+  it.each(['--profile', '--profile-file'])('rejects a bare %s flag', (flag) => {
+    expect(capture('check', 'scope', flag)).toMatchObject({ code: 2 });
+  });
+
+  it.each(['sentropic', 'stub'])('loads the %s init document with identical C1/C2 artifacts', (name) => {
+    writeFileSync('roundtrip.json', capture('init', '--profile', name, '--json').text);
+    writeFileSync('BRANCH.md', '- **Allowed Paths**: `src/**`\n- **Forbidden Paths**: `private/**`\n' +
+      '- **Conditional Paths**: `config/**`\n## Feedback Loop\n- BR42h-EX1\n- EXC-1\n');
+    const matrices = [
+      ['check', 'scope', '--branch-md', 'BRANCH.md', '--staged-files', 'Makefile,secret/key,src/a,private/key,config/x,unknown'],
+      ['check', 'branch', '--current-branch', 'feat/x-child', '--expected-branch', 'feat/x'],
+    ];
+    for (const args of matrices) {
+      expect(capture(...args, '--profile-file', 'roundtrip.json', '--json'))
+        .toEqual(capture(...args, '--profile', name, '--json'));
+    }
   });
 
   it('enforces configured commit-message guards when a message is supplied', () => {

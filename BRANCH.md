@@ -31,6 +31,7 @@
 
 ## Feedback Loop
 - [x] Tests-first receipt: CLI profile suite fails 11/14 against the unchanged kernel (loading, discovery, precedence, guards and configuration errors).
+- [x] Regression receipts: existing package suite plus initial additions PASS 127/127; final new-profile suites PASS 49/49 after adding file round-trips, worktree discovery and executable README coverage.
 - [x] Owner requirements authorize the profile contract and precedence; preserve built-in C1/C2 behavior and advisory exit status.
 - [ ] Track handoff: designated conductor imports the request, lots, deliverables and test receipts from this source; this lane does not append to the shared journal.
 - [ ] Train handoff: consolidated independent review, version allocation, package qualification and CI belong to integration.
@@ -42,7 +43,7 @@
 - [x] **Multi-branch** — one wagon, integrated and reviewed by the dated train lane.
 
 ## UAT Management (in orchestration context)
-- [ ] CLI acceptance: load a Rust + Node profile, enforce Cargo.toml / .githooks/** / LICENSE restrictions, and reject invalid configuration with exit 2.
+- [x] CLI acceptance: load a Rust + Node profile, enforce Cargo.toml / .githooks/** / LICENSE restrictions, and reject invalid configuration with exit 2.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline**: mandatory reads, isolated worktree, mechanical `harness check branch`; reuse existing Node image only.
