@@ -58,7 +58,9 @@ export function createContentHost(options: ContentHostOptions) {
   });
   async function fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const origin = parseContentHost(url.host, options.baseDomain);
+    const releaseOrigin = parseContentHost(url.host, options.baseDomain);
+    const liveOrigin = releaseOrigin ? undefined : options.live?.origin(url.host);
+    const origin = releaseOrigin ?? liveOrigin;
     if (!options.enabled() || url.protocol !== 'https:' || url.port || !origin ||
       (request.headers.has('host') && request.headers.get('host') !== url.host)) return fail(404);
     const cookies = request.headers.get('cookie') ?? '';
@@ -66,6 +68,8 @@ export function createContentHost(options: ContentHostOptions) {
     if (request.headers.has('service-worker')) return fail(404);
     const live = await options.live?.fetch(request, origin.id);
     if (live) return live;
+    // A host-owned pages domain serves live routes only: no release, reader or activation path exists there.
+    if (liveOrigin) return fail(404);
     if (url.pathname === '/_reader/nonce' && request.method === 'GET') {
       if (request.headers.has('origin') && request.headers.get('origin') !== url.origin) return fail(403);
       const nonce = randomBytes(32).toString('base64url');
