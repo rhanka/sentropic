@@ -17,11 +17,13 @@ export interface QualifiedSupervisor {
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
-    Promise<{ revision: number; routeEpoch: number }>;
+    Promise<{ revision: string; routeEpoch: number }>;
   build(runtime: LiveRuntime, attempt: LiveAttempt, command: typeof BUILD_RECIPE,
     env: ReturnType<typeof artifactEnvironment>): Promise<{ candidateDigest: string }>;
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
   verify(runtime: LiveRuntime, attempt: LiveAttempt, limits: { files: 255; fileBytes: 16777216; totalBytes: 67108864 }): Promise<void>;
+  /** Liveness lease frame (A-LIVE Amendment 1 §3): fenced, side-effect free; W3 binds it to the op it confirms. */
+  renew(runtime: LiveRuntime): Promise<void>;
 }
 export function createLiveWorker(supervisor: QualifiedSupervisor, placement: BuilderPlacement): LivePorts['worker'] {
   return {
@@ -46,5 +48,6 @@ export function createLiveWorker(supervisor: QualifiedSupervisor, placement: Bui
       return candidate;
     },
     verify: (runtime, attempt) => supervisor.verify(runtime, attempt, { files: 255, fileBytes: 16777216, totalBytes: 67108864 }),
+    renew: runtime => supervisor.renew(runtime),
   };
 }

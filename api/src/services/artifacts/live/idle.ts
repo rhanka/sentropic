@@ -1,20 +1,32 @@
 import type { LivePorts } from './ports';
-import { assertFence, automaticEligible, conflict, LiveError, publicationBaseline, type LiveKey } from './records';
+import { assertFence, automaticEligible, conflict, idleDeadline, LiveError, publicationBaseline, type LiveKey, type LiveState }
+  from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 
+const idle = (ports: LivePorts, state: LiveState | undefined): state is LiveState =>
+  !!state && state.runtime.phase === 'LIVE' && ports.now() > idleDeadline(state.runtime);
+
+/** The idle reaper (A-LIVE §5.3, Amendment 1): strictly after 900 s without qualifying activity, it always ends on the
+ * clean build of the last verified commit, except a draft conflict or a diverged head (immo R4). There is no absolute
+ * lifetime. The build is a heavy phase: it waits for the node gate while still LIVE, then rechecks idleness. A refused
+ * wait leaves the session LIVE for the next scheduler pass. */
 export async function idleBuild(ports: LivePorts, key: LiveKey) {
+  if (!idle(ports, await ports.store.read(key))) return;
+  try { return await ports.heavy.run(key, 'idle_build', () => idleUnderGate(ports, key)); }
+  catch (error) { if (error instanceof LiveError && error.reason === 'queued') return; throw error; }
+}
+async function idleUnderGate(ports: LivePorts, key: LiveKey) {
   const binding = await currentBinding(ports, key);
   let runtime = await ports.store.transaction(key, async unit => {
-    if (!unit.state || unit.state.runtime.phase !== 'LIVE' || ports.now() - unit.state.runtime.lastAccessAt <= 600_000) return;
+    if (!idle(ports, unit.state)) return;
     if (unit.state.runtime.generation !== binding.generation) conflict('stale_fence');
     unit.state.runtime.phase = 'QUIESCING'; unit.state.runtime.routeEpoch++;
     return structuredClone(unit.state.runtime);
   });
   if (!runtime) return;
   try {
-    if (ports.now() >= runtime.maximumLifetimeAt) return await teardown(ports, key, runtime);
     await ports.routes.revoke(key, runtime);
     await ports.worker.quiesce(runtime);
     const draft = await checkpoint(ports, key, runtime);
@@ -48,8 +60,7 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
       assertFence(unit.state, runtime!);
       const current = await currentBinding(ports, key, runtime!.generation);
       const state = unit.state;
-      if (state.runtime.pendingWake || state.runtime.phase !== 'VERIFYING' || state.runtime.attempt?.id !== attempt.id
-        || ports.now() >= state.runtime.maximumLifetimeAt) conflict('stale_fence');
+      if (state.runtime.pendingWake || state.runtime.phase !== 'VERIFYING' || state.runtime.attempt?.id !== attempt.id) conflict('stale_fence');
       if (current.releaseId !== attempt.expectedReleaseId) throw new LiveError('pointer_conflict');
       if (current.autoPublish && current.automaticAuthorized && automaticEligible(state.progress, attempt, current.releaseCommit)) {
         state.runtime.phase = 'PUBLISHING';

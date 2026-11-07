@@ -47,6 +47,6 @@ describe('builder pod admission and recovery', () => {
     expect(f.ports.worker.live).not.toHaveBeenCalled(); expect(f.published).toEqual(['A']);
     expect((await f.state())?.progress).toMatchObject({ latestVerifiedHeadSha: 'B', publicationBaselineHeadSha: 'B' });
     expect(f.draft().dirty).toBe(true); expect(f.objects.size).toBe(0);
-    await f.controller.start(key); f.advance(600_001); await f.controller.idle(key); expect(f.published).toEqual(['A']);
+    await f.controller.start(key); f.advance(900_001); await f.controller.reap(key); expect(f.published).toEqual(['A']);
   });
 });
