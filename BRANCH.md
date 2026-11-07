@@ -40,9 +40,9 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 1 — Candidate digest**
   - [x] One `candidateDigest` with §8.3 ceilings, safe paths, no file/directory conflict, pinned test vectors.
-- [ ] **Lot 2 — SG4b handoff**
+- [x] **Lot 2 — SG4b handoff**
   - [x] `kid` in claims and receipt; key resolvers for rotation overlap; Ed25519 only.
-  - [ ] Typed §8.3 final recheck inside the host transaction, every item tested.
+  - [x] Typed §8.3 final recheck (`publicationRecheck` over the locked host view) inside the host transaction, every refusal tested.
 - [ ] **Lot 3 — Live assertion and control**
   - [ ] Prefix-bound HMAC formats moved from W9, pinned token vector.
 - [ ] **Lot 4 — Host build API and export map**
