@@ -30,3 +30,29 @@ Use the existing Make targets with the shared Docker lock, ports `API_PORT=8803 
 - `make down ENV=test-app-w3b`
 
 The runtime suite creates and drops its own random PostgreSQL database. It imports the unchanged W3.a activation service and real package PG ports. These local checks do not qualify a production image, live ingress or browser bridge.
+
+## Live edge (A-LIVE §8.2, W9)
+
+Off unless `APP_ARTIFACT_LIVE_ENABLED=1` and content serving are both enabled. An incomplete or inconsistent configuration then refuses startup:
+
+- `APP_ARTIFACT_LIVE_PAGES_DOMAINS` (ConfigMap, per environment): whitespace-separated `<pages domain>=<kid>[,<kid>...]`. Preprod: `pages.preprod.immo.sent-tech.ca=immo-preprod-live-1` with controller kid `sentropic-preprod-live-1`. Prod: unset until immo serves a prod pages domain. A pages domain never overlaps the content base domain or another pages domain, and serves live routes only.
+- `APP_ARTIFACT_LIVE_HOST_KEYS` (Secret `artifact-content-runtime`): whitespace-separated `<kid>=<unpadded base64url>`, at least 32 bytes each. The immo content host holds the same keys and signs the assertion (`v1`) and its revocations (`c1`).
+- `APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS` (ConfigMap) and `APP_ARTIFACT_LIVE_CONTROLLER_KEYS` (Secret): the Sentropic API controller ring for fences (`f1`). Its kids and bytes differ from every host key, so immo can never forge a fence.
+- Optional: `APP_ARTIFACT_LIVE_BUILDER_NAMESPACE` (default `sentropic-artifact-builders`) and `APP_ARTIFACT_LIVE_PEERS` (multi-replica only, see below).
+
+The wire format (`src/live-format.ts`) is pure `node:crypto`; immo and the API sign with the same code (target home: `@sentropic/artifacts/live-host`).
+
+Push paths. Each takes exactly one signed header, no query and no body. 204 means applied; any other answer means retry (every operation is idempotent and only tightens authority). A message lives at most 300 s.
+- Host (immo): `POST /_live-control/v1` on the artifact's own pages-domain Host, `x-live-host-control`: `revoke_session`, or `revoke_invitation` with the new epoch floor. Open sockets close at once.
+- Controller (Sentropic API): `POST /_live-fence/v1` on the internal service Host (`artifact-content.<namespace>.svc.cluster.local:8791`), `x-live-controller-fence`: the artifact's generation and route-epoch floor. Refused on every public content or pages host.
+
+Edge admission forwards Vite dev URL shapes only (`/`, `/index.html`, `/src/`, Vite client and virtual modules, `/node_modules/`, root static files); the pod's Vite serves the staged closure only.
+
+Replicas. Fence state is in memory per replica; every overlay runs one replica. Before scaling above one, add a headless Service over the `artifact-content` pods, set `APP_ARTIFACT_LIVE_PEERS` to its DNS name, and allow ingress from `artifact-content` to itself on 8791. The receiving replica then copies every accepted push, with its original signature, to each ready replica (itself included) and answers 204 only when all applied it, else 503. A replica that becomes ready later holds no earlier fence but no earlier socket either; immo's gate stops asserting revoked sessions and invitations, and the immo content host closes its own proxied sockets on revocation.
+
+Key rotation, for either ring (keys are read at startup):
+1. Mint at least 32 random bytes under a new kid. Record it by name in the owner `.env` and in the Secret, never in source, logs or receipts.
+2. Add the new `<kid>=` entry to the Secret and the new kid to the ConfigMap list, keeping the old kid. Roll out `artifact-content`.
+3. Switch the signer (immo content host for host keys, Sentropic API for controller keys) to the new kid.
+4. After the longest message lifetime plus skew (3630 s host, 330 s controller), remove the old kid from the ConfigMap and the Secret. Roll out.
+Rotate at least every 90 days, and at once on suspected exposure.
