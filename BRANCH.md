@@ -38,7 +38,8 @@
 - [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
 - [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).
 - [ ] `attention`: `bootstrap: createBootstrapSource(supervisorPublicKey(key))` needs W4 `bootstrap.ts` and W3 `supervisor-frame.ts`; their `recipes.ts` conflict (W3 `liveEnvironment` vs W4) is a train arbitration, so W7 keeps the `bootstrap` string port.
-- [ ] `attention`: product `createBuilderService` composition waits for the AL-T/AL-D ports, the W3+W9 supervisor transport and the host base URL config; until then the mount answers 503 `builder_unavailable` to a bound host.
+- [ ] `attention`: a lock without script entries and no qualification file digests zero bytes as its `IntegrityEvidence` digest; s-archi to confirm (16:00 §1 names no digest for the absent file).
+- [ ] `attention`: product `createBuilderService` composition waits for the AL-T/AL-D ports, the W3+W9 supervisor transport and an AL-T forge port supplying `SourceSnapshot.gb1` (host base URL now `ARTIFACT_BUILDER_REMOTE_HOST_URL`); until then the mount answers 503 `builder_unavailable` to a bound host.
 - [x] `resolved`: live-host 8ce4700e4 exports `./live-host` (`index.ts`, fa651158b); W7 imports only that subpath.
 
 ## Orchestration Mode (AI-selected)
@@ -69,12 +70,12 @@
   - [x] Mount under `/api/v1/artifacts/builder` behind `createRequireServiceAuth`; ui nginx location without access log.
   - [x] Pod spec keeps main's resources and env (pod-4live owns them); namespace, placement and no `activeDeadlineSeconds` only.
   - [x] Builder-side HTTP `RemoteHost` on the live-host `HOST_BUILD_PATHS` (signed job request, handoff with candidate bytes).
-- [ ] **Lot 5 — s-archi 16:00 §1 (GB1 qualification file, remote host, keys)**
+- [x] **Lot 5 — s-archi 16:00 §1 (GB1 qualification file, remote host, keys)**
   - [x] Merge W5 @ 41078993c for the GB1 port `validateArtifactBuild` (BRW7-EX3).
   - [x] Read `artifact-build/gb1-qualification.json` at the pinned commit: 64 KiB, closed keys, empty execution allowlist, exact script-row cover, lock digest; missing file refused when the lock has scripts.
   - [x] IntegrityEvidence digest = SHA-256 of the qualification file; cache inventory from the W5 coverage (local copy deleted).
   - [x] Remote host base URL from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (preprod `https://preprod.immo.sent-tech.ca/api/v1/artifacts`).
-  - [ ] Key env names and rotation documented with the remote host and the qualification file.
+  - [x] Key env names and rotation documented with the remote host and the qualification file.
 - [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
   - [x] Push the wagon; report .tmp/rv/alive-W3-W7.md; `make down-volumes ENV=test-alive-w7`.
