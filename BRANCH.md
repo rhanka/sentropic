@@ -44,6 +44,6 @@
 - [x] Lot 0: plan r3.9, W2 contract, A-LIVE Amendment 1, s-archi review `w4-alive-w4-6b822a6f` and the W3 frame protocol read; untracked HMAC draft (`bootstrap.ts`, secret in the pod, port 5174) discarded.
 - [x] Lot 1: recipes (offline install, loopback Vite, pre-bundle driver, host-owned NODE_OPTIONS), tests first.
 - [x] Lot 2: frame verification, replay window, pod-bound fence and liveness lease, tests first.
-- [ ] Lot 3: W3 transfers (`put` + commit) for stage, overlay, dependencies and install, tests first.
+- [x] Lot 3: W3 transfers (`put` + commit) for stage, overlay, dependencies and install, tests first.
 - [ ] Lot 4: processes (`dev` with pre-bundle, `build`, `snapshot`, process-group termination), tests first.
 - [ ] Lot 5: :5173 listener and pod entry (`createBootstrapSource`), tests first; scoped tests and typecheck green; branch pushed.
