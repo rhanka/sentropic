@@ -21,8 +21,9 @@ export interface HostRecheckView {
    * separately recorded initial exception. */
   policy: { ownerAuthorized: boolean; automaticAuthorized: boolean; automaticEligible: boolean };
 }
-export type RecheckRefusal = 'scope_mismatch' | 'publication_paused' | 'generation_mismatch' | 'job_not_pending'
-  | 'attempt_fenced' | 'policy_refused' | 'head_unreachable' | 'release_conflict' | 'image_not_allowed';
+export const RECHECK_REFUSALS = ['scope_mismatch', 'publication_paused', 'generation_mismatch', 'job_not_pending',
+  'attempt_fenced', 'policy_refused', 'head_unreachable', 'release_conflict', 'image_not_allowed'] as const;
+export type RecheckRefusal = typeof RECHECK_REFUSALS[number];
 /** The host job the builder may build (A-LIVE §8.4 server-resolved commit), from `resolvePendingJob`. */
 export interface HostJob { jobId: string; generation: number; headSha: string; expectedReleaseId: string | null }
 
