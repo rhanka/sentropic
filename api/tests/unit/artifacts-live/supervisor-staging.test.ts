@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILD_RECIPE, artifactEnvironment } from '../../../src/services/artifacts/live/recipes';
+import { BUILD_RECIPE, buildEnvironment, liveEnvironment } from '../../../src/services/artifacts/live/recipes';
 import { candidateDigest } from '@sentropic/artifacts/live-host';
 import { DIST, fakePod, runtime, text } from './supervisor-pod';
 
@@ -49,7 +49,7 @@ describe('supervisor staging and projection', () => {
 describe('supervisor build output', () => {
   it('should terminate the build tree, read the output itself and seal the candidate digest it computed', async () => {
     const pod = fakePod();
-    const result = await pod.supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment());
+    const result = await pod.supervisor.build(runtime, attempt, BUILD_RECIPE, buildEnvironment());
     expect(pod.ops()).toEqual(['build', 'terminate', 'snapshot']);
     expect(pod.bodies[0].args).toEqual({ recipe: 'build', attemptId: 'att-1', headSha: 'h', treeSha: 't' });
     expect(result).toEqual({ candidateDigest: candidateDigest(DIST) });
@@ -57,10 +57,12 @@ describe('supervisor build output', () => {
       files: [expect.objectContaining({ path: 'index.html' }), expect.objectContaining({ path: 'assets/app.js' })] }));
   });
   it('should refuse a failed build, a foreign recipe or an output without its entry, sealing nothing', async () => {
-    const env = artifactEnvironment();
+    const env = buildEnvironment();
     const failed = fakePod({ build: () => ({ exitCode: 1 }) });
     await expect(failed.supervisor.build(runtime, attempt, BUILD_RECIPE, env)).rejects.toMatchObject(unavailable);
     await expect(failed.supervisor.build(runtime, attempt, { ...BUILD_RECIPE, args: ['run', 'x'] } as never, env)).rejects.toMatchObject(unavailable);
+    await expect(failed.supervisor.build(runtime, attempt, BUILD_RECIPE, liveEnvironment() as never)).rejects.toMatchObject(unavailable);
+    expect(failed.ops()).toEqual(['build']);
     const noEntry = fakePod({}, { dist: [text('app.js', 'x')] });
     await expect(noEntry.supervisor.build(runtime, attempt, BUILD_RECIPE, env)).rejects.toMatchObject(unavailable);
     expect(failed.sources.candidate).not.toHaveBeenCalled(); expect(noEntry.sources.candidate).not.toHaveBeenCalled();
@@ -68,7 +70,7 @@ describe('supervisor build output', () => {
   it('should refuse an output the shared candidate digest rejects as output_invalid, sealing nothing', async () => {
     const control = fakePod({}, { dist: [text('index.html', 'x'), text('assets/a\u0001.js', 'x')] });
     const failure = { code: 'builder_unavailable', reason: 'output_invalid' };
-    await expect(control.supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment())).rejects.toMatchObject(failure);
+    await expect(control.supervisor.build(runtime, attempt, BUILD_RECIPE, buildEnvironment())).rejects.toMatchObject(failure);
     await expect(control.supervisor.verify(runtime, { id: 'a', candidateDigest: 'e'.repeat(64) } as never, limits)).rejects.toMatchObject(failure);
     expect(control.sources.candidate).not.toHaveBeenCalled();
   });
