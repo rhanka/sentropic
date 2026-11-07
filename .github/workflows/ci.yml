@@ -999,14 +999,21 @@ jobs:
     if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
+    # BR89-EX1: nine lanes in seven legs, longest first (sizes from run 42408187255, each leg <= ~5 min);
+    # the memory MCP qualification has no matrix input, so exactly one leg (memory: memory-mcp) runs it.
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 7
       matrix:
         include:
-          - lane: source installed major
-          - lane: postgres comments crash
-          - lane: lazy stateful install
+          - lane: source
+          - lane: lazy
+          - lane: stateful crash
+          - lane: comments installed
+          - lane: install
+            memory: memory-mcp
+          - lane: postgres
+          - lane: major
     env:
       CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
     steps:
@@ -1031,6 +1038,7 @@ jobs:
           done
           exit "$result"
       - name: Qualify candidate memory MCP tools on PostgreSQL, stdio and HTTP
+        if: matrix.memory == 'memory-mcp'
         # Fresh published-peer install: this lane runs in the digest-pinned Compose
         # qualification image, whose node/npm tuple can never match the floating-tag
         # seal produced by ci-package-candidate; it must not consume prepared bytes.
