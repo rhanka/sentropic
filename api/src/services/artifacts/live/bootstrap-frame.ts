@@ -7,7 +7,8 @@
  * - Replay: an id seen inside its delivery window is refused; after the window the TTL refuses it.
  * - Fence: bound to this pod's name and UID, monotonic over (generation, leaseEpoch, routeEpoch), equal
  *   epochs only for the same session.
- * - Liveness lease (A-LIVE Amendment 1 §3): without a valid fenced frame for 30 minutes the bootstrap kills
+ * - Liveness lease (A-LIVE Amendment 1 §3): any valid fenced frame renews it (op `renew` is the side-effect-free
+ *   one the controller sends at least every 60 s); without one for 30 minutes the bootstrap kills
  *   the whole process tree and exits; with restartPolicy Never the pod ends and the controller applies §5.5.
  */
 export const LIVENESS_LEASE_MS = 30 * 60_000;
@@ -18,8 +19,8 @@ import { verify as frameVerify } from 'node:crypto';
 
 const FRAME = { version: 1, signature: 64, maxBytes: 2097152, ttlMs: 30000, skewMs: 5000, seen: 65536,
   leaseMs: ${LIVENESS_LEASE_MS}, leaseExit: ${LEASE_EXIT_CODE} };
-const FRAME_OPS = ['phase', 'terminate', 'clear', 'put', 'stage', 'dependencies', 'install', 'overlay', 'hostFile', 'prebundle', 'dev',
-  'build', 'snapshot'];
+const FRAME_OPS = ['phase', 'terminate', 'renew', 'clear', 'put', 'stage', 'dependencies', 'install', 'overlay', 'hostFile',
+  'prebundle', 'dev', 'build', 'snapshot'];
 const FRAME_KEYS = ['v', 'id', 'op', 'fence', 'issuedAt', 'expiresAt', 'args'];
 const FENCE_KEYS = ['generation', 'sessionId', 'leaseEpoch', 'routeEpoch', 'podName', 'podUid'];
 const frameObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -58,6 +59,10 @@ function frameFence(state, fence, identity) {
   }
   state.fence = { ...fence };
 }
+AGENT_SECTIONS.push(function leaseOps(ctx) {
+  /** Liveness renewal (Amendment 1 §3): no side effect and never queued; the receiver renewed the lease on the fenced frame. */
+  ctx.define('renew', [], async () => ({ renewed: true }), true);
+});
 function frameReceiver(ctx, dispatch) {
   const { options, state } = ctx;
   const seen = new Map();
