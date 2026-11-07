@@ -44,7 +44,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: proof against npm 11.16.0 sources and replay of 299 main first-parent pairs in .tmp/rv/wagon-ci10-deps-key.md.
 - [x] Lot 1: scripts/ci/api-tool-deps-key.mjs (exact deps-stage inputs, workspace version dropped behind an edge-validity signature, inert manifest fields dropped, fail-closed on unevaluated specs).
-- [ ] Lot 2: normalization tests (workspace bump stable; external version/integrity/resolved/edge and workspace add/remove move the key; real-repo release).
+- [x] Lot 2: normalization tests (workspace bump stable; external version/integrity/resolved/edge and workspace add/remove move the key; real-repo release).
 - [ ] Lot 3: semver oracle and Dockerfile input coverage tests.
 - [ ] Lot 4: Makefile wiring (BR91-EX1); scoped checks green.
 - [ ] Lot N: train CI green on the exact head; BRANCH.md removed at merge.
