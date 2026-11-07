@@ -2,6 +2,9 @@
 
 ## 0.2.18
 
+- Export the canonical MIME helpers through `server/mime` and the generic
+  reader-consent service, typed refusal, navigation and neutral screen through
+  `server/consent-grant`; the app retains its existing grant behavior.
 - Add scope-bound Git bindings, a closed host repository registry, durable
   Postgres lifecycle and replay records, and immutable release-index readers.
   Git metadata is projected only with the caller's current repository code right.
