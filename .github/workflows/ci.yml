@@ -2192,10 +2192,10 @@ jobs:
           if-no-files-found: error
       - name: Confirm the browser test stack shutdown
         if: always()
-        # Bounded wait: a failed shutdown fails the job; a slow one is left to the
-        # ephemeral runner teardown instead of blocking the verdict.
+        # Bounded wait (60s, after the artifact upload): a nonzero shutdown fails the
+        # job; only a shutdown still running after 60s is left to runner teardown.
         run: |
-          for _ in $(seq 1 10); do
+          for _ in $(seq 1 60); do
             [ -f .tmp/e2e-down.status ] && break
             sleep 1
           done
