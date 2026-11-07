@@ -20,6 +20,12 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/artifacts/**`
+  - `packages/harness/**` (BR0218-EX18)
+  - `docs/runbooks/registry-retention.md` (BR0218-EX18)
+  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` (BR0218-EX19)
+  - `api/src/services/artifacts/reader-consent.ts` (BR0218-EX20)
+  - `api/src/services/artifacts/reader-consent-screen.ts` (BR0218-EX20)
+  - `api/src/routes/namespaces/artifacts.ts` (BR0218-EX20)
   - `packages/cluster-mesh/src/forge/**`
   - `packages/cluster-mesh/src/index.ts`
   - `packages/cluster-mesh/tests/forge/**`
@@ -83,6 +89,11 @@
   - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
+
+- [x] BR0218-EX18: owner requests harness-profile-file and registry-retention wagons; admit their package/schema/tests and documentation paths, assign the harness patch on the train, retain all GHCR changes. Rollback reverts the two wagon merges; no registry operation or automation is activated.
+- [ ] BR0218-EX19 / TRAIN0218-GHCR: rebase onto #934 at e67164444, retain GHCR guard and main session authority, reproduce and correct run 42313674350 jobs 128231966807/128238726830 without changing the historical tool hash or removing any tool assertion. Regenerate release inputs once after final union; rollback ref backup/train0218-before-ghcr-20261107.
+- [ ] BR0218-EX20: owner requests public server/mime and generic server/consent-grant exports. Move the neutral screen, prescribed navigation and reader-consent service into the package, add the typed refusal helper and keep app bindings thin; preserve grant authority and exact HTTP/HTML behavior. Rollback reverts the extraction and exports.
+- [x] Harness wagon e3bbc1bbe: merge package profile/schema/CLI/tests and README; source receipt reports 133 distinct scoped cases, types and mechanical gates passing. Train qualification and version allocation follow.
 
 - [x] TRAIN0218-LIVE final evidence: Make refreshed the corrected union artifacts archive `e8ee37ac867a5c1ab16d9fc4a063d61c8fbe5cacdd438029665ccbd0fc34c750` and selected integrity; CM archive remains `8e865731671deff43949bebd0dbcb5845eb64690315806f7a1b5f465b1a98ea1` with candidate no-integrity policy retained. Root/API metadata regeneration is unchanged; APP-P1 retains its fixed four tools and digest `d55df3ada3722b79274e52c650a12d6baccd2640c61e4d712fe1380bd03c4c86`. Final API/consumer checks pass 35/35 and 25 cases plus three existing installed-only skips.
 - [x] TRAIN0218-LIVE P1: Make regenerated and retained `d8f3f9eaa0ad2354f4b778f9a608dabf3e6aae67663a8ea5fce77028e547b385` at the merged live union against unchanged committed lock `30aa43319587148e6e096fb3350b7ae95d06f83f0b0e3fe8d6fa93d28a2227c3`; verify passes 30 files/54 edges. Both packed L5 archives and all historical snapshots remain unchanged. The later bounded live fixes do not affect either L5 package or the root lock. Immutable generated snapshot uses EX4's size exception.
