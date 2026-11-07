@@ -57,6 +57,12 @@
   - [x] `createBuilderService`: controller, SG4b publication, Postgres job ledger and host build API; nothing started.
   - [x] Postgres job ledger in the existing host KV (`createPostgresBuildJobStore`), sharing the live store row lock.
   - [x] Live recipe path stays `ui/vite.config.ts`: the only contract value (immo R1/R2); no new config invented.
+- [ ] **Lot 4 — s-archi builder mount (decisions 07/11 15:00-15:25)**
+  - [ ] Run staleness = heavy-gate wait plus the four bounded build-only phases (20 min), not a pod lifetime.
+  - [ ] Host identity from the `artifacts:builder` service client and `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` (default deny).
+  - [ ] Builder handoff signing key and host receipt key ring from fixed env names, with a documented rotation cycle.
+  - [ ] Mount under `/api/v1/artifacts/builder` behind `createRequireServiceAuth`; ui nginx location without access log.
+  - [ ] Pod spec keeps main's resources and env (pod-4live owns them); namespace, placement and no `activeDeadlineSeconds` only.
 - [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
   - [x] Push the wagon; report .tmp/rv/alive-W3-W7.md; `make down-volumes ENV=test-alive-w7`.
