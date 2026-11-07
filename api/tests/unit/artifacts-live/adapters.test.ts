@@ -4,7 +4,7 @@ import { fixture, key } from './fixture';
 import { createLiveWorker, type QualifiedSupervisor } from '../../../src/services/artifacts/live/worker';
 import { withinPhase } from '../../../src/services/artifacts/live/deadline';
 import { fetchLockedTarball } from '../../../src/services/artifacts/live/npm-relay';
-import { BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, liveEnvironment, NPM_RELAY, PREBUNDLE_RECIPE }
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, NPM_RELAY, PREBUNDLE_RECIPE }
   from '../../../src/services/artifacts/live/recipes';
 import { createPostgresCacheStorage } from '../../../src/services/artifacts/live/cache-storage';
 
@@ -22,8 +22,8 @@ describe('trusted live adapters', () => {
     expect(supervisor.phase).toHaveBeenCalledWith(runtime, 'offline');
     // The bootstrap writes its frozen pre-bundle script: the only host file stays the live Vite config.
     expect(calls.slice(-3)).toEqual(['hostFile', 'prebundle', 'dev']);
-    expect(supervisor.prebundle).toHaveBeenCalledWith(runtime, PREBUNDLE_RECIPE, liveEnvironment());
-    expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, liveEnvironment());
+    expect(supervisor.prebundle).toHaveBeenCalledWith(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
+    expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, artifactEnvironment());
     expect(supervisor.hostFile).toHaveBeenCalledOnce();
     expect(supervisor.hostFile).toHaveBeenCalledWith(runtime, '/tmp/artifact-vite.config.mjs', expect.stringContaining('clientPort:443'));
     await worker.build(runtime, { id: 'attempt' } as never);
