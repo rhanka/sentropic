@@ -51,7 +51,8 @@
 - [ ] **Lot 2 — Host build API and builder service**
   - [x] Authenticated host identity; job by id; asynchronous build with job-bound status (`createHostBuildApi`, `createBuildJobs`).
   - [x] Scheduler sweep (reconcile, reap, recover) stays exposed by the controller, never started here.
-  - [ ] Host-selected live recipe path instead of the hard-coded `ui/` Vite config.
+  - [x] Postgres job ledger in the existing host KV (`createPostgresBuildJobStore`), sharing the live store row lock.
+  - [x] Live recipe path stays `ui/vite.config.ts`: the only contract value (immo R1/R2); no new config invented.
 - [ ] **Lot 3 — Gate**
   - [ ] Scoped checks: `make -f .tmp/packets/alive-w7-ops.mk w7-check` (tsc + vitest on api/tests/unit/artifacts-live).
   - [ ] Push the wagon; report .tmp/rv/alive-W3-W7.md.
