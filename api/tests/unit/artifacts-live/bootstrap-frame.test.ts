@@ -83,7 +83,7 @@ describe('pod bootstrap: liveness lease (A-LIVE Amendment 1 §3)', () => {
     const pod = await harness({ processes: { list: async () => alive, kill: () => { alive = []; }, killGroup: () => undefined } });
     const minutes = (n: number) => { pod.clock.now += n * 60_000; };
     minutes(29); expect(await pod.agent.checkLease()).toBe(false);
-    await pod.send('phase', { phase: 'stopped' });
+    expect(await pod.send('renew')).toEqual({ renewed: true });
     minutes(29); expect(await pod.agent.checkLease()).toBe(false);
     const other = generateKeyPairSync('ed25519');
     await pod.deliver(seal(other.privateKey, pod.body('phase', { phase: 'stopped' })));
