@@ -13,6 +13,15 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
         [namespace, rowKey(key)]);
       return rows[0] ? JSON.parse(rows[0].value) as LiveState : undefined;
     },
+    async active() {
+      const { rows } = await pool.query<{ key: string; value: string }>(
+        'SELECT key, value FROM control.artifact_host_kv WHERE storage_scope_id=$1', [namespace]);
+      return rows.flatMap(row => {
+        const { runtime } = JSON.parse(row.value) as LiveState;
+        const [storageScopeId, artifactId] = JSON.parse(row.key) as [string, string];
+        return runtime.phase === 'DORMANT' ? [] : [{ key: { storageScopeId, artifactId }, ownerId: runtime.ownerId }];
+      });
+    },
     async transaction(key, work) {
       const client = await pool.connect();
       try {

@@ -6,6 +6,8 @@ import type { CacheIdentity, CacheReceipt } from './cache';
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
+  /** Every runtime that is not DORMANT (this environment): the scheduler set and the admission slots after a restart. */
+  active(): Promise<Array<{ key: LiveKey; ownerId: string }>>;
   /** Serializes one binding across API replicas. Exceptions roll back state AND release writes. */
   transaction<T>(key: LiveKey, work: (unit: {
     state: LiveState | undefined; save(state: LiveState): void; client?: PoolClient;
@@ -69,6 +71,9 @@ export interface LivePorts {
     clean(runtime: LiveRuntime): Promise<void>;
     build(runtime: LiveRuntime, attempt: LiveAttempt): Promise<{ candidateDigest: string }>;
     verify(runtime: LiveRuntime, attempt: LiveAttempt): Promise<void>;
+    /** Liveness lease (A-LIVE Amendment 1 §3): one authenticated, fenced frame with no side effect. Without one for
+     * 30 minutes the bootstrap kills the process tree and exits. */
+    renew(runtime: LiveRuntime): Promise<void>;
   };
   routes: { revoke(key: LiveKey, runtime: LiveRuntime): Promise<void>; ready(key: LiveKey, runtime: LiveRuntime): Promise<void> };
   publication: {
