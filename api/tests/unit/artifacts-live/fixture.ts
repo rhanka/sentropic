@@ -1,19 +1,30 @@
 import { vi } from 'vitest';
 import type { DraftSnapshot, LiveBinding, LivePorts, LiveStore } from '../../../src/services/artifacts/live/ports';
-import type { LiveState } from '../../../src/services/artifacts/live/records';
+import type { LiveKey, LiveState } from '../../../src/services/artifacts/live/records';
 import { createLiveController } from '../../../src/services/artifacts/live/controller';
 import { createBuilderPods, type KubernetesCore } from '../../../src/services/artifacts/live/pods';
 import type { CacheReceipt } from '../../../src/services/artifacts/live/cache';
+import { createFairAdmission } from '../../../src/services/artifacts/live/admission';
+import { createHeavyGate } from '../../../src/services/artifacts/live/heavy';
 
 export const key = { storageScopeId: 'scope-a', artifactId: 'artifact-a' };
-export function fixture() {
-  let state: LiveState | undefined;
+export const owner = { principalId: 'owner' };
+const idOf = (k: LiveKey) => `${k.storageScopeId}/${k.artifactId}`;
+export function fixture(options: { capacity?: number } = {}) {
+  const states = new Map<string, LiveState>(); const drafts = new Map<string, DraftSnapshot>();
+  const owners = new Map<string, string>();
   let tail = Promise.resolve(); let sequence = 0; let now = 0;
   const events: string[] = []; const published: string[] = [];
   const binding: LiveBinding = { generation: 1, ownerId: 'owner', headSha: 'B', healthy: true,
     autoPublish: true, automaticAuthorized: true, releaseId: 'release-B', releaseCommit: 'B', initialUnpublishedBranchEligible: false };
-  let draft: DraftSnapshot = { generation: 1, revision: 1, baseHeadSha: 'B', treeSha: 'tree-B-dirty', dirty: true };
-  const objects = new Map<string, { metadata: { name: string; uid: string; labels: Record<string, string> }; spec: unknown }>();
+  const invitation = { epoch: 0, expiresAt: null as number | null };
+  const admission = createFairAdmission({ capacity: options.capacity ?? 1, waiterTtlMs: 60_000, now: () => now });
+  const draftOf = (k: LiveKey) => {
+    if (!drafts.has(idOf(k))) drafts.set(idOf(k), { generation: 1, revision: 'r1', baseHeadSha: 'B', treeSha: 'tree-B-dirty', dirty: true });
+    return drafts.get(idOf(k))!;
+  };
+  const objects = new Map<string, { metadata: { name: string; uid: string; labels: Record<string, string> }; spec: unknown;
+    status?: { phase?: string } }>();
   const core: KubernetesCore = {
     get: vi.fn(async (kind, name) => objects.get(kind + name) as never),
     create: vi.fn(async (kind, value) => {
@@ -28,25 +39,32 @@ export function fixture() {
     waitDeleted: vi.fn(async (kind, name) => { if (objects.has(kind + name)) throw new Error('still running'); }),
   };
   const store: LiveStore = {
-    read: async () => structuredClone(state),
-    async transaction(_key, work) {
+    read: async k => structuredClone(states.get(idOf(k))),
+    async transaction(k, work) {
       const previous = tail; let unlock!: () => void;
       tail = new Promise<void>(resolve => { unlock = resolve; }); await previous;
-      const unit = { state: structuredClone(state), save(next: LiveState) { unit.state = next; } };
+      const unit = { state: structuredClone(states.get(idOf(k))), save(next: LiveState) { unit.state = next; } };
       const before = { binding: structuredClone(binding), published: [...published] };
-      try { const result = await work(unit); state = structuredClone(unit.state); return structuredClone(result); }
-      catch (error) { Object.assign(binding, before.binding); published.splice(0, published.length, ...before.published); throw error; }
+      try {
+        const result = await work(unit);
+        if (unit.state) states.set(idOf(k), structuredClone(unit.state)); return structuredClone(result);
+      } catch (error) { Object.assign(binding, before.binding); published.splice(0, published.length, ...before.published); throw error; }
       finally { unlock(); }
     },
   };
   const ports: LivePorts = {
-    store, now: () => now, id: () => `id-${++sequence}`, binding: vi.fn(async () => ({ ...binding })),
+    store, now: () => now, id: () => `id-${++sequence}`,
+    binding: vi.fn(async k => ({ ...binding, ownerId: owners.get(idOf(k)) ?? binding.ownerId })),
     forge: { head: vi.fn(async () => binding.headSha), fastForward: vi.fn(async (_key, before, after) => before < after),
       reachable: vi.fn(async () => true),
       snapshot: vi.fn(async (_key, headSha) => ({ headSha, treeSha: `tree-${headSha}`, lockfile: new Uint8Array(),
         cacheIdentity: {} as never, stagingRef: `clean-${headSha}` })) },
-    drafts: { current: vi.fn(async () => ({ ...draft })), checkpoint: vi.fn(async () => { events.push('checkpoint'); }),
-      advanceClean: vi.fn(async (_key, _expected, headSha) => (draft = { ...draft, baseHeadSha: headSha, treeSha: `tree-${headSha}` })) },
+    drafts: { current: vi.fn(async k => ({ ...draftOf(k) })), checkpoint: vi.fn(async () => { events.push('checkpoint'); }),
+      advanceClean: vi.fn(async (k, _expected, headSha) => {
+        const next = { ...draftOf(k), baseHeadSha: headSha, treeSha: `tree-${headSha}` }; drafts.set(idOf(k), next); return next;
+      }) },
+    admission, heavy: createHeavyGate({ maxWaitMs: 60_000 }),
+    invitations: { current: vi.fn(async () => ({ ...invitation })) },
     pods: createBuilderPods(core, 'setInterval(() => {}, 1000)'),
     cache: { acquire: vi.fn(async () => ({ key: 'cache' } as CacheReceipt)) },
     worker: {
@@ -65,6 +83,7 @@ export function fixture() {
       return { releaseId: binding.releaseId };
     }) },
   };
-  return { ports, controller: createLiveController(ports), binding, core, objects, events, published,
-    advance(ms: number) { now += ms; }, draft: () => draft, state: () => store.read(key) };
+  return { ports, controller: createLiveController(ports), binding, core, objects, events, published, owners,
+    invitation, admission, advance(ms: number) { now += ms; }, draft: (k: LiveKey = key) => draftOf(k),
+    state: (k: LiveKey = key) => store.read(k) };
 }
