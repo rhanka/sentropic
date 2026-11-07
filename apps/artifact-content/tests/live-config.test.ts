@@ -2,7 +2,7 @@ import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { httpRelay, liveFromEnv, RELAY_HEADER, viteAdmittedPath, withFanOut } from '../src/live-config';
-import { ASSERTION_HEADER, CONTROL_HEADER, FENCE_HEADER, signLiveAssertion, signLiveFence } from '../src/live-format';
+import { ASSERTION_HEADER, CONTROL_HEADER, FENCE_HEADER, signLiveAssertion, signLiveFence } from '@sentropic/artifacts/live-host';
 import { LIVE_CONTROL_PATH, LIVE_FENCE_PATH, type LiveRoute } from '../src/live';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 
@@ -20,7 +20,7 @@ const base = 'preprod.sentropic.example';
 const now = () => Math.floor(Date.now() / 1000);
 function assertion() {
   const claims = { v: 1 as const, kid: 'immo-1', host: `${artifactId}.${pagesDomain}`, artifactId, storageScopeId: 's',
-    sessionId: 'session', generation: 1, routeEpoch: 1, podUid: 'uid', podName: '', sourceRevision: 1, principalId: 'owner',
+    sessionId: 'session', generation: 1, routeEpoch: 1, podUid: 'uid', podName: '', sourceRevision: 'rev-1', principalId: 'owner',
     role: 'binding_owner' as const, invitationId: '', invitationEpoch: 0, invitationExp: 0, iat: now(), exp: now() + 60 };
   claims.podName = podName(claims);
   return signLiveAssertion(claims, hostKey);
