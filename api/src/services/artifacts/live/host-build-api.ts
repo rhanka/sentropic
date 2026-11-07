@@ -8,26 +8,29 @@ import type { BuildJobRecord, BuildJobs } from './build-jobs';
  * SHA, and the builder resolves it against the host's pending job (`publication.job`). Building is asynchronous. */
 export interface HostIdentity { hostId: string; storageScopeId: string }
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
-type Env = { Variables: { identity: HostIdentity } };
+/** Context of the host build API: the identity resolved by `authenticate`. */
+export type HostBuildEnv = { Variables: { identity: HostIdentity } };
 const view = (record: BuildJobRecord) => ({ jobId: record.jobId, state: record.state,
   ...(record.code ? { code: record.code } : {}), ...(record.reason ? { reason: record.reason } : {}),
   ...(record.receipt ? { releaseId: record.receipt.releaseId } : {}) });
 
 export function createHostBuildApi(options: {
-  authenticate(request: Request): Promise<HostIdentity | null>;
+  /** Host identity of the verified service client (`hostAuthenticator`); null refuses before the body is read. */
+  authenticate(c: Context): HostIdentity | null;
   jobs: BuildJobs;
   /** Runs one explicit clean build to publication (controller.buildOnly). */
   build(key: LiveKey, jobId: string): Promise<void>;
   /** Background executor owned by the composition; nothing starts on import. */
   schedule(work: () => Promise<void>): void;
 }) {
-  const app = new Hono<Env>();
+  const app = new Hono<HostBuildEnv>();
   app.use('*', async (c, next) => {
-    const identity = await options.authenticate(c.req.raw).catch(() => null);
-    if (!identity || !ID.test(identity.storageScopeId)) return c.json({ error: 'unauthenticated' }, 401);
+    let identity: HostIdentity | null = null;
+    try { identity = options.authenticate(c); } catch { /* host_not_bound below */ }
+    if (!identity || !ID.test(identity.storageScopeId)) return c.json({ error: 'host_not_bound' }, 403);
     c.set('identity', identity); await next();
   });
-  const key = (c: Context<Env>, artifactId: string): LiveKey => ({ storageScopeId: c.get('identity').storageScopeId, artifactId });
+  const key = (c: Context<HostBuildEnv>, artifactId: string): LiveKey => ({ storageScopeId: c.get('identity').storageScopeId, artifactId });
   async function run(k: LiveKey, jobId: string, token: string) {
     try {
       await options.build(k, jobId);
