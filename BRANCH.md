@@ -20,6 +20,7 @@
   - `ui/src/routes/matrix/+page.svelte`
   - `ui/tests/utils/matrix-reload.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
