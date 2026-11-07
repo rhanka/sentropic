@@ -1,4 +1,4 @@
-import type { Handoff, HandoffReceipt } from './handoff';
+import type { Handoff, HandoffReceipt } from '@sentropic/artifacts/live-host';
 import type { LiveKey } from './records';
 import type { HandoffOutcomes } from './handoff-publication';
 
