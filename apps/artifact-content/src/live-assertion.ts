@@ -2,7 +2,7 @@ import { parseContentHost } from '@sentropic/artifacts/content/routing';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 import {
   ASSERTION_HEADER, CONTROL_HEADER, FENCE_HEADER, MAX_ASSERTION_SECONDS, verifyLiveAssertion, verifyLiveControl, verifyLiveFence,
-} from './live-format';
+} from '@sentropic/artifacts/live-host';
 import { LIVE_CONTROL_PATH, LIVE_FENCE_PATH, type LiveProxyPorts, type LiveRoute } from './live';
 
 /**

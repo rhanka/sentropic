@@ -30,7 +30,7 @@ describe('same-origin HMR transport', () => {
     });
     const port = await listen(upstream);
     const route: LiveRoute = { storageScopeId: 'scope', artifactId, sessionId: 'session',
-      expiresAt: Date.now() + 30_000, podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, sourceRevision: 1 };
+      expiresAt: Date.now() + 30_000, podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, sourceRevision: 'rev-1' };
     route.podName = podName(route);
     const live = createLiveProxy({ authorize: async () => route, current: async () => true,
       admittedPath: async () => true, watch: (_route, close) => { revoke = close; return vi.fn(); } });
