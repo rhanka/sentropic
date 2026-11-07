@@ -49,9 +49,9 @@
 
 ## Plan / Todo (lot-based)
 - [ ] Lot 1: red tests (a)-(h).
-  - [ ] `api/tests/api/mcp-workspaces-list-dispatch.test.ts` (a) discovery, (b) arguments, (c) scope and admission.
+  - [x] `api/tests/api/mcp-workspaces-list-dispatch.test.ts` (a) discovery, (b) arguments, (c) scope and admission.
   - [ ] `api/tests/api/mcp-workspaces-list-directory.test.ts` (d) filter, (e) anti-drift, (f) revoked credential, (g) shape and order.
   - [ ] `api/tests/api/mcp-resource-server.test.ts` (h) REST stays 401 for an OAuth bearer.
-  - [ ] `api/tests/api/registry-dispatch-terminal.test.ts`, `api/tests/api/app-artifacts-transport.test.ts`: tools/list carries workspaces_list.
+  - [x] `api/tests/api/registry-dispatch-terminal.test.ts`, `api/tests/api/app-artifacts-transport.test.ts`: tools/list carries workspaces_list.
 - [ ] Lot 2: implementation (shared authority source, workspace directory, dispatcher port, wiring).
 - [ ] Lot gate: `make typecheck-api`, `make lint-api`, scoped `make test-api-endpoints SCOPE=...` in the train 1b CI.
