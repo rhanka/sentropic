@@ -4,7 +4,8 @@ import { fixture, key } from './fixture';
 import { createLiveWorker, type QualifiedSupervisor } from '../../../src/services/artifacts/live/worker';
 import { withinPhase } from '../../../src/services/artifacts/live/deadline';
 import { fetchLockedTarball } from '../../../src/services/artifacts/live/npm-relay';
-import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, NPM_RELAY, PREBUNDLE_RECIPE }
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, liveViteConfig, NODE_HEAP_OPTIONS, NPM_RELAY,
+  PREBUNDLE_RECIPE }
   from '../../../src/services/artifacts/live/recipes';
 import { createPostgresCacheStorage } from '../../../src/services/artifacts/live/cache-storage';
 
@@ -29,6 +30,27 @@ describe('trusted live adapters', () => {
     await worker.build(runtime, { id: 'attempt' } as never);
     expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, buildEnvironment());
     expect(supervisor.terminate).toHaveBeenCalledWith(runtime);
+  });
+  it('should pre-bundle in the worker pod with the host config and env before the dev server starts', async () => {
+    const f = fixture(); const runtime = await f.controller.start(key); const calls: string[] = [];
+    const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'verify']
+      .map(name => [name, vi.fn(async () => { calls.push(name); })])) as unknown as QualifiedSupervisor;
+    const previous = process.env.NODE_OPTIONS; process.env.NODE_OPTIONS = '--max-old-space-size=8192';
+    try { await createLiveWorker(supervisor).live(runtime); }
+    finally { if (previous === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = previous; }
+    expect(calls).toEqual(['hostFile', 'hostFile', 'prebundle', 'dev']); expect(supervisor.dependencies).not.toHaveBeenCalled();
+    expect(supervisor.hostFile).toHaveBeenNthCalledWith(2, runtime, PREBUNDLE_RECIPE.args[0], LIVE_PREBUNDLE_SCRIPT);
+    expect(supervisor.prebundle).toHaveBeenCalledWith(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
+    expect(PREBUNDLE_RECIPE.args).toEqual(['/tmp/artifact-vite-prebundle.mjs']);
+    // Same host config and emptyDir cacheDir as the dev server; never the read-only shared dependency mount.
+    expect(LIVE_PREBUNDLE_SCRIPT).toContain("configFile:'/tmp/artifact-vite.config.mjs'");
+    expect(LIVE_PREBUNDLE_SCRIPT).toContain("existsSync('/tmp/vite-cache/deps/_metadata.json')");
+    expect(LIVE_PREBUNDLE_SCRIPT).not.toContain('/dependencies');
+    expect(liveViteConfig(runtime.sessionId, runtime.podName)).toContain("cacheDir:'/tmp/vite-cache'");
+    for (const env of [artifactEnvironment(), vi.mocked(supervisor.dev).mock.calls[0][2]]) {
+      expect(env.NODE_OPTIONS).toBe(NODE_HEAP_OPTIONS);
+    }
+    expect(NODE_HEAP_OPTIONS).toBe('--max-old-space-size=384');
   });
   it('should stop waiting after the fixed phase deadline without asserting process termination', async () => {
     vi.useFakeTimers();
