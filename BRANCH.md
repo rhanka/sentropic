@@ -1,80 +1,71 @@
-# fix: preserve production images by GHCR digest before A4
+# Feature: preserve tested GHCR config identity across Docker image stores
 
 ## Objective
-- [x] Pin the entire production overlay by digest, preserving live api, auth-idp, ui and PostgreSQL releases before any production deployment; keep content and identity runners closed on the preserved API release.
+- [x] Fix API/UI tested-config publication and open READY PR #937; rebase after #936 and repair shard 1 qualification, then push and exit without CI polling.
 
 ## Scope / Guardrails
-- [x] Branch fix/prod-ghcr-pin from origin/main 17ad1c58b06a01b4f8e77472fa0421b9c507104a; worktree tmp/worktrees/prod-ghcr-pin.
-- [x] Rebase after train #931 onto origin/main b5d08ccc9; resolve the root BRANCH.md conflict with this lane's plan and preserve every implementation commit.
-- [x] ENV=test-prod-ghcr-pin; API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595; no service stack or local image build (disk 94%).
-- [x] Make-only; ENV last; no Python, CI polling, deployment, merge, skip marker or attribution trailer.
-- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in .security/ci-lockfile-policy.json.
-- [x] Track source artifact: conductor is the designated .track writer; import this owner request, lots, decisions and .tmp/rv/prod-ghcr-pin.md from this branch.
+- [x] Branch `fix/ghcr-publish-digest-r2`; worktree `tmp/worktrees/ghcr-publish-r2`; rebased onto origin/main 5b4492d5a (#936).
+- [x] Scope is the urgent publication hotfix; inherited train evidence remains available in base b5d08ccc9.
+- [x] Environment test-ghcr-publish-r2; API_PORT=9690 UI_PORT=5890 MAILDEV_UI_PORT=1790; fixture tests need no services.
+- [x] Make only; Docker commands through `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh`, one slot per command.
+- [x] One READY hotfix PR to main; ordinary CI, no gate exception and no merge by this lane.
+- [x] No skip markers, run reruns, Python, attribution trailers, secret output or live enrollment.
+- [x] Selective staging and make commit only; every new commit stays below 150 changed lines.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`, enforced by the `validate-publishable-manifests` CI job).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `deploy/k8s/overlays/prod/kustomization.yaml`
-  - `deploy/k8s/overlays/prod/idp-identity-sync/cronjob.yaml`
-  - `deploy/ci/artifact-content/bundle-checks.mjs`
-  - `deploy/ci/artifact-content/bundle.selftest.mjs`
-  - `deploy/ci/preprod-a4/bundle.selftest.mjs`
-  - `deploy/ci/idp-identity-sync/bundle-checks.mjs`
-  - `scripts/ci/compatibility-classifier.mjs`
-  - `scripts/ci/compatibility-classifier.test.mjs`
-  - `scripts/ci/consumer-boundaries.json`
-  - `scripts/ci/consumer-contracts.mjs`
-  - `scripts/ci/consumer-contracts.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `.github/workflows/ci.yml`
-  - `Makefile`
-  - `scripts/ci/image-config.mjs`
-  - `scripts/ci/resolve-ui-image.mjs`
-  - `scripts/ci/resolve-ui-image.test.mjs`
+  - `Makefile` (BRGHCR2-EX1)
+  - `scripts/ci/image-receipt.mjs`
+  - `scripts/ci/image-receipt.test.mjs`
   - `scripts/ci/publish-image.mjs`
   - `scripts/ci/publish-image.test.mjs`
+  - `scripts/ci/resolve-ui-image.mjs`
+  - `scripts/ci/resolve-ui-image.test.mjs`
+  - `e2e/fixtures/provider-server.mjs` (BRGHCR2-EX2)
+  - `e2e/fixtures/provider-server.test.mjs` (BRGHCR2-EX2)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `.github/workflows/**`
   - `.track/**`
-  - `packages/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `deploy/k8s/base/**` only if a remaining pull-secret reference is found.
+  - `api/drizzle/*.sql` (not required)
+- **Exception process**:
+  - [x] Declare reason, impact and rollback before conditional changes; never weaken a CI gate.
 
 ## Feedback Loop
-- [x] BR936-EX2 (owner-requested three-job repair): allow the Make consumer test recipe to install pinned semver as its sibling targets do; impact: test tooling only; rollback: revert this recipe change. UI resolver/publication changes normalize the actual local archive config identity without weakening registry equality. Run 42343554904: consumer job 128316911845 lacks semver; UI job 128316694146 compares a containerd manifest ID with a config digest; security join 128317325400 rejects the consequent skipped UI scan, while API/tool/E2E scans pass.
-- [x] BR936-EX1 (owner-requested CI repair): allow ci.yml global-filter coverage for BR-83 policy edits; impact: policy edits select full integration; rollback: remove these filter entries with the classifier repair.
-- [x] CI run 42339681690, job 128304466738: deployment manifests were classified runtime-security, requiring unselected application suites; add a manifest-only classification with mandatory manifest validation and unchanged installed tuples.
-- [x] ROOT-CAUSE: prod inherits GHCR main aliases; Always would resolve A4 code without the prod A4 checkpoint. API and auth-idp run different manifest digests and require separate deployment pins.
-- [x] Live read-only snapshot 2026-11-07T04:36:37.804Z: api-5c56d8ffb7-7m8nf, auth-idp-5cd7858b5-bwds5 and ui-777fc875b4-chtvx are ready; digest equality and anonymous GHCR verification are required before handoff.
-- [x] Anonymous GHCR manifest byte hashes equal the live Pod imageIDs: api sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7; auth-idp sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909; ui sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e. The three existing workloads retain byte-identical code; only the registry changes.
-- [x] Postgres pull-secret cleanup is already present in origin/main; deploy/k8s contains no imagePullSecrets or sentropic-registry references. Historical baseline evidence is retained.
-- [x] Review P1 whole-overlay scope supersedes the three-deployment limit: content, identity export and PostgreSQL must also be immutable; no production deployment is authorized by this lane.
-- [x] Live read-only 2026-11-07: content Deployment and the identity export-replica leg are absent in prod; the export CronJob is suspended and has only PostgreSQL/s5cmd legs. Pin the new closed API-image consumers to the serving API digest already preserved anonymously in GHCR; no missing image copy is required. PostgreSQL Pod imageID is sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b.
-- [x] Update the existing A4 manifest gate that explicitly expected prod main tags to assert the three preserved digests instead; keep prod checkpoint/runtime isolation assertions intact.
+
+- [x] BRGHCR2-EX1: owner authorizes urgent publication repair; change only CI API publication prerequisites and scoped tests in Makefile. Impact: the receipt-aware publisher checks collisions before push. Rollback restores these lines.
+- [x] GHCR2 diagnosis: run 42347515474 imageId equals the anonymous GHCR manifest digest (API 54fd317d..., UI 6fc8f633...), whereas config digests are API 2c42cf19... and UI 0152249a.... API tag was absent and pushed; both failures precede main promotion.
+- [x] BRGHCR2-EX2: owner requests shard 1 repair after #936. Run 42350274147/job 128337464315 passes all 23 specs with zero retries, then fails fixtureReceipt's traffic.failedRequests === 0 (received 1). Allow provider fixture cancellation accounting and its HTTP regression test, plus a Docker-only Make test target. Keep malformed requests blocking; rollback reverts these bounded changes.
+- [x] Post-rebase package gate: no packages/* source or manifest changes relative to origin/main; no version bump or root lock regeneration applies.
+- [x] Shard evidence: #936 and #937 consume the identical E2E image b940a405... (tag 43f553); API input tag remains 54ddaf, while separately cached builds have different manifest IDs. No application source or E2E image input changed. The historical receipt omits the rejected request's error; retain that limit and record future fixture failures explicitly.
+- [ ] Conductor imports this owner request, hotfix lot and final .tmp/rv/ghcr-publish-r2.md into Track as designated single writer; this lane updates the mergeable source only.
 
 ## AI Flaky tests
-- [x] No exceptions, retries, increased timeouts or weakened safety assertions.
+- [x] No flaky allowance, timeout or retry change.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch safety fix; independent code review and one READY PR.
+- [x] Single hotfix branch; two independent Astra xhigh code reviews under the current owner model rule.
 
 ## UAT Management (in orchestration context)
-- [ ] Require the owner's GO before the cluster operator deploys the merged checkout with `make k8s-deploy KUBECONFIG=<approved-prod-kubeconfig-file> ENV=prod-release`.
-- [x] This lane never runs that command; merging or publishing alone does not change running production pods.
+- [x] No product surface changes; local Docker fixture tests exercise publication and refusal behavior.
 
 ## Plan / Todo (lot-based)
-- [x] **Post-train rebase**: all six implementation patches retain identical range-diff identities; keep every production digest and the whole-render mutable-image regression. Main's prod resource graph includes no A-LIVE controller or artifact-builder workload; both CronJobs remain fully digest-pinned.
-- [x] **Post-rebase publication gate**: no package source, package manifest, lockfile or L5 artifact differs from origin/main; no package version bump or generated-file refresh applies to this deployment/tooling-only branch.
-- [x] **Post-rebase manifest validation**: make test-artifact-content-manifests API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-prod-ghcr-pin passes on b5d08ccc9; retain main's builder-egress checks and every production image assertion. Conductor imports this rebase request and .tmp/rv/prod-ghcr-pin.md into Track.
-- [x] **Post-rebase CI contracts**: 75 classifier, consumer, tuple and image tests pass; all 42 workflow-wiring tests pass through their YAML-equipped test-publishable-manifests target. Initial mixed-target invocation lacked YAML; corrected invocation requires no source change.
-- [x] **Consumer bootstrap**: the unchanged real Make recipe reproduced the missing-semver failure; pinned bootstrap now passes all 20 classifier, 25 consumer and 10 installed-tuple tests on test-prod-ghcr-pin without a new image build.
-- [x] **Three-job local repair**: pinned consumer bootstrap passes 55 classifier/consumer/tuple tests. The exact b44031 pull now matches config 0bb7ae394d9695659dac905d81ee70d5ba1e57ddcebe2744a80bdfcd3f12796d instead of comparing manifest ID 424c4e6f6926b12f9ca7313d9828990aa4df887455c99f5ec3e369e26421602a. Archive metadata normalizes config identity for resolver/publication; config collisions, bad exports and digest drift remain blocking. Keep the helper in global dispatch coverage. Security DAG fixtures retain all selected scans and reject unexpected skips; no CVE exception is needed for the observed join failure.
-- [ ] **Three-job handoff**: push the verified commits, retain logs/state in .tmp/rv/fix-936-931.md and exit without CI observation. Conductor imports this request and results into Track and owns final-head CI/merge; this lane does not append to .track.
-- [x] **CI repair**: classifier regression failed before the fix; 19 classification, 24 consumer, 10 tuple and 41 real-workflow tests PASS through Make. Exact run-4510 dispatch replay PASS with deployment-only selection, required manifest validation and unchanged tuples. Policy edits select full integration. Conductor imports this request and .tmp/rv/fix-936-931.md into Track.
-- [x] **Review P1 classifier**: restrict Kubernetes deployment-only classification to YAML/JSON manifests; shell, SQL and other executable inputs retain full runtime/security integration, including generated ConfigMap sources. Regression reproduced before the fix; scoped classifier/consumer validation recorded in .tmp/rv/fix-936-931.md for conductor Track import.
-- [x] **Review P1 images**: the whole-render immutability regression failed on artifact-content before pinning; preserve the live PostgreSQL digest and API release for closed content/export consumers. Include every container, init container and ephemeral container in the production image assertion; evidence and targeted validation go to .tmp/rv/fix-936-931.md for conductor Track import.
-- [x] **Lot 0 — Evidence**: common/master/workflow/testing rules, isolated branch, mechanical harness branch check, production pods read-only, existing pull-secret cleanup confirmed.
-- [x] **Lot 1 — Pin and regression**: deployment-specific digests with removal trigger; rendered-overlay exact pins and 12 mutable-tag rejection cases for api/auth-idp/ui; both rendered tiers reject pull secrets; artifact-content activation and preprod checks preserved.
-- [x] **Lot 2 — Verify**: make test-artifact-content-manifests API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-prod-ghcr-pin PASS: 71 artifact checks, 31 A4 operator tests, recovery/custody/rendered ingress sequence checks. Anonymous GHCR proof and mechanical branch/scope gates PASS; two independent Astra xhigh code reviews PASS on implementation diff d5287e63449adbf80adae0618384e37aafd8fe20545bd3d5329e9f438366e8e9.
-- [ ] **Lot 3 — Handoff**: final make commit, make down-volumes ENV=test-prod-ghcr-pin, push, one READY PR, exact gated prod command in PR body, .tmp/rv/prod-ghcr-pin.md; exit without polling CI. Conductor owns CI observation, merge and Track import.
+- [ ] **Hotfix — bind publication to tested config bytes**
+  - [x] Read common rules, MASTER, workflow and testing; branch C1 passes on the requested branch.
+  - [x] Record configDigest from the tested archive separately from local imageId; preserve source, archive and loaded-image guards.
+  - [x] Reject existing different configs before push; preserve canonical UI reuse across Docker stores.
+  - [x] Scoped tests: image-receipt.test.mjs, publish-image.test.mjs, resolve-ui-image.test.mjs and ghcr-images.test.mjs; 47/47 pass, zero skips, including OCI manifest IDs, absent tags, collisions and alias drift.
+  - [x] Local test command: make test-ghcr-config-identity ENV=test-ghcr-publish-r2 (through docker-slot.sh, existing Node image; no build).
+  - [x] Independent correctness and immutable-publication reviews GO on code diff SHA-256 17e3809f98a332b4c7f30d4efcb28b9504f2b66f68353dca3038d9979d89d198; scope C1/C2 and whitespace pass; no application, version or lock change.
+  - [x] Original hotfix pushed as 9cf3d9f60 and READY PR #937 opened; original state retained in .tmp/rv.
+- [ ] **Follow-up — rebase and qualify shard 1**
+  - [x] Rebase onto 5b4492d5a; retain upstream UI config resolver and all its refusal tests; update qualification fixtures for configDigest and remove the superseded unused helper.
+  - [x] Reproduce aborted HTTP upload as failedRequests=1; account only incomplete ECONNRESET uploads as cancelled. Complete invalid requests still fail; fixtureReceipt's zero-failure assertion stays unchanged.
+  - [x] Docker-only scoped checks: make test-ghcr-e2e-qualification (44/44) and make test-ghcr-config-identity (52/52), zero skips; no new image build on the 93% disk.
+  - [x] Two independent Astra xhigh code reviews GO; scope/whitespace checks and cleanup pass. Review artifacts: .tmp/rv/ghcr-publish-r2-followup-review-*.md. Historical rejected-request cause remains unconfirmed.
+  - [ ] One force-with-lease push, final state in .tmp/rv/ghcr-publish-r2.md and EXIT without CI polling; conductor confirms final CI.
