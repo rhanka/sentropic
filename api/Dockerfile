@@ -4,6 +4,10 @@
 # inputs, so a version bump in an unrelated workspace invalidates at most this
 # cheap stage — never the install layer below. The pruned lock keeps entries
 # verbatim from the committed lock (lockfile-exact, no re-resolution).
+# CI10-S4: the toolbox may build its source layer on a prebuilt, verified
+# dependency image (ci-tool-deps). Defaults keep every other target unchanged.
+ARG BASE_FROM=dependencies
+ARG TOOL_DEPS_IMAGE=ci-tool-deps
 FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS deps-manifests
 WORKDIR /workspace
 COPY package.json package-lock.json* ./
@@ -302,7 +306,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
 
-FROM dependencies AS base
+FROM ${BASE_FROM} AS base
 # Explicit production inputs only (fix/api-image-canonical-artifact): no blind
 # `COPY . .`, so unhashed sources (ui/**, e2e suites, non-consumed packages)
 # can never perturb the canonical tag. Every source below is hashed into
@@ -408,15 +412,19 @@ RUN wget -q https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x8
 
 # Non-browser API checks need no Chromium or duplicate Playwright installation.
 # The screen smoke uses the separately qualified E2E image's browser instead.
-FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS ci-tools
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS ci-tool-deps
 WORKDIR /workspace
+# Dependency-only toolbox image: keyed solely by lockfiles, manifests, tool locks and
+# this Dockerfile, so main publishes it once and every PR run pulls it by digest.
 # Copy the prepared filesystem, not the install/cache history of its layers.
 RUN rm -rf /usr/local/lib/node_modules/npm
 COPY --from=ci-tool-base /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
-COPY --from=ci-tool-base /workspace/node_modules /workspace/node_modules
-COPY --from=ci-tool-base /workspace/package.json /workspace/package-lock.json /workspace/
-COPY --from=ci-tool-base /workspace/.security /workspace/.security
+COPY --from=ci-tool-base /workspace /workspace
+COPY --from=ci-tool-base /opt/ci-tools /opt/ci-tools
 COPY --from=ci-tool-base /opt/ast-grep /opt/ast-grep
+
+# Thin source layer: workspace sources and their builds on top of the dependency image.
+FROM ${TOOL_DEPS_IMAGE} AS ci-tools
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
 COPY --from=base /workspace/apps /workspace/apps

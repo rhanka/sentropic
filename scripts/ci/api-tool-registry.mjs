@@ -7,7 +7,20 @@ import { digest } from './image-receipt.mjs';
 // a pulled toolbox is accepted only when it matches that recorded manifest.
 const SCHEMA = '1';
 const LABEL = 'org.sentropic.toolbox.';
-export const TAG = /^tool-[a-f0-9]{64}$/;
+// `tool-` is the full toolbox identity; `tooldeps-` is the dependency-only base image.
+export const TAG = /^tool(?:deps)?-[a-f0-9]{64}$/;
+
+// Pin a verified pull to the exact manifest digest so a later consumer (a BuildKit
+// builder resolving FROM) cannot receive different bytes from a moved tag.
+export function pinnedRef(repo, repoDigests) {
+  const match = repoDigests.find(ref => ref.startsWith(`${repo}@sha256:`));
+  if (!match || !/@sha256:[a-f0-9]{64}$/.test(match)) throw Error('Pulled image has no digest for the registry repository');
+  return match;
+}
+
+// The recorded dependency base names the identity it was pinned for, so a build for another
+// dependency identity (a stale local record) can refuse it instead of inheriting old bytes.
+export const depsRecord = (tag, ref) => `${tag} ${ref}`;
 
 export function manifestLabels({ tag, imageId, lockDigest, architecture }) {
   return { schema: SCHEMA, tag, imageId, lockDigest, architecture };
@@ -24,12 +37,18 @@ export function validateManifest(labels, expected) {
 const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
 
 export async function main([mode, repo, tag, ref]) {
-  if (!['pull', 'push'].includes(mode) || !repo || !TAG.test(tag ?? '') || !ref) {
-    throw Error('Usage: api-tool-registry.mjs pull|push registry/repository tool-<sha256> local-ref');
+  if (!['pull', 'push', 'pin'].includes(mode) || !repo || !TAG.test(tag ?? '') || !ref) {
+    throw Error('Usage: api-tool-registry.mjs pull|push|pin registry/repository tool[deps]-<sha256> local-ref');
   }
   const expected = { schema: SCHEMA, tag, lockDigest: await digest('package-lock.json'),
     architecture: process.env.IMAGE_PLATFORM || 'linux/amd64' };
   const manifestRef = `${repo}:${tag}-manifest`;
+  if (mode === 'pin') {
+    // Only valid after a successful verified pull: the local image must still be the recorded one.
+    const raw = JSON.parse(docker('image', 'inspect', `${repo}:${tag}`, '--format', '{{json .RepoDigests}}'));
+    console.log(depsRecord(tag, pinnedRef(repo, raw)));
+    return;
+  }
   if (mode === 'push') {
     const imageId = docker('image', 'inspect', ref, '--format', '{{.Id}}');
     const labels = manifestLabels({ ...expected, imageId });

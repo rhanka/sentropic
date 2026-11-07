@@ -87,8 +87,17 @@ test('should retain every API shard and all artifact lanes in the actual workflo
   assert.match(base, /github\.event\.pull_request\.base\.sha \|\| github\.event\.before/);
   assert.match(base, /format\('origin\/\{0\}', github\.event\.repository\.default_branch\)/);
   assert.deepEqual(matrix.filter(row => row.suite === 'unit').map(row => row.unit_shard), [1, 2, 3, 4]);
-  assert.deepEqual(matrix.filter(row => row.suite === 'endpoints').map(row => row.endpoints_shard), [1, 2, 3, 4, 5, 6, 7, 8]);
+  const endpoints = matrix.filter(row => row.suite === 'endpoints').map(row => row.endpoints_shard);
+  assert.deepEqual([...endpoints].sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.deepEqual(matrix.filter(row => row.suite === 'app-cluster-mesh').map(row => row.app_shard), [1, 2]);
+  // CI10-S4 wave: every member starts at t0, longest measured shards first.
+  assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], matrix.length);
+  assert.deepEqual(matrix.map(row => [row.suite, row.app_shard ?? row.endpoints_shard ?? row.unit_shard].filter(v => v !== undefined).join(':')), [
+    'app-cluster-mesh:1', 'app-cluster-mesh:2',
+    'endpoints:8', 'endpoints:2', 'endpoints:3', 'endpoints:4', 'endpoints:6', 'endpoints:5', 'endpoints:1', 'endpoints:7',
+    'unit:1', 'unit:2', 'unit:3', 'unit:4',
+    'queue', 'security', 'artifact-store', 'object-registry', 'outbox', 'contracts',
+  ]);
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
   const executed = expected.filter(row => row.selected).map(row => ({ job: row.job, conclusion: 'success' }));
   for (const row of expected.filter(row => /^(test-api-unit-integration|test-api-sut|artifacts-qualification) \(/.test(row.job))) {
