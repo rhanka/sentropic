@@ -22,7 +22,17 @@ test('should cache exact toolbox inputs without reusing a previous run transport
     assert.equal(steps.find(s => s.run === `make ${command} ENV=test-ci-api`).if, undefined);
   }
   assert.equal(steps.find(s => s.run === 'make ci-build-api-tool ENV=test-ci-images').if,
-    "steps.toolbox-cache.outputs.cache-hit != 'true'");
+    "steps.toolbox-cache.outputs.cache-hit != 'true' && steps.toolbox-registry.outputs.hit != 'true'");
+});
+
+test('should publish the prebuilt toolbox only from main after interface verification', () => {
+  const steps = jobs['build-api-tool-image'].steps;
+  const runs = steps.map(s => s.run);
+  const publish = steps.find(s => s.run === 'make push-api-tool-registry ENV=test-ci-api');
+  assert.match(publish.if, /github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
+  assert.ok(runs.indexOf('make test-ci-api-tool-runtime ENV=test-ci-api') < runs.indexOf(publish.run));
+  assert.match(steps.find(s => s.id === 'toolbox-registry').if, /CI_IMAGE_CACHE == '1'/);
+  assert.equal(jobs['build-api-tool-image'].permissions.packages, 'write');
 });
 
 test('should start independent consumer checks after selection and retain real archive dependencies', () => {
