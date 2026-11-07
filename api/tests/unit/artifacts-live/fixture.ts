@@ -62,7 +62,8 @@ export function fixture() {
       verify: vi.fn(async () => { events.push('verify'); }),
     },
     routes: { revoke: vi.fn(async () => { events.push('revoke'); }), ready: vi.fn(async () => { events.push('ready'); }) },
-    publication: { job: vi.fn(async () => ({ headSha: 'A', expectedReleaseId: binding.releaseId })),
+    publication: { job: vi.fn(async (_key, jobId: string) => ({ jobId, generation: binding.generation, headSha: 'A',
+      expectedReleaseId: binding.releaseId })),
       commit: vi.fn(async (_unit, _key, attempt) => {
       published.push(attempt.headSha); binding.releaseCommit = attempt.headSha; binding.releaseId = `release-${attempt.headSha}`;
       return { releaseId: binding.releaseId };
