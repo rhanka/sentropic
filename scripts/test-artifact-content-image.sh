@@ -62,20 +62,23 @@ content_build() {
 }
 
 content_ci_identity() {
-  local build_job publish_job test_line save_line promotion
+  local guard_job publish_job publish_head promotion
   # Read the whole job, stopping at the next job rather than at nested steps.
-  build_job=$(awk '/^  build-api-image:$/ { found=1; next } found && /^  [a-z].*:$/ { exit } found { print }' .github/workflows/ci.yml)
-  test_line=$(grep -n 'run: make test-artifact-content-image .*ENV=test-ci-api' <<< "$build_job" | cut -d: -f1 || true)
-  save_line=$(grep -n 'run: make save-api' <<< "$build_job" | cut -d: -f1)
-  [ -n "$test_line" ] && [ -n "$save_line" ] && [ "$test_line" -lt "$save_line" ] || fail 'CI does not qualify content before transporting the canonical image'
+  guard_job=$(awk '/^  api-image-guards:$/ { found=1; next } found && /^  [a-z].*:$/ { exit } found { print }' .github/workflows/ci.yml)
+  grep -Eq 'run: make test-artifact-content-image .*ENV=test-ci-api' <<< "$guard_job" || fail 'CI does not qualify content on the transported canonical image'
+  grep -Fq 'name: api-image' <<< "$guard_job" || fail 'content guard does not consume the transported image artifact'
+  grep -Fq 'run: make load-api' <<< "$guard_job" || fail 'content guard does not verify the transported image receipt'
   publish_job=$(awk '/^  publish-api-image:$/ { found=1; next } found && /^  [a-z].*:$/ { exit } found { print }' .github/workflows/ci.yml)
+  publish_head=$(awk '/^  publish-api-image:$/ { found=1; next } found && /^    needs:/ { print; exit }' .github/workflows/ci.yml)
+  grep -Fq 'api-image-guards' <<< "$publish_head" || fail 'publisher does not require the image guards'
+  grep -Fq "needs.api-image-guards.result == 'success'" <<< "$publish_job" || fail 'publisher does not gate on the image guards result'
   grep -Fq 'name: api-image' <<< "$publish_job" || fail 'publisher does not consume the tested image artifact'
   grep -Fq 'make load-api' <<< "$publish_job" || fail 'publisher does not verify the transported image receipt'
   ! grep -Eq 'make (build-api|build-api-image)' <<< "$publish_job" || fail 'publisher rebuilds the tested artifact'
   promotion=$(make --no-print-directory -n k8s-deploy-preprod API_VERSION=abc123 UI_VERSION=def456 \
     API_IMAGE_NAME=sentropic-api REGISTRY=registry.test.example ENV="${ENV:?}")
   grep -Fq '"registry.test.example" "sentropic-api" "abc123"' <<< "$promotion" || fail 'promotion changes the canonical API tag'
-  echo 'PASS: CI tests content before transport, publishes the verified receipt without rebuilding and retains canonical promotion tags'
+  echo 'PASS: CI tests content on the transported image, publishes only after the guards, publishes the verified receipt without rebuilding and retains canonical promotion tags'
 }
 
 content_runtime() {
