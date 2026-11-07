@@ -35,7 +35,8 @@ export function createLiveWorkerBridge(deps: {
       return { ...fences, revision: draft.revision, ready: runtime.phase === 'LIVE' && runtime.appliedRevision === draft.revision };
     },
     async stop(input: BridgeIdentity & { liveSessionId: string; leaseEpoch: number }): Promise<void> {
-      if ((await deps.packageRuntime(input)).liveSessionId !== input.liveSessionId) conflict('stale_session');
+      const fences = await deps.packageRuntime(input);
+      if (fences.liveSessionId !== input.liveSessionId || fences.leaseEpoch !== input.leaseEpoch) conflict('stale_session');
       const stored = await deps.ports.store.read(keyOf(input));
       if (!stored || stored.runtime.phase === 'DORMANT') return;
       const { ownerId, sessionId, generation } = stored.runtime;
