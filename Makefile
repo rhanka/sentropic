@@ -559,16 +559,12 @@ lock-hono-4-13-17: ## Resolve hono 4.13.17 in every lock and mirror the ^4.13.16
 	@# The selected tuple pinned hoisted 4.10.7 and satisfied the MCP SDK's ^4.11.4 only through a nested 4.13.13 copy; the hoisted 4.13.17 removes it.
 	sed -i '/"node_modules\/@modelcontextprotocol\/sdk\/node_modules\/hono": {/,/^    },/d' packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json
 	sed -i '/"": {/,/^    },/ s/"hono": "4\.10\.7"/"hono": "4.13.17"/' packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json
-	@# Workspace spec mirrors follow the manifests; mcp-auth keeps ^4.10.7 because ci.yml pins PEERS=hono@4.10.7 (out of scope here). The published @sentropic/mcp-platform@0.3.0 registry copy keeps its recorded ^4.10.7 peer (immutable tarball manifest), so the root floor count is 11.
+	@# Published package manifests keep their recorded hono ranges (a range change on a published version requires a version bump; the lock resolves 4.13.17 inside them). Only the app and private-package floors move, so the root floor count is 3 and the api count 2.
 	sed -i '/"api": {/,/^    },/ s/"hono": "\^4\.12\.25"/"hono": "^4.13.16"/' package-lock.json
 	sed -i '/"apps\/llm-gateway": {/,/^    },/ s/"hono": "\^4\.12\.25"/"hono": "^4.13.16"/' package-lock.json
 	sed -i '/"packages\/connector-host": {/,/^    },/ s/"hono": "\^4\.12\.18"/"hono": "^4.13.16"/' package-lock.json
 	sed -i '/"": {/,/^    },/ s/"hono": "\^4\.12\.25"/"hono": "^4.13.16"/' api/package-lock.json
 	sed -i '/"\.\.\/packages\/connector-host": {/,/^    },/ s/"hono": "\^4\.12\.18"/"hono": "^4.13.16"/' api/package-lock.json
-	for block in 'packages\/auth-hono' 'packages\/chat-server' 'packages\/cluster-mesh' 'packages\/comments' 'packages\/connector-host' 'packages\/flow' 'packages\/llm-gateway' 'packages\/mcp-platform'; do \
-		sed -i "/\"$$block\": {/,/^    },/ s/\"hono\": \"\\^4\\.10\\.7\"/\"hono\": \"^4.13.16\"/" package-lock.json; done
-	for block in '\.\.\/packages\/auth-hono' '\.\.\/packages\/chat-server' '\.\.\/packages\/cluster-mesh' '\.\.\/packages\/comments' '\.\.\/packages\/connector-host' '\.\.\/packages\/flow' '\.\.\/packages\/llm-gateway' '\.\.\/packages\/mcp-platform'; do \
-		sed -i "/\"$$block\": {/,/^    },/ s/\"hono\": \"\\^4\\.10\\.7\"/\"hono\": \"^4.13.16\"/" api/package-lock.json; done
 	sed -i 's|"version":"4\.13\.14","resolved":"https://registry\.npmjs\.org/hono/-/hono-4\.13\.14\.tgz","integrity":"$(HONO_4_13_14_INTEGRITY)"|"version":"4.13.17","resolved":"https://registry.npmjs.org/hono/-/hono-4.13.17.tgz","integrity":"$(HONO_4_13_17_INTEGRITY)"|g' scripts/ci/consumer-locks.json scripts/ci/tool-locks.json packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json packages/cluster-mesh/tests/storage/comments-deps.package-lock.json
 	sed -i 's|"version":"4\.13\.13","resolved":"https://registry\.npmjs\.org/hono/-/hono-4\.13\.13\.tgz","integrity":"$(HONO_4_13_13_INTEGRITY)"|"version":"4.13.17","resolved":"https://registry.npmjs.org/hono/-/hono-4.13.17.tgz","integrity":"$(HONO_4_13_17_INTEGRITY)"|g' scripts/ci/tool-locks.json
 	sed -i 's|"version":"4\.13\.16","resolved":"https://registry\.npmjs\.org/hono/-/hono-4\.13\.16\.tgz","integrity":"$(HONO_4_13_16_INTEGRITY)"|"version":"4.13.17","resolved":"https://registry.npmjs.org/hono/-/hono-4.13.17.tgz","integrity":"$(HONO_4_13_17_INTEGRITY)"|g' scripts/ci/tool-locks.json
@@ -577,8 +573,8 @@ lock-hono-4-13-17: ## Resolve hono 4.13.17 in every lock and mirror the ^4.13.16
 		test $$(sed -n '/"node_modules\/hono": {/,/^    },/p' $$f | grep -c '"version": "4.13.17"') -eq 1 || (echo "❌ hono 4.13.17 missing in $$f" && exit 1); done
 	@test $$(grep -o '"node_modules/hono":{' packages/cluster-mesh/tests/storage/comments-deps.package-lock.json | wc -l) -eq 1 || (echo "❌ hono copy count wrong in the comments storage lock" && exit 1)
 	@test $$(grep -o '"version":"4\.13\.17","resolved":"https://registry\.npmjs\.org/hono/-/hono-4\.13\.17\.tgz"' packages/cluster-mesh/tests/storage/comments-deps.package-lock.json | wc -l) -eq 1 || (echo "❌ hono 4.13.17 missing in the comments storage lock" && exit 1)
-	@test $$(grep -c '"hono": "\^4\.13\.16"' package-lock.json) -eq 11 || (echo "❌ root lock workspace hono floor count wrong" && exit 1)
-	@test $$(grep -c '"hono": "\^4\.13\.16"' api/package-lock.json) -eq 10 || (echo "❌ api lock hono floor count wrong" && exit 1)
+	@test $$(grep -c '"hono": "\^4\.13\.16"' package-lock.json) -eq 3 || (echo "❌ root lock workspace hono floor count wrong" && exit 1)
+	@test $$(grep -c '"hono": "\^4\.13\.16"' api/package-lock.json) -eq 2 || (echo "❌ api lock hono floor count wrong" && exit 1)
 	@test $$(grep -c 'hono-4\.13\.17\.tgz' scripts/ci/consumer-locks.json) -eq 5 || (echo "❌ consumer closure hono count wrong" && exit 1)
 	@! grep -q 'hono-4\.13\.0\.tgz\|hono-4\.13\.9\.tgz\|hono-4\.13\.13\.tgz\|hono-4\.13\.14\.tgz\|hono-4\.13\.16\.tgz' package-lock.json api/package-lock.json scripts/ci/tool-locks.json scripts/ci/consumer-locks.json packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json packages/cluster-mesh/tests/storage/comments-deps.package-lock.json || (echo "❌ stale hono reference remains" && exit 1)
 	@! grep -q '@modelcontextprotocol/sdk/node_modules/hono' packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json || (echo "❌ nested hono copy remains in the selected fixture" && exit 1)
