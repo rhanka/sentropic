@@ -2,6 +2,7 @@ import type { CacheReceipt } from './cache';
 import type { DraftSnapshot, LivePorts, SourceSnapshot } from './ports';
 import type { LiveAttempt, LiveRuntime } from './records';
 import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE, liveViteConfig } from './recipes';
+import type { BuilderPlacement } from './placement';
 
 /** GB4's bounded trusted transport; repository processes cannot invoke this interface.
  * It enforces monotonic session/lease/route fences and whole-process-tree cancellation.
@@ -22,7 +23,7 @@ export interface QualifiedSupervisor {
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
   verify(runtime: LiveRuntime, attempt: LiveAttempt, limits: { files: 255; fileBytes: 16777216; totalBytes: 67108864 }): Promise<void>;
 }
-export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['worker'] {
+export function createLiveWorker(supervisor: QualifiedSupervisor, placement: BuilderPlacement): LivePorts['worker'] {
   return {
     async quiesce(runtime) { await supervisor.phase(runtime, 'stopped'); await supervisor.terminate(runtime); },
     async clean(runtime) {
@@ -36,7 +37,7 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
     },
     restore: (runtime, draft) => supervisor.overlay(runtime, draft),
     async live(runtime) {
-      await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName));
+      await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName, placement));
       return supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment());
     },
     async build(runtime, attempt) {
