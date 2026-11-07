@@ -49,3 +49,4 @@
 - [x] Lot 4: processes (`dev` with pre-bundle, `build`, `snapshot`, process-group termination), tests first.
 - [x] Lot 5: :5173 listener and pod entry (`createBootstrapSource`), tests first; scoped tests and typecheck green; branch pushed.
 - [x] Lot 6: decisions 2026-11-07 15:00 (one d2-4, queued heavy phases): separate `prebundle` op, build heap 1024 env, dependency tree limits 64 MiB / 1 GiB, no host VITE_BASEMAP_TILE_URL, tests first.
+- [ ] Lot 7: side-effect-free immediate `renew` op for the controller liveness cadence (Amendment 1 §3), tests first.
