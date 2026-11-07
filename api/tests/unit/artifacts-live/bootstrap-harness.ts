@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AGENT_SOURCE } from '../../../src/services/artifacts/live/bootstrap-agent';
 import {
-  BUILD_RECIPE, INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, PREBUNDLE_RECIPE, artifactEnvironment,
+  BUILD_RECIPE, INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment,
 } from '../../../src/services/artifacts/live/recipes';
 
 /** Loads the pod agent exactly as the bootstrap embeds it (a plain JavaScript module string). */
@@ -48,7 +48,8 @@ export async function harness(options: Record<string, unknown> = {}) {
   const clock = { now: 1_000_000 };
   const killed: number[] = []; const groups: number[] = []; const exits: number[] = [];
   const { createAgent } = await agentModule();
-  const agent = createAgent({ root, recipes, env: artifactEnvironment(), settleMs: 1, publicKey: keys.publicKey, identity: POD,
+  const agent = createAgent({ root, recipes, env: artifactEnvironment(), buildEnv: buildEnvironment(), settleMs: 1,
+    publicKey: keys.publicKey, identity: POD,
     now: () => clock.now, exit: (code: number) => { exits.push(code); },
     spawn: () => { throw new Error('spawn not expected'); },
     processes: { list: async () => [], kill: (pid: number) => { killed.push(pid); }, killGroup: (pgid: number) => { groups.push(pgid); } },
