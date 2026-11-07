@@ -136,10 +136,21 @@ test('should classify root lock changes as root lock/toolchain', () => {
   assert.equal(verdict.kind, 'root-lock-toolchain');
 });
 
-test('should classify api, deploy and security paths as runtime/security', () => {
-  for (const file of ['api/src/routes/x.ts', 'deploy/k8s/overlays/preprod/x.yaml', '.security/audit-allowlist.json']) {
+test('should classify api, deployment runtime and security paths as runtime/security', () => {
+  for (const file of ['api/src/routes/x.ts', 'deploy/idp-sync/run.mjs', '.security/audit-allowlist.json']) {
     const verdict = classifyCompatibility({ files: [file], packages: [] });
     assert.equal(verdict.kind, 'runtime-security', file);
+  }
+});
+
+test('should classify only Kubernetes manifests and deployment checks as deployment-only', () => {
+  const files = ['BRANCH.md', 'deploy/k8s/overlays/prod/kustomization.yaml',
+    'deploy/ci/artifact-content/bundle-checks.mjs', 'deploy/ci/artifact-content/bundle.selftest.mjs',
+    'deploy/ci/preprod-a4/bundle.selftest.mjs'];
+  assert.equal(classifyCompatibility({ files }).kind, 'deployment-only');
+  for (const extra of ['api/src/index.ts', 'package-lock.json',
+    'scripts/ci/compatibility-classifier.mjs', 'vendor/unknown.ts']) {
+    assert.notEqual(classifyCompatibility({ files: [...files, extra] }).kind, 'deployment-only', extra);
   }
 });
 
@@ -187,5 +198,5 @@ test('should keep the most conservative kind when a change spans areas', () => {
 
 test('should expose every documented change kind', () => {
   assert.deepEqual([...CHANGE_KINDS].sort(), ['additive', 'breaking', 'explicit-adoption',
-    'documentation-only', 'internal-fix', 'root-lock-toolchain', 'runtime-security', 'shared-asset', 'ui-only', 'unknown'].sort());
+    'deployment-only', 'documentation-only', 'internal-fix', 'root-lock-toolchain', 'runtime-security', 'shared-asset', 'ui-only', 'unknown'].sort());
 });
