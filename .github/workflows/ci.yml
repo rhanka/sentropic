@@ -1723,7 +1723,7 @@ jobs:
         run: make load-api-tool-cache ENV=test-ci-api
       - name: Log in to GHCR
         if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1786,7 +1786,7 @@ jobs:
         run: make load-api-tool ENV=test-ci-api
       - name: Log in to GHCR
         if: env.CI_IMAGE_CACHE == '1'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
