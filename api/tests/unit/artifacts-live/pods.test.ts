@@ -15,10 +15,20 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.tolerations).toEqual([{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }]);
     const res = pod.spec.containers[0].resources;
     expect(res.requests['ephemeral-storage']).toBe('0'); expect(res.limits['ephemeral-storage']).toBe('2Gi');
-    expect(res.requests.memory).toBe('1280Mi'); expect(res.limits.memory).toBe('1536Mi');
+    expect(res.requests).toEqual({ cpu: '350m', memory: '450Mi', 'ephemeral-storage': '0' });
+    expect(res.limits).toEqual({ cpu: '2', memory: '1200Mi', 'ephemeral-storage': '2Gi' });
+    expect(pod.spec.containers[0].env).toContainEqual({ name: 'NODE_OPTIONS', value: '--max-old-space-size=384' });
     expect(pod.spec.volumes.every(volume => Object.keys(volume).sort().join(',') === 'emptyDir,name')).toBe(true);
     expect(pod.metadata.labels['sentropic.dev/artifact-binding']).toBeDefined();
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
+  });
+  it('should keep four live pod requests within one d2-4 node allocatable memory', async () => {
+    const f = fixture(); const runtime = await f.controller.start(key);
+    const { requests, limits } = builderPod(key, runtime, 'trusted').spec.containers[0].resources;
+    const mebibytes = (value: string) => Number(value.replace(/Mi$/, ''));
+    expect(4 * mebibytes(requests.memory)).toBeLessThanOrEqual(1.93 * 1024);
+    expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThan(2000);
+    expect(mebibytes(limits.memory)).toBeGreaterThan(mebibytes(requests.memory));
   });
   it('should adopt the matching pod after a creation response is lost', async () => {
     const f = fixture(); const create = vi.mocked(f.core.create).getMockImplementation()!;

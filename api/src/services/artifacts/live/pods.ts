@@ -30,8 +30,9 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
       env: Object.entries(artifactEnvironment()).map(([name, value]) => ({ name, value })),
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
-      resources: { requests: { cpu: '500m', memory: '1280Mi', 'ephemeral-storage': '0' },
-        limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': '2Gi' } },
+      // L0 measured cap adjustment (A-LIVE §12): 4 live pods per d2-4 node; only the limits overcommit.
+      resources: { requests: { cpu: '350m', memory: '450Mi', 'ephemeral-storage': '0' },
+        limits: { cpu: '2', memory: '1200Mi', 'ephemeral-storage': '2Gi' } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
         { name: 'dependencies', mountPath: '/dependencies' }],
