@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { inRange, lockDirs, lockPartition, parseRegister, registerMatch, auditFindings, advisoryFindings, routeAdvisoryErrors, clean, cmp, MODES } from './sca-gate.mjs';
+import { inRange, lockDirs, lockPartition, parseRegister, registerMatch, auditFindings, advisoryFindings, routeAdvisoryErrors, clean, cmp, MODES, walkLocks, issueLine, errorAnnotation, manifestWarning } from './sca-gate.mjs';
 
 test('should evaluate advisory ranges', () => {
   assert.equal(inRange('1.19.17', '< 1.19.18'), true);
@@ -106,4 +109,29 @@ test('should surface fetch failures and paginate full pages', async () => {
   assert.deepEqual(paged.findings.map(f => f.ghsa), ['GHSA-late']);
   const endless = await advisoryFindings({ ...ctx, fetchFn: async () => okPage(pages[0]) });
   assert.match(endless.errors[0], /more than 20 pages/);
+});
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const EXPECTED_COVERED = ['.', 'api', 'apps/auth-idp/web', 'e2e', 'e2e/npm-toolchain', 'packages/llm-mesh/seat-tools',
+  'spec/ci-cd-ten-minutes/dossier', 'tools/scw-tem-mock', 'ui'];
+
+test('should pin the real covered lock set and have no manifest-less covered lock', () => {
+  const { covered } = lockPartition(walkLocks(repoRoot));
+  assert.deepEqual(covered, EXPECTED_COVERED);
+  assert.deepEqual(covered.filter(d => !existsSync(path.join(repoRoot, d, 'package.json'))), []);
+});
+
+test('should clean every field of annotation and issue templates', () => {
+  const evil = { severity: 'high\n::error::s', package: 'p\r\n::warning::x', version: '1::2', dir: 'd\n::e', ghsa: 'G\n::g', title: 't\n::t', expired: true };
+  for (const out of [issueLine(evil), errorAnnotation(evil).replace(/^::error::/, '')]) {
+    assert.doesNotMatch(out, /[\r\n]/);
+    assert.doesNotMatch(out, /::/);
+  }
+  assert.match(errorAnnotation(evil), /^::error::/);
+});
+
+test('should emit one workflow warning per covered lock without a manifest', () => {
+  assert.equal(manifestWarning('tools/x'), '::warning::covered lock tools/x/package-lock.json has no sibling package.json: not audited');
+  assert.equal(manifestWarning('a\n::error::b').split('\n').length, 1);
+  assert.equal(manifestWarning('a\n::error::b').slice(11).includes('::'), false);
 });
