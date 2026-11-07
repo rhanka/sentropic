@@ -27,8 +27,10 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (none planned: the handoff ledger reuses `control.artifact_host_kv`)
   - `.github/workflows/**`
+  - `packages/artifacts/src/server/live-{store,mutations,read}.ts`, `packages/artifacts/tests/**` (BRW7-EX1: through the W8 merge only)
 
 ## Feedback Loop
+- [x] BRW7-EX1: wagon feat/alive-w8 @ edeb219a0 merged so the builder service composes its admission, heavy gate and invitations (s-archi batch 2, W7 item 5); impact: W8's files, its BRW8-EX1 package files included, enter this branch through the merge only, no W7 commit edits `packages/**`; rollback: revert the merge commit.
 - [x] `resolved` (s-archi batch review, W3 dae5b0f0a): W3 seals the snapshot into `SupervisorSources.candidate`; W7 provides that sink (`createCandidateStore`), which is also its `CandidateExport`.
 - [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
 - [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).

@@ -34,6 +34,15 @@ async function lockedRow<V, T>(pool: Pool, space: string, key: string,
 export function createPostgresLiveStore(pool: Pool): LiveStore {
   return {
     read: key => readRow<LiveState>(pool, namespace, rowKey(key)),
+    async active() {
+      const { rows } = await pool.query<{ key: string; value: string }>(
+        'SELECT key, value FROM control.artifact_host_kv WHERE storage_scope_id=$1', [namespace]);
+      return rows.flatMap(row => {
+        const { runtime } = JSON.parse(row.value) as LiveState;
+        const [storageScopeId, artifactId] = JSON.parse(row.key) as [string, string];
+        return runtime.phase === 'DORMANT' ? [] : [{ key: { storageScopeId, artifactId }, ownerId: runtime.ownerId }];
+      });
+    },
     transaction<T>(key: LiveKey, work: Parameters<LiveStore['transaction']>[1]) {
       return lockedRow<LiveState, T>(pool, namespace, rowKey(key), async (state, client) => {
         const unit = { state, save(next: LiveState) { unit.state = next; }, client };
