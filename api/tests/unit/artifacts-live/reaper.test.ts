@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { fixture, key, owner } from './fixture';
-import { LiveError } from '../../../src/services/artifacts/live/records';
 
 const other = { storageScopeId: 'scope-a', artifactId: 'artifact-b' };
 
@@ -39,13 +38,24 @@ describe('live idle reaper (A-LIVE Amendment 1: 900 s, ends on the clean build)'
     await f.controller.reconcile(key);
     expect(f.ports.worker.build).toHaveBeenCalledOnce(); expect((await f.state())?.runtime.stateDetail).toBeUndefined();
   });
-  it('should keep the session LIVE when the heavy gate refuses, and build on the next pass', async () => {
-    const f = fixture(); await f.controller.start(key); f.advance(900_001);
-    const run = f.ports.heavy.run;
-    f.ports.heavy.run = vi.fn(async () => { throw new LiveError('builder_unavailable', 'queued'); });
-    await f.controller.reap(key); expect((await f.state())?.runtime.phase).toBe('LIVE');
-    f.ports.heavy.run = run; await f.controller.reap(key);
+  it('should stop the live, then wait durably in BUILD_QUEUED while another binding is live, and build after it stops', async () => {
+    const f = fixture({ capacity: 2, budgetMiB: 1706 }); await f.controller.start(key); const b = await f.controller.start(other);
+    f.advance(900_001); await f.controller.activity(other, b.sessionId, 'read', owner);
+    await f.controller.reap(key); await f.controller.reconcile(key);
+    expect((await f.state())?.runtime.phase).toBe('BUILD_QUEUED'); expect(f.ports.worker.build).not.toHaveBeenCalled();
+    expect(await f.controller.heavyStatus(key)).toEqual([{ kind: 'build', state: 'queued', position: 1 }]);
+    expect(await f.controller.lease(key)).toBe(true);
+    await f.controller.stop(other, { ownerId: 'owner', sessionId: b.sessionId, generation: 1 });
+    await f.controller.reconcile(key);
     expect(f.ports.worker.build).toHaveBeenCalledOnce(); expect((await f.state())?.runtime.phase).toBe('DORMANT');
+    expect(await f.controller.heavyStatus(key)).toEqual([]);
+  });
+  it('should wake a BUILD_QUEUED binding back to LIVE and drop its build ticket', async () => {
+    const f = fixture({ capacity: 2, budgetMiB: 1706 }); await f.controller.start(key); const b = await f.controller.start(other);
+    f.advance(900_001); await f.controller.activity(other, b.sessionId, 'read', owner); await f.controller.reap(key);
+    await expect(f.controller.wake(key)).resolves.toMatchObject({ phase: 'LIVE', appliedRevision: 'r1' });
+    expect(await f.controller.heavyStatus(key)).toEqual([]); expect(f.ports.worker.build).not.toHaveBeenCalled();
+    expect((await f.queue.status('d2-4-a')).lives).toHaveLength(2);
   });
 });
 
@@ -67,8 +77,9 @@ describe('live liveness lease (A-LIVE Amendment 1 §3)', () => {
   });
   it('should list only runtimes that are not DORMANT', async () => {
     const f = fixture({ capacity: 2 }); await f.controller.start(key); const b = await f.controller.start(other);
-    expect(await f.controller.active()).toEqual([{ key, ownerId: 'owner' }, { key: other, ownerId: 'owner' }]);
+    expect(await f.controller.active()).toEqual([{ key, ownerId: 'owner', phase: 'LIVE' },
+      { key: other, ownerId: 'owner', phase: 'LIVE' }]);
     await f.controller.stop(other, { ownerId: 'owner', sessionId: b.sessionId, generation: 1 });
-    expect(await f.controller.active()).toEqual([{ key, ownerId: 'owner' }]);
+    expect(await f.controller.active()).toEqual([{ key, ownerId: 'owner', phase: 'LIVE' }]);
   });
 });
