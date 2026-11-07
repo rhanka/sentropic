@@ -69,7 +69,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   for (const [name, job] of Object.entries(workflow.jobs)) {
     assert.ok(!job.concurrency?.group.startsWith('ci-capacity-'), name);
   }
-  assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
+  assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 20);
   assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 6);
 });
 
