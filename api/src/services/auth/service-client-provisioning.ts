@@ -109,3 +109,85 @@ export const buildServiceClientRegistration = (source: NodeJS.ProcessEnv): Desir
     tenantSlug: (source.OAUTH_SERVICE_CLIENT_TENANT || 'sentropic').trim(),
   };
 };
+
+export interface ProvisioningState {
+  binding: { tenantId: string } | null;
+  oauthClientCollision: boolean;
+  stored: {
+    allowedScopes: string[];
+    clientSecretHash: string;
+    displayName: string | null;
+    dpopBoundAccessTokens: boolean;
+    exchangePolicy: unknown;
+    resourceIndicators: string[];
+    revokedAt: Date | null;
+  } | null;
+  tenant: { status: string; tenantId: string } | null;
+}
+
+export interface ProvisioningPlan {
+  action: 'create' | 'noop' | 'update';
+  bindTenant: boolean;
+  changes: string[];
+  rotateSecret: boolean;
+}
+
+const missingFrom = (items: string[], reference: string[]) => items.filter((item) => !reference.includes(item));
+
+/**
+ * Decide what to write for `desired` given the stored state, or throw a refusal.
+ * "Widen" grants more authority (added scope or resource, DPoP requirement removed);
+ * "downgrade" grants less (removed scope or resource, DPoP requirement added). Each needs
+ * its explicit flag, and so does a secret change, so a replay can never silently mutate a client.
+ */
+export const planServiceClientProvisioning = (desired: DesiredServiceClient, state: ProvisioningState): ProvisioningPlan => {
+  const { clientId, flags } = desired;
+  if (state.oauthClientCollision) {
+    throw new Error(`Refusing: ${clientId} already names an oauth_clients row; use a distinct service client id.`);
+  }
+  if (!state.tenant) throw new Error(`Refusing: CM tenant ${desired.tenantSlug} does not exist.`);
+  if (state.tenant.status !== 'active') throw new Error(`Refusing: CM tenant ${desired.tenantSlug} is not active.`);
+  if (state.binding && state.binding.tenantId !== state.tenant.tenantId) {
+    throw new Error(`Refusing: ${clientId} is bound to another tenant; a rebind needs a new client id.`);
+  }
+  const bindTenant = !state.binding;
+  const { stored } = state;
+  if (!stored) return { action: 'create', bindTenant, changes: ['created'], rotateSecret: false };
+  if (stored.revokedAt) {
+    throw new Error(`Refusing: ${clientId} is revoked; restoring access requires a separate owner authorization.`);
+  }
+  if (stored.exchangePolicy != null) {
+    throw new Error(`Refusing: ${clientId} carries a token-exchange policy; CRED_CYCLE.md governs it.`);
+  }
+
+  const widen = [
+    ...missingFrom(desired.allowedScopes, stored.allowedScopes).map((scope) => `+scope ${scope}`),
+    ...missingFrom(desired.resourceIndicators, stored.resourceIndicators).map((uri) => `+resource ${uri}`),
+    ...(stored.dpopBoundAccessTokens && !desired.dpopBoundAccessTokens ? ['-dpop'] : []),
+  ];
+  const downgrade = [
+    ...missingFrom(stored.allowedScopes, desired.allowedScopes).map((scope) => `-scope ${scope}`),
+    ...missingFrom(stored.resourceIndicators, desired.resourceIndicators).map((uri) => `-resource ${uri}`),
+    ...(!stored.dpopBoundAccessTokens && desired.dpopBoundAccessTokens ? ['+dpop'] : []),
+  ];
+  if (widen.length > 0 && !flags.allowWiden) {
+    throw new Error(`Refusing to widen ${clientId} (${widen.join(', ')}) without OAUTH_SERVICE_CLIENT_ALLOW_WIDEN=true.`);
+  }
+  if (downgrade.length > 0 && !flags.allowDowngrade) {
+    throw new Error(`Refusing to downgrade ${clientId} (${downgrade.join(', ')}) without OAUTH_SERVICE_CLIENT_ALLOW_DOWNGRADE=true.`);
+  }
+  const rotateSecret = stored.clientSecretHash !== desired.clientSecretHash;
+  if (rotateSecret && !flags.rotateSecret) {
+    throw new Error(`Refusing to replace the secret of ${clientId} without OAUTH_SERVICE_CLIENT_ROTATE_SECRET=true.`);
+  }
+
+  const changes = [...widen, ...downgrade];
+  if ((stored.displayName ?? '') !== desired.displayName) changes.push('display name');
+  if (rotateSecret) changes.push('secret rotated');
+  if (bindTenant) changes.push('tenant binding');
+  return { action: changes.length > 0 ? 'update' : 'noop', bindTenant, changes, rotateSecret };
+};
+
+/** Due date of the 90-day secret cycle: last rotation, else creation, plus 90 days. */
+export const rotationDueAt = (createdAt: Date, secretRotatedAt: Date | null): Date =>
+  new Date((secretRotatedAt ?? createdAt).getTime() + SERVICE_CLIENT_ROTATION_DAYS * 86_400_000);
