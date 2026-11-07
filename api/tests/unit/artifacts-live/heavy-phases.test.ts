@@ -25,7 +25,7 @@ describe('live heavy phases share one node gate', () => {
     const f = fixture({ capacity: 2 }); await f.controller.start(keys[0]);
     const building = deferred(); const release = deferred();
     f.ports.worker.build = vi.fn(async () => { building.resolve(); await release.promise; return { candidateDigest: 'c' }; });
-    f.advance(600_001); const idle = f.controller.idle(keys[0]); await building.promise;
+    f.advance(900_001); const idle = f.controller.reap(keys[0]); await building.promise;
     const prepare = vi.mocked(f.ports.worker.prepare).mock.calls.length;
     const revive = f.controller.start(keys[1]); await new Promise(resolve => setTimeout(resolve, 5));
     expect(f.ports.worker.prepare).toHaveBeenCalledTimes(prepare);
