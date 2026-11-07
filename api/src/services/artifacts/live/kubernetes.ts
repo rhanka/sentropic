@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { setTimeout as delay } from 'node:timers/promises';
-import { BUILDER_NAMESPACE, type KubernetesCore } from './pods';
+import type { KubernetesCore } from './pods';
+import type { BuilderPlacement } from './placement';
 import { conflict, LiveError } from './records';
 
 /** Uses the API's sentropic-app identity, never mounts or forwards its token to a builder. */
-export function createInClusterKubernetes(options: {
+export function createInClusterKubernetes(placement: BuilderPlacement, options: {
   caFile?: string; tokenFile?: string; apiUrl?: string;
 } = {}): KubernetesCore {
   const directory = '/var/run/secrets/kubernetes.io/serviceaccount';
@@ -14,7 +15,7 @@ export function createInClusterKubernetes(options: {
   const base = new URL(options.apiUrl ?? 'https://kubernetes.default.svc');
   if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/') throw new LiveError('builder_unavailable');
   async function call<T>(method: string, resource: 'pods' | 'services', name?: string, body?: unknown): Promise<T | undefined> {
-    const path = `/api/v1/namespaces/${BUILDER_NAMESPACE}/${resource}${name ? `/${encodeURIComponent(name)}` : ''}`;
+    const path = `/api/v1/namespaces/${placement.namespace}/${resource}${name ? `/${encodeURIComponent(name)}` : ''}`;
     const bytes = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
     return new Promise<T | undefined>((resolve, reject) => {
       const req = request(new URL(path, base), { method, ca, timeout: 30_000, headers: {

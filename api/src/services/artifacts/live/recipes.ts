@@ -1,3 +1,4 @@
+import type { BuilderPlacement } from './placement';
 export const NPM_RELAY = 'http://npm-relay.npm-relay.svc.cluster.local:4873/';
 export const BUILDER_IMAGE = 'docker.io/library/node@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198bcb09fb998f7dcbf68';
 /** VITE_BASEMAP_TILE_URL is owned by the repository build wrapper (owner decision 2026-11-07); the host never passes it. */
@@ -52,14 +53,14 @@ export const BUILD_RECIPE = Object.freeze({
   executable: '/usr/local/bin/npm', args: ['--ignore-scripts', '--offline', 'run', 'build:artifact'], timeoutMs: 300_000,
 });
 /** Host-owned wrapper preserves qualified plugins while overriding writable repository server options. */
-export function liveViteConfig(sessionId: string, podName: string) {
+export function liveViteConfig(sessionId: string, podName: string, placement: BuilderPlacement) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(sessionId) || !/^artifact-[a-f0-9]{40}$/.test(podName)) throw new Error('Invalid live session');
   return `import { loadConfigFromFile } from '/workspace/node_modules/vite/dist/node/index.js';
 const loaded = await loadConfigFromFile({command:'serve', mode:'development'}, '/workspace/ui/vite.config.ts');
 const repo = loaded?.config ?? {};
 export default {...repo, root:'/workspace/ui', envDir:'/tmp/artifact-empty-env', cacheDir:'/tmp/vite-cache',
   server:{host:'127.0.0.1', port:${LIVE_UPSTREAM_PORT}, strictPort:true, proxy:{}, cors:false,
-    allowedHosts:[${JSON.stringify(`${podName}.sentropic-artifact-builders.svc.cluster.local`)}],
+    allowedHosts:[${JSON.stringify(`${podName}.${placement.serviceDomain}`)}],
     hmr:{protocol:'wss', clientPort:443, path:${JSON.stringify(`/_live/${sessionId}/hmr`)}},
     fs:{strict:true, allow:['/workspace','/dependencies'], deny:['**/.env*','**/.git/**','**/*.pem','**/*.key']}}};`;
 }
