@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   candidateDigest, HOST_BUILD_PATHS, LiveHostError, parseHandoffRequest, sealHandoff, verifyJobRequest, type HandoffReceipt,
 } from '@sentropic/artifacts/live-host';
-import { createHttpRemoteHost } from '../../../src/services/artifacts/live/remote-host';
+import { BUILDER_REMOTE_HOST_ENV, builderRemoteHost, createHttpRemoteHost } from '../../../src/services/artifacts/live/remote-host';
 
 const builder = { kid: 'builder-1', key: generateKeyPairSync('ed25519').privateKey };
 const builderKeys = (kid: string) => (kid === 'builder-1' ? createPublicKey(builder.key) : undefined);
@@ -63,6 +63,20 @@ describe('HTTP remote host (live-host host build paths)', () => {
   it('refuses a base URL that is not https or carries credentials, a query or a fragment', () => {
     for (const baseUrl of ['http://immo.test/', 'https://user:pw@immo.test/', 'https://immo.test/?a=1', 'https://immo.test/#x', 'not a url']) {
       expect(() => createHttpRemoteHost({ baseUrl, signingKey: () => builder, now: () => 0 }))
+        .toThrow(expect.objectContaining({ code: 'builder_unavailable', reason: 'host_unconfigured' }));
+    }
+  });
+  it('takes the content host base from the fixed env name and reaches the preprod live-host routes', async () => {
+    expect(BUILDER_REMOTE_HOST_ENV).toBe('ARTIFACT_BUILDER_REMOTE_HOST_URL');
+    const fetch = vi.fn(async () => json(200, { v: 1, job: hostJob }));
+    const host = builderRemoteHost({ [BUILDER_REMOTE_HOST_ENV]: 'https://preprod.immo.sent-tech.ca/api/v1/artifacts' },
+      { signingKey: () => builder, now: () => 1_000, fetch: fetch as unknown as typeof globalThis.fetch });
+    await host.job(key, 'job-1', fence);
+    expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe('https://preprod.immo.sent-tech.ca/api/v1/artifacts/live-host/v1/job');
+  });
+  it('refuses to compose without a configured content host base', () => {
+    for (const env of [{}, { [BUILDER_REMOTE_HOST_ENV]: '' }, { [BUILDER_REMOTE_HOST_ENV]: 'http://preprod.immo.sent-tech.ca/api' }]) {
+      expect(() => builderRemoteHost(env, { signingKey: () => builder, now: () => 0 }))
         .toThrow(expect.objectContaining({ code: 'builder_unavailable', reason: 'host_unconfigured' }));
     }
   });
