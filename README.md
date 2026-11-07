@@ -1,5 +1,9 @@
 # Sentropic
 
+Container images are public at `ghcr.io/rhanka/sentropic-api`,
+`ghcr.io/rhanka/sentropic-ui`, and `ghcr.io/rhanka/sentropic-e2e`.
+See [Kubernetes delivery and the manual prod approval step](deploy/k8s/README.md).
+
 Public site: https://sentropic.sent-tech.ca
 
 French editorial reference: [README.fr.md](README.fr.md)

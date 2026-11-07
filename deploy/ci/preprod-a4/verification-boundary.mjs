@@ -3,7 +3,7 @@ import { canonical, digest, namespace } from './guards.mjs';
 export function assertTrafficRestriction(request, grant, k) {
   if (grant.authorizationRef !== request.authorizationRef || grant.operationId !== request.operationId
     || grant.candidateImage !== request.candidateImage || grant.candidateCommit !== request.candidateCommit
-    || !/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-ui@sha256:[a-f0-9]{64}$/.test(grant.uiImage)
+    || !/^ghcr\.io\/rhanka\/sentropic-ui@sha256:[a-f0-9]{64}$/.test(grant.uiImage)
     || !/^[a-f0-9]{64}$/.test(grant.middlewareSpecSha256)
     || typeof grant.trafficRestrictionReceiptRef !== 'string' || !grant.trafficRestrictionReceiptRef.trim()
     || /placeholder|<|>|TODO|example|pending/i.test(grant.trafficRestrictionReceiptRef)) throw new Error('verification_grant_invalid');

@@ -10,7 +10,7 @@ export const requestSchema = z.object({
   format: z.literal('preprod-a4-request/1'), namespace: z.literal('sentropic-preprod'),
   operationId: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/),
   candidateCommit: z.string().regex(/^[a-f0-9]{40}$/).refine(value => value !== '0'.repeat(40)),
-  candidateImage: z.string().regex(/^rg\.fr-par\.scw\.cloud\/nc-reg\/sentropic-api@sha256:[a-f0-9]{64}$/),
+  candidateImage: z.string().regex(/^ghcr\.io\/rhanka\/sentropic-api@sha256:[a-f0-9]{64}$/),
   backupTemplateSha256: digest,
   authorizationRef: ref, writerFenceRef: ref, rollbackCheckpointRef: ref, rollbackLimitsRef: ref,
   sourceMetadataDispositionRef: ref, remoteSnapshotRef: ref, remoteSnapshotDigest: digest,

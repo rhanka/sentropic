@@ -58,7 +58,7 @@ for (const tier of ['prod', 'preprod']) {
     const pinned = load(`/rendered/${tier}-pinned.yaml`);
     qualify(pinned);
     assert.equal(object(pinned, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image,
-      `rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:${'a'.repeat(64)}`);
+      `ghcr.io/rhanka/sentropic-api@sha256:${'a'.repeat(64)}`);
   });
   for (const workload of ['api', 'artifact-content']) for (const flag of closed) {
     const enable = values => {
@@ -66,7 +66,9 @@ for (const tier of ['prod', 'preprod']) {
       return values;
     };
     check(`${tier}: reject ${workload} ${flag}=1 on a tag`, () => {
-      assert.throws(() => checkActivationImage(enable(structuredClone(objects))), /opening requires digest-pinned/);
+      const tagged = enable(structuredClone(objects));
+      object(tagged, 'Deployment', workload).spec.template.spec.containers[0].image = 'ghcr.io/rhanka/sentropic-api:unqualified';
+      assert.throws(() => checkActivationImage(tagged), /opening requires digest-pinned/);
     });
     check(`${tier}: digest prerequisite accepts ${workload} ${flag}=1`, () => {
       const pinned = enable(load(`/rendered/${tier}-pinned.yaml`));
