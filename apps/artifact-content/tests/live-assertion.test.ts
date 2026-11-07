@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHmac } from 'node:crypto';
 import { createHostAssertionLive, createLiveFences } from '../src/live-assertion';
 import {
-  ASSERTION_HEADER, CONTROL_HEADER, FENCE_HEADER, signLiveAssertion, signLiveControl, signLiveFence,
-  verifyLiveAssertion, verifyLiveControl, type LiveAssertionClaims, type LiveControlClaims, type LiveFenceClaims,
-} from '../src/live-format';
+  ASSERTION_HEADER, CONTROL_HEADER, FENCE_HEADER, MAX_SOURCE_REVISION_LENGTH, signLiveAssertion, signLiveControl, signLiveFence,
+  type LiveAssertionClaims, type LiveControlClaims, type LiveFenceClaims,
+} from '@sentropic/artifacts/live-host';
 import { createContentHost } from '../src/host';
 import { createLiveProxy, LIVE_CONTROL_PATH, LIVE_FENCE_PATH } from '../src/live';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
@@ -17,7 +18,7 @@ const controllerKey = Buffer.alloc(32, 5);
 const t0 = 1_000_000;
 function claims(over: Partial<LiveAssertionClaims> = {}): LiveAssertionClaims {
   const base = { v: 1 as const, kid: 'immo-1', host, artifactId, storageScopeId: 'scope', sessionId: 'session',
-    generation: 1, routeEpoch: 1, podUid: 'uid', podName: '', sourceRevision: 3, principalId: 'owner',
+    generation: 1, routeEpoch: 1, podUid: 'uid', podName: '', sourceRevision: 'gen:1/rev:3', principalId: 'owner',
     role: 'binding_owner' as const, invitationId: '', invitationEpoch: 0, invitationExp: 0,
     iat: t0 / 1000, exp: t0 / 1000 + 600, ...over };
   base.podName = over.podName ?? podName(base);
@@ -37,25 +38,31 @@ function fixture(time = { now: t0 }) {
 }
 const sign = (c = claims(), k = key) => signLiveAssertion(c, k);
 
-describe('signed host assertion', () => {
-  it('should round-trip and reject tampering, short keys, wrong key and malformed tokens', () => {
-    const keys = (kid: string) => kid === 'immo-1' ? key : undefined;
-    expect(verifyLiveAssertion(sign(), { key: keys, now: () => t0 })).toMatchObject({ artifactId, sessionId: 'session' });
-    const [v, body, mac] = sign().split('.');
-    const forged = Buffer.from(JSON.stringify({ ...claims(), principalId: 'attacker' })).toString('base64url');
-    for (const bad of [`${v}.${forged}.${mac}`, `${v}.${body}.${mac.slice(0, -2)}AA`, sign(claims(), Buffer.alloc(32, 9)),
-      'garbage', '', `v2.${body}.${mac}`, `${v}.${body}`]) {
-      expect(verifyLiveAssertion(bad, { key: keys, now: () => t0 })).toBeUndefined();
+/** A correctly keyed `v1` token over arbitrary claims, as a signer still emitting a numeric revision would. */
+function raw(body: object, k = key) {
+  const encoded = Buffer.from(JSON.stringify(body)).toString('base64url');
+  return `v1.${encoded}.${createHmac('sha256', k).update(`v1.${encoded}`).digest('base64url')}`;
+}
+describe('signed host assertion at the edge (wire format owned by @sentropic/artifacts/live-host)', () => {
+  it('should carry the opaque source revision into the route unchanged', async () => {
+    const f = fixture();
+    for (const sourceRevision of ['gen:1/rev:3', '8f14e45fceea167a', 'x'.repeat(MAX_SOURCE_REVISION_LENGTH)]) {
+      expect((await f.live.authorize(f.req(sign(claims({ sourceRevision }))), artifactId))?.sourceRevision).toBe(sourceRevision);
     }
-    expect(() => signLiveAssertion(claims(), Buffer.alloc(8))).toThrow();
-    expect(verifyLiveAssertion(sign(), { key: () => Buffer.alloc(8, 1), now: () => t0 })).toBeUndefined();
   });
-  it('should refuse expired, not-yet-valid and over-long assertions', () => {
-    const keys = () => key;
-    expect(verifyLiveAssertion(sign(), { key: keys, now: () => t0 + 601_000 })).toBeUndefined();
-    expect(verifyLiveAssertion(sign(claims({ iat: t0 / 1000 + 120, exp: t0 / 1000 + 700 })), { key: keys, now: () => t0 })).toBeUndefined();
-    expect(verifyLiveAssertion(sign(claims({ exp: t0 / 1000 + 4 * 3600 })), { key: keys, now: () => t0 })).toBeUndefined();
-    expect(verifyLiveAssertion(sign(claims({ exp: t0 / 1000 - 1 })), { key: keys, now: () => t0 })).toBeUndefined();
+  it('should refuse a numeric, empty or over-long revision even under a listed key', async () => {
+    const f = fixture();
+    expect(await f.live.authorize(f.req(raw(claims())), artifactId)).toBeDefined();
+    for (const sourceRevision of [3, '', 'x'.repeat(MAX_SOURCE_REVISION_LENGTH + 1)]) {
+      expect(await f.live.authorize(f.req(raw(claims({ sourceRevision } as never))), artifactId)).toBeUndefined();
+    }
+  });
+  it('should refuse a tampered, foreign-key or expired assertion', async () => {
+    const f = fixture(); const [v, , mac] = sign().split('.');
+    const forged = Buffer.from(JSON.stringify({ ...claims(), principalId: 'attacker' })).toString('base64url');
+    for (const bad of [`${v}.${forged}.${mac}`, sign(claims(), Buffer.alloc(32, 9)), sign(claims({ exp: t0 / 1000 - 1 }))]) {
+      expect(await f.live.authorize(f.req(bad), artifactId)).toBeUndefined();
+    }
   });
 });
 
@@ -134,7 +141,6 @@ describe('host assertion live edge', () => {
 const invitee = (over: Partial<LiveAssertionClaims> = {}) => claims({ principalId: 'guest', role: 'invitee', invitationId: 'inv-1',
   invitationEpoch: 1, invitationExp: t0 / 1000 + 900, ...over });
 describe('invitee role (multi-user live)', () => {
-  const keys = () => key;
   it('should carry principal, role, invitation id, epoch and expiry into the route', async () => {
     const f = fixture(); const route = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
     expect(route).toMatchObject({ role: 'invitee', principalId: 'guest', invitationId: 'inv-1', invitationEpoch: 1, sessionId: 'session', generation: 1 });
@@ -151,8 +157,8 @@ describe('invitee role (multi-user live)', () => {
     ['invitee expired invitation', { role: 'invitee', invitationId: 'i', invitationEpoch: 1, invitationExp: t0 / 1000 - 1 }],
     ['assertion outliving invitation', { role: 'invitee', invitationId: 'i', invitationEpoch: 1, invitationExp: t0 / 1000 + 10 }],
     ['invitee epoch zero', { role: 'invitee', invitationId: 'i', invitationEpoch: 0, invitationExp: t0 / 1000 + 900 }],
-  ])('should refuse %s', (_n, over) => {
-    expect(verifyLiveAssertion(sign(claims(over as Partial<LiveAssertionClaims>)), { key: keys, now: () => t0 })).toBeUndefined();
+  ])('should refuse %s at the edge', async (_n, over) => {
+    const f = fixture(); expect(await f.live.authorize(f.req(sign(claims(over as Partial<LiveAssertionClaims>))), artifactId)).toBeUndefined();
   });
   it('should close invitee sockets on invitation revocation without touching the owner or other invitations', async () => {
     const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
@@ -221,7 +227,6 @@ describe('host push path: signed revocation', () => {
     const stop = control({ op: 'revoke_session', sessionId: 'session', invitationId: '', epoch: 0 });
     expect((await f.live.control(post(signLiveControl(stop, key)), artifactId))?.status).toBe(204);
     expect(closeOwner).toHaveBeenCalledTimes(1); expect(await f.live.authorize(f.req(sign()), artifactId)).toBeUndefined();
-    expect(verifyLiveControl(signLiveControl(stop, key), { key: () => key, now: () => t0 })).toEqual(stop);
   });
   it.each([
     ['no token', () => post()],

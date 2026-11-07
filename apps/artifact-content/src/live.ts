@@ -6,7 +6,9 @@ import type { LiveKey } from '../../../api/src/services/artifacts/live/records';
 
 export interface LiveRoute extends LiveKey {
   sessionId: string; generation: number; routeEpoch: number; podUid: string; podName: string;
-  expiresAt: number; sourceRevision: number;
+  expiresAt: number;
+  /** Opaque live source revision (A-LIVE live revisions): compared, never parsed. */
+  sourceRevision: string;
   /** Host-asserted principal and role; an invitee has view/dev-source authority only (A-LIVE §9). */
   principalId?: string; role?: 'binding_owner' | 'invitee';
   invitationId?: string; invitationEpoch?: number;

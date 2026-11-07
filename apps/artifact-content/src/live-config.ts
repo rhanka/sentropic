@@ -1,7 +1,7 @@
 import { resolve4 } from 'node:dns/promises';
 import { request as httpRequest } from 'node:http';
 import { createHostAssertionLive, createLiveFences } from './live-assertion';
-import { CONTROL_HEADER, FENCE_HEADER, MIN_KEY_BYTES } from './live-format';
+import { CONTROL_HEADER, FENCE_HEADER, MIN_KEY_BYTES } from '@sentropic/artifacts/live-host';
 import { createLiveProxy, type LiveProxyPorts } from './live';
 
 /** Marks a replica-to-replica copy of an accepted push; a copy is applied, never relayed again. */
