@@ -1,11 +1,12 @@
-# Feature: Train 4 2026-11-07 CI10 stage 4 (parallel unit shards, toolbox dependency base, matrix reload)
+# Feature: Train 1a 2026-11-07 artifacts 0.2.20 (git tools routing, live-host subpath)
 
 ## Objective
-- [ ] One train, one PR, one CI: start all API test shards at once longest first, pull a verified toolbox dependency base on PRs, and reload the matrix page after a late workspace scope reset.
-- [x] Wagons: perf/ci10-stage4, fix/ui-matrix-reload (cherry-picked onto main 3f1027496 without conflict).
+- [ ] One train, one PR, one CI, one npm publication: @sentropic/artifacts 0.2.20 carrying the git-backed tool routing (feat/artifacts-route-git-tools) and the live-host subpath (feat/artifacts-live-host).
+- [x] Wagons: feat/artifacts-route-git-tools, feat/artifacts-live-host (cherry-picked onto main 8ee9c24ef; wagon BRANCH.md edits dropped).
+- [x] CI wagon perf/ci10-cluster-mesh (4ff175482, 2b454214d) cherry-picked; wagon BRANCH.md replaced by the train plan, BR89-EX1 carried over.
 
 ## Scope / Guardrails
-- [x] Branch train/2026-11-07-ci10-d; worktree tmp/worktrees/train4; ENV=test-ci10-train4.
+- [x] Branch train/2026-11-07-artifacts-0.2.20; worktree tmp/worktrees/train1a; ENV=test-train1a.
 - [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling.
 - [x] Scoped local checks only; full suites run in the PR CI.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
@@ -13,26 +14,35 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/**`
-  - `Makefile`
-  - `api/Dockerfile`
+  - `packages/artifacts/**`
+  - `package-lock.json`
+  - `api/package-lock.json`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
   - `.github/workflows/ci.yml`
-  - `ui/src/routes/matrix/+page.svelte`
-  - `ui/tests/utils/matrix-reload.test.ts`
+  - `scripts/ci/**`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `packages/*/src/**`
   - `api/drizzle/*.sql`
 - **Conditional Paths (allowed with declared exception)**:
-  - `.github/workflows/ci.yml` under BR87-EX1.
-  - `Makefile` and `api/Dockerfile` under BR87-EX2.
+  - `package-lock.json` under BR88-EX1.
+  - `api/package-lock.json`, `api/src/services/mcp/cluster-registry.ts`, `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts` under BR88-EX2.
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`, `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` under BR88-EX3.
+  - `.github/workflows/ci.yml` under BR89-EX1.
 
 ## Feedback Loop
-- [x] BR87-EX1: unit shard scheduling and toolbox base pull and publish wiring in ci.yml. Rollback: revert the workflow and wiring tests together.
-- [x] BR87-EX2: toolbox base targets in the Makefile and the Dockerfile base stage split. Rollback: restore recipes and stages.
-- [ ] Acceptance: spans of three CI runs retained in .tmp/rv/ci10-final.md.
+- [x] BR88-EX1: package-lock.json workspace entry of @sentropic/artifacts moves 0.2.18 to 0.2.20. Rollback: revert the version bump and lock line together.
+- [x] BR88-EX2: provider-version repin of the APP-P1 manifest digest to 0.2.20 `6faa661d9eab38920f4b7926d0778af00e3054dc3064f14c3d644ee0faa97ab7` (same digest at version 0.2.18 stays `d55df3ad…`, tool definitions byte-stable), plus the API lock workspace entry. Impact: API registry pin and its two scoped tests only. Rollback: revert with the version bump.
+- [x] BR88-EX3: selected-fixture repin of @sentropic/artifacts 0.2.18 to 0.2.20 through `make pack-candidate-siblings` (CI-equivalent PR context) and `refresh-lazy-package-lock`; guarded archive sha256 `35b4d0c39c310747bf1174b66e19ba6d4168fb9b0f7765f9f8f208ee16d23189`, lock integrity and tuple-spec pin updated. Impact: packaging fixture only. Rollback: revert with the version bump.
+- [x] BR89-EX1 (wagon perf/ci10-cluster-mesh): validate-cluster-mesh matrix regrouped from 3 legs of 3 serial lanes to 7 legs (max-parallel 7), memory MCP qualification run once from the install leg. Impact: +4 jobs per selected run, every lane and gate kept. Rollback: revert the workflow and the scripts/ci shape tests together.
+- [ ] Acceptance: exact-head CI green, GLM APPROVE, npm publication of 0.2.20 by the publish workflow after merge.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -40,17 +50,16 @@
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick**
 - [x] **Multi-branch**
-- [x] Rationale: two wagons integrated into one dated train with one CI.
+- [x] Rationale: two package wagons integrated into one train with a single version and publication.
 
 ## UAT Management (in orchestration context)
-- [ ] Exact-head pull_request CI result and critical-path spans retained in the PR.
+- [ ] Exact-head pull_request CI result retained in the PR.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: wagons cherry-picked onto main without conflict.
-- [x] Lot 2: scoped checks green (ci-dag 10/10, unit-graph 7/7, expected-results 28/28, api-tool-cache 6/6, ci-static 3/3).
-- [x] Lot 3: push, open PR, GLM review.
-- [x] Review B1: pin the exact longest-first wave and the complete endpoint set (performance-report 8/8).
-- [x] Review M3: a deps miss or a failed thin build falls back to the full toolbox build with a warning; full-build failure stays fatal (api-tool-cache 11/11, api-tooling layers, disk-hygiene).
-- [x] Review L4: the deps record names its tooldeps identity; a stale or malformed record is refused and truncated (api-tool-cache 13/13).
-- [x] Review M2: observed slots lower bound 17 -> 28, the executed peak of run 42393158936 (half-open spans); account quota stays to-measure (expected-results 28/28).
+- [x] Lot 1: wagons cherry-picked onto main without code conflict.
+- [x] Lot 2: version 0.2.20, merged changelog, lock entry.
+- [x] Lot 2b (CI run 42411674268 fixes): APP-P1 digest computed through `make test-artifacts` probe (0.2.20 `6faa661d…`, 0.2.18 override `d55df3ad…`); selected fixture refreshed; `test-cluster-mesh SCOPE=tests/packaging` 85 pass, `test-lazy-package` with sibling receipts 136/136.
+- [x] Lot 2c (CI wagon BR89-EX1): ci-dag 10/10, unit-graph 7/7, expected-results 28/28, ci-static 3/3, performance-report 8/8, run-metrics 36/36, package-qualification-dag 9/9, package-candidate 9/9, consumer-contracts 25/25, ci-capacity-policy shapeValid.
+- [ ] Lot 2d: API `tests/api/app-mcp-registry.test.ts` and `tests/api/app-mcp-installed.test.ts` run in the train CI app-cluster-mesh shards (local API stack needs an image rebuild, refused at 91% disk).
+- [ ] Lot 3: push, open PR, CI and GLM review in parallel.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.

@@ -383,10 +383,12 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
       const independent = independentValidators(workflow);
       const noCapacityMutexes = Object.values(workflow.jobs).every(job => !job.concurrency?.group.startsWith('ci-capacity-'));
       const matrixWidths = { api: workflow.jobs['test-api-unit-integration'].strategy['max-parallel'],
-        e2e: workflow.jobs['test-e2e'].strategy['max-parallel'] };
+        e2e: workflow.jobs['test-e2e'].strategy['max-parallel'],
+        clusterMesh: workflow.jobs['validate-cluster-mesh'].strategy['max-parallel'] };
       const proofs = args.flatMap((arg, i) => arg === '--proof-file' ? [JSON.parse(fs.readFileSync(args[i + 1], 'utf8'))] : []);
       const proof = wallClockProof(proofs, policyDigest(workflow));
-      const shapeValid = independent && noCapacityMutexes && matrixWidths.api === 20 && matrixWidths.e2e === 6;
+      const shapeValid = independent && noCapacityMutexes && matrixWidths.api === 20 && matrixWidths.e2e === 6
+        && matrixWidths.clusterMesh === 7;
       console.log(JSON.stringify({ perRunSlots: demand, observedSlotsLowerBound: OBSERVED_SLOTS_LOWER_BOUND, releaseGroups: 2,
         scenarios, independentValidators: independent, noCapacityMutexes, matrixWidths, shapeValid, wallClockProof: proof,
         source: 'Per-run DAG demand; observed slots = executed peak of run 42393158936; account quota remains to-measure', admitted: null }, null, 2));

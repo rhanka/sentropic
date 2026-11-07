@@ -15,7 +15,10 @@ const storage = fs.readFileSync('packages/cluster-mesh/tests/storage/postgres.mk
 const packaging = fs.readFileSync('packages/cluster-mesh/packaging.mk', 'utf8');
 const prepare = fs.readFileSync('packages/cluster-mesh/tests/packaging/prepare.sh', 'utf8');
 const lanes = ['source', 'postgres', 'comments', 'crash', 'installed', 'major', 'stateful', 'lazy', 'install'];
-const groups = ['source installed major', 'postgres comments crash', 'lazy stateful install'];
+const groups = ['source', 'lazy', 'stateful crash', 'comments installed', 'install', 'postgres', 'major'];
+// GitHub names a matrix member from its values; only the install leg carries the memory MCP key.
+const members = ['source', 'lazy', 'stateful crash', 'comments installed', 'install, memory-mcp', 'postgres', 'major']
+  .map(suffix => `validate-cluster-mesh (${suffix})`);
 
 test('should require the immutable producer before every selected package qualification', () => {
   assert.deepEqual(jobs['package-candidates'].needs, ['changes']);
@@ -26,7 +29,8 @@ test('should require the immutable producer before every selected package qualif
   assert.ok(jobs['ci-gate'].needs.includes('package-candidates'));
   assert.ok(jobs['ci-gate'].needs.includes('validate-cluster-mesh'));
   assert.equal(jobs['validate-cluster-mesh'].strategy['fail-fast'], false);
-  assert.equal(jobs['validate-cluster-mesh'].strategy['max-parallel'], 3);
+  assert.equal(jobs['validate-cluster-mesh'].strategy['max-parallel'], 7);
+  assert.equal(jobs['validate-cluster-mesh'].strategy.matrix.include.length, 7, 'every leg starts at once');
   assert.deepEqual(jobs['validate-cluster-mesh'].strategy.matrix.include.map(row => row.lane), groups);
   assert.deepEqual(groups.flatMap(group => group.split(' ')).sort(), [...lanes].sort());
 });
@@ -35,8 +39,8 @@ test('should reject every missing, failed, cancelled or skipped actual qualifica
   const selected = expected.filter(row => row.selected);
   const executed = selected.map(row => ({ job: row.job, conclusion: 'success' }));
   assert.equal(evaluateExpected({ expected, executed }).ok, true);
-  for (const lane of groups) {
-    const job = `validate-cluster-mesh (${lane})`;
+  assert.deepEqual(expected.filter(row => row.job.startsWith('validate-cluster-mesh (')).map(row => row.job), members);
+  for (const job of members) {
     assert.ok(selected.some(row => row.job === job));
     assert.equal(evaluateExpected({ expected, executed: executed.filter(row => row.job !== job) }).ok, false);
     for (const conclusion of ['failed', 'cancelled', 'skipped', 'neutral']) {
@@ -47,7 +51,7 @@ test('should reject every missing, failed, cancelled or skipped actual qualifica
 
 test('should qualify candidate implementation changes while application image steps remain unselected', () => {
   const expected = workflowExpected(workflow, { event: 'pull_request', changes: { package_candidates: 'true' } });
-  for (const name of ['package-candidates', 'validate-llm-mesh', 'validate-llm-gateway', ...groups.map(lane => `validate-cluster-mesh (${lane})`)]) {
+  for (const name of ['package-candidates', 'validate-llm-mesh', 'validate-llm-gateway', ...members]) {
     assert.equal(expected.find(row => row.job === name)?.selected, true, name);
   }
   for (const name of ['build-api-image', 'build-ui', 'build-e2e']) {
@@ -74,6 +78,24 @@ test('should keep mutating lanes on distinct runner workspaces and database name
   assert.match(cleanup.run, /make down ENV=test-ci-br80-\$lane/);
   assert.match(makefile, /CM_COMMENTS_REPORT=tmp\/ci-manifest-guard\/qualify-cluster-mesh\/\$\(PACKAGE_LANE\)/);
 });
+test('should qualify the memory MCP tools once per run from one leg on inputs no lane changes', () => {
+  const cluster = jobs['validate-cluster-mesh'];
+  const legs = cluster.strategy.matrix.include;
+  for (const leg of legs) assert.deepEqual(Object.keys(leg).filter(key => !['lane', 'memory'].includes(key)), []);
+  assert.deepEqual(legs.filter(leg => 'memory' in leg), [{ lane: 'install', memory: 'memory-mcp' }]);
+  const memory = cluster.steps.filter(step => step.run?.includes('memory-mcp-qualify'));
+  assert.equal(memory.length, 1);
+  assert.equal(memory[0].if, "matrix.memory == 'memory-mcp'");
+  assert.equal(memory[0].run, 'make memory-mcp-qualify E2_LOCK=/tmp/sentropic-docker.lock ENV=test-memory-mcp');
+  assert.deepEqual(memory[0].env, { CI_PACKAGE_CANDIDATES: '' });
+  // No lane input reaches this qualification, so one execution equals each former per-leg copy.
+  assert.doesNotMatch(JSON.stringify(memory[0]), /matrix\.lane|strategy\./);
+  const names = cluster.steps.map(step => step.name);
+  assert.ok(names.indexOf('Qualify the isolated package lane') < names.indexOf(memory[0].name));
+  for (const step of cluster.steps.filter(step => step !== memory[0])) {
+    assert.ok([undefined, 'always()'].includes(step.if), `${step.name ?? step.uses} runs in every leg`);
+  }
+});
 test('should retain seed then crash/restart then verification in the same crash fixture', () => {
   const recipe = storage.split('cluster-mesh-pg-crash-test:\n')[1].split('\nCM_PG_NEXT_IMAGE')[0];
   assert.ok(recipe.indexOf('CM_PG_CRASH_PHASE=seed') < recipe.indexOf('cluster-mesh-pg-crash API_PORT='));
@@ -94,7 +116,7 @@ test('should run and clean every grouped qualifier while retaining any failure',
     });
     assert.equal(result.status, failure ? 1 : 0);
     const calls = fs.readFileSync(log, 'utf8').trim().split('\n');
-    assert.equal(calls.length, 9);
+    assert.equal(calls.length, group.split(' ').length * 3);
     group.split(' ').forEach((lane, i) => {
       assert.equal(calls[i * 3], `ci-package-qualification PACKAGE_LANE=${lane} ENV=test-ci-br80-${lane}`);
       assert.match(calls[i * 3 + 1], new RegExp(`cluster-mesh-pg-down ENV=test-ci-br80-${lane}`));

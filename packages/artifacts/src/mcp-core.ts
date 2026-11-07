@@ -16,7 +16,7 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.18';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.20';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
@@ -279,7 +279,8 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
       let request: Pick<HttpRequest, 'method' | 'path' | 'body'>;
       switch (input.tool) {
         case 'artifacts_live_write': case 'artifacts_live_read': case 'artifacts_live_reset':
-        case 'artifacts_live_status': case 'artifacts_live_control': case 'artifacts_git_commit':
+        case 'artifacts_live_status': case 'artifacts_live_control': case 'artifacts_git_commit': case 'artifacts_fetch_app_source':
+        case 'artifacts_git_attach': case 'artifacts_git_publish':
           request = { method: 'POST', path: '/' + input.tool.slice(10), body: args }; break;
         case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
