@@ -29,6 +29,7 @@ export function fakePod(overrides: Partial<Record<FrameBody['op'], Handler>> = {
   const defaults: Record<FrameBody['op'], Handler> = {
     phase: body => ({ phase: body.args.phase }),
     terminate: () => ({ treeGone: true }),
+    renew: () => ({ renewed: true }),
     clear: body => ({ cleared: body.args.paths }),
     put: body => {
       const files = transfers.get(String(body.args.transfer)) ?? new Map(); transfers.set(String(body.args.transfer), files);

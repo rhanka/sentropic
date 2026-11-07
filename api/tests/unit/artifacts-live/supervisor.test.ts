@@ -49,6 +49,38 @@ describe('supervisor transport fencing', () => {
   });
 });
 
+describe('supervisor liveness renewal', () => {
+  it('should renew the lease with an empty fenced frame and require its exact acknowledgement', async () => {
+    const pod = fakePod();
+    expect(await pod.supervisor.renew(runtime)).toBeUndefined();
+    expect(pod.bodies[0]).toMatchObject({ op: 'renew', args: {}, fence: { generation: 1, leaseEpoch: 2, routeEpoch: 3, podUid: 'uid-1' } });
+    for (const reply of [{}, { renewed: 'true' }, { renewed: false }]) {
+      await expect(fakePod({ renew: () => reply }).supervisor.renew(runtime)).rejects.toMatchObject(unavailable);
+    }
+    await expect(fakePod({ renew: () => refuse('fenced') }).supervisor.renew(runtime)).rejects.toMatchObject(stale);
+    await expect(pod.supervisor.renew({ ...runtime, podUid: null })).rejects.toMatchObject(unavailable);
+  });
+  it('should refuse a stale renewal before sending it', async () => {
+    const pod = fakePod();
+    await pod.supervisor.renew({ ...runtime, leaseEpoch: 3 });
+    await expect(pod.supervisor.renew(runtime)).rejects.toMatchObject(stale);
+    expect(pod.channel.send).toHaveBeenCalledTimes(1);
+  });
+  it('should leave an in-flight command running, since a renewal has no side effect', async () => {
+    let aborted = false; let release = () => {};
+    const pod = fakePod({ build: (_body, signal) => new Promise(resolve => {
+      signal.addEventListener('abort', () => { aborted = true; });
+      release = () => resolve({ exitCode: 0 });
+    }) });
+    const pending = pod.supervisor.build(runtime, { id: 'a', headSha: 'h', treeSha: 't' } as never, BUILD_RECIPE, buildEnvironment());
+    await pod.supervisor.renew(runtime);
+    expect(aborted).toBe(false);
+    release();
+    await expect(pending).resolves.toMatchObject({ candidateDigest: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(pod.ops()).toEqual(['build', 'renew', 'terminate', 'snapshot']);
+  });
+});
+
 describe('supervisor transport commands', () => {
   it('should confirm a phase by echo only, since W2 makes the relay fence a static policy proven by Q1', async () => {
     const pod = fakePod();
