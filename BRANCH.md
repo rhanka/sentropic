@@ -1,38 +1,34 @@
-# Feature: Train 3 2026-11-07 (UI folder reload, SCA gate hardening, builder pool d2-4, Track flake item)
+# Feature: A-LIVE W2 sentropic-side egress policies (wagon feat/alive-netpol, train 1b)
 
 ## Objective
-- [ ] One train, one PR, one CI: fix the folders/[id] use-case list reload race, harden the SCA gate (4 LOW findings of the #940 review), schedule live builder pods on the artifact-builders pool, and record the e2e flake in Track.
-- [x] Wagons: fix/ui-folder-usecase-reload, chore/sca-gate-lows, feat/artifact-builder-pool-d2-4, chore/track-e2e-usecase-flake (cherry-picked onto main 2d06ba7eb without conflict).
+- [ ] Pin the Sentropic share of the W2 policy split (plan r3.6/r3.7): `artifact-content` egress TCP 5173 to labelled workers, and the API controller's egress to the npm relay :4873 and the Kubernetes API, in the preprod and prod overlays, with the default-deny intact.
 
 ## Scope / Guardrails
-- [x] Branch train/2026-11-07-ci10-c; worktree tmp/worktrees/train3; ENV=test-ci10-train3.
+- [x] Branch feat/alive-netpol from origin/main 3f1027496; worktree tmp/worktrees/alive-netpol; ENV=test-alive-netpol.
+- [x] Wagon only: no PR, no version bump, no lock or manifest regeneration.
 - [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling.
-- [x] Scoped local checks only; full suites run in the PR CI.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `ui/src/lib/utils/keyed-reload.ts`
-  - `ui/src/routes/folders/[id]/+page.svelte`
-  - `ui/tests/utils/keyed-reload.test.ts`
-  - `scripts/security/sca-gate.mjs`
-  - `scripts/security/sca-gate.test.mjs`
-  - `.security/vulnerability-register.yaml`
-  - `api/src/services/artifacts/live/pods.ts`
-  - `api/tests/unit/artifacts-live/pods.test.ts`
+  - `deploy/ci/artifact-content/network.selftest.mjs`
+  - `deploy/ci/artifact-content/bundle.selftest.mjs`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/*/src/**`
-  - `api/drizzle/*.sql`
-  - `.github/workflows/ci.yml`
+  - `api/**`
+  - `deploy/k8s/base/**`
+  - `deploy/k8s/overlays/**`
 - **Conditional Paths (allowed with declared exception)**:
-  - `.track/**` under BR86-EX1.
+  - `deploy/k8s/README.md` under BR88N-EX1.
 
 ## Feedback Loop
-- [x] BR86-EX1: Track writer commit for the e2e use-case flake bug item 01M6VD98F8SY5WYQ186GV4F66A. Rollback: revert the Track commit.
-- [ ] Acceptance: exact-head CI green; e2e 06-usecase passes; no gate weakened.
+- [x] BR88N-EX1: `deploy/k8s/README.md` documents the egress posture. Reason: operators and k8s need the rule that an API Egress policy isolates the API. Impact: documentation only, no rendered object changes. Rollback: revert the README hunk.
+- [x] attention: the API Egress policy is not added. The app namespaces carry an ingress-only default-deny (poc-k8s contract and live, 2026-11-07), so an API Egress policy limited to the relay and the Kubernetes API would cut Postgres, DNS, the IdP and providers. The tests pin the controller paths instead.
+- [x] attention: `artifact-content` egress to workers on TCP 5173 is already on main (fdd3e6164) and already qualified; this wagon keeps it unchanged.
+- [ ] attention: the prod worker namespace is not named yet (k8s K1-prod), and `BUILDER_NAMESPACE` is fixed in `api/src/services/artifacts/live/pods.ts`. Prod content egress still targets `sentropic-artifact-builders`.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -40,13 +36,12 @@
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick**
 - [x] **Multi-branch**
-- [x] Rationale: four independent wagons integrated into one dated train with one CI.
+- [x] Rationale: wagon branch integrated by the train 1b lane, one CI per train.
 
 ## UAT Management (in orchestration context)
-- [ ] Exact-head pull_request CI result retained in the PR.
+- [ ] No UI change; acceptance is the train CI and the Q1 deny probes.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: wagons cherry-picked onto main without conflict.
-- [x] Lot 2: scoped checks green (sca-gate unit 14/14, ui keyed-reload 2/2; pods test 5/5 recorded by its wagon).
-- [ ] Lot 3: push, open PR, review.
-- [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
+- [x] Lot 0: baseline `make test-artifact-content-manifests ENV=test-alive-netpol` green on main.
+- [ ] Lot 1: controller egress reachability, open-policy guard and API-isolation rejection cases; README posture.
+- [ ] Lot N: push the wagon branch; train 1b integrates it.
