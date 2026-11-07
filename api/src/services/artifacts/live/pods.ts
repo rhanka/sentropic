@@ -13,6 +13,8 @@ const labels = (key: LiveKey, runtime: LiveRuntime) => ({
   'sentropic.dev/artifact-generation': String(runtime.generation),
   'sentropic.dev/artifact-lease': String(runtime.leaseEpoch),
 });
+/** emptyDir sizes (s-archi 2026-11-07 (a)): source, scratch /tmp (npm cache, Vite cache, build output), installed tree. */
+export const VOLUME_LIMITS = Object.freeze({ source: '512Mi', scratch: '2Gi', dependencies: '1536Mi' });
 /** Bootstrap is trusted host code, not repository content or a caller-supplied command. */
 export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string) {
   if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable');
@@ -22,22 +24,25 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
     serviceAccountName: 'artifact-builder', automountServiceAccountToken: false, enableServiceLinks: false,
     nodeSelector: { nodepool: 'artifact-builders' },
     tolerations: [{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }],
-    restartPolicy: 'Never', activeDeadlineSeconds: 3600, terminationGracePeriodSeconds: 10,
+    // A-LIVE Amendment 1: no activeDeadlineSeconds; the bootstrap liveness lease bounds an unattended pod.
+    restartPolicy: 'Never', terminationGracePeriodSeconds: 10,
     securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000,
       seccompProfile: { type: 'RuntimeDefault' } },
     containers: [{ name: 'builder', image: BUILDER_IMAGE, imagePullPolicy: 'IfNotPresent',
       workingDir: '/workspace', command: ['node', '--input-type=module', '-e', bootstrap],
-      env: Object.entries(artifactEnvironment()).map(([name, value]) => ({ name, value })),
+      env: [...Object.entries(artifactEnvironment()).map(([name, value]) => ({ name, value })),
+        { name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } }],
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
       // L0 measured cap adjustment (A-LIVE §12): 4 live pods per d2-4 node; only the limits overcommit.
+      // The memory limit holds the in-pod clean build (heap 1024); the ephemeral limit is the emptyDir sum.
       resources: { requests: { cpu: '350m', memory: '450Mi', 'ephemeral-storage': '0' },
-        limits: { cpu: '2', memory: '1200Mi', 'ephemeral-storage': '2Gi' } },
+        limits: { cpu: '2', memory: '1536Mi', 'ephemeral-storage': '4Gi' } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
         { name: 'dependencies', mountPath: '/dependencies' }],
     }],
-    volumes: ['source', 'scratch', 'dependencies'].map(name => ({ name, emptyDir: { sizeLimit: '512Mi' } })),
+    volumes: Object.entries(VOLUME_LIMITS).map(([name, sizeLimit]) => ({ name, emptyDir: { sizeLimit } })),
   } };
 }
 interface Pod {
