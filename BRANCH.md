@@ -53,5 +53,5 @@
 - [x] Lot 7: liveness lease frame at most every 60 s while not DORMANT and a concurrent scheduler.
 - [x] Lot 8: admission survives an API restart, capacity from per-env config, bridge.stop lease fence, bounded opaque revision (review R1/R2).
 - [x] Lot 9: package live idle deadline at 900 s with no absolute lifetime (BRW8-EX1).
-- [ ] Lot 10: scoped checks green after the review and Amendment 1.
+- [x] Lot 10: scoped checks green after the review and Amendment 1 (tsc and eslint live scope, api artifacts-live 104/104, package live-tools 18/18).
 - [ ] Lot N: train integration CI green on the exact head.
