@@ -26,9 +26,13 @@
   - `api/drizzle/*.sql`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+  - `packages/artifacts/src/server/live-store.ts` (BRW8-EX1)
+  - `packages/artifacts/src/server/live-mutations.ts` (BRW8-EX1)
+  - `packages/artifacts/src/server/live-read.ts` (BRW8-EX1)
 
 ## Feedback Loop
 - [x] attention: the A-LIVE §3.3 contract keeps live_status owner-only, while plan Δ4 lists live_status for invitees; the contract wins and the package is unchanged.
+- [x] BRW8-EX1: the package LiveService runtime record follows A-LIVE Amendment 1 (idleDeadline = lastAccessAt + 900 s, maximumLifetimeAt removed); impact: three package server files, no export or version change; rollback: revert the BRW8-EX1 commit.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -48,5 +52,6 @@
 - [x] Lot 6: idle reaper strictly after 900 s ending on the clean build, no absolute lifetime (A-LIVE Amendment 1).
 - [x] Lot 7: liveness lease frame at most every 60 s while not DORMANT and a concurrent scheduler.
 - [x] Lot 8: admission survives an API restart, capacity from per-env config, bridge.stop lease fence, bounded opaque revision (review R1/R2).
-- [ ] Lot 9: scoped checks green after the review and Amendment 1.
+- [ ] Lot 9: package live idle deadline at 900 s with no absolute lifetime (BRW8-EX1).
+- [ ] Lot 10: scoped checks green after the review and Amendment 1.
 - [ ] Lot N: train integration CI green on the exact head.
