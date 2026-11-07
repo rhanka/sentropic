@@ -26,6 +26,8 @@ export interface SourceSnapshot {
   headSha: string; treeSha: string; lockfile: Uint8Array; cacheIdentity: CacheIdentity;
   /** Trusted, path-filtered staging reference. No forge credentials or environment files. */
   stagingRef: string;
+  /** GB1 descriptor digest validated at this exact commit. */
+  descriptorDigest: string;
 }
 export interface LivePorts {
   store: LiveStore;
@@ -83,6 +85,6 @@ export interface LivePorts {
     /** Resolve and authorize the immutable admitted SG3/SG4 job, never a caller-supplied SHA or CAS. */
     job(key: LiveKey, jobId: string): Promise<{ headSha: string; expectedReleaseId: string | null }>;
     /** Atomic SG4 release/index/receipt writes in the supplied store transaction; never network publication here. */
-    commit(unit: { client?: PoolClient }, key: LiveKey, attempt: LiveAttempt): Promise<{ releaseId: string }>;
+    commit(unit: { client?: PoolClient }, key: LiveKey, attempt: LiveAttempt, runtime: LiveRuntime): Promise<{ releaseId: string }>;
   };
 }
