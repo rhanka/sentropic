@@ -10,6 +10,7 @@ import { createArtifactHost } from './composition';
 import { createPrivateArtifactStorage } from './lifecycle';
 import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdentity } from './credentials';
 import { createArtifactTransport } from './transport';
+import { createWorkspaceDirectory } from './workspace-directory';
 import { createArtifactReaderActivation } from './reader-activation';
 import { createPostgresReaderConsentStore } from '@sentropic/artifacts/adapters/postgres-reader-consent';
 import { assertConsentScopeId, assertConsentScopeVersion } from '@sentropic/artifacts/server/consent';
@@ -44,8 +45,10 @@ const blobs: PublicationBlobStore = {
   listKeys: async prefix => (await privateStorage()).blobs.listKeys(prefix),
 };
 
-export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes,
-  currentIdentity: createCurrentArtifactIdentity(resource) });
+const currentIdentity = createCurrentArtifactIdentity(resource);
+export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes, currentIdentity });
+/** Same credential reader as the host, so a listed workspace matches its bind() authority. */
+export const productWorkspaceDirectory = createWorkspaceDirectory({ pool, currentIdentity });
 export const productArtifactTransport = createArtifactTransport(productArtifactHost);
 
 export const artifactReaderEnabled = () => artifactHostEnabled() && process.env.APP_ARTIFACT_READER_ENABLED === '1';
