@@ -1633,24 +1633,6 @@ jobs:
       - name: Build API image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make ci-build-api ENV=test-ci-images
-      - name: Test image receipt integrity and input guards
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-image-receipts ENV=test-ci-images
-      - name: Verify npm CLI and cache are absent from the production runtime
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-api-runtime ENV=test-ci-api
-      - name: Test publish-api-image tag-collision guard
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-api-tag-guard ENV=test-ci-api
-      - name: Test pgbackup restore isolation guards
-        if: needs.changes.outputs.global == 'true'
-        run: make test-pgbackup-restore-isolation ENV=test-ci-restore-guard
-      - name: Test canonical API image artifact
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ci-api-image-canonical ENV=test-ci-api
-      - name: Verify the production artifact content entrypoint
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-artifact-content-image ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
@@ -1667,7 +1649,39 @@ jobs:
           include-hidden-files: true
           compression-level: 0
 
-  build-api-tool-image:
+  # Guards run in parallel with the consumers of the uploaded image; ci-gate and
+  # publish-api-image both require this job, so an unguarded image never ships.
+  api-image-guards:
+    runs-on: ubuntu-latest
+    needs: [changes, build-api-image]
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - uses: actions/download-artifact@v7
+        with:
+          name: api-image
+          path: .
+      - name: Load and verify the transported API image
+        run: make load-api ENV=test-ci-api
+      - name: Test image receipt integrity and input guards
+        run: make test-ci-image-receipts ENV=test-ci-images
+      - name: Verify npm CLI and cache are absent from the production runtime
+        run: make test-ci-api-runtime ENV=test-ci-api
+      - name: Test publish-api-image tag-collision guard
+        run: make test-ci-api-tag-guard ENV=test-ci-api
+      - name: Test pgbackup restore isolation guards
+        if: needs.changes.outputs.global == 'true'
+        run: make test-pgbackup-restore-isolation ENV=test-ci-restore-guard
+      - name: Test canonical API image artifact
+        run: make test-ci-api-image-canonical ENV=test-ci-api
+      - name: Verify the production artifact content entrypoint
+        run: make test-artifact-content-image ENV=test-ci-api
+
+  # Pure qualification of the toolbox inputs: it does not feed the image, so it
+  # runs beside the consumers; ci-gate requires it.
+  api-tool-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
@@ -1679,6 +1693,15 @@ jobs:
         run: make test-ci-api-tooling ENV=test-ci-api
       - name: Qualify measured unit membership, dependency gates and archive validation
         run: make test-ci-unit-shards test-ci-unit-graph test-ci-api-tool-cache ENV=test-ci-api
+
+  build-api-tool-image:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
       - name: Compute complete toolbox cache identity
         id: toolbox-key
         run: make -s api-tool-cache-key ENV=test-ci-api >> "$GITHUB_OUTPUT"
@@ -2552,12 +2575,13 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    needs: [changes, api-image-guards, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') &&
       needs.changes.result == 'success' &&
+      needs.api-image-guards.result == 'success' &&
       needs.typecheck-lint-api.result == 'success' &&
       needs.typecheck-lint-ui.result == 'success' &&
       needs.security-sast-sca.result == 'success' &&
@@ -3590,7 +3614,9 @@ jobs:
       - validate-harness
       - validate-live-speech
       - build-api-image
+      - api-image-guards
       - build-api-tool-image
+      - api-tool-qualification
       - test-api-unit-integration
       - test-api-sut
       - test-api-ai
@@ -3691,7 +3717,7 @@ jobs:
       validate-mcp-auth, validate-mcp-platform, validate-connector-host, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
-      validate-artifacts, artifacts-qualification, validate-harness, build-api-image, build-api-tool-image,
+      validate-artifacts, artifacts-qualification, validate-harness, build-api-image, api-image-guards, build-api-tool-image, api-tool-qualification,
       test-api-unit-integration, test-api-sut, test-api-ai, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-code-api, security-code-ui, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
