@@ -45,4 +45,8 @@
 - [x] Lot 4: bounded OOM crash restore of the acknowledged draft; package OOM and invitee tests.
 - [x] Lot 5: binding-owner authority and invitee read grants for the host live assertion.
 - [x] Lot gate: scoped checks green (tsc live scope, eslint live scope, api artifacts-live 83/83, package live-tools 17/17).
+- [ ] Lot 6: idle reaper strictly after 900 s ending on the clean build, no absolute lifetime (A-LIVE Amendment 1).
+- [ ] Lot 7: liveness lease frame at most every 60 s while not DORMANT and a concurrent scheduler.
+- [ ] Lot 8: admission survives an API restart, capacity from per-env config, bridge.stop lease fence, bounded opaque revision (review R1/R2).
+- [ ] Lot 9: scoped checks green after the review and Amendment 1.
 - [ ] Lot N: train integration CI green on the exact head.

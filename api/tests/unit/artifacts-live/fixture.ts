@@ -18,7 +18,9 @@ export function fixture(options: { capacity?: number } = {}) {
   const binding: LiveBinding = { generation: 1, ownerId: 'owner', headSha: 'B', healthy: true,
     autoPublish: true, automaticAuthorized: true, releaseId: 'release-B', releaseCommit: 'B', initialUnpublishedBranchEligible: false };
   const invitation = { epoch: 0, expiresAt: null as number | null };
-  const admission = createFairAdmission({ capacity: options.capacity ?? 1, waiterTtlMs: 60_000, now: () => now });
+  const keys = new Map<string, LiveKey>();
+  const admission = createFairAdmission({ capacity: options.capacity ?? 1, waiterTtlMs: 60_000, now: () => now,
+    holders: () => store.active() });
   const draftOf = (k: LiveKey) => {
     if (!drafts.has(idOf(k))) drafts.set(idOf(k), { generation: 1, revision: 'r1', baseHeadSha: 'B', treeSha: 'tree-B-dirty', dirty: true });
     return drafts.get(idOf(k))!;
@@ -40,6 +42,8 @@ export function fixture(options: { capacity?: number } = {}) {
   };
   const store: LiveStore = {
     read: async k => structuredClone(states.get(idOf(k))),
+    active: async () => [...states].filter(([, state]) => state.runtime.phase !== 'DORMANT')
+      .map(([id, state]) => ({ key: keys.get(id)!, ownerId: state.runtime.ownerId })),
     async transaction(k, work) {
       const previous = tail; let unlock!: () => void;
       tail = new Promise<void>(resolve => { unlock = resolve; }); await previous;
@@ -47,7 +51,8 @@ export function fixture(options: { capacity?: number } = {}) {
       const before = { binding: structuredClone(binding), published: [...published] };
       try {
         const result = await work(unit);
-        if (unit.state) states.set(idOf(k), structuredClone(unit.state)); return structuredClone(result);
+        if (unit.state) { states.set(idOf(k), structuredClone(unit.state)); keys.set(idOf(k), { ...k }); }
+        return structuredClone(result);
       } catch (error) { Object.assign(binding, before.binding); published.splice(0, published.length, ...before.published); throw error; }
       finally { unlock(); }
     },
@@ -75,6 +80,7 @@ export function fixture(options: { capacity?: number } = {}) {
       quiesce: vi.fn(async () => { events.push('quiesce'); }),
       build: vi.fn(async () => { events.push('build'); return { candidateDigest: 'candidate' }; }),
       verify: vi.fn(async () => { events.push('verify'); }),
+      renew: vi.fn(async () => undefined),
     },
     routes: { revoke: vi.fn(async () => { events.push('revoke'); }), ready: vi.fn(async () => { events.push('ready'); }) },
     publication: { job: vi.fn(async () => ({ headSha: 'A', expectedReleaseId: binding.releaseId })),

@@ -42,7 +42,7 @@ describe('live admission in the controller', () => {
     const other = { storageScopeId: 'scope-a', artifactId: 'artifact-b' };
     await expect(f.controller.start(other)).rejects.toMatchObject({ code: 'builder_unavailable' });
     await f.controller.reap(key); // not yet past lifetime
-    f.advance(3_600_001); await f.controller.reap(key);
+    f.advance(3_900_001); await f.controller.reap(key);
     expect((await f.state())!.runtime.phase).toBe('DORMANT');
     await expect(f.admission.acquire(other, 'owner')).resolves.toBeUndefined();
   });
