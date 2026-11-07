@@ -16,6 +16,7 @@ const t0 = 1_000_000;
 function claims(over: Partial<LiveAssertionClaims> = {}): LiveAssertionClaims {
   const base = { v: 1 as const, kid: 'immo-1', host, artifactId, storageScopeId: 'scope', sessionId: 'session',
     generation: 1, routeEpoch: 1, podUid: 'uid', podName: '', sourceRevision: 3, principalId: 'owner',
+    role: 'binding_owner' as const, invitationId: '', invitationEpoch: 0, invitationExp: 0,
     iat: t0 / 1000, exp: t0 / 1000 + 600, ...over };
   base.podName = over.podName ?? podName(base);
   return base;
@@ -124,6 +125,57 @@ describe('host assertion live edge', () => {
     expect(await f.proxy.authorize(f.req(sign(), path, { headers: { origin } }), artifactId, true)).toBeDefined();
     expect(await f.proxy.authorize(f.req(sign(), path), artifactId, true)).toBeUndefined();
     expect(await f.proxy.authorize(f.req(undefined, path, { headers: { origin } }), artifactId, true)).toBeUndefined();
+  });
+});
+
+const invitee = (over: Partial<LiveAssertionClaims> = {}) => claims({ principalId: 'guest', role: 'invitee', invitationId: 'inv-1',
+  invitationEpoch: 1, invitationExp: t0 / 1000 + 900, ...over });
+describe('invitee role (multi-user live)', () => {
+  const keys = () => key;
+  it('should carry principal, role, invitation id, epoch and expiry into the route', async () => {
+    const f = fixture(); const route = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
+    expect(route).toMatchObject({ role: 'invitee', principalId: 'guest', invitationId: 'inv-1', invitationEpoch: 1, sessionId: 'session', generation: 1 });
+    const owner = (await f.live.authorize(f.req(sign()), artifactId))!;
+    expect(owner).toMatchObject({ role: 'binding_owner', principalId: 'owner' }); expect(owner.invitationId).toBeUndefined();
+  });
+  it('should cap the route lifetime at the invitation expiry', async () => {
+    const f = fixture(); const route = (await f.live.authorize(f.req(sign(invitee({ invitationExp: t0 / 1000 + 100 }))), artifactId))!;
+    expect(route.expiresAt).toBe(t0 + 100_000);
+  });
+  it.each([
+    ['unknown role', { role: 'admin' }], ['owner carrying an invitation', { invitationId: 'inv-1' }],
+    ['invitee without invitation id', { role: 'invitee', invitationId: '', invitationEpoch: 1, invitationExp: t0 / 1000 + 900 }],
+    ['invitee expired invitation', { role: 'invitee', invitationId: 'i', invitationEpoch: 1, invitationExp: t0 / 1000 - 1 }],
+    ['assertion outliving invitation', { role: 'invitee', invitationId: 'i', invitationEpoch: 1, invitationExp: t0 / 1000 + 10 }],
+    ['invitee epoch zero', { role: 'invitee', invitationId: 'i', invitationEpoch: 0, invitationExp: t0 / 1000 + 900 }],
+  ])('should refuse %s', (_n, over) => {
+    expect(verifyLiveAssertion(sign(claims(over as Partial<LiveAssertionClaims>)), { key: keys, now: () => t0 })).toBeUndefined();
+  });
+  it('should close invitee sockets on invitation revocation without touching the owner or other invitations', async () => {
+    const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
+    const other = (await f.live.authorize(f.req(sign(invitee({ invitationId: 'inv-2' }))), artifactId))!;
+    const owner = (await f.live.authorize(f.req(sign()), artifactId))!;
+    const closeGuest = vi.fn(); const closeOther = vi.fn(); const closeOwner = vi.fn();
+    f.live.watch(guest, closeGuest); f.live.watch(other, closeOther); f.live.watch(owner, closeOwner);
+    f.fences.revokeInvitation({ artifactId, invitationId: 'inv-1', epoch: 2 });
+    expect(closeGuest).toHaveBeenCalledTimes(1); expect(closeOther).not.toHaveBeenCalled(); expect(closeOwner).not.toHaveBeenCalled();
+    expect(await f.live.current(guest)).toBe(false); expect(await f.live.current(owner)).toBe(true);
+    expect(await f.live.authorize(f.req(sign(invitee())), artifactId)).toBeUndefined();
+    expect(await f.live.authorize(f.req(sign(invitee({ invitationEpoch: 2 }))), artifactId)).toBeDefined();
+  });
+  it('should close an invitee socket when the session is revoked or a new generation is fenced', async () => {
+    const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
+    const close = vi.fn(); f.live.watch(guest, close);
+    f.fences.fence({ artifactId, generation: 2, routeEpoch: 1 }); expect(close).toHaveBeenCalledTimes(1);
+  });
+  it('should expire an invitee through the proxy validity check', async () => {
+    const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee({ invitationExp: t0 / 1000 + 100 }))), artifactId))!;
+    expect(await f.proxy.valid(guest)).toBe(true); f.time.now = t0 + 101_000; expect(await f.proxy.valid(guest)).toBe(false);
+  });
+  it('should authorize the invitee websocket upgrade and serve HTML to the invitee', async () => {
+    const f = fixture(); const path = '/_live/session/hmr';
+    expect(await f.proxy.authorize(f.req(sign(invitee()), path, { headers: { origin } }), artifactId, true)).toBeDefined();
+    expect((await f.proxy.fetch(f.req(sign(invitee())), artifactId))?.status).toBe(200);
   });
 });
 
