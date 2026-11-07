@@ -89,7 +89,15 @@ ifndef API_TOOL_VERSION
 API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json e2e/tests/fixtures | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 endif
 export API_TOOL_VERSION
+# CI10-S4: dependency-only toolbox identity. True inputs only: lockfile, workspace manifests,
+# tool locks and installers, audit gate, .dockerignore and the Dockerfile (which pins the
+# Node/Go base digests and every dependency/tool stage). No workspace source bytes.
+ifndef API_TOOL_DEPS_VERSION
+API_TOOL_DEPS_VERSION := tooldeps-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api/Dockerfile api/package.json 'packages/*/package.json' 'apps/*/package.json' package.json package-lock.json .dockerignore scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+endif
+export API_TOOL_DEPS_VERSION
 API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
+API_TOOL_DEPS_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)sentropic-api-tool-deps:$(API_TOOL_DEPS_VERSION)
 export UI_IMAGE_NAME  ?= sentropic-ui
 export E2E_IMAGE_NAME ?= sentropic-e2e
 export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
@@ -720,8 +728,23 @@ pull-api-tool-registry: ## Pull the prebuilt toolbox for this exact content iden
 	@node scripts/ci/api-tool-registry.mjs pull $(API_TOOL_REGISTRY_IMAGE) $(API_TOOL_VERSION) $(API_TOOL_IMAGE)
 push-api-tool-registry: ## Publish the verified toolbox and its recorded manifest (main CI only)
 	@node scripts/ci/api-tool-registry.mjs push $(API_TOOL_REGISTRY_IMAGE) $(API_TOOL_VERSION) $(API_TOOL_IMAGE)
+API_TOOL_DEPS_REGISTRY_IMAGE ?= ghcr.io/rhanka/sentropic-ci-toolbox-deps
+API_TOOL_DEPS_REF_FILE ?= .tmp/api-tool-deps-ref
+.PHONY: verify-api-tool-deps print-api-tool-deps-version pull-api-tool-deps-registry push-api-tool-deps-registry ci-build-api-tool-deps
+print-api-tool-deps-version: ## Print the dependency-only toolbox tag
+	@echo $(API_TOOL_DEPS_VERSION)
+pull-api-tool-deps-registry: ## Pull and verify the dependency toolbox; record its digest ref for the source-layer build
+	@mkdir -p $(dir $(API_TOOL_DEPS_REF_FILE)) && : > $(API_TOOL_DEPS_REF_FILE)
+	@node scripts/ci/api-tool-registry.mjs pull $(API_TOOL_DEPS_REGISTRY_IMAGE) $(API_TOOL_DEPS_VERSION) $(API_TOOL_DEPS_IMAGE)
+	@node scripts/ci/api-tool-registry.mjs pin $(API_TOOL_DEPS_REGISTRY_IMAGE) $(API_TOOL_DEPS_VERSION) $(API_TOOL_DEPS_IMAGE) > $(API_TOOL_DEPS_REF_FILE)
+verify-api-tool-deps: ## Run the toolbox runner/compiler interface check on the dependency base
+	@$(MAKE) test-ci-api-tool-runtime TOOL_RUNTIME_IMAGE=$(API_TOOL_DEPS_IMAGE) ENV=$(ENV)
+push-api-tool-deps-registry: ## Publish the verified dependency toolbox and its manifest (main CI only)
+	@node scripts/ci/api-tool-registry.mjs push $(API_TOOL_DEPS_REGISTRY_IMAGE) $(API_TOOL_DEPS_VERSION) $(API_TOOL_DEPS_IMAGE)
+ci-build-api-tool-deps: ## Build the dependency-only toolbox (main publication path)
+	@$(CI_IMAGE_BUILD) --target ci-tool-deps -f api/Dockerfile -t $(API_TOOL_DEPS_IMAGE) .
 test-ci-api-tool-cache: ci-test-env
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs scripts/ci/api-tool-build.test.mjs
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
@@ -745,7 +768,7 @@ test-ci-release-receipts: ci-test-env ## Reject untested releases: required chec
 
 .PHONY: test-ci-api-tool-runtime
 test-ci-api-tool-runtime: ci-test-env ## Verify npm runners and rebuilt esbuild Node interfaces
-	@docker run --rm $(API_TOOL_IMAGE) node -e 'const {execFileSync}=require("node:child_process"); execFileSync("npm",["--version"],{stdio:"inherit"}); execFileSync("npx",["--no-install","vitest","--version"],{stdio:"inherit"}); for(const path of ["/workspace/node_modules/esbuild","/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild"]){const tool=require(path); const result={exports:null}; new Function("module",tool.transformSync("module.exports = 6 * 7 as number",{loader:"ts"}).code)(result); if(result.exports!==42)throw Error("esbuild transform failed: "+path); console.log("PASS: esbuild",tool.version,"TypeScript transform and Node protocol");}'
+	@docker run --rm $(or $(TOOL_RUNTIME_IMAGE),$(API_TOOL_IMAGE)) node -e 'const {execFileSync}=require("node:child_process"); execFileSync("npm",["--version"],{stdio:"inherit"}); execFileSync("npx",["--no-install","vitest","--version"],{stdio:"inherit"}); for(const path of ["/workspace/node_modules/esbuild","/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild"]){const tool=require(path); const result={exports:null}; new Function("module",tool.transformSync("module.exports = 6 * 7 as number",{loader:"ts"}).code)(result); if(result.exports!==42)throw Error("esbuild transform failed: "+path); console.log("PASS: esbuild",tool.version,"TypeScript transform and Node protocol");}'
 
 build-api-tool-image: ## Reuse the toolbox locally or from the registry; build only on a cache miss
 	@if docker image inspect $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
@@ -785,7 +808,8 @@ export IMAGE_PLATFORM ?= linux/amd64
 CI_IMAGE_CACHE ?= 0
 CI_IMAGE_CACHE_FLAGS = $(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM) --cache-to type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM)$(comma)mode=max,--no-cache)
 comma := ,
-CI_IMAGE_BUILD = $(DISK_HYGIENE_GUARD) && docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+CI_IMAGE_BUILDX = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+CI_IMAGE_BUILD = $(DISK_HYGIENE_GUARD) && $(CI_IMAGE_BUILDX)
 .PHONY: ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e
 ci-build-api:
 	@$(MAKE) ci-build-api-target IMAGE_KIND=api ENV=$(ENV)
@@ -794,8 +818,10 @@ ci-build-api-target:
 	@$(MAKE) record-api-image ENV=$(ENV)
 ci-build-api-tool:
 	@$(MAKE) ci-build-api-tool-target IMAGE_KIND=api-tool ENV=$(ENV)
+# A recorded, verified dependency digest (pull-api-tool-deps-registry) makes this a thin source build;
+# a miss, cold mode or a failed thin build runs the full toolbox build (scripts/ci/api-tool-build.mjs).
 ci-build-api-tool-target:
-	@$(CI_IMAGE_BUILD) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
+	@$(DISK_HYGIENE_GUARD) && node scripts/ci/api-tool-build.mjs $(API_TOOL_DEPS_REF_FILE) $(API_TOOL_DEPS_VERSION) $(API_TOOL_DEPS_REGISTRY_IMAGE) -- $(CI_IMAGE_BUILDX) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
 ci-build-ui:
 	@node scripts/ci/resolve-ui-image.mjs $(ENV)
 ci-build-ui-target:

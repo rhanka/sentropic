@@ -87,3 +87,20 @@ test('should keep both production suites and reject either missing result', () =
     assert.equal(evaluateExpected({ expected, executed: executed.filter(row => row.job !== name) }).ok, false);
   }
 });
+
+test('should pull the verified dependency base on PRs and publish it only from the main-only successor', () => {
+  const producer = jobs['build-api-tool-image'];
+  const pull = producer.steps.find(s => s.id === 'toolbox-deps-registry');
+  assert.match(pull.if, /CI_IMAGE_CACHE == '1'/);
+  assert.match(pull.run, /make pull-api-tool-deps-registry/);
+  const order = producer.steps.map(s => s.id ?? s.name);
+  assert.ok(order.indexOf('toolbox-deps-registry') < order.indexOf('Build CI toolbox'));
+  assert.ok(!producer.steps.some(s => /push-api-tool/.test(s.run ?? '')));
+  assert.equal(producer.permissions.packages, 'read');
+  const publish = jobs['api-tool-registry-publish'];
+  const runs = publish.steps.map(s => s.run ?? '');
+  const build = runs.findIndex(r => r.includes('ci-build-api-tool-deps verify-api-tool-deps'));
+  const push = runs.findIndex(r => r.includes('push-api-tool-deps-registry'));
+  assert.ok(build >= 0 && push > build, 'dependency base is built and interface-verified before it is pushed');
+  assert.match(publish.steps[push].if, /deps_missing == 'true'/);
+});
