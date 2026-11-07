@@ -65,6 +65,7 @@
   - [x] Builder handoff signing key and host receipt key ring from fixed env names, with a documented rotation cycle.
   - [x] Mount under `/api/v1/artifacts/builder` behind `createRequireServiceAuth`; ui nginx location without access log.
   - [x] Pod spec keeps main's resources and env (pod-4live owns them); namespace, placement and no `activeDeadlineSeconds` only.
+  - [x] Builder-side HTTP `RemoteHost` on the live-host `HOST_BUILD_PATHS` (signed job request, handoff with candidate bytes).
 - [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
   - [x] Push the wagon; report .tmp/rv/alive-W3-W7.md; `make down-volumes ENV=test-alive-w7`.

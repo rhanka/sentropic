@@ -42,6 +42,9 @@ The host supplies these mandatory integrations:
   The builder resolves only the host's pending job and registers its attempt
   fence; the host runs `acceptHandoff`, whose recheck covers every §8.3 item.
   Keys carry a `kid`, so builder and receipt keys rotate with an overlap.
+  `createHttpRemoteHost` is the builder-side `RemoteHost` over the live-host
+  `HOST_BUILD_PATHS` (https base URL from the host configuration): a closed
+  refusal rejects with `LiveHostError`, any other failure is an unknown outcome.
 - The API is mounted under `/api/v1/artifacts/builder` (`createBuilderMount`)
   behind `createRequireServiceAuth` with the `artifacts:builder` scope. The
   verified client maps to its host identity through
