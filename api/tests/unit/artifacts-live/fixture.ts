@@ -7,9 +7,17 @@ import type { CacheReceipt } from '../../../src/services/artifacts/live/cache';
 import { createFairAdmission } from '../../../src/services/artifacts/live/admission';
 import { createHeavyPhaseQueue, createMemoryHeavyPhaseQueueStore, PROVISIONAL_HEAVY_PHASE_COSTS_MIB } from '@sentropic/cluster-mesh';
 import { createQueuedHeavyGate, liveHolds } from '../../../src/services/artifacts/live/heavy';
+import { builderPlacement } from '../../../src/services/artifacts/live/placement';
 
 export const key = { storageScopeId: 'scope-a', artifactId: 'artifact-a' };
 export const owner = { principalId: 'owner' };
+export const placement = builderPlacement({ ARTIFACT_BUILDER_NAMESPACE: 'artifact-builders-test',
+  ARTIFACT_BUILDER_SERVICE_DOMAIN: 'artifact-builders-test.svc.cluster.local' });
+/** GB1 inputs of every fixture commit: a lock without script entries, so no qualification file is required. */
+export const gb1Descriptor = JSON.stringify({ version: 1, buildScript: 'build:artifact', outputDir: 'dist', lockfilePath: 'package-lock.json' });
+const gb1Manifest = { name: 'fixture', version: '1.0.0', scripts: { 'build:artifact': 'vite build' } };
+const gb1 = { subPath: '', files: { 'sentropic.artifact.json': gb1Descriptor, 'package.json': JSON.stringify(gb1Manifest),
+  'package-lock.json': JSON.stringify({ lockfileVersion: 3, packages: { '': gb1Manifest } }) } };
 const idOf = (k: LiveKey) => `${k.storageScopeId}/${k.artifactId}`;
 /** `budgetMiB` defaults to a node with room for every phase; pass 1706 for one d2-4 (s-archi 07/11 15:05). */
 export function fixture(options: { capacity?: number; budgetMiB?: number; maxWaitMs?: number } = {}) {
@@ -67,7 +75,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     forge: { head: vi.fn(async () => binding.headSha), fastForward: vi.fn(async (_key, before, after) => before < after),
       reachable: vi.fn(async () => true),
       snapshot: vi.fn(async (_key, headSha) => ({ headSha, treeSha: `tree-${headSha}`, lockfile: new Uint8Array(),
-        cacheIdentity: {} as never, stagingRef: `clean-${headSha}` })) },
+        cacheIdentity: {} as never, stagingRef: `clean-${headSha}`, gb1 })) },
     drafts: { current: vi.fn(async k => ({ ...draftOf(k) })), checkpoint: vi.fn(async () => { events.push('checkpoint'); }),
       advanceClean: vi.fn(async (k, _expected, headSha) => {
         const next = { ...draftOf(k), baseHeadSha: headSha, treeSha: `tree-${headSha}` }; drafts.set(idOf(k), next); return next;
@@ -75,8 +83,8 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     admission, heavy: createQueuedHeavyGate({ queue, node: 'd2-4-a', maxWaitMs: options.maxWaitMs ?? 2_000, pollMs: 1,
       renewMs: 1_000, holds: () => liveHolds(store) }),
     invitations: { current: vi.fn(async () => ({ ...invitation })) },
-    pods: createBuilderPods(core, 'setInterval(() => {}, 1000)'),
-    cache: { acquire: vi.fn(async () => ({ key: 'cache' } as CacheReceipt)) },
+    pods: createBuilderPods(core, 'setInterval(() => {}, 1000)', placement),
+    cache: { acquire: vi.fn(async () => ({ key: 'cache', identity: { lockSha256: 'lock-sha', nodeVersion: 'v24', npmVersion: '11' } } as CacheReceipt)) },
     worker: {
       clean: vi.fn(async () => { events.push('clean'); }),
       prepare: vi.fn(async (_runtime, source) => { events.push(`prepare:${source.headSha}`); }),
@@ -89,7 +97,8 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
       renew: vi.fn(async () => undefined),
     },
     routes: { revoke: vi.fn(async () => { events.push('revoke'); }), ready: vi.fn(async () => { events.push('ready'); }) },
-    publication: { job: vi.fn(async () => ({ headSha: 'A', expectedReleaseId: binding.releaseId })),
+    publication: { job: vi.fn(async (_key, jobId: string) => ({ jobId, generation: binding.generation, headSha: 'A',
+      expectedReleaseId: binding.releaseId })),
       commit: vi.fn(async (_unit, _key, attempt) => {
       published.push(attempt.headSha); binding.releaseCommit = attempt.headSha; binding.releaseId = `release-${attempt.headSha}`;
       return { releaseId: binding.releaseId };
