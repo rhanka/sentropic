@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import { ArtifactOperationError } from '../server/failures.js';
-import { gitBindingEvent, gitBindingReceiptKey, validateGitBindingWrite,
-  type GitBinding, type GitBindingEvent, type GitBindingStore } from '../server/git-bindings.js';
+import { gitBindingEvent, gitBindingReceiptKey, validateGitAttachIntent, validateGitBindingWrite,
+  type GitAttachIntent, type GitBinding, type GitBindingEvent, type GitBindingStore } from '../server/git-bindings.js';
 import type { GitReleaseIndex, GitReleaseIndexStore } from '../server/git-contracts.js';
 
 const fields = ['artifactId', 'storageScopeId', 'repoId', 'branch', 'channel', 'personalPrincipalId', 'subPath',
@@ -14,8 +14,19 @@ function bindingRow(row: Record<string, unknown>): GitBinding {
     return key === 'stateDetail' && value === null ? [] : [[key, value instanceof Date ? value.toISOString() : value]];
   })) as unknown as GitBinding;
 }
+const intentFields = ['storageScopeId', 'actorId', 'idempotencyKey', 'commandHash', 'artifactId', 'repoId',
+  'branch', 'baseCommitSha', 'createdAt'] as const;
+const intentRow = (row: Record<string, unknown>): GitAttachIntent => Object.fromEntries(intentFields.map(key => {
+  const value = row[column(key)];
+  return [key, value instanceof Date ? value.toISOString() : value];
+})) as unknown as GitAttachIntent;
 /** Injected pool, no import-time I/O/DDL. All mutation work shares one transaction. */
 export function createPostgresGitBindingStore(pool: Pool): GitBindingStore {
+  const readIntent = async (scope: string, actorId: string, key: string) => {
+    const { rows } = await pool.query(`SELECT * FROM artifacts.git_attach_intents
+      WHERE storage_scope_id=$1 AND actor_id=$2 AND idempotency_key=$3`, [scope, actorId, key]);
+    return rows[0] ? intentRow(rows[0]) : undefined;
+  };
   return {
     async get(scope, id) {
       const { rows } = await pool.query('SELECT * FROM artifacts.git_bindings WHERE storage_scope_id=$1 AND artifact_id=$2',
@@ -32,9 +43,18 @@ export function createPostgresGitBindingStore(pool: Pool): GitBindingStore {
         for (const key of ['beforeSha', 'afterSha', 'deliveryId', 'invocationId'] as const) {
           if (row[column(key)] !== null) event[key] = row[column(key)];
         }
+        if (row.branch_created === true) event.branchCreated = true;
         return event;
       });
     },
+    async reserveAttachIntent(intent) {
+      validateGitAttachIntent(intent);
+      await pool.query(`INSERT INTO artifacts.git_attach_intents (storage_scope_id,actor_id,idempotency_key,
+        command_hash,artifact_id,repo_id,branch,base_commit_sha,created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`, intentFields.map(key => intent[key]));
+      return (await readIntent(intent.storageScopeId, intent.actorId, intent.idempotencyKey))!;
+    },
+    attachIntent: readIntent,
     async write(input) {
       const snapshot = structuredClone(input);
       const binding = snapshot.binding;
@@ -65,10 +85,10 @@ export function createPostgresGitBindingStore(pool: Pool): GitBindingStore {
           WHERE git_bindings.storage_scope_id=EXCLUDED.storage_scope_id`, values);
         const event = gitBindingEvent(snapshot);
         await client.query(`INSERT INTO artifacts.git_binding_events
-          (artifact_id,storage_scope_id,actor_id,action,before_sha,after_sha,delivery_id,invocation_id,created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [binding.artifactId, scope, snapshot.actorId,
+          (artifact_id,storage_scope_id,actor_id,action,before_sha,after_sha,delivery_id,invocation_id,created_at,
+          branch_created) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [binding.artifactId, scope, snapshot.actorId,
           event.action, event.beforeSha ?? null, event.afterSha ?? null,
-          event.deliveryId ?? null, event.invocationId ?? null, event.createdAt]);
+          event.deliveryId ?? null, event.invocationId ?? null, event.createdAt, event.branchCreated ?? null]);
         await client.query('INSERT INTO artifacts.idempotency_keys(key,params_hash,result) VALUES ($1,$2,$3)',
           [key, snapshot.commandHash, JSON.stringify(binding)]);
         await client.query('COMMIT');
