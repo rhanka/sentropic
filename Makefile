@@ -695,8 +695,31 @@ test-artifact-content-image: ci-test-env ## Qualify the content role in the reco
 	@bash scripts/test-artifact-content-image.sh $(or $(CONTENT_IMAGE_CASE),all)
 
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
+.PHONY: test-ci-unit-shards
+test-ci-unit-shards: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		sh -ec 'node scripts/ci/locked-tools.mjs --prefix /tmp/unit-tools --ignore-scripts --no-audit --no-fund @types/node@22 typescript@5.9.3 vitest@4.1.5 >/dev/null; export UNIT_VITEST_TOOL_DIR=/tmp/unit-tools; node --test scripts/ci/api-unit-shards.test.mjs scripts/ci/api-unit-shards-cli.test.mjs'
+
+.PHONY: test-ci-unit-graph
+test-ci-unit-graph: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-unit-graph.test.mjs'
+
 api-tool-version: ## Print the content-addressed CI toolbox tag
 	@echo $(API_TOOL_VERSION)
+
+# Reuse exact toolbox bytes across runs; current-run transport receipts stay fresh.
+API_TOOL_CACHE_DIR ?= .tmp/api-tool-cache
+.PHONY: api-tool-cache-key save-api-tool-cache load-api-tool-cache test-ci-api-tool-cache
+api-tool-cache-key:
+	@printf 'key=%s-%s\n' "$$(sha256sum package-lock.json | cut -d' ' -f1)" '$(API_TOOL_VERSION)'
+save-api-tool-cache:
+	@node scripts/ci/api-tool-cache.mjs write $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
+load-api-tool-cache:
+	@node scripts/ci/api-tool-cache.mjs verify $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
+	@set -o pipefail; zstd -dc $(API_TOOL_CACHE_DIR)/image.tar.zst | docker load
+	@node scripts/ci/api-tool-cache.mjs loaded $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
+test-ci-api-tool-cache: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
@@ -1080,10 +1103,64 @@ ci-expected-results: ## Evaluate expected vs executed results EXPECTED_FILE=<jso
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_GATE_NEEDS -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-expected-results.mjs $(if $(EXPECTED_FILE),--expected-file $(EXPECTED_FILE),--help) $(if $(EXECUTED_FILE),--executed-file $(EXECUTED_FILE),)
 test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node --test scripts/ci/ci-run-metrics.test.mjs
+
+# BR84-EX2: read-only GitHub capture; no workflow retry, cancellation or publication.
+CI_PROOF_DIR ?= tmp/ci-performance
+CI_PROOF_REF ?= $(shell git branch --show-current)
+CI_PROOF_INPUT ?= spec/ci-cd-ten-minutes/runs.json
+.PHONY: ci-performance-capture ci-performance-report test-ci-performance-report ci-performance-dispatch
+.PHONY: ci-performance-receipt ci-performance-retain
+ci-performance-receipt: ## Read the original workflow-SHA receipt for an already captured run
+	@mkdir -p "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capacity"
+	@gh run download $(CI_RUN_ID) --repo rhanka/sentropic --name ci-capacity-$(CI_RUN_ID)-$(CI_RUN_ATTEMPT) --dir "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capacity"
+ci-performance-retain: ## Retain sanitized API captures as the versioned report input
+	@mkdir -p spec/ci-cd-ten-minutes
+	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --collect $(CI_PROOF_DIR) > "$(CI_PROOF_INPUT).new"
+	@mv "$(CI_PROOF_INPUT).new" "$(CI_PROOF_INPUT)"
+ci-performance-capture: ## Capture one exact attempt, expanded jobs and dispatch manifest via gh API
+	@printf '%s\n' '$(CI_RUN_ID)' '$(CI_RUN_ATTEMPT)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@mkdir -p "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)"
+	@gh api repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT) > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/run.json"
+	@gh api --paginate 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT)/jobs?per_page=100' | jq -s '[.[].jobs[]]' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/jobs.json"
+	@gh api 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/artifacts?per_page=100' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/artifacts.json"
+	@test -f "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/expected.json" || gh run download $(CI_RUN_ID) --repo rhanka/sentropic --name ci-expected-$(CI_RUN_ID)-$(CI_RUN_ATTEMPT) --dir "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)" || \
+		printf '%s\n' '{"status":"missing","reason":"dispatch artifact unavailable"}' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/missing-manifest.json"
+	@jq -n --arg capturedAt "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" --slurpfile run "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/run.json" --slurpfile jobs "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/jobs.json" '{capturedAt:$$capturedAt,run:$$run[0],jobs:$$jobs[0]}' > "$(CI_PROOF_DIR)/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)/capture.json"
+ci-performance-dispatch: ## Qualify the wagon through CI without opening a PR or publishing a release
+	@test -n "$(CI_PROOF_REF)" && test "$(CI_PROOF_REF)" != main
+	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_PROOF_REF)" -f bootstrap_publish_target=none
+ci-performance-report: ## Report retained real-run measurements; REQUIRE_PROOF=1 rejects missing/breached acceptance
+	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-performance-report.mjs --input $(CI_PROOF_INPUT) $(if $(filter 1,$(REQUIRE_PROOF)),--require-proof) $(if $(filter 1,$(CI_PROOF_JSON)),--json)
+test-ci-performance-report: ## Reject incomplete, failed, rerun and undersampled performance claims
+	@docker run --rm --pull=never -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-performance-report.test.mjs'
+# BR84-EX2: dossier dependencies stay in a lane-owned volume, never host node_modules.
+CI_DOSSIER = spec/ci-cd-ten-minutes/dossier
+CI_DOSSIER_NODE = node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+CI_DOSSIER_BROWSER_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+CI_DOSSIER_PULL ?= never
+CI_DOSSIER_MOUNTS = -v "$(CURDIR):/workspace" -v "$(ENV)-ci-dossier-deps:/workspace/$(CI_DOSSIER)/node_modules" -w /workspace/$(CI_DOSSIER)
+CI_DOSSIER_RUN = docker run --rm --pull=$(CI_DOSSIER_PULL) -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) $(CI_DOSSIER_NODE)
+.PHONY: ci-dossier-tools build-ci-dossier test-ci-dossier clean-ci-dossier
+ci-dossier-tools: ci-test-env
+	@docker run --rm --pull=$(CI_DOSSIER_PULL) -v "$(ENV)-ci-dossier-deps:/deps" $(CI_DOSSIER_NODE) chown "$$(id -u):$$(id -g)" /deps
+	@$(CI_DOSSIER_RUN) npm ci --ignore-scripts --no-audit --no-fund
+	@$(CI_DOSSIER_RUN) sh -ec 'mkdir -p node_modules/.ci-diagram-source; tar -xzf vendor/diagram-source.tgz -C node_modules/.ci-diagram-source; node scripts/contract-evidence.mjs'
+build-ci-dossier: ci-dossier-tools ## Typecheck, lint and build the portable measured dossier
+	@$(CI_DOSSIER_RUN) npm run check
+	@$(CI_DOSSIER_RUN) npm run lint
+	@$(CI_DOSSIER_RUN) npm run build
+test-ci-dossier: build-ci-dossier ## Qualify graph calculation and controls in the exported portable artifact
+	@$(CI_DOSSIER_RUN) npm test
+	@docker run --rm --pull=$(CI_DOSSIER_PULL) -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(CI_DOSSIER_MOUNTS) $(CI_DOSSIER_BROWSER_IMAGE) node node_modules/@playwright/test/cli.js test
+clean-ci-dossier: ci-test-env ## Remove only this lane's dossier dependency volume
+	@docker volume rm $(ENV)-ci-dossier-deps
+
 test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
 
 .PHONY: test-ci-dag
+include scripts/ci/ci-static.mk
+
 test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-dag.test.mjs'
 
@@ -2227,8 +2304,9 @@ test-artifact-content: ## Qualify content process behavior, types and lint on th
 	@$(API_TEST_RUN) api sh -lc 'npx --no-install tsc --project ../apps/artifact-content/tsconfig.json && cd /workspace/apps/artifact-content && npx --no-install eslint src tests'
 
 .PHONY: test-app-cluster-mesh
+APP_CLUSTER_MESH_ARGS ?= --no-file-parallelism
 test-app-cluster-mesh: test-artifact-content ## Retain the app topic host, reader and catalogue receiving gates
-	@$(MAKE) test-api-endpoints SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/artifacts-host-migrations.test.ts tests/api/artifacts-host-recovery.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts" API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism" ENV=$(ENV)
+	@$(MAKE) test-api-endpoints SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/artifacts-host-migrations.test.ts tests/api/artifacts-host-recovery.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts" API_TEST_WORKERS=1 API_TEST_ARGS="$(APP_CLUSTER_MESH_ARGS)" ENV=$(ENV)
 .PHONY: test-idp-sync-selftest
 test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without cluster access (BR45-EX1)
 	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
@@ -2267,7 +2345,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 .PHONY: scope-check
 include docs/governance/kit/artifact-weight.mk
 
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight test-memory-mcp),)
+ifneq ($(filter $(ENV),test-ci10-b test-ci-ten-minute-proof test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight test-memory-mcp),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
