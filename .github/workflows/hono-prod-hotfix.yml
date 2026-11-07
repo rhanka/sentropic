@@ -1,7 +1,7 @@
 name: hono-prod-hotfix
 
 # One-shot hotfix: derive patched images FROM the exact production digests, replacing only
-# @hono/node-server (GHSA-jpvv-r467-5p4w). Runs on push to the hotfix branch (path-filtered)
+# @hono/node-server (GHSA-jpvv-r467-5p4w, GHSA-rmxm-3fg6-px4f). Runs on push to the hotfix branch (path-filtered)
 # because a branch-only workflow cannot be dispatched. Deploy is NOT done here.
 on:
   push:
@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 env:
-  PATCHED_VERSION: 1.19.18
-  PATCHED_INTEGRITY: sha512-609kppIP9GITS+EwPyB6Kiq8z2yXONaYD1VHpo7MMP9celRJYbkFr9KakJncHwK0EK/XYtlogqmrLchDv5HX5w==
+  PATCHED_VERSION: 2.1.6
+  PATCHED_INTEGRITY: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==
   IMAGE_REPO: ghcr.io/rhanka/sentropic-api
 
 jobs:
@@ -50,6 +50,23 @@ jobs:
           docker pull "$base"
           user="$(docker image inspect --format '{{.Config.User}}' "$base")"
           echo "ORIG_USER=${user:-root}" >> "$GITHUB_ENV"
+      - name: Call-site audit on the unpatched base (2.x compatibility)
+        run: |
+          set -eu
+          base="${IMAGE_REPO}@${{ matrix.base_digest }}"
+          docker run --rm --entrypoint sh "$base" -c '
+            cd /workspace/api
+            echo "node: $(node -v)"
+            echo "hono: $(node -p "require(\"hono/package.json\").version")"
+            echo "dist files:"; ls dist | head -20
+            echo "--- @hono/node-server references in dist (module specifiers):"
+            grep -rhoE "[\"\x27]@hono/node-server[^\"\x27]*[\"\x27]" dist | sort | uniq -c
+            echo "--- inlined markers (would mean the lib is bundled, not loaded from node_modules):"
+            grep -rcE "function getRequestListener|var getRequestListener|createAdaptorServer =|serveStatic = " dist | grep -v ":0" || echo "none inlined"
+            echo "--- usage lines:"
+            grep -rnE "(serveStatic|getRequestListener|createAdaptorServer|[^a-zA-Z]serve)\(" dist --include=*.js | grep -vE "^\S+:[0-9]+:\s*//" | cut -c1-200 | head -30
+            echo "--- source maps / src present:"; ls /workspace/api/src 2>/dev/null | head -3 || true
+          '
       - name: Negative control, probe must FAIL on the unpatched base
         run: |
           set -eu
@@ -103,7 +120,7 @@ jobs:
           set -eu
           cid="$(docker run -d -e NODE_ENV=production "patched-${{ matrix.role }}")"
           sleep 8
-          docker logs "$cid" 2>&1 | tail -n 15 | cut -c1-200 || true
+          docker logs "$cid" 2>&1 | grep -E "\"[A-Za-z_0-9]+\"$|message|Error|listening|Listening|started" | cut -c1-160 | head -80 || true
           docker rm -f "$cid" >/dev/null
       - name: Push by tag and report the digest
         run: |
