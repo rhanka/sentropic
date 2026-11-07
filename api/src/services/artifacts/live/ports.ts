@@ -3,6 +3,9 @@ import type { LiveAttempt, LiveKey, LivePhase, LiveRuntime, LiveState } from './
 import type { LiveAdmission } from './admission';
 import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
+import type { AttemptFence } from './host-recheck';
+/** Host-resolved pending job (G0 v3 §2.6). */
+export interface HostJob { jobId: string; generation: number; headSha: string; expectedReleaseId: string | null }
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
@@ -82,8 +85,9 @@ export interface LivePorts {
   };
   routes: { revoke(key: LiveKey, runtime: LiveRuntime): Promise<void>; ready(key: LiveKey, runtime: LiveRuntime): Promise<void> };
   publication: {
-    /** Resolve and authorize the immutable admitted SG3/SG4 job, never a caller-supplied SHA or CAS. */
-    job(key: LiveKey, jobId: string): Promise<{ headSha: string; expectedReleaseId: string | null }>;
+    /** Resolve the binding's pending SG3/SG4 job at its generation, never a caller-supplied SHA or CAS. The host
+     * records `fence` (this run and attempt) monotonically; only that attempt's handoff can publish. */
+    job(key: LiveKey, jobId: string, fence: AttemptFence): Promise<HostJob>;
     /** Atomic SG4 release/index/receipt writes in the supplied store transaction; never network publication here. */
     commit(unit: { client?: PoolClient }, key: LiveKey, attempt: LiveAttempt, runtime: LiveRuntime): Promise<{ releaseId: string }>;
   };
