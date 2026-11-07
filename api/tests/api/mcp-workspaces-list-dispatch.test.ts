@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
+import { ArtifactOperationError } from '@sentropic/artifacts/server/outcome-contract';
 import { createRegistryDispatchRouter, type RegistryDispatchPorts } from '../../src/services/mcp/registry-dispatch';
 import { createArtifactTransport } from '../../src/services/artifacts/transport';
 import { APP_P1_MANIFEST_DIGEST } from '../../src/services/mcp/cluster-registry';
@@ -97,6 +98,25 @@ describe('workspaces_list host tool dispatch', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ jsonrpc: '2.0', id: 'c', error: { code: -32003, message: 'invocation_refused' } });
     expect(ports.workspaces).not.toHaveBeenCalled();
+  });
+
+  it('(i) should still list workspaces_list when the default workspace cannot be bound', async () => {
+    const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+    const bind = vi.fn(async () => { throw new ArtifactOperationError('access_denied'); });
+    const denied = createArtifactTransport({ profile, bind } as never);
+    const { ports, rpc } = fixture({ transport: vi.fn(async () => denied) });
+    const response = await rpc('i', 'tools/list');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ jsonrpc: '2.0', id: 'i', result: { tools: [{ name: 'workspaces_list',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false } }] } });
+    expect(bind).toHaveBeenCalledExactlyOnceWith(identity, 'workspace-a');
+    expect(ports.workspaces).not.toHaveBeenCalled();
+    // Only access_denied is a discovery outcome; any other bind failure stays an internal error.
+    for (const failure of [new ArtifactOperationError('admission_unavailable'), new Error('database down')]) {
+      bind.mockRejectedValueOnce(failure);
+      expect(await (await rpc('j', 'tools/list')).json())
+        .toEqual({ jsonrpc: '2.0', id: 'j', error: { code: -32603, message: 'Internal error' } });
+    }
   });
 
   it('should answer a denied current credential with access_denied rather than an empty list', async () => {

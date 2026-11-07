@@ -1,6 +1,7 @@
 import { authorizeDispatch } from '@sentropic/mcp-platform/transport/dispatch';
 import type { HttpRequest, HttpResponse } from '@sentropic/artifacts/http';
 import { ArtifactProfileInputError } from '@sentropic/artifacts/mcp-core';
+import { ArtifactOperationError } from '@sentropic/artifacts/server/outcome-contract';
 import { APP_P1_MANIFEST_DIGEST, compileAppMcpRegistry } from '../mcp/cluster-registry';
 import type { createArtifactHost } from './composition';
 import type { ArtifactHostIdentity } from './authorization';
@@ -30,7 +31,14 @@ export function createArtifactTransport(host: Host) {
     async discover(identity: ArtifactHostIdentity, workspaceId: string, scopes: readonly string[]) {
       if (!scopes.includes('mcp:discover')) return [];
       const registry = await ready;
-      await host.bind(identity, workspaceId);
+      try {
+        await host.bind(identity, workspaceId);
+      } catch (error) {
+        // No bindable workspace for this identity: hide the registry tools, keep tools/list answering
+        // so the dispatcher can still list host tools (workspaces_list). Any other failure propagates.
+        if (error instanceof ArtifactOperationError && error.kind === 'access_denied') return [];
+        throw error;
+      }
       return [...registry.tools].filter(([name]) => isToolPermitted(identity.clientId, name))
         .map(([name, tool]) => ({ name, inputSchema: tool.inputSchema }));
     },
