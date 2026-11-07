@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILD_RECIPE, buildEnvironment, liveEnvironment } from '../../../src/services/artifacts/live/recipes';
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment } from '../../../src/services/artifacts/live/recipes';
 import { candidateDigest } from '@sentropic/artifacts/live-host';
 import { LiveError } from '../../../src/services/artifacts/live/records';
 import { DIST, fakePod, runtime, text } from './supervisor-pod';
@@ -74,7 +74,7 @@ describe('supervisor build output', () => {
     const failed = fakePod({ build: () => ({ exitCode: 1 }) });
     await expect(failed.supervisor.build(runtime, attempt, BUILD_RECIPE, env)).rejects.toMatchObject(unavailable);
     await expect(failed.supervisor.build(runtime, attempt, { ...BUILD_RECIPE, args: ['run', 'x'] } as never, env)).rejects.toMatchObject(unavailable);
-    await expect(failed.supervisor.build(runtime, attempt, BUILD_RECIPE, liveEnvironment() as never)).rejects.toMatchObject(unavailable);
+    await expect(failed.supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment() as never)).rejects.toMatchObject(unavailable);
     expect(failed.ops()).toEqual(['build']);
     const noEntry = fakePod({}, { dist: [text('app.js', 'x')] });
     await expect(noEntry.supervisor.build(runtime, attempt, BUILD_RECIPE, env)).rejects.toMatchObject(unavailable);
