@@ -384,6 +384,7 @@ jobs:
               - 'scripts/test-api-tooling.sh'
               - 'scripts/ci/image-receipt.mjs'
               - 'scripts/ci/image-receipt.test.mjs'
+              - 'scripts/ci/image-config.mjs'
               - 'scripts/ci/compatibility-classifier.mjs'
               - 'scripts/ci/compatibility-classifier.test.mjs'
               - 'scripts/ci/consumer-contracts.mjs'
