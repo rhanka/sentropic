@@ -1,0 +1,67 @@
+name: cluster-mesh-gas-release
+
+# Release assets for the GAS bundle. Never runs on push to a branch or on PR. `workflow_dispatch` defaults to a dry run
+# (workflow artifact only); a real GitHub release is created ONLY from a `cluster-mesh-gas-v*` tag push or an explicit
+# dispatch with publish=true.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Create the GitHub release (default false = dry run, workflow artifact only)'
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'cluster-mesh-gas-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    outputs:
+      bundle_sha256: ${{ steps.sha.outputs.bundle_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build bundle twice, compare, write sha256 + manifest
+        run: make -f Makefile -f packages/cluster-mesh/gas.mk build-cluster-mesh-gas GAS_GIT_SHA="${GITHUB_SHA}" ENV=gas-release
+      - name: SBOM (syft, digest-pinned in tool-inventory.json)
+        run: make -f Makefile -f packages/cluster-mesh/gas.mk sbom-cluster-mesh-gas GAS_GIT_SHA="${GITHUB_SHA}" ENV=gas-release
+      - name: Check bundle sha256 = release sha256 (.sha256 and manifest)
+        run: make -f Makefile -f packages/cluster-mesh/gas.mk verify-cluster-mesh-gas ENV=gas-release
+      - id: sha
+        run: echo "bundle_sha256=$(cut -d' ' -f1 tmp/gas-release/cluster-mesh.gas.js.sha256)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cluster-mesh-gas-release-assets
+          path: tmp/gas-release/
+          if-no-files-found: error
+
+  publish:
+    needs: assets
+    if: ${{ startsWith(github.ref, 'refs/tags/cluster-mesh-gas-v') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: cluster-mesh-gas-release-assets
+          path: tmp/gas-release
+      - name: Create release (draft until the read-back check passes)
+        run: gh release create "$TAG" tmp/gas-release/* --draft --title "$TAG" --notes "bundle sha256 ${{ needs.assets.outputs.bundle_sha256 }}"
+      - name: Read the release asset back and compare sha256 with the built bundle
+        run: |
+          mkdir -p tmp/gas-readback
+          gh release download "$TAG" --pattern 'cluster-mesh.gas.js' --dir tmp/gas-readback
+          test "$(sha256sum tmp/gas-readback/cluster-mesh.gas.js | cut -d' ' -f1)" = "${{ needs.assets.outputs.bundle_sha256 }}"
+          gh release edit "$TAG" --draft=false
