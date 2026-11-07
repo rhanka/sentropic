@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { imageConfigDigest } from './image-config.mjs';
 
 // Resolve the canonical artifact BEFORE save-ui and every image consumer.
 // Rebuilding an existing content tag can change timestamps and config bytes.
@@ -12,7 +13,7 @@ export function resolveUiImage(testEnv, env = process.env) {
     const config = JSON.parse(remote.stdout).config?.digest;
     if (!/^sha256:[a-f0-9]{64}$/.test(config ?? '')) throw Error('Canonical UI tag must name a single image manifest');
     execFileSync('docker', ['pull', '--platform', env.IMAGE_PLATFORM || 'linux/amd64', ref], { stdio: 'inherit', env });
-    const loaded = execFileSync('docker', ['image', 'inspect', ref, '--format', '{{.Id}}'], { encoding: 'utf8', env }).trim();
+    const loaded = imageConfigDigest(ref, env);
     if (loaded !== config) throw Error('Pulled UI config differs from the canonical registry image');
     console.log(`Reusing canonical UI image ${ref} (${config})`);
     return;
