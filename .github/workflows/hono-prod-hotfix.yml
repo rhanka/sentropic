@@ -57,7 +57,7 @@ jobs:
           docker run --rm --entrypoint sh "$base" -c '
             cd /workspace/api
             echo "node: $(node -v)"
-            echo "hono: $(node -p "require(\"hono/package.json\").version")"
+            echo "hono: $(grep -m1 "\"version\"" /workspace/node_modules/hono/package.json)"
             echo "dist files:"; ls dist | head -20
             echo "--- @hono/node-server references in dist (module specifiers):"
             grep -rhoE "[\"\x27]@hono/node-server[^\"\x27]*[\"\x27]" dist | sort | uniq -c
