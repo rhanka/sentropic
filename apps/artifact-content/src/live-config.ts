@@ -37,25 +37,39 @@ const VITE_QUERY = new Set(['v', 't', 'import', 'direct', 'url', 'raw', 'inline'
 export const viteAdmittedPath: LiveProxyPorts['admittedPath'] = async (_route, path, query) =>
   VITE_PATH.test(path) && [...query.keys()].every(name => VITE_QUERY.has(name));
 
+/** Socket peer address of each inbound request, recorded by the listener; never taken from a header. */
+const remoteAddresses = new WeakMap<Request, string>();
+export function withRemoteAddress(request: Request, address: string | undefined) {
+  if (address) remoteAddresses.set(request, address.startsWith('::ffff:') ? address.slice(7) : address);
+  return request;
+}
+
 type PushPorts = Required<Pick<LiveProxyPorts, 'control' | 'fence'>>;
 /**
  * Fan-out across replicas: an accepted push is copied, with its own signature, to every ready replica (self
  * included; every operation is idempotent and monotonic). 204 means every replica applied it; otherwise 503 and the
- * pusher retries.
+ * pusher retries. A relayed copy is applied, never relayed again, and only when its socket address is a ready
+ * replica's: from any other sender, or without a recorded address, it is refused before it has any effect.
  */
 export function withFanOut<T extends PushPorts>(ports: T, options: {
   peers(): Promise<string[]>; send(peer: string, request: Request, header: string): Promise<boolean>;
 }): T {
-  const relay = async (request: Request, header: string, response: Response | undefined) => {
-    if (response?.status !== 204 || request.headers.get(RELAY_HEADER) === '1') return response;
+  const fromPeer = async (request: Request) => {
+    const address = remoteAddresses.get(request);
+    return request.headers.get(RELAY_HEADER) === '1' && !!address && (await options.peers().catch((): string[] => [])).includes(address);
+  };
+  const relay = async (request: Request, header: string, apply: () => Promise<Response | undefined>) => {
+    if (request.headers.has(RELAY_HEADER)) return await fromPeer(request) ? apply() : undefined;
+    const response = await apply();
+    if (response?.status !== 204) return response;
     const sent = await options.peers().then(peers => Promise.all(peers.map(peer => options.send(peer, request, header)
       .catch(() => false))), () => [false]);
     return sent.every(Boolean) ? response
       : new Response(null, { status: 503, headers: { 'cache-control': 'private, no-store', 'retry-after': '1' } });
   };
   return { ...ports,
-    control: async (request: Request, artifactId: string) => relay(request, CONTROL_HEADER, await ports.control(request, artifactId)),
-    fence: async (request: Request) => relay(request, FENCE_HEADER, await ports.fence(request)) };
+    control: async (request: Request, artifactId: string) => relay(request, CONTROL_HEADER, () => ports.control(request, artifactId)),
+    fence: async (request: Request) => relay(request, FENCE_HEADER, () => ports.fence(request)) };
 }
 export const httpRelay = (port: number) => (peer: string, request: Request, header: string) => new Promise<boolean>(resolve => {
   const url = new URL(request.url);
@@ -98,6 +112,8 @@ export function liveFromEnv(env: NodeJS.ProcessEnv, baseDomain: string) {
   const ports = createHostAssertionLive({ hosts, key: kid => hostKeys.get(kid), fences: createLiveFences(),
     controller: { keyIds: controllerKeyIds, key: kid => controllerKeys.get(kid) }, admittedPath: viteAdmittedPath });
   const port = Number(env.ARTIFACT_CONTENT_PORT ?? '8791');
-  return createLiveProxy(peers ? withFanOut(ports, { peers: () => resolve4(peers), send: httpRelay(port) }) : ports,
+  // Without peers there is no replica to relay to, so no relayed copy is ever accepted.
+  const replicas = peers ? () => resolve4(peers) : async (): Promise<string[]> => [];
+  return createLiveProxy(withFanOut(ports, { peers: replicas, send: httpRelay(port) }),
     { builderNamespace: env.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE?.trim() || undefined });
 }
