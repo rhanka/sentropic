@@ -1,56 +1,54 @@
-# Feature: Train 4 2026-11-07 CI10 stage 4 (parallel unit shards, toolbox dependency base, matrix reload)
+# Feature: Governed client_credentials service client provisioner
 
 ## Objective
-- [ ] One train, one PR, one CI: start all API test shards at once longest first, pull a verified toolbox dependency base on PRs, and reload the matrix page after a late workspace scope reset.
-- [x] Wagons: perf/ci10-stage4, fix/ui-matrix-reload (cherry-picked onto main 3f1027496 without conflict).
+- [ ] Provide a governed, idempotent path to register a `client_credentials` service client (`service_clients` row + CM tenant binding) through a one-off Job and a Make target, replacing the « out-of-band » procedure.
 
 ## Scope / Guardrails
-- [x] Branch train/2026-11-07-ci10-d; worktree tmp/worktrees/train4; ENV=test-ci10-train4.
-- [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling.
-- [x] Scoped local checks only; full suites run in the PR CI.
+- [x] Branch feat/oauth-service-client-provisioner from origin/main 8ee9c24ef; worktree tmp/worktrees/svc-client-provisioner; ENV=test-svc-client.
+- [x] Wagon: pushed branch only, no PR, no version bump, no lock regeneration; rides train 1b.
+- [x] Make only; no Python, no attribution trailers, no CI skips; commits under 150 lines.
+- [x] Never print a secret: the script logs no plaintext and no hash.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/**`
+  - `api/src/services/auth/service-client-provisioning.ts`
+  - `api/src/scripts/oauth-register-service-client.ts`
+  - `api/tests/unit/oauth-register-service-client.test.ts`
+  - `api/package.json`
+  - `deploy/k8s/base/37-oauth-register-service-client-job.yaml`
+  - `deploy/k8s/base/15-networkpolicy.yaml`
+  - `scripts/ci/oauth-service-client-job.test.mjs`
+  - `docs/secrets.md`
+  - `deploy/ci/idp-identity-sync/CRED_CYCLE.md`
   - `Makefile`
-  - `api/Dockerfile`
-  - `.github/workflows/ci.yml`
-  - `ui/src/routes/matrix/+page.svelte`
-  - `ui/tests/utils/matrix-reload.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
   - `packages/*/src/**`
   - `api/drizzle/*.sql`
+  - `package-lock.json`
 - **Conditional Paths (allowed with declared exception)**:
-  - `.github/workflows/ci.yml` under BR87-EX1.
-  - `Makefile` and `api/Dockerfile` under BR87-EX2.
+  - `Makefile` under BRSVC-EX1.
 
 ## Feedback Loop
-- [x] BR87-EX1: unit shard scheduling and toolbox base pull and publish wiring in ci.yml. Rollback: revert the workflow and wiring tests together.
-- [x] BR87-EX2: toolbox base targets in the Makefile and the Dockerfile base stage split. Rollback: restore recipes and stages.
-- [ ] Acceptance: spans of three CI runs retained in .tmp/rv/ci10-final.md.
+- [x] BRSVC-EX1: additive target `oauth-register-service-client-job` and the Job render test added to the default `test-publishable-manifests` list. Rollback: delete the target and the list entry; the Job yaml stays valid for direct kubectl apply.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [x] **Multi-branch**
-- [x] Rationale: two wagons integrated into one dated train with one CI.
+- [x] **Mono-branch + cherry-pick**
+- [ ] **Multi-branch**
+- [x] Rationale: one wagon, integrated by the train lane.
 
 ## UAT Management (in orchestration context)
-- [ ] Exact-head pull_request CI result and critical-path spans retained in the PR.
+- [ ] Preprod run of the immo client after the train 1b image deploy (ops lane).
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: wagons cherry-picked onto main without conflict.
-- [x] Lot 2: scoped checks green (ci-dag 10/10, unit-graph 7/7, expected-results 28/28, api-tool-cache 6/6, ci-static 3/3).
-- [x] Lot 3: push, open PR, GLM review.
-- [x] Review B1: pin the exact longest-first wave and the complete endpoint set (performance-report 8/8).
-- [x] Review M3: a deps miss or a failed thin build falls back to the full toolbox build with a warning; full-build failure stays fatal (api-tool-cache 11/11, api-tooling layers, disk-hygiene).
-- [x] Review L4: the deps record names its tooldeps identity; a stale or malformed record is refused and truncated (api-tool-cache 13/13).
-- [x] Review M2: observed slots lower bound 17 -> 28, the executed peak of run 42393158936 (half-open spans); account quota stays to-measure (expected-results 28/28).
-- [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
+- [ ] Lot 1: pure env parser and provisioning planner with unit tests.
+- [ ] Lot 2: script entrypoint, dist build, Job manifest, network policy.
+- [ ] Lot 3: Make target, Job render test, docs/secrets.md procedure with the 90-day cycle.
+- [ ] Lot N: scoped checks green (`make test-api-unit SCOPE=tests/unit/oauth-register-service-client.test.ts ENV=test-svc-client`, `make test-publishable-manifests SCOPE=scripts/ci/oauth-service-client-job.test.mjs ENV=test-svc-client`, `make typecheck-api ENV=test-svc-client`); branch pushed.
