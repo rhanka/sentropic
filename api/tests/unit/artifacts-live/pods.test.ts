@@ -7,7 +7,8 @@ describe('builder pod admission and recovery', () => {
   it('should emit the exact VAP/PSA manifest without credentials or persistent volumes', async () => {
     const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted', placement);
     expect(pod.spec).toMatchObject({ serviceAccountName: 'artifact-builder', automountServiceAccountToken: false,
-      activeDeadlineSeconds: 3600, restartPolicy: 'Never', securityContext: { runAsNonRoot: true } });
+      restartPolicy: 'Never', securityContext: { runAsNonRoot: true } });
+    expect(pod.spec).not.toHaveProperty('activeDeadlineSeconds');
     expect(pod.spec.containers).toHaveLength(1); expect(pod.spec.containers[0].image).toBe(BUILDER_IMAGE);
     expect(pod.spec.containers[0].securityContext).toMatchObject({ allowPrivilegeEscalation: false,
       readOnlyRootFilesystem: true, capabilities: { drop: ['ALL'] } });

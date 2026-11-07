@@ -22,7 +22,8 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
     serviceAccountName: 'artifact-builder', automountServiceAccountToken: false, enableServiceLinks: false,
     nodeSelector: { nodepool: 'artifact-builders' },
     tolerations: [{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }],
-    restartPolicy: 'Never', activeDeadlineSeconds: 3600, terminationGracePeriodSeconds: 10,
+    // A-LIVE Amendment 1: no activeDeadlineSeconds; the bootstrap liveness lease bounds an unattended pod.
+    restartPolicy: 'Never', terminationGracePeriodSeconds: 10,
     securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000,
       seccompProfile: { type: 'RuntimeDefault' } },
     containers: [{ name: 'builder', image: BUILDER_IMAGE, imagePullPolicy: 'IfNotPresent',
