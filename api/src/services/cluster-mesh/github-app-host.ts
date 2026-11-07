@@ -9,7 +9,8 @@ import {
 } from '@sentropic/cluster-mesh';
 import { Hono, type MiddlewareHandler } from 'hono';
 
-import { withConnectorRevocationKey } from '../secret-crypto';
+import { env } from '../../config/env';
+import { isProvisionedSecretEncryptionKey, withConnectorRevocationKey } from '../secret-crypto';
 
 /**
  * A-LIVE W1 (plan lot M2-S, G0 v3 §2.7) — SG0-app host composition.
@@ -62,7 +63,10 @@ export interface GitHubAppHostConfig {
 }
 
 export type GitHubAppHostSettlement =
-  | { readonly enabled: false; readonly disabledReason: 'not_configured' | 'invalid_config' }
+  | {
+    readonly enabled: false;
+    readonly disabledReason: 'not_configured' | 'custody_key_unavailable' | 'invalid_config';
+  }
   | { readonly enabled: true; readonly config: GitHubAppHostConfig };
 
 export type GitHubAppForge = Parameters<typeof createGitHubAppEnrollment>[0]['github'];
@@ -140,7 +144,8 @@ const readBrokerBindings = (source: string, targets: readonly GitHubAppTargetBin
 };
 
 /**
- * Fail-closed env settlement: a composition is enabled only when the public
+ * Fail-closed env settlement: a composition is enabled only when the custody
+ * key is provisioned and the public
  * base URL is an https origin and every target tuple is inside the frozen
  * registry. A single illegal value disables the whole mount rather than
  * narrowing it: half-open enrollment surfaces are never acceptable.
@@ -151,6 +156,11 @@ export const resolveGitHubAppHostConfig = (
   const publicBaseUrl = source.GITHUB_APP_PUBLIC_BASE_URL?.trim() ?? '';
   const targetsJson = source.GITHUB_APP_TARGETS_JSON?.trim() ?? '';
   if (!publicBaseUrl || !targetsJson) return { enabled: false, disabledReason: 'not_configured' };
+  // The App PEM, webhook secret and tokens are never sealed under the
+  // committed development seed: no provisioned key, no mount.
+  if (!isProvisionedSecretEncryptionKey(source.SECRET_ENCRYPTION_KEY)) {
+    return { enabled: false, disabledReason: 'custody_key_unavailable' };
+  }
 
   const invalid = (): GitHubAppHostSettlement => ({ enabled: false, disabledReason: 'invalid_config' });
   let origin: URL;
@@ -211,6 +221,8 @@ export interface GitHubAppHostRouterDeps {
  * returns a mountable Hono app serving the absolute `/github-app/*` routes.
  */
 export const createGitHubAppHostRouter = (deps: GitHubAppHostRouterDeps): Hono => {
+  // Defence in depth for direct callers: the mount gate already refused.
+  if (!isProvisionedSecretEncryptionKey(env.SECRET_ENCRYPTION_KEY)) throw new GitAppError('capability_unavailable');
   const custody = withConnectorRevocationKey(GIT_APP_CUSTODY_KEY_REF, (key) =>
     createEncryptedGitAppCustodian({ store: deps.store, key }));
   const service = createGitHubAppEnrollment({
