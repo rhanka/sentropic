@@ -40,6 +40,13 @@ rollback and credential rotation are documented in
   Any Egress policy on the API isolates it. Such a policy must keep the relay,
   the Kubernetes API, DNS, Postgres, the IdP and HTTPS providers. The test
   `make test-artifact-content-manifests` enforces this.
+- Live edge ingress (A-LIVE W9). Each overlay adds
+  `allow-immo-content-host-to-artifact-content`: `artifact-content` TCP 8791 (its
+  only listener, HTTP and websocket upgrade) admits the immo content host, which is
+  the `radar-api` reader pods (`app.kubernetes.io/name: radar-immobilier`,
+  `component: api`), from the same environment only: `radar-immobilier` to
+  `sentropic`, and `radar-immobilier-preprod` to `sentropic-preprod`. The
+  matching egress in the immo namespaces is owned by k8s and immo.
 - `07-sealed-sentropic-pgbackup.yaml` — SealedSecret `sentropic-pgbackup`
   (`S3_ACCESS_KEY`/`S3_SECRET_KEY` reused from DOC_STORAGE, `S3_BUCKET`,
   `S3_REGION`, `S3_ENDPOINT`) for the Postgres backup CronJob.
