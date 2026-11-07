@@ -43,8 +43,8 @@
 - [x] **Lot 2 — SG4b handoff**
   - [x] `kid` in claims and receipt; key resolvers for rotation overlap; Ed25519 only.
   - [x] Typed §8.3 final recheck (`publicationRecheck` over the locked host view) inside the host transaction, every refusal tested.
-- [ ] **Lot 3 — Live assertion and control**
-  - [ ] Prefix-bound HMAC formats moved from W9, pinned token vector.
+- [x] **Lot 3 — Live assertion and control**
+  - [x] Prefix-bound HMAC formats (v1 assertion, c1 control, f1 fence) moved whole from W9 33c077e91; opaque bounded string `sourceRevision`; pinned token vector.
 - [ ] **Lot 4 — Host build API and export map**
   - [ ] Request/response types and parsers; `./live-host` export; built export map test.
 - [ ] **Lot 5 — Gate**
