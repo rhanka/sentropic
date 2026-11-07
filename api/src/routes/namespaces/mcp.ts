@@ -29,7 +29,7 @@ import { createGoogleConnectorHost } from '../../services/connector-host/google-
 import { getWorkspaceRole, resolveDefaultWorkspaceId } from '../../services/workspace-access';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { resolveOAuthIssuer } from '../auth/oauth';
-import { artifactHostEnabled, productArtifactTransport } from '../../services/artifacts/instance';
+import { artifactHostEnabled, productArtifactTransport, productWorkspaceDirectory } from '../../services/artifacts/instance';
 import { artifactCredential } from '../../services/artifacts/credentials';
 import { createConnectorAdmission, resolveMemberWorkspace, type WorkspaceMembershipPorts } from '../../services/mcp/client-policy';
 import { createRegistryDispatchRouter } from '../../services/mcp/registry-dispatch';
@@ -226,6 +226,7 @@ export const productMcpModule: ClusterMeshHonoNamespaceModule = {
       transport: async () => productArtifactTransport,
       enabled: () => isEnabled() && artifactHostEnabled(),
       authorize: authorizeProductMcpInvocation,
+      workspaces: productWorkspaceDirectory,
       async authenticate(context, scopes, requestedWorkspace) {
         const auth = getMcpAuth();
         try {
