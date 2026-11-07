@@ -2,8 +2,8 @@
 
 ## Objective
 - [ ] One train, one PR, one CI: the A-LIVE api/apps wagons (W1, W3, W4, W5, pod-4live, netpol, MCP takeover L1, h2a CLI OAuth client, service client provisioner, W8, W7, W9) cherry-picked onto main in that order; wagon BRANCH.md edits dropped.
-- [ ] Integration contract: recipes.ts = W4 + W7 placement; pods.ts = pod-4live resources/volumes/env + W7 namespace/placement, no activeDeadlineSeconds; worker.ts = W8 structure + W3 signatures + W4 environments.
-- [ ] Frozen: `packages/artifacts/src/live-host` HostLedger and AcceptOptions types unchanged.
+- [x] Integration contract: recipes.ts = W4 + W7 placement; pods.ts = pod-4live resources/volumes/env + W7 namespace/placement, no activeDeadlineSeconds; worker.ts = W8 structure + W3 signatures + W4 environments.
+- [x] Frozen: `packages/artifacts/src/live-host` HostLedger and AcceptOptions types unchanged.
 
 ## Scope / Guardrails
 - [x] Branch train/2026-11-07-alive-1b from origin/main a5d8dee87; worktree tmp/worktrees/train1b; ENV=test-train1b.
@@ -35,7 +35,7 @@
   - `api/tests/unit/oauth-register-service-client.test.ts`
   - `api/tests/unit/services/cluster-mesh/github-app-host.test.ts`
   - `apps/artifact-content/**`
-  - `deploy/ci/artifact-content/*.selftest.mjs`
+  - `deploy/ci/artifact-content/**`
   - `deploy/ci/idp-identity-sync/CRED_CYCLE.md`
   - `docs/secrets.md`
   - `scripts/ci/oauth-service-client-job.test.mjs`
@@ -58,8 +58,9 @@
   - `deploy/k8s/**` under BR90-EX5.
   - `packages/artifacts/src/server/**`, `packages/artifacts/package.json`, `packages/artifacts/CHANGELOG.md` under BR90-EX6.
   - `packages/cluster-mesh/src/**`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/CHANGELOG.md` under BR90-EX7.
-  - `packages/auth-hono/src/oauth/redirect-utils.ts`, `packages/auth-hono/package.json`, `packages/auth-hono/CHANGELOG.md` under BR90-EX8.
+  - `packages/auth-hono/src/oauth/redirect-utils.ts`, `packages/auth-hono/package.json` under BR90-EX8.
   - `package-lock.json`, `api/package-lock.json` under BR90-EX9.
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`, `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` under BR90-EX10.
 
 ## Feedback Loop
 - [x] BR90-EX1 (W1, was BR86-EX1): one control migration `0021_github_app_enrollments.sql` and its journal entry (idx 16) for the SG0-app envelope store. Impact: one additive control table. Rollback: revert the W1 commits and drop the table.
@@ -69,8 +70,9 @@
 - [x] BR90-EX5 (netpol BR88N-EX1/EX2, provisioner, W9): per-overlay live edge Ingress NetworkPolicy, the provisioning Job and its postgres NetworkPolicy, the artifact-content live configuration (inert) and the README egress note. Rollback: delete the added objects and their resources lines.
 - [x] BR90-EX6 (W5, W8 BRW8-EX1): `@sentropic/artifacts` server GB1 validators and the 900 s live idle deadline; version bump and changelog. Rollback: revert the wagon commits and the bump together.
 - [x] BR90-EX7 (W8 BRW8-EX2): `@sentropic/cluster-mesh` durable FIFO heavy-phase queue (one module, one root export); version bump and changelog. Rollback: revert the wagon commits and the bump together.
-- [x] BR90-EX8 (h2a CLI OAuth client): `@sentropic/auth-hono` RFC 8252 §7.3 port-less loopback redirect matching for public clients; version bump and changelog. Rollback: revert the commit and the bump together.
-- [x] BR90-EX9: root and api lock workspace entries follow the three version bumps. Rollback: revert with the bumps.
+- [x] BR90-EX8 (h2a CLI OAuth client): `@sentropic/auth-hono` RFC 8252 §7.3 port-less loopback redirect matching for public clients; patch bump 0.18.0 to 0.18.1 keeps every `^0.18.0` consumer range (the package has no changelog). Rollback: revert the commit and the bump together.
+- [x] BR90-EX9: root and api lock workspace entries follow the three version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1; registry latest 0.2.20, 0.25.0, 0.18.0). Rollback: revert with the bumps.
+- [x] BR90-EX10: the cluster-mesh selected packaging fixture follows the cluster-mesh candidate archive name (dev.15). Rollback: revert with the bump.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -84,13 +86,13 @@
 - [ ] Exact-head pull_request CI result retained in the PR.
 
 ## Plan / Todo (lot-based)
-- [ ] Lot 1: W1 cherry-picked; scoped checks.
-- [ ] Lot 2: W3 and W4 cherry-picked; recipes.ts owned by W4; artifacts-live suite and live tsc.
-- [ ] Lot 3: W5 and pod-4live cherry-picked; pods.ts resources from pod-4live.
-- [ ] Lot 4: netpol, MCP takeover L1, h2a CLI OAuth client and service client provisioner cherry-picked; manifest and auth-hono checks.
-- [ ] Lot 5: W8 cherry-picked; worker.ts = W8 structure + W3 signatures + W4 environments; cluster-mesh queue checks.
-- [ ] Lot 6: W7 cherry-picked; recipes.ts placement, pods.ts namespace/placement, FIX5 supervisor signing key.
-- [ ] Lot 7: W9 cherry-picked on the live-host subpath.
-- [ ] Lot 8: version bumps (artifacts, cluster-mesh, auth-hono) and locks.
+- [x] Lot 1: W1 cherry-picked (tree identical to the wagon on its files); its API suites run in the PR CI (no local API image at 92% disk).
+- [x] Lot 2: W3 and W4 cherry-picked without conflict; recipes.ts owned by W4.
+- [x] Lot 3: W5 and pod-4live cherry-picked; pods.ts resources from pod-4live; `make test-artifacts SCOPE=tests/build-` 61/61.
+- [x] Lot 4: netpol, MCP takeover L1, h2a CLI OAuth client and service client provisioner cherry-picked; `make test-auth-hono SCOPE=tests/oauth` 147/147, `make typecheck-auth-hono`, `make test-publishable-manifests SCOPE=scripts/ci/oauth-service-client-job.test.mjs` 4/4, `make test-artifact-content-manifests` 141 PASS.
+- [x] Lot 5: W8 cherry-picked; worker.ts = W8 structure + W3 signatures + W4 environments; `make test-cluster-mesh SCOPE=tests/heavy-phase-queue.spec.ts` 7/7.
+- [x] Lot 6: W7 (FIX5) cherry-picked with its W3/W4/W5/W8 merge resolutions carried; recipes.ts placement, pods.ts namespace/placement; artifacts-live 258/258 and live src tsc clean.
+- [x] Lot 7: W9 cherry-picked on the live-host subpath; artifact-content live vitest 157/157, tsc clean, `make test-artifact-content-manifests` 145 PASS.
+- [x] Lot 8: version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1), lock workspace entries, selected fixture candidate archive name.
 - [ ] Lot 9: push, open PR, GLM review of the full diff.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
