@@ -11,6 +11,8 @@ export const sha256 = (value: Uint8Array | string) => createHash('sha256').updat
 export const text = (path: string, value: string, mode = 0o644): TransferFile => ({ path, mode, bytes: Buffer.from(value) });
 export const DIST = [text('index.html', '<main></main>'), text('assets/app.js', 'export {}')];
 type Handler = (body: FrameBody, signal: AbortSignal) => unknown;
+/** Async source yielding one item at a time, as the streaming cache and tarball readers do. */
+export async function* stream<T>(items: readonly T[]) { for (const item of items) yield item; }
 /** Refusal marker for a handler: the fake pod answers ok:false with this closed code. */
 export const refuse = (code: string) => ({ __refuse: code });
 
@@ -62,8 +64,7 @@ export function fakePod(overrides: Partial<Record<FrameBody['op'], Handler>> = {
   const sources: SupervisorSources = {
     source: vi.fn(async () => [text('package-lock.json', '{"lockfileVersion":3}'), text('ui/main.ts', 'ok')]),
     draft: vi.fn(async () => ({ files: [text('ui/main.ts', 'edited')], deletes: ['ui/old.ts'] })),
-    dependencies: vi.fn(async () => [{ path: 'node_modules/vite/bin/vite.js', type: 'file' as const, mode: 365 as const,
-      bytes: Buffer.from('#!').toString('base64') }]),
+    dependencies: vi.fn(() => stream([{ path: 'node_modules/vite/bin/vite.js', mode: 365 as const, bytes: Buffer.from('#!') }])),
     candidate: vi.fn(async () => undefined),
   };
   let ids = 0;

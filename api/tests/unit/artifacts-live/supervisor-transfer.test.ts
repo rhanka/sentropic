@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHUNK_BYTES, OUTPUT_LIMITS, putFrames, readSnapshot, treeDigest,
+import { CHUNK_BYTES, OUTPUT_LIMITS, putWriter, readSnapshot, streamSnapshot, TREE_LIMITS, treeDigest,
   type TransferFile } from '../../../src/services/artifacts/live/supervisor-transfer';
 import { MAX_FRAME_BYTES } from '../../../src/services/artifacts/live/supervisor-frame';
 
@@ -13,7 +13,30 @@ function pages(entries: Record<string, unknown>[], perPage = 2) {
 const entry = (path: string, data: Buffer, offset = 0, size = data.length, type = 'file') =>
   ({ path, type, mode: 0o644, size, offset, data: data.toString('base64') });
 
+const putFrames = (transfer: string, target: 'workspace', files: TransferFile[]) => {
+  const writer = putWriter(transfer, target);
+  return [...files.flatMap(f => [...writer.add(f)]), ...writer.end()];
+};
+
 describe('supervisor transfer', () => {
+  it('should bound dependency trees at 65536 files, 64 MiB per file and 1 GiB in total (decision 07/11 a)', () => {
+    expect(TREE_LIMITS).toEqual({ files: 65_536, fileBytes: 64 * 1024 * 1024, totalBytes: 1024 * 1024 * 1024 });
+  });
+  it('should emit each put frame as soon as it fills, holding one file and one frame', () => {
+    const writer = putWriter('t1', 'dependencies');
+    expect([...writer.add(file('big.bin', CHUNK_BYTES * 2 + 5))].map(f => f.entries.length)).toEqual([1, 1]);
+    expect([...writer.add(file('small.js', 3))]).toEqual([]);
+    expect([...writer.end()].map(f => f.entries.map(e => e.path))).toEqual([['big.bin', 'small.js']]);
+    expect([...writer.end()]).toEqual([]);
+  });
+  it('should hand each finished snapshot file to the sink before reading the next page', async () => {
+    const events: string[] = [];
+    const list = [entry('a.js', Buffer.alloc(4, 1), 0, 6), entry('a.js', Buffer.alloc(2, 1), 4, 6), entry('b.js', Buffer.from('b'))];
+    const page = pages(list, 1);
+    await streamSnapshot(async cursor => { events.push(`page ${cursor}`); return page(cursor); }, TREE_LIMITS, 'refuse', fail,
+      async f => { events.push(`file ${f.path} ${f.bytes.length}`); });
+    expect(events).toEqual(['page 0', 'page 1', 'file a.js 6', 'page 2', 'file b.js 1']);
+  });
   it('should split files into put frames that fit the signed frame bound and reassemble exactly', () => {
     const files = [file('a.txt', 0), file('big.bin', CHUNK_BYTES * 2 + 5), file('ui/x.js', 3)];
     const frames = putFrames('t1', 'workspace', files);
