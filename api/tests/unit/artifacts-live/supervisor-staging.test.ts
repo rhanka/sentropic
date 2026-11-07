@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILD_RECIPE, buildEnvironment, liveEnvironment } from '../../../src/services/artifacts/live/recipes';
 import { candidateDigest } from '@sentropic/artifacts/live-host';
+import { LiveError } from '../../../src/services/artifacts/live/records';
 import { DIST, fakePod, runtime, text } from './supervisor-pod';
 
 const unavailable = { code: 'builder_unavailable' };
@@ -31,6 +32,18 @@ describe('supervisor staging and projection', () => {
     await expect(pod.supervisor.dependencies(runtime, cache, { readOnly: false, verifyHash: true } as never)).rejects.toMatchObject(unavailable);
     const writable = fakePod({ dependencies: () => ({ readOnly: false }) });
     await expect(writable.supervisor.dependencies(runtime, cache, { readOnly: true, verifyHash: true })).rejects.toMatchObject(unavailable);
+  });
+  it('should stream cache files one at a time and never commit a tree whose read fails part-way', async () => {
+    const pod = fakePod();
+    const read: string[] = [];
+    pod.sources.dependencies = async function* () {
+      for (const path of ['node_modules/a.js', 'node_modules/b.js']) { read.push(path); yield { path, mode: 292 as const, bytes: Buffer.from(path) }; }
+      throw new LiveError('dependency_cache_invalid');
+    };
+    await expect(pod.supervisor.dependencies(runtime, cache, { readOnly: true, verifyHash: true }))
+      .rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    expect(read).toHaveLength(2);
+    expect(pod.ops()).not.toContain('dependencies');
   });
   it('should project the exact draft revision atomically with its deletions and bounded overlay', async () => {
     const pod = fakePod();
