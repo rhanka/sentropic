@@ -7,11 +7,11 @@
 export const TRANSFER_SOURCE = String.raw`
 AGENT_SECTIONS.push(function transferOps(ctx) {
   const { state, at } = ctx;
-  const TREE = { files: 65536, fileBytes: 16777216, totalBytes: 536870912 };
+  const TREE = { files: 65536, fileBytes: 67108864, totalBytes: 1073741824 };
   const TARGETS = {
     workspace: { root: '/workspace', ...TREE }, install: { root: '/tmp', ...TREE }, dependencies: { root: '/dependencies', ...TREE },
     overlay: { root: '/workspace', files: 255, fileBytes: 1048576, totalBytes: 8388608 },
-    'npm-cache': { root: '/tmp', files: 65536, fileBytes: 67108864, totalBytes: 536870912 },
+    'npm-cache': { root: '/tmp', ...TREE },
   };
   const MODES = [0o444, 0o555, 0o644, 0o755];
   const OPEN = 4; const PUT_ENTRIES = 256;
