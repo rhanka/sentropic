@@ -19,6 +19,9 @@
   - `api/src/services/mcp/cluster-registry.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -28,10 +31,12 @@
 - **Conditional Paths (allowed with declared exception)**:
   - `package-lock.json` under BR88-EX1.
   - `api/package-lock.json`, `api/src/services/mcp/cluster-registry.ts`, `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts` under BR88-EX2.
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`, `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` under BR88-EX3.
 
 ## Feedback Loop
 - [x] BR88-EX1: package-lock.json workspace entry of @sentropic/artifacts moves 0.2.18 to 0.2.20. Rollback: revert the version bump and lock line together.
 - [x] BR88-EX2: provider-version repin of the APP-P1 manifest digest to 0.2.20 `6faa661d9eab38920f4b7926d0778af00e3054dc3064f14c3d644ee0faa97ab7` (same digest at version 0.2.18 stays `d55df3ad…`, tool definitions byte-stable), plus the API lock workspace entry. Impact: API registry pin and its two scoped tests only. Rollback: revert with the version bump.
+- [x] BR88-EX3: selected-fixture repin of @sentropic/artifacts 0.2.18 to 0.2.20 through `make pack-candidate-siblings` (CI-equivalent PR context) and `refresh-lazy-package-lock`; guarded archive sha256 `35b4d0c39c310747bf1174b66e19ba6d4168fb9b0f7765f9f8f208ee16d23189`, lock integrity and tuple-spec pin updated. Impact: packaging fixture only. Rollback: revert with the version bump.
 - [ ] Acceptance: exact-head CI green, GLM APPROVE, npm publication of 0.2.20 by the publish workflow after merge.
 
 ## AI Flaky tests
