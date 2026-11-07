@@ -24,10 +24,6 @@ The host supplies these mandatory integrations:
 - The trusted supervisor implements bounded staging/process transport, complete
   process-tree termination, monotonic route fencing, atomic source projection,
   read-only verified dependency materialization and phase-fenced networking.
-  Before the dev server it runs the separate `prebundle` heavy phase: the pod
-  bootstrap writes its frozen host pre-bundle script itself (no host file) and
-  runs it to completion; its output stays in the emptyDir cacheDir, never the
-  shared cache.
   Bootstrap and this transport must be qualified together under GB4. An empty
   bootstrap, arbitrary shell or Kubernetes exec fallback is not provided.
   `createSupervisorTransport` (below) is that transport; pass it as `supervisor`
@@ -114,6 +110,23 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   The builder resolves only the host's pending job and registers its attempt
   fence; the host runs `acceptHandoff`, whose recheck covers every §8.3 item.
   Keys carry a `kid`, so builder and receipt keys rotate with an overlap.
+  `createHttpRemoteHost` is the builder-side `RemoteHost` over the live-host
+  `HOST_BUILD_PATHS`: a closed refusal rejects with `LiveHostError`, any other
+  failure is an unknown outcome. Only a 409 `job_not_pending` on the job
+  resolution is retried, freshly signed, with bounded backoff
+  (`JOB_NOT_PENDING_BACKOFF_MS`: 6 tries, 250 ms doubling to 4 s, 7.75 s), then
+  it fails for good. `builderRemoteHost(process.env)` reads the https
+  base from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (no secret); preprod is
+  `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls
+  `<base>/live-host/v1/job` and `<base>/live-host/v1/handoff`.
+- The API is mounted under `/api/v1/artifacts/builder` (`createBuilderMount`)
+  behind `createRequireServiceAuth` with the `artifacts:builder` scope. The
+  verified client maps to its host identity through
+  `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` = `[{clientId, hostId, storageScopeId}]`
+  (owner sentropic). An absent or invalid value binds nothing (default deny).
+  The ui nginx keeps this path out of its access and error logs.
+- A host build run is presumed dead after its heavy-gate wait plus the four
+  bounded build-only phases (`runStaleMs`), then it can be re-admitted.
 - `builderPlacement(process.env)` supplies the per-environment worker namespace
   and service domain; there is no namespace constant.
 - The content host supplies separate live authorization/currentness and the
@@ -203,6 +216,68 @@ to its object before the next snapshot page is read. `materialize` rechecks the
 seal and the manifest, then rehashes each file as it is read into put frames.
 A mismatch quarantines the entry. The API therefore holds one file (at most
 64 MiB) and one bounded frame or reply. File objects are not garbage-collected.
+
+## GB1 qualification file
+
+`qualifyBuild` runs GB1 on the forge snapshot of the pinned commit
+(`SourceSnapshot.gb1`: descriptor, manifests, lock, the host-sealed integrity
+map) through the W5 port `validateArtifactBuild`. It reads
+`artifact-build/gb1-qualification.json` at the repository root:
+
+    {"v":1,"lockSha256":"<hex>","postinstallAllowlist":[],
+     "scriptQualification":[{"package","version","integrity"}]}
+
+The file is at most 64 KiB with closed keys; its rows enter W5 as disabled hooks
+with an empty execution allowlist. Refusals: a malformed file
+(`build_descriptor_invalid`/`qualification_invalid`), then
+`install_script_not_allowlisted` with `execution_allowlist_not_empty`,
+`qualification_lock_mismatch`, `qualification_rows_mismatch` (the rows do not
+exactly cover the lock script entries) or `qualification_missing` (no file while
+the lock has script entries). The SHA-256 of the file bytes is the
+`IntegrityEvidence` digest, which must equal the cache identity
+`integrityDigest`; a lock without script entries and no file digests zero bytes.
+The cache inventory is the W5 coverage: literal SRI or the sealed map.
+
+## SG4b handoff keys
+
+`builderKeys(process.env)` reads two values from the API environment secret
+(never git, never logs; the owner `.env` names them only):
+
+- `ARTIFACT_BUILDER_HANDOFF_SIGNING_KEY_JSON` = `{"kid","privateKey"}`: the
+  builder's current Ed25519 key, PKCS#8 DER in base64. It signs the handoff and
+  the host job request. The content host receives `builderPublicKey(...)`: the
+  kid and the SPKI public key only.
+- `ARTIFACT_BUILDER_HOST_RECEIPT_KEYS_JSON` = `[{"kid","publicKey"}]`: the
+  content host's receipt public keys (SPKI DER, base64), at most 4 entries.
+
+An absent or invalid value refuses to compose the builder service.
+
+Rotation cycle: every 90 days, and at once on a suspected exposure.
+
+1. Builder key: generate a new pair and a new kid, then send the public key and
+   kid to the host. The host adds them next to the old kid.
+2. Once the host confirms, replace the signing value and restart the API.
+3. The host drops the old kid when no handoff signed with it is still valid
+   (10-minute handoff lifetime).
+4. Host receipt key: the host sends its new kid and public key. Sentropic adds
+   them to the ring before the host switches. It removes the old kid after the
+   host confirms the switch plus one handoff lifetime, because a resend may
+   still return a receipt signed with the old kid.
+
+## Supervisor frame key
+
+`supervisorKey(process.env)` reads `ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON` =
+`{"kid","privateKey"}` (Ed25519, PKCS#8 DER in base64; owner sentropic) from the
+API environment secret. An absent or invalid value refuses to compose the live
+service. `composeSupervisor` derives both halves from this one key: the W3
+transport signs every frame with it, and the pod bootstrap is
+`createBootstrapSource(supervisorPublicKey(key))`, so the pod spec carries the
+public key only and refuses a frame sealed with any other key.
+
+Rotation: a single active key. Replace the value only after every live pod has
+stopped, then restart the API; the new key applies at the next revive, because
+each pod keeps the public key of the bootstrap it started with. Rotate on the
+owner's cycle, and at once on a suspected exposure.
 
 Fake Kubernetes/forge tests live under `api/tests/unit/artifacts-live`; live
 proxy/upgrade tests live under `apps/artifact-content/tests/live*`. They cover
