@@ -16,8 +16,9 @@ export interface SupervisorSources {
   source(stagingRef: string): Promise<readonly TransferFile[]>;
   /** AL-D: the complete overlay of this exact draft revision. Draft-store credentials never reach the pod. */
   draft(runtime: LiveRuntime, draft: DraftSnapshot): Promise<{ files: readonly TransferFile[]; deletes: readonly string[] }>;
-  /** Verified cache read that rechecks seal and tree hash on every use (dependency cache `materialize`). */
-  dependencies(receipt: CacheReceipt): Promise<readonly DependencyFile[]>;
+  /** Verified cache stream (dependency cache `materialize`): seal and manifest rechecked on every use, then each file
+   * rehashed as it is read, one file at a time. */
+  dependencies(receipt: CacheReceipt): AsyncIterable<DependencyFile>;
   /** Trusted sink of the sealed candidate bytes for the SG4b upload; publication authority stays outside the pod. */
   candidate(input: { runtime: LiveRuntime; attempt: LiveAttempt; candidateDigest: string; files: readonly TransferFile[] }): Promise<void>;
 }
@@ -40,7 +41,7 @@ const cacheFailure = failure('dependency_cache_invalid');
 
 export function createSupervisorTransport(options: SupervisorOptions) {
   const core = createSupervisorChannel(options);
-  const { call, transfer, snapshot } = core;
+  const { call, transfer, stream, snapshot } = core;
   /** The stable output with the single shared candidate digest; a set that digest refuses is an invalid output. */
   async function output(runtime: LiveRuntime) {
     const files = await snapshot(runtime, 'output', OUTPUT_LIMITS, 'refuse', outputFailure);
@@ -71,11 +72,13 @@ export function createSupervisorTransport(options: SupervisorOptions) {
     },
     async dependencies(runtime, cache, mode) {
       if (mode.readOnly !== true || mode.verifyHash !== true) unavailable();
-      const files = (await options.sources.dependencies(cache)).map(file => {
-        if (file.type !== 'file') cacheFailure('invalid');
-        return { path: file.path, mode: file.mode === 365 ? 0o555 : 0o444, bytes: Buffer.from(file.bytes, 'base64') };
-      });
-      const sent = await transfer(runtime, 'dependencies', files, TREE_LIMITS, cacheFailure);
+      async function* readOnly(files: AsyncIterable<DependencyFile>) {
+        for await (const file of files) {
+          if (file.mode !== 292 && file.mode !== 365) cacheFailure('invalid');
+          yield { path: file.path, mode: file.mode === 365 ? 0o555 : 0o444, bytes: file.bytes };
+        }
+      }
+      const sent = await stream(runtime, 'dependencies', readOnly(options.sources.dependencies(cache)), TREE_LIMITS, cacheFailure);
       const data = await call(runtime, 'dependencies', { ...sent, cacheKey: cache.key, cacheTree: cache.treeSha256, readOnly: true });
       if (data.treeDigest !== sent.treeDigest || data.readOnly !== true) unavailable();
     },

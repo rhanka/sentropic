@@ -14,7 +14,13 @@ function prefix(key: string) {
   if (!/^[a-f0-9]{64}\/[a-f0-9]{64}$/.test(key)) throw new LiveError('dependency_cache_invalid');
   return `dependency-cache/v1/${key}/`;
 }
-/** Private cache bucket/credentials stay at the host. Only complete immutable objects get a pointer. */
+/** One immutable object per distinct file, named by the sha256 of its bytes and shared by every cache entry. */
+function fileRef(digest: string) {
+  if (!/^[a-f0-9]{64}$/.test(digest)) throw new LiveError('dependency_cache_invalid');
+  return `dependency-cache/v1/files/${digest}`;
+}
+/** Private cache bucket/credentials stay at the host. Only complete immutable manifests get a pointer; file objects are
+ * written as the install streams and stay invisible until a manifest naming them is admitted. */
 export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs): CachePorts['storage'] {
   async function read(key: string): Promise<CacheObject | undefined> {
     const root = prefix(key);
@@ -43,6 +49,8 @@ export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs)
       if (!winner) throw new LiveError('dependency_cache_invalid');
       return winner;
     },
+    putFile: async (digest, bytes) => blobs.put(fileRef(digest), bytes),
+    getFile: async digest => blobs.get(fileRef(digest)),
     async quarantine(key) {
       prefix(key);
       // Keep quarantined bytes private for diagnosis; an incomplete/invalid entry is never mountable.
