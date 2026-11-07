@@ -47,9 +47,9 @@
 - [x] Single hotfix branch; independent code review under current owner model policy.
 
 ## UAT Management (in orchestration context)
-- [ ] Raw HTTP regression: literal/encoded backslashes and public/protected positive controls.
+- [x] Raw HTTP regression: seven literal/encoded backslash cases and public/protected positive controls; vulnerable 1.19.17 fails, fixed 2.1.6 passes.
 
 ## Plan / Todo (lot-based)
-- [ ] **Dependency remediation**: pin one 2.1.6 adapter in root/API/fixtures/tool closures; preserve historical evidence.
+- [x] **Dependency remediation**: pin 2.1.6 in root/API/fixtures/tool closures; clean npm ci and npm ls in root/API show one physical copy.
 - [ ] **Regression and artifact proof**: vulnerable failure, fixed success; npm ls root/API/runtime/content; actual import resolution.
 - [ ] **Security handoff**: production exposure register, review, scope, push, one READY PR, state and EXIT.

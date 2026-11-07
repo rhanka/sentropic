@@ -616,6 +616,18 @@ verify-api-image: ## Fail if the loaded canonical tag differs from the recorded 
 .PHONY: test-ci-api-runtime
 test-ci-api-runtime: verify-api-image ## Prove the production artifact has no npm CLI, global tree or cache
 	@docker run --rm $(API_IMAGE_REF) sh -ec '! command -v npm; ! command -v npx; test ! -e /usr/local/lib/node_modules/npm; test ! -e /root/.npm; node --version'
+	@$(MAKE) test-security-hono-image ENV=$(ENV)
+
+# BRHONO-EX1: exercise the real HTTP adapter and the retained canonical runtime tree.
+HONO_NPM_IMAGE := node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
+.PHONY: test-security-hono-node-server test-security-hono-image
+test-security-hono-node-server: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(HONO_NPM_IMAGE) \
+		node scripts/security/hono-node-server-install.mjs
+test-security-hono-image: ci-test-env verify-api-image
+	@HONO_RUNTIME_IMAGE="$$(cat "$(API_IMAGE_RECEIPT)")" HONO_NPM_IMAGE="$(HONO_NPM_IMAGE)" \
+		bash scripts/security/hono-node-server-image.sh
 
 .PHONY: test-ci-api-tag-guard
 test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
