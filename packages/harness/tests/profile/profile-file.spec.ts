@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { checkScope } from '../../src/checks/scope-check.js';
 import { checkBranch } from '../../src/checks/branch-check.js';
 import { parseBranchMd } from '../../src/branch-md/parse.js';
@@ -21,6 +22,9 @@ describe('strict profile document validation', () => {
     [{ ...base, id: '' }, 'INVALID_PROFILE'],
     [{ ...base, forbiddenPathDefaults: [''] }, 'INVALID_PROFILE'],
     [{ ...base, forbiddenPathDefaults: [1] }, 'INVALID_PROFILE'],
+    [{ ...base, allowedPathDefaults: ['/absolute/**'] }, 'INVALID_PROFILE'],
+    [{ ...base, conditionalPathDefaults: ['../outside/**'] }, 'INVALID_PROFILE'],
+    [{ ...base, forbiddenPathDefaults: ['src\\windows'] }, 'INVALID_PROFILE'],
     [{ ...base, conditionalRequiresException: 'yes' }, 'INVALID_PROFILE'],
     [{ ...base, branchMatch: 'similar' }, 'INVALID_PROFILE'],
     [{ ...base, exceptionIdPattern: '[' }, 'INVALID_REGEX'],
@@ -33,6 +37,17 @@ describe('strict profile document validation', () => {
     catch (error) {
       expect(error).toBeInstanceOf(ProfileValidationError);
       expect(error).toMatchObject({ code });
+    }
+  });
+
+  it('keeps the README Rust + Node example executable under the published contract', () => {
+    const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+    const example = /```json\n([\s\S]*?)\n```/.exec(readme)![1];
+    const profile = parseHarnessProfile(JSON.parse(example));
+    for (const path of ['Cargo.toml', '.githooks/pre-commit', 'LICENSE']) {
+      expect(checkScope({ stagedFiles: [path], profile,
+        boundary: { allowed: [], forbidden: [], conditional: [] } }).violations[0].message)
+        .toBe(`forbidden path touched: ${path}`);
     }
   });
 
