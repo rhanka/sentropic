@@ -53,5 +53,6 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
       return candidate;
     },
     verify: (runtime, attempt) => supervisor.verify(runtime, attempt, { files: 255, fileBytes: 16777216, totalBytes: 67108864 }),
+    renew: runtime => supervisor.renew(runtime),
   };
 }

@@ -23,7 +23,7 @@ describe('live scheduler (lease cadence and concurrent reconcile)', () => {
     const blocked = deferred(); const reconciled: string[] = [];
     const controller = {
       active: vi.fn(async () => [{ key, ownerId: 'alice' }, { key: other, ownerId: 'bob' }]),
-      lease: vi.fn(async () => true),
+      lease: vi.fn(async (_k: typeof key) => true),
       reconcile: vi.fn(async (k: typeof key) => { if (k === key) await blocked.promise; reconciled.push(k.artifactId); }),
     };
     const scheduler = createLiveScheduler({ controller, intervalMs: 30_000, onError: vi.fn() });

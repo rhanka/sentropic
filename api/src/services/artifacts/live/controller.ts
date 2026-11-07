@@ -105,6 +105,14 @@ export function createLiveController(ports: LivePorts) {
     },
     /** The idle reaper (Amendment 1): no absolute lifetime; strictly after 900 s idle it ends on the clean build. */
     reap: (key: LiveKey) => idleBuild(ports, key),
+    /** Liveness lease (Amendment 1 §3): one authenticated, fenced frame to a leased pod. It never renews idle time. */
+    async lease(key: LiveKey) {
+      const runtime = (await ports.store.read(key))?.runtime;
+      if (!runtime || runtime.phase === 'DORMANT' || runtime.podUid === null) return false;
+      await ports.worker.renew(runtime); return true;
+    },
+    /** Every runtime that is not DORMANT, for the scheduler. */
+    active: () => ports.store.active(),
   };
 }
 export type { LiveKey, LiveRuntime };
