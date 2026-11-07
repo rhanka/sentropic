@@ -60,7 +60,7 @@
 - [ ] **Lot 4 — s-archi builder mount (decisions 07/11 15:00-15:25)**
   - [x] Run staleness = heavy-gate wait plus the four bounded build-only phases (20 min), not a pod lifetime.
   - [x] Host identity from the `artifacts:builder` service client and `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` (default deny).
-  - [ ] Builder handoff signing key and host receipt key ring from fixed env names, with a documented rotation cycle.
+  - [x] Builder handoff signing key and host receipt key ring from fixed env names, with a documented rotation cycle.
   - [ ] Mount under `/api/v1/artifacts/builder` behind `createRequireServiceAuth`; ui nginx location without access log.
   - [ ] Pod spec keeps main's resources and env (pod-4live owns them); namespace, placement and no `activeDeadlineSeconds` only.
 - [x] **Lot 3 — Gate**
