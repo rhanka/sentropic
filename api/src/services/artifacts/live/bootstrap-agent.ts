@@ -5,7 +5,9 @@
  * string, so the pod needs only Node built-ins from the approved image digest (no shell, no exec).
  * Error codes are the closed W3 reply set: `fenced`, `limit`, `failed`; `reason` is a closed token.
  */
+import { DEPENDENCY_OPS_SOURCE } from './bootstrap-deps';
 import { FILE_OPS_SOURCE } from './bootstrap-files';
+import { MATERIALIZE_OPS_SOURCE } from './bootstrap-materialize';
 
 const CORE_SOURCE = String.raw`
 import * as agentFs from 'node:fs/promises';
@@ -107,6 +109,25 @@ export function createAgent(options) {
     }
     return false;
   };
+  /** Frozen recipes only: own process group, no shell, explicit environment, no inherited stdio. */
+  ctx.spawnRecipe = (recipe, cwd) => {
+    const child = options.spawn(recipe.executable, [...recipe.args],
+      { cwd: ctx.at(cwd), env: { ...ctx.env }, shell: false, detached: true, stdio: 'ignore' });
+    ctx.state.child = child;
+    return child;
+  };
+  ctx.runToExit = (recipe, cwd) => new Promise((resolve) => {
+    let child;
+    try { child = ctx.spawnRecipe(recipe, cwd); } catch { resolve(-1); return; }
+    const timer = setTimeout(() => { ctx.terminateAll(); }, recipe.timeoutMs);
+    if (timer.unref) timer.unref();
+    child.once('error', () => { clearTimeout(timer); resolve(-1); });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      if (ctx.state.child === child) ctx.state.child = null;
+      resolve(code === 0 ? 0 : -1);
+    });
+  });
   for (const section of AGENT_SECTIONS) section(ctx);
   let queue = Promise.resolve();
   const serial = (work) => { const next = queue.then(work, work); queue = next.then(() => undefined, () => undefined); return next; };
@@ -129,4 +150,4 @@ export function createAgent(options) {
 
 `;
 
-export const AGENT_SOURCE = CORE_SOURCE + FILE_OPS_SOURCE;
+export const AGENT_SOURCE = CORE_SOURCE + FILE_OPS_SOURCE + DEPENDENCY_OPS_SOURCE + MATERIALIZE_OPS_SOURCE;
