@@ -1,10 +1,13 @@
 import type { Handoff, HandoffReceipt } from '@sentropic/artifacts/live-host';
 import type { LiveKey } from './records';
 import type { HandoffOutcomes } from './handoff-publication';
+import { PHASE_DEADLINE_MS } from './deadline';
 
-/** Above the longest build-only run (each phase bounded by withinPhase, the runtime by its lifetime) plus teardown:
- * a run older than this is presumed dead and can be re-admitted. */
-export const RUN_STALE_MS = 3_900_000;
+/** Bounded phases of one build-only run, each under PHASE_DEADLINE_MS (withinPhase or its recipe timeout). */
+export const BUILD_ONLY_PHASES = ['install', 'prepare', 'build', 'verify'] as const;
+/** A run older than its heavy-gate wait plus its bounded phases (20 min) is presumed dead and can be re-admitted.
+ * There is no pod lifetime to derive it from (A-LIVE Amendment 1). */
+export const runStaleMs = (heavyWaitMs: number) => heavyWaitMs + BUILD_ONLY_PHASES.length * PHASE_DEADLINE_MS;
 /** Builder-side job ledger of the host build API. One run token per admission; only the current run may fail it. */
 export interface BuildJobRecord {
   storageScopeId: string; artifactId: string; jobId: string; state: 'accepted' | 'published' | 'failed';
@@ -17,7 +20,7 @@ export interface RecordStore {
 }
 export const buildJobId = (key: LiveKey, jobId: string) => JSON.stringify([key.storageScopeId, key.artifactId, jobId]);
 
-export function createBuildJobs(store: RecordStore, now: () => number, token: () => string) {
+export function createBuildJobs(store: RecordStore, now: () => number, token: () => string, staleMs: number) {
   const owned = (key: LiveKey, record: BuildJobRecord | undefined) =>
     record && record.storageScopeId === key.storageScopeId && record.artifactId === key.artifactId ? record : undefined;
   return {
@@ -25,7 +28,7 @@ export function createBuildJobs(store: RecordStore, now: () => number, token: ()
     /** `run` is true only for a new run: first admission, after a failure, or after a stale run. */
     admit: (key: LiveKey, jobId: string) => store.update(buildJobId(key, jobId), current => {
       const record = owned(key, current);
-      if (record && (record.state === 'published' || (record.state === 'accepted' && now() - record.admittedAt < RUN_STALE_MS))) {
+      if (record && (record.state === 'published' || (record.state === 'accepted' && now() - record.admittedAt < staleMs))) {
         return { result: { record, run: false } };
       }
       const next: BuildJobRecord = { ...key, jobId, state: 'accepted', token: token(), admittedAt: now(),
