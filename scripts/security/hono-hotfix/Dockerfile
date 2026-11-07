@@ -1,16 +1,16 @@
-# Derived hotfix image: replaces ONLY @hono/node-server (GHSA-jpvv-r467-5p4w) in an exact,
+# Derived hotfix image: replaces ONLY @hono/node-server (GHSA-jpvv-r467-5p4w, GHSA-rmxm-3fg6-px4f) in an exact,
 # digest-pinned production image. No application code is rebuilt or changed.
 ARG BASE
 FROM ${BASE}
 ARG ORIG_USER=root
 ARG EXPECTED_OLD=1.19.17
-ARG EXPECTED_NEW=1.19.18
+ARG EXPECTED_NEW=2.1.6
 ARG BASE_REF
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.source="https://github.com/rhanka/sentropic" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.base.name="${BASE_REF}" \
-      org.opencontainers.image.description="Production image with @hono/node-server patched to ${EXPECTED_NEW} (GHSA-jpvv-r467-5p4w); nothing else changed" \
+      org.opencontainers.image.description="Production image with @hono/node-server patched to ${EXPECTED_NEW} (GHSA-jpvv-r467-5p4w, GHSA-rmxm-3fg6-px4f); nothing else changed" \
       ca.sent-tech.patched-dependency="@hono/node-server@${EXPECTED_NEW}"
 USER root
 COPY node-server.tgz /tmp/node-server.tgz
