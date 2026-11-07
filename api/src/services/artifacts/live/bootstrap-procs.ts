@@ -1,10 +1,10 @@
 /**
  * Pod agent section: repository processes and snapshots (A-LIVE §8.3, W3 ops `phase`, `dev`, `build`, `snapshot`).
  * Repository code (pre-bundle, Vite, clean build) runs only in the `offline` phase after sealed dependency
- * materialization, from frozen recipes chosen by name. `dev` first runs the host pre-bundle driver to
- * completion, so its output stays in this pod's /tmp/vite-cache. Under W2 static deny, `phase` records the
- * posture and reports established outbound TCP sockets (excluding the :5173 listener and the loopback Vite
- * upstream); it cannot prove NetworkPolicy denial, which stays a Q1 receipt.
+ * materialization, from frozen recipes chosen by name. `prebundle` is its own heavy phase, admitted by the controller's
+ * queue on the node memory budget; `dev` refuses without it. The clean build alone runs with the build heap env.
+ * Under W2 static deny, `phase` records the posture and reports established outbound TCP sockets (excluding the
+ * :5173 listener and the loopback Vite upstream); it cannot prove NetworkPolicy denial, which stays a Q1 receipt.
  * `snapshot` pages regular files as contiguous base64 slices: `output` (ui/dist, 255 files / 16 MiB / 64 MiB,
  * links refused) and `dependencies` (the /tmp/install node_modules files, links skipped).
  */
@@ -14,7 +14,7 @@ AGENT_SECTIONS.push(function processOps(ctx) {
   const OUTPUT_DIR = '/workspace/ui/dist';
   const ROOTS = {
     output: { dir: OUTPUT_DIR, files: 255, fileBytes: 16777216, totalBytes: 67108864, links: 'refuse', deps: false },
-    dependencies: { dir: '/tmp/install', files: 65536, fileBytes: 16777216, totalBytes: 536870912, links: 'skip', deps: true },
+    dependencies: { dir: '/tmp/install', files: 65536, fileBytes: 67108864, totalBytes: 1073741824, links: 'skip', deps: true },
   };
   const CHUNK = 786432; const PAGE_ENTRIES = 4096;
   const HOST_CONFIG = '/tmp/artifact-vite.config.mjs'; const PREBUNDLE_SCRIPT = '/tmp/artifact-vite-prebundle.mjs';
@@ -48,18 +48,25 @@ AGENT_SECTIONS.push(function processOps(ctx) {
     state.phase = phase;
     return { phase, egress: 'static-deny', established: await established() };
   });
+  /** Heavy phase of its own (queued by the controller on the node memory budget): the host driver writes this
+   * pod's /tmp/vite-cache, so the dev server never re-optimizes at its first render. */
+  ctx.define('prebundle', ['recipe'], async ({ recipe }) => {
+    if (recipe !== 'prebundle') agentFail('failed', 'invalid_recipe');
+    await repoPhase(true);
+    state.prebundled = false;
+    await agentAtomicWrite(at(PREBUNDLE_SCRIPT), Buffer.from(ctx.recipes.prebundleScript, 'utf8'), 0o444);
+    if (await ctx.runToExit(ctx.recipes.prebundle, '/workspace') !== 0) agentFail('failed', 'prebundle_failed');
+    if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
+    state.prebundled = true;
+    return { prebundled: true };
+  });
   /** Idempotent for one session/lease: projections reuse the running Vite so HMR applies the overlay. */
   ctx.define('dev', ['recipe'], async ({ recipe }, fence) => {
     if (recipe !== 'live') agentFail('failed', 'invalid_recipe');
     const session = [fence.generation, fence.sessionId, fence.leaseEpoch].join(':');
     if (state.live && state.child && state.liveSession === session) return { revision: state.revision, routeEpoch: fence.routeEpoch };
+    if (!state.prebundled) agentFail('failed', 'prebundle_missing');
     await repoPhase(true);
-    if (!state.prebundled) {
-      await agentAtomicWrite(at(PREBUNDLE_SCRIPT), Buffer.from(ctx.recipes.prebundleScript, 'utf8'), 0o444);
-      if (await ctx.runToExit(ctx.recipes.prebundle, '/workspace') !== 0) agentFail('failed', 'prebundle_failed');
-      if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
-      state.prebundled = true;
-    }
     let child = null;
     try { child = ctx.spawnRecipe(ctx.recipes.live, '/workspace'); } catch { agentFail('failed', 'dev_unavailable'); }
     child.once('error', () => undefined);
@@ -77,7 +84,7 @@ AGENT_SECTIONS.push(function processOps(ctx) {
     await agentNoLinks(at, '/workspace', 'ui/dist/index');
     await agentFs.rm(at(OUTPUT_DIR), { recursive: true, force: true });
     state.snapshots.output = null;
-    const exitCode = await ctx.runToExit(ctx.recipes.build, '/workspace');
+    const exitCode = await ctx.runToExit(ctx.recipes.build, '/workspace', options.buildEnv);
     if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
     return { exitCode };
   });
