@@ -30,6 +30,7 @@
   - [x] Declare `BR99-EXn` with reason, impact and rollback before touching a conditional path.
 
 ## Feedback Loop
+- [x] Tests-first receipt: CLI profile suite fails 11/14 against the unchanged kernel (loading, discovery, precedence, guards and configuration errors).
 - [x] Owner requirements authorize the profile contract and precedence; preserve built-in C1/C2 behavior and advisory exit status.
 - [ ] Track handoff: designated conductor imports the request, lots, deliverables and test receipts from this source; this lane does not append to the shared journal.
 - [ ] Train handoff: consolidated independent review, version allocation, package qualification and CI belong to integration.
