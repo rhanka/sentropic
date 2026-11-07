@@ -26,7 +26,7 @@ describe('builder pod admission and recovery', () => {
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
   });
   it('should bound every emptyDir within the ephemeral limit and fit four CPU requests on one d2-4 node', async () => {
-    const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted');
+    const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted', placement);
     const { requests, limits } = pod.spec.containers[0].resources;
     const mebibytes = (value: string) => Number(/^(\d+)(Mi|Gi)$/.exec(value)![1]) * (value.endsWith('Gi') ? 1024 : 1);
     const emptyDirs = pod.spec.volumes.reduce((total, volume) => total + mebibytes(volume.emptyDir.sizeLimit), 0);
