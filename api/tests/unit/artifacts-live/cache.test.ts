@@ -3,19 +3,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDependencyCache, type CacheIdentity, type CacheObject, type CachePorts, type CacheReceipt,
   type DependencyFile } from '../../../src/services/artifacts/live/cache';
 import { sha256 } from '../../../src/services/artifacts/live/integrity';
+import { GB1_QUALIFICATION_PATH } from '../../../src/services/artifacts/live/gb1-qualification';
 import { artifactEnvironment, BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
 
 function cacheFixture() {
   const bytes = Buffer.from('qualified tarball');
   const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
   const entry = { version: '1.0.0', resolved: 'https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz', integrity };
-  const lock = { lockfileVersion: 3, packages: { '': {}, 'node_modules/pkg': entry } };
+  const manifest = { name: 'fixture', version: '1.0.0', scripts: { 'build:artifact': 'vite build' } };
+  const lock = { lockfileVersion: 3, packages: { '': manifest, 'node_modules/pkg': entry } as Record<string, Record<string, unknown>> };
+  const rows: { package: string; version: string; integrity: string }[] = [];
   let stored: CacheObject | undefined;
   const files = new Map<string, Uint8Array>();
   const installed: DependencyFile = { path: 'pkg/index.js', mode: 292, bytes: Buffer.from('module.exports = 1') };
   const ports: CachePorts = {
     signingKey: () => Buffer.alloc(32, 1),
-    evidence: vi.fn(async lockSha256 => ({ lockSha256, digest: 'f'.repeat(64), approved: [], disabledHooks: [] })),
     fetch: vi.fn(async () => bytes),
     cleanInstall: vi.fn<CachePorts['cleanInstall']>(async input => {
       for await (const tarball of input.tarballs) expect(tarball.bytes).toEqual(bytes);
@@ -27,13 +29,17 @@ function cacheFixture() {
       putFile: vi.fn(async (digest, data) => { files.set(digest, data); }), getFile: vi.fn(async digest => files.get(digest)) },
   };
   const source = () => {
-    const lockfile = Buffer.from(JSON.stringify(lock));
+    const lockText = JSON.stringify(lock); const lockfile = Buffer.from(lockText);
+    const qualification = JSON.stringify({ v: 1, lockSha256: sha256(lockText), postinstallAllowlist: [], scriptQualification: rows });
+    const gb1 = { subPath: '', files: { 'sentropic.artifact.json': JSON.stringify({ version: 1, buildScript: 'build:artifact',
+      outputDir: 'dist', lockfilePath: 'package-lock.json' }), 'package.json': JSON.stringify(manifest),
+      'package-lock.json': lockText, [GB1_QUALIFICATION_PATH]: qualification } };
     const cacheIdentity: CacheIdentity = { storageScopeId: 'scope', repoId: 'repo', lockSha256: sha256(lockfile),
       image: BUILDER_IMAGE, platform: 'linux/amd64', nodeVersion: '24', npmVersion: '11', policyRevision: 'p1',
-      workspaceTopology: 'root', integrityDigest: 'f'.repeat(64) };
-    return { lockfile, cacheIdentity, stagingRef: 'verified-clean-checkout' };
+      workspaceTopology: 'root', integrityDigest: sha256(qualification) };
+    return { lockfile, cacheIdentity, stagingRef: 'verified-clean-checkout', gb1 };
   };
-  return { lock, ports, source, files, installed, cache: createDependencyCache(ports), stored: () => stored! };
+  return { lock, rows, ports, source, files, installed, cache: createDependencyCache(ports), stored: () => stored! };
 }
 async function collect(cache: ReturnType<typeof createDependencyCache>, receipt: CacheReceipt) {
   const out: DependencyFile[] = [];
@@ -74,13 +80,17 @@ describe('locked dependency cache', () => {
     await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'dependency_integrity_mismatch' });
     expect(f.ports.storage.putFile).not.toHaveBeenCalled(); expect(f.ports.storage.admit).not.toHaveBeenCalled();
   });
-  it('should not replace literal script-package lock integrity with a host map value', async () => {
-    const f = cacheFixture(); const entry = f.lock.packages['node_modules/pkg']; const integrity = entry.integrity;
-    Object.assign(entry, { integrity: '', hasInstallScript: true });
-    f.ports.evidence = vi.fn(async lockSha256 => ({ lockSha256, digest: 'f'.repeat(64),
-      approved: [{ path: 'node_modules/pkg', url: entry.resolved, version: entry.version, integrity }],
-      disabledHooks: [{ path: 'node_modules/pkg', version: entry.version, integrity }] }));
-    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'dependency_integrity_missing' });
+  it('should install a qualified script package with its hook disabled and refuse an unqualified one', async () => {
+    const f = cacheFixture(); const entry = f.lock.packages['node_modules/pkg']; entry.hasInstallScript = true;
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'install_script_not_allowlisted' });
+    f.rows.push({ package: 'pkg', version: '1.0.0', integrity: String(entry.integrity) });
+    await expect(f.cache.acquire(f.source())).resolves.toMatchObject({ inventory: [expect.objectContaining({ path: 'node_modules/pkg' })] });
+    expect(f.ports.fetch).toHaveBeenCalledOnce();
+  });
+  it('should bind the qualification file digest into the cache identity', async () => {
+    const f = cacheFixture(); const source = f.source(); source.cacheIdentity.integrityDigest = 'f'.repeat(64);
+    await expect(f.cache.acquire(source)).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    expect(f.ports.fetch).not.toHaveBeenCalled();
   });
   it.each(['../escape', '/absolute', 'pkg/../../escape', 'pkg\\escape'])('should reject unsafe dependency path %s', async path => {
     const f = cacheFixture(); f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
