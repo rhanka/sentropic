@@ -30,11 +30,13 @@ export function gitToolsWorld(options: { delegated?: 'none' | 'personal-only'; b
     : { admits: async executor => executor === 'caller', request: build };
   const bindings = createMemoryGitBindingStore();
   const journal = vi.fn();
-  const deps: GitToolsDeps = { bindings, git: git as unknown as GitToolsDeps['git'], journal,
-    registry: createGitRepositoryRegistry([{ repoId: 'repo-a', storageScopeId: 'scope-a', forge: 'github-app', locator: 'o/r',
-      installationRef: 'i', webhookSecretRef: 'w', branchPrefix: 'artifact/', allowedSubPaths: [''], canWrite: true,
-      writablePaths: ['ui/**'], codePolicyRef: 'p', publicationPolicy: { delegatedPublication: options.delegated ?? 'personal-only' } }]),
-    codeRights: { canReadCode: async () => options.rights !== false },
+  const access = { rights: options.rights !== false };
+  const registry = createGitRepositoryRegistry([{ repoId: 'repo-a', storageScopeId: 'scope-a', forge: 'github-app', locator: 'o/r',
+    installationRef: 'i', webhookSecretRef: 'w', branchPrefix: 'artifact/', allowedSubPaths: [''], canWrite: true,
+    writablePaths: ['ui/**'], codePolicyRef: 'p', publicationPolicy: { delegatedPublication: options.delegated ?? 'personal-only' } }]);
+  vi.spyOn(registry, 'get');
+  const deps: GitToolsDeps = { bindings, git: git as unknown as GitToolsDeps['git'], journal, registry,
+    codeRights: { canReadCode: async () => access.rights },
     authorize: async () => ({ ownerId: options.owner ?? 'alice', canWrite: options.canWrite !== false }),
     ...(buildPort ? { build: buildPort } : {}), now: () => new Date('2026-11-07T00:00:00Z') };
   const tools = options.tools ?? ['fetch_app_source', 'git_attach', 'git_publish'];
@@ -44,5 +46,5 @@ export function gitToolsWorld(options: { delegated?: 'none' | 'personal-only'; b
     ...(options.withService === false ? {} : { gitTools: createGitToolService(deps) }) });
   const call = (route: string, body: Record<string, unknown>, actor = 'alice') =>
     world.http('/' + route, body, world.invocation(actor));
-  return { world, call, git, heads, build, deps, journal, bindings };
+  return { world, call, git, heads, build, deps, journal, bindings, access, registry };
 }
