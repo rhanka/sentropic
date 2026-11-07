@@ -1,11 +1,11 @@
-# Feature: Train 2026-11-07 CI10 stage 3 (image guards, prebuilt toolbox, lighter e2e)
+# Feature: Train 3 2026-11-07 (UI folder reload, SCA gate hardening, builder pool d2-4, Track flake item)
 
 ## Objective
-- [ ] One train, one PR, one CI: move API image guards and toolbox qualification off the critical path, pull a content-addressed prebuilt toolbox, and lighten the e2e shards, targeting a full PR CI of 12-13 minutes without self-hosted runners.
-- [x] Wagons: perf/ci10-image-checks, perf/ci10-toolbox-e2e (cherry-picked onto main 695ebb580).
+- [ ] One train, one PR, one CI: fix the folders/[id] use-case list reload race, harden the SCA gate (4 LOW findings of the #940 review), schedule live builder pods on the artifact-builders pool, and record the e2e flake in Track.
+- [x] Wagons: fix/ui-folder-usecase-reload, chore/sca-gate-lows, feat/artifact-builder-pool-d2-4, chore/track-e2e-usecase-flake (cherry-picked onto main 2d06ba7eb without conflict).
 
 ## Scope / Guardrails
-- [x] Branch train/2026-11-07-ci10-b; worktree tmp/worktrees/train2; ENV=test-ci10-train2.
+- [x] Branch train/2026-11-07-ci10-c; worktree tmp/worktrees/train3; ENV=test-ci10-train3.
 - [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling.
 - [x] Scoped local checks only; full suites run in the PR CI.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
@@ -13,27 +13,26 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/ci/**`
-  - `scripts/test-artifact-content-image.sh`
-  - `Makefile`
-  - `api/tests/unit/auth/oauth-state-adapter.test.ts`
-  - `.github/workflows/ci.yml`
+  - `ui/src/lib/utils/keyed-reload.ts`
+  - `ui/src/routes/folders/[id]/+page.svelte`
+  - `ui/tests/utils/keyed-reload.test.ts`
+  - `scripts/security/sca-gate.mjs`
+  - `scripts/security/sca-gate.test.mjs`
+  - `.security/vulnerability-register.yaml`
+  - `api/src/services/artifacts/live/pods.ts`
+  - `api/tests/unit/artifacts-live/pods.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
   - `packages/*/src/**`
   - `api/drizzle/*.sql`
+  - `.github/workflows/ci.yml`
 - **Conditional Paths (allowed with declared exception)**:
-  - `.github/workflows/ci.yml` under BR85-EX1.
-  - `Makefile` under BR85-EX2.
+  - `.track/**` under BR86-EX1.
 
 ## Feedback Loop
-- [x] BR85-EX1: image guards job, toolbox qualification job, GHCR toolbox pull and main-only push (job-level packages: write), e2e image loads and shutdown. Rollback: revert the workflow and wiring tests together.
-- [x] BR85-EX2: toolbox registry pull and push targets in the Makefile. Rollback: restore recipes.
-- [x] BR85-EX3: test-only fix of the oauth-state-adapter race test (main red after the security train, Postgres 40001): run() goes through withSerializationRetry like production; assertions unchanged. Rollback: revert fa7ac7f8e.
-- [x] Investigation: run 42384565117 failed only on e2e 06-usecase.spec.ts:93 (shard 6, 1 of 55); same e2e harness passed on runs 42380173023 and 42383767925; same-family flake predates this train (run 42341356424, 05-usecase-detail SSE). Fresh run requested by head change; root cause in .tmp/rv/e2e-usecase-flake.md.
-- [ ] Acceptance: exact-head CI wall time retained in .tmp/rv/train-ci10-b.md on three runs.
+- [x] BR86-EX1: Track writer commit for the e2e use-case flake bug item 01M6VD98F8SY5WYQ186GV4F66A. Rollback: revert the Track commit.
+- [ ] Acceptance: exact-head CI green; e2e 06-usecase passes; no gate weakened.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -41,13 +40,13 @@
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick**
 - [x] **Multi-branch**
-- [x] Rationale: two CI wagons integrated into one dated train with one CI.
+- [x] Rationale: four independent wagons integrated into one dated train with one CI.
 
 ## UAT Management (in orchestration context)
-- [ ] Exact-head pull_request CI timing retained in .tmp/rv/train-ci10-b.md.
+- [ ] Exact-head pull_request CI result retained in the PR.
 
 ## Plan / Todo (lot-based)
 - [x] Lot 1: wagons cherry-picked onto main without conflict.
-- [x] Lot 2: scoped make checks green (ci-dag 10/10, unit-graph 5/5, expected-results 28/28, api-tool-cache 4/4, ci-static 3/3).
-- [ ] Lot 3: push, open PR, GLM review.
+- [x] Lot 2: scoped checks green (sca-gate unit 14/14, ui keyed-reload 2/2; pods test 5/5 recorded by its wagon).
+- [ ] Lot 3: push, open PR, review.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.

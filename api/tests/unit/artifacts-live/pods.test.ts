@@ -11,6 +11,11 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.containers).toHaveLength(1); expect(pod.spec.containers[0].image).toBe(BUILDER_IMAGE);
     expect(pod.spec.containers[0].securityContext).toMatchObject({ allowPrivilegeEscalation: false,
       readOnlyRootFilesystem: true, capabilities: { drop: ['ALL'] } });
+    expect(pod.spec.nodeSelector).toEqual({ nodepool: 'artifact-builders' });
+    expect(pod.spec.tolerations).toEqual([{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }]);
+    const res = pod.spec.containers[0].resources;
+    expect(res.requests['ephemeral-storage']).toBe('0'); expect(res.limits['ephemeral-storage']).toBe('2Gi');
+    expect(res.requests.memory).toBe('1280Mi'); expect(res.limits.memory).toBe('1536Mi');
     expect(pod.spec.volumes.every(volume => Object.keys(volume).sort().join(',') === 'emptyDir,name')).toBe(true);
     expect(pod.metadata.labels['sentropic.dev/artifact-binding']).toBeDefined();
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
