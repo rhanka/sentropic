@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILD_RECIPE, artifactEnvironment } from '../../../src/services/artifacts/live/recipes';
-import { candidateManifestDigest } from '../../../src/services/artifacts/live/supervisor-transfer';
+import { candidateDigest } from '@sentropic/artifacts/live-host';
 import { DIST, fakePod, runtime, text } from './supervisor-pod';
 
 const unavailable = { code: 'builder_unavailable' };
@@ -52,7 +52,7 @@ describe('supervisor build output', () => {
     const result = await pod.supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment());
     expect(pod.ops()).toEqual(['build', 'terminate', 'snapshot']);
     expect(pod.bodies[0].args).toEqual({ recipe: 'build', attemptId: 'att-1', headSha: 'h', treeSha: 't' });
-    expect(result).toEqual({ candidateDigest: candidateManifestDigest(DIST) });
+    expect(result).toEqual({ candidateDigest: candidateDigest(DIST) });
     expect(pod.sources.candidate).toHaveBeenCalledWith(expect.objectContaining({ attempt, candidateDigest: result.candidateDigest,
       files: [expect.objectContaining({ path: 'index.html' }), expect.objectContaining({ path: 'assets/app.js' })] }));
   });
@@ -65,12 +65,19 @@ describe('supervisor build output', () => {
     await expect(noEntry.supervisor.build(runtime, attempt, BUILD_RECIPE, env)).rejects.toMatchObject(unavailable);
     expect(failed.sources.candidate).not.toHaveBeenCalled(); expect(noEntry.sources.candidate).not.toHaveBeenCalled();
   });
+  it('should refuse an output the shared candidate digest rejects as output_invalid, sealing nothing', async () => {
+    const control = fakePod({}, { dist: [text('index.html', 'x'), text('assets/a\u0001.js', 'x')] });
+    const failure = { code: 'builder_unavailable', reason: 'output_invalid' };
+    await expect(control.supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment())).rejects.toMatchObject(failure);
+    await expect(control.supervisor.verify(runtime, { id: 'a', candidateDigest: 'e'.repeat(64) } as never, limits)).rejects.toMatchObject(failure);
+    expect(control.sources.candidate).not.toHaveBeenCalled();
+  });
   it('should verify with the exact limits that the stable output still matches the sealed candidate', async () => {
     const pod = fakePod();
-    await pod.supervisor.verify(runtime, { id: 'att-1', candidateDigest: candidateManifestDigest(DIST) } as never, limits);
+    await pod.supervisor.verify(runtime, { id: 'att-1', candidateDigest: candidateDigest(DIST) } as never, limits);
     await expect(pod.supervisor.verify(runtime, { id: 'att-1', candidateDigest: 'e'.repeat(64) } as never, limits)).rejects.toMatchObject(unavailable);
     await expect(pod.supervisor.verify(runtime, { id: 'att-1' } as never, limits)).rejects.toMatchObject(unavailable);
-    await expect(pod.supervisor.verify(runtime, { id: 'att-1', candidateDigest: candidateManifestDigest(DIST) } as never,
+    await expect(pod.supervisor.verify(runtime, { id: 'att-1', candidateDigest: candidateDigest(DIST) } as never,
       { ...limits, files: 256 } as never)).rejects.toMatchObject(unavailable);
     const big = fakePod({}, { dist: [text('index.html', 'x'), ...Array.from({ length: 255 }, (_, i) => text(`f${i}`, 'x'))] });
     await expect(big.supervisor.verify(runtime, { id: 'a', candidateDigest: 'e'.repeat(64) } as never, limits)).rejects.toMatchObject({ code: 'limit_exceeded' });
