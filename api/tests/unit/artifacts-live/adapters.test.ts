@@ -8,13 +8,14 @@ import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_PREBUNDLE_SCR
   PREBUNDLE_RECIPE }
   from '../../../src/services/artifacts/live/recipes';
 import { createPostgresCacheStorage } from '../../../src/services/artifacts/live/cache-storage';
+import { createPostgresLiveStore } from '../../../src/services/artifacts/live/postgres';
 
 describe('trusted live adapters', () => {
   it('should force fixed offline recipes and read-only verified dependencies', async () => {
     const f = fixture(); const runtime = await f.controller.start(key);
     const calls: string[] = [];
     const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'prebundle', 'dev',
-      'build', 'verify'].map(name => [name, vi.fn(async () => { calls.push(name); return name === 'build' ? { candidateDigest: 'digest' } : undefined; })]),
+      'build', 'verify', 'renew'].map(name => [name, vi.fn(async () => { calls.push(name); return name === 'build' ? { candidateDigest: 'digest' } : undefined; })]),
     ) as unknown as QualifiedSupervisor;
     const worker = createLiveWorker(supervisor);
     const source = await f.ports.forge.snapshot(key, 'B'); const cache = await f.ports.cache.acquire(source, runtime);
@@ -30,6 +31,7 @@ describe('trusted live adapters', () => {
     await worker.build(runtime, { id: 'attempt' } as never);
     expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, buildEnvironment());
     expect(supervisor.terminate).toHaveBeenCalledWith(runtime);
+    await worker.renew(runtime); expect(supervisor.renew).toHaveBeenCalledWith(runtime);
   });
   it('should pre-bundle in the worker pod with the host config and env before the dev server starts', async () => {
     const f = fixture(); const runtime = await f.controller.start(key); const calls: string[] = [];
@@ -117,5 +119,15 @@ describe('trusted live adapters', () => {
         .rejects.toMatchObject({ code: 'dependency_integrity_missing' });
     }
     expect(transport).not.toHaveBeenCalled();
+  });
+  it('should list the runtimes that are not DORMANT from the live store namespace', async () => {
+    const row = (scope: string, artifact: string, phase: string, ownerId: string) =>
+      ({ key: JSON.stringify([scope, artifact]), value: JSON.stringify({ runtime: { phase, ownerId } }) });
+    const query = vi.fn(async () => ({ rows: [row('s', 'a', 'LIVE', 'alice'), row('s', 'b', 'DORMANT', 'bob'),
+      row('t', 'c', 'RECOVERING', 'carol')] }));
+    expect(await createPostgresLiveStore({ query } as never).active()).toEqual([
+      { key: { storageScopeId: 's', artifactId: 'a' }, ownerId: 'alice' },
+      { key: { storageScopeId: 't', artifactId: 'c' }, ownerId: 'carol' }]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('control.artifact_host_kv'), ['artifact-live-runtime/v1']);
   });
 });
