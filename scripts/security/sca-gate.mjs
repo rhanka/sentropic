@@ -36,6 +36,11 @@ export function clean(text) {
   return String(text ?? '').replace(/[\r\n]+/g, ' ').replace(/::/g, ': :');
 }
 
+// Whole templates go through clean(): no raw field can reach an annotation or the issue body.
+export const issueLine = f => clean(`- **${f.severity}** \`${f.package}@${f.version}\` (${f.dir}) ${f.ghsa}: ${f.title}${f.expired ? ' [register entry EXPIRED]' : ''}`);
+export const errorAnnotation = f => `::error::${clean(`${f.severity} ${f.package}@${f.version} (${f.dir}) ${f.ghsa} ${f.title}${f.expired ? ' [register expired]' : ''}`)}`;
+export const manifestWarning = dir => `::warning::${clean(`covered lock ${dir}/package-lock.json has no sibling package.json: not audited`)}`;
+
 // Minimal parser for the flat register schema (4-space ids, 6-space scalar fields).
 export function parseRegister(text) {
   const entries = [];
@@ -166,7 +171,7 @@ export function routeAdvisoryErrors(mode, advisoryErrors) {
 
 export const MODES = ['pr', 'scheduled'];
 
-function walkLocks(root, rel = '') {
+export function walkLocks(root, rel = '') {
   const out = [];
   for (const e of readdirSync(path.join(root, rel), { withFileTypes: true })) {
     if (['node_modules', '.git', '.tmp', 'tmp', '.security'].includes(e.name)) continue;
@@ -206,11 +211,12 @@ async function main() {
   const report = { mode, today, lockfiles: dirs, excludedLocks: excluded, locksWithoutManifest: noManifest, findings: unique, failing, errors, warnings };
   mkdirSync(outDir, { recursive: true });
   writeFileSync(path.join(outDir, 'sca-gate.json'), JSON.stringify(report, null, 2));
-  const md = ['# SCA gate findings', '', ...failing.map(f => `- **${f.severity}** \`${f.package}@${f.version}\` (${f.dir}) ${clean(f.ghsa)}: ${clean(f.title)}${f.expired ? ' [register entry EXPIRED]' : ''}`),
+  const md = ['# SCA gate findings', '', ...failing.map(issueLine),
     ...errors.map(e => `- ERROR ${clean(e)}`)].join('\n');
   writeFileSync(path.join(outDir, 'sca-gate-issue.md'), md + '\n');
   for (const w of warnings) console.log(`::warning::${clean(w)}`);
-  for (const f of failing) console.log(`::error::${f.severity} ${f.package}@${f.version} (${f.dir}) ${clean(f.ghsa)} ${clean(f.title)}${f.expired ? ' [register expired]' : ''}`);
+  for (const d of noManifest) console.log(manifestWarning(d));
+  for (const f of failing) console.log(errorAnnotation(f));
   for (const e of errors) console.log(`::error::${clean(e)}`);
   console.log(`sca-gate: ${dirs.length} lockfiles (${excluded.length} excluded by policy, ${noManifest.length} without manifest), ${unique.length} findings, ${failing.length} unregistered, ${errors.length} errors, ${warnings.length} warnings`);
   process.exit(failing.length || errors.length ? 1 : 0);
