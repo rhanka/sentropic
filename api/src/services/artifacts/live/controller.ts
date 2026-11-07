@@ -1,11 +1,14 @@
 import type { LivePorts } from './ports';
 import { assertFence, conflict, type LiveKey, type LiveRuntime } from './records';
-import { revive } from './revive';
+import { crashRestore, revive } from './revive';
 import { prepareLive } from './prepare-live';
 import { idleBuild } from './idle';
 import { buildOnly } from './build-only';
 import { withinPhase } from './deadline';
+import { fenceInvitations } from './invitations';
 import { projectRevision } from './project';
+import { gated } from './heavy';
+import { authorizeLive, liveRole, type LiveActor } from './authorize';
 import { currentBinding, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
@@ -23,7 +26,8 @@ export function createLiveController(ports: LivePorts) {
       }
       if (runtime.phase === 'LIVE') {
         try { await ports.pods.ensure(key, runtime); }
-        catch (error) { await failed(ports, key, runtime, error); return; }
+        catch (error) { await failed(ports, key, runtime, error); return crashRestore(ports, key, error); }
+        if (!await fenceInvitations(ports, key)) return;
         return idleBuild(ports, key);
       }
       // Recovery of an in-flight operation belongs to startup after its old API executor is fenced.
@@ -31,15 +35,20 @@ export function createLiveController(ports: LivePorts) {
     start: (key: LiveKey) => revive(ports, key),
     idle: (key: LiveKey) => idleBuild(ports, key),
     buildOnly: (key: LiveKey, admittedJobId: string) => buildOnly(ports, key, admittedJobId),
-    project: (key: LiveKey, durableRevision: number) => projectRevision(ports, key, durableRevision),
-    /** Only the authenticated host calls this after an admitted source operation or visible interaction. */
-    async activity(key: LiveKey, sessionId: string, kind: 'edit' | 'read' | 'foreground' | 'heartbeat' | 'status') {
+    project: (key: LiveKey, durableRevision: string) => projectRevision(ports, key, durableRevision),
+    /** Owner or invitee route grant for the host live assertion; writes are the binding owner's only. */
+    authorize: (key: LiveKey, actor: LiveActor, access: 'read' | 'write') => authorizeLive(ports, key, actor, access),
+    /** Only the authenticated host calls this after an admitted source operation or visible interaction. Edits come
+     * from the binding owner only; invited foreground viewing and reads may extend the session (A-LIVE §5.3). */
+    async activity(key: LiveKey, sessionId: string, kind: 'edit' | 'read' | 'foreground' | 'heartbeat' | 'status', actor: LiveActor) {
       if (kind === 'heartbeat' || kind === 'status') return;
       const binding = await currentBinding(ports, key);
+      const fence = await ports.invitations.current(key, binding.generation);
       await ports.store.transaction(key, async unit => {
         const runtime = unit.state?.runtime;
         if (!runtime || runtime.generation !== binding.generation || runtime.sessionId !== sessionId) conflict('stale_session');
         if (runtime.phase !== 'LIVE') conflict('transition_busy');
+        liveRole(runtime, binding, actor, kind === 'edit' ? 'write' : 'read', ports.now(), fence.epoch);
         if (kind !== 'foreground' || ports.now() - runtime.lastAccessAt >= 5000) runtime.lastAccessAt = ports.now();
       });
     },
@@ -57,11 +66,15 @@ export function createLiveController(ports: LivePorts) {
       if (!runtime) return revive(ports, key);
       try {
         await ports.routes.revoke(key, runtime);
-        // The higher phase fence cancels every older worker command before restoring source.
+        // The higher phase fence cancels every older worker command, which ends a gated build, before restoring source.
         await ports.worker.quiesce(runtime);
         runtime = await transition(ports, key, runtime, state => { state.runtime.attempt = null; });
-        return await withinPhase(prepareLive(ports, key, runtime));
       } catch (error) { await failed(ports, key, runtime, error); throw error; }
+      const fenced = runtime;
+      return gated(ports.heavy, key, 'wake', error => failed(ports, key, fenced, error), async () => {
+        try { return await withinPhase(prepareLive(ports, key, fenced)); }
+        catch (error) { await failed(ports, key, fenced, error); throw error; }
+      });
     },
     /** Narrow stop after code-right revocation exposes teardown fields only. Identity comes from host auth. */
     async stop(key: LiveKey, input: { ownerId: string; sessionId: string; generation: number }) {
