@@ -1,7 +1,7 @@
 # Feature: Repository-owned harness profiles
 
 ## Objective
-- [ ] Enable sentbase and other repositories to own a strictly validated harness profile without changing the scope kernel.
+- [x] Enable sentbase and other repositories to own a strictly validated harness profile through the existing scope kernel.
 
 ## Scope / Guardrails
 - [x] Owner packet: `.tmp/packets/harness-profile-file.md`; wagon `feat/harness-profile-file` from `origin/main` at `165ce5b93`.
@@ -53,5 +53,5 @@
   - [x] Validate directly against that schema and expose typed configuration errors.
 - [x] **Lot 3 — Kernel and CLI**: profile path defaults, BRANCH conventions, commit guards; shared resolver for check/verify/audit/init; 36 new tests and `make typecheck-harness` PASS.
   - [x] Consume profile path defaults, branch conventions and optional commit guards in C2.
-- [ ] **Lot 4 — Documentation and handoff**: README Rust + Node example, scoped regressions, mechanical scope gate, push branch only, report `.tmp/rv/harness-profile-file.md`, remove test volumes.
+- [x] **Lot 4 — Documentation and handoff**: README Rust + Node example, scoped regressions, mechanical scope gate, branch pushed without a PR, report `.tmp/rv/harness-profile-file.md`, test volumes removed.
   - [x] Document the JSON Schema, selection precedence, scope/plan/commit rules and executable Rust + Node example.
