@@ -23,6 +23,7 @@
   import { streamHub } from '$lib/stores/streamHub';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { getScopedWorkspaceIdForUser, workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, workspaceScope } from '$lib/stores/workspaceScope';
+  import { createKeyedReload, folderScopeKey } from '$lib/utils/keyed-reload';
   import { session } from '$lib/stores/session';
   import { acceptUnlock, acquireLock, fetchLock, forceUnlock, releaseLock, requestUnlock, sendPresence, fetchPresence, leavePresence, type LockSnapshot, type PresenceUser } from '$lib/utils/object-lock';
 
@@ -91,13 +92,21 @@
 
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
+  // Keyed reload: the layout wipes initiativesStore/currentFolderId whenever the
+  // workspace scope changes (including the post-hydration /workspaces re-scope),
+  // so the list is (re)loaded for each distinct folder+scope pair, once.
+  const useCaseReload = createKeyedReload();
+
   const loadUseCases = async () => {
+    const seq = useCaseReload.begin(folderScopeKey(folderId, $workspaceScope.selectedId));
     isLoading = true;
     try {
       const useCases = await fetchInitiatives(folderId);
+      if (!useCaseReload.isCurrent(seq)) return;
       initiativesStore.set(useCases);
 
       const folder: Folder = await apiGet(`/folders/${folderId}`);
+      if (!useCaseReload.isCurrent(seq)) return;
       currentFolder = folder;
       matrix = folder.matrixConfig;
 
@@ -109,11 +118,12 @@
 
       foldersStore.update((items) => items.map((f) => (f.id === folder.id ? { ...f, ...folder } : f)));
     } catch (error) {
+      if (!useCaseReload.isCurrent(seq)) return;
       console.error('Failed to load folder/use cases:', error);
       addToast({ type: 'error', message: get(_)('folders.detail.errors.load') });
       currentFolder = null;
     } finally {
-      isLoading = false;
+      if (useCaseReload.isCurrent(seq)) isLoading = false;
     }
   };
 
@@ -332,9 +342,14 @@
 
   $: if (hasMounted && folderId && folderId !== lastFolderIdForCounts) {
     lastFolderIdForCounts = folderId;
-    currentFolderId.set(folderId);
-    void loadUseCases();
     void loadCommentCounts();
+  }
+
+  $: if (hasMounted && folderId && $workspaceScope.selectedId !== undefined) {
+    if (useCaseReload.needsReload(folderScopeKey(folderId, $workspaceScope.selectedId))) {
+      currentFolderId.set(folderId);
+      void loadUseCases();
+    }
   }
 
   const subscribeLock = (targetId: string) => {
