@@ -4,7 +4,11 @@ import { component } from './bundle-checks.mjs';
 // Evaluate additive policies across BOTH rendered namespaces, including accidental
 // extra policies. This models the label/namespace/port subset used by these bundles.
 const labelsMatch = (selector, labels) => Object.entries(selector.matchLabels ?? {})
-  .every(([key, value]) => labels[key] === value);
+  .every(([key, value]) => labels[key] === value) &&
+  (selector.matchExpressions ?? []).every(({ key, operator }) => {
+    assert.equal(operator, 'Exists', 'network qualification supports only the declared Exists expressions');
+    return Object.hasOwn(labels, key);
+  });
 function peerMatches(peer, ownerNamespace, candidate) {
   if (peer.ipBlock) return true; // Conservatively treat new CIDR grants as reachable.
   const namespace = peer.namespaceSelector
@@ -40,6 +44,12 @@ export function checkConnectivity(objects) {
       assert(!reachable(content, pod(other, name), 5432), 'cross-environment content egress denied');
     }
     assert(!reachable(content, pod(namespace, 'api'), 8787), 'content cannot call privileged API');
+    const builder = { namespace: 'sentropic-artifact-builders', labels: { 'sentropic.dev/artifact-binding': 'qualified-binding' } };
+    assert(reachable(content, builder, 5173), 'content must reach a labeled builder on its live port');
+    assert(!reachable(content, { ...builder, labels: {} }, 5173), 'unlabeled builder pods remain denied');
+    assert(!reachable(content, { ...builder, namespace: other }, 5173), 'binding labels in another namespace remain denied');
+    assert(!reachable(content, builder, 8787), 'other builder ports remain denied');
+    assert(!reachable(content, builder, 5173, 'UDP'), 'builder live egress is TCP only');
     assert(!reachable(content, { namespace: 'external', labels: {} }, 443), 'object egress awaits tenant receipt');
     const dns = { namespace: 'kube-system', labels: { 'k8s-app': 'kube-dns' } };
     for (const protocol of ['TCP', 'UDP']) assert(reachable(content, dns, 53, protocol));

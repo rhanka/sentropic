@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "buildScript": "build:artifact",
+  "outputDir": "ui/dist",
+  "lockfilePath": "package-lock.json",
+  "entry": "index.html"
+}

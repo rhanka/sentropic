@@ -10,6 +10,59 @@ const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 const context = { changes: { global: 'true' }, event: 'pull_request', ref: 'refs/pull/79/merge' };
 
+test('should keep CI candidate producers and consumers independent of the deployment registry', () => {
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (['publish-api-image', 'publish-ui-image', 'deploy-preprod'].includes(name)) continue;
+    assert.doesNotMatch(JSON.stringify(job), /secrets\.SCW_SECRET_KEY|DOCKER_PASSWORD|DOCKER_USERNAME/, name);
+    for (const step of job.steps ?? []) {
+      assert.doesNotMatch(step.run ?? '', /\bpull-(?:api(?:-tool)?|ui|e2e)-image\b|\bdocker\s+pull\b/, name);
+    }
+  }
+});
+
+test('should build each candidate once and transport its archive and identity receipt to every consumer', () => {
+  const producers = { api: 'build-api-image', 'api-tool': 'build-api-tool-image', ui: 'build-ui', e2e: 'build-e2e' };
+  const dependsOn = (name, producer, seen = new Set()) => {
+    if (seen.has(name)) return false;
+    seen.add(name);
+    return [workflow.jobs[name]?.needs ?? []].flat().some(parent =>
+      parent === producer || dependsOn(parent, producer, seen));
+  };
+  for (const [kind, producer] of Object.entries(producers)) {
+    const buildTarget = new RegExp(`\\bci-build-${kind}\\b(?!-)`);
+    const builds = Object.entries(workflow.jobs).flatMap(([name, job]) =>
+      (job.steps ?? []).filter(step => buildTarget.test(step.run ?? '')).map(() => name));
+    assert.deepEqual(builds, [producer], kind);
+    assert.equal(workflow.jobs[producer].strategy?.matrix, undefined, `${producer}: build once`);
+    const upload = workflow.jobs[producer].steps.find(step =>
+      step.uses?.startsWith('actions/upload-artifact@') && step.with?.name === `${kind}-image`);
+    assert.ok(upload, `${kind}: missing transport`);
+    const files = upload.with.path.split('\n').map(file => file.trim());
+    assert.ok(files.includes(`${kind}-image.tar.zst`), `${kind}: missing archive`);
+    assert.ok(files.includes(`${kind}-image.json`), `${kind}: missing identity receipt`);
+    assert.equal(upload.with['compression-level'], 0, `${kind}: archive is already compressed`);
+    if (kind === 'api') {
+      assert.ok(files.includes('.tmp/ci-prod-image/api-image-id'), 'API runtime identity must travel with the archive');
+      assert.equal(upload.with['include-hidden-files'], true);
+    }
+    const consumers = Object.entries(workflow.jobs).filter(([, job]) =>
+      job.steps?.some(step => step.uses?.startsWith('actions/download-artifact@') && step.with?.name === `${kind}-image`));
+    assert.ok(consumers.length > 0, `${kind}: no consumers`);
+    for (const [name, job] of consumers) {
+      assert.ok(dependsOn(name, producer), `${name}: missing producer barrier`);
+      if (name === 'retain-daily-identities') {
+        assert.ok(job.steps.some(step => step.uses?.startsWith('actions/upload-artifact@')
+          && step.with?.path === `daily-identities/${kind}-image.json`), `${kind}: retain identity only`);
+        continue;
+      }
+      const download = job.steps.findIndex(step =>
+        step.uses?.startsWith('actions/download-artifact@') && step.with?.name === `${kind}-image`);
+      const load = job.steps.findIndex(step => new RegExp(`\\bload-${kind}\\b(?!-)`).test(step.run ?? ''));
+      assert.ok(load > download, `${name}: verify and load ${kind} after download`);
+    }
+  }
+});
+
 // GitHub implicitly requires success() unless a status function is explicit.
 function publisherDispatch(name, changes, overrides = {}) {
   const job = workflow.jobs[name];

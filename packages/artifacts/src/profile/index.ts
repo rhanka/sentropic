@@ -125,7 +125,9 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       if (!Object.hasOwn(props, key) || !matchesSchema(value, props[key])) throw new Error('profile/schema default mismatch');
     }
     if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_publish_bundle',
-      'artifacts_publish_bundle_v2', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) {
+      'artifacts_publish_bundle_v2', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
+      'artifacts_git_attach', 'artifacts_git_commit', 'artifacts_git_publish', 'artifacts_git_live',
+      'artifacts_live_write', 'artifacts_live_reset', 'artifacts_live_control'].includes(name)) {
       (idempotency as Record<string, unknown>)[name] = { required: true, scope: 'principal' };
     }
   }
@@ -144,6 +146,11 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     },
     capabilityForRoute(method, path) {
       let name: ArtifactCapabilityName | undefined;
+      const gitRoutes = ['list_app_sources', 'fetch_app_source', 'git_attach', 'git_commit', 'git_publish',
+        'live_write', 'live_read', 'live_reset', 'live_status', 'live_control'];
+      if (method === 'POST' && gitRoutes.some(route => path === '/' + route)) {
+        name = `artifacts_${path.slice(1)}` as ArtifactCapabilityName;
+      }
       if (method === 'POST' && path === '/ensure') name = 'artifacts_ensure';
       if (method === 'POST' && path === '/publish') name = 'artifacts_publish';
       if (method === 'POST' && path === '/publish_bundle') name = 'artifacts_publish_bundle';

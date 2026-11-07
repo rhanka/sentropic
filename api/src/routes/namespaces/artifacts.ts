@@ -6,7 +6,7 @@ import type { ArtifactHostIdentity } from '../../services/artifacts/authorizatio
 import type { ArtifactTransport } from '../../services/artifacts/transport';
 import type { ArtifactReaderTarget, createArtifactReaderActivation } from '../../services/artifacts/reader-activation';
 import type { ReaderConsentService } from '../../services/artifacts/reader-consent';
-import { renderConsentScreen } from '../../services/artifacts/reader-consent-screen';
+import { readerConsentRequired, renderConsentScreen } from '@sentropic/artifacts/server/consent-grant';
 
 export const ARTIFACT_HTTP_PATH = '/resources/artifacts/*';
 export interface ArtifactHttpPorts {
@@ -174,8 +174,7 @@ export function createArtifactHttpRouter(ports: ArtifactHttpPorts): Hono {
         scopeId: query.scopeId, scopeVersion: declared.scopeVersion });
     }
     if (decision.refusal === 'reader_consent_required') {
-      return context.json({ code: 'reader_consent_required',
-        scopeId: query.scopeId, retryable: false }, 403);
+      return context.json(readerConsentRequired(query.scopeId), 403);
     }
     return context.json({ error: decision.status === 401 ? 'access_denied' : 'not_found' },
       decision.status as 400);
