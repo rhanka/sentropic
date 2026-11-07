@@ -6,8 +6,9 @@ import { ArtifactOperationError, classifyArtifactFailure } from '../src/server/f
 // Exact descriptor bytes from rhanka/radar-immobilier#1012, blob fa1a073ce0d1ce79ccdbca6ec9638f604f441b9f.
 const immo = readFileSync(new URL('./fixtures/build-contract/immo.artifact.json', import.meta.url), 'utf8');
 const descriptor = JSON.parse(immo);
+const pinned = `sha512-${Buffer.alloc(64, 1).toString('base64')}`;
 const dependency = {
-  version: '1.2.3', integrity: 'sha512-pinned',
+  version: '1.2.3', integrity: pinned,
   resolved: 'https://registry.npmjs.org/example/-/example-1.2.3.tgz',
 };
 function fixture(options: { descriptor?: unknown; manifest?: object; packages?: object; subPath?: string } = {}) {
@@ -78,7 +79,7 @@ describe('GB1 frozen build contract', () => {
   });
   it('should require the exact host-owned postinstall triple', () => {
     const snapshot = fixture({ packages: { 'node_modules/example': { ...dependency, hasInstallScript: true } } });
-    const allowed = { package: 'example', version: '1.2.3', integrity: 'sha512-pinned' };
+    const allowed = { package: 'example', version: '1.2.3', integrity: pinned };
     refusal(snapshot, 'install_script_not_allowlisted');
     for (const key of ['package', 'version', 'integrity']) {
       refusal({ ...snapshot, postinstallAllowlist: [{ ...allowed, [key]: 'wrong' }] }, 'install_script_not_allowlisted');
