@@ -17,6 +17,7 @@
   - `api/src/services/artifacts/live/recipes.ts` (offline install, loopback Vite, pre-bundle, NODE_OPTIONS)
   - `api/tests/unit/artifacts-live/bootstrap*.ts`
   - `api/tests/unit/artifacts-live/recipes.test.ts`
+  - `api/tests/unit/artifacts-live/cache.test.ts` (host environment assertion only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -47,3 +48,4 @@
 - [x] Lot 3: W3 transfers (`put` + commit) for stage, overlay, dependencies and install, tests first.
 - [x] Lot 4: processes (`dev` with pre-bundle, `build`, `snapshot`, process-group termination), tests first.
 - [x] Lot 5: :5173 listener and pod entry (`createBootstrapSource`), tests first; scoped tests and typecheck green; branch pushed.
+- [ ] Lot 6: decisions 2026-11-07 15:00 (one d2-4, queued heavy phases): separate `prebundle` op, build heap 1024 env, dependency tree limits 64 MiB / 1 GiB, no host VITE_BASEMAP_TILE_URL, tests first.

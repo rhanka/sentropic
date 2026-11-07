@@ -82,7 +82,7 @@ describe('locked dependency cache', () => {
   it('should construct exactly the Immo public environment with no inherited proxy settings', () => {
     const env = artifactEnvironment();
     expect(Object.keys(env).filter(name => name.startsWith('VITE_')).sort())
-      .toEqual(['VITE_API_BASE_URL', 'VITE_ARTIFACT_MODE', 'VITE_BASEMAP_TILE_URL']);
+      .toEqual(['VITE_API_BASE_URL', 'VITE_ARTIFACT_MODE']);
     for (const name of ['GITHUB_PAGES', 'QA_HARNESS', 'API_PROXY_TARGET', 'NPM_TOKEN', 'DATABASE_URL']) expect(env).not.toHaveProperty(name);
     expect(env.VITE_ARTIFACT_MODE).toBe('1'); expect(INSTALL_RECIPE.args).toContain('--ignore-scripts');
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, NODE_HEAP_OPTIONS, PREBUNDLE_RECIPE,
-  artifactEnvironment, liveViteConfig,
+  INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, NODE_BUILD_HEAP_OPTIONS, NODE_HEAP_OPTIONS,
+  PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment, liveViteConfig,
 } from '../../../src/services/artifacts/live/recipes';
 
 const POD = `artifact-${'a'.repeat(40)}`;
@@ -13,10 +13,20 @@ describe('offline pod recipes (W2 static deny)', () => {
     expect(artifactEnvironment().npm_config_cache).toBe('/tmp/npm-cache');
   });
 
-  it('should cap every worker Node heap with a host-owned NODE_OPTIONS', () => {
+  it('should cap every worker Node heap with a host-owned NODE_OPTIONS, 1024 for the clean build only', () => {
     expect(NODE_HEAP_OPTIONS).toBe('--max-old-space-size=384');
     expect(artifactEnvironment().NODE_OPTIONS).toBe('--max-old-space-size=384');
     expect(artifactEnvironment()).not.toBe(artifactEnvironment());
+    expect(NODE_BUILD_HEAP_OPTIONS).toBe('--max-old-space-size=1024');
+    expect(buildEnvironment()).toEqual({ ...artifactEnvironment(), NODE_OPTIONS: '--max-old-space-size=1024' });
+  });
+
+  it('should leave the basemap tile URL to the repository build wrapper and never name the relay in the pod env', () => {
+    for (const env of [artifactEnvironment(), buildEnvironment()]) {
+      expect(env).not.toHaveProperty('VITE_BASEMAP_TILE_URL');
+      expect(env).not.toHaveProperty('npm_config_registry');
+      expect(env.npm_config_offline).toBe('true');
+    }
   });
 
   it('should pre-bundle through the host-owned driver and live wrapper into pod scratch only', () => {
