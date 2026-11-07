@@ -7,27 +7,32 @@ describe('builder pod admission and recovery', () => {
   it('should emit the exact VAP/PSA manifest without credentials or persistent volumes', async () => {
     const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted');
     expect(pod.spec).toMatchObject({ serviceAccountName: 'artifact-builder', automountServiceAccountToken: false,
-      activeDeadlineSeconds: 3600, restartPolicy: 'Never', securityContext: { runAsNonRoot: true } });
+      restartPolicy: 'Never', securityContext: { runAsNonRoot: true } });
+    expect(pod.spec).not.toHaveProperty('activeDeadlineSeconds');
     expect(pod.spec.containers).toHaveLength(1); expect(pod.spec.containers[0].image).toBe(BUILDER_IMAGE);
     expect(pod.spec.containers[0].securityContext).toMatchObject({ allowPrivilegeEscalation: false,
       readOnlyRootFilesystem: true, capabilities: { drop: ['ALL'] } });
     expect(pod.spec.nodeSelector).toEqual({ nodepool: 'artifact-builders' });
     expect(pod.spec.tolerations).toEqual([{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }]);
     const res = pod.spec.containers[0].resources;
-    expect(res.requests['ephemeral-storage']).toBe('0'); expect(res.limits['ephemeral-storage']).toBe('2Gi');
     expect(res.requests).toEqual({ cpu: '350m', memory: '450Mi', 'ephemeral-storage': '0' });
-    expect(res.limits).toEqual({ cpu: '2', memory: '1200Mi', 'ephemeral-storage': '2Gi' });
+    expect(res.limits).toEqual({ cpu: '2', memory: '1536Mi', 'ephemeral-storage': '4Gi' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'NODE_OPTIONS', value: '--max-old-space-size=384' });
-    expect(pod.spec.volumes.every(volume => Object.keys(volume).sort().join(',') === 'emptyDir,name')).toBe(true);
+    expect(pod.spec.containers[0].env).toContainEqual({ name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } });
+    expect(pod.spec.containers[0].env.filter(entry => 'valueFrom' in entry)).toHaveLength(1);
+    expect(pod.spec.volumes).toEqual([{ name: 'source', emptyDir: { sizeLimit: '512Mi' } },
+      { name: 'scratch', emptyDir: { sizeLimit: '2Gi' } }, { name: 'dependencies', emptyDir: { sizeLimit: '1536Mi' } }]);
     expect(pod.metadata.labels['sentropic.dev/artifact-binding']).toBeDefined();
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
   });
-  it('should keep four live pod requests within one d2-4 node allocatable memory', async () => {
-    const f = fixture(); const runtime = await f.controller.start(key);
-    const { requests, limits } = builderPod(key, runtime, 'trusted').spec.containers[0].resources;
-    const mebibytes = (value: string) => Number(value.replace(/Mi$/, ''));
-    expect(4 * mebibytes(requests.memory)).toBeLessThanOrEqual(1.93 * 1024);
-    expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThan(2000);
+  it('should bound every emptyDir within the ephemeral limit and fit four CPU requests on one d2-4 node', async () => {
+    const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted');
+    const { requests, limits } = pod.spec.containers[0].resources;
+    const mebibytes = (value: string) => Number(/^(\d+)(Mi|Gi)$/.exec(value)![1]) * (value.endsWith('Gi') ? 1024 : 1);
+    const emptyDirs = pod.spec.volumes.reduce((total, volume) => total + mebibytes(volume.emptyDir.sizeLimit), 0);
+    expect(emptyDirs).toBeLessThanOrEqual(mebibytes(limits['ephemeral-storage']));
+    // k8s measured the d2-4 node: 1458m CPU free after system pods; only memory limits overcommit.
+    expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1458);
     expect(mebibytes(limits.memory)).toBeGreaterThan(mebibytes(requests.memory));
   });
   it('should adopt the matching pod after a creation response is lost', async () => {
