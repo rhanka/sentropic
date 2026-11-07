@@ -629,6 +629,18 @@ test-security-hono-image: ci-test-env verify-api-image
 	@HONO_RUNTIME_IMAGE="$$(cat "$(API_IMAGE_RECEIPT)")" HONO_NPM_IMAGE="$(HONO_NPM_IMAGE)" \
 		bash scripts/security/hono-node-server-image.sh
 
+# BRSCA-EX1: SCA gate over every runtime lockfile + GitHub advisory check, admitted node image.
+.PHONY: test-security-sca-gate test-security-sca-gate-unit
+test-security-sca-gate-unit: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(HONO_NPM_IMAGE) \
+		node --test scripts/security/sca-gate.test.mjs
+test-security-sca-gate: ci-test-env test-security-sca-gate-unit ## SCA gate: npm audit on all lockfiles + GitHub advisories (SCA_GATE_MODE=pr|scheduled)
+	@mkdir -p .security
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e GITHUB_TOKEN -e GITHUB_REPOSITORY -e SCA_GATE_TODAY \
+		-v "$(CURDIR):/workspace:ro" -v "$(CURDIR)/.security:/workspace/.security" -w /workspace $(HONO_NPM_IMAGE) \
+		node scripts/security/sca-gate.mjs --mode=$(or $(SCA_GATE_MODE),pr)
+
 .PHONY: test-ci-api-tag-guard
 test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
 	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
