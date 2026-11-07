@@ -31,7 +31,7 @@
   - `api/drizzle/*.sql` (max 1 file) — unused.
 
 ## Feedback Loop
-- [ ] Named port for W3 (supervisor) and W7 (builder service): the existing subpath `@sentropic/artifacts/server/build-contract` re-exports the integrity, output and receipt validators; no new package export. A-LIVE §8.4 defines the receipt join; no invented cross-lane contract.
+- [x] Named port for W3 (supervisor) and W7 (builder service): the existing subpath `@sentropic/artifacts/server/build-contract` re-exports the integrity, output and receipt validators; no new package export. A-LIVE §8.4 defines the receipt join; no invented cross-lane contract.
 
 ## AI Flaky tests
 - [ ] No flaky allowance, timeout increase or new skip.
@@ -45,7 +45,7 @@
 - [ ] Wagon: branch pushed, scoped tests green locally; no PR, no CI polling (relay to the conductor).
 
 ## Plan / Todo (lot-based)
-- [ ] Lot 1: failing tests for integrity coverage, script qualification, receipt verifier, output boundaries.
+- [x] Lot 1: failing tests for integrity coverage, script qualification, receipt verifier, output boundaries.
 - [x] Lot 2: host integrity map coverage + typed `dependency_integrity_missing`/`dependency_integrity_mismatch` refusals + script qualification rows (A-LIVE §7.2-7.3, §3.4).
 - [x] Lot 3: pure mandatory receipt schema + verifier with anti-replay and falsified-digest refusals (A-LIVE §8.4; G0 §4.3).
 - [x] Lot 4: candidate output ceiling gate, boundary fixtures 255/256 files, 16 MiB±1, 64 MiB±1 (A-LIVE §8.3, §10 lot 2).
