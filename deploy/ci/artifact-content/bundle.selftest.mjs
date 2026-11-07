@@ -148,6 +148,11 @@ for (const tier of ['prod', 'preprod']) {
     const copy = structuredClone(objects); mutation(copy); assert.throws(() => qualify(copy));
   });
   deny('reader enabled by main deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_READER_ENABLED').value = '1'; });
+  deny('live edge enabled by the ConfigMap', o => { object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_LIVE_ENABLED = '1'; });
+  deny('live pages domain of the other tier', o => {
+    const data = object(o, 'ConfigMap', 'artifact-content').data;
+    data.APP_ARTIFACT_LIVE_PAGES_DOMAINS = tier === 'prod' ? 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1' : 'pages.immo.sent-tech.ca=immo-prod-live-1';
+  });
   deny('content flag inherited from a secret', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].env = []; });
   deny('broad app credentials', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.name = 'sentropic-api'; });
   deny('cross-environment PG access', o => {

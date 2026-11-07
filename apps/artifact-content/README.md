@@ -35,12 +35,12 @@ The runtime suite creates and drops its own random PostgreSQL database. It impor
 
 Off unless `APP_ARTIFACT_LIVE_ENABLED=1` and content serving are both enabled. An incomplete or inconsistent configuration then refuses startup:
 
-- `APP_ARTIFACT_LIVE_PAGES_DOMAINS` (ConfigMap, per environment): whitespace-separated `<pages domain>=<kid>[,<kid>...]`. Preprod: `pages.preprod.immo.sent-tech.ca=immo-preprod-live-1` with controller kid `sentropic-preprod-live-1`. Prod: unset until immo serves a prod pages domain. A pages domain never overlaps the content base domain or another pages domain, and serves live routes only.
+- `APP_ARTIFACT_LIVE_PAGES_DOMAINS` (ConfigMap, per environment): whitespace-separated `<pages domain>=<kid>[,<kid>...]`. Preprod: `pages.preprod.immo.sent-tech.ca=immo-preprod-live-1` with controller kid `sentropic-preprod-live-1`. Prod: placeholders `pages.immo.sent-tech.ca=immo-prod-live-1` with controller kid `sentropic-prod-live-1`, inert until immo serves the prod pages domain and both rings are minted. A pages domain never overlaps the content base domain or another pages domain, and serves live routes only.
 - `APP_ARTIFACT_LIVE_HOST_KEYS` (Secret `artifact-content-runtime`): whitespace-separated `<kid>=<unpadded base64url>`, at least 32 bytes each. The immo content host holds the same keys and signs the assertion (`v1`) and its revocations (`c1`).
 - `APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS` (ConfigMap) and `APP_ARTIFACT_LIVE_CONTROLLER_KEYS` (Secret): the Sentropic API controller ring for fences (`f1`). Its kids and bytes differ from every host key, so immo can never forge a fence.
 - Optional: `APP_ARTIFACT_LIVE_BUILDER_NAMESPACE` (default `sentropic-artifact-builders`) and `APP_ARTIFACT_LIVE_PEERS` (multi-replica only, see below).
 
-The wire format (`src/live-format.ts`) is pure `node:crypto`; immo and the API sign with the same code (target home: `@sentropic/artifacts/live-host`).
+The wire format is imported from `@sentropic/artifacts/live-host` (0.2.20+): immo, the API and this edge sign and verify with that one module. `sourceRevision` is an opaque string of 1 to 256 characters, compared and never parsed.
 
 Push paths. Each takes exactly one signed header, no query and no body. 204 means applied; any other answer means retry (every operation is idempotent and only tightens authority). A message lives at most 300 s.
 - Host (immo): `POST /_live-control/v1` on the artifact's own pages-domain Host, `x-live-host-control`: `revoke_session`, or `revoke_invitation` with the new epoch floor. Open sockets close at once.
@@ -48,7 +48,7 @@ Push paths. Each takes exactly one signed header, no query and no body. 204 mean
 
 Edge admission forwards Vite dev URL shapes only (`/`, `/index.html`, `/src/`, Vite client and virtual modules, `/node_modules/`, root static files); the pod's Vite serves the staged closure only.
 
-Replicas. Fence state is in memory per replica; every overlay runs one replica. Before scaling above one, add a headless Service over the `artifact-content` pods, set `APP_ARTIFACT_LIVE_PEERS` to its DNS name, and allow ingress from `artifact-content` to itself on 8791. The receiving replica then copies every accepted push, with its original signature, to each ready replica (itself included) and answers 204 only when all applied it, else 503. A replica that becomes ready later holds no earlier fence but no earlier socket either; immo's gate stops asserting revoked sessions and invitations, and the immo content host closes its own proxied sockets on revocation.
+Replicas. Fence state is in memory per replica; every overlay runs one replica. Before scaling above one, add a headless Service over the `artifact-content` pods, set `APP_ARTIFACT_LIVE_PEERS` to its DNS name, and allow ingress from `artifact-content` to itself on 8791. The receiving replica then copies every accepted push, with its original signature, to each ready replica (itself included) and answers 204 only when all applied it, else 503. A relayed copy (`x-live-relayed: 1`) is accepted only from the socket address of a ready replica (the resolved `APP_ARTIFACT_LIVE_PEERS` set), never on the word of a header; without peers none is accepted. A replica that becomes ready later holds no earlier fence but no earlier socket either; immo's gate stops asserting revoked sessions and invitations, and the immo content host closes its own proxied sockets on revocation.
 
 Key rotation, for either ring (keys are read at startup):
 1. Mint at least 32 random bytes under a new kid. Record it by name in the owner `.env` and in the Secret, never in source, logs or receipts.
