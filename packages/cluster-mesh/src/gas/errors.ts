@@ -34,3 +34,21 @@ export class LockTimeoutError extends Error {
     this.name = 'LockTimeoutError';
   }
 }
+
+/** Version rule refusal (spec §5 / N3 r3 OQ13): every refusal of the contiguous 1..latest rule answers this code. */
+export class VersionConflictError extends Error {
+  readonly code = 'version_conflict';
+  constructor(public readonly detail: string) {
+    super(`version_conflict: ${detail}`);
+    this.name = 'VersionConflictError';
+  }
+}
+
+/** Any other store refusal (shape, envelope, integrity, pins). The store re-validates and never rebuilds. */
+export type StoreRefusalCode = 'registry_invalid' | 'envelope_invalid' | 'integrity_mismatch' | 'build_pin_mismatch' | 'not_canonical';
+export class StoreRefusedError extends Error {
+  constructor(public readonly code: StoreRefusalCode, public readonly detail: string) {
+    super(`${code}: ${detail}`);
+    this.name = 'StoreRefusedError';
+  }
+}
