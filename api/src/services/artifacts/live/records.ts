@@ -30,8 +30,9 @@ export const IDLE_THRESHOLD_MS = 900_000;
 export const idleDeadline = (runtime: Pick<LiveRuntime, 'lastAccessAt'>) => runtime.lastAccessAt + IDLE_THRESHOLD_MS;
 /** Liveness lease (Amendment 1 §3): one fenced supervisor frame at least this often while a runtime is not DORMANT. */
 export const LEASE_FRAME_INTERVAL_MS = 60_000;
-/** Revisions are opaque strings owned by the package LiveService, bounded for the host live assertion. */
-export const LIVE_REVISION_MAX_LENGTH = 128;
+/** Revisions are opaque strings owned by the package LiveService, bounded like the host live assertion
+ * (`MAX_SOURCE_REVISION_LENGTH` in `@sentropic/artifacts/live-host`). */
+export const LIVE_REVISION_MAX_LENGTH = 256;
 export class LiveError extends Error {
   constructor(readonly code: string, readonly reason?: string) { super(code); }
 }
