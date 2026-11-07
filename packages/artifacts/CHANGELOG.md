@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.2.19
+## 0.2.20
+
+- Add the `@sentropic/artifacts/live-host` subpath: single live-host candidate digest with pinned vectors,
+  SG4b handoff seal and receipt verification with key rotation, A-LIVE 8.3 publication recheck and
+  pending handling shared by `acceptHandoff`, live assertion, control and fence formats, and the host
+  build API types with signed job requests. Additive; no existing export changes.
+- Includes the 0.2.19 git-backed tool routing below (never published separately).
 
 - Route `artifacts_fetch_app_source`, `artifacts_git_attach` and `artifacts_git_publish`
   through `createHttpArtifactApp` and the MCP executor (G0 v3 §1.3; A-LIVE v2 S03).
