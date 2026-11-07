@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   createEncryptedGitAppCustodian,
   createGitHubAppEnrollment,
@@ -7,7 +8,7 @@ import {
   type GitAppOwnerRepository,
   type GitCredentialInvalidation,
 } from '@sentropic/cluster-mesh';
-import { Hono, type MiddlewareHandler } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { env } from '../../config/env';
 import { isProvisionedSecretEncryptionKey, withConnectorRevocationKey } from '../secret-crypto';
@@ -29,12 +30,15 @@ import { isProvisionedSecretEncryptionKey, withConnectorRevocationKey } from '..
  *   bound server-side to exactly one { storageScopeId, repoId } tuple from
  *   the enrolled registry — caller-supplied locators or tuples are never
  *   accepted;
- * - custody through the host secret custodian key `secret-crypto:v1`;
+ * - custody through the host secret custodian key `secret-crypto:v1`, refused
+ *   (fail-closed) unless `SECRET_ENCRYPTION_KEY` is provisioned;
+ * - the public mount `/api/v1/github-app/*` (reached through the ui nginx
+ *   `/api/v1/` proxy), translated onto the frozen package root `/github-app`;
  * - the credential-invalidation bus other lanes subscribe to.
  *
- * None of these routes log query, body or headers: the app logger fences
- * `isGitHubAppPath` paths (callback states, codes and installation ids are
- * credential-shaped). This module itself never logs at all.
+ * None of these routes log query, body or headers: the app logger and the ui
+ * nginx fence `isGitHubAppPath` paths (callback states, codes and
+ * installation ids are credential-shaped). This module itself never logs.
  */
 
 /** G0 v3 §2.7: the only repositories enrollable through this host, in order. */
@@ -84,12 +88,81 @@ export const GIT_APP_BROKER_SCOPE = 'github-app:broker';
 /** Host secret custodian key reference (G0 v3 §2.7 custody contract). */
 export const GIT_APP_CUSTODY_KEY_REF = 'secret-crypto:v1';
 
-/** True exactly for the SG0-app host paths the app logger must never record. */
+/** Absolute root the frozen cluster-mesh router serves (internal only). */
+const PACKAGE_ROOT = '/github-app';
+/** Product prefix the ui nginx proxies to the API (no ingress change). */
+const PUBLIC_PREFIX = '/api/v1';
+/** Public SG0-app root on the product origin. */
+export const GITHUB_APP_PUBLIC_ROOT = `${PUBLIC_PREFIX}${PACKAGE_ROOT}`;
+
+/**
+ * Header set of every SG0-app response. Mirrors the package router: the
+ * manifest form posts to github.com, and no referrer leaks a ref or state.
+ */
+export const GITHUB_APP_SECURITY_HEADERS: Readonly<Record<string, string>> = {
+  'cache-control': 'no-store',
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+  'content-security-policy': "default-src 'none'; form-action https://github.com 'self'; base-uri 'none'; frame-ancestors 'none'",
+  'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+};
+
+/** Internal broker-identity header; any caller-supplied value is stripped. */
+const BROKER_TOKEN_HEADER = 'x-sentropic-github-app-broker';
+
+/**
+ * True exactly for the public SG0-app paths: the app logger never records
+ * them and the product-wide secure headers never overwrite their headers.
+ */
 export const isGitHubAppPath = (path: string): boolean =>
-  path === '/github-app' || path.startsWith('/github-app/');
+  path === GITHUB_APP_PUBLIC_ROOT || path.startsWith(`${GITHUB_APP_PUBLIC_ROOT}/`);
 
 const installationRefFromPath = (path: string): string | null =>
   /^\/github-app\/(enroll_[0-9a-fA-F-]{36})(?:\/|$)/.exec(path)?.[1] ?? null;
+
+const HTML_ESCAPES: Readonly<Record<string, string>> = {
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+};
+const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
+
+const onPackageRoot = (path: string): boolean => path === PACKAGE_ROOT || path.startsWith(`${PACKAGE_ROOT}/`);
+
+/** Publishes a package-root URL (relative or on `base`) under the public mount. */
+const toPublicUrl = (value: string, base: string): string => {
+  if (value.startsWith('/')) return onPackageRoot(value) ? `${PUBLIC_PREFIX}${value}` : value;
+  if (value.startsWith(`${base}/`) && onPackageRoot(value.slice(base.length))) {
+    return `${base}${PUBLIC_PREFIX}${value.slice(base.length)}`;
+  }
+  return value;
+};
+
+/**
+ * Package responses use absolute package-root paths in redirects and in
+ * same-origin form actions; the host republishes both on the public mount.
+ */
+const toPublicResponse = async (response: Response, base: string): Promise<Response> => {
+  const headers = new Headers(response.headers);
+  const location = headers.get('location');
+  if (location) headers.set('location', toPublicUrl(location, base));
+  if (!headers.get('content-type')?.startsWith('text/html')) {
+    return new Response(response.body, { status: response.status, headers });
+  }
+  const html = (await response.text())
+    .replaceAll(`action="${PACKAGE_ROOT}/`, `action="${GITHUB_APP_PUBLIC_ROOT}/`);
+  headers.delete('content-length');
+  return new Response(html, { status: response.status, headers });
+};
+
+/** Sets the SG0-app header set on host-rendered responses; package headers win. */
+const applySecurityHeaders: MiddlewareHandler = async (c, next) => {
+  await next();
+  for (const [name, value] of Object.entries(GITHUB_APP_SECURITY_HEADERS)) {
+    if (!c.res.headers.has(name)) c.res.headers.set(name, value);
+  }
+};
+
+const readServiceClient = (c: Context): { clientId?: unknown; scopes?: unknown } | undefined =>
+  c.get('serviceClient');
 
 const targetKeyOf = (locator: string): string => locator.split('/')[1] ?? '';
 const registryIndexOf = (locator: string): number => GIT_APP_TARGET_REGISTRY.indexOf(
@@ -145,10 +218,10 @@ const readBrokerBindings = (source: string, targets: readonly GitHubAppTargetBin
 
 /**
  * Fail-closed env settlement: a composition is enabled only when the custody
- * key is provisioned and the public
- * base URL is an https origin and every target tuple is inside the frozen
- * registry. A single illegal value disables the whole mount rather than
- * narrowing it: half-open enrollment surfaces are never acceptable.
+ * key is provisioned, the public base URL is an https origin and every target
+ * tuple is inside the frozen registry. A single illegal value disables the
+ * whole mount rather than narrowing it: half-open enrollment surfaces are
+ * never acceptable.
  */
 export const resolveGitHubAppHostConfig = (
   source: Readonly<Record<string, string | undefined>>,
@@ -218,15 +291,18 @@ export interface GitHubAppHostRouterDeps {
 
 /**
  * Composes the cluster-mesh SG0-app router with this host's adapters and
- * returns a mountable Hono app serving the absolute `/github-app/*` routes.
+ * returns a mountable Hono app serving the public `/api/v1/github-app/*`
+ * routes. The frozen package router keeps its own `/github-app/*` root and is
+ * only reached through the translating dispatcher below, never mounted.
  */
 export const createGitHubAppHostRouter = (deps: GitHubAppHostRouterDeps): Hono => {
   // Defence in depth for direct callers: the mount gate already refused.
   if (!isProvisionedSecretEncryptionKey(env.SECRET_ENCRYPTION_KEY)) throw new GitAppError('capability_unavailable');
+  const base = deps.config.publicBaseUrl;
   const custody = withConnectorRevocationKey(GIT_APP_CUSTODY_KEY_REF, (key) =>
     createEncryptedGitAppCustodian({ store: deps.store, key }));
   const service = createGitHubAppEnrollment({
-    publicBaseUrl: deps.config.publicBaseUrl,
+    publicBaseUrl: base,
     custody,
     github: deps.github,
     onCredentialsChanged: deps.onCredentialsChanged,
@@ -239,8 +315,26 @@ export const createGitHubAppHostRouter = (deps: GitHubAppHostRouterDeps): Hono =
     // redirect keeps the enrolled target authoritative; a lost record must
     // kill the ref routes, never re-guess the target.
     await deps.store.record(started.installationRef, targetKeyOf(target.locator));
-    return started;
+    return { ...started, promptUrl: toPublicUrl(started.promptUrl, base) };
   };
+
+  // GitHub calls back on the manifest URLs: publish them on the public mount.
+  const prompt: typeof service.prompt = async (target, ref) => {
+    const issued = await service.prompt(target, ref);
+    const { manifest } = issued;
+    return {
+      ...issued,
+      manifest: {
+        ...manifest,
+        redirect_url: toPublicUrl(manifest.redirect_url, base),
+        setup_url: toPublicUrl(manifest.setup_url, base),
+        hook_attributes: { ...manifest.hook_attributes, url: toPublicUrl(manifest.hook_attributes.url, base) },
+      },
+    };
+  };
+
+  const targetByKey = (key: string): GitHubAppTargetBinding | null =>
+    deps.config.targets.find((target) => targetKeyOf(target.locator) === key) ?? null;
 
   const resolveTarget = async (request: Request): Promise<GitHubAppTargetBinding | null> => {
     const url = new URL(request.url);
@@ -248,20 +342,21 @@ export const createGitHubAppHostRouter = (deps: GitHubAppHostRouterDeps): Hono =
     if (ref) {
       // Ref routes carry their target durably, never through a query string.
       const recordedKey = await deps.store.lookup(ref);
-      if (!recordedKey) return null;
-      return deps.config.targets.find((target) => targetKeyOf(target.locator) === recordedKey) ?? null;
+      return recordedKey ? targetByKey(recordedKey) : null;
     }
+    // The enroll gesture names its registry target explicitly: no default.
     const requestedKey = url.searchParams.get('target');
-    if (requestedKey) {
-      return deps.config.targets.find((target) => targetKeyOf(target.locator) === requestedKey) ?? null;
-    }
-    // Gesture default: the first frozen-registry target, as chosen in the plan.
-    return deps.config.targets[0] ?? null;
+    return requestedKey ? targetByKey(requestedKey) : null;
+  };
+
+  const ownerPrincipal = async (request: Request): Promise<GitHubAppPrincipal | null> => {
+    const principal = await deps.resolvePrincipal(request);
+    return principal && principal.role === GITHUB_APP_OWNER_ROLE ? principal : null;
   };
 
   const resolveOwner = async (request: Request): Promise<GitAppOwnerRepository | null> => {
-    const principal = await deps.resolvePrincipal(request);
-    if (!principal || principal.role !== GITHUB_APP_OWNER_ROLE) return null;
+    const principal = await ownerPrincipal(request);
+    if (!principal) return null;
     const target = await resolveTarget(request);
     if (!target) return null;
     return {
@@ -272,36 +367,81 @@ export const createGitHubAppHostRouter = (deps: GitHubAppHostRouterDeps): Hono =
     };
   };
 
-  // The service-auth middleware stores its verified client on the hono
-  // context; the cluster-mesh router hands over the raw Request, so the
-  // binding travels keyed by that same Request object, per call.
-  const principalsByRequest = new WeakMap<Request, GitHubAppBrokerBinding>();
+  // The S2S guard runs on the public request; its verified binding reaches
+  // the package router through a per-request random token header (stripped
+  // from every caller request), which survives request re-wrapping such as
+  // the package bodyLimit on chunked bodies.
+  const brokerTokens = new Map<string, GitHubAppBrokerBinding>();
   const authenticateBroker = async (request: Request): Promise<{ storageScopeId: string; repoId: string } | null> => {
-    const binding = principalsByRequest.get(request);
+    const token = request.headers.get(BROKER_TOKEN_HEADER);
+    const binding = token ? brokerTokens.get(token) : undefined;
     return binding ? { storageScopeId: binding.storageScopeId, repoId: binding.repoId } : null;
   };
 
-  const app = new Hono();
-  app.use('/github-app/broker/*', async (c, next) => {
-    // Run the real S2S guard; its refusal leaves no service context, so the
-    // cluster-mesh route answers with the sanitized access_denied refusal.
-    await deps.brokerMiddleware(c, async () => undefined);
-    const client: { clientId: string; scopes: string[]; jkt: string | null } | undefined = c.get('serviceClient');
-    if (client && client.scopes?.includes(GIT_APP_BROKER_SCOPE)) {
-      const binding = deps.config.brokers.find((broker) => broker.clientId === client.clientId);
-      if (binding) principalsByRequest.set(c.req.raw, binding);
-    }
-    return next();
+  const packageRouter = createGitHubAppRouter({
+    service: { ...service, begin, prompt },
+    publicBaseUrl: base,
+    resolveOwner,
+    authenticateBroker,
   });
+
+  const app = new Hono();
+  app.use(GITHUB_APP_PUBLIC_ROOT, applySecurityHeaders);
+  app.use(`${GITHUB_APP_PUBLIC_ROOT}/*`, applySecurityHeaders);
   app.onError((error, c) => {
     const code = error instanceof GitAppError ? error.code : 'capability_unavailable';
     return c.json({ error: code }, code === 'access_denied' ? 403 : code === 'invalid_request' ? 400 : 503);
   });
-  app.route('/', createGitHubAppRouter({
-    service: { ...service, begin },
-    publicBaseUrl: deps.config.publicBaseUrl,
-    resolveOwner,
-    authenticateBroker,
-  }));
+
+  // Owner landing: one form per registry target, each carrying its target in
+  // the form action (optionally narrowed by `?target=`).
+  app.get(GITHUB_APP_PUBLIC_ROOT, async (c) => {
+    if (!(await ownerPrincipal(c.req.raw))) throw new GitAppError('access_denied');
+    const requested = c.req.query('target');
+    const targets = requested === undefined
+      ? deps.config.targets
+      : deps.config.targets.filter((target) => targetKeyOf(target.locator) === requested);
+    if (!targets.length) throw new GitAppError('access_denied');
+    const forms = targets.map((target) => {
+      const action = `${GITHUB_APP_PUBLIC_ROOT}/enroll?target=${encodeURIComponent(targetKeyOf(target.locator))}`;
+      return `<form method="post" action="${escapeHtml(action)}"><button>Enroll ${escapeHtml(target.locator)}</button></form>`;
+    });
+    return c.html(`<html><body>${forms.join('')}</body></html>`);
+  });
+
+  app.all(`${GITHUB_APP_PUBLIC_ROOT}/*`, async (c) => {
+    const publicUrl = new URL(c.req.url);
+    const packageUrl = new URL(`${publicUrl.pathname.slice(PUBLIC_PREFIX.length)}${publicUrl.search}`, publicUrl.origin);
+    const headers = new Headers(c.req.raw.headers);
+    headers.delete(BROKER_TOKEN_HEADER);
+    let token: string | null = null;
+    if (packageUrl.pathname.startsWith(`${PACKAGE_ROOT}/broker/`)) {
+      // Run the real S2S guard; its refusal leaves no service context, so the
+      // package route answers with the sanitized access_denied refusal.
+      await deps.brokerMiddleware(c, async () => undefined);
+      const client = readServiceClient(c) ?? {};
+      const clientId = typeof client.clientId === 'string' ? client.clientId : null;
+      const scopes: unknown[] = Array.isArray(client.scopes) ? client.scopes : [];
+      const binding = clientId && scopes.includes(GIT_APP_BROKER_SCOPE)
+        ? deps.config.brokers.find((broker) => broker.clientId === clientId)
+        : undefined;
+      if (binding) {
+        token = randomUUID();
+        brokerTokens.set(token, binding);
+        headers.set(BROKER_TOKEN_HEADER, token);
+      }
+    }
+    try {
+      const hasBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';
+      const response = await packageRouter.fetch(new Request(packageUrl, {
+        method: c.req.method,
+        headers,
+        ...(hasBody ? { body: c.req.raw.body, duplex: 'half' } : {}),
+      } as RequestInit));
+      return await toPublicResponse(response, base);
+    } finally {
+      if (token) brokerTokens.delete(token);
+    }
+  });
   return app;
 };
