@@ -12,13 +12,14 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `api/src/services/artifacts/live/supervisor-channel.ts`
   - `api/src/services/artifacts/live/supervisor.ts`
   - `api/src/services/artifacts/live/supervisor-frame.ts`
   - `api/src/services/artifacts/live/supervisor-transfer.ts`
   - `api/src/services/artifacts/live/supervisor-install.ts`
   - `api/src/services/artifacts/live/recipes.ts` (INSTALL_RECIPE offline only, W2 §2)
   - `api/src/services/artifacts/live/README.md`
-  - `api/tests/unit/artifacts-live/supervisor*.test.ts`
+  - `api/tests/unit/artifacts-live/supervisor*.ts` (tests and the shared fake pod)
   - `api/tests/unit/artifacts-live/cache.test.ts` (INSTALL_RECIPE assertion only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
