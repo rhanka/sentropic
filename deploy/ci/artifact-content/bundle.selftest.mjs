@@ -212,6 +212,9 @@ for (const [name, egress, error] of [
   ['an API allowlist without the relay', [httpsRule, { to: [{ podSelector: { matchLabels: component('postgres') } }] },
     { to: [{ podSelector: { matchLabels: component('auth-idp') } }] },
     { to: [{ namespaceSelector: {}, podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } } }] }], /npm relay/],
+  ['an API allowlist opening 443 without the in-cluster immo ingress hop', [relayRule, httpsRule,
+    { to: [{ podSelector: { matchLabels: component('postgres') } }] }, { to: [{ podSelector: { matchLabels: component('auth-idp') } }] },
+    { to: [{ namespaceSelector: {}, podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } } }] }], /SG4b/],
 ]) check(`reject an API egress policy with ${name}`, () => {
   const copy = structuredClone(combined);
   copy.push({ kind: 'NetworkPolicy', metadata: { name: 'api-egress', namespace: 'sentropic-preprod' },
