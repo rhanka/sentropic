@@ -26,12 +26,18 @@
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `packages/**`, `apps/**`, `deploy/**`, `api/drizzle/**`
-  - `api/src/services/artifacts/live/{pods,service,worker,ports,records,controller}.ts` (sibling lanes W4/W7/W8/pod-4live)
+  - `api/src/services/artifacts/live/{pods,service,ports,records,controller}.ts` (sibling lanes W4/W7/W8/pod-4live)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none.
+  - `api/src/services/artifacts/live/worker.ts` (BRW3-EX1)
+  - `api/tests/unit/artifacts-live/adapters.test.ts` (BRW3-EX1, BRW3-EX2)
+  - `api/src/services/artifacts/live/cache.ts` (BRW3-EX2)
+  - `api/src/services/artifacts/live/cache-storage.ts` (BRW3-EX2)
+  - `api/tests/unit/artifacts-live/cache.test.ts` (BRW3-EX2)
 
 ## Feedback Loop
 - [x] Open questions for W4/W7/W8/W9 recorded in `.tmp/rv/alive-W3-W7.md`; no invented cross-lane contract.
+- [x] BRW3-EX1: s-archi correction 07/11 15:05 assigns W3 the `QualifiedSupervisor.prebundle` port and the worker call order (live config host file, pre-bundle, dev; no pre-bundle host file) with `liveEnvironment()` for pre-bundle and dev and `buildEnvironment()` for the build; impact: `worker.ts` interface and two worker calls plus their adapter test; rollback: revert the BRW3-EX1 commits.
+- [x] BRW3-EX2: s-archi decision 07/11 15:00 (a') makes the trusted dependency cache stream (one content-addressed object per file plus a manifest, memory bounded to one file); impact: `cache.ts`, `cache-storage.ts` and their tests, receipt tree digest unchanged; rollback: revert the BRW3-EX2 commits.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -51,3 +57,6 @@
 - [x] Lot 3: offline clean install over the transport (tarballs staged into the pod npm cache, `npm ci --offline`), tests first.
 - [x] Lot 4: README transport section; scoped tests and typecheck green; branch pushed.
 - [x] Lot 5: final pass: the single `candidateDigest` of `@sentropic/artifacts/live-host` replaces `candidateManifestDigest` (tests first); immo installed tree measured against `TREE_LIMITS`.
+- [ ] Lot 6: decisions 07/11 15:00 and 15:05: `prebundle` op, live and build environments, HOST_FILES kept at 3 (BRW3-EX1), tests first.
+- [ ] Lot 7: dependency limits 65536 files, 64 MiB per file, 1 GiB total; streaming trusted cache and tarballs (BRW3-EX2), tests first.
+- [ ] Lot 8: README; scoped tests and typecheck green; branch pushed.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FRAME_TTL_MS } from '../../../src/services/artifacts/live/supervisor-frame';
-import { BUILD_RECIPE, LIVE_RECIPE, artifactEnvironment } from '../../../src/services/artifacts/live/recipes';
+import { BUILD_RECIPE, LIVE_RECIPE, PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment, liveEnvironment }
+  from '../../../src/services/artifacts/live/recipes';
 import { fakePod, refuse, runtime, sha256 } from './supervisor-pod';
 
 const stale = { code: 'git_live_conflict', reason: 'stale_fence' };
@@ -28,7 +29,7 @@ describe('supervisor transport fencing', () => {
       build: (_body, signal) => new Promise(() => { signal.addEventListener('abort', () => { aborted = true; }); }),
       terminate: () => ({ treeGone: false }),
     });
-    const pending = pod.supervisor.build(runtime, { id: 'a' } as never, BUILD_RECIPE, artifactEnvironment()).catch(e => e);
+    const pending = pod.supervisor.build(runtime, { id: 'a' } as never, BUILD_RECIPE, buildEnvironment()).catch(e => e);
     await expect(pod.supervisor.terminate({ ...runtime, routeEpoch: 4 })).rejects.toMatchObject(unavailable);
     expect(aborted).toBe(true);
     expect(await pending).toMatchObject(unavailable);
@@ -70,19 +71,39 @@ describe('supervisor transport commands', () => {
     const pod = fakePod();
     await pod.supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', 'export default {}');
     expect(pod.bodies[0].args).toEqual({ path: '/tmp/artifact-vite.config.mjs', source: 'export default {}' });
-    await expect(pod.supervisor.hostFile(runtime, '/workspace/x', 'x')).rejects.toMatchObject(unavailable);
+    // HOST_FILES stays at 3: the bootstrap writes its frozen pre-bundle script itself.
+    for (const path of ['/workspace/x', '/tmp/artifact-vite-prebundle.mjs']) {
+      await expect(pod.supervisor.hostFile(runtime, path, 'x')).rejects.toMatchObject(unavailable);
+    }
     await expect(pod.supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', 'x'.repeat(70_000))).rejects.toMatchObject(unavailable);
     expect(pod.channel.send).toHaveBeenCalledTimes(1);
     const wrong = fakePod({ hostFile: () => ({ sha256: sha256('other') }) });
     await expect(wrong.supervisor.hostFile(runtime, '/tmp/host-npmrc', '')).rejects.toMatchObject(unavailable);
   });
+  it('should run the pre-bundle by recipe name only with the live environment and require its acknowledgement', async () => {
+    const env = liveEnvironment();
+    const pod = fakePod();
+    await pod.supervisor.prebundle(runtime, PREBUNDLE_RECIPE, env);
+    expect(pod.bodies[0]).toMatchObject({ op: 'prebundle', args: { recipe: 'prebundle' } });
+    await expect(pod.supervisor.prebundle(runtime, { ...PREBUNDLE_RECIPE, args: ['/tmp/x.mjs'] } as never, env)).rejects.toMatchObject(unavailable);
+    for (const other of [artifactEnvironment(), buildEnvironment()]) {
+      await expect(pod.supervisor.prebundle(runtime, PREBUNDLE_RECIPE, other as never)).rejects.toMatchObject(unavailable);
+    }
+    expect(pod.channel.send).toHaveBeenCalledTimes(1);
+    await expect(fakePod({ prebundle: () => ({}) }).supervisor.prebundle(runtime, PREBUNDLE_RECIPE, env)).rejects.toMatchObject(unavailable);
+    await expect(fakePod({ prebundle: () => refuse('failed') }).supervisor.prebundle(runtime, PREBUNDLE_RECIPE, env))
+      .rejects.toMatchObject(unavailable);
+  });
   it('should start Vite by recipe name only and fence the acknowledged route epoch and revision type', async () => {
-    const env = artifactEnvironment();
+    const env = liveEnvironment();
     const pod = fakePod();
     expect(await pod.supervisor.dev(runtime, LIVE_RECIPE, env)).toEqual({ revision: 7, routeEpoch: 3 });
     expect(pod.bodies[0].args).toEqual({ recipe: 'live' });
     await expect(pod.supervisor.dev(runtime, { ...LIVE_RECIPE, args: ['--evil'] } as never, env)).rejects.toMatchObject(unavailable);
     await expect(pod.supervisor.dev(runtime, LIVE_RECIPE, { ...env, NODE_OPTIONS: '--inspect' } as never)).rejects.toMatchObject(unavailable);
+    for (const other of [artifactEnvironment(), buildEnvironment()]) {
+      await expect(pod.supervisor.dev(runtime, LIVE_RECIPE, other as never)).rejects.toMatchObject(unavailable);
+    }
     const old = fakePod({ dev: () => ({ revision: 7, routeEpoch: 2 }) });
     await expect(old.supervisor.dev(runtime, LIVE_RECIPE, env)).rejects.toMatchObject(stale);
     const typed = fakePod({ dev: () => ({ revision: '7', routeEpoch: 3 }) });
