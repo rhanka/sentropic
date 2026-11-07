@@ -59,7 +59,7 @@
 - [x] Lot 9: package live idle deadline at 900 s with no absolute lifetime (BRW8-EX1).
 - [x] Lot 10: scoped checks green after the review and Amendment 1 (tsc and eslint live scope, api artifacts-live 104/104, package live-tools 18/18).
 - [x] Lot 11: cluster-mesh durable FIFO heavy-phase queue under the node memory budget (BRW8-EX2).
-- [ ] Lot 12: heavy gate as a queue client for install, pre-bundle, dev and build; 4-live admission; queued status.
+- [x] Lot 12: heavy gate as a queue client for install, pre-bundle, dev and build; 4-live admission; queued status.
 - [ ] Lot 13: idle build waits durably in BUILD_QUEUED after its live stops.
 - [ ] Lot 14: scoped checks green after the queue.
 - [ ] Lot N: train integration CI green on the exact head.
