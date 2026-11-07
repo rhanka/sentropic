@@ -2,6 +2,18 @@ import { ArtifactOperationError } from './failures.js';
 import { validateBuildDependencies } from './build-dependencies.js';
 import { lockfileSha256, sha256Hex, type HostIntegrityMap } from './build-integrity.js';
 
+/** Named GB1 port for the supervisor (W3) and the builder service (W7); one public subpath. */
+export {
+  approvedIntegrity, hostIntegrityMapDigest, lockfileSha256,
+  type DependencyIntegrityInventory, type DependencyIntegrityRecord, type HostIntegrityMap, type HostIntegrityMapEntry,
+} from './build-integrity.js';
+export type { BuildDependencyEvidence, ScriptQualificationRecord } from './build-dependencies.js';
+export { validateBuildOutput, type AdmittedOutputFile, type BuildOutputEntry } from './build-output.js';
+export {
+  candidateInventoryDigest, verifyBuilderReceipt, verifyServedCandidate,
+  type BuilderAttestedEvidence, type BuilderReceiptExpectation, type BuilderReceiptMismatch, type CandidateFileDigest,
+} from './build-receipt.js';
+
 /** Frozen G0 v3 §4.1 fields. Install permissions belong to the host. */
 export interface ArtifactBuildDescriptor {
   readonly version: 1;

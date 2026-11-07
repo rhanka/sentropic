@@ -34,6 +34,8 @@ describe('GB1 frozen build contract', () => {
   it('should expose validation through the built public package subpath', async () => {
     const api = await import('@sentropic/artifacts/server/build-contract');
     expect(api.validateArtifactBuild(fixture()).install.args).toEqual(['ci', '--ignore-scripts']);
+    for (const name of ['lockfileSha256', 'hostIntegrityMapDigest', 'validateBuildOutput', 'candidateInventoryDigest',
+      'verifyBuilderReceipt', 'verifyServedCandidate'] as const) expect(typeof api[name]).toBe('function');
   });
   it('should accept the real Immo descriptor with an empty allowlist and scripts disabled', () => {
     const snapshot = fixture();
