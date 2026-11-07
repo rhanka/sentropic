@@ -501,8 +501,14 @@ a 2 MiB serialized MCP result budget before selecting this capability.
 `createGitToolService({ bindings, registry, codeRights, git, authorize, build?,
 outputDir?, journal? })`. Each executor fails closed: no `gitTools` is
 `capability_unavailable` (503); `git_publish` without a `build` port is
-`provider_unavailable` (503); `ci` and an unopened `sandbox` executor are
-`builder_unavailable`. `artifacts_list_app_sources` stays unrouted.
+`provider_unavailable` (503); `ci` is `builder_unavailable`, and so is every
+other executor the `build` port does not admit, including the omitted `caller`
+default (without a `build` port only `caller` is admitted). Every `git_attach`
+path, pause/resume/detach included, checks the current code right before any
+registry or forge call. A branch created by attach records an intent first
+(migration `0012_git_attach_intents.sql`) and marks its attach event
+`branchCreated: true`; see `docs/git-bindings.md`.
+`artifacts_list_app_sources` stays unrouted.
 
 `POST /set_access` grants or revokes a named principal's read access, requires a
 caller `idempotencyKey`, and keeps the artifact private. Bind

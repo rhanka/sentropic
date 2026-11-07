@@ -14,7 +14,8 @@ The package root exports `GitBinding`, `GitBindingStore`, `GitReleaseIndex`,
 `createMemoryGitBindingStore`. The existing `./adapters/postgres` export
 provides `createPostgresGitBindingStore` and `createPostgresGitReleaseIndexStore`.
 Construction performs no I/O or DDL. The host applies migrations through
-`0010_git_bindings.sql` using its migration journal before injecting the ports.
+`0010_git_bindings.sql` (and `0012_git_attach_intents.sql` for the 0.2.19 git
+tools) using its migration journal before injecting the ports.
 
 ## Migration 0010 rollback
 
@@ -35,7 +36,8 @@ additive schema**. It does not reverse migration 0010. Before rollback:
 The pre-0010 release adapter uses named INSERT columns, tolerates the extra
 nullable `git_commit` column and reads releases without consulting Git tables.
 `tests/git-bindings-rollback.integration.test.ts` seeds a release before 0010,
-applies 0010, retains detached bindings/events and indexed provenance, then
+applies 0010 through the latest Git migration (0012 attach intents included),
+retains detached bindings/events, intents and indexed provenance, then
 uses those unchanged release methods to read and publish across the rollback
 boundary without DDL. It also checks journal/data retention and both immutable
 record triggers. This qualifies the package storage path; the deploying host
@@ -78,6 +80,21 @@ transaction. Receipts use a SHA-256 key including scope, actor and caller key.
 Same-key/same-command replay returns the stored binding; a different command
 is refused. Partial unique indexes arbitrate concurrent branch claimants.
 The memory double has the same behavior within one process.
+
+## Attach intents and branch creation (0.2.19)
+
+Migration `0012_git_attach_intents.sql` is additive: a nullable
+`git_binding_events.branch_created` column and the `git_attach_intents` table.
+`git_attach` writes an intent (scope, actor, key, command hash, repo, branch,
+resolved base SHA) through `reserveAttachIntent` before the forge
+`createBranch`. Put-if-absent keeps the first resolution. A same-key retry after
+a lost binding write finds its intent and keeps the created-branch outcome; a
+branch without a matching intent, or whose head left the intent base, is
+pre-existing. The attach event that binds a created branch carries
+`branchCreated: true`; the store refuses it on any other event. A-LIVE v2
+§5.3.1 derives `initialUnpublishedBranchEligible` from that event, the
+personal channel, the delegation policy and the branch's publication history
+in the release index; a later re-attach never carries the flag.
 
 No binding mutation deletes a forge branch or changes the served release.
 Events contain identifiers and SHAs, never credentials, source or messages.
