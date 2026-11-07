@@ -59,4 +59,4 @@
 - [x] Lot 5: final pass: the single `candidateDigest` of `@sentropic/artifacts/live-host` replaces `candidateManifestDigest` (tests first); immo installed tree measured against `TREE_LIMITS`.
 - [x] Lot 6: decisions 07/11 15:00 and 15:05: `prebundle` op, live and build environments, HOST_FILES kept at 3 (BRW3-EX1), tests first.
 - [x] Lot 7: dependency limits 65536 files, 64 MiB per file, 1 GiB total; streaming trusted cache and tarballs (BRW3-EX2), tests first.
-- [ ] Lot 8: README; scoped tests and typecheck green; branch pushed.
+- [x] Lot 8: README; scoped tests and typecheck green; branch pushed.

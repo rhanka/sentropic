@@ -27,7 +27,8 @@ The host supplies these mandatory integrations:
   Bootstrap and this transport must be qualified together under GB4. An empty
   bootstrap, arbitrary shell or Kubernetes exec fallback is not provided.
   `createSupervisorTransport` (below) is that transport; pass it as `supervisor`
-  and its `cleanInstall` as the dependency cache `cleanInstall`.
+  and its `cleanInstall` as the dependency cache `cleanInstall`; its
+  `sources.dependencies` is the dependency cache `materialize` stream.
 
 ## Supervisor transport
 
@@ -52,17 +53,28 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   then one commit op carrying `{ transfer, treeDigest }`. `treeDigest` is the
   sha256 of the JSON list `[path, mode, size, sha256]` sorted by path; the pod
   recomputes it and applies the whole set atomically or nothing. Limits: staged
-  source, install source and dependency trees 65,536 files / 16 MiB per file /
-  512 MiB (`TREE_LIMITS`); an overlay 255 paths / 1 MiB per file / 8 MiB; the
-  tarball set 64 MiB per tarball / 512 MiB. A tree over a limit fails `limit`.
+  source, install source and dependency trees 65,536 files / 64 MiB per file /
+  1 GiB (`TREE_LIMITS`, decision 07/11 (a)); an overlay 255 paths / 1 MiB per
+  file / 8 MiB; the tarball set 64 MiB per tarball / 512 MiB. A tree over a
+  limit fails `limit`. Put frames are emitted as soon as one fills, and a
+  streamed tree whose source fails part-way is never committed.
 - Ops and required echo: `phase {phase}` → phase; `terminate` → `treeGone: true`;
   `clear {paths}` → `cleared`; `stage`/`overlay`/`dependencies` → `treeDigest`
   (+ `revision`, + `readOnly: true`); `hostFile {path, source}` → `sha256`, with
   `path` one of the three host-owned files `/tmp/artifact-vite.config.mjs`,
   `/tmp/host-npmrc`, `/tmp/host-global-npmrc` (never the workspace), ≤ 64 KiB;
-  `dev {recipe: 'live'}` → `revision`, `routeEpoch`; `build {recipe: 'build'}` and
+  `prebundle {recipe: 'prebundle'}` → `prebundled: true`; `dev {recipe: 'live'}`
+  → `revision`, `routeEpoch`; `build {recipe: 'build'}` and
   `install {recipe: 'install', tarballs}` → `exitCode: 0`. Recipes cross the
   wire by name; the bootstrap runs its frozen copy with the host environment.
+- Pre-bundle (decision 07/11 15:05): a separate op, so the cluster-mesh queue
+  admits it on its own. The bootstrap writes its frozen pre-bundle script itself;
+  no host file carries it. `dev` refuses with `failed` until a pre-bundle has
+  run. The worker sends the live Vite config, then `prebundle`, then `dev`.
+- Environments: the supervisor refuses, before sending, a `prebundle` or `dev`
+  whose environment is not `liveEnvironment()` and a `build` whose environment
+  is not `buildEnvironment()` (heap 1024, no `VITE_BASEMAP_TILE_URL`). W4 owns
+  both functions in `recipes.ts`.
 - `snapshot { root: 'output' | 'dependencies', cursor }` →
   `{ entries: [{ path, type, mode, size, offset, data }], next }`. Output accepts
   regular files only, requires `index.html` and enforces 255 files / 16 MiB /
@@ -105,6 +117,18 @@ Dependency cache keys include the exact lock SHA-256 plus scope/repository,
 toolchain/image, platform, options/policy, workspace and integrity evidence.
 The host authenticates receipts and verifies safe tree hashes at every use.
 Missing integrity, including script-package literal pins, blocks admission.
+
+The trusted cache streams (decision 07/11 (a')), because the API runs under a
+512Mi limit. Each distinct installed file is one private object at
+`dependency-cache/v1/files/<sha256>`, shared by every entry. The Postgres
+pointer names one manifest object, `{ receipt, manifest }`, where each manifest
+row is `[path, mode, size, sha256]`. The sealed receipt tree digest is unchanged:
+the sha256 of the sorted `[path, mode, sha256]` rows. During a cold install,
+tarballs are fetched and verified one at a time. Each exported file is written
+to its object before the next snapshot page is read. `materialize` rechecks the
+seal and the manifest, then rehashes each file as it is read into put frames.
+A mismatch quarantines the entry. The API therefore holds one file (at most
+64 MiB) and one bounded frame or reply. File objects are not garbage-collected.
 
 Fake Kubernetes/forge tests live under `api/tests/unit/artifacts-live`; live
 proxy/upgrade tests live under `apps/artifact-content/tests/live*`. They cover
