@@ -63,7 +63,8 @@ reports `ready` only when the worker applied that exact revision.
 Authority is the binding owner, i.e. the acting user. `authorize` returns the
 route grant the host signs into its live assertion: writes for the binding owner
 only, reads for the owner or an unexpired invitee of the current invitation
-epoch. Revisions are opaque strings of at most 128 characters. Pod slots are
+epoch. Revisions are opaque strings of at most 256 characters, the live-host
+assertion bound (`MAX_SOURCE_REVISION_LENGTH`). Pod slots are
 admitted fairly across users; the capacity comes from per-environment
 configuration, and slots held by pods that are not DORMANT are re-read before
 the first decision after an API restart. One controller replica per environment
