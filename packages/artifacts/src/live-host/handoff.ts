@@ -28,16 +28,16 @@ const encode = (value: Json): string => Array.isArray(value) ? `[${value.map(enc
 const canonical = (value: unknown) => encode(JSON.parse(JSON.stringify(value)) as Json);
 const sha = (data: string) => createHash('sha256').update(data).digest('hex');
 const HANDOFF_TAG = 'sentropic.sg4b.handoff.v1\n'; const RECEIPT_TAG = 'sentropic.sg4b.receipt.v1\n';
-const signed = (tag: string, body: object, key: KeyObject) => sign(null, Buffer.from(tag + canonical(body)), key).toString('base64url');
-function valid(tag: string, body: object, signature: unknown, key: KeyObject | undefined) {
+export const signed = (tag: string, body: object, key: KeyObject) => sign(null, Buffer.from(tag + canonical(body)), key).toString('base64url');
+export function valid(tag: string, body: object, signature: unknown, key: KeyObject | undefined) {
   try {
     return ed25519(key, 'public') && typeof signature === 'string'
       && verify(null, Buffer.from(tag + canonical(body)), key, Buffer.from(signature, 'base64url'));
   } catch { return false; }
 }
 export const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const text = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
-const count = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 1;
+export const text = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
+export const count = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 1;
 /** Deterministic: a resend for the same attempt reuses the nonce, even under a rotated key, and reads the committed receipt. */
 const nonceOf = (c: HandoffInput) =>
   sha(canonical([c.scopeId, c.artifactId, c.jobId, c.runId, c.attempt, c.generation, c.commitSha, c.candidateDigest]));
