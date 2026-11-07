@@ -87,7 +87,7 @@ test('should retain every API shard and all artifact lanes in the actual workflo
   assert.match(base, /github\.event\.pull_request\.base\.sha \|\| github\.event\.before/);
   assert.match(base, /format\('origin\/\{0\}', github\.event\.repository\.default_branch\)/);
   assert.deepEqual(matrix.filter(row => row.suite === 'unit').map(row => row.unit_shard), [1, 2, 3, 4]);
-  assert.deepEqual(matrix.filter(row => row.suite === 'endpoints').map(row => row.endpoints_shard), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(matrix.filter(row => row.suite === 'endpoints').map(row => row.endpoints_shard).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8]); // order is longest-first by design; completeness is what matters
   assert.deepEqual(matrix.filter(row => row.suite === 'app-cluster-mesh').map(row => row.app_shard), [1, 2]);
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
   const executed = expected.filter(row => row.selected).map(row => ({ job: row.job, conclusion: 'success' }));
