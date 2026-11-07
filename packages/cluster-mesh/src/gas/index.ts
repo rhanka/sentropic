@@ -7,3 +7,6 @@ export * from './probe.js';
 export * from './boundary.js';
 export * from './identity.js';
 export * from './access.js';
+export * from './registry.js';
+export * from './jcs.js';
+export * from './store.js';
