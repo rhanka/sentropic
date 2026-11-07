@@ -44,7 +44,10 @@ The host supplies these mandatory integrations:
   Keys carry a `kid`, so builder and receipt keys rotate with an overlap.
   `createHttpRemoteHost` is the builder-side `RemoteHost` over the live-host
   `HOST_BUILD_PATHS`: a closed refusal rejects with `LiveHostError`, any other
-  failure is an unknown outcome. `builderRemoteHost(process.env)` reads the https
+  failure is an unknown outcome. Only a 409 `job_not_pending` on the job
+  resolution is retried, freshly signed, with bounded backoff
+  (`JOB_NOT_PENDING_BACKOFF_MS`: 6 tries, 250 ms doubling to 4 s, 7.75 s), then
+  it fails for good. `builderRemoteHost(process.env)` reads the https
   base from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (no secret); preprod is
   `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls
   `<base>/live-host/v1/job` and `<base>/live-host/v1/handoff`.
