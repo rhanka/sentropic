@@ -288,6 +288,7 @@ jobs:
       oauth_verify: ${{ steps.filter.outputs.oauth_verify }}
       mcp_auth: ${{ steps.filter.outputs.mcp_auth }}
       mcp_platform: ${{ steps.filter.outputs.mcp_platform }}
+      connector_host: ${{ steps.filter.outputs.connector_host }}
       memory_l5: ${{ steps.filter.outputs.memory_l5 }}
       auth_hono: ${{ steps.filter.outputs.auth_hono }}
       auth_client: ${{ steps.filter.outputs.auth_client }}
@@ -572,6 +573,13 @@ jobs:
               - '.github/workflows/ci.yml'
             mcp_auth_publish:
               - 'packages/mcp-auth/**'
+            connector_host:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/connector-host/**'
+              - 'packages/mcp-platform/**'
+              - '.github/workflows/ci.yml'
             mcp_platform:
               - 'Makefile'
               - 'package.json'
@@ -829,37 +837,58 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - name: Typecheck UI
+      - name: Typecheck and lint UI with one preparation
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-ui
-      - name: Lint UI
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make lint-ui
+        run: make typecheck-ui lint-ui ENV=test-ci-static-ui
+
+  api-static:
+    runs-on: ubuntu-latest
+    needs: [changes, build-api-tool-image]
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: typecheck
+          - lane: lint
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load qualified toolbox
+        run: make load-api-tool ENV=test-ci-static
+      - name: Restore incremental diagnostics
+        uses: actions/cache@v4
+        with:
+          path: tmp/ci-static/
+          key: api-static-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.lane }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/tsconfig*.json', '**/eslint.config.*', '**/.eslintrc*', 'api/package.json', 'api/Dockerfile', 'scripts/ci/tool-locks.json', 'scripts/ci/ci-static.mk') }}-${{ github.sha }}
+          restore-keys: |
+            api-static-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.lane }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/tsconfig*.json', '**/eslint.config.*', '**/.eslintrc*', 'api/package.json', 'api/Dockerfile', 'scripts/ci/tool-locks.json', 'scripts/ci/ci-static.mk') }}-
+      - name: Run complete compiler or linter program
+        run: make ci-${{ matrix.lane }}-api ENV=test-ci-static
+
+  idp-web-static:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Typecheck IdP screens front
+        run: make typecheck-idp-web ENV=test-ci-idp-web-static
+      - name: Build IdP screens front
+        run: make build-idp-web ENV=test-ci-idp-web-static
 
   typecheck-lint-api:
     runs-on: ubuntu-latest
-    needs: [changes]
+    needs: [changes, api-static, idp-web-static]
+    if: always() && !cancelled()
     steps:
       - uses: actions/checkout@v6
+      - name: Require every selected API static program
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-      - name: Setup Docker
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        uses: docker/setup-buildx-action@v4
-      - name: Typecheck API
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-api
-      - name: Typecheck IdP
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-idp
-      - name: Typecheck IdP screens front
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make typecheck-idp-web
-      - name: Build IdP screens front
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-idp-web
-      - name: Lint API
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make lint-api
+        run: make ci-static-join CI_TYPECHECK_RESULT=${{ needs.api-static.result }} CI_LINT_RESULT=${{ needs.api-static.result }} CI_IDP_WEB_RESULT=${{ needs.idp-web-static.result }} ENV=test-ci-static
 
   validate-idp-sync:
     runs-on: ubuntu-latest
@@ -905,7 +934,7 @@ jobs:
   # entry; the publishable-manifest guard keeps its own complete-result checks.
   consumer-contracts:
     runs-on: ubuntu-latest
-    needs: [changes, package-candidates]
+    needs: [changes]
     if: always() && !cancelled() && inputs.decision_fixtures_only != true
     permissions:
       contents: read
@@ -923,7 +952,7 @@ jobs:
         run: make test-ci-compatibility test-ci-consumer-contracts test-ci-installed-tuple ENV=test-ci-contracts
       - name: Verify the live dispatch selects every required consumer
         env:
-          VERIFY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          VERIFY_BASE: ${{ github.event.pull_request.base.sha || github.event.before || format('origin/{0}', github.event.repository.default_branch) }}
           VERIFY_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           VERIFY_CHANGES_JSON: ${{ toJSON(needs.changes.outputs) }}
           VERIFY_EVENT: ${{ github.event_name }}
@@ -1234,6 +1263,21 @@ jobs:
       - name: API Extract MCP Platform
         run: make api-extract-mcp-platform
 
+  validate-connector-host:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: always() && !cancelled() && (needs.changes.outputs.connector_host == 'true' || needs.changes.outputs.global == 'true')
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Connector Host
+        run: make typecheck-connector-host
+      - name: Test Connector Host
+        run: make test-connector-host ENV=test-ci-connector-host
+      - name: Build Connector Host
+        run: make build-connector-host
+
   memory-l5-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
@@ -1474,18 +1518,28 @@ jobs:
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-flow ENV=test-ci-flow
 
-  validate-artifacts:
+  artifacts-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: budget
+          - lane: static-package
+          - lane: unit
+          - lane: integration
+          - lane: activation
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Check dossier artifact size budget
+        if: matrix.lane == 'budget'
         run: make check-artifact-budget ENV=test-ci-artifact-budget
       - name: Upload dossier size and browser receipts
-        if: always()
+        if: always() && matrix.lane == 'budget'
         uses: actions/upload-artifact@v7
         with:
           name: artifact-size-reports
@@ -1498,31 +1552,39 @@ jobs:
             docs/governance/kit/.cache/geometry-review.json
             docs/governance/kit/.cache/routing-budget.json
       - name: Remove artifact qualification stack
-        if: always()
-        run: make down ENV=test-ci-artifact-budget
-      - name: Typecheck Artifacts
-        run: make typecheck-artifacts
-      - name: Build Artifacts
-        run: make build-artifacts
+        if: always() && matrix.lane == 'budget'
+        run: make down-volumes ENV=test-ci-artifact-budget
       - name: Test Artifacts
-        run: make test-artifacts
+        if: matrix.lane == 'unit'
+        run: make test-artifacts ENV=test-ci-artifacts-unit
       - name: Test Artifacts integration
+        if: matrix.lane == 'integration'
         run: make test-artifacts-integration ENV=test-ci-artifacts
+      - name: Remove integration qualification stack
+        if: always() && matrix.lane == 'integration'
+        run: make down-volumes ENV=test-ci-artifacts
       - name: Test installed activation conformance vectors
+        if: matrix.lane == 'activation'
         run: make -f packages/cluster-mesh/packaging.mk test-lazy-package-activation ENV=test-ci-artifacts-activation
       - name: Remove activation qualification stack
-        if: always()
-        run: make down ENV=test-ci-artifacts-activation
-      - name: Lint Artifacts
-        run: make lint-artifacts
-      - name: Pack Artifacts
+        if: always() && matrix.lane == 'activation'
+        run: make down-volumes ENV=test-ci-artifacts-activation
+      - name: Typecheck, build, lint, pack and probe Artifacts
+        if: matrix.lane == 'static-package'
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-artifacts ENV=test-ci-artifacts
-      - name: Probe packed Artifacts consumer
-        run: make probe-artifacts-packed-consumer ENV=test-ci-artifacts
+        run: make typecheck-artifacts build-artifacts lint-artifacts pack-artifacts probe-artifacts-packed-consumer ENV=test-ci-artifacts
+
+  validate-artifacts:
+    runs-on: ubuntu-latest
+    needs: [changes, artifacts-qualification]
+    if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
+    steps:
+      - uses: actions/checkout@v6
+      - name: Require every artifact qualification shard
+        run: make ci-artifacts-join CI_ARTIFACT_RESULT=${{ needs.artifacts-qualification.result }} ENV=test-ci-artifacts
 
   validate-harness:
     runs-on: ubuntu-latest
@@ -1615,13 +1677,32 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Test toolbox image references, cache fallback and hash inputs
         run: make test-ci-api-tooling ENV=test-ci-api
+      - name: Qualify measured unit membership, dependency gates and archive validation
+        run: make test-ci-unit-shards test-ci-unit-graph test-ci-api-tool-cache ENV=test-ci-api
+      - name: Compute complete toolbox cache identity
+        id: toolbox-key
+        run: make -s api-tool-cache-key ENV=test-ci-api >> "$GITHUB_OUTPUT"
+      - name: Restore exact toolbox bytes
+        id: toolbox-cache
+        if: env.CI_IMAGE_CACHE == '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: .tmp/api-tool-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-api-tool-v1-${{ steps.toolbox-key.outputs.key }}
+      - name: Verify and load cached toolbox
+        if: steps.toolbox-cache.outputs.cache-hit == 'true'
+        run: make load-api-tool-cache ENV=test-ci-api
       - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - name: Build CI toolbox
+        if: steps.toolbox-cache.outputs.cache-hit != 'true'
         run: make ci-build-api-tool ENV=test-ci-images
       - name: Verify toolbox runner and compiler interfaces
         run: make test-ci-api-tool-runtime ENV=test-ci-api
       - name: Save CI toolbox
         run: make save-api-tool ENV=test-ci-api
+      - name: Prepare verified toolbox cache
+        if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
+        run: make save-api-tool-cache ENV=test-ci-api
       - uses: actions/upload-artifact@v7
         with:
           name: api-tool-image
@@ -1631,14 +1712,21 @@ jobs:
             api-tool-image.json
           compression-level: 0
 
+      - name: Save exact toolbox bytes
+        if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .tmp/api-tool-cache
+          key: ${{ steps.toolbox-cache.outputs.cache-primary-key }}
+
   test-api-unit-integration:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-api-tool-image]
+    needs: [changes, build-api-tool-image]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       API_TEST_CI: '1'
-      API_TEST_SUT: ${{ (matrix.suite == 'smoke' || matrix.suite == 'limit') && '1' || '0' }}
-      DISABLE_RATE_LIMIT: ${{ matrix.suite == 'limit' && 'false' || 'true' }}
+      API_TEST_SUT: '0'
+      DISABLE_RATE_LIMIT: 'true'
       API_PORT: '9491'
       UI_PORT: '5691'
       MAILDEV_UI_PORT: '1591'
@@ -1647,11 +1735,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - suite: smoke
           - suite: unit
+            unit_shard: 1
+          - suite: unit
+            unit_shard: 2
+          - suite: unit
+            unit_shard: 3
+          - suite: unit
+            unit_shard: 4
+          # Retain the app/content qualification in a separate isolated lane.
+          - suite: app-cluster-mesh
+            app_shard: 1
+          - suite: app-cluster-mesh
+            app_shard: 2
           - suite: queue
           - suite: security
-          - suite: limit
           # BR70-CI1: the foundation data-spine test dirs (BR-52 artifact-store /
           # BR-59 object-registry / BR-60 outbox) were green-by-absence — no matrix
           # suite ran them. Each resolves via the test-api-% Makefile pattern to the
@@ -1672,6 +1770,14 @@ jobs:
             endpoints_shard: 3
           - suite: endpoints
             endpoints_shard: 4
+          - suite: endpoints
+            endpoints_shard: 5
+          - suite: endpoints
+            endpoints_shard: 6
+          - suite: endpoints
+            endpoints_shard: 7
+          - suite: endpoints
+            endpoints_shard: 8
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1683,35 +1789,68 @@ jobs:
           path: .
       - name: Load CI toolbox
         run: make load-api-tool ENV=test-ci-api
-      - name: Download API image artifact
-        if: matrix.suite == 'smoke' || matrix.suite == 'limit'
-        uses: actions/download-artifact@v7
-        with:
-          name: api-image
-          path: .
-      - name: Load API image from artifact
-        if: matrix.suite == 'smoke' || matrix.suite == 'limit'
-        run: make load-api ENV=test-ci-api
       - name: Start API test stack
-        run: |
-          if [ "$API_TEST_SUT" = 1 ]; then
-            make up-api-sut ENV=test-ci-api
-          else
-            make up-api-test-ci ENV=test-ci-api
-          fi
+        run: make up-api-test-ci ENV=test-ci-api
       - name: Test API gateway package version evidence
-        if: matrix.suite == 'unit'
+        if: matrix.suite == 'unit' && matrix.unit_shard == 1
         run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
       - name: Qualify app cluster-mesh host, reader, catalog and content
-        if: matrix.suite == 'unit'
-        run: make test-app-cluster-mesh ENV=test-ci-api
+        if: matrix.suite == 'app-cluster-mesh'
+        run: make test-app-cluster-mesh APP_CLUSTER_MESH_ARGS="--no-file-parallelism --shard=${{ matrix.app_shard }}/2" ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
+        if: matrix.suite != 'app-cluster-mesh'
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then
-            make test-api-endpoints API_TEST_WORKERS=1 API_TEST_ARGS="--shard=${{ matrix.endpoints_shard }}/4" ENV=test-ci-api
+            make test-api-endpoints API_TEST_WORKERS=1 API_TEST_ARGS="--shard=${{ matrix.endpoints_shard }}/8" ENV=test-ci-api
+          elif [ "${{ matrix.suite }}" = "unit" ]; then
+            make test-api-unit API_TEST_ARGS="--shard=${{ matrix.unit_shard }}/4" ENV=test-ci-api
           else
             make test-api-${{ matrix.suite }} ENV=test-ci-api
           fi
+      - name: Show API logs on failure
+        if: failure()
+        run: make logs-api-ci ENV=test-ci-api
+      - name: Tear down API test stack
+        if: always()
+        run: make down-api-ci ENV=test-ci-api
+
+  # Only these suites qualify the shipped production image. Source suites may
+  # start as soon as their independently built toolbox is available.
+  test-api-sut:
+    runs-on: ubuntu-latest
+    needs: [changes, build-api-image, build-api-tool-image]
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    env:
+      API_TEST_CI: '1'
+      API_TEST_SUT: '1'
+      DISABLE_RATE_LIMIT: ${{ matrix.suite == 'limit' && 'false' || 'true' }}
+      API_PORT: '9491'
+      UI_PORT: '5691'
+      MAILDEV_UI_PORT: '1591'
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        include:
+          - suite: smoke
+          - suite: limit
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - run: make load-api-tool ENV=test-ci-api
+      - uses: actions/download-artifact@v7
+        with:
+          name: api-image
+          path: .
+      - run: make load-api ENV=test-ci-api
+      - run: make up-api-sut ENV=test-ci-api
+      - name: Test production API (${{ matrix.suite }})
+        run: make test-api-${{ matrix.suite }} ENV=test-ci-api
       - name: Show API logs on failure
         if: failure()
         run: make logs-api-ci ENV=test-ci-api
@@ -1726,7 +1865,7 @@ jobs:
   # shards run, ci-gate still requires them green.
   test-api-ai:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-api-tool-image]
+    needs: [changes, build-api-tool-image]
     if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && (needs.changes.outputs.ai == 'true' || needs.changes.outputs.global == 'true')
     env:
       API_TEST_CI: '1'
@@ -1910,7 +2049,7 @@ jobs:
     needs: [changes, build-api-image, build-ui, build-e2e]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
-      max-parallel: 5
+      max-parallel: 6
       fail-fast: false
       matrix:
         include:
@@ -2144,6 +2283,29 @@ jobs:
         run: make ci-security-join ENV=test-ci-security
 
   # Security: IaC scans (infrastructure configuration)
+  # BRSCA-EX1: always scheduled SCA gate (npm audit on every lockfile + GitHub advisories).
+  security-sca-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [changes]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Run SCA gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: make test-security-sca-gate SCA_GATE_MODE=pr ENV=test-ci-sca-gate
+      - name: Upload SCA gate report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: security-sca-gate-results
+          include-hidden-files: true
+          if-no-files-found: error
+          path: .security/sca-gate.json
+          retention-days: 30
+
   security-iac:
     runs-on: ubuntu-latest
     permissions:
@@ -2390,7 +2552,7 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
@@ -2402,6 +2564,7 @@ jobs:
       (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.build-ui-static.result == 'success' || (needs.build-ui-static.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       needs.test-api-unit-integration.result == 'success' &&
+      needs.test-api-sut.result == 'success' &&
       (needs.test-api-ai.result == 'success' || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.ai != 'true' && needs.changes.outputs.global != 'true')) &&
       needs.test-e2e.result == 'success' &&
       needs.e2e-vscode.result == 'success' &&
@@ -3396,7 +3559,10 @@ jobs:
       - build-e2e
       - typecheck-lint-ui
       - typecheck-lint-api
+      - api-static
+      - idp-web-static
       - validate-idp-sync
+      - security-sca-gate
       - validate-llm-mesh
       - validate-cluster-mesh
       - validate-llm-gateway
@@ -3406,6 +3572,7 @@ jobs:
       - validate-oauth-verify
       - validate-mcp-auth
       - validate-mcp-platform
+      - validate-connector-host
       - memory-l5-qualification
       - validate-auth-hono
       - validate-auth-client
@@ -3419,11 +3586,13 @@ jobs:
       - validate-skills
       - validate-flow
       - validate-artifacts
+      - artifacts-qualification
       - validate-harness
       - validate-live-speech
       - build-api-image
       - build-api-tool-image
       - test-api-unit-integration
+      - test-api-sut
       - test-api-ai
       - build-ui
       - build-desktop
@@ -3516,14 +3685,14 @@ jobs:
     permissions:
       contents: read
       actions: read
-    needs: [changes, package-candidates, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
+    needs: [changes, package-candidates, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api, api-static, idp-web-static,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
       validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
-      validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
+      validate-mcp-auth, validate-mcp-platform, validate-connector-host, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
-      validate-artifacts, validate-harness, build-api-image, build-api-tool-image,
-      test-api-unit-integration, test-api-ai, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
+      validate-artifacts, artifacts-qualification, validate-harness, build-api-image, build-api-tool-image,
+      test-api-unit-integration, test-api-sut, test-api-ai, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-code-api, security-code-ui, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
       publish-llm-mesh, publish-llm-gateway, publish-chat-ui, publish-cited-source-viewer,
@@ -3585,7 +3754,12 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report test-ci-static ENV=test-ci-capacity
+      - name: Qualify the portable measured performance dossier
+        run: make test-ci-dossier CI_DOSSIER_PULL=missing ENV=test-ci-performance-dossier
+      - name: Remove dossier tooling volume
+        if: always()
+        run: make clean-ci-dossier ENV=test-ci-performance-dossier
       - name: Qualify provider boundary, browser membership and live receipts
         run: make test-ci-provider-fixtures test-ci-browser-shards test-ci-live-provider-receipt test-ci-dev-image-pin check-e2e-inventory ENV=test-ci-capacity
       - name: Qualify artifact dispatch and fail-closed scan joins

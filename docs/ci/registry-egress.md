@@ -25,7 +25,7 @@ Counts below cover API/E2E pulls in browser jobs, on a full selected run. UI pul
 | October 27, run [40603516452](https://github.com/rhanka/sentropic/actions/runs/40603516452), source `a6545c732` | 5 | 1 | 1 | 0 | 6 |
 | Audited main / this wagon | 6 | 1 | 1 | 0 | 0 |
 
-The historical runs' job-step receipts confirm successful pulls. The modern matrix has six shards; `max-parallel: 5` limits concurrency, not membership. Eight current browser executions receive artifacts without these registry pulls.
+The historical runs' job-step receipts confirm successful pulls. The modern matrix has six shards; `max-parallel: 6` admits all shards at once; it does not change membership. Eight current browser executions receive artifacts without these registry pulls.
 
 ## Measured payload and before/after estimate
 

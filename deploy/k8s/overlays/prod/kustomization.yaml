@@ -11,7 +11,7 @@ resources:
 patches:
   - path: patch-artifact-content-config.yaml
   - path: patch-postgres-storageclass.yaml
-  # Preserve each live production image: remove at the A4 prod cutover.
+  # Preserve each live production image (hono 4.13.17 / @hono/node-server 2.1.6 maintenance builds, 2026-11-07): remove at the A4 prod cutover.
   # API and IdP use different releases from the same repository.
   - patch: |
       apiVersion: apps/v1
@@ -23,7 +23,7 @@ patches:
           spec:
             containers:
               - name: api
-                image: ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7
+                image: ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05
   - patch: |
       apiVersion: apps/v1
       kind: Deployment
@@ -34,7 +34,7 @@ patches:
           spec:
             containers:
               - name: auth-idp
-                image: ghcr.io/rhanka/sentropic-api@sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909
+                image: ghcr.io/rhanka/sentropic-api@sha256:4b78a02fc743ae85ce9f5819d5ebc6b49e02fca7b3161a87ea06afa401a3dc34
   # Content is not deployed yet; retain the serving API release while closed.
   - patch: |
       apiVersion: apps/v1
@@ -46,7 +46,7 @@ patches:
           spec:
             containers:
               - name: artifact-content
-                image: ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7
+                image: ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05
   - patch: |
       apiVersion: apps/v1
       kind: StatefulSet

@@ -384,7 +384,8 @@ test('every validation pack step receives the CI context and an explicit ENV', (
   let count = 0;
   for (const [name, job] of Object.entries(jobs)) {
     for (const step of job.steps ?? []) {
-      if (!/\bpack-[a-z-]+/.test(step.run ?? '') || !name.startsWith('validate-') || /pack-candidate-siblings/.test(step.run)) continue;
+      const validation = name.startsWith('validate-') || name === 'artifacts-qualification';
+      if (!/\bpack-[a-z-]+/.test(step.run ?? '') || !validation || /pack-candidate-siblings/.test(step.run)) continue;
       for (const [k, v] of Object.entries(CTX)) assert.equal(step.env?.[k], v, `${name}: ${k}`);
       assert.match(step.run, / ENV=test-ci-[a-z-]+$/);
       // The installed-pair core pack duplicates validate-chat-core's own pack for the
@@ -803,7 +804,7 @@ test('consumer contracts (BR-83): candidate contract lanes are wired into CI', (
 test('consumer contracts (BR-83): verifier job joins the complete verdict', () => {
   const job = jobs['consumer-contracts'];
   assert.ok(job, 'consumer-contracts job must exist');
-  assert.deepEqual(job.needs, ['changes', 'package-candidates']);
+  assert.deepEqual(job.needs, ['changes']);
   const runs = job.steps.map((step) => step.run ?? '').join('\n');
   assert.ok(runs.includes('test-ci-compatibility'), 'classifier gate must run');
   assert.ok(runs.includes('test-ci-consumer-contracts'), 'contract selection gate must run');
