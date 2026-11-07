@@ -1022,8 +1022,8 @@ test-ci-compatibility: ## Qualify change-kind classification for consumer select
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/compatibility-classifier.test.mjs)'
 test-ci-consumer-contracts: ## Qualify consumer-boundary selection over qualified candidates (BR83-EX2)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		node --test $(or $(SCOPE),scripts/ci/consumer-contracts.test.mjs)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node --test $(or $(SCOPE),scripts/ci/consumer-contracts.test.mjs)'
 test-ci-installed-tuple: ## Qualify immutable installed tuples and Docker inputs (BR83-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/installed-tuple.test.mjs)'
