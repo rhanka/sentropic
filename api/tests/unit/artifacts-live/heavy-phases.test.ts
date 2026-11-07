@@ -22,13 +22,16 @@ describe('live heavy phases go through the cluster-mesh queue of one d2-4 node (
     expect(await f.queue.status('d2-4-a')).toMatchObject({ usedMiB: 3 * 40 + 3 * 418, entries: [] });
     expect((await f.queue.status('d2-4-a')).lives).toHaveLength(3);
   });
-  it('should queue a fourth pre-bundle while three lives run, then refuse it past the bound and free its pod', async () => {
+  it('should queue a pre-bundle that does not fit beside two lives, then refuse it past the bound and free its pod', async () => {
+    // Provisional costs: 3 pod bases + 2 lives + a 980 MiB pre-bundle = 1936 MiB > 1706, so users who arrive one after
+    // another reach two lives; a third pre-bundle waits for a live to stop.
     const f = fixture({ capacity: 4, budgetMiB: 1706, maxWaitMs: 20 }); users(f);
-    for (const k of keys.slice(0, 3)) await f.controller.start(k);
-    await expect(f.controller.start(keys[3])).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'queued' });
-    expect((await f.state(keys[3]))?.runtime).toMatchObject({ phase: 'DORMANT', stateDetail: 'builder_unavailable' });
-    expect(f.objects.size).toBe(3); expect((await f.queue.status('d2-4-a')).pods).toHaveLength(3);
-    await expect(f.admission.acquire(keys[3], 'user-3')).resolves.toBeUndefined();
+    for (const k of keys.slice(0, 2)) await f.controller.start(k);
+    const objects = f.objects.size;
+    await expect(f.controller.start(keys[2])).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'queued' });
+    expect((await f.state(keys[2]))?.runtime).toMatchObject({ phase: 'DORMANT', stateDetail: 'builder_unavailable' });
+    expect(f.objects.size).toBe(objects); expect((await f.queue.status('d2-4-a')).pods).toHaveLength(2);
+    await expect(f.admission.acquire(keys[2], 'user-2')).resolves.toBeUndefined();
   });
   it('should hold an explicit clean build while another binding is live and refuse it past the bound', async () => {
     const f = fixture({ capacity: 2, budgetMiB: 1706, maxWaitMs: 20 }); await f.controller.start(keys[0]);
