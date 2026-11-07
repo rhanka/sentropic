@@ -62,3 +62,4 @@
 - [x] Lot 7: dependency limits 65536 files, 64 MiB per file, 1 GiB total; streaming trusted cache and tarballs (BRW3-EX2), tests first.
 - [x] Lot 8: README; scoped tests and typecheck green; branch pushed.
 - [x] Lot 9: s-archi 16:40 FIX1: W3 drops its `recipes.ts` edits and compares pre-bundle and dev with W4's `artifactEnvironment()`, the build with `buildEnvironment()`; `cache.test.ts` takes W4's identical public `VITE_*` assertion; tests first.
+- [x] Lot 10: s-archi 16:40 FIX2: op `renew {}` → `{ renewed: true }` implementing the W8 port `QualifiedSupervisor.renew` (fenced, side-effect free; the W8 controller owns the ≤ 60 s cadence), tests first.
