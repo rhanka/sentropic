@@ -3,7 +3,7 @@ import { ArtifactOperationError } from './failures.js';
 import { persistLiveOverlay } from './live-drafts.js';
 import { applyLiveMutation, liveTreeSha, type LiveBaseTree, type LiveMutation } from './live-tree.js';
 import { liveResponse, type LiveAuthority, type LiveServiceDeps } from './live-contracts.js';
-import type { LiveOverlayEntry, LiveTransaction } from './live-store.js';
+import { LIVE_IDLE_THRESHOLD_MS, type LiveOverlayEntry, type LiveTransaction } from './live-store.js';
 
 export const liveBusy = (reason: import('./live-errors.js').LiveConflictReason): never => {
   throw new ArtifactOperationError('git_live_conflict', { publicDetails: { reason } });
@@ -59,13 +59,13 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
         origin: operation === 'live_control' ? 'explicit' : 'implicit', rowVersion: 1,
         ownerId: authority.ownerId, podUid: null, sourceRevision: record.revision,
         baseHeadSha: record.baseHeadSha, liveTreeSha: record.liveTreeSha,
-        idleDeadline: new Date(now + 600000).toISOString(), maximumLifetimeAt: new Date(now + 3600000).toISOString(),
+        idleDeadline: new Date(now + LIVE_IDLE_THRESHOLD_MS).toISOString(),
         activeAttemptId: null, stateDetail: null };
       Object.assign(record.runtime, { sourceRevision: record.revision, baseHeadSha: record.baseHeadSha,
         liveTreeSha: record.liveTreeSha, rowVersion: record.runtime.rowVersion + 1 });
       if (operation === 'live_control') record.runtime.renewOnReady = true;
       record.runtime.lastAccessAt = new Date(now).toISOString();
-      record.runtime.idleDeadline = new Date(now + 600000).toISOString();
+      record.runtime.idleDeadline = new Date(now + LIVE_IDLE_THRESHOLD_MS).toISOString();
     }
   }
   return { action, result: { ...liveResponse(record, currentHeadSha, now), state: record.runtime?.phase ?? 'DORMANT',
