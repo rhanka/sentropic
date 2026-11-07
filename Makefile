@@ -644,7 +644,7 @@ api-tool-version: ## Print the content-addressed CI toolbox tag
 
 # Reuse exact toolbox bytes across runs; current-run transport receipts stay fresh.
 API_TOOL_CACHE_DIR ?= .tmp/api-tool-cache
-.PHONY: api-tool-cache-key save-api-tool-cache load-api-tool-cache test-ci-api-tool-cache
+.PHONY: api-tool-cache-key save-api-tool-cache load-api-tool-cache test-ci-api-tool-cache pull-api-tool-registry push-api-tool-registry
 api-tool-cache-key:
 	@printf 'key=%s-%s\n' "$$(sha256sum package-lock.json | cut -d' ' -f1)" '$(API_TOOL_VERSION)'
 save-api-tool-cache:
@@ -653,8 +653,14 @@ load-api-tool-cache:
 	@node scripts/ci/api-tool-cache.mjs verify $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
 	@set -o pipefail; zstd -dc $(API_TOOL_CACHE_DIR)/image.tar.zst | docker load
 	@node scripts/ci/api-tool-cache.mjs loaded $(API_TOOL_CACHE_DIR) $(API_TOOL_IMAGE)
+# Prebuilt toolbox on GHCR: the tag is the full content identity; pushes happen on main only (CI).
+API_TOOL_REGISTRY_IMAGE ?= ghcr.io/rhanka/sentropic-ci-toolbox
+pull-api-tool-registry: ## Pull the prebuilt toolbox for this exact content identity; non-zero on any miss or mismatch
+	@node scripts/ci/api-tool-registry.mjs pull $(API_TOOL_REGISTRY_IMAGE) $(API_TOOL_VERSION) $(API_TOOL_IMAGE)
+push-api-tool-registry: ## Publish the verified toolbox and its recorded manifest (main CI only)
+	@node scripts/ci/api-tool-registry.mjs push $(API_TOOL_REGISTRY_IMAGE) $(API_TOOL_VERSION) $(API_TOOL_IMAGE)
 test-ci-api-tool-cache: ci-test-env
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
