@@ -48,8 +48,8 @@
   - [x] `expect()` contract: every A-LIVE §8.3 recheck, one test per refusal (`publicationRecheck`).
   - [ ] Import `candidateDigest`, the handoff types and the verifier from `@sentropic/artifacts/live-host`; `kid` in claims and receipt; delete the api copy.
 - [ ] **Lot 2 — Host build API and builder service**
-  - [ ] Authenticated host identity; job by id; asynchronous build with job-bound status.
-  - [ ] Scheduler sweep (reconcile, reap, recover) exposed, never started.
+  - [x] Authenticated host identity; job by id; asynchronous build with job-bound status (`createHostBuildApi`, `createBuildJobs`).
+  - [x] Scheduler sweep (reconcile, reap, recover) stays exposed by the controller, never started here.
   - [ ] Host-selected live recipe path instead of the hard-coded `ui/` Vite config.
 - [ ] **Lot 3 — Gate**
   - [ ] Scoped checks: `make -f .tmp/packets/alive-w7-ops.mk w7-check` (tsc + vitest on api/tests/unit/artifacts-live).
