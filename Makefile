@@ -74,7 +74,7 @@ export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
 export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/artifact-content apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json packages/chat-core/src/runtime packages/chat-core/package.json packages/chat-core/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export UI_VERSION     ?= $(shell bash scripts/ci/ui-image-version.sh "$(IMAGE_PLATFORM)" "$(VITE_EXTENSION_PROFILE_BUILD)" "$(VITE_EXTENSION_API_BASE_URL_BUILD)" "$(VITE_EXTENSION_APP_BASE_URL_BUILD)" "$(VITE_EXTENSION_WS_BASE_URL_BUILD)" "$(LLM_MESH_NODE_IMAGE)")
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/npm-toolchain e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
 API_IMAGE_RECEIPT ?= .tmp/ci-prod-image/api-image-id
@@ -694,7 +694,7 @@ ci-build-api-tool:
 ci-build-api-tool-target:
 	@$(CI_IMAGE_BUILD) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
 ci-build-ui:
-	@$(MAKE) ci-build-ui-target IMAGE_KIND=ui ENV=$(ENV)
+	@node scripts/ci/resolve-ui-image.mjs $(ENV)
 ci-build-ui-target:
 	@$(CI_IMAGE_BUILD) --target production -f ui/Dockerfile -t $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) \
 		--build-arg VITE_API_BASE_URL=/api/v1 --build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE_BUILD) \
@@ -4761,9 +4761,13 @@ check-image-registry: ## Reject the retired registry anywhere in tracked files
 check-preprod-images: ## Check the actual rendered recovery pins by anonymous digest
 	@node scripts/ci/check-preprod-images.mjs
 
-test-ghcr-images: ci-test-env test-ghcr-login ## Reject registry collisions and private or altered manifests
-	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs
+test-ghcr-images: ci-test-env test-ghcr-login test-ui-image-version ## Reject registry collisions and private or altered manifests
+	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs
 
 .PHONY: test-ghcr-login
 test-ghcr-login: ci-test-env ## Exercise the real Make login recipe with fixture credentials
 	@bash scripts/ci/ghcr-login.test.sh
+
+.PHONY: test-ui-image-version
+test-ui-image-version: ci-test-env ## Prove shipped inputs and production profiles select a new canonical UI tag
+	@bash scripts/ci/ui-image-version.test.sh
