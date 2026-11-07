@@ -6,7 +6,7 @@ import { TREE_LIMITS, treeDigest, type TransferFile } from '../../../src/service
 import type { LiveRuntime } from '../../../src/services/artifacts/live/records';
 
 export const runtime = { generation: 1, sessionId: 'sess-1', leaseEpoch: 2, routeEpoch: 3, podName: 'artifact-' + 'a'.repeat(40),
-  podUid: 'uid-1', sourceRevision: 7 } as LiveRuntime;
+  podUid: 'uid-1', sourceRevision: 'r7' } as LiveRuntime;
 export const sha256 = (value: Uint8Array | string) => createHash('sha256').update(value).digest('hex');
 export const text = (path: string, value: string, mode = 0o644): TransferFile => ({ path, mode, bytes: Buffer.from(value) });
 export const DIST = [text('index.html', '<main></main>'), text('assets/app.js', 'export {}')];

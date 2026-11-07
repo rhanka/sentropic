@@ -55,8 +55,9 @@ describe('live heavy gate (client of the cluster-mesh heavy-phase queue)', () =>
   });
   it('should gate an in-pod clean install as the install phase only', async () => {
     const { gate } = world({ maxWaitMs: 5 }); const held = deferred();
-    const install = vi.fn(async () => ({ files: [], runId: 'run' })); const wrapped = gatedInstall(gate, install);
-    const input = { lockfile: new Uint8Array(), identity: {} as never, recipe: {} as never, stagingRef: 's', tarballs: [] };
+    const install = vi.fn(async () => ({ runId: 'run' })); const wrapped = gatedInstall(gate, install);
+    const input = { lockfile: new Uint8Array(), identity: {} as never, recipe: {} as never, stagingRef: 's',
+      tarballs: (async function* () {})(), sink: async () => undefined };
     const holder = gate.run('v1', 'build', () => held.promise);
     await expect(wrapped({ ...input, runtime: { podName: 'v2' } as LiveRuntime })).rejects.toMatchObject({ reason: 'queued' });
     expect(install).not.toHaveBeenCalled();
