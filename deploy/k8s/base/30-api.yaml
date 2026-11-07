@@ -94,7 +94,7 @@ spec:
       serviceAccountName: sentropic-app
       containers:
         - name: api
-          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          image: ghcr.io/rhanka/sentropic-api:main
           imagePullPolicy: Always
           env:
             - name: JEV_API_KEY

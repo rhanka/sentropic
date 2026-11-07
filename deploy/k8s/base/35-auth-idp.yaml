@@ -96,7 +96,7 @@ spec:
             claimName: auth-idp-session-authority
       containers:
         - name: auth-idp
-          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          image: ghcr.io/rhanka/sentropic-api:main
           imagePullPolicy: Always
           # D4-a: the SAME api image, run as the IdP. cwd is /workspace so the
           # IdP resolves apps/auth-idp/web/build (its screens) relative to cwd.

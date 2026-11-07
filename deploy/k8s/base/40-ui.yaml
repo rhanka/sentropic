@@ -53,7 +53,7 @@ spec:
       serviceAccountName: sentropic-app
       containers:
         - name: ui
-          image: rg.fr-par.scw.cloud/nc-reg/sentropic-ui:main
+          image: ghcr.io/rhanka/sentropic-ui:main
           imagePullPolicy: Always
           ports:
             - name: http
