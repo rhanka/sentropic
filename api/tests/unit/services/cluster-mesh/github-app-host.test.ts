@@ -1,9 +1,11 @@
 import { createHmac, generateKeyPairSync, randomUUID } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { MiddlewareHandler } from 'hono';
 import type { GitCredentialInvalidation } from '@sentropic/cluster-mesh';
 
+import { env } from '../../../../src/config/env';
 import {
+  GITHUB_APP_PUBLIC_ROOT,
   GIT_APP_TARGET_REGISTRY,
   createGitHubAppHostRouter,
   isGitHubAppPath,
@@ -17,12 +19,28 @@ import {
  *
  * The cluster-mesh SG0-app core (enrollment, lifecycle, rotation, custody and
  * its forged GitHub adapter) ships with its own package tests. This suite
- * proves the SENTROPIC HOST composition of that core: resolveOwner from the
- * owner session, the frozen target registry, authenticateBroker from bound
- * service identities, the durable ref-to-target mapping, and the plan's
- * contract acceptance (callback/replay/scope, single-repo lease, forbidden
- * permissions refused, revocation).
+ * proves the SENTROPIC HOST composition of that core: the fail-closed custody
+ * key gate, resolveOwner from the owner session, the frozen target registry
+ * with an explicit enroll target, the public `/api/v1/github-app` mount over
+ * the package root, authenticateBroker from bound service identities, the
+ * durable ref-to-target mapping, and the plan's contract acceptance
+ * (callback/replay/scope, single-repo lease, forbidden permissions refused,
+ * revocation).
  */
+
+const ROOT = '/api/v1/github-app';
+const CUSTODY_KEY = 'unit-test-github-app-custody-key';
+const DEV_SEED = 'dev-secret-key-change-in-production-please';
+const GITHUB_FORM_ACTION = "form-action https://github.com 'self'";
+
+let savedCustodyKey: string | undefined;
+beforeAll(() => {
+  savedCustodyKey = env.SECRET_ENCRYPTION_KEY;
+  env.SECRET_ENCRYPTION_KEY = CUSTODY_KEY;
+});
+afterAll(() => {
+  env.SECRET_ENCRYPTION_KEY = savedCustodyKey;
+});
 
 const pem = () => generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey
   .export({ type: 'pkcs8', format: 'pem' }).toString();
@@ -55,9 +73,8 @@ const fakeForge = () => {
   const appKey = pem();
   const minted: string[] = [];
   const revoked: string[] = [];
-  let granted: Record<string, string> = { ...PERMISSIONS };
+  const granted: Record<string, string> = { ...PERMISSIONS };
   let tokenPermissions: Record<string, string> = { ...PERMISSIONS };
-  let tokenRepositoryIds: string[] = [];
   const github: GitHubAppForge = {
     exchange: async () => ({ appId: '42', slug: `test-app-${randomUUID().slice(0, 6)}`, privateKey: appKey, webhookSecret: 'fake-webhook-secret' }),
     inspectInstallation: async () => ({ permissions: granted, suspended: false }),
@@ -70,7 +87,7 @@ const fakeForge = () => {
       minted.push(`${installationId}:${repositoryId}`);
       const token = `fake-token-${minted.length}`;
       return { token, expiresAt: new Date(time + 3_600_000).toISOString(),
-        permissions: tokenPermissions, repositoryIds: tokenRepositoryIds.length ? tokenRepositoryIds : [repositoryId] };
+        permissions: tokenPermissions, repositoryIds: [repositoryId] };
     },
   };
   return {
@@ -91,6 +108,7 @@ const config: GitHubAppHostConfig = {
   ],
   brokers: [{ clientId: 'immo-host-broker', storageScopeId: 'scope-immo', repoId: 'repo-immo' }],
 };
+const BASE = config.publicBaseUrl;
 
 type Principal = { ownerId: string; role: string } | null;
 
@@ -126,79 +144,111 @@ const createHarness = (brokerClientId?: string): Harness => {
     onCredentialsChanged: async (event) => { invalidations.push(event); },
     now: forge.now,
   });
-  return { request: (path, init) => router.request(path, init), forge, invalidations };
+  return { request: async (path, init) => router.request(path, init), forge, invalidations };
 };
 
 const sessionHeaders = (owner = 'owner-1'): Record<string, string> => ({ authorization: owner });
 const enrollPostHeaders = (owner?: string): Record<string, string> =>
-  ({ ...sessionHeaders(owner), origin: config.publicBaseUrl });
+  ({ ...sessionHeaders(owner), origin: BASE });
+
+type TargetKey = 'radar-immobilier' | 'sentropic';
+
+const refOf = (begin: Response): string =>
+  new URL(begin.headers.get('location')!, BASE).pathname.replace(/^\/api\/v1\/github-app\//, '');
+
+const beginEnroll = (harness: Harness, target: TargetKey = 'radar-immobilier', owner?: string) =>
+  harness.request(`${ROOT}/enroll?target=${target}`, { method: 'POST', headers: enrollPostHeaders(owner) });
 
 interface EnrollOutcome {
   ref: string;
-  status?: Response;
+  status: Response;
   begin: Response;
+  installed: Response;
 }
 
 /** Owner gesture flow: landing → enroll → prompt → manifest → installation → status. */
-const enroll = async (harness: Harness, target: 'radar-immobilier' | 'sentropic' = 'radar-immobilier', owner = 'owner-1'): Promise<EnrollOutcome | Response> => {
-  const query = `?target=${target}`;
-  const landing = await harness.request(`/github-app${query}`, { headers: sessionHeaders(owner) });
-  if (landing.status !== 200) return landing;
+const enroll = async (harness: Harness, target: TargetKey = 'radar-immobilier', owner = 'owner-1'): Promise<EnrollOutcome> => {
+  const landing = await harness.request(`${ROOT}?target=${target}`, { headers: sessionHeaders(owner) });
+  expect(landing.status).toBe(200);
   expect(await landing.text()).toContain(`Enroll ${target === 'sentropic' ? 'rhanka/sentropic' : 'rhanka/radar-immobilier'}`);
-  const begin = await harness.request(`/github-app/enroll${query}`, { method: 'POST', headers: enrollPostHeaders(owner) });
-  if (begin.status !== 303) return begin;
-  const ref = new URL(begin.headers.get('location')!, config.publicBaseUrl).pathname.replace(/^\/github-app\//, '');
-  const prompt = await harness.request(`/github-app/${ref}`, { headers: sessionHeaders(owner) });
-  if (prompt.status !== 200) return prompt;
+  const begin = await beginEnroll(harness, target, owner);
+  expect(begin.status).toBe(303);
+  const ref = refOf(begin);
+  const prompt = await harness.request(`${ROOT}/${ref}`, { headers: sessionHeaders(owner) });
+  expect(prompt.status).toBe(200);
   const manifestState = /state=([0-9a-f-]{36})/.exec(await prompt.text())![1];
-  const converted = await harness.request(`/github-app/${ref}/manifest?state=${manifestState}&code=fake-manifest-code`,
+  const converted = await harness.request(`${ROOT}/${ref}/manifest?state=${manifestState}&code=fake-manifest-code`,
     { headers: sessionHeaders(owner) });
-  if (converted.status !== 303) return converted;
+  expect(converted.status).toBe(303);
   const installState = new URL(converted.headers.get('location')!).searchParams.get('state')!;
-  const installed = await harness.request(`/github-app/${ref}/installation?state=${installState}&installation_id=500`,
+  const installed = await harness.request(`${ROOT}/${ref}/installation?state=${installState}&installation_id=500`,
     { headers: sessionHeaders(owner) });
-  if (installed.status !== 303) return installed;
-  const status = await harness.request(`/github-app/${ref}/status`, { headers: sessionHeaders(owner) });
-  return { ref, status, begin };
+  expect(installed.status).toBe(303);
+  const status = await harness.request(`${ROOT}/${ref}/status`, { headers: sessionHeaders(owner) });
+  return { ref, status, begin, installed };
 };
 
+const leaseBody = (ref: string) =>
+  JSON.stringify({ storageScopeId: 'scope-immo', repoId: 'repo-immo', installationRef: ref });
 const leaseRequest = (ref: string): RequestInit => ({
-  method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ storageScopeId: 'scope-immo', repoId: 'repo-immo', installationRef: ref }),
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: leaseBody(ref),
 });
 
 describe('SG0-app host config resolution', () => {
+  const configured = (extra: Record<string, string | undefined> = {}) => ({
+    GITHUB_APP_PUBLIC_BASE_URL: 'https://api.sentropic.example',
+    GITHUB_APP_TARGETS_JSON: JSON.stringify([{ locator: 'rhanka/sentropic', storageScopeId: 's', repoId: 'r' }]),
+    SECRET_ENCRYPTION_KEY: CUSTODY_KEY,
+    ...extra,
+  });
+
   it('should keep the frozen target registry to the two plan repositories in plan order', () => {
     expect(GIT_APP_TARGET_REGISTRY).toEqual(['rhanka/radar-immobilier', 'rhanka/sentropic']);
   });
 
+  it('should refuse the mount without a provisioned custody key, including the committed dev seed', () => {
+    const refused = { enabled: false, disabledReason: 'custody_key_unavailable' };
+    expect(resolveGitHubAppHostConfig(configured({ SECRET_ENCRYPTION_KEY: undefined }))).toEqual(refused);
+    expect(resolveGitHubAppHostConfig(configured({ SECRET_ENCRYPTION_KEY: '' }))).toEqual(refused);
+    expect(resolveGitHubAppHostConfig(configured({ SECRET_ENCRYPTION_KEY: '   ' }))).toEqual(refused);
+    expect(resolveGitHubAppHostConfig(configured({ SECRET_ENCRYPTION_KEY: DEV_SEED }))).toEqual(refused);
+    expect(resolveGitHubAppHostConfig(configured({ SECRET_ENCRYPTION_KEY: ` ${DEV_SEED} ` }))).toEqual(refused);
+    expect(resolveGitHubAppHostConfig(configured())).toMatchObject({ enabled: true });
+  });
+
+  it('should refuse to compose the router when the process custody key is absent or the dev seed', () => {
+    try {
+      env.SECRET_ENCRYPTION_KEY = undefined;
+      expect(() => createHarness()).toThrow('capability_unavailable');
+      env.SECRET_ENCRYPTION_KEY = DEV_SEED;
+      expect(() => createHarness()).toThrow('capability_unavailable');
+    } finally {
+      env.SECRET_ENCRYPTION_KEY = CUSTODY_KEY;
+    }
+    expect(() => createHarness()).not.toThrow();
+  });
+
   it('should disable the composition when public base URL or targets are missing or not https', () => {
     expect(resolveGitHubAppHostConfig({})).toEqual({ enabled: false, disabledReason: 'not_configured' });
-    const targets = JSON.stringify([{ locator: 'rhanka/sentropic', storageScopeId: 's', repoId: 'r' }]);
-    expect(resolveGitHubAppHostConfig({
-      GITHUB_APP_PUBLIC_BASE_URL: 'http://api.sentropic.example', GITHUB_APP_TARGETS_JSON: targets,
-    })).toEqual({ enabled: false, disabledReason: 'invalid_config' });
-    expect(resolveGitHubAppHostConfig({
-      GITHUB_APP_PUBLIC_BASE_URL: 'https://api.sentropic.example/v1', GITHUB_APP_TARGETS_JSON: targets,
-    })).toEqual({ enabled: false, disabledReason: 'invalid_config' });
+    expect(resolveGitHubAppHostConfig(configured({ GITHUB_APP_PUBLIC_BASE_URL: 'http://api.sentropic.example' })))
+      .toEqual({ enabled: false, disabledReason: 'invalid_config' });
+    expect(resolveGitHubAppHostConfig(configured({ GITHUB_APP_PUBLIC_BASE_URL: 'https://api.sentropic.example/v1' })))
+      .toEqual({ enabled: false, disabledReason: 'invalid_config' });
   });
 
   it('should reject target and broker bindings outside the registry or outside enrolled tuples', () => {
-    const base = { GITHUB_APP_PUBLIC_BASE_URL: 'https://api.sentropic.example' };
-    expect(resolveGitHubAppHostConfig({ ...base, GITHUB_APP_TARGETS_JSON: JSON.stringify([
+    expect(resolveGitHubAppHostConfig(configured({ GITHUB_APP_TARGETS_JSON: JSON.stringify([
       { locator: 'rhanka/radar-immobilier', storageScopeId: 's', repoId: 'r' },
       { locator: 'octocat/hello', storageScopeId: 's2', repoId: 'r2' },
-    ]) })).toEqual({ enabled: false, disabledReason: 'invalid_config' });
-    expect(resolveGitHubAppHostConfig({
-      ...base,
+    ]) }))).toEqual({ enabled: false, disabledReason: 'invalid_config' });
+    expect(resolveGitHubAppHostConfig(configured({
       GITHUB_APP_TARGETS_JSON: JSON.stringify([{ locator: 'rhanka/radar-immobilier', storageScopeId: 's', repoId: 'r' }]),
       GITHUB_APP_BROKER_BINDINGS_JSON: JSON.stringify([{ clientId: 'immo-host-broker', storageScopeId: 'other-scope', repoId: 'other-repo' }]),
-    })).toEqual({ enabled: false, disabledReason: 'invalid_config' });
+    }))).toEqual({ enabled: false, disabledReason: 'invalid_config' });
   });
 
   it('should resolve configured bindings in frozen registry order regardless of the input order', () => {
-    const settled = resolveGitHubAppHostConfig({
-      GITHUB_APP_PUBLIC_BASE_URL: 'https://api.sentropic.example',
+    const settled = resolveGitHubAppHostConfig(configured({
       GITHUB_APP_TARGETS_JSON: JSON.stringify([
         { locator: 'rhanka/sentropic', storageScopeId: 'scope-app', repoId: 'repo-app' },
         { locator: 'rhanka/radar-immobilier', storageScopeId: 'scope-immo', repoId: 'repo-immo' },
@@ -206,7 +256,7 @@ describe('SG0-app host config resolution', () => {
       GITHUB_APP_BROKER_BINDINGS_JSON: JSON.stringify([
         { clientId: 'immo-host-broker', storageScopeId: 'scope-immo', repoId: 'repo-immo' },
       ]),
-    });
+    }));
     expect(settled).toMatchObject({ enabled: true });
     if (!settled.enabled) return;
     expect(settled.config.targets.map((target) => target.locator))
