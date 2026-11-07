@@ -84,6 +84,10 @@ export function verifyDispatch({ kind, slugs = [], boundaries = null, workflow =
   // claims omission based on candidate contracts, so it additionally needs
   // qualified bytes. CI intentionally supplies no candidates for UI/shared.
   const omissionGated = verdict.selection !== 'full' && verdict.selection !== 'adopted';
+  if (verdict.selection === 'deployment' && ['before', 'after'].some((side) =>
+    !['api', 'ui'].every((app) => isPlainObject(tuples?.[side]?.[app])))) {
+    problems.push('installed api/ui tuples are missing: deployment-only selection is unproven');
+  }
   if (tuples !== null && tuples !== undefined && omissionGated) {
     if (!isPlainObject(tuples.before) || !isPlainObject(tuples.after)) {
       problems.push('installed tuples are missing: omission is unproven');
@@ -164,6 +168,10 @@ export function selectConsumers({ kind, slugs = [], boundaries = null, ref = '' 
   if (!isPlainObject(boundaries)) throw new Error('consumer boundaries are required');
   const policy = boundaries.policies?.[kind];
   if (!policy) throw new Error(`unknown change kind: ${kind}`);
+  if (policy.selection === 'deployment') {
+    return { selection: 'deployment', required: [{ kind: 'job', identity: 'validate-idp-sync' }],
+      fastPath: false, reasons: [`${kind}: ${policy.note}`] };
+  }
   if (policy.selection === 'documentation') {
     return { selection: 'documentation', required: [], fastPath: false, reasons: [`${kind}: ${policy.note}`] };
   }

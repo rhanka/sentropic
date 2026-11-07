@@ -10,6 +10,59 @@ const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => {
 }).filter(Boolean);
 let passed = 0;
 const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
+// Remove these preservation expectations at the A4 prod cutover.
+const prodPins = {
+  api: 'ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7',
+  'auth-idp': 'ghcr.io/rhanka/sentropic-api@sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909',
+  'artifact-content': 'ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7',
+  ui: 'ghcr.io/rhanka/sentropic-ui@sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e',
+};
+const checkProdPins = objects => {
+  for (const [name, expected] of Object.entries(prodPins)) {
+    const containers = object(objects, 'Deployment', name).spec.template.spec.containers;
+    assert.equal(containers.length, 1);
+    assert.equal(containers[0].name, name);
+    assert.doesNotMatch(containers[0].image, /:main(?:@|$)/);
+    assert.equal(containers[0].image, expected, `${name} must retain its live production digest without a mutable tag`);
+  }
+};
+const prod = load('/rendered/prod.yaml');
+const allContainers = value => {
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, child]) =>
+    ['containers', 'initContainers', 'ephemeralContainers'].includes(key) ? child : allContainers(child));
+};
+const checkImmutableImages = objects => {
+  const containers = allContainers(objects);
+  assert(containers.length > 0, 'prod must contain workloads');
+  for (const c of containers) assert.match(c.image, /@sha256:[a-f0-9]{64}$/, `${c.name} must use an immutable image`);
+};
+check('prod: the entire rendered overlay uses immutable images', () => checkImmutableImages(prod));
+for (const [index, c] of allContainers(prod).entries()) for (const image of ['repo:main', 'repo:latest', 'repo:abcdef', 'repo']) {
+  check(`prod: reject mutable ${c.name} image ${image}`, () => {
+    const changed = structuredClone(prod);
+    allContainers(changed)[index].image = image;
+    assert.throws(() => checkImmutableImages(changed), /must use an immutable image/);
+  });
+}
+check('prod: export uses the preserved API image and postgres keeps its live digest', () => {
+  assert.equal(object(prod, 'CronJob', 'sentropic-idp-identity-export').spec.jobTemplate.spec.template.spec
+    .initContainers.find(c => c.name === 'export-replica').image, prodPins.api);
+  assert.equal(object(prod, 'StatefulSet', 'postgres').spec.template.spec.containers[0].image,
+    'postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b');
+});
+check('prod: API, IdP and UI retain their live GHCR digests without mutable tags', () => checkProdPins(prod));
+for (const name of Object.keys(prodPins)) for (const tag of ['main', 'latest', 'abcdef', 'prod-20261106']) {
+  check(`prod: reject ${name}:${tag}`, () => {
+    const changed = structuredClone(prod);
+    object(changed, 'Deployment', name).spec.template.spec.containers[0].image = `${prodPins[name].split('@')[0]}:${tag}`;
+    assert.throws(() => checkProdPins(changed));
+  });
+}
+for (const tier of ['prod', 'preprod']) check(`${tier}: public workloads need no registry pull secret`, () => {
+  assert.doesNotMatch(readFileSync(`/rendered/${tier}.yaml`, 'utf8'), /imagePullSecrets|sentropic-registry/);
+  if (tier === 'preprod') assert.equal(object(load(`/rendered/${tier}.yaml`), 'StatefulSet', 'postgres').spec.template.spec.containers[0].image, 'postgres:17-alpine');
+});
 function checkRoutes(objects, tier) {
   const domain = `${tier === 'preprod' ? 'preprod.' : ''}sentropic.sent-tech.ca`;
   for (const name of ['api', 'artifact-content']) {
@@ -55,11 +108,12 @@ function checkNetwork(objects) {
 for (const tier of ['prod', 'preprod']) {
   const objects = load(`/rendered/${tier}.yaml`);
   check(`${tier}: real host parser denies reserved wildcard labels`, () => checkReservedHosts(objects));
-  const qualify = values => { checkWorkload(values, tier); checkRoutes(values, tier); checkNetwork(values); };
+  const preservedImages = tier === 'prod' ? prodPins : undefined;
+  const qualify = (values, images = preservedImages) => { checkWorkload(values, tier, images); checkRoutes(values, tier); checkNetwork(values); };
   check(`${tier}: closed workload, TLS routes, scoped network and restore access`, () => qualify(objects));
   check(`${tier}: one digest replacement covers API, IdP and content`, () => {
     const pinned = load(`/rendered/${tier}-pinned.yaml`);
-    qualify(pinned);
+    qualify(pinned, null);
     assert.equal(object(pinned, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image,
       `ghcr.io/rhanka/sentropic-api@sha256:${'a'.repeat(64)}`);
   });
