@@ -10,9 +10,9 @@ export const MAX_REPLY_BYTES = 2 * 1024 * 1024;
 /** Delivery window, not a command deadline: the pod refuses a frame received after expiresAt. */
 export const FRAME_TTL_MS = 30_000;
 const CLOCK_SKEW_MS = 5_000;
-export type SupervisorOp = 'phase' | 'terminate' | 'clear' | 'put' | 'stage' | 'dependencies' | 'install'
+export type SupervisorOp = 'phase' | 'terminate' | 'renew' | 'clear' | 'put' | 'stage' | 'dependencies' | 'install'
   | 'overlay' | 'hostFile' | 'prebundle' | 'dev' | 'build' | 'snapshot';
-const OPS: ReadonlySet<string> = new Set<SupervisorOp>(['phase', 'terminate', 'clear', 'put', 'stage', 'dependencies',
+const OPS: ReadonlySet<string> = new Set<SupervisorOp>(['phase', 'terminate', 'renew', 'clear', 'put', 'stage', 'dependencies',
   'install', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'snapshot']);
 /** Durable controller fence plus the leased pod identity; the pod refuses any fence older than one it has seen. */
 export interface FrameFence {

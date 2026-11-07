@@ -24,6 +24,9 @@ export interface QualifiedSupervisor {
     env: ReturnType<typeof buildEnvironment>): Promise<{ candidateDigest: string }>;
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
   verify(runtime: LiveRuntime, attempt: LiveAttempt, limits: { files: 255; fileBytes: 16777216; totalBytes: 67108864 }): Promise<void>;
+  /** Liveness lease (A-LIVE Amendment 1 §3, W8 port): fenced, side-effect free; the controller sends it at least every
+   * 60 s outside DORMANT. */
+  renew(runtime: LiveRuntime): Promise<void>;
 }
 export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['worker'] {
   return {

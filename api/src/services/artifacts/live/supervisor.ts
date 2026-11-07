@@ -58,6 +58,11 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if ((await call(runtime, 'phase', { phase })).phase !== phase) unavailable();
     },
     terminate,
+    /** Op `renew {}` → `renewed: true`: the pod renews its liveness lease on the fenced frame and does nothing else,
+     * so a renewal never cancels or waits for an in-flight command. */
+    async renew(runtime) {
+      if ((await call(runtime, 'renew', {})).renewed !== true) unavailable();
+    },
     async clear(runtime, paths) {
       if (!paths.length || new Set(paths).size !== paths.length || !paths.every(path => WRITABLE_ROOTS.has(path))) unavailable();
       if (!same((await call(runtime, 'clear', { paths: [...paths] })).cleared, paths)) unavailable();
