@@ -383,7 +383,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
         e2e: workflow.jobs['test-e2e'].strategy['max-parallel'] };
       const proofs = args.flatMap((arg, i) => arg === '--proof-file' ? [JSON.parse(fs.readFileSync(args[i + 1], 'utf8'))] : []);
       const proof = wallClockProof(proofs, policyDigest(workflow));
-      const shapeValid = independent && noCapacityMutexes && matrixWidths.api === 15 && matrixWidths.e2e === 6;
+      const shapeValid = independent && noCapacityMutexes && matrixWidths.api === 20 && matrixWidths.e2e === 6;
       console.log(JSON.stringify({ perRunSlots: demand, observedSlotsLowerBound: 17, releaseGroups: 2,
         scenarios, independentValidators: independent, noCapacityMutexes, matrixWidths, shapeValid, wallClockProof: proof,
         source: 'Per-run DAG demand; hosted-runner admission and account quota remain to-measure', admitted: null }, null, 2));
