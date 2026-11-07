@@ -144,6 +144,7 @@ test('dedicated manifest_guard filter: only exact image and consumer-policy guar
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
   const globalGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs',
+    'scripts/ci/image-config.mjs',
     'scripts/ci/compatibility-classifier.mjs', 'scripts/ci/compatibility-classifier.test.mjs',
     'scripts/ci/consumer-contracts.mjs', 'scripts/ci/consumer-contracts.test.mjs',
     'scripts/ci/consumer-boundaries.json',
