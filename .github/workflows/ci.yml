@@ -2026,7 +2026,7 @@ jobs:
     needs: [changes, build-api-image, build-ui, build-e2e]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
-      max-parallel: 5
+      max-parallel: 6
       fail-fast: false
       matrix:
         include:
