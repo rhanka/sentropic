@@ -106,4 +106,16 @@ describe('pod bootstrap agent: W3 transfers and source staging', () => {
     expect(await clean.send('terminate')).toEqual({ treeGone: true });
     expect(groups).toEqual([]);
   });
+
+  it('should admit dependency files up to 64 MiB and trees up to 1 GiB, keeping the overlay and output caps', async () => {
+    const pod = await harness();
+    const put = (transfer: string, target: string, size: number) => pod.send('put', { transfer, target,
+      entries: [{ path: 'node_modules/skia/skia.node', mode: 0o444, size, offset: 0, data: b64('x') }] });
+    for (const target of ['dependencies', 'install', 'npm-cache']) {
+      expect(await put(`ok-${target}`, target, 33 * 1024 * 1024)).toEqual({});
+      await expect(put(`big-${target}`, target, 64 * 1024 * 1024 + 1)).rejects.toThrow('limit:limit_exceeded');
+    }
+    await pod.send('clear', { paths: ['/tmp', '/dependencies'] });
+    await expect(put('overlay', 'overlay', 1024 * 1024 + 1)).rejects.toThrow('limit:limit_exceeded');
+  });
 });
