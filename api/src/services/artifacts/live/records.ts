@@ -5,10 +5,12 @@ export type LivePhase = 'DORMANT' | 'REVIVING' | 'LIVE' | 'QUIESCING' | 'BUILD_P
 export interface LiveRuntime {
   generation: number; ownerId: string; sessionId: string; phase: LivePhase;
   leaseEpoch: number; rowVersion: number; podUid: string | null; podName: string;
-  sourceRevision: number; appliedRevision: number | null; baseHeadSha: string;
+  sourceRevision: string; appliedRevision: string | null; baseHeadSha: string;
   liveTreeSha: string; lastAccessAt: number; maximumLifetimeAt: number;
-  routeEpoch: number; pendingWake: boolean; attempt: LiveAttempt | null;
+  routeEpoch: number; invitationEpoch: number; invitationExpiresAt: number | null; pendingWake: boolean; attempt: LiveAttempt | null;
   stateDetail?: string;
+  /** Consecutive automatic crash restores of this binding; a normal revive resets it. */
+  crashRestores?: number;
 }
 export interface PublicationProgress {
   generation: number; latestVerifiedHeadSha: string; progressSeq: number;

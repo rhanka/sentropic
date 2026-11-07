@@ -16,7 +16,7 @@ export interface QualifiedSupervisor {
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
-    Promise<{ revision: number; routeEpoch: number }>;
+    Promise<{ revision: string; routeEpoch: number }>;
   build(runtime: LiveRuntime, attempt: LiveAttempt, command: typeof BUILD_RECIPE,
     env: ReturnType<typeof artifactEnvironment>): Promise<{ candidateDigest: string }>;
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
