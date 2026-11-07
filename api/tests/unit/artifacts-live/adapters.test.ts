@@ -15,11 +15,12 @@ describe('trusted live adapters', () => {
     const f = fixture(); const runtime = await f.controller.start(key);
     const calls: string[] = [];
     const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'prebundle', 'dev',
-      'build', 'verify', 'renew'].map(name => [name, vi.fn(async () => { calls.push(name); return name === 'build' ? { candidateDigest: 'digest' } : undefined; })]),
+      'build', 'verify', 'renew'].map(name => [name, vi.fn(async () => { calls.push(name); return name === 'build' ? { candidateDigest: 'digest' }
+        : name === 'prebundle' ? { prebundled: true } : undefined; })]),
     ) as unknown as QualifiedSupervisor;
     const worker = createLiveWorker(supervisor);
     const source = await f.ports.forge.snapshot(key, 'B'); const cache = await f.ports.cache.acquire(source, runtime);
-    await worker.prepare(runtime, source, cache); await worker.live(runtime);
+    await worker.prepare(runtime, source, cache); await worker.prebundle(runtime); await worker.live(runtime);
     expect(supervisor.dependencies).toHaveBeenCalledWith(runtime, cache, { readOnly: true, verifyHash: true });
     expect(supervisor.phase).toHaveBeenCalledWith(runtime, 'offline');
     // The bootstrap writes its frozen pre-bundle script: the only host file stays the live Vite config.
@@ -28,6 +29,9 @@ describe('trusted live adapters', () => {
     expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, artifactEnvironment());
     expect(supervisor.hostFile).toHaveBeenCalledOnce();
     expect(supervisor.hostFile).toHaveBeenCalledWith(runtime, '/tmp/artifact-vite.config.mjs', expect.stringContaining('clientPort:443'));
+    // The pre-bundle is its own supervisor op (W3 signature above), after the live config and before the dev server.
+    expect(vi.mocked(supervisor.hostFile).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(supervisor.prebundle).mock.invocationCallOrder[0]);
+    expect(vi.mocked(supervisor.prebundle).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(supervisor.dev).mock.invocationCallOrder[0]);
     await worker.build(runtime, { id: 'attempt' } as never);
     expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, buildEnvironment());
     expect(supervisor.terminate).toHaveBeenCalledWith(runtime);
@@ -38,7 +42,7 @@ describe('trusted live adapters', () => {
     const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'verify']
       .map(name => [name, vi.fn(async () => { calls.push(name); })])) as unknown as QualifiedSupervisor;
     const previous = process.env.NODE_OPTIONS; process.env.NODE_OPTIONS = '--max-old-space-size=8192';
-    try { await createLiveWorker(supervisor).live(runtime); }
+    try { const worker = createLiveWorker(supervisor); await worker.prebundle(runtime); await worker.live(runtime); }
     finally { if (previous === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = previous; }
     expect(calls).toEqual(['hostFile', 'prebundle', 'dev']); expect(supervisor.dependencies).not.toHaveBeenCalled();
     // The bootstrap embeds the frozen pre-bundle script; only the Vite config crosses as a host file.
@@ -126,8 +130,8 @@ describe('trusted live adapters', () => {
     const query = vi.fn(async () => ({ rows: [row('s', 'a', 'LIVE', 'alice'), row('s', 'b', 'DORMANT', 'bob'),
       row('t', 'c', 'RECOVERING', 'carol')] }));
     expect(await createPostgresLiveStore({ query } as never).active()).toEqual([
-      { key: { storageScopeId: 's', artifactId: 'a' }, ownerId: 'alice' },
-      { key: { storageScopeId: 't', artifactId: 'c' }, ownerId: 'carol' }]);
+      { key: { storageScopeId: 's', artifactId: 'a' }, ownerId: 'alice', phase: 'LIVE' },
+      { key: { storageScopeId: 't', artifactId: 'c' }, ownerId: 'carol', phase: 'RECOVERING' }]);
     expect(query).toHaveBeenCalledWith(expect.stringContaining('control.artifact_host_kv'), ['artifact-live-runtime/v1']);
   });
 });
