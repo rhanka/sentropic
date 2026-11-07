@@ -13,7 +13,7 @@ import {
 } from './publishable-manifests.mjs';
 
 export const CHANGE_KINDS = ['internal-fix', 'additive', 'breaking', 'explicit-adoption',
-  'root-lock-toolchain', 'runtime-security', 'ui-only', 'shared-asset', 'documentation-only', 'unknown'];
+  'root-lock-toolchain', 'runtime-security', 'ui-only', 'shared-asset', 'deployment-only', 'documentation-only', 'unknown'];
 
 // Higher rank is more conservative and wins when a change spans areas.
 const RANK = { 'internal-fix': 0, 'ui-only': 1, additive: 2, 'shared-asset': 3,
@@ -27,6 +27,8 @@ export function classifyFileArea(file) {
   if (typeof file !== 'string' || file.length === 0) return 'unknown';
   if (file.endsWith('.md') || file === 'LICENSE') return 'unrelated';
   if (file === 'package.json' || file === 'package-lock.json') return 'root-lock';
+  if ((file.startsWith('deploy/k8s/') && /\.(?:yaml|yml|json)$/.test(file))
+    || file.startsWith('deploy/ci/')) return 'deployment';
   if (file === 'Makefile' || file === 'api/Dockerfile' || file === 'ui/Dockerfile'
     || file === '.dockerignore' || file.startsWith('.github/workflows/')
     || file.startsWith('scripts/') || file.startsWith('tools/')
@@ -131,11 +133,18 @@ export function classifyCompatibility({ files = [], packages = [], semver = load
   const uiConfined = areas.includes('ui')
     && areas.every((area) => ['ui', 'unrelated', 'package-doc'].includes(area));
   const kinds = [];
-  if (areas.includes('runtime-security')) kinds.push({ kind: 'runtime-security', reasons: ['runtime, deploy, security, e2e, or host change'] });
+  const deploymentOnly = areas.includes('deployment')
+    && areas.every((area) => ['deployment', 'unrelated', 'package-doc'].includes(area));
+  if (areas.includes('runtime-security') || (areas.includes('deployment') && !deploymentOnly)) {
+    kinds.push({ kind: 'runtime-security', reasons: ['runtime, security, e2e, host, or mixed deployment change'] });
+  }
   if (areas.includes('root-lock') || areas.includes('toolchain')) {
     kinds.push({ kind: 'root-lock-toolchain', reasons: ['root lock, toolchain, image input, or workflow change'] });
   }
   for (const entry of packages) kinds.push(classifyPackageChange({ ...entry, files, semver }));
+  if (deploymentOnly && kinds.every((entry) => entry.kind === 'internal-fix')) {
+    return { kind: 'deployment-only', reasons: ['changes confined to Kubernetes manifests and deployment validation'] };
+  }
   if (areas.every((area) => area === 'unrelated' || area === 'package-doc')
     && kinds.every((entry) => entry.kind === 'internal-fix')) {
     return { kind: 'documentation-only', reasons: ['changes confined to identified documentation'] };

@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { publish } from './publish-image.mjs';
 
-const imageId = `sha256:${'a'.repeat(64)}`;
+const config = '{"created":"qualified"}';
+const imageId = `sha256:${createHash('sha256').update(config).digest('hex')}`;
 const manifest = JSON.stringify({ config: { digest: imageId } });
 const digest = text => `sha256:${createHash('sha256').update(text).digest('hex')}`;
 
@@ -19,9 +20,13 @@ async function fixture(run, { collision = false, aliasDrift = false } = {}) {
     writeFileSync(join(dir, 'ui-image.json'), JSON.stringify(receipt));
     writeFileSync(join(dir, 'docker'), [
       `#!${process.execPath}`,
-      'const fs = require("node:fs"); const a = process.argv.slice(2);',
+      'const fs = require("node:fs"), cp = require("node:child_process"); const a = process.argv.slice(2);',
       'fs.appendFileSync("calls.jsonl", JSON.stringify(a) + "\\n");',
-      `if (a[0] === 'image') console.log(${JSON.stringify(imageId)});`,
+      `if (a[0] === 'image' && a[1] === 'save') {`,
+      `  fs.writeFileSync('manifest.json', JSON.stringify([{Config: '${imageId.slice(7)}.json'}]));`,
+      `  fs.writeFileSync('${imageId.slice(7)}.json', ${JSON.stringify(config)});`,
+      `  process.stdout.write(cp.execFileSync('tar', ['-cf', '-', 'manifest.json', '${imageId.slice(7)}.json']));`,
+      `} else if (a[0] === 'image') console.log(${JSON.stringify(imageId)});`,
       `else if (a[0] === 'manifest') console.log(${JSON.stringify(collision ? JSON.stringify({ config: { digest: `sha256:${'b'.repeat(64)}` } }) : manifest)});`,
       `else if (a[0] === 'buildx') console.log('Digest: ${digest(manifest)}');`,
     ].join('\n'), { mode: 0o755 });
