@@ -2116,17 +2116,20 @@ jobs:
         with:
           name: ui-image
           path: .
-      - name: Load API image from artifact
-        run: make load-api
-      - name: Load UI image from artifact
-        run: make load-ui
       - name: Download E2E image artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: e2e-image
           path: .
-      - name: Load exact E2E image
-        run: make load-e2e ENV=e2e-ci
+      - name: Load API, UI and exact E2E images in parallel
+        run: |
+          # Each load verifies its receipt; any failed load fails the step.
+          make load-api & api=$!
+          make load-ui & ui=$!
+          make load-e2e ENV=e2e-ci & e2e=$!
+          status=0
+          for pid in "$api" "$ui" "$e2e"; do wait "$pid" || status=1; done
+          exit "$status"
       - name: Test e2e API & UI (shard ${{ matrix.shard }})
         env:
           E2E_SHARD: ${{ matrix.shard }}
@@ -2137,6 +2140,14 @@ jobs:
       - name: Require isolated provider traffic
         if: always()
         run: make ci-provider-receipt ENV=e2e-ci
+      - name: Start the browser test stack shutdown
+        if: always()
+        # The provider receipt above needs the live stack; once it is collected the
+        # same make down runs detached so it overlaps the artifact upload.
+        run: |
+          mkdir -p .tmp
+          rm -f .tmp/e2e-down.status
+          setsid bash -c 'make down ENV=e2e-ci > .tmp/e2e-down.log 2>&1; echo $? > .tmp/e2e-down.status' > /dev/null 2>&1 < /dev/null &
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -2146,9 +2157,21 @@ jobs:
             .tmp/ci-provider/
           include-hidden-files: true
           if-no-files-found: error
-      - name: Stop the browser test stack
+      - name: Confirm the browser test stack shutdown
         if: always()
-        run: make down ENV=e2e-ci
+        # Bounded wait: a failed shutdown fails the job; a slow one is left to the
+        # ephemeral runner teardown instead of blocking the verdict.
+        run: |
+          for _ in $(seq 1 10); do
+            [ -f .tmp/e2e-down.status ] && break
+            sleep 1
+          done
+          if [ ! -f .tmp/e2e-down.status ]; then
+            echo "::warning::browser stack shutdown still running; runner teardown completes it"
+            exit 0
+          fi
+          cat .tmp/e2e-down.log
+          [ "$(cat .tmp/e2e-down.status)" = 0 ]
 
   e2e-vscode:
     runs-on: ubuntu-latest
