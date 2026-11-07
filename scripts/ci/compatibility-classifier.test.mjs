@@ -154,6 +154,18 @@ test('should classify only Kubernetes manifests and deployment checks as deploym
   }
 });
 
+test('should require full integration for executable deployment files including generated ConfigMap inputs', () => {
+  for (const file of ['deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sh',
+    'deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql',
+    'deploy/k8s/overlays/prod/idp-identity-sync/reader-role.sql',
+    'deploy/k8s/base/run.mjs', 'deploy/k8s/base/run', 'deploy/k8s/base/run.ts']) {
+    assert.equal(classifyFileArea(file), 'runtime-security', file);
+    for (const files of [[file], ['deploy/k8s/overlays/prod/kustomization.yaml', file]]) {
+      assert.equal(classifyCompatibility({ files }).kind, 'runtime-security', file);
+    }
+  }
+});
+
 test('should classify Dockerfile and workflow edits as toolchain', () => {
   for (const file of ['api/Dockerfile', '.github/workflows/ci.yml', 'Makefile']) {
     assert.equal(classifyFileArea(file), 'toolchain', file);

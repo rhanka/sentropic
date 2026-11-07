@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { classifyCompatibility } from './compatibility-classifier.mjs';
 import {
   contractTestsFor,
   loadBoundaries,
@@ -19,6 +20,17 @@ const boundaries = loadBoundaries(path.join(root, 'scripts', 'ci', 'consumer-bou
 
 const jobs = (verdict) => verdict.required.filter((row) => row.kind === 'job').map((row) => row.identity);
 const tests = (verdict) => verdict.required.filter((row) => row.kind === 'test').map((row) => row.identity);
+
+test('should retain full runtime integration for shell and SQL mounted by Kubernetes', () => {
+  for (const name of ['export-prod.sh', 'export-prod.sql', 'reader-role.sql']) {
+    const { kind } = classifyCompatibility({ files: [`deploy/k8s/overlays/prod/idp-identity-sync/${name}`] });
+    const verdict = selectConsumers({ kind, slugs: [], boundaries });
+    assert.equal(verdict.selection, 'full', name);
+    assert.equal(verdict.fastPath, false, name);
+    assert.ok(jobs(verdict).includes('test-e2e'), name);
+    assert.ok(jobs(verdict).includes('test-api-unit-integration'), name);
+  }
+});
 
 test('should require manifest validation and identical installed tuples for deployment-only changes', () => {
   const workflow = { jobs: { changes: {}, 'ci-gate': { needs: ['validate-idp-sync'] },
