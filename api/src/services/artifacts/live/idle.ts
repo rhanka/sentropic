@@ -1,12 +1,22 @@
 import type { LivePorts } from './ports';
-import { assertFence, automaticEligible, conflict, LiveError, publicationBaseline, type LiveKey } from './records';
+import { assertFence, automaticEligible, conflict, LiveError, publicationBaseline, type LiveKey, type LiveState } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { withinPhase } from './deadline';
 
+const idle = (ports: LivePorts, state: LiveState | undefined): state is LiveState =>
+  !!state && state.runtime.phase === 'LIVE' && ports.now() - state.runtime.lastAccessAt > 600_000;
+
+/** The clean build is a heavy phase: it waits for the node gate while still LIVE, then rechecks idleness. A refused
+ * wait leaves the session LIVE for the next scheduler pass. */
 export async function idleBuild(ports: LivePorts, key: LiveKey) {
+  if (!idle(ports, await ports.store.read(key))) return;
+  try { return await ports.heavy.run(key, 'idle_build', () => idleUnderGate(ports, key)); }
+  catch (error) { if (error instanceof LiveError && error.reason === 'queued') return; throw error; }
+}
+async function idleUnderGate(ports: LivePorts, key: LiveKey) {
   const binding = await currentBinding(ports, key);
   let runtime = await ports.store.transaction(key, async unit => {
-    if (!unit.state || unit.state.runtime.phase !== 'LIVE' || ports.now() - unit.state.runtime.lastAccessAt <= 600_000) return;
+    if (!idle(ports, unit.state)) return;
     if (unit.state.runtime.generation !== binding.generation) conflict('stale_fence');
     unit.state.runtime.phase = 'QUIESCING'; unit.state.runtime.routeEpoch++;
     return structuredClone(unit.state.runtime);
