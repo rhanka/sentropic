@@ -30,7 +30,7 @@
   - none.
 
 ## Feedback Loop
-- [ ] Open questions for W4/W7/W8/W9 recorded in `.tmp/rv/alive-W3-W7.md`; no invented cross-lane contract.
+- [x] Open questions for W4/W7/W8/W9 recorded in `.tmp/rv/alive-W3-W7.md`; no invented cross-lane contract.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -48,4 +48,4 @@
 - [x] Lot 1: signed bounded frame (Ed25519, public key for the pod spec) and bounded transfer/snapshot reader, tests first.
 - [x] Lot 2: `createSupervisorTransport` implementing every `QualifiedSupervisor` method, tests first.
 - [x] Lot 3: offline clean install over the transport (tarballs staged into the pod npm cache, `npm ci --offline`), tests first.
-- [ ] Lot 4: README transport section; scoped tests and typecheck green; branch pushed.
+- [x] Lot 4: README transport section; scoped tests and typecheck green; branch pushed.

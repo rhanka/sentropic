@@ -26,6 +26,41 @@ The host supplies these mandatory integrations:
   read-only verified dependency materialization and phase-fenced networking.
   Bootstrap and this transport must be qualified together under GB4. An empty
   bootstrap, arbitrary shell or Kubernetes exec fallback is not provided.
+  `createSupervisorTransport` (below) is that transport; pass it as `supervisor`
+  and its `cleanInstall` as the dependency cache `cleanInstall`.
+
+## Supervisor transport
+
+Workers have no egress in any phase (W2 static deny), so the supervisor pushes
+every byte over the only worker ingress, TCP :5173, relayed by `artifact-content`
+through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
+
+- Frame: 64-byte Ed25519 signature, then the exact UTF-8 JSON body
+  `{ v: 1, id, op, fence, issuedAt, expiresAt, args }`; at most 2 MiB; delivery
+  window 30 s. `fence` = generation, sessionId, leaseEpoch, routeEpoch, podName,
+  podUid. The private key stays in the API; the pod spec carries
+  `supervisorPublicKey(key)` (SPKI DER, base64). `openFrame` is the reference pod
+  check; the bootstrap also keeps the highest fence and the ids seen in the window.
+- Reply: `{ id, ok, code?, data? }`, at most 2 MiB; `code` is `fenced`, `limit`,
+  `integrity` or `failed`. Pod text is never read.
+- Trees: `put { transfer, target, entries: [{ path, mode, size, offset, data }] }`,
+  then one commit op carrying `{ transfer, treeDigest }`. `treeDigest` is the
+  sha256 of the JSON list `[path, mode, size, sha256]` sorted by path; the pod
+  recomputes it and applies the whole set atomically or nothing.
+- Ops and required echo: `phase {phase}` → phase; `terminate` → `treeGone: true`;
+  `clear {paths}` → `cleared`; `stage`/`overlay`/`dependencies` → `treeDigest`
+  (+ `revision`, + `readOnly: true`); `hostFile {path, source}` → `sha256`;
+  `dev {recipe: 'live'}` → `revision`, `routeEpoch`; `build {recipe: 'build'}` and
+  `install {recipe: 'install', tarballs}` → `exitCode: 0`. Recipes cross the
+  wire by name; the bootstrap runs its frozen copy with the host environment.
+- `snapshot { root: 'output' | 'dependencies', cursor }` →
+  `{ entries: [{ path, type, mode, size, offset, data }], next }`. Output accepts
+  regular files only, requires `index.html` and enforces 255 files / 16 MiB /
+  64 MiB; the candidate digest is the sha256 of `[path, size, sha256]` sorted by
+  path, computed and sealed on the trusted side after the build tree is gone.
+- Install: tarballs are staged as `<index>.tgz` with their integrity; the
+  bootstrap re-verifies and writes them content-addressed into the npm cache, then
+  runs `npm ci --offline`. A missing entry refuses with `integrity`.
 - The clean installer starts from the supplied verified source/lock in a fresh
   directory inside the leased pod, consumes the verified tarballs through the
   fixed npm configuration, suppresses hooks and exports only dependencies. It
