@@ -54,3 +54,4 @@
 - [x] **Lot 3 — Kernel and CLI**: profile path defaults, BRANCH conventions, commit guards; shared resolver for check/verify/audit/init; 36 new tests and `make typecheck-harness` PASS.
   - [x] Consume profile path defaults, branch conventions and optional commit guards in C2.
 - [ ] **Lot 4 — Documentation and handoff**: README Rust + Node example, scoped regressions, mechanical scope gate, push branch only, report `.tmp/rv/harness-profile-file.md`, remove test volumes.
+  - [x] Document the JSON Schema, selection precedence, scope/plan/commit rules and executable Rust + Node example.

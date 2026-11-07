@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://sentropic.dev/harness/harness-profile.schema.json",
+  "$id": "https://github.com/rhanka/sentropic/packages/harness/schema/harness-profile.schema.json",
   "title": "Harness repository profile",
   "type": "object",
   "additionalProperties": false,
