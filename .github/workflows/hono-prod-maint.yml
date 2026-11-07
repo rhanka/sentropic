@@ -1,0 +1,130 @@
+name: hono-prod-maint
+
+# One-shot maintenance build of a production image from its exact source commit with
+# @hono/node-server 2.1.6 and hono >= 4.13.16 (GHSA-jpvv-r467-5p4w, GHSA-rmxm-3fg6-px4f, hono advisories of 2026-11-01).
+# Proves the fix IN THE BUNDLE and against the built image as a SUT. Deploy is NOT done here.
+on:
+  push:
+    branches: [fix/hono-prod-maint-api, fix/hono-prod-maint-idp]
+    paths:
+      - .github/workflows/hono-prod-maint.yml
+      - scripts/security/hono-sut/**
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_REPO: ghcr.io/rhanka/sentropic-api
+  API_BASE_DIGEST: sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7
+  IDP_BASE_DIGEST: sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909
+
+jobs:
+  maint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Select role
+        run: |
+          set -eu
+          case "$GITHUB_REF_NAME" in
+            fix/hono-prod-maint-api) SRC=836a82f88f171988f256285530990158794939db; echo "ROLE=api" >> "$GITHUB_ENV"; echo "BASE_DIGEST=$API_BASE_DIGEST" >> "$GITHUB_ENV" ;;
+            fix/hono-prod-maint-idp) SRC=7fab39899cd199f457dcc120f39593bb9dd59be9; echo "ROLE=idp" >> "$GITHUB_ENV"; echo "BASE_DIGEST=$IDP_BASE_DIGEST" >> "$GITHUB_ENV" ;;
+            *) echo "unexpected ref"; exit 1 ;;
+          esac
+          echo "SOURCE_COMMIT=$SRC" >> "$GITHUB_ENV"
+      - name: Build the production image from the pinned lock
+        run: |
+          set -eu
+          docker build --target base -f api/Dockerfile -t sut-base .
+          docker build --target production -f api/Dockerfile -t sut .
+      - name: Prove the installed tree used for the bundle
+        run: |
+          set -eu
+          docker run --rm --entrypoint sh sut-base -c '
+            set -eu
+            find /workspace -type d \( -path "*/node_modules/@hono/node-server" -o -path "*/node_modules/hono" \) -prune -print | sort
+            echo "node-server: $(node -p "require(\"/workspace/node_modules/@hono/node-server/package.json\").version")"
+            echo "hono: $(node -p "require(\"/workspace/node_modules/hono/package.json\").version")"
+            test "$(node -p "require(\"/workspace/node_modules/@hono/node-server/package.json\").version")" = 2.1.6
+            node -e "const v=require(\"/workspace/node_modules/hono/package.json\").version.split(\".\").map(Number); if(!(v[0]==4&&(v[1]>13||(v[1]==13&&v[2]>=16)))) process.exit(1)"
+          '
+      - name: Prove the fix in the BUNDLES (inlined marker) with a negative control on the prod base
+        run: |
+          set -eu
+          docker pull "${IMAGE_REPO}@${BASE_DIGEST}"
+          for f in /workspace/api/dist/index.js /workspace/apps/auth-idp/dist/index.js; do
+            n_new="$(docker run --rm --entrypoint sh sut -c "grep -c 'Backslash in request path' $f")"
+            n_old="$(docker run --rm --entrypoint sh "${IMAGE_REPO}@${BASE_DIGEST}" -c "grep -c 'Backslash in request path' $f" || true)"
+            echo "$f marker: fixed=$n_new base=${n_old:-0}"
+            [ "$n_new" -ge 1 ]
+            [ "${n_old:-0}" = 0 ]
+          done
+      - name: SUT env
+        run: |
+          set -eu
+          docker network create sutnet
+          docker run -d --name pg --network sutnet -e POSTGRES_DB=app -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app postgres:17-alpine
+          for i in $(seq 1 30); do docker exec pg pg_isready -U app -d app && break; sleep 2; done
+          cat > sut.env <<'ENV'
+          NODE_ENV=production
+          DISABLE_RATE_LIMIT=true
+          ADMIN_EMAIL=e2e-admin@example.com
+          DATABASE_URL=postgres://app:app@pg:5432/app
+          SCW_TEM_SECRET_KEY=sut-dummy
+          SCW_TEM_API_BASE_URL=http://127.0.0.1:9
+          JWT_SECRET=sut-dummy-jwt-secret-sut-dummy-jwt-secret
+          WEBAUTHN_RP_ID=localhost
+          WEBAUTHN_ORIGIN=http://localhost
+          OUTBOX_DISPATCHER_AUTOSTART=false
+          ENV
+          sed -i 's/^ *//' sut.env
+      - name: SUT probes on the fixed image
+        run: |
+          set -eu
+          if [ "$ROLE" = api ]; then
+            docker run -d --name app --network sutnet --env-file sut.env -e PORT=8080 -p 18080:8080 sut
+            OK=/api/v1/health PREFIX=api
+          else
+            docker run -d --name app --network sutnet --env-file sut.env -e IDP_PORT=8080 -p 18080:8080 -w /workspace --entrypoint node sut apps/auth-idp/dist/index.js
+            OK=/.well-known/openid-configuration PREFIX=_app
+          fi
+          echo "OK=$OK" >> "$GITHUB_ENV"; echo "PREFIX=$PREFIX" >> "$GITHUB_ENV"
+          up=0
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:18080${OK}" -o /dev/null; then up=1; break; fi
+            sleep 2
+          done
+          docker logs app 2>&1 | tail -25 | cut -c1-200
+          [ "$up" = 1 ]
+          node scripts/security/hono-sut/probe.mjs http://127.0.0.1:18080 "$OK" "$PREFIX" fixed
+          docker rm -f app >/dev/null
+      - name: SUT negative control on the prod base (probe must reach the route on the vulnerable image)
+        run: |
+          set -eu
+          base="${IMAGE_REPO}@${BASE_DIGEST}"
+          if [ "$ROLE" = api ]; then
+            docker run -d --name appold --network sutnet --env-file sut.env -e PORT=8080 -p 18080:8080 "$base"
+          else
+            docker run -d --name appold --network sutnet --env-file sut.env -e IDP_PORT=8080 -p 18080:8080 -w /workspace --entrypoint node "$base" apps/auth-idp/dist/index.js
+          fi
+          up=0
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:18080${OK}" -o /dev/null; then up=1; break; fi
+            sleep 2
+          done
+          docker logs appold 2>&1 | tail -15 | cut -c1-200
+          [ "$up" = 1 ]
+          node scripts/security/hono-sut/probe.mjs http://127.0.0.1:18080 "$OK" "$PREFIX" vulnerable
+          docker rm -f appold >/dev/null
+      - name: Push by tag and report the digest
+        run: |
+          set -eu
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          tag="hono-maint-${ROLE}-${{ github.run_id }}"
+          docker tag sut "${IMAGE_REPO}:${tag}"
+          docker push "${IMAGE_REPO}:${tag}" | tee push.log
+          digest="$(grep -o 'digest: sha256:[0-9a-f]*' push.log | head -1 | cut -d' ' -f2)"
+          echo "role=${ROLE} tag=${tag} digest=${digest} source=${SOURCE_COMMIT} base=${BASE_DIGEST}" | tee -a "$GITHUB_STEP_SUMMARY"
