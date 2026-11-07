@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBuildJobs, RUN_STALE_MS, type BuildJobRecord, type RecordStore } from '../../../src/services/artifacts/live/build-jobs';
+import { BUILD_ONLY_PHASES, createBuildJobs, runStaleMs, type BuildJobRecord, type RecordStore } from '../../../src/services/artifacts/live/build-jobs';
+import { PHASE_DEADLINE_MS } from '../../../src/services/artifacts/live/deadline';
 import { createHostBuildApi } from '../../../src/services/artifacts/live/host-build-api';
 import { LiveError } from '../../../src/services/artifacts/live/records';
 import type { HandoffReceipt } from '@sentropic/artifacts/live-host';
@@ -14,7 +15,7 @@ function memoryStore(): RecordStore {
 }
 function setup(build = vi.fn(async () => {})) {
   let now = 0; let n = 0; const background: Promise<void>[] = [];
-  const jobs = createBuildJobs(memoryStore(), () => now, () => `token-${++n}`);
+  const jobs = createBuildJobs(memoryStore(), () => now, () => `token-${++n}`, STALE);
   const authenticate = vi.fn(async (request: Request) =>
     request.headers.get('x-test-host') === 'immo' ? { hostId: 'immo', storageScopeId: 'scope-immo' } : null);
   const app = createHostBuildApi({ authenticate, jobs, build, schedule: work => { background.push(work()); } });
@@ -25,6 +26,9 @@ function setup(build = vi.fn(async () => {})) {
 }
 const receipt = { nonce: 'n', releaseId: 'release-A' } as unknown as HandoffReceipt;
 const k = { storageScopeId: 'scope-immo', artifactId: 'artifact-a' };
+/** Heavy-gate wait of the test composition. */
+const HEAVY_WAIT_MS = 60_000;
+const STALE = runStaleMs(HEAVY_WAIT_MS);
 
 describe('host build API (M3-B)', () => {
   it('refuses an unauthenticated host before reading the body', async () => {
@@ -65,11 +69,19 @@ describe('host build API (M3-B)', () => {
     s.build.mockImplementationOnce(() => new Promise<void>(() => {}));
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1' }); expect(s.build).toHaveBeenCalledTimes(2);
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1' }); expect(s.build).toHaveBeenCalledTimes(2);
-    s.advance(RUN_STALE_MS); await s.post({ artifactId: 'artifact-a', jobId: 'job-1' }); expect(s.build).toHaveBeenCalledTimes(3);
+    s.advance(STALE); await s.post({ artifactId: 'artifact-a', jobId: 'job-1' }); expect(s.build).toHaveBeenCalledTimes(3);
+  });
+  it('presumes a run dead after its heavy-gate wait and its bounded phases, never after a pod lifetime', async () => {
+    expect(BUILD_ONLY_PHASES).toEqual(['install', 'prepare', 'build', 'verify']);
+    expect(PHASE_DEADLINE_MS).toBe(300_000);
+    expect(runStaleMs(0)).toBe(1_200_000); expect(STALE).toBe(HEAVY_WAIT_MS + 1_200_000);
+    const s = setup(); await s.jobs.admit(k, 'job-1');
+    s.advance(STALE - 1); expect((await s.jobs.admit(k, 'job-1')).run).toBe(false);
+    s.advance(1); expect((await s.jobs.admit(k, 'job-1')).run).toBe(true);
   });
   it('a stale run cannot overwrite the outcome of the newer run', async () => {
     const s = setup();
-    const first = await s.jobs.admit(k, 'job-1'); s.advance(RUN_STALE_MS); const second = await s.jobs.admit(k, 'job-1');
+    const first = await s.jobs.admit(k, 'job-1'); s.advance(STALE); const second = await s.jobs.admit(k, 'job-1');
     await s.jobs.fail(k, 'job-1', first.record.token, 'builder_unavailable');
     expect((await s.jobs.read(k, 'job-1'))?.state).toBe('accepted');
     await s.jobs.fail(k, 'job-1', second.record.token, 'builder_unavailable');
