@@ -15,7 +15,8 @@ export interface QualifiedSupervisor {
   dependencies(runtime: LiveRuntime, cache: CacheReceipt, options: { readOnly: true; verifyHash: true }): Promise<void>;
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
-  /** Runs to completion in the worker pod; writes only its emptyDir cacheDir, never the shared dependency cache. */
+  /** Separate heavy phase. The pod bootstrap writes its frozen LIVE_PREBUNDLE_SCRIPT itself (no hostFile) and runs it
+   * to completion; it writes only the emptyDir cacheDir, never the shared dependency cache. */
   prebundle(runtime: LiveRuntime, command: typeof PREBUNDLE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
     Promise<{ prebundled: true }>;
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
