@@ -1,7 +1,7 @@
 # fix: preserve production images by GHCR digest before A4
 
 ## Objective
-- [x] Pin api, auth-idp and ui to their preserved live production GHCR digests before any production deployment; locally qualified and reviewed for one READY PR.
+- [x] Pin the entire production overlay by digest, preserving live api, auth-idp, ui and PostgreSQL releases before any production deployment; keep content and identity runners closed on the preserved API release.
 
 ## Scope / Guardrails
 - [x] Branch fix/prod-ghcr-pin from origin/main 17ad1c58b06a01b4f8e77472fa0421b9c507104a; worktree tmp/worktrees/prod-ghcr-pin.
@@ -14,9 +14,11 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `deploy/k8s/overlays/prod/kustomization.yaml`
+  - `deploy/k8s/overlays/prod/idp-identity-sync/cronjob.yaml`
   - `deploy/ci/artifact-content/bundle-checks.mjs`
   - `deploy/ci/artifact-content/bundle.selftest.mjs`
   - `deploy/ci/preprod-a4/bundle.selftest.mjs`
+  - `deploy/ci/idp-identity-sync/bundle-checks.mjs`
   - `scripts/ci/compatibility-classifier.mjs`
   - `scripts/ci/compatibility-classifier.test.mjs`
   - `scripts/ci/consumer-boundaries.json`
@@ -40,7 +42,8 @@
 - [x] Live read-only snapshot 2026-11-07T04:36:37.804Z: api-5c56d8ffb7-7m8nf, auth-idp-5cd7858b5-bwds5 and ui-777fc875b4-chtvx are ready; digest equality and anonymous GHCR verification are required before handoff.
 - [x] Anonymous GHCR manifest byte hashes equal the live Pod imageIDs: api sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7; auth-idp sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909; ui sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e. The three existing workloads retain byte-identical code; only the registry changes.
 - [x] Postgres pull-secret cleanup is already present in origin/main; deploy/k8s contains no imagePullSecrets or sentropic-registry references. Historical baseline evidence is retained.
-- [x] Scope: pin the three existing production deployments; artifact-content and the suspended identity-export job retain their separate image references. Owner must review the complete render before GO.
+- [x] Review P1 whole-overlay scope supersedes the three-deployment limit: content, identity export and PostgreSQL must also be immutable; no production deployment is authorized by this lane.
+- [x] Live read-only 2026-11-07: content Deployment and the identity export-replica leg are absent in prod; the export CronJob is suspended and has only PostgreSQL/s5cmd legs. Pin the new closed API-image consumers to the serving API digest already preserved anonymously in GHCR; no missing image copy is required. PostgreSQL Pod imageID is sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b.
 - [x] Update the existing A4 manifest gate that explicitly expected prod main tags to assert the three preserved digests instead; keep prod checkpoint/runtime isolation assertions intact.
 
 ## AI Flaky tests
@@ -56,6 +59,7 @@
 ## Plan / Todo (lot-based)
 - [x] **CI repair**: classifier regression failed before the fix; 19 classification, 24 consumer, 10 tuple and 41 real-workflow tests PASS through Make. Exact run-4510 dispatch replay PASS with deployment-only selection, required manifest validation and unchanged tuples. Policy edits select full integration. Conductor imports this request and .tmp/rv/fix-936-931.md into Track.
 - [x] **Review P1 classifier**: restrict Kubernetes deployment-only classification to YAML/JSON manifests; shell, SQL and other executable inputs retain full runtime/security integration, including generated ConfigMap sources. Regression reproduced before the fix; scoped classifier/consumer validation recorded in .tmp/rv/fix-936-931.md for conductor Track import.
+- [x] **Review P1 images**: the whole-render immutability regression failed on artifact-content before pinning; preserve the live PostgreSQL digest and API release for closed content/export consumers. Include every container, init container and ephemeral container in the production image assertion; evidence and targeted validation go to .tmp/rv/fix-936-931.md for conductor Track import.
 - [x] **Lot 0 — Evidence**: common/master/workflow/testing rules, isolated branch, mechanical harness branch check, production pods read-only, existing pull-secret cleanup confirmed.
 - [x] **Lot 1 — Pin and regression**: deployment-specific digests with removal trigger; rendered-overlay exact pins and 12 mutable-tag rejection cases for api/auth-idp/ui; both rendered tiers reject pull secrets; artifact-content activation and preprod checks preserved.
 - [x] **Lot 2 — Verify**: make test-artifact-content-manifests API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-prod-ghcr-pin PASS: 71 artifact checks, 31 A4 operator tests, recovery/custody/rendered ingress sequence checks. Anonymous GHCR proof and mechanical branch/scope gates PASS; two independent Astra xhigh code reviews PASS on implementation diff d5287e63449adbf80adae0618384e37aafd8fe20545bd3d5329e9f438366e8e9.

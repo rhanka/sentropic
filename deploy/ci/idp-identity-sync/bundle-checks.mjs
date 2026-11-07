@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 export const postgresImage = 'postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24';
 export const s5cmdImage = 'peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a';
 // Two-phase G7 bundle (a4-cm-gaps-r2 §9.2): the CM replica runners execute from the
-// api image (same convention as the base Jobs; release pins it via kustomize
-// `images: newTag`, commented in both parent overlays). The gate allowlists the
-// exact convention string and binds it to the two runner containers only.
+// api image. Prod preserves the serving API digest; preprod follows its parent
+// overlay pin. Bind the exact reference to the two runner containers only.
 export const apiImage = 'ghcr.io/rhanka/sentropic-api:main';
+const prodApiImage = 'ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7';
 const runnerContainers = ['export-replica', 'replica-sync'];
 export const envValue = (container, name) => container.env.find(e => e.name === name)?.value;
 export function checkBundle(objects, tier) {
   const prod = tier === 'prod', namespace = prod ? 'sentropic' : 'sentropic-preprod';
+  const runnerImage = prod ? prodApiImage : apiImage;
   const get = (kind, name) => { const hits = objects.filter(o => o.kind === kind && o.metadata.name === name); assert.equal(hits.length, 1, `${kind}/${name}`); return hits[0]; };
   for (const o of objects) assert.equal(o.metadata.namespace, namespace);
   assert(!objects.some(o => ['Secret', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding'].includes(o.kind)), 'bundle must not own secret values or admission policies');
@@ -31,8 +32,8 @@ export function checkBundle(objects, tier) {
   assert(volumes.length); for (const v of volumes) { assert.equal(v.emptyDir.medium, 'Memory'); assert(v.emptyDir.sizeLimit); }
   const containers = [...pod.initContainers, ...pod.containers];
   for (const c of containers) {
-    assert([postgresImage, s5cmdImage, apiImage].includes(c.image), 'image must match the approved pinned images');
-    if (c.image === apiImage) assert(runnerContainers.includes(c.name), 'api image is reserved for the CM replica runners');
+    assert([postgresImage, s5cmdImage, runnerImage].includes(c.image), 'image must match the approved pinned images');
+    if (c.image === runnerImage) assert(runnerContainers.includes(c.name), 'api image is reserved for the CM replica runners');
     assert.equal(c.securityContext.allowPrivilegeEscalation, false); assert.deepEqual(c.securityContext.capabilities.drop, ['ALL']);
     for (const budget of ['requests', 'limits']) for (const resource of ['cpu', 'memory']) assert(c.resources[budget][resource]);
     assert(!c.envFrom, 'explicit env only');
@@ -52,7 +53,7 @@ export function checkBundle(objects, tier) {
     assert.equal(sqlLeg.image, postgresImage);
     assert.deepEqual(sqlLeg.command, ['sh', '/sql/export-prod.sh']);
     const replicaLeg = pod.initContainers[1];
-    assert.equal(replicaLeg.image, apiImage);
+    assert.equal(replicaLeg.image, runnerImage);
     assert(replicaLeg.command.join(' ').includes('/app/dist/scripts/identity-replica-export.js'), 'runner entrypoint');
     assert.equal(envValue(replicaLeg, 'SOURCE_PLACEMENT'), 'prod');
     assert(replicaLeg.env.some(e => e.name === 'CM_IDENTITY_DELETION_BUDGETS_JSON' && e.valueFrom?.secretKeyRef?.name === 'sentropic-identity-budgets'), 'runner budgets');

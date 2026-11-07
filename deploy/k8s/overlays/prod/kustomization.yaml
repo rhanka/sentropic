@@ -35,6 +35,29 @@ patches:
             containers:
               - name: auth-idp
                 image: ghcr.io/rhanka/sentropic-api@sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909
+  # Content is not deployed yet; retain the serving API release while closed.
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: artifact-content
+      spec:
+        template:
+          spec:
+            containers:
+              - name: artifact-content
+                image: ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7
+  - patch: |
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: postgres
+      spec:
+        template:
+          spec:
+            containers:
+              - name: postgres
+                image: postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
   - patch: |
       apiVersion: apps/v1
       kind: Deployment
