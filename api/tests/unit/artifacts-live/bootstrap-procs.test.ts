@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -120,5 +121,19 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
     const many = Object.fromEntries(Array.from({ length: 256 }, (_, i) => [`f${i}.js`, 'x'])); many['index.html'] = 'x';
     await expect(pages((await run(many)).pod, 'output')).rejects.toThrow('limit:limit_exceeded');
     expect((await stat((await run({ 'index.html': 'x' })).pod.path('workspace/ui/dist/index.html'))).size).toBe(1);
+  });
+
+  it('should answer the side-effect-free renew op at once, even behind a running heavy phase', async () => {
+    const children = new Map<number, EventEmitter>();
+    const spawn = () => { const child: any = new EventEmitter(); child.pid = 4100 + children.size; children.set(child.pid, child); return child; };
+    const pod = await harness({ spawn, processes: { list: async () => [], kill: () => undefined,
+      killGroup: (pgid: number) => children.get(pgid)?.emit('exit', null, 'SIGKILL') } });
+    await ready(pod);
+    const running = pod.send('prebundle', { recipe: 'prebundle' }).catch(error => error);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(await pod.send('renew')).toEqual({ renewed: true });
+    await expect(pod.send('renew', { now: 1 })).rejects.toThrow('failed:unknown_field');
+    await pod.send('terminate');
+    expect(String(await running)).toContain('prebundle_failed');
   });
 });
