@@ -207,6 +207,12 @@ describe('MCP connector-host routes', () => {
     expect(JSON.stringify(body)).not.toContain(gmailAccessToken);
   });
 
+  it('keeps REST /api/v1/workspaces closed to a valid MCP OAuth bearer (workspaces_list is MCP-only)', async () => {
+    const token = await issueToken(['mcp:discover', 'mcp:tools:invoke']);
+    const response = await app.request('/api/v1/workspaces', { headers: { authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(401);
+  });
+
   it('rejects a token missing mcp:tools:invoke before the connector mount reaches Google', async () => {
     const fetchMock = await installFetch();
     const token = await issueToken(['mcp:resources:read']);
