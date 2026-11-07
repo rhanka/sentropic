@@ -7,29 +7,38 @@ import test from 'node:test';
 import { publish } from './publish-image.mjs';
 import { resolveUiImage } from './resolve-ui-image.mjs';
 
-const canonicalId = `sha256:${'a'.repeat(64)}`, rebuiltId = `sha256:${'b'.repeat(64)}`;
-const manifest = imageId => ({ config: { digest: imageId } });
 const digest = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+const canonicalConfig = '{"created":"canonical"}', rebuiltConfig = '{"created":"rebuilt"}';
+const canonicalId = digest(canonicalConfig), rebuiltId = digest(rebuiltConfig);
+const manifest = imageId => ({ config: { digest: imageId } });
+const manifestId = digest(JSON.stringify(manifest(canonicalId)));
 
 async function fixture(run, initial = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'canonical-ui-'));
   const cwd = process.cwd(), previousPath = process.env.PATH;
   try {
-    writeFileSync(join(dir, 'state.json'), JSON.stringify({ remote: manifest(canonicalId), localId: rebuiltId, ...initial }));
+    writeFileSync(join(dir, 'state.json'), JSON.stringify({ remote: manifest(canonicalId), localId: rebuiltId, localConfig: rebuiltConfig, ...initial }));
     const script = [
       `#!${process.execPath}`,
-      'const fs = require("node:fs"), crypto = require("node:crypto");',
+      'const fs = require("node:fs"), crypto = require("node:crypto"), cp = require("node:child_process");',
       'const a = process.argv.slice(2), s = JSON.parse(fs.readFileSync("state.json"));',
       'const tool = process.argv[1].endsWith("/make") ? "make" : "docker";',
       'fs.appendFileSync("calls.jsonl", JSON.stringify([tool, ...a]) + "\\n");',
-      'if (tool === "make") s.localId = "' + rebuiltId + '";',
+      'if (tool === "make") { s.localId = "' + rebuiltId + '"; s.localConfig = ' + JSON.stringify(rebuiltConfig) + '; }',
       'else if (a[0] === "manifest") {',
       '  if (s.lookupError || !s.remote) { console.error(s.lookupError || "manifest unknown"); process.exit(1); }',
       '  console.log(JSON.stringify(s.remote));',
       '} else if (a[0] === "pull") {',
-      '  if (s.pullError) process.exit(1); s.localId = s.drift ? s.localId : s.remote.config.digest;',
+      '  if (s.pullError) process.exit(1); if (!s.drift) { s.localId = s.containerd ? "' + manifestId + '" : s.remote.config.digest; s.localConfig = ' + JSON.stringify(canonicalConfig) + '; }',
+      '} else if (a[0] === "image" && a[1] === "save") {',
+      '  if (s.saveError) process.exit(1);',
+      '  const hash = crypto.createHash("sha256").update(s.localConfig).digest("hex");',
+      '  const file = s.classic ? hash + ".json" : "blobs/sha256/" + hash;',
+      '  fs.mkdirSync("blobs/sha256", {recursive: true}); fs.writeFileSync(file, s.localConfig);',
+      '  fs.writeFileSync("manifest.json", JSON.stringify(s.exportedManifest || [{Config: file}]));',
+      '  process.stdout.write(cp.execFileSync("tar", ["-cf", "-", "manifest.json", file]));',
       '} else if (a[0] === "image") console.log(s.localId);',
-      'else if (a[0] === "push") s.remote = {config: {digest: s.localId}};',
+      'else if (a[0] === "push") s.remote = {config: {digest: "sha256:" + crypto.createHash("sha256").update(s.localConfig).digest("hex")}};',
       'else if (a[0] === "buildx") console.log("Digest: sha256:" + crypto.createHash("sha256").update(JSON.stringify(s.remote)).digest("hex"));',
       'fs.writeFileSync("state.json", JSON.stringify(s));',
     ].join('\n');
@@ -73,6 +82,15 @@ test('should build a missing UI tag once and publish exactly its qualified confi
   assert.equal(calls().filter(call => call[1] === 'push').length, 2);
 }, { remote: null }));
 
+for (const initial of [{ containerd: true }, { classic: true }]) {
+  test(`should verify the actual config through qualification and publication (${JSON.stringify(initial)})`, async () => fixture(async ({ env, qualify, publicFetch }) => {
+    resolveUiImage('test-ghcr-ui-fix', env); qualify();
+    const result = await publish('ui', env, publicFetch);
+    assert.equal(result.imageId, initial.containerd ? manifestId : canonicalId);
+    assert.equal(result.digest, manifestId);
+  }, initial));
+}
+
 for (const lookupError of ['unauthorized', 'denied', 'connection refused', '']) {
   test(`should refuse to build on an unproven registry absence (${lookupError || 'empty stderr'})`, async () => fixture(({ env, calls }) => {
     assert.throws(() => resolveUiImage('test-ghcr-ui-fix', env), /refusing to build/);
@@ -80,7 +98,10 @@ for (const lookupError of ['unauthorized', 'denied', 'connection refused', '']) 
   }, { remote: null, lookupError: lookupError || ' ' }));
 }
 
-for (const initial of [{ remote: { manifests: [] } }, { pullError: true }, { drift: true }]) {
+for (const initial of [{ remote: { manifests: [] } }, { pullError: true }, { drift: true },
+  { saveError: true }, { exportedManifest: [] },
+  { exportedManifest: [{ Config: `blobs/sha256/${'f'.repeat(64)}` }] },
+  { exportedManifest: [{ Config: '../config.json' }] }]) {
   test(`should refuse index, failed pull or config drift without rebuilding (${JSON.stringify(initial)})`, async () => fixture(({ env, calls }) => {
     assert.throws(() => resolveUiImage('test-ghcr-ui-fix', env));
     assert(!calls().some(call => call[0] === 'make' || call[1] === 'push'));
