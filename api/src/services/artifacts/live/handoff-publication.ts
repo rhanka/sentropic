@@ -6,7 +6,7 @@ import type { LivePorts } from './ports';
 /** The remote host (D0) resolves its own admitted jobs and runs step 2 of the handoff (A-LIVE §8.4).
  * A host refusal rejects with HandoffError; any other rejection is a transport failure with an unknown outcome. */
 export interface RemoteHost {
-  job(key: LiveKey, jobId: string): Promise<{ headSha: string; expectedReleaseId: string | null }>;
+  job: LivePorts['publication']['job'];
   accept(key: LiveKey, handoff: Handoff, files: readonly CandidateFile[]): Promise<HandoffReceipt>;
 }
 /** Exact verified output snapshot read by the trusted supervisor after the build processes terminated. */
@@ -21,7 +21,7 @@ export function createHandoffPublication(options: {
   signingKey(): KeyObject; hostKey(): KeyObject; now(): number; resends?: number;
 }): LivePorts['publication'] {
   return {
-    job: (key, jobId) => options.host.job(key, jobId),
+    job: (key, jobId, fence) => options.host.job(key, jobId, fence),
     async commit(_unit, key, attempt, runtime) {
       if (!attempt.candidateDigest || !attempt.evidence) throw new LiveError('builder_unavailable', 'evidence_missing');
       const files = await options.candidates.read(runtime, attempt);
