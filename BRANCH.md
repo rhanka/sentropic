@@ -61,5 +61,5 @@
 - [x] Lot 11: cluster-mesh durable FIFO heavy-phase queue under the node memory budget (BRW8-EX2).
 - [x] Lot 12: heavy gate as a queue client for install, pre-bundle, dev and build; 4-live admission; queued status.
 - [x] Lot 13: idle build waits durably in BUILD_QUEUED after its live stops.
-- [ ] Lot 14: scoped checks green after the queue.
+- [x] Lot 14: scoped checks green after the queue (tsc and eslint live scope and queue, api artifacts-live 107/107, cluster-mesh queue 7/7).
 - [ ] Lot N: train integration CI green on the exact head.
