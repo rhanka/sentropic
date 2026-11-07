@@ -49,7 +49,11 @@ AGENT_SECTIONS.push(function fileOps(ctx) {
   ctx.define('hostFile', ['path', 'source'], async ({ path, source }) => {
     if (!AGENT_HOST_FILES.includes(path)) agentFail('failed', 'invalid_path');
     if (typeof source !== 'string' || Buffer.byteLength(source) > AGENT_LIMITS.hostFileBytes) agentFail('limit', 'limit_exceeded');
-    await agentAtomicWrite(at(path), Buffer.from(source, 'utf8'), 0o644);
+    const data = Buffer.from(source, 'utf8');
+    // Rewriting an identical live config would make Vite restart its server and drop HMR clients.
+    const info = await agentFs.lstat(at(path)).catch(() => null);
+    if (info && info.isFile() && (await agentFs.readFile(at(path))).equals(data)) return {};
+    await agentAtomicWrite(at(path), data, 0o644);
     return {};
   });
   /** Applies admitted text: the supervisor sends the writes/deletes that make the tree equal base + overlay. */
