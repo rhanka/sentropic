@@ -32,6 +32,11 @@
 //                                client + PKCE, NO secret — e.g. a claude.ai MCP connector using
 //                                Advanced-settings custom credentials). In 'none' mode
 //                                OAUTH_CLIENT_SECRET is neither required nor stored.
+//   OAUTH_CLIENT_PRESET          'sentropic-mcp': defaults for the claude.ai connector client of the Sentropic MCP
+//                                resource server (public, PKCE, refresh, claude.ai + claude.com callbacks,
+//                                three MCP scopes + offline_access). Requires OAUTH_CLIENT_RESOURCE_INDICATORS
+//                                (the MCP_RESOURCE_URI of the target environment); any other OAUTH_CLIENT_*
+//                                variable overrides the preset.
 //   OAUTH_CLIENT_REQUIRED_ACR    optional minimum ACR: 'urn:sentropic:loa:passkey-fresh'
 //                                (passkey/2FA enforced at authorize) or empty (no policy, default).
 //   OAUTH_CLIENT_ALLOWED_USER_IDS optional comma-separated user ids (subject allowlist,
@@ -47,6 +52,7 @@ import { eq } from 'drizzle-orm';
 
 import { db, pool } from '../db/client';
 import { oauthClients } from '../db/schema';
+import { SENTROPIC_MCP_CLIENT_ID } from '../services/mcp/client-policy';
 
 const hashSecret = (secret: string): string => createHash('sha256').update(secret).digest('hex');
 
@@ -91,10 +97,30 @@ export interface OAuthClientRegistrationValues {
  * prod-safe guards. Kept separate from `main()` (the DB upsert) so it is unit-testable without a
  * database. Every returned array/field is validated here.
  */
+export const SENTROPIC_MCP_PRESET: Readonly<Record<string, string>> = Object.freeze({
+  OAUTH_CLIENT_ID: SENTROPIC_MCP_CLIENT_ID,
+  OAUTH_CLIENT_NAME: 'Sentropic MCP (claude.ai)',
+  OAUTH_CLIENT_REDIRECT_URIS: 'https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback',
+  OAUTH_CLIENT_TOKEN_AUTH: 'none',
+  OAUTH_CLIENT_GRANT_TYPES: 'authorization_code,refresh_token',
+  OAUTH_CLIENT_SCOPES: 'mcp:discover,mcp:resources:read,mcp:tools:invoke,offline_access',
+});
+
+const applyPreset = (source: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const preset = (source.OAUTH_CLIENT_PRESET ?? '').trim();
+  if (!preset) return source;
+  if (preset !== SENTROPIC_MCP_CLIENT_ID) throw new Error(`Unknown OAUTH_CLIENT_PRESET '${preset}'.`);
+  if (!source.OAUTH_CLIENT_RESOURCE_INDICATORS?.trim()) {
+    throw new Error('OAUTH_CLIENT_PRESET requires OAUTH_CLIENT_RESOURCE_INDICATORS (the MCP resource URI).');
+  }
+  return { ...SENTROPIC_MCP_PRESET, ...Object.fromEntries(Object.entries(source).filter(([, v]) => v !== undefined)) };
+};
+
 export const buildOAuthClientRegistration = (
-  source: NodeJS.ProcessEnv = process.env,
+  rawSource: NodeJS.ProcessEnv = process.env,
   now: Date = new Date(),
 ): OAuthClientRegistrationValues => {
+  const source = applyPreset(rawSource);
   const clientId = (source.OAUTH_CLIENT_ID ?? 'design-system').trim();
   const name = (source.OAUTH_CLIENT_NAME ?? 'Sentropic Design System').trim();
 
@@ -239,7 +265,7 @@ const main = async (): Promise<void> => {
   const policy = resolvePolicyUpdate(
     stored ? { ...stored, allowedUserIds: stored.allowedUserIds ?? [], requiredAcr: stored.requiredAcr ?? null } : null,
     { allowedUserIds: values.allowedUserIds, requiredAcr: values.requiredAcr,
-      ...(process.env.OAUTH_CLIENT_GRANT_TYPES !== undefined ? { grantTypes: values.grantTypes } : {}) }
+      ...(process.env.OAUTH_CLIENT_GRANT_TYPES !== undefined || process.env.OAUTH_CLIENT_PRESET !== undefined ? { grantTypes: values.grantTypes } : {}) }
   );
 
   await db
