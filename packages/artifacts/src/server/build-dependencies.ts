@@ -89,6 +89,11 @@ export function validateBuildDependencies(
     const local = path === '' || workspaceTargets.has(path);
     const manifestPath = repositoryPath(path ? `${path}/package.json` : 'package.json');
     const manifest = local ? buildJson(snapshot.files[manifestPath]) : raw;
+    // Bundled dependencies ship inside the locked tarball, whose verified integrity covers their bytes.
+    const bundle = local ? undefined : raw.bundleDependencies;
+    if (bundle !== undefined && bundle !== true
+      && (!Array.isArray(bundle) || bundle.some(name => typeof name !== 'string'))) refuse();
+    const bundled = (name: string): boolean => bundle === true || (Array.isArray(bundle) && bundle.includes(name));
     for (const source of [raw, manifest]) {
       for (const section of sections) {
         const dependencies = source[section];
@@ -97,7 +102,7 @@ export function validateBuildDependencies(
         for (const [name, spec] of Object.entries(dependencies)) {
           if (!registrySpec(spec) || !/^(?:@[A-Za-z0-9._-]+\/)?[A-Za-z0-9._-]+$/.test(name)) refuse();
           if ((section === 'dependencies' || (local && section === 'devDependencies'))
-            && !lockedPackage(path, name)) refuse();
+            && !(section === 'dependencies' && bundled(name)) && !lockedPackage(path, name)) refuse();
         }
       }
     }
