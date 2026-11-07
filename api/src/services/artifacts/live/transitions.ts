@@ -51,7 +51,7 @@ export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRunt
   return transition(ports, key, runtime, state => {
     state.runtime.phase = 'DORMANT'; state.runtime.podUid = null;
     state.runtime.appliedRevision = null; state.runtime.attempt = null;
-  });
+  }).then(async dormant => { await ports.admission.release(key); return dormant; });
 }
 export async function failed(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, error: unknown) {
   const detail = error instanceof LiveError ? error.code : 'builder_unavailable';
