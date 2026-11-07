@@ -3,16 +3,18 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import {
   ARTIFACT_BUILDER_BASE_PATH, ARTIFACT_BUILDER_SCOPE, createBuilderMount, hostAuthenticator, parseBuilderHostBindings,
 } from '../../../src/services/artifacts/live/builder-mount';
+import { createBuildJobs, runStaleMs, type BuildJobRecord, type RecordStore } from '../../../src/services/artifacts/live/build-jobs';
+import { createHostBuildApi, type HostBuildEnv } from '../../../src/services/artifacts/live/host-build-api';
 
 const immo = { clientId: 'immo-builder-client', hostId: 'immo', storageScopeId: 'scope-immo' };
 /** Stands in for createRequireServiceAuth: verifies the bearer, then sets `serviceClient` like the real guard. */
 const requireService: MiddlewareHandler = async (c, next) => {
-  const [clientId, scopes] = (c.req.header('authorization') ?? '').replace(/^Bearer /, '').split(':');
+  const [clientId, scopes] = (c.req.header('authorization') ?? '').replace(/^Bearer /, '').split('|');
   if (!clientId) return c.json({ error: 'invalid_token' }, 401);
   c.set('serviceClient' as never, { clientId, scopes: (scopes ?? '').split(','), jkt: null } as never);
   await next();
 };
-const bearer = (clientId: string, scopes = ARTIFACT_BUILDER_SCOPE) => ({ authorization: `Bearer ${clientId}:${scopes}` });
+const bearer = (clientId: string, scopes = ARTIFACT_BUILDER_SCOPE) => ({ authorization: `Bearer ${clientId}|${scopes}` });
 
 describe('builder host bindings (ARTIFACT_BUILDER_HOST_BINDINGS_JSON)', () => {
   it('binds each service client to one host identity', () => {
@@ -32,10 +34,10 @@ describe('builder host bindings (ARTIFACT_BUILDER_HOST_BINDINGS_JSON)', () => {
 
 describe('builder mount (/api/v1/artifacts/builder)', () => {
   const authenticate = hostAuthenticator(parseBuilderHostBindings(JSON.stringify([immo])));
-  function mounted(api: Hono | null) {
+  function mounted(api: Hono<HostBuildEnv> | null) {
     const app = new Hono(); app.route('/', createBuilderMount({ requireService, authenticate, api })); return app;
   }
-  const echo = () => { const api = new Hono(); api.post('/v1/builds', c => c.json({ host: authenticate(c) }, 202)); return api; };
+  const echo = () => { const api = new Hono<HostBuildEnv>(); api.post('/v1/builds', c => c.json({ host: authenticate(c) }, 202)); return api; };
   it('serves the host build API under the public base path to a bound client with the builder scope', async () => {
     const response = await mounted(echo()).request(`${ARTIFACT_BUILDER_BASE_PATH}/v1/builds`, { method: 'POST', headers: bearer(immo.clientId) });
     expect(response.status).toBe(202);
@@ -59,6 +61,16 @@ describe('builder mount (/api/v1/artifacts/builder)', () => {
     const bound = await app.request(path, { method: 'POST', headers: bearer(immo.clientId) });
     expect(bound.status).toBe(503); expect(await bound.json()).toEqual({ error: 'builder_unavailable' });
     expect((await app.request(path, { method: 'POST', headers: bearer('unbound-client') })).status).toBe(403);
+  });
+  it('mounts the real host build API: the job scope is the bound host scope', async () => {
+    const rows = new Map<string, BuildJobRecord>(); const store: RecordStore = { read: async id => rows.get(id),
+      async update(id, change) { const { next, result } = change(rows.get(id)); if (next) rows.set(id, next); return result; } };
+    const jobs = createBuildJobs(store, () => 0, () => 'token', runStaleMs(0)); const build = vi.fn(async () => {});
+    const api = createHostBuildApi({ authenticate, jobs, build, schedule: work => { void work(); } });
+    const response = await mounted(api).request(`${ARTIFACT_BUILDER_BASE_PATH}/v1/builds`, { method: 'POST',
+      headers: { ...bearer(immo.clientId), 'content-type': 'application/json' }, body: JSON.stringify({ artifactId: 'a', jobId: 'j' }) });
+    expect(response.status).toBe(202);
+    expect(build).toHaveBeenCalledWith({ storageScopeId: 'scope-immo', artifactId: 'a' }, 'j');
   });
   it('serves nothing outside its base path', async () => {
     expect((await mounted(echo()).request('/api/v1/artifacts/other', { headers: bearer(immo.clientId) })).status).toBe(404);
