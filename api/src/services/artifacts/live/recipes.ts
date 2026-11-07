@@ -18,6 +18,26 @@ export const INSTALL_RECIPE = Object.freeze({
   executable: '/usr/local/bin/npm', args: ['ci', '--ignore-scripts', '--no-audit', '--no-fund',
     '--registry', NPM_RELAY], timeoutMs: 300_000,
 });
+/** Runs inside the worker pod before the dev server. Its output stays in the pod's emptyDir cacheDir
+ * (/tmp/vite-cache) and never enters the shared dependency cache. */
+export const PREBUNDLE_RECIPE = Object.freeze({
+  executable: '/usr/local/bin/node', args: ['/tmp/artifact-vite-prebundle.mjs'], timeoutMs: 300_000,
+});
+/** Host-owned pre-bundle driver. It runs Vite's dev pipeline with the live config (plugin buildStart hooks
+ * included, so plugin cache metadata matches the dev server) but no HTTP, watcher or module transforms,
+ * and exits once the optimizer commits deps/_metadata.json. `vite optimize` skips buildStart, so
+ * vite-plugin-svelte would force a full re-optimization on the dev server's first render. */
+export const LIVE_PREBUNDLE_SCRIPT = `import { existsSync } from 'node:fs';
+import { createServer } from '/workspace/node_modules/vite/dist/node/index.js';
+const server = await createServer({configFile:'/tmp/artifact-vite.config.mjs', mode:'development',
+  server:{middlewareMode:true, ws:false, watch:null}, optimizeDeps:{holdUntilCrawlEnd:false}});
+try {
+  for (let i = 0; !existsSync('/tmp/vite-cache/deps/_metadata.json'); i++) {
+    if (i >= 1100) throw new Error('Pre-bundle did not commit');
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+} finally { await server.close(); }
+process.exit(0);`;
 export const LIVE_RECIPE = Object.freeze({
   executable: '/usr/local/bin/node', args: ['/workspace/node_modules/vite/bin/vite.js',
     '--config', '/tmp/artifact-vite.config.mjs', '--host', '0.0.0.0', '--port', '5173', '--strictPort'], timeoutMs: 300_000,
