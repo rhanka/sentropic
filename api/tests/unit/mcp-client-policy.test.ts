@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  H2A_CLI_CLIENT_ID,
   READ_ONLY_CONNECTOR_CAPABILITIES,
   READ_ONLY_TOOL_ALLOWLIST,
   SENTROPIC_MCP_CLIENT_ID,
   createConnectorAdmission,
   isConnectorCapabilityPermitted,
+  isReadOnlyClient,
   isToolPermitted,
   nonReadOnlyAllowlistEntries,
   resolveMemberWorkspace,
@@ -29,6 +31,13 @@ describe('read-only allowlist per client (DEC-116 parity)', () => {
     for (const tool of ['artifacts_ensure', 'artifacts_publish', 'artifacts_git_commit', 'unknown_tool']) {
       expect(isToolPermitted(SENTROPIC_MCP_CLIENT_ID, tool)).toBe(false);
       expect(isToolPermitted('immo-mcp', tool)).toBe(true);
+    }
+  });
+
+  it('keeps the full write surface for the owner-delegated h2a CLI', () => {
+    expect(isReadOnlyClient(H2A_CLI_CLIENT_ID)).toBe(false);
+    for (const tool of ['artifacts_ensure', 'artifacts_publish', 'artifacts_get']) {
+      expect(isToolPermitted(H2A_CLI_CLIENT_ID, tool)).toBe(true);
     }
   });
 
