@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
-import { createReadStream, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createReadStream, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export async function digest(file) {
@@ -21,15 +19,6 @@ export function archiveConfigDigest(archive) {
   }
   const bytes = execFileSync('tar', ['-xOf', archive, config]);
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-}
-
-export function localConfigDigest(ref, env = process.env) {
-  const dir = mkdtempSync(join(tmpdir(), 'tested-image-config-'));
-  try {
-    const archive = join(dir, 'image.tar');
-    execFileSync('docker', ['image', 'save', '--output', archive, ref], { env });
-    return archiveConfigDigest(archive);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
 export function validate(receipt, expected) {
