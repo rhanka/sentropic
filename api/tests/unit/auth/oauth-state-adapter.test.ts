@@ -11,7 +11,7 @@ import {
 } from '../../../src/db/schema';
 import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
 import { createCmUser } from '../../../src/services/identity/cm-users';
-import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
+import { runCmIdentityWrite, withSerializationRetry } from '../../../src/services/identity/cm-transaction';
 import { cmDeleteForUsers } from '../../utils/cm-identity-test-store';
 
 const now = new Date('2026-01-01T00:00:00.000Z');
@@ -22,8 +22,10 @@ const clientId = 'example-mock-rp';
 
 type StatePort = ReturnType<typeof createOauthStateStoreAdapter>;
 // Each protocol operation gets a real independent request transaction, including races.
-const run = <T>(work: (port: StatePort) => Promise<T>) => runCmIdentityWrite(transaction =>
-  work(createOauthStateStoreAdapter({ transaction, now: () => now })));
+// Production OAuth requests run under withSerializationRetry (cm-auth-binding request()); mirror it so a
+// SERIALIZABLE loser (40001) retries and observes the winner instead of surfacing the abort.
+const run = <T>(work: (port: StatePort) => Promise<T>) => withSerializationRetry(() => runCmIdentityWrite(transaction =>
+  work(createOauthStateStoreAdapter({ transaction, now: () => now }))));
 const createAdapter = () => ({
   findClient: (...args: Parameters<StatePort['findClient']>) => run(port => port.findClient(...args)),
   findServiceClient: (id: string) => run(port => port.findServiceClient!(id)),
