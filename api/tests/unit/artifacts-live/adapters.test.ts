@@ -4,7 +4,8 @@ import { fixture, key, placement } from './fixture';
 import { createLiveWorker, type QualifiedSupervisor } from '../../../src/services/artifacts/live/worker';
 import { withinPhase } from '../../../src/services/artifacts/live/deadline';
 import { fetchLockedTarball } from '../../../src/services/artifacts/live/npm-relay';
-import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, NPM_RELAY, PREBUNDLE_RECIPE }
+  from '../../../src/services/artifacts/live/recipes';
 import { createPostgresCacheStorage } from '../../../src/services/artifacts/live/cache-storage';
 import { createPostgresLiveStore } from '../../../src/services/artifacts/live/postgres';
 
@@ -23,7 +24,7 @@ describe('trusted live adapters', () => {
     expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, artifactEnvironment());
     expect(supervisor.hostFile).toHaveBeenCalledWith(runtime, '/tmp/artifact-vite.config.mjs', expect.stringContaining('clientPort:443'));
     // The pre-bundle is its own supervisor op, after the live config and before the dev server.
-    expect(supervisor.prebundle).toHaveBeenCalledWith(runtime);
+    expect(supervisor.prebundle).toHaveBeenCalledWith(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
     expect(vi.mocked(supervisor.hostFile).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(supervisor.prebundle).mock.invocationCallOrder[0]);
     expect(vi.mocked(supervisor.prebundle).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(supervisor.dev).mock.invocationCallOrder[0]);
     await worker.build(runtime, { id: 'attempt' } as never);
@@ -65,11 +66,25 @@ describe('trusted live adapters', () => {
       async get(ref) { return blobs.get(ref); }, async delete(ref) { blobs.delete(ref); } });
     const cacheKey = 'a'.repeat(64) + '/' + 'b'.repeat(64);
     expect(await storage.read(cacheKey)).toBeUndefined();
-    await storage.admit(cacheKey, { receipt: {} as never, files: [] });
-    expect(await storage.read(cacheKey)).toMatchObject({ files: [] });
+    await storage.admit(cacheKey, { receipt: {} as never, manifest: [] });
+    expect(await storage.read(cacheKey)).toMatchObject({ manifest: [] });
     blobs.set([...blobs.keys()][0], Buffer.from('changed'));
     await expect(storage.read(cacheKey)).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
     await storage.quarantine(cacheKey); expect(await storage.read(cacheKey)).toBeUndefined();
+  });
+  it('should keep one private content-addressed object per dependency file, apart from the manifest pointers', async () => {
+    const blobs = new Map<string, Uint8Array>();
+    const storage = createPostgresCacheStorage({ query: vi.fn() } as never, { async put(ref, bytes) { blobs.set(ref, bytes); },
+      async get(ref) { return blobs.get(ref); }, async delete(ref) { blobs.delete(ref); } });
+    const digest = 'c'.repeat(64);
+    await storage.putFile(digest, Buffer.from('x'));
+    expect([...blobs.keys()]).toEqual([`dependency-cache/v1/files/${digest}`]);
+    expect(await storage.getFile(digest)).toEqual(Buffer.from('x'));
+    expect(await storage.getFile('d'.repeat(64))).toBeUndefined();
+    for (const bad of ['../x', 'C'.repeat(64), 'c'.repeat(63)]) {
+      await expect(storage.putFile(bad, Buffer.from('x'))).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+      await expect(storage.getFile(bad)).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    }
   });
   it('should reject registry paths that resolve outside the fixed relay before transport', async () => {
     const bytes = Buffer.from('tarball');
