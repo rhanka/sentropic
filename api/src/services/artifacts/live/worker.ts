@@ -49,6 +49,7 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
     },
     live: runtime => supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment()),
     async build(runtime, attempt) {
+      // FIX3 (s-archi 16:40): the clean build alone runs with the W4 build heap (1024).
       const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, buildEnvironment());
       await supervisor.terminate(runtime);
       return candidate;
