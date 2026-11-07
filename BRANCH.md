@@ -20,7 +20,6 @@
   - `api/src/services/artifacts/live/recipes.ts` (INSTALL_RECIPE offline only, W2 §2)
   - `api/src/services/artifacts/live/README.md`
   - `api/tests/unit/artifacts-live/supervisor*.ts` (tests and the shared fake pod)
-  - `api/tests/unit/artifacts-live/cache.test.ts` (INSTALL_RECIPE assertion only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -48,5 +47,5 @@
 - [x] Lot 0: plan r3.5, A-LIVE v2 §3.2/§8.1/§8.3/§8.4 and W2 contract read; previous uncommitted draft replaced (it trusted pod self-attestation of relay denial and pushed no bytes).
 - [x] Lot 1: signed bounded frame (Ed25519, public key for the pod spec) and bounded transfer/snapshot reader, tests first.
 - [x] Lot 2: `createSupervisorTransport` implementing every `QualifiedSupervisor` method, tests first.
-- [ ] Lot 3: offline clean install over the transport (tarballs staged into the pod npm cache, `npm ci --offline`), tests first.
+- [x] Lot 3: offline clean install over the transport (tarballs staged into the pod npm cache, `npm ci --offline`), tests first.
 - [ ] Lot 4: README transport section; scoped tests and typecheck green; branch pushed.

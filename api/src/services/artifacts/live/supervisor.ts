@@ -6,6 +6,7 @@ import { conflict, LiveError, type LiveAttempt, type LiveRuntime } from './recor
 import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE } from './recipes';
 import type { QualifiedSupervisor } from './worker';
 import { createSupervisorChannel, failure, type ChannelOptions } from './supervisor-channel';
+import { createCleanInstall } from './supervisor-install';
 import { OUTPUT_LIMITS, TREE_LIMITS, candidateManifestDigest, type TransferFile } from './supervisor-transfer';
 
 /** Trusted byte sources: the pod has no egress (W2 §1), so the supervisor pushes every byte it needs. */
@@ -37,7 +38,8 @@ const outputFailure = failure('builder_unavailable', 'output_invalid');
 const cacheFailure = failure('dependency_cache_invalid');
 
 export function createSupervisorTransport(options: SupervisorOptions) {
-  const { call, transfer, snapshot } = createSupervisorChannel(options);
+  const core = createSupervisorChannel(options);
+  const { call, transfer, snapshot } = core;
   async function output(runtime: LiveRuntime) {
     const files = await snapshot(runtime, 'output', OUTPUT_LIMITS, 'refuse', outputFailure);
     if (!files.some(file => file.path === OUTPUT_ENTRY)) unavailable('output_invalid');
@@ -115,5 +117,5 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if (candidateManifestDigest(await output(runtime)) !== attempt.candidateDigest) unavailable('output_changed');
     },
   };
-  return supervisor;
+  return { ...supervisor, cleanInstall: createCleanInstall(core, options.sources.source) };
 }
