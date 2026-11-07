@@ -42,6 +42,7 @@
   - `.github/workflows/**` under BRGHCR-EX2
 
 ## Feedback Loop
+- [x] GHCR-FINAL-HEAD — Remove the temporary source-access workflow from the final tree. Already-enqueued run 42314083708 remains bound to 259d0f805 and completes the authorized copies independently. No steady-state workflow, Make recipe or script uses source-registry credentials; final-head CI and copy receipts remain required.
 - [x] GHCR-SOURCE-READY — Main run 42304697239 passed every API/UI qualification and both source image publishers; final remote preservation can now proceed. E2E bootstrap has already succeeded and is removed from the temporary workflow.
 - [x] GHCR-CANDIDATE-ID — Read the main producer job logs without credentials: API config da6af026... (job 128191555204), UI config ac35dc8c... (job 128196327671). The temporary remote copy also requires these exact tested config IDs, in addition to equal source/destination manifest digests.
 - [x] GHCR-GUARD — The repository-wide host guard also rejects escaped regex/JSON hostname references, covering the same authorization-regex form migrated by this train. Hidden-path negative fixtures cover literal and single/double escaped forms without printing content.
@@ -59,7 +60,7 @@
 - [x] GHCR-REF2 — Base workloads, both tier overlays, recovery pins and sync CronJobs now use GHCR; historical baseline URLs follow the owner-requested repository-wide removal.
 - [x] GHCR-REF1 — Switch A4 authorization contracts, identity/artifact render fixtures and source API digest validation to GHCR.
 - [x] BRGHCR-EX1 — Owner explicitly requests Make registry migration/guard/copy entry points; impact: image delivery only; rollback: revert this train. Local mechanical scope uses the installed host harness via .tmp/ghcr-ops.mk to avoid a forbidden local build.
-- [x] BRGHCR-EX2 — Owner explicitly requests GHCR-only CI with packages:write; temporary remote-copy workflow is deleted after completion; impact: container registry only; rollback: revert this train without changing cluster Secrets.
+- [x] BRGHCR-EX2 — Owner explicitly requests GHCR-only CI with packages:write; delete the temporary remote-copy workflow after enqueueing its immutable one-shot run; impact: container registry only; rollback: revert this train without changing cluster Secrets.
 - [x] Preserve BR-82 tested-artifact joins; remote published config digest equals the loaded/tested image ID; manifest digest is recorded before deployment.
 - [x] Public package visibility: API/UI already public; CI created E2E and set it public. All three package API records now report public; recovery images are verified anonymously by exact manifest digest. No owner click remains.
 
