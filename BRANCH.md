@@ -5,7 +5,7 @@
 - [x] Response `{workspaces:[{workspaceRef, name, role, publishable}]}`: exactly the `createArtifactAuthorization.read` predicate for the token tenant; `publishable` = that decision's `writable`.
 
 ## Scope / Guardrails
-- [x] Branch feat/mcp-workspaces-list from origin/main a5d8dee87; worktree tmp/mcp-workspaces-list; ENV=test-ws-list.
+- [x] Branch feat/mcp-workspaces-list from origin/main a5d8dee87; worktree tmp/mcp-workspaces-list; ENV=test-ws-list (build), ENV=test-ws-list-fix (s-archi fix lane).
 - [x] Wagon: no PR, no version bump, no lock, APP-P1 pin, fixture or L5 manifest change; the train 1b integration lane merges it.
 - [x] Make only; no Python, attribution trailers, CI skips or reruns.
 - [x] Wired as a `createRegistryDispatchRouter` port, never a registry provider; the APP-P1 manifest stays at 4 tools.
@@ -20,6 +20,7 @@
   - `api/src/services/artifacts/authorization.ts`
   - `api/src/services/artifacts/instance.ts`
   - `api/src/services/artifacts/workspace-directory.ts`
+  - `api/src/services/artifacts/transport.ts`
   - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
   - `api/tests/api/mcp-workspaces-list-directory.test.ts`
   - `api/tests/api/registry-dispatch-terminal.test.ts`
@@ -37,7 +38,8 @@
 
 ## Feedback Loop
 - [x] acknowledge: test list (a)-(h) from s-archi (session sentropic-15); invalid arguments answer -32600 invalid_request (HTTP 400).
-- [ ] attention: local scoped run blocked by the disk rule (host above 90%, no new local image build); validation runs in the train 1b CI.
+- [x] attention: local scoped run first blocked by the disk rule; unblocked by the free-space rule (>= 30 GB free), run in the fix lane.
+- [x] s-archi blocking (1): tools/list keeps listing workspaces_list when the default workspace cannot be bound (discover maps only access_denied to no registry tools); test (i).
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -54,4 +56,5 @@
   - [x] `api/tests/api/mcp-resource-server.test.ts` (h) REST stays 401 for an OAuth bearer.
   - [x] `api/tests/api/registry-dispatch-terminal.test.ts`, `api/tests/api/app-artifacts-transport.test.ts`: tools/list carries workspaces_list.
 - [x] Lot 2: implementation (shared authority source, workspace directory, dispatcher port, wiring).
-- [ ] Lot gate: `make typecheck-api`, `make lint-api`, scoped `make test-api-endpoints SCOPE=...` in the train 1b CI.
+- [x] Lot 3: s-archi fix (1) in `transport.ts` discover, test (i) in the dispatch and transport suites.
+- [x] Lot gate (ENV=test-ws-list-fix): `make exec-api CMD="npm run typecheck"` 0 errors; `make exec-api CMD="npm run lint"` 0 errors; scoped `make test-api-endpoints` on the five files (mcp-workspaces-list-dispatch, mcp-workspaces-list-directory, app-artifacts-transport, registry-dispatch-terminal, mcp-resource-server) 65/65 passed; test (i) red without the fix.
