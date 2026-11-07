@@ -2592,6 +2592,7 @@ jobs:
           fi
           printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
           chmod 600 kubeconfig.yaml
+          echo "Backup target API server: $(KUBECONFIG="$PWD/kubeconfig.yaml" kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
           make db-backup-prod KUBECONFIG="$PWD/kubeconfig.yaml" ENV=test-ci-restore
       - name: Test restore and smoke tests
         run: |
