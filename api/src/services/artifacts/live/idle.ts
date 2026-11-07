@@ -46,7 +46,8 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
     await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING') conflict('stale_fence');
-      state.runtime.phase = 'BUILD_QUEUED';
+      // The §8.4 evidence joins the pinned inputs, known here; the queued build only adds the candidate digest.
+      state.runtime.phase = 'BUILD_QUEUED'; state.runtime.attempt!.evidence = buildEvidence(source, cache);
     });
   } catch (error) {
     if (stale(error)) return;
@@ -72,7 +73,6 @@ async function admittedBuild(ports: LivePorts, key: LiveKey, runtime: LiveRuntim
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING' || state.runtime.attempt?.id !== attempt.id) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt.candidateDigest = candidate.candidateDigest;
-      state.runtime.attempt.evidence = buildEvidence(source, cache);
     });
     await ports.worker.verify(runtime, runtime.attempt!);
     const finalHead = await observeHead(ports, key, runtime);
