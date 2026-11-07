@@ -29,9 +29,21 @@ const CURRENT_KEY_VERSION = 'v1';
  * Do not "simplify" by trimming, normalising, or base64-decoding the seed: each changes the sha256 and
  * bricks every stored secret.
  */
+const LEGACY_V1_SEED = 'dev-secret-key-change-in-production-please';
+
 const resolveV1Key = (): Buffer => {
-  const seed = env.SECRET_ENCRYPTION_KEY || 'dev-secret-key-change-in-production-please';
+  const seed = env.SECRET_ENCRYPTION_KEY || LEGACY_V1_SEED;
   return createHash('sha256').update(seed).digest();
+};
+
+/**
+ * True only for a provisioned at-rest key: non-blank and not the committed development seed.
+ * Fail-closed custody surfaces (SG0-app enrollment) gate on this; the shared `v1` fallback above
+ * stays unchanged for every existing consumer.
+ */
+export const isProvisionedSecretEncryptionKey = (value: string | undefined): boolean => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 && trimmed !== LEGACY_V1_SEED;
 };
 
 /**
