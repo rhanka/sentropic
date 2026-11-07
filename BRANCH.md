@@ -26,8 +26,13 @@
   - `scripts/ci/consumer-contracts.test.mjs`
   - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `.github/workflows/ci.yml`
-- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
+  - `scripts/ci/image-config.mjs`
+  - `scripts/ci/resolve-ui-image.mjs`
+  - `scripts/ci/resolve-ui-image.test.mjs`
+  - `scripts/ci/publish-image.mjs`
+  - `scripts/ci/publish-image.test.mjs`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
@@ -36,6 +41,7 @@
   - `deploy/k8s/base/**` only if a remaining pull-secret reference is found.
 
 ## Feedback Loop
+- [x] BR936-EX2 (owner-requested three-job repair): allow the Make consumer test recipe to install pinned semver as its sibling targets do; impact: test tooling only; rollback: revert this recipe change. UI resolver/publication changes normalize the actual local archive config identity without weakening registry equality. Run 42343554904: consumer job 128316911845 lacks semver; UI job 128316694146 compares a containerd manifest ID with a config digest; security join 128317325400 rejects the consequent skipped UI scan, while API/tool/E2E scans pass.
 - [x] BR936-EX1 (owner-requested CI repair): allow ci.yml global-filter coverage for BR-83 policy edits; impact: policy edits select full integration; rollback: remove these filter entries with the classifier repair.
 - [x] CI run 42339681690, job 128304466738: deployment manifests were classified runtime-security, requiring unselected application suites; add a manifest-only classification with mandatory manifest validation and unchanged installed tuples.
 - [x] ROOT-CAUSE: prod inherits GHCR main aliases; Always would resolve A4 code without the prod A4 checkpoint. API and auth-idp run different manifest digests and require separate deployment pins.
@@ -57,6 +63,8 @@
 - [x] This lane never runs that command; merging or publishing alone does not change running production pods.
 
 ## Plan / Todo (lot-based)
+- [x] **Consumer bootstrap**: the unchanged real Make recipe reproduced the missing-semver failure; pinned bootstrap now passes all 20 classifier, 25 consumer and 10 installed-tuple tests on test-prod-ghcr-pin without a new image build.
+- [ ] **Three-job repair**: bootstrap the real consumer Make recipe; regress canonical UI reuse with distinct manifest/config IDs and config drift; verify the actual b44031 pull plus publication identity fixtures and security join; push, retain logs/state in .tmp/rv/fix-936-931.md and exit without CI observation. Conductor imports this request and results into Track.
 - [x] **CI repair**: classifier regression failed before the fix; 19 classification, 24 consumer, 10 tuple and 41 real-workflow tests PASS through Make. Exact run-4510 dispatch replay PASS with deployment-only selection, required manifest validation and unchanged tuples. Policy edits select full integration. Conductor imports this request and .tmp/rv/fix-936-931.md into Track.
 - [x] **Review P1 classifier**: restrict Kubernetes deployment-only classification to YAML/JSON manifests; shell, SQL and other executable inputs retain full runtime/security integration, including generated ConfigMap sources. Regression reproduced before the fix; scoped classifier/consumer validation recorded in .tmp/rv/fix-936-931.md for conductor Track import.
 - [x] **Review P1 images**: the whole-render immutability regression failed on artifact-content before pinning; preserve the live PostgreSQL digest and API release for closed content/export consumers. Include every container, init container and ephemeral container in the production image assertion; evidence and targeted validation go to .tmp/rv/fix-936-931.md for conductor Track import.
