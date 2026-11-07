@@ -12,6 +12,11 @@ export const key = { storageScopeId: 'scope-a', artifactId: 'artifact-a' };
 export const owner = { principalId: 'owner' };
 export const placement = builderPlacement({ ARTIFACT_BUILDER_NAMESPACE: 'artifact-builders-test',
   ARTIFACT_BUILDER_SERVICE_DOMAIN: 'artifact-builders-test.svc.cluster.local' });
+/** GB1 inputs of every fixture commit: a lock without script entries, so no qualification file is required. */
+export const gb1Descriptor = JSON.stringify({ version: 1, buildScript: 'build:artifact', outputDir: 'dist', lockfilePath: 'package-lock.json' });
+const gb1Manifest = { name: 'fixture', version: '1.0.0', scripts: { 'build:artifact': 'vite build' } };
+const gb1 = { subPath: '', files: { 'sentropic.artifact.json': gb1Descriptor, 'package.json': JSON.stringify(gb1Manifest),
+  'package-lock.json': JSON.stringify({ lockfileVersion: 3, packages: { '': gb1Manifest } }) } };
 const idOf = (k: LiveKey) => `${k.storageScopeId}/${k.artifactId}`;
 export function fixture(options: { capacity?: number } = {}) {
   const states = new Map<string, LiveState>(); const drafts = new Map<string, DraftSnapshot>();
@@ -66,7 +71,7 @@ export function fixture(options: { capacity?: number } = {}) {
     forge: { head: vi.fn(async () => binding.headSha), fastForward: vi.fn(async (_key, before, after) => before < after),
       reachable: vi.fn(async () => true),
       snapshot: vi.fn(async (_key, headSha) => ({ headSha, treeSha: `tree-${headSha}`, lockfile: new Uint8Array(),
-        cacheIdentity: {} as never, stagingRef: `clean-${headSha}`, descriptorDigest: `descriptor-${headSha}` })) },
+        cacheIdentity: {} as never, stagingRef: `clean-${headSha}`, gb1 })) },
     drafts: { current: vi.fn(async k => ({ ...draftOf(k) })), checkpoint: vi.fn(async () => { events.push('checkpoint'); }),
       advanceClean: vi.fn(async (k, _expected, headSha) => {
         const next = { ...draftOf(k), baseHeadSha: headSha, treeSha: `tree-${headSha}` }; drafts.set(idOf(k), next); return next;
