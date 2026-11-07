@@ -5,7 +5,7 @@ import { withinPhase } from './deadline';
 import { revive } from './revive';
 
 /** Called after AL-D commits an admitted revision/result. Replays cannot reproject an older draft. */
-export async function projectRevision(ports: LivePorts, key: LiveKey, revision: number) {
+export async function projectRevision(ports: LivePorts, key: LiveKey, revision: string) {
   const binding = await currentBinding(ports, key);
   const draft = await ports.drafts.current(key, binding.generation);
   if (draft.revision !== revision) throw new LiveError('git_live_revision_moved');
