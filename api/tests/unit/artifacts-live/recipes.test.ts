@@ -3,6 +3,7 @@ import {
   INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, NODE_BUILD_HEAP_OPTIONS, NODE_HEAP_OPTIONS,
   PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment, liveViteConfig,
 } from '../../../src/services/artifacts/live/recipes';
+import { placement } from './fixture';
 
 const POD = `artifact-${'a'.repeat(40)}`;
 
@@ -34,14 +35,14 @@ describe('offline pod recipes (W2 static deny)', () => {
     expect(LIVE_PREBUNDLE_SCRIPT).toContain("configFile:'/tmp/artifact-vite.config.mjs'");
     expect(LIVE_PREBUNDLE_SCRIPT).toContain("existsSync('/tmp/vite-cache/deps/_metadata.json')");
     expect(LIVE_PREBUNDLE_SCRIPT).toContain('middlewareMode:true, ws:false, watch:null');
-    expect(liveViteConfig('s1', POD)).toContain("cacheDir:'/tmp/vite-cache'");
+    expect(liveViteConfig('s1', POD, placement)).toContain("cacheDir:'/tmp/vite-cache'");
   });
 
   it('should bind Vite to loopback behind the bootstrap that owns :5173', () => {
     expect(LIVE_UPSTREAM_PORT).toBe(5174);
     expect(LIVE_RECIPE.args).toEqual(['/workspace/node_modules/vite/bin/vite.js', '--config',
       '/tmp/artifact-vite.config.mjs', '--host', '127.0.0.1', '--port', '5174', '--strictPort']);
-    const config = liveViteConfig('s1', POD);
+    const config = liveViteConfig('s1', POD, placement);
     expect(config).toContain("host:'127.0.0.1', port:5174, strictPort:true");
     expect(config).not.toContain('0.0.0.0');
     expect(config).toContain('"/_live/s1/hmr"');
