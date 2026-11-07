@@ -10,7 +10,7 @@ import {
   resolveGitHubAppHostConfig,
   type GitHubAppForge,
   type GitHubAppHostConfig,
-} from '../../../src/services/cluster-mesh/github-app-host';
+} from '../../../../src/services/cluster-mesh/github-app-host';
 
 /**
  * A-LIVE W1 / plan lot M2-S — SG0-app host composition contract tests.
