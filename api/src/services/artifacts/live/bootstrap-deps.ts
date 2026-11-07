@@ -1,58 +1,76 @@
 /**
- * Pod agent section: W2 offline dependency acquisition.
- * - `tarballs` stores trusted-cache bytes at npm's content-addressed path after re-verifying SRI.
- * - `install` runs the frozen `npm ci --offline` in a fresh /dependencies from host manifests only.
- * - `export` pages the installed regular files back to the trusted cache for its sealed receipt.
- * Materialization lives in bootstrap-materialize.ts.
- * Acquisition (`tarballs`, `install`, `export`) is refused once repository code ran in this pod.
+ * Pod agent section: W2 offline clean install (W3 `install { recipe, runId, source, cache, tarballs }`).
+ * - `source` is the staged source tree, placed in a fresh /tmp/install (no node_modules, .npmrc or .yarnrc).
+ * - `cache` carries the trusted-cache tarballs; each is re-verified against its SRI and stored at npm's
+ *   content-addressed path in /tmp/npm-cache. A lockfile entry without a staged literal integrity refuses
+ *   with `integrity` before npm runs, so the install never depends on a fetch.
+ * - Then the frozen `npm ci --offline --ignore-scripts` runs in /tmp/install with the host environment.
+ * The supervisor exports the result with `snapshot { root: 'dependencies' }` (bootstrap-procs.ts).
  */
 export const DEPENDENCY_OPS_SOURCE = String.raw`
 AGENT_SECTIONS.push(function dependencyOps(ctx) {
   const { state, at } = ctx;
-  const DEP = { files: 65536, bytes: 536870912, exportFiles: 4096, exportBytes: 12582912, tarballs: 20000 };
+  const INSTALL_DIR = '/tmp/install';
   const CONTENT = '/tmp/npm-cache/_cacache/content-v2/';
-  const reset = () => { state.installed = null; state.tarballs = 0; };
-  ctx.resets.push(reset); reset();
-  const trusted = () => { if (state.tainted || state.phase !== 'stopped') agentFail('failed', 'phase_refused'); };
-
-  async function listInstalled() {
-    const out = []; let total = 0;
-    const walk = async (rel) => {
-      for (const name of (await agentFs.readdir(at('/dependencies/' + rel))).sort()) {
-        const path = rel ? rel + '/' + name : name;
-        const info = await agentFs.lstat(at('/dependencies/' + path));
-        if (info.isSymbolicLink()) continue;
-        if (info.isDirectory()) { await walk(path); continue; }
-        if (!info.isFile()) agentFail('failed', 'special_file');
-        if (!path.split('/').includes('node_modules')) continue;
-        total += info.size;
-        if (info.size > AGENT_LIMITS.fileBytes || total > DEP.bytes || out.length >= DEP.files) agentFail('limit', 'limit_exceeded');
-        out.push({ path, mode: info.mode & 0o111 ? 365 : 292, size: info.size });
-      }
-    };
-    await walk('');
-    return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const SRI = /^(sha256|sha384|sha512)-([A-Za-z0-9+/]+={0,2})$/;
+  ctx.resets.push(['/tmp', () => { state.installed = false; }]);
+  state.installed = false;
+  async function fileDigest(algo, path) {
+    const hash = agentHash(algo);
+    const handle = await agentFs.open(path, 'r');
+    try { for await (const chunk of handle.createReadStream({ autoClose: false })) hash.update(chunk); }
+    finally { await handle.close(); }
+    return hash.digest();
   }
-  ctx.define('install', ['manifests'], async ({ manifests }) => {
-    trusted();
+  async function stageTarballs(cache, tarballs) {
+    const set = await ctx.commitTransfer(cache.transfer, cache.treeDigest, 'npm-cache');
+    const staged = new Set();
+    try {
+      const byPath = new Map(set.files.map((f) => [f.path, f]));
+      if (!Array.isArray(tarballs) || tarballs.length !== byPath.size) agentFail('integrity', 'integrity_missing');
+      for (const tarball of tarballs) {
+        agentRecord(tarball, ['path', 'integrity']);
+        const file = byPath.get(tarball.path); byPath.delete(tarball.path);
+        const match = SRI.exec(typeof tarball.integrity === 'string' ? tarball.integrity : '');
+        if (!file || !match) agentFail('integrity', 'integrity_missing');
+        const expected = Buffer.from(match[2], 'base64');
+        if (!(await fileDigest(match[1], at(file.staged))).equals(expected)) agentFail('integrity', 'integrity_mismatch');
+        staged.add(tarball.integrity);
+        const hex = expected.toString('hex');
+        const target = at(CONTENT + match[1] + '/' + hex.slice(0, 2) + '/' + hex.slice(2, 4) + '/' + hex.slice(4));
+        if (await agentFs.lstat(target).catch(agentMissing)) continue;
+        await agentFs.mkdir(agentPath.dirname(target), { recursive: true });
+        await agentFs.chmod(at(file.staged), 0o444);
+        await agentFs.rename(at(file.staged), target);
+      }
+    } finally { await set.dispose(); }
+    return staged;
+  }
+  async function requireCovered(staged) {
+    let lock = null;
+    try { lock = JSON.parse(await agentFs.readFile(at(INSTALL_DIR + '/package-lock.json'), 'utf8')); } catch { agentFail('failed', 'lockfile_missing'); }
+    if (!lock || !lock.packages || typeof lock.packages !== 'object' || Array.isArray(lock.packages)) agentFail('failed', 'invalid_lockfile');
+    for (const [path, entry] of Object.entries(lock.packages)) {
+      if (!path || !entry || typeof entry !== 'object' || entry.link === true || typeof entry.resolved !== 'string'
+        || !/^https?:\/\//.test(entry.resolved)) continue;
+      if (typeof entry.integrity !== 'string' || !staged.has(entry.integrity)) agentFail('integrity', 'integrity_missing');
+    }
+  }
+  ctx.define('install', ['recipe', 'runId', 'source', 'cache', 'tarballs'], async ({ recipe, runId, source, cache, tarballs }) => {
+    if (recipe !== 'install' || typeof runId !== 'string' || !AGENT_ID.test(runId)) agentFail('failed', 'invalid_args');
+    agentArgs(source, ['transfer', 'treeDigest']); agentArgs(cache, ['transfer', 'treeDigest']);
     if (state.installed) agentFail('failed', 'already_installed');
-    if (!Array.isArray(manifests) || manifests.length === 0 || manifests.length > 1024) agentFail('failed', 'invalid_args');
-    const batch = new Map();
-    for (const manifest of manifests) {
-      agentRecord(manifest, ['path', 'contentBase64']);
-      const path = agentSourcePath(manifest.path);
-      if (path !== 'package-lock.json' && path !== 'package.json' && !path.endsWith('/package.json')) agentFail('failed', 'invalid_path');
-      if (batch.has(path)) agentFail('failed', 'duplicate_path');
-      batch.set(path, agentBytes(manifest.contentBase64, AGENT_LIMITS.fileBytes));
-    }
-    if (!batch.has('package.json') || !batch.has('package-lock.json')) agentFail('failed', 'lockfile_missing');
-    for (const [path, data] of batch) {
-      await agentFs.mkdir(agentPath.dirname(at('/dependencies/' + path)), { recursive: true });
-      await agentFs.writeFile(at('/dependencies/' + path), data, { flag: 'wx', mode: 0o644 });
-    }
-    if (await ctx.runToExit(ctx.recipes.INSTALL, '/dependencies') !== 0) agentFail('failed', 'install_failed');
-    state.installed = await listInstalled();
-    return { files: state.installed.length, bytes: state.installed.reduce((n, f) => n + f.size, 0) };
+    if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
+    if (await agentFs.lstat(at(INSTALL_DIR)).catch(agentMissing)) agentFail('failed', 'duplicate_path');
+    state.installed = true;
+    const set = await ctx.commitTransfer(source.transfer, source.treeDigest, 'install');
+    try {
+      const paths = set.files.map((f) => agentSourcePath(f.path));
+      if (!paths.includes('package.json') || !paths.includes('package-lock.json')) agentFail('failed', 'lockfile_missing');
+      for (const file of set.files) await ctx.place(file, INSTALL_DIR);
+    } finally { await set.dispose(); }
+    await requireCovered(await stageTarballs(cache, tarballs));
+    return { exitCode: await ctx.runToExit(ctx.recipes.install, INSTALL_DIR) };
   });
 });
 `;
