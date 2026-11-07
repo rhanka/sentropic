@@ -13,8 +13,7 @@ export function artifactEnvironment() {
     npm_config_update_notifier: 'false', ...ARTIFACT_PUBLIC_ENV };
 }
 export const INSTALL_RECIPE = Object.freeze({
-  executable: '/usr/local/bin/npm', args: ['ci', '--ignore-scripts', '--no-audit', '--no-fund',
-    '--registry', NPM_RELAY], timeoutMs: 300_000,
+  executable: '/usr/local/bin/npm', args: ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], timeoutMs: 300_000,
 });
 export const LIVE_RECIPE = Object.freeze({
   executable: '/usr/local/bin/node', args: ['/workspace/node_modules/vite/bin/vite.js',
