@@ -1,7 +1,7 @@
 import type { CacheReceipt } from './cache';
 import type { DraftSnapshot, LivePorts, SourceSnapshot } from './ports';
 import type { LiveAttempt, LiveRuntime } from './records';
-import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE, liveViteConfig } from './recipes';
+import { artifactEnvironment, BUILD_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, liveViteConfig, PREBUNDLE_RECIPE } from './recipes';
 
 /** GB4's bounded trusted transport; repository processes cannot invoke this interface.
  * It enforces monotonic session/lease/route fences and whole-process-tree cancellation.
@@ -15,6 +15,8 @@ export interface QualifiedSupervisor {
   dependencies(runtime: LiveRuntime, cache: CacheReceipt, options: { readOnly: true; verifyHash: true }): Promise<void>;
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
+  /** Runs to completion in the worker pod; writes only its emptyDir cacheDir, never the shared dependency cache. */
+  prebundle(runtime: LiveRuntime, command: typeof PREBUNDLE_RECIPE, env: ReturnType<typeof artifactEnvironment>): Promise<void>;
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
     Promise<{ revision: number; routeEpoch: number }>;
   build(runtime: LiveRuntime, attempt: LiveAttempt, command: typeof BUILD_RECIPE,
@@ -37,6 +39,8 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
     restore: (runtime, draft) => supervisor.overlay(runtime, draft),
     async live(runtime) {
       await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName));
+      await supervisor.hostFile(runtime, '/tmp/artifact-vite-prebundle.mjs', LIVE_PREBUNDLE_SCRIPT);
+      await supervisor.prebundle(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
       return supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment());
     },
     async build(runtime, attempt) {
