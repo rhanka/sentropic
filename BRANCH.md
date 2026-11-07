@@ -33,6 +33,9 @@
 ## Feedback Loop
 - [x] Named port for W3 (supervisor) and W7 (builder service): the existing subpath `@sentropic/artifacts/server/build-contract` re-exports the integrity, output and receipt validators; no new package export. A-LIVE §8.4 defines the receipt join; no invented cross-lane contract.
 
+- [x] Real Immo lock probe (radar-immobilier origin/main cc9f7ce2c, not committed): today dependency_integrity_missing (607 gaps); with a full map, 15 of 19 script entries lack literal SRI and stay install_script_not_allowlisted until the W6 upstream repair; simulated repair accepted with 19 disabled rows and an empty allowlist.
+- [x] Fixed: tarball-bundled dependencies (bundleDependencies, e.g. @tailwindcss/oxide-wasm32-wasi) were refused as dep_outside_lock.
+
 ## AI Flaky tests
 - [ ] No flaky allowance, timeout increase or new skip.
 
@@ -42,11 +45,11 @@
 - [x] Rationale: lane W5 of the parallel alive plan; one wagon among W1-W11, merged by the train integration lane.
 
 ## UAT Management (in orchestration context)
-- [ ] Wagon: branch pushed, scoped tests green locally; no PR, no CI polling (relay to the conductor).
+- [x] Wagon: branch pushed, scoped tests green locally; no PR, no CI polling (relay to the conductor).
 
 ## Plan / Todo (lot-based)
 - [x] Lot 1: failing tests for integrity coverage, script qualification, receipt verifier, output boundaries.
 - [x] Lot 2: host integrity map coverage + typed `dependency_integrity_missing`/`dependency_integrity_mismatch` refusals + script qualification rows (A-LIVE §7.2-7.3, §3.4).
 - [x] Lot 3: pure mandatory receipt schema + verifier with anti-replay and falsified-digest refusals (A-LIVE §8.4; G0 §4.3).
 - [x] Lot 4: candidate output ceiling gate, boundary fixtures 255/256 files, 16 MiB±1, 64 MiB±1 (A-LIVE §8.3, §10 lot 2).
-- [ ] Lot 5: scoped green (test-artifacts, typecheck-artifacts, lint-artifacts), scope-check per commit, wagon push, French report.
+- [x] Lot 5: scoped green (test-artifacts build-* 62/62, typecheck-artifacts, lint-artifacts), scope-check C2 PASS, wagon push, French report.
