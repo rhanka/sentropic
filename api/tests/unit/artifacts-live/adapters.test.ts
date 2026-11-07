@@ -31,8 +31,10 @@ describe('trusted live adapters', () => {
     const previous = process.env.NODE_OPTIONS; process.env.NODE_OPTIONS = '--max-old-space-size=8192';
     try { await createLiveWorker(supervisor).live(runtime); }
     finally { if (previous === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = previous; }
-    expect(calls).toEqual(['hostFile', 'hostFile', 'prebundle', 'dev']); expect(supervisor.dependencies).not.toHaveBeenCalled();
-    expect(supervisor.hostFile).toHaveBeenNthCalledWith(2, runtime, PREBUNDLE_RECIPE.args[0], LIVE_PREBUNDLE_SCRIPT);
+    expect(calls).toEqual(['hostFile', 'prebundle', 'dev']); expect(supervisor.dependencies).not.toHaveBeenCalled();
+    // The bootstrap embeds the frozen pre-bundle script; only the Vite config crosses as a host file.
+    expect(supervisor.hostFile).toHaveBeenCalledOnce();
+    expect(supervisor.hostFile).toHaveBeenCalledWith(runtime, '/tmp/artifact-vite.config.mjs', expect.any(String));
     expect(supervisor.prebundle).toHaveBeenCalledWith(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
     expect(PREBUNDLE_RECIPE.args).toEqual(['/tmp/artifact-vite-prebundle.mjs']);
     // Same host config and emptyDir cacheDir as the dev server; never the read-only shared dependency mount.
