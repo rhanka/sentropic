@@ -147,7 +147,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **Hotfix — bind publication to tested config bytes**
   - [x] Read common rules, MASTER, workflow and testing; branch C1 passes on the requested branch.
-  - [ ] Record configDigest from the tested archive separately from local imageId; preserve source, archive and loaded-image guards.
+  - [x] Record configDigest from the tested archive separately from local imageId; preserve source, archive and loaded-image guards.
   - [ ] Reject existing different configs before push; preserve canonical UI reuse across Docker stores.
   - [ ] Scoped tests: image-receipt.test.mjs, publish-image.test.mjs, resolve-ui-image.test.mjs and ghcr-images.test.mjs, including OCI manifest IDs, absent tags, collisions and alias drift.
   - [ ] Independent review, scope C2 and whitespace checks; no application, version or lock change.
