@@ -11,7 +11,7 @@ const env = () => ({ Utilities: mockUtilities(), PropertiesService: { getScriptP
 describe('GAS bundle (G1)', () => {
   it('A1 loads in a vm context with only mocked globals (no Promise/TextEncoder/crypto) and a fetch call fails', () => {
     const { ctx, api } = loadBundle(built.code, env());
-    expect(Object.keys(api)).toContain('probe');
+    expect(Object.keys(api)).toEqual(expect.arrayContaining(['probe', 'createGasViewerIdentity', 'createDossierAccess']));
     expect(() => api.init(env(), { mode: 'store' })).not.toThrow();
     expect(() => vm.runInContext('UrlFetchApp.fetch("https://example.invalid")', ctx)).toThrow(/UrlFetchApp is not defined/);
   });
