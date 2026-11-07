@@ -4,6 +4,7 @@ import { createArtifactTransport } from '../../src/services/artifacts/transport'
 import { createArtifactHttpRouter } from '../../src/routes/namespaces/artifacts';
 import { createRegistryDispatchRouter } from '../../src/services/mcp/registry-dispatch';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
+import { ArtifactOperationError } from '@sentropic/artifacts/server/outcome-contract';
 
 const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'client-a', credentialId: 'token-a' };
 function fixture() {
@@ -51,6 +52,8 @@ describe('compiled app artifact transports', () => {
       .toEqual(['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish']);
     bind.mockRejectedValueOnce(new Error('revoked'));
     await expect(transport.discover(identity, 'workspace-a', ['mcp:discover'])).rejects.toThrow();
+    bind.mockRejectedValueOnce(new ArtifactOperationError('access_denied'));
+    expect(await transport.discover(identity, '', ['mcp:discover'])).toEqual([]);
     expect(await transport.discover(identity, 'workspace-a', [])).toEqual([]);
   });
   it('should mount HTTP effects with host identity and preserve package status', async () => {
