@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.20
+
+- Add the `@sentropic/artifacts/live-host` subpath: single live-host candidate digest with pinned vectors,
+  SG4b handoff seal and receipt verification with key rotation, A-LIVE 8.3 publication recheck and
+  pending handling shared by `acceptHandoff`, live assertion, control and fence formats, and the host
+  build API types with signed job requests. Additive; no existing export changes.
+- Includes the 0.2.19 git-backed tool routing below (never published separately).
+
+- Route `artifacts_fetch_app_source`, `artifacts_git_attach` and `artifacts_git_publish`
+  through `createHttpArtifactApp` and the MCP executor (G0 v3 §1.3; A-LIVE v2 S03).
+  `createGitToolService` composes the injected binding store, registry, code-rights,
+  GitPort and build executor ports; a missing port is a closed 503 refusal.
+- `assertArtifactsTransportProfile` admits the three tools. Existing catalogue
+  entries are byte-identical; `artifacts_list_app_sources` stays unrouted.
+- `git_attach` checks the current code right on every path before any registry or
+  forge call, and admits every executor through the host build port at attach.
+- Additive migration `0012_git_attach_intents.sql`: a durable attach intent written
+  before `createBranch` keeps a crash retry deterministic, and the attach event of a
+  created branch carries `branchCreated: true` (A-LIVE v2 §5.3.1).
+- The served authoring guide describes the git-backed path and the current caps.
+
 ## 0.2.18
 
 - Export the canonical MIME helpers through `server/mime` and the generic
