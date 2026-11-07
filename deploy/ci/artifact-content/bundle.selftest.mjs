@@ -12,9 +12,9 @@ let passed = 0;
 const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
 // Remove these preservation expectations at the A4 prod cutover.
 const prodPins = {
-  api: 'ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7',
-  'auth-idp': 'ghcr.io/rhanka/sentropic-api@sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909',
-  'artifact-content': 'ghcr.io/rhanka/sentropic-api@sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7',
+  api: 'ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05',
+  'auth-idp': 'ghcr.io/rhanka/sentropic-api@sha256:4b78a02fc743ae85ce9f5819d5ebc6b49e02fca7b3161a87ea06afa401a3dc34',
+  'artifact-content': 'ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05',
   ui: 'ghcr.io/rhanka/sentropic-ui@sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e',
 };
 const checkProdPins = objects => {
