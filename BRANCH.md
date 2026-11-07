@@ -58,7 +58,7 @@
   - [x] Postgres job ledger in the existing host KV (`createPostgresBuildJobStore`), sharing the live store row lock.
   - [x] Live recipe path stays `ui/vite.config.ts`: the only contract value (immo R1/R2); no new config invented.
 - [ ] **Lot 4 — s-archi builder mount (decisions 07/11 15:00-15:25)**
-  - [ ] Run staleness = heavy-gate wait plus the four bounded build-only phases (20 min), not a pod lifetime.
+  - [x] Run staleness = heavy-gate wait plus the four bounded build-only phases (20 min), not a pod lifetime.
   - [ ] Host identity from the `artifacts:builder` service client and `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` (default deny).
   - [ ] Builder handoff signing key and host receipt key ring from fixed env names, with a documented rotation cycle.
   - [ ] Mount under `/api/v1/artifacts/builder` behind `createRequireServiceAuth`; ui nginx location without access log.

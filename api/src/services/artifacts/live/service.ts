@@ -15,7 +15,7 @@ import { fetchLockedTarball } from './npm-relay';
 import type { BuilderPlacement } from './placement';
 import type { KeyResolver, SigningKey } from '@sentropic/artifacts/live-host';
 import { createHandoffPublication, type CandidateExport, type RemoteHost } from './handoff-publication';
-import { createBuildJobs } from './build-jobs';
+import { createBuildJobs, runStaleMs } from './build-jobs';
 import { createHostBuildApi, type HostIdentity } from './host-build-api';
 
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
@@ -48,7 +48,8 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
   host: RemoteHost; candidates: CandidateExport; signingKey(): SigningKey; hostKeys: KeyResolver;
   authenticate(request: Request): Promise<HostIdentity | null>; schedule(work: () => Promise<void>): void;
 }) {
-  const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id);
+  const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
+    runStaleMs(options.heavyGate.maxWaitMs));
   const publication = createHandoffPublication({ host: options.host, candidates: options.candidates, outcomes: jobs,
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });
   const controller = createArtifactLiveService({ ...options, publication });
