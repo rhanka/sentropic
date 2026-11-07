@@ -79,6 +79,7 @@
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (BR0218-EX8)
   - `ui/src/routes/organizations/[id]/+page.svelte` (BR0218-EX9)
   - `e2e/tests/01-organizations-detail.spec.ts` (BR0218-EX9)
+  - `e2e/tests/05-usecase-detail.spec.ts` (BR0218-EX21)
   - `packages/chat-core/src/runtime/comments/state.ts` (BR0218-EX10)
   - `packages/chat-core/tests/runtime/comments-module.spec.ts` (BR0218-EX10)
   - `packages/chat-core/package.json` (BR0218-EX10)
@@ -90,6 +91,8 @@
 
 ## Feedback Loop
 
+- [x] BR0218-EX21 / TRAIN0218-SSE-SUBSCRIPTION: owner requests failed shard 5 repair after the shard 6 correction. Run 42341356424 job 128310600397 retains the initial constraint after a successful PUT. The test waits for a request, while the unchanged server only establishes LISTEN before returning the SSE response; request dispatch does not establish subscription. Admit only this test synchronization correction and its scoped reproduction; preserve the content assertion, existing timeout budgets and zero retries. Rollback restores this test; conductor imports the request and .tmp/rv/fix-936-931.md into Track.
+- [x] TRAIN0218-SSE-SUBSCRIPTION qualification: reuse the failing run's API/UI references 54ddaf/a593cc and verified archived E2E harness with only this mounted test. Delay SSE dispatch by 1500ms in an ignored reproduction fixture: before, mutation at 465ms precedes SSE 200 at 2018ms and the unchanged content assertion fails; after waiting for a successful scoped response, SSE 200 at 1894ms precedes mutation at 1895ms and both scoped cases pass with zero skips/retries. Source only changes the request readiness check to a successful-response check; no application, timeout, retry, lock, version or release-input change. Mechanical C1/C2 and whitespace checks pass; cleanup/push/state handoff recorded in .tmp/rv/fix-936-931.md.
 - [x] BR0218-EX9 / TRAIN0218-SSE-BOOTSTRAP diagnosis: run 42338249677 job 128301104513 times out at the train-added scenario's SSE wait (line 329). Organization presence and stream runtime match main; only this regression scenario differs. Its 2000ms timer incorrectly includes navigation/bootstrap. Exact CI API/UI/E2E archives and saved config identities verified; a controlled 2100ms document delay reproduces the same timeout with eight other cases passing, zero retries.
 - [x] TRAIN0218-SSE-BOOTSTRAP correction: observe the same successful workspace-scoped SSE response from navigation start, then assert the retained observation after page/bootstrap and snapshot capture within the unchanged 2000ms budget. Keep the held stale POST, both avatar assertions and heartbeat suppression. Exact CI images plus the controlled document delay: before one failure/eight passes, after 9/9 at four workers with zero retries/skips; SSE responds 2426ms after navigation starts. C1/C2 and whitespace pass; no runtime/version/lock change. Conductor imports this request and .tmp/rv/fix-936-931.md into Track.
 - [x] TRAIN0218-PROBE: rebase with merge history preserved onto GHCR UI main `17ad1c58b`; artifacts 0.2.18, cluster-mesh dev.14 and harness 0.5.0 remain above published versions. Original job `128290129247` and local core-only replay reproduce the stale 24-name probe against the frozen 35-name G0/A-LIVE catalogue. Append its eleven approved names in order; no tool definition or snapshot bytes change.

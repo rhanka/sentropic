@@ -242,10 +242,11 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    const sseRequestPromise = page.waitForRequest((req) => {
+    // The response follows LISTEN registration; request dispatch can precede it.
+    const sseReadyPromise = page.waitForResponse((res) => {
       try {
-        const url = new URL(req.url());
-        return url.pathname.endsWith('/api/v1/streams/sse') && url.searchParams.get('workspace_id') === workspaceAId;
+        const url = new URL(res.url());
+        return res.ok() && url.pathname.endsWith('/api/v1/streams/sse') && url.searchParams.get('workspace_id') === workspaceAId;
       } catch {
         return false;
       }
@@ -254,7 +255,7 @@ test.describe('Détail des cas d\'usage', () => {
     await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
-    await sseRequestPromise;
+    await sseReadyPromise;
 
     const token = `E2E_CONSTRAINT_${Date.now()}`;
     const updateRes = await page.request.put(
