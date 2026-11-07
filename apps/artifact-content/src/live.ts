@@ -21,10 +21,17 @@ export interface LiveProxyPorts {
   watch(route: LiveRoute, revoke: () => void): () => void;
   /** Resolves a host-owned pages-domain Host to its artifact. Such hosts serve live routes only, never releases. */
   origin?(host: string): ContentOrigin | undefined;
+  /** Host push path (`LIVE_CONTROL_PATH` on a pages-domain Host): signed revocations; undefined means refused. */
+  control?(request: Request, artifactId: string): Promise<Response | undefined>;
+  /** Controller push path (`LIVE_FENCE_PATH` on the internal Host): signed fences; undefined means refused. */
+  fence?(request: Request): Promise<Response | undefined>;
   fetch?: typeof fetch;
   now?: () => number;
 }
 export const hmrPath = (sessionId: string) => `/_live/${encodeURIComponent(sessionId)}/hmr`;
+export const LIVE_CONTROL_PATH = '/_live-control/v1';
+export const LIVE_FENCE_PATH = '/_live-fence/v1';
+export const DEFAULT_BUILDER_NAMESPACE = 'sentropic-artifact-builders';
 export function liveHeaders(mime: string, size: number, origin: string, sessionId: string, scriptHashes: string[] = []) {
   const endpoint = new URL(hmrPath(sessionId), origin); endpoint.protocol = 'wss:';
   return { ...contentHeaders({ mimeType: mime, size, mode: 'application' }),
@@ -44,8 +51,11 @@ function safePath(url: URL) {
       || ['.git', '.npmrc', '.yarnrc', '.track', 'deploy'].includes(part)
       || /\.(?:pem|key|p12|pfx)$/.test(part));
 }
-export function createLiveProxy(ports: LiveProxyPorts) {
+/** `builderNamespace` is the per-environment worker namespace that serves the live pods' Vite port. */
+export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespace?: string } = {}) {
   const now = ports.now ?? Date.now;
+  const namespace = options.builderNamespace ?? DEFAULT_BUILDER_NAMESPACE;
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(namespace)) throw new Error('Invalid live builder namespace');
   const valid = async (route: LiveRoute) => route.podName === podName(route)
     && /^[A-Za-z0-9_-]{1,128}$/.test(route.sessionId) && route.expiresAt > now() && await ports.current(route);
   const refused = () => new Response(null, { status: 404, headers: { 'cache-control': 'private, no-store' } });
@@ -60,10 +70,12 @@ export function createLiveProxy(ports: LiveProxyPorts) {
       const viteToken = query.length === 0 || (query.length === 1 && query[0][0] === 'token' && /^[A-Za-z0-9_-]{1,256}$/.test(query[0][1]));
       if (websocket ? url.pathname !== hmrPath(route.sessionId) || !viteToken
         || request.headers.get('origin') !== url.origin : !await ports.admittedPath(route, url.pathname, url.searchParams)) return;
-      return { route, upstream: `http://${route.podName}.sentropic-artifact-builders.svc.cluster.local:5173`,
+      return { route, upstream: `http://${route.podName}.${namespace}.svc.cluster.local:5173`,
         path: url.pathname + url.search };
     },
     valid, watch: ports.watch, origin: (host: string) => ports.origin?.(host),
+    control: async (request: Request, artifactId: string) => ports.control?.(request, artifactId),
+    fence: async (request: Request) => ports.fence?.(request),
     async fetch(request: Request, artifactId: string): Promise<Response | undefined> {
       const admitted = await this.authorize(request, artifactId);
       if (!admitted) return new URL(request.url).pathname.startsWith('/_live/') ? refused() : undefined;
