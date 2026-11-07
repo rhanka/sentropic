@@ -148,8 +148,8 @@
 - [ ] **Hotfix — bind publication to tested config bytes**
   - [x] Read common rules, MASTER, workflow and testing; branch C1 passes on the requested branch.
   - [x] Record configDigest from the tested archive separately from local imageId; preserve source, archive and loaded-image guards.
-  - [ ] Reject existing different configs before push; preserve canonical UI reuse across Docker stores.
-  - [ ] Scoped tests: image-receipt.test.mjs, publish-image.test.mjs, resolve-ui-image.test.mjs and ghcr-images.test.mjs, including OCI manifest IDs, absent tags, collisions and alias drift.
+  - [x] Reject existing different configs before push; preserve canonical UI reuse across Docker stores.
+  - [x] Scoped tests: image-receipt.test.mjs, publish-image.test.mjs, resolve-ui-image.test.mjs and ghcr-images.test.mjs; 47/47 pass, zero skips, including OCI manifest IDs, absent tags, collisions and alias drift.
   - [ ] Independent review, scope C2 and whitespace checks; no application, version or lock change.
   - [ ] Cleanup, push, open one READY PR, write final state and EXIT without CI polling.
 
