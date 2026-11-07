@@ -55,6 +55,6 @@
   - [x] `createBuilderService`: controller, SG4b publication, Postgres job ledger and host build API; nothing started.
   - [x] Postgres job ledger in the existing host KV (`createPostgresBuildJobStore`), sharing the live store row lock.
   - [x] Live recipe path stays `ui/vite.config.ts`: the only contract value (immo R1/R2); no new config invented.
-- [ ] **Lot 3 — Gate**
+- [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
-  - [ ] Push the wagon; report .tmp/rv/alive-W3-W7.md.
+  - [x] Push the wagon; report .tmp/rv/alive-W3-W7.md; `make down-volumes ENV=test-alive-w7`.
