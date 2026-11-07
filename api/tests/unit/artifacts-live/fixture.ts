@@ -44,11 +44,11 @@ export function fixture() {
     forge: { head: vi.fn(async () => binding.headSha), fastForward: vi.fn(async (_key, before, after) => before < after),
       reachable: vi.fn(async () => true),
       snapshot: vi.fn(async (_key, headSha) => ({ headSha, treeSha: `tree-${headSha}`, lockfile: new Uint8Array(),
-        cacheIdentity: {} as never, stagingRef: `clean-${headSha}` })) },
+        cacheIdentity: {} as never, stagingRef: `clean-${headSha}`, descriptorDigest: `descriptor-${headSha}` })) },
     drafts: { current: vi.fn(async () => ({ ...draft })), checkpoint: vi.fn(async () => { events.push('checkpoint'); }),
       advanceClean: vi.fn(async (_key, _expected, headSha) => (draft = { ...draft, baseHeadSha: headSha, treeSha: `tree-${headSha}` })) },
     pods: createBuilderPods(core, 'setInterval(() => {}, 1000)'),
-    cache: { acquire: vi.fn(async () => ({ key: 'cache' } as CacheReceipt)) },
+    cache: { acquire: vi.fn(async () => ({ key: 'cache', identity: { lockSha256: 'lock-sha', nodeVersion: 'v24', npmVersion: '11' } } as CacheReceipt)) },
     worker: {
       clean: vi.fn(async () => { events.push('clean'); }),
       prepare: vi.fn(async (_runtime, source) => { events.push(`prepare:${source.headSha}`); }),
