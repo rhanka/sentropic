@@ -40,6 +40,12 @@ rollback and credential rotation are documented in
   Any Egress policy on the API isolates it. Such a policy must keep the relay,
   the Kubernetes API, DNS, Postgres, the IdP and HTTPS providers. The test
   `make test-artifact-content-manifests` enforces this.
+- SG4b handoff egress (A-LIVE W7). The builder in the API calls the same-environment
+  immo host (`immo.sent-tech.ca` or `preprod.immo.sent-tech.ca`, `/api/v1/artifacts`)
+  on TCP 443 through the platform Traefik LoadBalancer. The API is not
+  egress-isolated, so no policy is added. In-cluster, kube-proxy sends the LB
+  address to the Traefik pods (namespace `traefik`) on websecure TCP 8443, so an
+  API Egress policy must allow both the LB on 443 and that 8443 hop.
 - Live edge ingress (A-LIVE W9). Each overlay adds
   `allow-immo-content-host-to-artifact-content`: `artifact-content` TCP 8791 (its
   only listener, HTTP and websocket upgrade) admits the immo content host, which is
