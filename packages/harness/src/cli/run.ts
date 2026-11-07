@@ -1,7 +1,7 @@
 import { checkBranch } from '../checks/branch-check.js';
 import { toVerificationRun } from '../run/emit.js';
-import { sentropicProfile } from '../profile/sentropic.js';
-import { stubProfile } from '../profile/stub.js';
+import { resolveProfile } from '../profile/resolve.js';
+import { ProfileValidationError } from '../profile/document.js';
 import type { HarnessProfile } from '../profile/profile.js';
 import type { CheckResult, VerificationCategory } from '../artifacts/verification-run.js';
 import { parseFlags, str, type FlagValue } from './args.js';
@@ -11,11 +11,11 @@ import { handleMechanicalVerb } from './mechanical-verbs.js';
 
 const USAGE = [
   'usage: harness check <scope|branch> [--current-branch <b>] [--expected-branch <b>] ' +
-    '[--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--json]',
+    '[--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--profile-file <path>] [--commit-message <text>] [--json]',
   '       harness verify [--category static|unit|integration|e2e|ci|uat] [--staged-files <list>] ' +
-    '[--current-branch <b>] [--expected-branch <b>] [--branch-md <path>] [--profile sentropic|stub] [--json]',
-  '       harness init [--profile sentropic|stub] [--json]',
-  '       harness audit [--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--json]',
+    '[--current-branch <b>] [--expected-branch <b>] [--branch-md <path>] [--profile sentropic|stub] [--profile-file <path>] [--commit-message <text>] [--json]',
+  '       harness init [--profile sentropic|stub] [--profile-file <path>] [--json]',
+  '       harness audit [--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--profile-file <path>] [--commit-message <text>] [--json]',
   '       harness brainstorm [<topic>] [--peers <n>] [--ladder study|vol|evol] [--json]',
   '       harness test [<scope>] [--category unit|integration|e2e] [--watch] [--json]',
   '       harness debug [<symptom>] [--json]',
@@ -37,7 +37,7 @@ function handleCheck(
     return 2;
   }
 
-  const profile: HarnessProfile = str(flags.profile) === 'stub' ? stubProfile : sentropicProfile;
+  const profile: HarnessProfile = resolveProfile(flags);
   const category: VerificationCategory = 'static';
   let result: CheckResult;
   let code: string;
@@ -86,14 +86,14 @@ function handleCheck(
 }
 
 /**
- * Pure, arg-based CLI driver — reads everything from `argv`, writes via `out`, returns an exit code.
+ * Arg-based CLI driver — reads profile/plan files, writes via `out`, returns an exit code.
  * No internal git calls (the caller supplies branch + staged files), no `process.exit`, no fs writes.
  * Advisory (D5 Layer A): a failing check returns 0; only a usage error returns non-zero.
  *
  * Verb families: `check` (C1/C2 → VerificationRun); method/recorder verbs (brainstorm/test/debug/
  * review/plan/branch/skills → WorkEvent + skill pointer, see `method-verbs.ts`).
  */
-export function runHarnessCli(argv: string[], out: (s: string) => void): number {
+function dispatch(argv: string[], out: (s: string) => void): number {
   const { positionals, flags } = parseFlags(argv);
   const command = positionals[0];
 
@@ -109,4 +109,13 @@ export function runHarnessCli(argv: string[], out: (s: string) => void): number 
 
   out(USAGE);
   return command === undefined ? 0 : 2;
+}
+
+export function runHarnessCli(argv: string[], out: (s: string) => void): number {
+  try { return dispatch(argv, out); }
+  catch (error) {
+    if (!(error instanceof ProfileValidationError)) throw error;
+    out(`harness: ${error.message}`);
+    return 2;
+  }
 }
