@@ -53,5 +53,28 @@ export function checkConnectivity(objects) {
     assert(!reachable(content, { namespace: 'external', labels: {} }, 443), 'object egress awaits tenant receipt');
     const dns = { namespace: 'kube-system', labels: { 'k8s-app': 'kube-dns' } };
     for (const protocol of ['TCP', 'UDP']) assert(reachable(content, dns, 53, protocol));
+    // Live controller (A-LIVE W2): Sentropic owns the API side of API -> npm relay :4873 and
+    // API -> Kubernetes API; k8s owns the relay ingress. The app namespaces carry an ingress-only
+    // default-deny, so any API Egress policy isolates the API and must keep every path below.
+    const api = pod(namespace, 'api');
+    const apiEgress = (to, port, protocol = 'TCP') => directionAllows(objects, 'Egress', api, to, port, protocol);
+    const relay = { namespace: 'npm-relay', labels: { 'app.kubernetes.io/name': 'npm-relay' } };
+    assert(apiEgress(relay, 4873), 'controller must reach the npm relay');
+    for (const port of [443, 6443]) assert(apiEgress({ namespace: 'external', labels: {} }, port), 'controller must reach the Kubernetes API and HTTPS providers');
+    for (const protocol of ['TCP', 'UDP']) assert(apiEgress(dns, 53, protocol), 'API must keep DNS');
+    assert(reachable(api, pod(namespace, 'postgres'), 5432), 'API must keep its PostgreSQL');
+    assert(reachable(api, pod(namespace, 'auth-idp'), 8787), 'API must keep the IdP revocation path');
+  }
+}
+// The operator-owned default-deny is not rendered here; no rendered policy may widen it to a whole
+// namespace or to unnamed peers.
+export function checkNoOpenPolicy(objects) {
+  for (const { metadata, spec } of objects.filter(o => o.kind === 'NetworkPolicy')) {
+    const selector = spec.podSelector ?? {};
+    assert(Object.keys(selector.matchLabels ?? {}).length + (selector.matchExpressions ?? []).length > 0,
+      `${metadata.name}: namespace-wide pod selector`);
+    for (const [direction, peers] of [['ingress', 'from'], ['egress', 'to']]) {
+      for (const rule of spec[direction] ?? []) assert((rule[peers] ?? []).length > 0, `${metadata.name}: ${direction} rule without peers`);
+    }
   }
 }

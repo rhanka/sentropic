@@ -43,5 +43,5 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: baseline `make test-artifact-content-manifests ENV=test-alive-netpol` green on main.
-- [ ] Lot 1: controller egress reachability, open-policy guard and API-isolation rejection cases; README posture.
+- [x] Lot 1: controller egress reachability, open-policy guard and API-isolation rejection cases; README posture; `make test-artifact-content-manifests ENV=test-alive-netpol` 127 PASS, 0 failures (31/31 node tests).
 - [ ] Lot N: push the wagon branch; train 1b integrates it.
