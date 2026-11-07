@@ -288,6 +288,7 @@ jobs:
       oauth_verify: ${{ steps.filter.outputs.oauth_verify }}
       mcp_auth: ${{ steps.filter.outputs.mcp_auth }}
       mcp_platform: ${{ steps.filter.outputs.mcp_platform }}
+      connector_host: ${{ steps.filter.outputs.connector_host }}
       memory_l5: ${{ steps.filter.outputs.memory_l5 }}
       auth_hono: ${{ steps.filter.outputs.auth_hono }}
       auth_client: ${{ steps.filter.outputs.auth_client }}
@@ -572,6 +573,13 @@ jobs:
               - '.github/workflows/ci.yml'
             mcp_auth_publish:
               - 'packages/mcp-auth/**'
+            connector_host:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/connector-host/**'
+              - 'packages/mcp-platform/**'
+              - '.github/workflows/ci.yml'
             mcp_platform:
               - 'Makefile'
               - 'package.json'
@@ -1254,6 +1262,21 @@ jobs:
         run: make pack-mcp-platform ENV=test-ci-mcp-platform
       - name: API Extract MCP Platform
         run: make api-extract-mcp-platform
+
+  validate-connector-host:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: always() && !cancelled() && (needs.changes.outputs.connector_host == 'true' || needs.changes.outputs.global == 'true')
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Connector Host
+        run: make typecheck-connector-host
+      - name: Test Connector Host
+        run: make test-connector-host ENV=test-ci-connector-host
+      - name: Build Connector Host
+        run: make build-connector-host
 
   memory-l5-qualification:
     runs-on: ubuntu-latest
@@ -3549,6 +3572,7 @@ jobs:
       - validate-oauth-verify
       - validate-mcp-auth
       - validate-mcp-platform
+      - validate-connector-host
       - memory-l5-qualification
       - validate-auth-hono
       - validate-auth-client
@@ -3664,7 +3688,7 @@ jobs:
     needs: [changes, package-candidates, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api, api-static, idp-web-static,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
       validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
-      validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
+      validate-mcp-auth, validate-mcp-platform, validate-connector-host, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
       validate-artifacts, artifacts-qualification, validate-harness, build-api-image, build-api-tool-image,
