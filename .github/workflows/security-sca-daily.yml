@@ -1,0 +1,43 @@
+name: Security SCA daily
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sca-gate:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Run SCA gate (fail closed on advisory API errors)
+        id: gate
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: make test-security-sca-gate SCA_GATE_MODE=scheduled ENV=test-ci-sca-gate
+      - name: Open or update the security issue
+        if: steps.gate.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title='Daily SCA gate: unregistered high/critical findings'
+          gh label create security --color B60205 --description 'Security findings' 2>/dev/null || true
+          number="$(gh issue list --label security --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+          body="$(cat .security/sca-gate-issue.md)"$'\n\n'"Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --label security --title "$title" --body "$body"
+          fi
+      - name: Fail when the gate failed
+        if: steps.gate.outcome == 'failure'
+        run: exit 1
