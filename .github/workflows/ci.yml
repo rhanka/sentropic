@@ -1807,10 +1807,33 @@ jobs:
       UI_PORT: '5691'
       MAILDEV_UI_PORT: '1591'
     strategy:
-      max-parallel: 15
+      max-parallel: 20
       fail-fast: false
       matrix:
         include:
+          # CI10-S4: longest shards first (measured: app-cluster-mesh ~5.3 min, endpoints 2/3/8 ~4.1 min);
+          # max-parallel equals the matrix size so every shard starts at t0 of the wave.
+          # Retain the app/content qualification in a separate isolated lane.
+          - suite: app-cluster-mesh
+            app_shard: 1
+          - suite: app-cluster-mesh
+            app_shard: 2
+          - suite: endpoints
+            endpoints_shard: 8
+          - suite: endpoints
+            endpoints_shard: 2
+          - suite: endpoints
+            endpoints_shard: 3
+          - suite: endpoints
+            endpoints_shard: 4
+          - suite: endpoints
+            endpoints_shard: 6
+          - suite: endpoints
+            endpoints_shard: 5
+          - suite: endpoints
+            endpoints_shard: 1
+          - suite: endpoints
+            endpoints_shard: 7
           - suite: unit
             unit_shard: 1
           - suite: unit
@@ -1819,41 +1842,15 @@ jobs:
             unit_shard: 3
           - suite: unit
             unit_shard: 4
-          # Retain the app/content qualification in a separate isolated lane.
-          - suite: app-cluster-mesh
-            app_shard: 1
-          - suite: app-cluster-mesh
-            app_shard: 2
           - suite: queue
           - suite: security
-          # BR70-CI1: the foundation data-spine test dirs (BR-52 artifact-store /
-          # BR-59 object-registry / BR-60 outbox) were green-by-absence — no matrix
-          # suite ran them. Each resolves via the test-api-% Makefile pattern to the
-          # per-dir npm script added in api/package.json. (`tests/services/` is a
-          # cross-lane grab-bag — catalog/flow/chat — NOT foundation, routed to its
-          # owning lanes separately, so it is intentionally not wired here.)
+          # BR70-CI1: foundation data-spine dirs (BR-52 artifact-store / BR-59
+          # object-registry / BR-60 outbox), resolved via the test-api-% pattern.
           - suite: artifact-store
           - suite: object-registry
           - suite: outbox
-          # BR83-EX1: consumer-owned candidate contracts for the comments and
-          # cluster-mesh boundaries (api/tests/contracts/).
+          # BR83-EX1: consumer-owned candidate contracts (api/tests/contracts/).
           - suite: contracts
-          - suite: endpoints
-            endpoints_shard: 1
-          - suite: endpoints
-            endpoints_shard: 2
-          - suite: endpoints
-            endpoints_shard: 3
-          - suite: endpoints
-            endpoints_shard: 4
-          - suite: endpoints
-            endpoints_shard: 5
-          - suite: endpoints
-            endpoints_shard: 6
-          - suite: endpoints
-            endpoints_shard: 7
-          - suite: endpoints
-            endpoints_shard: 8
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
