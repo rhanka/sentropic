@@ -63,11 +63,25 @@ describe('trusted live adapters', () => {
       async get(ref) { return blobs.get(ref); }, async delete(ref) { blobs.delete(ref); } });
     const cacheKey = 'a'.repeat(64) + '/' + 'b'.repeat(64);
     expect(await storage.read(cacheKey)).toBeUndefined();
-    await storage.admit(cacheKey, { receipt: {} as never, files: [] });
-    expect(await storage.read(cacheKey)).toMatchObject({ files: [] });
+    await storage.admit(cacheKey, { receipt: {} as never, manifest: [] });
+    expect(await storage.read(cacheKey)).toMatchObject({ manifest: [] });
     blobs.set([...blobs.keys()][0], Buffer.from('changed'));
     await expect(storage.read(cacheKey)).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
     await storage.quarantine(cacheKey); expect(await storage.read(cacheKey)).toBeUndefined();
+  });
+  it('should keep one private content-addressed object per dependency file, apart from the manifest pointers', async () => {
+    const blobs = new Map<string, Uint8Array>();
+    const storage = createPostgresCacheStorage({ query: vi.fn() } as never, { async put(ref, bytes) { blobs.set(ref, bytes); },
+      async get(ref) { return blobs.get(ref); }, async delete(ref) { blobs.delete(ref); } });
+    const digest = 'c'.repeat(64);
+    await storage.putFile(digest, Buffer.from('x'));
+    expect([...blobs.keys()]).toEqual([`dependency-cache/v1/files/${digest}`]);
+    expect(await storage.getFile(digest)).toEqual(Buffer.from('x'));
+    expect(await storage.getFile('d'.repeat(64))).toBeUndefined();
+    for (const bad of ['../x', 'C'.repeat(64), 'c'.repeat(63)]) {
+      await expect(storage.putFile(bad, Buffer.from('x'))).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+      await expect(storage.getFile(bad)).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    }
   });
   it('should reject registry paths that resolve outside the fixed relay before transport', async () => {
     const bytes = Buffer.from('tarball');
