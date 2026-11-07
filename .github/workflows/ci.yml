@@ -2651,13 +2651,14 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, api-image-guards, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    needs: [changes, api-image-guards, api-tool-qualification, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') &&
       needs.changes.result == 'success' &&
       needs.api-image-guards.result == 'success' &&
+      needs.api-tool-qualification.result == 'success' &&
       needs.typecheck-lint-api.result == 'success' &&
       needs.typecheck-lint-ui.result == 'success' &&
       needs.security-sast-sca.result == 'success' &&

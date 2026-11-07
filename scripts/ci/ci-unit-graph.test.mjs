@@ -77,6 +77,8 @@ test('should keep both production suites and reject either missing result', () =
   assert.ok(jobs['ci-gate'].needs.includes('test-api-sut'));
   assert.ok(jobs['publish-api-image'].needs.includes('test-api-sut'));
   assert.ok(jobs['publish-api-image'].if.includes("needs.test-api-sut.result == 'success'"));
+  assert.ok(jobs['publish-api-image'].needs.includes('api-tool-qualification'));
+  assert.ok(jobs['publish-api-image'].if.includes("needs.api-tool-qualification.result == 'success'"));
   const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
   const executed = expected.filter(row => row.selected).map(row => ({ job: row.job, conclusion: 'success' }));
   for (const suite of ['smoke', 'limit']) {
