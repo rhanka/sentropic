@@ -164,3 +164,11 @@ no-op. Cycle: create → verify exchange → record secret location and creation
 date in the tenant credential register → rotate ≤90 days → verify reprise
 (authenticate with the current secret after every rotation before recording
 success).
+
+## Other service clients (client_credentials)
+
+This record governs only the exchange workload. A `client_credentials` service client
+without an exchange policy is provisioned, in preprod and prod, only by the Job of
+`make oauth-register-service-client-job` (procedure and 90-day cycle in `docs/secrets.md`).
+That provisioner refuses `immo-mcp-workload` and every row with an exchange policy, so it
+never competes with the named-Secret sync, and the sync leaves those rows untouched.

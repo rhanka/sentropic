@@ -50,5 +50,5 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 1: pure env parser and provisioning planner with unit tests.
 - [x] Lot 2: script entrypoint, dist build, Job manifest, network policy.
-- [ ] Lot 3: Make target, Job render test, docs/secrets.md procedure with the 90-day cycle.
+- [x] Lot 3: Make target, Job render test, docs/secrets.md procedure with the 90-day cycle.
 - [ ] Lot N: scoped checks green (`make test-api-unit SCOPE=tests/unit/oauth-register-service-client.test.ts ENV=test-svc-client`, `make test-publishable-manifests SCOPE=scripts/ci/oauth-service-client-job.test.mjs ENV=test-svc-client`, `make typecheck-api ENV=test-svc-client`); branch pushed.
