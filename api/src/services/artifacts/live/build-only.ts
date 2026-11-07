@@ -8,8 +8,6 @@ import { buildEvidence } from './evidence';
 /** Explicit historical publication uses one clean pod; dormant drafts never enter this worker. */
 export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
   const binding = await currentBinding(ports, key);
-  const job = await ports.publication.job(key, jobId);
-  if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
   const draft = await ports.drafts.current(key, binding.generation);
   if (draft.generation !== binding.generation) conflict('stale_fence');
   let runtime = await ports.store.transaction(key, async unit => {
@@ -28,6 +26,18 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
     } });
     return structuredClone(unit.state!.runtime);
   });
+  // Only the binding's pending job at this generation; the host records this run's attempt fence. No pod exists yet.
+  let job;
+  try {
+    job = await ports.publication.job(key, jobId, { runId: runtime.sessionId, attempt: runtime.leaseEpoch });
+    if (job.jobId !== jobId || job.generation !== binding.generation) throw new LiveError('git_live_conflict', 'job_not_pending');
+    if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
+  } catch (error) {
+    await transition(ports, key, runtime, state => {
+      state.runtime.phase = 'DORMANT'; state.runtime.stateDetail = error instanceof LiveError ? error.code : 'builder_unavailable';
+    });
+    throw error;
+  }
   try {
     await checkpoint(ports, key, runtime);
     const pod = await ports.pods.ensure(key, runtime);
