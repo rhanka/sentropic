@@ -46,7 +46,7 @@
 
 ## Plan / Todo (lot-based)
 - [ ] Lot 1: failing tests for integrity coverage, script qualification, receipt verifier, output boundaries.
-- [ ] Lot 2: host integrity map coverage + typed `dependency_integrity_missing`/`dependency_integrity_mismatch` refusals + script qualification rows (A-LIVE §7.2-7.3, §3.4).
+- [x] Lot 2: host integrity map coverage + typed `dependency_integrity_missing`/`dependency_integrity_mismatch` refusals + script qualification rows (A-LIVE §7.2-7.3, §3.4).
 - [ ] Lot 3: pure mandatory receipt schema + verifier with anti-replay and falsified-digest refusals (A-LIVE §8.4; G0 §4.3).
 - [ ] Lot 4: candidate output ceiling gate, boundary fixtures 255/256 files, 16 MiB±1, 64 MiB±1 (A-LIVE §8.3, §10 lot 2).
 - [ ] Lot 5: scoped green (test-artifacts, typecheck-artifacts, lint-artifacts), scope-check per commit, wagon push, French report.
