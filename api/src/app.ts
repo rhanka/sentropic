@@ -350,32 +350,33 @@ const allowedOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
 // secureHeaders() returns a middleware — invoke the factory ONCE, register the result.
 // NOTE: CORP and COEP are NOT set here because they block legitimate cross-origin
 // API requests from the frontend (e.g. localhost:5173 → localhost:8787).
-app.use(
-  '*',
-  secureHeaders({
-    contentSecurityPolicy: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "https://*.sent-tech.ca"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-      upgradeInsecureRequests: [],
-    },
-    strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
-    crossOriginOpenerPolicy: 'same-origin',
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: false,
-    xContentTypeOptions: 'nosniff',
-    xFrameOptions: 'DENY',
-    xXssProtection: '1; mode=block',
-    referrerPolicy: 'strict-origin-when-cross-origin',
-  }),
-);
+const productSecureHeaders = secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"],
+    connectSrc: ["'self'", "https://*.sent-tech.ca"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:", "https:"],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+    upgradeInsecureRequests: [],
+  },
+  strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
+  crossOriginOpenerPolicy: 'same-origin',
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+  xContentTypeOptions: 'nosniff',
+  xFrameOptions: 'DENY',
+  xXssProtection: '1; mode=block',
+  referrerPolicy: 'strict-origin-when-cross-origin',
+});
+// SG0-app paths carry their own stricter header set (the manifest form posts
+// to github.com; no-referrer). secureHeaders writes AFTER next(), so it must
+// not run on those paths at all, or it overwrites them (A-LIVE W1).
+app.use('*', (c, next) => (isGitHubAppPath(c.req.path) ? next() : productSecureHeaders(c, next)));
 
 // Global HTTP logging (opt-in)
 app.use('*', async (c, next) => {
@@ -450,8 +451,9 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
 } as const;
 app.route('/api/v1/cluster-mesh/qualification', clusterMeshLiveQualificationRouter);
 // A-LIVE W1 (M2-S): mounted SG0-app enrollment host on the public origin
-// (`/github-app/*`). Code only until the GB4-P go (A-LIVE §10): without its
-// three env vars the composition is absent and the origin serves nothing here.
+// (`/api/v1/github-app/*`, reached through the ui nginx /api/v1/ proxy). Code
+// only until the GB4-P go (A-LIVE §10): without its env vars and a provisioned
+// custody key the composition is absent and the origin serves nothing here.
 const productGitHubAppRouter = createProductGitHubAppRouter();
 if (productGitHubAppRouter) app.route('/', productGitHubAppRouter);
 // RC2.receiver: frozen source routes + source/browser/relay middleware separation.
