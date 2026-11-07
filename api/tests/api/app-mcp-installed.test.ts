@@ -16,7 +16,7 @@ describe('physical app registry installation', () => {
       const meshArtifact = fileURLToPath(import.meta.resolve('@sentropic/artifacts/mcp',
         import.meta.resolve('@sentropic/cluster-mesh')));
       assert.equal(realpathSync(apiArtifact), realpathSync(meshArtifact));
-      assert.equal(ARTIFACTS_PROVIDER_VERSION, '0.2.18');
+      assert.equal(ARTIFACTS_PROVIDER_VERSION, '0.2.20');
       const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
       const result = await compileAppMcpRegistry({
         artifacts: { profile, app: { profileDigest: profile.profileDigest,
