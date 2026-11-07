@@ -396,41 +396,54 @@ describe('SG0-app host routes: broker leases', () => {
   it('should mint a lease only for the bound service identity and repository', async () => {
     const harness = createHarness('immo-host-broker');
     const outcome = await enroll(harness);
-    if (!(await isEnrollOutcome(outcome))) throw new Error('owner flow failed');
-    const lease = await harness.request('/github-app/broker/lease', leaseRequest(outcome.ref));
+    const lease = await harness.request(`${ROOT}/broker/lease`, leaseRequest(outcome.ref));
     expect(lease.status).toBe(200);
     expect(await lease.json()).toMatchObject({ repositoryId: '101', permissions: { contents: 'write', metadata: 'read' } });
     expect(harness.forge.minted).toEqual(['500:101']);
   });
 
-  it('should refuse unauthenticated brokers, tuple substitution and unknown enrollments', async () => {
+  it('should resolve the bound broker for a chunked body re-wrapped by the package body limit', async () => {
     const harness = createHarness('immo-host-broker');
     const outcome = await enroll(harness);
-    if (!(await isEnrollOutcome(outcome))) throw new Error('owner flow failed');
+    const bytes = new TextEncoder().encode(leaseBody(outcome.ref));
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(bytes); controller.close(); } });
+    const lease = await harness.request(`${ROOT}/broker/lease`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body, duplex: 'half',
+    } as RequestInit);
+    expect(lease.status).toBe(200);
+    expect(harness.forge.minted).toEqual(['500:101']);
+  });
+
+  it('should refuse unauthenticated or header-forging brokers, tuple substitution and unknown enrollments', async () => {
+    const harness = createHarness('immo-host-broker');
+    const outcome = await enroll(harness);
 
     const anonymous = createHarness();
-    const refusedAnonymous = await anonymous.request('/github-app/broker/lease', leaseRequest(outcome.ref));
+    const refusedAnonymous = await anonymous.request(`${ROOT}/broker/lease`, leaseRequest(outcome.ref));
     expect(refusedAnonymous.status).toBe(403);
     expect(await refusedAnonymous.json()).toEqual({ error: 'access_denied' });
+    const forgedHeader = await anonymous.request(`${ROOT}/broker/lease`, {
+      method: 'POST', body: leaseBody(outcome.ref),
+      headers: { 'content-type': 'application/json', 'x-sentropic-github-app-broker': randomUUID() },
+    });
+    expect(forgedHeader.status).toBe(403);
+    expect(await forgedHeader.json()).toEqual({ error: 'access_denied' });
 
-    const substituted = await harness.request('/github-app/broker/lease', {
+    const substituted = await harness.request(`${ROOT}/broker/lease`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ storageScopeId: 'scope-app', repoId: 'repo-app', installationRef: outcome.ref }),
     });
     expect(substituted.status).toBe(403);
     expect(await substituted.json()).toEqual({ error: 'access_denied' });
 
-    const malformed = await harness.request('/github-app/broker/lease', {
+    const malformed = await harness.request(`${ROOT}/broker/lease`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ storageScopeId: 'scope-immo' }),
     });
     expect(malformed.status).toBe(400);
     expect(await malformed.json()).toEqual({ error: 'invalid_request' });
 
-    const unknownRef = await harness.request('/github-app/broker/lease', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ storageScopeId: 'scope-immo', repoId: 'repo-immo', installationRef: `enroll_${randomUUID()}` }),
-    });
+    const unknownRef = await harness.request(`${ROOT}/broker/lease`, leaseRequest(`enroll_${randomUUID()}`));
     expect(unknownRef.status).toBe(503);
     expect(await unknownRef.json()).toEqual({ error: 'capability_unavailable' });
   });
@@ -438,19 +451,17 @@ describe('SG0-app host routes: broker leases', () => {
   it('should refuse a lease on the other repository and close forging on forbidden permissions', async () => {
     const harness = createHarness('immo-host-broker');
     const sentropic = await enroll(harness, 'sentropic');
-    if (!(await isEnrollOutcome(sentropic))) throw new Error('owner flow failed');
-    const otherRepo = await harness.request('/github-app/broker/lease', leaseRequest(sentropic.ref));
+    const otherRepo = await harness.request(`${ROOT}/broker/lease`, leaseRequest(sentropic.ref));
     expect(otherRepo.status).toBe(403);
     expect(await otherRepo.json()).toEqual({ error: 'access_denied' });
 
     const immo = await enroll(harness);
-    if (!(await isEnrollOutcome(immo))) throw new Error('owner flow failed');
     harness.forge.tokenGrants({ contents: 'write', metadata: 'read', workflows: 'write' });
-    const overbroad = await harness.request('/github-app/broker/lease', leaseRequest(immo.ref));
+    const overbroad = await harness.request(`${ROOT}/broker/lease`, leaseRequest(immo.ref));
     expect(overbroad.status).toBe(503);
     expect(await overbroad.json()).toEqual({ error: 'capability_unavailable' });
     expect(harness.forge.revoked).toEqual(['fake-token-1']);
-    const status = await harness.request(`/github-app/${immo.ref}/status`, { headers: sessionHeaders() });
+    const status = await harness.request(`${ROOT}/${immo.ref}/status`, { headers: sessionHeaders() });
     expect(status.status).toBe(200);
     expect(await status.json()).toMatchObject({ state: 'revoked' });
     expect(harness.invalidations).toMatchObject([{ storageScopeId: 'scope-immo', repoId: 'repo-immo' }]);
@@ -461,14 +472,13 @@ describe('SG0-app host routes: revocation', () => {
   it('should revoke on the owner request, close leases, and refuse later leases', async () => {
     const harness = createHarness('immo-host-broker');
     const outcome = await enroll(harness);
-    if (!(await isEnrollOutcome(outcome))) throw new Error('owner flow failed');
-    const lease = await harness.request('/github-app/broker/lease', leaseRequest(outcome.ref));
+    const lease = await harness.request(`${ROOT}/broker/lease`, leaseRequest(outcome.ref));
     expect(lease.status).toBe(200);
-    const revoke = await harness.request(`/github-app/${outcome.ref}/revoke`,
+    const revoke = await harness.request(`${ROOT}/${outcome.ref}/revoke`,
       { method: 'POST', headers: enrollPostHeaders() });
     expect(revoke.status).toBe(200);
     expect(await revoke.json()).toMatchObject({ state: 'revoked', installationRef: outcome.ref });
-    const afterRevoke = await harness.request('/github-app/broker/lease', leaseRequest(outcome.ref));
+    const afterRevoke = await harness.request(`${ROOT}/broker/lease`, leaseRequest(outcome.ref));
     expect(afterRevoke.status).toBe(503);
     expect(await afterRevoke.json()).toEqual({ error: 'capability_unavailable' });
     expect(harness.forge.revoked).toContain('fake-token-1');
@@ -485,27 +495,27 @@ describe('SG0-app host routes: revocation', () => {
   it('should accept a signed installation removal event and close the enrollment', async () => {
     const harness = createHarness('immo-host-broker');
     const outcome = await enroll(harness);
-    if (!(await isEnrollOutcome(outcome))) throw new Error('owner flow failed');
     const payload = Buffer.from(JSON.stringify({ action: 'deleted', installation: { id: 500 } }));
     const signature = `sha256=${createHmac('sha256', 'fake-webhook-secret').update(payload).digest('hex')}`;
-    const events = await harness.request(`/github-app/${outcome.ref}/events`, {
+    const events = await harness.request(`${ROOT}/${outcome.ref}/events`, {
       method: 'POST',
       headers: { 'x-github-delivery': randomUUID(), 'x-github-event': 'installation', 'x-hub-signature-256': signature },
       body: payload,
     });
     expect(events.status).toBe(200);
-    const status = await harness.request(`/github-app/${outcome.ref}/status`, { headers: sessionHeaders() });
+    const status = await harness.request(`${ROOT}/${outcome.ref}/status`, { headers: sessionHeaders() });
     expect(await status.json()).toMatchObject({ state: 'revoked' });
     expect(harness.invalidations.length).toBe(1);
   });
 });
 
 describe('SG0-app http path fence', () => {
-  it('should fence exactly github-app paths for log suppression', () => {
-    expect(isGitHubAppPath('/github-app')).toBe(true);
-    expect(isGitHubAppPath('/github-app/enroll_xyz/key')).toBe(true);
-    expect(isGitHubAppPath('/api/v1/github-app')).toBe(false);
-    expect(isGitHubAppPath('/github-applications')).toBe(false);
+  it('should fence exactly the public github-app paths for logs and product headers', () => {
+    expect(GITHUB_APP_PUBLIC_ROOT).toBe(ROOT);
+    expect(isGitHubAppPath('/api/v1/github-app')).toBe(true);
+    expect(isGitHubAppPath('/api/v1/github-app/enroll_xyz/manifest')).toBe(true);
+    expect(isGitHubAppPath('/github-app')).toBe(false);
+    expect(isGitHubAppPath('/api/v1/github-applications')).toBe(false);
     expect(isGitHubAppPath('/')).toBe(false);
   });
 });
