@@ -1,7 +1,7 @@
 import type { CacheReceipt } from './cache';
 import type { DraftSnapshot, LivePorts, SourceSnapshot } from './ports';
 import type { LiveAttempt, LiveRuntime } from './records';
-import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE, liveViteConfig } from './recipes';
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, liveViteConfig } from './recipes';
 
 /** GB4's bounded trusted transport; repository processes cannot invoke this interface.
  * It enforces monotonic session/lease/route fences and whole-process-tree cancellation.
@@ -20,7 +20,7 @@ export interface QualifiedSupervisor {
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
     Promise<{ revision: string; routeEpoch: number }>;
   build(runtime: LiveRuntime, attempt: LiveAttempt, command: typeof BUILD_RECIPE,
-    env: ReturnType<typeof artifactEnvironment>): Promise<{ candidateDigest: string }>;
+    env: ReturnType<typeof buildEnvironment>): Promise<{ candidateDigest: string }>;
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
   verify(runtime: LiveRuntime, attempt: LiveAttempt, limits: { files: 255; fileBytes: 16777216; totalBytes: 67108864 }): Promise<void>;
   /** Liveness lease frame (A-LIVE Amendment 1 §3): fenced, side-effect free; W3 binds it to the op it confirms. */
@@ -45,7 +45,8 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
     },
     live: runtime => supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment()),
     async build(runtime, attempt) {
-      const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment());
+      // FIX3 (s-archi 16:40): the clean build alone runs with the W4 build heap (1024).
+      const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, buildEnvironment());
       await supervisor.terminate(runtime);
       return candidate;
     },

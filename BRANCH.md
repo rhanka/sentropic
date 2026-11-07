@@ -62,4 +62,5 @@
 - [x] Lot 12: heavy gate as a queue client for install, pre-bundle, dev and build; 4-live admission; queued status.
 - [x] Lot 13: idle build waits durably in BUILD_QUEUED after its live stops.
 - [x] Lot 14: scoped checks green after the queue (tsc and eslint live scope and queue, api artifacts-live 107/107, cluster-mesh queue 7/7).
+- [x] Lot 15: FIX3 (s-archi 16:40): worker.build passes the W4 buildEnvironment() (heap 1024); prebundle and dev keep artifactEnvironment(); W4 recipes port merged, W4 stays the only recipes author (api artifacts-live 142/142).
 - [ ] Lot N: train integration CI green on the exact head.
