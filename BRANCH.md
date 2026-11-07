@@ -45,8 +45,8 @@
   - [x] Typed §8.3 final recheck (`publicationRecheck` over the locked host view) inside the host transaction, every refusal tested.
 - [x] **Lot 3 — Live assertion and control**
   - [x] Prefix-bound HMAC formats (v1 assertion, c1 control, f1 fence) moved whole from W9 33c077e91; opaque bounded string `sourceRevision`; pinned token vector.
-- [ ] **Lot 4 — Host build API and export map**
-  - [ ] Request/response types and parsers; `./live-host` export; built export map test.
+- [x] **Lot 4 — Host build API and export map**
+  - [x] Request/response types and parsers (signed job request, handoff request, closed refusal bodies); `./live-host` export; built export map test.
 - [ ] **Lot 5 — Gate**
-  - [ ] `make typecheck-artifacts`, `make lint-artifacts`, scoped `make test-artifacts SCOPE=...`.
+  - [x] `make typecheck-artifacts`, `make lint-artifacts`, scoped `make test-artifacts SCOPE=...` (live-host 56/56, transport-exports 1/1).
   - [ ] Push the wagon; report .tmp/rv/live-host.md.
