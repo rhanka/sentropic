@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createBuildJobs, RUN_STALE_MS, type BuildJobRecord, type RecordStore } from '../../../src/services/artifacts/live/build-jobs';
 import { createHostBuildApi } from '../../../src/services/artifacts/live/host-build-api';
 import { LiveError } from '../../../src/services/artifacts/live/records';
-import type { HandoffReceipt } from '../../../src/services/artifacts/live/handoff';
+import type { HandoffReceipt } from '@sentropic/artifacts/live-host';
 
 function memoryStore(): RecordStore {
   const rows = new Map<string, BuildJobRecord>(); let tail = Promise.resolve();
