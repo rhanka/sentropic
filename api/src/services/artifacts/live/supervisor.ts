@@ -4,7 +4,7 @@ import type { CacheReceipt, DependencyFile } from './cache';
 import { safeDependencyPath } from './integrity';
 import type { DraftSnapshot, SourceSnapshot } from './ports';
 import { conflict, LiveError, type LiveAttempt, type LiveRuntime } from './records';
-import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE } from './recipes';
+import { BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, liveEnvironment, PREBUNDLE_RECIPE } from './recipes';
 import type { QualifiedSupervisor } from './worker';
 import { createSupervisorChannel, failure, type ChannelOptions } from './supervisor-channel';
 import { createCleanInstall } from './supervisor-install';
@@ -95,9 +95,14 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if (!HOST_FILES.has(path) || typeof source !== 'string' || Buffer.byteLength(source) > MAX_HOST_FILE_BYTES) unavailable();
       if ((await call(runtime, 'hostFile', { path, source })).sha256 !== sha256(source)) unavailable();
     },
-    /** Recipes cross the wire by name only; the bootstrap runs its frozen copy with the host-owned environment. */
+    /** Recipes cross the wire by name only; the bootstrap runs its frozen copy (and frozen script) with the host-owned
+     * environment. The pre-bundle runs to completion with the live environment; the pod's `dev` refuses until it has. */
+    async prebundle(runtime, command, env) {
+      if (!same(command, PREBUNDLE_RECIPE) || !same(env, liveEnvironment())) unavailable();
+      if ((await call(runtime, 'prebundle', { recipe: 'prebundle' })).prebundled !== true) unavailable();
+    },
     async dev(runtime, command, env) {
-      if (!same(command, LIVE_RECIPE) || !same(env, artifactEnvironment())) unavailable();
+      if (!same(command, LIVE_RECIPE) || !same(env, liveEnvironment())) unavailable();
       const data = await call(runtime, 'dev', { recipe: 'live' });
       if (data.routeEpoch !== runtime.routeEpoch) return Number.isSafeInteger(data.routeEpoch) ? conflict('stale_fence') : unavailable();
       if (typeof data.revision !== typeof runtime.sourceRevision) unavailable();
@@ -105,7 +110,7 @@ export function createSupervisorTransport(options: SupervisorOptions) {
     },
     /** A-LIVE §8.3: read the stable output only after the build tree is gone, and seal the digest computed here. */
     async build(runtime, attempt, command, env) {
-      if (!same(command, BUILD_RECIPE) || !same(env, artifactEnvironment())) unavailable();
+      if (!same(command, BUILD_RECIPE) || !same(env, buildEnvironment())) unavailable();
       const data = await call(runtime, 'build', { recipe: 'build', attemptId: attempt.id, headSha: attempt.headSha, treeSha: attempt.treeSha });
       if (data.exitCode !== 0) unavailable('build_failed');
       await terminate(runtime);
