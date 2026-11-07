@@ -11,7 +11,7 @@ export function createLiveUpgrade(options: { live: LiveProxy; baseDomain: string
     let cleanup: (() => void) | undefined;
     try {
       const host = incoming.headers.host ?? '';
-      const artifact = parseContentHost(host, options.baseDomain);
+      const artifact = parseContentHost(host, options.baseDomain) ?? options.live.origin(host);
       const key = incoming.headers['sec-websocket-key'];
       if (!options.enabled() || !artifact || incoming.method !== 'GET' || !incoming.url?.startsWith('/')
         || incoming.url.startsWith('//') || incoming.headers.upgrade?.toLowerCase() !== 'websocket'

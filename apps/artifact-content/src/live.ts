@@ -1,5 +1,6 @@
 import { contentHeaders } from '@sentropic/artifacts/content/headers';
 import { createHash } from 'node:crypto';
+import type { ContentOrigin } from '@sentropic/artifacts/content/routing';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 import type { LiveKey } from '../../../api/src/services/artifacts/live/records';
 
@@ -15,6 +16,8 @@ export interface LiveProxyPorts {
   admittedPath(route: LiveRoute, path: string, query: URLSearchParams): Promise<boolean>;
   /** Revoke active sockets immediately on generation/session/grant/route changes. */
   watch(route: LiveRoute, revoke: () => void): () => void;
+  /** Resolves a host-owned pages-domain Host to its artifact. Such hosts serve live routes only, never releases. */
+  origin?(host: string): ContentOrigin | undefined;
   fetch?: typeof fetch;
   now?: () => number;
 }
@@ -57,7 +60,7 @@ export function createLiveProxy(ports: LiveProxyPorts) {
       return { route, upstream: `http://${route.podName}.sentropic-artifact-builders.svc.cluster.local:5173`,
         path: url.pathname + url.search };
     },
-    valid, watch: ports.watch,
+    valid, watch: ports.watch, origin: (host: string) => ports.origin?.(host),
     async fetch(request: Request, artifactId: string): Promise<Response | undefined> {
       const admitted = await this.authorize(request, artifactId);
       if (!admitted) return new URL(request.url).pathname.startsWith('/_live/') ? refused() : undefined;
