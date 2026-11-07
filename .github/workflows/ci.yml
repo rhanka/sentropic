@@ -1704,6 +1704,8 @@ jobs:
       packages: read
     needs: [changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    outputs:
+      deps_missing: ${{ steps.toolbox-deps-registry.outputs.hit == 'false' }}
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1733,6 +1735,14 @@ jobs:
         if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true'
         run: |
           if make pull-api-tool-registry ENV=test-ci-api; then echo "hit=true" >> "$GITHUB_OUTPUT"; else echo "hit=false" >> "$GITHUB_OUTPUT"; fi
+      # CI10-S4: the dependency-only base is keyed by lockfiles/manifests/tool locks/Dockerfile,
+      # so PR source changes still hit it. Verified by recorded manifest + imageId, then pinned
+      # to its digest for the source-layer build. A miss builds the whole toolbox as before.
+      - name: Pull prebuilt toolbox dependencies by content identity
+        id: toolbox-deps-registry
+        if: env.CI_IMAGE_CACHE == '1' && steps.toolbox-cache.outputs.cache-hit != 'true' && steps.toolbox-registry.outputs.hit != 'true'
+        run: |
+          if make pull-api-tool-deps-registry ENV=test-ci-api; then echo "hit=true" >> "$GITHUB_OUTPUT"; else echo "hit=false" >> "$GITHUB_OUTPUT"; fi
       - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - name: Build CI toolbox
         if: steps.toolbox-cache.outputs.cache-hit != 'true' && steps.toolbox-registry.outputs.hit != 'true'
@@ -1794,6 +1804,16 @@ jobs:
       - name: Publish prebuilt toolbox
         if: env.CI_IMAGE_CACHE == '1'
         run: make push-api-tool-registry ENV=test-ci-api
+      # Main-only: build the dependency base from main's own tree (warm layer cache), run the
+      # same runner/compiler interface check on it, then publish. PR runs never write it.
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
+        if: env.CI_IMAGE_CACHE == '1' && needs.build-api-tool-image.outputs.deps_missing == 'true'
+      - name: Build and verify toolbox dependency base
+        if: env.CI_IMAGE_CACHE == '1' && needs.build-api-tool-image.outputs.deps_missing == 'true'
+        run: make ci-build-api-tool-deps verify-api-tool-deps IMAGE_KIND=api-tool-deps ENV=test-ci-images
+      - name: Publish prebuilt toolbox dependency base
+        if: env.CI_IMAGE_CACHE == '1' && needs.build-api-tool-image.outputs.deps_missing == 'true'
+        run: make push-api-tool-deps-registry ENV=test-ci-api
 
   test-api-unit-integration:
     runs-on: ubuntu-latest
