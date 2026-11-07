@@ -50,4 +50,5 @@
 - [x] Lot 2: scoped checks green (ci-dag 10/10, unit-graph 7/7, expected-results 28/28, api-tool-cache 6/6, ci-static 3/3).
 - [x] Lot 3: push, open PR, GLM review.
 - [x] Review B1: pin the exact longest-first wave and the complete endpoint set (performance-report 8/8).
+- [x] Review M3: a deps miss or a failed thin build falls back to the full toolbox build with a warning; full-build failure stays fatal (api-tool-cache 11/11, api-tooling layers, disk-hygiene).
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.

@@ -744,7 +744,7 @@ push-api-tool-deps-registry: ## Publish the verified dependency toolbox and its 
 ci-build-api-tool-deps: ## Build the dependency-only toolbox (main publication path)
 	@$(CI_IMAGE_BUILD) --target ci-tool-deps -f api/Dockerfile -t $(API_TOOL_DEPS_IMAGE) .
 test-ci-api-tool-cache: ci-test-env
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs scripts/ci/api-tool-build.test.mjs
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
@@ -808,7 +808,8 @@ export IMAGE_PLATFORM ?= linux/amd64
 CI_IMAGE_CACHE ?= 0
 CI_IMAGE_CACHE_FLAGS = $(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM) --cache-to type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM)$(comma)mode=max,--no-cache)
 comma := ,
-CI_IMAGE_BUILD = $(DISK_HYGIENE_GUARD) && docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+CI_IMAGE_BUILDX = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+CI_IMAGE_BUILD = $(DISK_HYGIENE_GUARD) && $(CI_IMAGE_BUILDX)
 .PHONY: ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e
 ci-build-api:
 	@$(MAKE) ci-build-api-target IMAGE_KIND=api ENV=$(ENV)
@@ -818,10 +819,9 @@ ci-build-api-target:
 ci-build-api-tool:
 	@$(MAKE) ci-build-api-tool-target IMAGE_KIND=api-tool ENV=$(ENV)
 # A recorded, verified dependency digest (pull-api-tool-deps-registry) makes this a thin source build;
-# without it (miss or cold mode) the whole toolbox is built from scratch.
+# a miss, cold mode or a failed thin build runs the full toolbox build (scripts/ci/api-tool-build.mjs).
 ci-build-api-tool-target:
-	@deps_ref="$$(cat $(API_TOOL_DEPS_REF_FILE) 2>/dev/null || true)"; \
-	$(CI_IMAGE_BUILD) $${deps_ref:+--build-arg BASE_FROM=$$deps_ref --build-arg TOOL_DEPS_IMAGE=$$deps_ref} --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
+	@$(DISK_HYGIENE_GUARD) && node scripts/ci/api-tool-build.mjs $(API_TOOL_DEPS_REF_FILE) -- $(CI_IMAGE_BUILDX) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
 ci-build-ui:
 	@node scripts/ci/resolve-ui-image.mjs $(ENV)
 ci-build-ui-target:
