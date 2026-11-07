@@ -542,6 +542,46 @@ lock-vite-737-824: ## Bump vite 7.3.6->7.3.7 and 8.2.2->8.2.4 in root + api lock
 	@! grep -q 'vite-7.3.6.tgz' package-lock.json || (echo "❌ stale vite 7.3.6 reference remains" && exit 1)
 	@! grep -q 'vite-8.2.2.tgz' package-lock.json api/package-lock.json || (echo "❌ stale vite 8.2.2 reference remains" && exit 1)
 	@echo "✅ vite 7.3.7 / 8.2.4 in root + api locks"
+HONO_4_13_17_INTEGRITY := sha512-vZIcbkvjOR5hHRWERbGkr8fGfF0GGM1ooYkuH448iO3b2AdVEr3AXZSw4Z3Kn+1L5z0CVoVeyV29VGYmFh05kQ==
+HONO_4_13_0_INTEGRITY := sha512-jhunvfHWxd7J5EFfSgH4xsYJzSe/lfqbUCxiyyeaQasUsXeEHXtzVid+7EOGByc5JnFa23SSFL3Y2RV/z1T+eQ==
+HONO_4_13_9_INTEGRITY := sha512-7dMkQmZoC4E6F7AtaQSPhlWAdnBti+j7rreMZl8QB4jFiEhP9TWbGWUMi8WYzBCgmgulxuvLQupKqo+Co6Omyg==
+HONO_4_13_10_7_INTEGRITY := sha512-icXIITfw/07Q88nLSkB9aiUrd8rYzSweK681Kjo/TSggaGbOX4RRyxxm71v+3PC8C/j+4rlxGeoTRxQDkaJkUw==
+HONO_4_13_13_INTEGRITY := sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA==
+HONO_4_13_14_INTEGRITY := sha512-yhRLQ21U6qa9Hsu2N7Qcbh8tE+WKEcoErjIo56LeSGiGXGp9sA7UpE86Ui9uexb61KakiGwuHMn2QdV7w6i6kQ==
+HONO_4_13_16_INTEGRITY := sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A==
+.PHONY: lock-hono-4-13-17
+lock-hono-4-13-17: ## Resolve hono 4.13.17 in every lock and mirror the ^4.13.16 floors (BRHONO-EX2; the ci.yml hono@4.10.7 tool spec is out of scope)
+	@echo "🔒 Bumping hono to 4.13.17 in root, api and fixture locks..."
+	sed -i '/"node_modules\/hono": {/,/^    },/ { s/"version": "4\.13\.0"/"version": "4.13.17"/; s|hono-4\.13\.0\.tgz|hono-4.13.17.tgz|; s|$(HONO_4_13_0_INTEGRITY)|$(HONO_4_13_17_INTEGRITY)|; }' package-lock.json
+	sed -i '/"node_modules\/hono": {/,/^    },/ { s/"version": "4\.13\.9"/"version": "4.13.17"/; s|hono-4\.13\.9\.tgz|hono-4.13.17.tgz|; s|$(HONO_4_13_9_INTEGRITY)|$(HONO_4_13_17_INTEGRITY)|; }' api/package-lock.json
+	sed -i '/"node_modules\/hono": {/,/^    },/ { s/"version": "4\.10\.7"/"version": "4.13.17"/; s|hono-4\.10\.7\.tgz|hono-4.13.17.tgz|; s|$(HONO_4_13_10_7_INTEGRITY)|$(HONO_4_13_17_INTEGRITY)|; }' packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json
+	sed -i '/"node_modules\/hono": {/,/^    },/ { s/"version": "4\.13\.14"/"version": "4.13.17"/; s|hono-4\.13\.14\.tgz|hono-4.13.17.tgz|; s|$(HONO_4_13_14_INTEGRITY)|$(HONO_4_13_17_INTEGRITY)|; }' packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json
+	@# The selected tuple satisfied the MCP SDK's ^4.11.4 only through a nested copy at 4.10.7; the hoisted 4.13.17 removes it.
+	sed -i '/"node_modules\/@modelcontextprotocol\/sdk\/node_modules\/hono": {/,/^    },/d' packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json
+	sed -i '/"": {/,/^    },/ s/"hono": "4\.10\.7"/"hono": "4.13.17"/' packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json
+	@# Workspace spec mirrors follow the manifests; mcp-auth keeps ^4.10.7 because ci.yml pins PEERS=hono@4.10.7 (out of scope here).
+	sed -i '/"api": {/,/^    },/ s/"hono": "\^4\.12\.25"/"hono": "^4.13.16"/' package-lock.json
+	sed -i '/"apps\/llm-gateway": {/,/^    },/ s/"hono": "\^4\.12\.25"/"hono": "^4.13.16"/' package-lock.json
+	sed -i '/"packages\/connector-host": {/,/^    },/ s/"hono": "\^4\.12\.18"/"hono": "^4.13.16"/' package-lock.json
+	sed -i '/"packages\/connector-host\/node_modules\/@sentropic\/mcp-platform": {/,/^    },/ s/"hono": "\^4\.10\.7"/"hono": "^4.13.16"/' package-lock.json
+	sed -i '/"": {/,/^    },/ s/"hono": "\^4\.12\.25"/"hono": "^4.13.16"/' api/package-lock.json
+	sed -i '/"\.\.\/packages\/connector-host": {/,/^    },/ s/"hono": "\^4\.12\.18"/"hono": "^4.13.16"/' api/package-lock.json
+	for block in 'packages\/auth-hono' 'packages\/chat-server' 'packages\/cluster-mesh' 'packages\/comments' 'packages\/connector-host' 'packages\/flow' 'packages\/llm-gateway' 'packages\/mcp-platform' 'packages\/connector-host\/node_modules\/@sentropic\/mcp-platform'; do \
+		sed -i "/\"$$block\": {/,/^    },/ s/\"hono\": \"\\^4\\.10\\.7\"/\"hono\": \"^4.13.16\"/" package-lock.json; done
+	for block in '\.\.\/packages\/auth-hono' '\.\.\/packages\/chat-server' '\.\.\/packages\/cluster-mesh' '\.\.\/packages\/comments' '\.\.\/packages\/connector-host' '\.\.\/packages\/flow' '\.\.\/packages\/llm-gateway' '\.\.\/packages\/mcp-platform'; do \
+		sed -i "/\"$$block\": {/,/^    },/ s/\"hono\": \"\\^4\\.10\\.7\"/\"hono\": \"^4.13.16\"/" api/package-lock.json; done
+	sed -i 's|"version":"4\.13\.14","resolved":"https://registry\.npmjs\.org/hono/-/hono-4\.13\.14\.tgz","integrity":"$(HONO_4_13_14_INTEGRITY)"|"version":"4.13.17","resolved":"https://registry.npmjs.org/hono/-/hono-4.13.17.tgz","integrity":"$(HONO_4_13_17_INTEGRITY)"|g' scripts/ci/consumer-locks.json scripts/ci/tool-locks.json packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json
+	sed -i 's|"version":"4\.13\.13","resolved":"https://registry\.npmjs\.org/hono/-/hono-4\.13\.13\.tgz","integrity":"$(HONO_4_13_13_INTEGRITY)"|"version":"4.13.17","resolved":"https://registry.npmjs.org/hono/-/hono-4.13.17.tgz","integrity":"$(HONO_4_13_17_INTEGRITY)"|g' scripts/ci/tool-locks.json
+	sed -i 's|"version":"4\.13\.16","resolved":"https://registry\.npmjs\.org/hono/-/hono-4\.13\.16\.tgz","integrity":"$(HONO_4_13_16_INTEGRITY)"|"version":"4.13.17","resolved":"https://registry.npmjs.org/hono/-/hono-4.13.17.tgz","integrity":"$(HONO_4_13_17_INTEGRITY)"|g' scripts/ci/tool-locks.json
+	@for f in package-lock.json api/package-lock.json packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json; do \
+		test $$(grep -c '"node_modules/hono": {' $$f) -eq 1 || (echo "❌ hono copy count wrong in $$f" && exit 1); \
+		test $$(sed -n '/"node_modules\/hono": {/,/^    },/p' $$f | grep -c '"version": "4.13.17"') -eq 1 || (echo "❌ hono 4.13.17 missing in $$f" && exit 1); done
+	@test $$(grep -c '"hono": "\^4\.13\.16"' package-lock.json) -eq 12 || (echo "❌ root lock workspace hono floor count wrong" && exit 1)
+	@test $$(grep -c '"hono": "\^4\.13\.16"' api/package-lock.json) -eq 10 || (echo "❌ api lock hono floor count wrong" && exit 1)
+	@test $$(grep -c 'hono-4\.13\.17\.tgz' scripts/ci/consumer-locks.json) -eq 5 || (echo "❌ consumer closure hono count wrong" && exit 1)
+	@! grep -q 'hono-4\.13\.0\.tgz\|hono-4\.13\.9\.tgz\|hono-4\.13\.13\.tgz\|hono-4\.13\.14\.tgz\|hono-4\.13\.16\.tgz' package-lock.json api/package-lock.json scripts/ci/tool-locks.json scripts/ci/consumer-locks.json packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json || (echo "❌ stale hono reference remains" && exit 1)
+	@! grep -q '@modelcontextprotocol/sdk/node_modules/hono' packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json || (echo "❌ nested hono copy remains in the selected fixture" && exit 1)
+	@echo "✅ hono 4.13.17 in every runtime, fixture and consumer lock"
 .PHONY: lock-markdown-it-direct
 lock-markdown-it-direct: ## Bump markdown-it 14.3.0/14.1.1 -> 14.3.2 in root + ui locks (pinned, no stack)
 	@echo "🔒 Bumping markdown-it to 14.3.2 in package-lock.json + ui/package-lock.json..."
@@ -616,6 +656,18 @@ verify-api-image: ## Fail if the loaded canonical tag differs from the recorded 
 .PHONY: test-ci-api-runtime
 test-ci-api-runtime: verify-api-image ## Prove the production artifact has no npm CLI, global tree or cache
 	@docker run --rm $(API_IMAGE_REF) sh -ec '! command -v npm; ! command -v npx; test ! -e /usr/local/lib/node_modules/npm; test ! -e /root/.npm; node --version'
+	@$(MAKE) test-security-hono-image ENV=$(ENV)
+
+# BRHONO-EX1: exercise the real HTTP adapter and the retained canonical runtime tree.
+HONO_NPM_IMAGE := node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
+.PHONY: test-security-hono-node-server test-security-hono-image
+test-security-hono-node-server: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(HONO_NPM_IMAGE) \
+		node scripts/security/hono-node-server-install.mjs
+test-security-hono-image: ci-test-env verify-api-image
+	@HONO_RUNTIME_IMAGE="$$(cat "$(API_IMAGE_RECEIPT)")" HONO_NPM_IMAGE="$(HONO_NPM_IMAGE)" \
+		bash scripts/security/hono-node-server-image.sh
 
 .PHONY: test-ci-api-tag-guard
 test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
