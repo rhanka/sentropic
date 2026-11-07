@@ -2144,6 +2144,29 @@ jobs:
         run: make ci-security-join ENV=test-ci-security
 
   # Security: IaC scans (infrastructure configuration)
+  # BRSCA-EX1: always scheduled SCA gate (npm audit on every lockfile + GitHub advisories).
+  security-sca-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [changes]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Run SCA gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: make test-security-sca-gate SCA_GATE_MODE=pr ENV=test-ci-sca-gate
+      - name: Upload SCA gate report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: security-sca-gate-results
+          include-hidden-files: true
+          if-no-files-found: error
+          path: .security/sca-gate.json
+          retention-days: 30
+
   security-iac:
     runs-on: ubuntu-latest
     permissions:
@@ -3397,6 +3420,7 @@ jobs:
       - typecheck-lint-ui
       - typecheck-lint-api
       - validate-idp-sync
+      - security-sca-gate
       - validate-llm-mesh
       - validate-cluster-mesh
       - validate-llm-gateway
