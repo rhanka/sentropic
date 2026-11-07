@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@sentropic/chat-core": "^0.3.0",
-    "hono": "^4.10.7"
+    "hono": "^4.13.16"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",
