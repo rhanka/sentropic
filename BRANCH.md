@@ -42,6 +42,6 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: profile run 42408187255 per step and per lane in .tmp/rv/wagon-ci10-cluster-mesh.md.
-- [ ] Lot 1: regroup the matrix into 7 legs longest first; memory MCP step once; shape checks pinned (expected-results width 7, DAG members, memory-once test).
-- [ ] Lot 2: scoped checks green (test-ci-dag, test-ci-unit-graph, test-ci-expected-results, test-ci-static, test-ci-performance-report, test-ci-run-metrics, ci-capacity-policy, test-ci-package-qualification-dag, test-ci-consumer-contracts, publishable-ci-wiring).
+- [x] Lot 1: regroup the matrix into 7 legs longest first; memory MCP step once; shape checks pinned (expected-results width 7, DAG members, memory-once test).
+- [x] Lot 2: scoped checks green (ci-dag 10/10, unit-graph 7/7, expected-results 28/28, ci-static 3/3, performance-report 8/8, run-metrics 36/36, ci-capacity-policy shapeValid, package-qualification-dag 9/9, consumer-contracts 25/25, publishable-ci-wiring 42/42).
 - [ ] Lot N: train CI green on the exact head; BRANCH.md removed at merge.
