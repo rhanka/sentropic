@@ -41,6 +41,7 @@ export function fakePod(overrides: Partial<Record<FrameBody['op'], Handler>> = {
     install: () => ({ exitCode: 0 }),
     overlay: body => { revision = body.args.revision; return { ...commit(body.args), revision }; },
     hostFile: body => ({ sha256: sha256(String(body.args.source)) }),
+    prebundle: () => ({ prebundled: true }),
     dev: body => ({ revision, routeEpoch: body.fence.routeEpoch }),
     build: () => ({ exitCode: 0 }),
     snapshot: body => {

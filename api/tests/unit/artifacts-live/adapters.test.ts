@@ -4,23 +4,30 @@ import { fixture, key } from './fixture';
 import { createLiveWorker, type QualifiedSupervisor } from '../../../src/services/artifacts/live/worker';
 import { withinPhase } from '../../../src/services/artifacts/live/deadline';
 import { fetchLockedTarball } from '../../../src/services/artifacts/live/npm-relay';
-import { BUILD_RECIPE, LIVE_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
+import { BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, liveEnvironment, NPM_RELAY, PREBUNDLE_RECIPE }
+  from '../../../src/services/artifacts/live/recipes';
 import { createPostgresCacheStorage } from '../../../src/services/artifacts/live/cache-storage';
 
 describe('trusted live adapters', () => {
   it('should force fixed offline recipes and read-only verified dependencies', async () => {
     const f = fixture(); const runtime = await f.controller.start(key);
-    const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'dev', 'build', 'verify']
-      .map(name => [name, vi.fn(async () => name === 'build' ? { candidateDigest: 'digest' } : undefined)])) as unknown as QualifiedSupervisor;
+    const calls: string[] = [];
+    const supervisor = Object.fromEntries(['phase', 'terminate', 'clear', 'stage', 'dependencies', 'overlay', 'hostFile', 'prebundle', 'dev',
+      'build', 'verify'].map(name => [name, vi.fn(async () => { calls.push(name); return name === 'build' ? { candidateDigest: 'digest' } : undefined; })]),
+    ) as unknown as QualifiedSupervisor;
     const worker = createLiveWorker(supervisor);
     const source = await f.ports.forge.snapshot(key, 'B'); const cache = await f.ports.cache.acquire(source, runtime);
     await worker.prepare(runtime, source, cache); await worker.live(runtime);
     expect(supervisor.dependencies).toHaveBeenCalledWith(runtime, cache, { readOnly: true, verifyHash: true });
     expect(supervisor.phase).toHaveBeenCalledWith(runtime, 'offline');
-    expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, expect.objectContaining({ VITE_ARTIFACT_MODE: '1' }));
+    // The bootstrap writes its frozen pre-bundle script: the only host file stays the live Vite config.
+    expect(calls.slice(-3)).toEqual(['hostFile', 'prebundle', 'dev']);
+    expect(supervisor.prebundle).toHaveBeenCalledWith(runtime, PREBUNDLE_RECIPE, liveEnvironment());
+    expect(supervisor.dev).toHaveBeenCalledWith(runtime, LIVE_RECIPE, liveEnvironment());
+    expect(supervisor.hostFile).toHaveBeenCalledOnce();
     expect(supervisor.hostFile).toHaveBeenCalledWith(runtime, '/tmp/artifact-vite.config.mjs', expect.stringContaining('clientPort:443'));
     await worker.build(runtime, { id: 'attempt' } as never);
-    expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, expect.anything());
+    expect(supervisor.build).toHaveBeenCalledWith(runtime, expect.anything(), BUILD_RECIPE, buildEnvironment());
     expect(supervisor.terminate).toHaveBeenCalledWith(runtime);
   });
   it('should stop waiting after the fixed phase deadline without asserting process termination', async () => {
