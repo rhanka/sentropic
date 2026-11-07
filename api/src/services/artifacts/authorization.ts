@@ -25,14 +25,11 @@ export function artifactReadClient(pool: Pool | PoolClient): FinalizeTxClient {
   } };
 }
 
-export function createArtifactAuthorization(options: {
-  identity: ArtifactHostIdentity; workspaceId: string; storageScopeId: string;
-  pool: Pool; currentIdentity: CurrentArtifactIdentity;
-}) {
-  const { identity, workspaceId, storageScopeId } = options;
-  const read = async (client: FinalizeTxClient, lock = false) => {
-    const { rows } = await client.query<{ revision: string; role: string; approved: boolean }>(
-      `SELECT concat_ws(':', u.xmin, p.xmin, t.xmin, tm.xmin, cw.xmin, w.xmin, wm.xmin) AS revision, wm.role,
+/** The one membership authority source shared by read() and the workspace directory.
+ * $1 = subject, $2 = verified token tenant; callers only add selected columns, a
+ * narrowing predicate or a lock, so the approval predicate cannot drift between them.
+ */
+export const ARTIFACT_AUTHORITY_SOURCE = `wm.role,
         (u.account_status = 'active' AND p.disabled_at IS NULL AND t.status = 'active'
           AND tm.status = 'approved' AND w.hidden_at IS NULL) AS approved
        FROM workspaces w
@@ -42,16 +39,34 @@ export function createArtifactAuthorization(options: {
        JOIN cm_identity.cm_tenants t ON t.tenant_id = tm.tenant_id
        JOIN cm_identity.identity_user_accounts u ON u.user_id = wm.user_id
        JOIN cm_identity.identity_account_profiles p ON p.user_id = u.user_id
-       WHERE w.id = $2 AND cw.tenant_id = $3 ${lock ? 'FOR SHARE OF u, p, t, tm, cw, w, wm' : ''}`,
-      [identity.subject, workspaceId, identity.tenantId],
+       WHERE cw.tenant_id = $2`;
+
+/** Combine one ARTIFACT_AUTHORITY_SOURCE row with the current credential decision. */
+export function artifactAuthority(row: { role: string; approved: boolean } | undefined,
+  credential: { readonly readable: boolean; readonly writable: boolean }) {
+  return {
+    readable: !!row?.approved && credential.readable === true && ['viewer', 'commenter', 'editor', 'admin'].includes(row.role),
+    writable: !!row?.approved && credential.readable === true && credential.writable === true
+      && ['editor', 'admin'].includes(row.role),
+  };
+}
+
+export function createArtifactAuthorization(options: {
+  identity: ArtifactHostIdentity; workspaceId: string; storageScopeId: string;
+  pool: Pool; currentIdentity: CurrentArtifactIdentity;
+}) {
+  const { identity, workspaceId, storageScopeId } = options;
+  const read = async (client: FinalizeTxClient, lock = false) => {
+    const { rows } = await client.query<{ revision: string; role: string; approved: boolean }>(
+      `SELECT concat_ws(':', u.xmin, p.xmin, t.xmin, tm.xmin, cw.xmin, w.xmin, wm.xmin) AS revision,
+       ${ARTIFACT_AUTHORITY_SOURCE} AND w.id = $3 ${lock ? 'FOR SHARE OF u, p, t, tm, cw, w, wm' : ''}`,
+      [identity.subject, identity.tenantId, workspaceId],
     );
     const row = rows[0];
     // Credential locks precede quota waits; this is also re-read after every wait.
     const credential = await options.currentIdentity(client, identity, workspaceId);
     return { revision: createHash('sha256').update(row?.revision ?? 'missing').digest('hex'),
-      readable: !!row?.approved && credential.readable === true && ['viewer', 'commenter', 'editor', 'admin'].includes(row.role),
-      writable: !!row?.approved && credential.readable === true && credential.writable === true
-        && ['editor', 'admin'].includes(row.role) };
+      ...artifactAuthority(row, credential) };
   };
   const current = () => read(artifactReadClient(options.pool));
   const policy: CommitPolicyParticipantFactory = {
