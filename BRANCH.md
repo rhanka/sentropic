@@ -1,52 +1,49 @@
-# Feature: Train 3 2026-11-07 (UI folder reload, SCA gate hardening, builder pool d2-4, Track flake item)
+# Feature: A-LIVE W7 — builder service, host build API and SG4b two-step handoff (M3-B)
 
 ## Objective
-- [ ] One train, one PR, one CI: fix the folders/[id] use-case list reload race, harden the SCA gate (4 LOW findings of the #940 review), schedule live builder pods on the artifact-builders pool, and record the e2e flake in Track.
-- [x] Wagons: fix/ui-folder-usecase-reload, chore/sca-gate-lows, feat/artifact-builder-pool-d2-4, chore/track-e2e-usecase-flake (cherry-picked onto main 2d06ba7eb without conflict).
+- [ ] Builder service composition, authenticated host build API (job by id, never a caller SHA) and the A-LIVE §8.4 two-step SG4b handoff, coded against the W3 `QualifiedSupervisor` port. Code only: merge and activation wait for the GB4-P go (A-LIVE §10).
 
 ## Scope / Guardrails
-- [x] Branch train/2026-11-07-ci10-c; worktree tmp/worktrees/train3; ENV=test-ci10-train3.
-- [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling.
-- [x] Scoped local checks only; full suites run in the PR CI.
+- [x] Branch feat/alive-w7 from origin/main 3f1027496; worktree tmp/worktrees/alive-w7; ENV=test-alive-w7.
+- [x] Plan .tmp/rv/alive-enablement-plan.md (W7, lot M3-B); contracts A-LIVE v2 and G0 v3; immo reservations R1-R5.
+- [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling; never ENV=dev.
+- [x] Wagon: push the branch, no PR, no version bump, no lock or manifest regeneration.
+- [x] Pod resources and NODE_OPTIONS belong to wagon feat/alive-pod-4live (plan r3.5); not changed here.
+- [x] Nothing deployed or activated on any cluster.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `ui/src/lib/utils/keyed-reload.ts`
-  - `ui/src/routes/folders/[id]/+page.svelte`
-  - `ui/tests/utils/keyed-reload.test.ts`
-  - `scripts/security/sca-gate.mjs`
-  - `scripts/security/sca-gate.test.mjs`
-  - `.security/vulnerability-register.yaml`
-  - `api/src/services/artifacts/live/pods.ts`
-  - `api/tests/unit/artifacts-live/pods.test.ts`
+  - `api/src/services/artifacts/live/**`
+  - `api/tests/unit/artifacts-live/**`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/*/src/**`
-  - `api/drizzle/*.sql`
-  - `.github/workflows/ci.yml`
-- **Conditional Paths (allowed with declared exception)**:
-  - `.track/**` under BR86-EX1.
+  - `packages/**`
+  - `apps/**`
+  - `plan/NN-BRANCH_*.md`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (none planned: the handoff ledger reuses `control.artifact_host_kv`)
+  - `.github/workflows/**`
 
 ## Feedback Loop
-- [x] BR86-EX1: Track writer commit for the e2e use-case flake bug item 01M6VD98F8SY5WYQ186GV4F66A. Rollback: revert the Track commit.
-- [ ] Acceptance: exact-head CI green; e2e 06-usecase passes; no gate weakened.
-
-## AI Flaky tests
-- [x] No flaky allowance, timeout increase or new skip.
+- [ ] `attention`: W3 port has no method to export the verified candidate bytes; W7 injects a `CandidateExport` port (open question to W3).
+- [ ] `attention`: the host-side verifier must be packaged for immo (W10); placement is an open question.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [x] **Multi-branch**
-- [x] Rationale: four independent wagons integrated into one dated train with one CI.
-
-## UAT Management (in orchestration context)
-- [ ] Exact-head pull_request CI result retained in the PR.
+- [x] **Multi-branch** (wagon merged by the train integration lane)
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: wagons cherry-picked onto main without conflict.
-- [x] Lot 2: scoped checks green (sca-gate unit 14/14, ui keyed-reload 2/2; pods test 5/5 recorded by its wagon).
-- [ ] Lot 3: push, open PR, review.
-- [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
+- [ ] **Lot 1 — SG4b two-step handoff**
+  - [ ] Ed25519 single-use authorization bound to job, generation, commit, candidate, run and attempt; 10-minute lifetime.
+  - [ ] Host verifier: mandatory evidence, foreign scope/job, replay, expiry, altered bytes, stored-bytes re-read, response-loss replay.
+  - [ ] Builder publication port: anti-repack check, durable intent, bounded resend, receipt verification, idempotent record.
+- [ ] **Lot 2 — Host build API and builder service**
+  - [ ] Authenticated host identity; job by id; asynchronous build with job-bound status.
+  - [ ] Scheduler sweep (reconcile, reap, recover) exposed, never started.
+  - [ ] Composition with the handoff publication; host-selected live recipe path.
+- [ ] **Lot 3 — Gate**
+  - [ ] Scoped checks: `make -f .tmp/packets/alive-w7-ops.mk w7-check` (tsc + vitest on api/tests/unit/artifacts-live).
+  - [ ] Push the wagon; report .tmp/rv/alive-W3-W7.md.
