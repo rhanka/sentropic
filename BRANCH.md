@@ -73,7 +73,7 @@
   - [x] Merge W5 @ 41078993c for the GB1 port `validateArtifactBuild` (BRW7-EX3).
   - [x] Read `artifact-build/gb1-qualification.json` at the pinned commit: 64 KiB, closed keys, empty execution allowlist, exact script-row cover, lock digest; missing file refused when the lock has scripts.
   - [x] IntegrityEvidence digest = SHA-256 of the qualification file; cache inventory from the W5 coverage (local copy deleted).
-  - [ ] Remote host base URL from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (preprod `https://preprod.immo.sent-tech.ca/api/v1/artifacts`).
+  - [x] Remote host base URL from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (preprod `https://preprod.immo.sent-tech.ca/api/v1/artifacts`).
   - [ ] Key env names and rotation documented with the remote host and the qualification file.
 - [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
