@@ -131,11 +131,11 @@ export function loadBoundaries(file) {
 
 // Deterministic integration lanes: the complete consumer-side suite. Live
 // provider lanes stay change-filter selected and are never implied here.
-export const INTEGRATION_LANES = ['test-api-unit-integration', 'test-ui', 'test-e2e',
+export const INTEGRATION_LANES = ['test-api-unit-integration', 'test-api-sut', 'test-ui', 'test-e2e',
   'e2e-vscode', 'smoke-idp-screens'];
 
 const CONSUMER_LANES = {
-  api: [{ kind: 'job', identity: 'test-api-unit-integration' }],
+  api: [{ kind: 'job', identity: 'test-api-unit-integration' }, { kind: 'job', identity: 'test-api-sut' }],
   ui: [{ kind: 'job', identity: 'test-ui' }],
   'auth-idp': [{ kind: 'job', identity: 'smoke-idp-screens' }],
   'llm-gateway': [{ kind: 'make', identity: 'test-llm-gateway-process' }],

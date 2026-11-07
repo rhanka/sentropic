@@ -12,7 +12,7 @@
     { "slug": "cited-source-viewer", "kind": "library", "validation": "validate-cited-source-viewer" },
     { "slug": "cluster-mesh", "kind": "library", "validation": "validate-cluster-mesh" },
     { "slug": "comments", "kind": "library", "validation": "validate-comments" },
-    { "slug": "connector-host", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
+    { "slug": "connector-host", "kind": "library", "validation": "validate-connector-host" },
     { "slug": "contracts", "kind": "library", "validation": "validate-contracts" },
     { "slug": "cowork-bridge", "kind": "library", "validation": "validate-cowork-bridge" },
     { "slug": "cowork-desktop", "kind": "library", "validation": "validate-cowork-desktop" },
