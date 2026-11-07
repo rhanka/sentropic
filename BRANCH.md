@@ -44,8 +44,8 @@
 - [ ] **Lot 1b — s-archi changes**
   - [x] Builder namespace and service domain from per-environment configuration (`builderPlacement`).
   - [x] In-pod install `npm ci --offline --ignore-scripts`, no registry, no script allowlist.
-  - [ ] Job admission: `binding.pendingJobId === jobId` and a matching generation.
-  - [ ] `expect()` contract: every A-LIVE §8.3 recheck, one test per refusal.
+  - [x] Job admission: `binding.pendingJobId === jobId` and a matching generation; monotonic host attempt fence.
+  - [x] `expect()` contract: every A-LIVE §8.3 recheck, one test per refusal (`publicationRecheck`).
   - [ ] Import `candidateDigest`, the handoff types and the verifier from `@sentropic/artifacts/live-host`; `kid` in claims and receipt; delete the api copy.
 - [ ] **Lot 2 — Host build API and builder service**
   - [ ] Authenticated host identity; job by id; asynchronous build with job-bound status.
