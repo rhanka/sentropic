@@ -7,7 +7,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof, independentValidators } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof, independentValidators, OBSERVED_SLOTS_LOWER_BOUND } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
@@ -203,6 +203,7 @@ test('should capture only selected delivery endpoints and reject cross-head rece
   assert.throws(() => capacityCapture(workflow, run, [], { ...manifest, policyDigest: 'other-workflow' }), /policy/);
   assert.deepEqual(capture.endpoints.images, ['publish-api-image']);
   assert.deepEqual(capture.endpoints.packages, ['publish-comments']);
+  assert.deepEqual(capture.capacity, { availableSlots: OBSERVED_SLOTS_LOWER_BOUND, reserveSlots: 0 });
   assert.equal(capture.timings.verdictSeconds, null);
   assert.equal(capacityCapture(workflow, run, [{ name: 'changes', runner_id: 0, conclusion: 'cancelled',
     started_at: '2026-10-26T15:46:09Z', completed_at: '2026-10-26T15:52:57Z' }], manifest).timings.classificationSeconds, null);
