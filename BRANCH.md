@@ -5,6 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Branch fix/prod-ghcr-pin from origin/main 17ad1c58b06a01b4f8e77472fa0421b9c507104a; worktree tmp/worktrees/prod-ghcr-pin.
+- [x] Rebase after train #931 onto origin/main b5d08ccc9; resolve the root BRANCH.md conflict with this lane's plan and preserve every implementation commit.
 - [x] ENV=test-prod-ghcr-pin; API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595; no service stack or local image build (disk 94%).
 - [x] Make-only; ENV last; no Python, CI polling, deployment, merge, skip marker or attribution trailer.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in .security/ci-lockfile-policy.json.
@@ -63,6 +64,10 @@
 - [x] This lane never runs that command; merging or publishing alone does not change running production pods.
 
 ## Plan / Todo (lot-based)
+- [x] **Post-train rebase**: all six implementation patches retain identical range-diff identities; keep every production digest and the whole-render mutable-image regression. Main's prod resource graph includes no A-LIVE controller or artifact-builder workload; both CronJobs remain fully digest-pinned.
+- [x] **Post-rebase publication gate**: no package source, package manifest, lockfile or L5 artifact differs from origin/main; no package version bump or generated-file refresh applies to this deployment/tooling-only branch.
+- [x] **Post-rebase manifest validation**: make test-artifact-content-manifests API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-prod-ghcr-pin passes on b5d08ccc9; retain main's builder-egress checks and every production image assertion. Conductor imports this rebase request and .tmp/rv/prod-ghcr-pin.md into Track.
+- [x] **Post-rebase CI contracts**: 75 classifier, consumer, tuple and image tests pass; all 42 workflow-wiring tests pass through their YAML-equipped test-publishable-manifests target. Initial mixed-target invocation lacked YAML; corrected invocation requires no source change.
 - [x] **Consumer bootstrap**: the unchanged real Make recipe reproduced the missing-semver failure; pinned bootstrap now passes all 20 classifier, 25 consumer and 10 installed-tuple tests on test-prod-ghcr-pin without a new image build.
 - [x] **Three-job local repair**: pinned consumer bootstrap passes 55 classifier/consumer/tuple tests. The exact b44031 pull now matches config 0bb7ae394d9695659dac905d81ee70d5ba1e57ddcebe2744a80bdfcd3f12796d instead of comparing manifest ID 424c4e6f6926b12f9ca7313d9828990aa4df887455c99f5ec3e369e26421602a. Archive metadata normalizes config identity for resolver/publication; config collisions, bad exports and digest drift remain blocking. Keep the helper in global dispatch coverage. Security DAG fixtures retain all selected scans and reject unexpected skips; no CVE exception is needed for the observed join failure.
 - [ ] **Three-job handoff**: push the verified commits, retain logs/state in .tmp/rv/fix-936-931.md and exit without CI observation. Conductor imports this request and results into Track and owns final-head CI/merge; this lane does not append to .track.
