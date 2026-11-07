@@ -645,6 +645,10 @@ test-ci-image-receipts: ci-test-env ## Reject incorrect source, workflow, archiv
 test-ghcr-config-identity: ci-test-env ## Regress config identity independently of Docker's image ID representation
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/image-receipt.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs scripts/ci/ghcr-images.test.mjs
 
+.PHONY: test-ghcr-e2e-qualification
+test-ghcr-e2e-qualification: ci-test-env ## Qualify provider cancellation accounting without a service stack
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" --tmpfs /workspace/.tmp:rw,exec,mode=1777 -w /workspace $(LLM_MESH_NODE_IMAGE) node --test e2e/fixtures/provider-server.test.mjs scripts/ci/live-provider-receipt.test.mjs
+
 .PHONY: test-ci-release-receipts
 test-ci-release-receipts: ci-test-env ## Reject untested releases: required checks, source/digest, publication, integrity/provenance, stale receipts
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/release-receipt.test.mjs
