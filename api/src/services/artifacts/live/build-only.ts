@@ -1,4 +1,5 @@
-import type { LivePorts } from './ports';
+import type { DraftSnapshot, LiveBinding, LivePorts } from './ports';
+import { releaseIfDormant } from './admission';
 import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey } from './records';
 import { podName } from './pods';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
@@ -11,6 +12,13 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
   if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
   const draft = await ports.drafts.current(key, binding.generation);
   if (draft.generation !== binding.generation) conflict('stale_fence');
+  // A build pod takes a live slot, and the clean build is a heavy phase; a refusal at either gate writes no state.
+  await ports.admission.acquire(key, binding.ownerId);
+  try { return await ports.heavy.run(key, 'explicit_build', () => buildUnderGate(ports, key, jobId, binding, job, draft)); }
+  catch (error) { await releaseIfDormant(ports, key); throw error; }
+}
+async function buildUnderGate(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding,
+  job: { headSha: string; expectedReleaseId: string | null }, draft: DraftSnapshot) {
   let runtime = await ports.store.transaction(key, async unit => {
     if (unit.state && unit.state.runtime.phase !== 'DORMANT') conflict('pending_publication');
     const previous = unit.state;
@@ -19,7 +27,8 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
       rowVersion: previous?.runtime.rowVersion ?? 0, podUid: null, podName: podName(key),
       sourceRevision: draft.revision, appliedRevision: null, baseHeadSha: draft.baseHeadSha, liveTreeSha: draft.treeSha,
       lastAccessAt: ports.now(), maximumLifetimeAt: ports.now() + 3_600_000,
-      routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1, pendingWake: false, attempt: null };
+      routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1, invitationEpoch: 0, invitationExpiresAt: null,
+      pendingWake: false, attempt: null };
     unit.save({ runtime, progress: previous?.progress.generation === binding.generation ? previous.progress : {
       generation: binding.generation, latestVerifiedHeadSha: binding.headSha, progressSeq: 0,
       publicationBaselineHeadSha: binding.headSha, publicationBaselineSeq: 0, lastProgressEventId: null,
