@@ -4,7 +4,7 @@ import { podName } from '../../../api/src/services/artifacts/live/pods';
 
 function fixture() {
   const route: LiveRoute = { storageScopeId: 'scope', artifactId: 'artifact', sessionId: 'session',
-    podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, expiresAt: 1000, sourceRevision: 4 };
+    podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, expiresAt: 1000, sourceRevision: 'rev-4' };
   route.podName = podName(route);
   const ports: LiveProxyPorts = { authorize: vi.fn(async () => route), current: vi.fn(async () => true),
     admittedPath: vi.fn(async () => true), watch: () => () => {}, now: () => 0,
