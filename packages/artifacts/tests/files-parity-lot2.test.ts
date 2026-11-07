@@ -624,10 +624,8 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
       }
       return value;
     };
-    const { artifacts_create_upload_page: _page, artifacts_list_assets: _list,
-      artifacts_publish_bundle_v2: _v2, artifacts_publish_bundle: _bundle,
-      artifacts_lookup_people: _lookup, artifacts_list_access: _access,
-      artifacts_revoke_reader_consent: _revoke, ...preexisting } = ARTIFACTS_TOOL_DEFINITIONS;
+    const preexisting = Object.fromEntries(ARTIFACTS_TOOL_NAMES.slice(0, 17)
+      .map((name) => [name, ARTIFACTS_TOOL_DEFINITIONS[name]]));
     // Byte freeze of the 17 LOT 1 definitions (same canonical hash as the
     // LOT 1 pin test): no silent edit of a shipped tool, ever.
     expect(createHash('sha256').update(JSON.stringify(sortKeys(preexisting), null, 2)).digest('hex'))
@@ -637,8 +635,7 @@ describe('files parity LOT 2 (d): staging GC, quotas, metrics', () => {
     // union tools): no removal or rename of a shipped tool.
     expect([...Object.keys(preexisting), 'artifacts_publish_bundle', 'artifacts_lookup_people',
       'artifacts_list_access', 'artifacts_revoke_reader_consent'].sort()).toEqual(
-      [...ARTIFACTS_TOOL_NAMES].filter((name) => !['artifacts_create_upload_page', 'artifacts_list_assets',
-        'artifacts_publish_bundle_v2'].includes(name)).sort());
+      [...ARTIFACTS_TOOL_NAMES.slice(0, 21)].sort());
     expect(ARTIFACTS_TOOL_NAMES).toContain('artifacts_create_upload_page');
     expect(ARTIFACTS_TOOL_NAMES).toContain('artifacts_list_assets');
     expect(ARTIFACTS_TOOL_NAMES).toContain('artifacts_publish_bundle_v2');

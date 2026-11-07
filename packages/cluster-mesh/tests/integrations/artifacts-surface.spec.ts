@@ -29,6 +29,10 @@ const SPEC_TOOLS = [
   // Files parity LOT 2 — appended last, same order as ARTIFACT_CAPABILITY_NAMES.
   'artifacts_create_upload_page', 'artifacts_list_assets',
   'artifacts_publish_bundle_v2',
+  'artifacts_list_app_sources', 'artifacts_fetch_app_source',
+  'artifacts_git_attach', 'artifacts_git_commit', 'artifacts_git_publish', 'artifacts_git_live',
+  'artifacts_live_write', 'artifacts_live_read', 'artifacts_live_reset',
+  'artifacts_live_status', 'artifacts_live_control',
 ];
 
 interface ModuleOptions { failArtifacts?: boolean; loads?: string[] }
