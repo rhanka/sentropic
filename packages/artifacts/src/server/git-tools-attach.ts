@@ -5,8 +5,9 @@ import type { GitBinding } from './git-contracts.js';
 import { validateGitBindingTarget } from './git-registry.js';
 import type { GitPortTarget } from './git-port.js';
 import type { GitToolInvocation, GitToolsDeps } from './git-tools-contracts.js';
-import { requireOwner } from './git-tools-publish.js';
+import { requireCodeRight, requireOwner } from './git-tools-publish.js';
 
+type Executor = GitBinding['executor'];
 const FIELDS = ['repoId', 'branch', 'baseRef', 'subPath', 'autoPublish', 'executor', 'pause'];
 const id8 = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 8);
 const notFound = (error: unknown) => error instanceof ArtifactOperationError && error.kind === 'not_found';
@@ -20,22 +21,26 @@ export async function attachGit(deps: GitToolsDeps, args: Record<string, any>, i
   const given = FIELDS.filter(field => args[field] !== undefined);
   const now = (deps.now?.() ?? new Date()).toISOString();
   const hash = orderedDigest({ operation: 'git_attach', args });
-  const write = async (binding: GitBinding, action: 'attach' | 'pause' | 'resume' | 'detach', afterSha?: string) => {
+  const write = async (binding: GitBinding, action: 'attach' | 'pause' | 'resume' | 'detach', afterSha?: string,
+    branchCreated = false) => {
     const out = await deps.bindings.write({ binding, expectedVersion: before?.version ?? null, actorId: inv.actorId,
       idempotencyKey: args.idempotencyKey, commandHash: hash,
-      event: { action, beforeSha: before?.headCommitSha ?? undefined, afterSha, invocationId: inv.invocationId } });
+      event: { action, beforeSha: before?.headCommitSha ?? undefined, afterSha, invocationId: inv.invocationId,
+        ...(branchCreated ? { branchCreated: true as const } : {}) } });
     return { artifactId: args.artifactId, git: out.binding, replayed: out.replayed };
   };
   const base = before && { ...before, version: before.version + 1, updatedAt: now };
   if (args.detach !== undefined) {
     if (args.detach !== true || given.length) throw new ArtifactOperationError('invalid_request');
     if (!active) throw new ArtifactOperationError('git_not_attached');
+    await requireCodeRight(deps, inv, before.repoId);
     return write({ ...base!, state: 'detached', generation: before.generation + 1,
       pendingJobId: null, pendingCommitSha: null }, 'detach');
   }
   if (args.pause !== undefined) {
     if (given.length !== 1) throw new ArtifactOperationError('invalid_request');
     if (!active) throw new ArtifactOperationError('git_not_attached');
+    await requireCodeRight(deps, inv, before.repoId);
     if (args.pause) return write({ ...base!, state: 'paused', generation: before.generation + 1,
       pendingJobId: null, pendingCommitSha: null }, 'pause');
     const target = await attachTarget(deps, before, inv);
@@ -43,11 +48,11 @@ export async function attachGit(deps: GitToolsDeps, args: Record<string, any>, i
       throw notFound(error) ? new ArtifactOperationError('git_branch_missing') : error; });
     return write({ ...base!, state: 'attached' }, 'resume');
   }
-  const executor: 'caller' | 'ci' | 'sandbox' = args.executor ?? 'caller';
-  if (executor !== 'caller' && !(executor === 'sandbox' && await deps.build?.admits('sandbox'))) {
-    throw new ArtifactOperationError('builder_unavailable', { publicDetails: { executor,
-      reason: executor === 'ci' ? 'executor_retired' : 'executor_unavailable' } });
-  }
+  const repoId: string | undefined = active ? before.repoId : args.repoId;
+  if (repoId === undefined) throw new ArtifactOperationError('invalid_request');
+  await requireCodeRight(deps, inv, repoId);
+  const executor: Executor = args.executor ?? (active ? before.executor : 'caller');
+  await admitExecutor(deps, executor);
   if (active) {
     if ((args.repoId ?? before.repoId) !== before.repoId || (args.branch ?? before.branch) !== before.branch ||
       (args.subPath ?? before.subPath) !== before.subPath || executor !== before.executor) {
@@ -57,37 +62,56 @@ export async function attachGit(deps: GitToolsDeps, args: Record<string, any>, i
     if (autoPublish && !before.autoPublish) await assertAutoPublish(deps, before.repoId, before.branch, before.channel, inv);
     return write({ ...base!, autoPublish }, 'attach', before.headCommitSha ?? undefined);
   }
-  if (args.repoId === undefined) throw new ArtifactOperationError('invalid_request');
   const principal = id8(`${scope}\0${inv.actorId}`);
   const branch: string = args.branch ?? `artifact/p/${principal}/app-${id8(args.artifactId)}`;
   const subPath: string = args.subPath ?? '';
-  const repo = await validateGitBindingTarget(deps.registry, scope, args.repoId, branch, subPath);
+  const repo = await validateGitBindingTarget(deps.registry, scope, repoId, branch, subPath);
   const personal = branch.startsWith('artifact/p/');
   if (personal && !branch.startsWith(`artifact/p/${principal}/`)) throw new ArtifactOperationError('git_ref_not_allowed');
   const channel = personal ? 'personal' : 'shared';
-  const target: GitPortTarget = { storageScopeId: scope, repoId: args.repoId, branch, subPath,
+  if (args.autoPublish === true) await assertAutoPublish(deps, repoId, branch, channel, inv);
+  const target: GitPortTarget = { storageScopeId: scope, repoId, branch, subPath,
     principalId: inv.actorId, outputDir: deps.outputDir ?? 'dist' };
-  let head: string; let created = false;
-  try { head = await deps.git.resolveRef(target, branch); }
-  catch (error) {
-    if (!notFound(error)) throw error;
-    if (args.baseRef === undefined) throw new ArtifactOperationError('git_branch_missing');
-    head = await deps.git.resolveRef(target, args.baseRef);
-    await deps.git.createBranch(target, head);
-    created = true;
-  }
-  const defaulted = created && channel === 'personal' && repo.publicationPolicy.delegatedPublication === 'personal-only';
-  const autoPublish: boolean = args.autoPublish ?? defaulted;
-  if (autoPublish && args.autoPublish === true && !created) {
+  const { head, created } = await attachHead(deps, target, args, inv, hash, now);
+  if (args.autoPublish === true && !created) {
     throw new ArtifactOperationError('git_auto_publish_refused', { publicDetails: { reason: 'initial_pre_existing_branch' } });
   }
-  if (args.autoPublish === true) await assertAutoPublish(deps, args.repoId, branch, channel, inv);
-  const binding: GitBinding = { artifactId: args.artifactId, storageScopeId: scope, repoId: args.repoId, branch,
+  const defaulted = created && channel === 'personal' && repo.publicationPolicy.delegatedPublication === 'personal-only';
+  const binding: GitBinding = { artifactId: args.artifactId, storageScopeId: scope, repoId, branch,
     channel, personalPrincipalId: personal ? inv.actorId : null, subPath, baseCommitSha: head, headCommitSha: head,
-    releaseCommitSha: before?.releaseCommitSha ?? null, autoPublish, executor, pendingJobId: null,
-    pendingCommitSha: null, state: 'attached', generation: before ? before.generation + 1 : 1,
+    releaseCommitSha: before?.releaseCommitSha ?? null, autoPublish: args.autoPublish ?? defaulted, executor,
+    pendingJobId: null, pendingCommitSha: null, state: 'attached', generation: before ? before.generation + 1 : 1,
     version: before ? before.version + 1 : 1, attachedBy: inv.actorId, attachedAt: now, updatedAt: now };
-  return write(binding, 'attach', head);
+  return write(binding, 'attach', head, created);
+}
+/**
+ * A-LIVE v2 §5.3.1: « created by this command » is the durable intent written before createBranch, never a forge
+ * guess. A same-key retry after a lost binding write keeps the outcome; a moved head or a foreign branch does not.
+ */
+async function attachHead(deps: GitToolsDeps, target: GitPortTarget, args: Record<string, any>, inv: GitToolInvocation,
+  hash: string, now: string): Promise<{ head: string; created: boolean }> {
+  const current = await deps.git.resolveRef(target, target.branch).catch(error => {
+    if (notFound(error)) return undefined;
+    throw error;
+  });
+  const prior = await deps.bindings.attachIntent(inv.storageScopeId, inv.actorId, args.idempotencyKey);
+  if (prior && prior.commandHash !== hash) throw new ArtifactOperationError('command_conflict');
+  if (current !== undefined) return { head: current, created: prior?.baseCommitSha === current };
+  if (args.baseRef === undefined) throw new ArtifactOperationError('git_branch_missing');
+  const intent = prior ?? await deps.bindings.reserveAttachIntent({ storageScopeId: inv.storageScopeId,
+    artifactId: args.artifactId, actorId: inv.actorId, idempotencyKey: args.idempotencyKey, commandHash: hash,
+    repoId: target.repoId, branch: target.branch, baseCommitSha: await deps.git.resolveRef(target, args.baseRef),
+    createdAt: now });
+  if (intent.commandHash !== hash) throw new ArtifactOperationError('command_conflict');
+  await deps.git.createBranch(target, intent.baseCommitSha);
+  return { head: intent.baseCommitSha, created: true };
+}
+/** G0 v3 §1.2 / A-LIVE S03: the host build port admits every executor, the omitted caller default included. */
+async function admitExecutor(deps: GitToolsDeps, executor: Executor) {
+  const open = executor !== 'ci' && (deps.build
+    ? await deps.build.admits(executor).then(value => value === true, () => false) : executor === 'caller');
+  if (!open) throw new ArtifactOperationError('builder_unavailable', { publicDetails: { executor,
+    reason: executor === 'ci' ? 'executor_retired' : 'executor_unavailable' } });
 }
 async function attachTarget(deps: GitToolsDeps, binding: GitBinding, inv: GitToolInvocation): Promise<GitPortTarget> {
   await validateGitBindingTarget(deps.registry, binding.storageScopeId, binding.repoId, binding.branch, binding.subPath);

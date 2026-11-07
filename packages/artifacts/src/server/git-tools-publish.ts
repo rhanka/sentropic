@@ -9,6 +9,12 @@ export async function requireOwner(deps: GitToolsDeps, inv: GitToolInvocation, a
   const authority = await deps.authorize(inv, artifactId);
   if (authority.ownerId !== inv.actorId || (write && !authority.canWrite)) throw new ArtifactOperationError('access_denied');
 }
+/** Current repository code right (G0 v3 §1.4); a port failure is a denial. Runs before any registry or forge call. */
+export async function requireCodeRight(deps: GitToolsDeps, inv: GitToolInvocation, repoId: string) {
+  const allowed = await deps.codeRights.canReadCode({ storageScopeId: inv.storageScopeId, repoId, actorId: inv.actorId })
+    .then(value => value === true, () => false);
+  if (!allowed) throw new ArtifactOperationError('access_denied');
+}
 /** G0 v3 §2.6 git_publish: pin one reachable SHA, persist the build job, move the binding to build_pending. */
 export async function publishGit(deps: GitToolsDeps, args: Record<string, any>, inv: GitToolInvocation) {
   await requireOwner(deps, inv, args.artifactId, true);
@@ -16,9 +22,7 @@ export async function publishGit(deps: GitToolsDeps, args: Record<string, any>, 
   const scope = inv.storageScopeId;
   const binding = await deps.bindings.get(scope, args.artifactId);
   if (!binding || binding.state === 'detached') throw new ArtifactOperationError('git_not_attached');
-  const allowed = await deps.codeRights.canReadCode({ storageScopeId: scope, repoId: binding.repoId, actorId: inv.actorId })
-    .then(value => value === true, () => false);
-  if (!allowed) throw new ArtifactOperationError('access_denied');
+  await requireCodeRight(deps, inv, binding.repoId);
   if (binding.state === 'paused') throw new ArtifactOperationError('git_binding_paused', { publicDetails: { state: 'paused' } });
   if (binding.state === 'diverged') throw new ArtifactOperationError('git_diverged', {
     publicDetails: { headCommitSha: binding.headCommitSha, releaseCommitSha: binding.releaseCommitSha } });
