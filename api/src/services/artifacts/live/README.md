@@ -138,27 +138,43 @@ only, reads for the owner or an unexpired invitee of the current invitation
 epoch. Revisions are opaque strings of at most 256 characters, the live-host
 assertion bound (`MAX_SOURCE_REVISION_LENGTH`). Pod slots are
 admitted fairly across users; the capacity comes from per-environment
-configuration, and slots held by pods that are not DORMANT are re-read before
-the first decision after an API restart. One controller replica per environment
-owns admission. One heavy phase at a time
-runs per node (`createPostgresHeavyGate`): cold revive, wake, crash restore and
-the idle or explicit clean build; HMR projection never waits for it. An
-OOM-killed or evicted LIVE pod is replaced, after confirmed deletion, by a
-fenced revive of the acknowledged draft, at most twice in a row.
+configuration (4 on one d2-4 by default), and slots held by pods that are not
+DORMANT are re-read before the first decision after an API restart. One
+controller replica per environment owns admission. An OOM-killed or evicted
+LIVE pod is replaced, after confirmed deletion, by a fenced revive of the
+acknowledged draft, at most twice in a row.
 
-Known limits of the heavy-phase gate:
+Heavy phases go through the cluster-mesh heavy-phase queue of the builder node
+(`createHeavyPhaseQueue`, durable in the host KV through
+`createPostgresHeavyQueueStore`): the in-pod install, the Vite pre-bundle (its
+own supervisor op), the dev server start and the clean build. The queue is a
+strict FIFO: a phase is admitted when the pod bases, the live reservations, the
+admitted phases and its own cost fit the node budget (1706 MiB on one d2-4;
+provisional costs install 980, pre-bundle 980, dev 418, build 1344 MiB; the pod
+base is measured per deployment). A finished dev start becomes its pod's live
+reservation until the live stops. A build is admitted only when no live runs on
+the node. Cold revive, wake and crash restore queue each phase in turn; HMR
+projection never waits. An interactive waiter is refused with
+`builder_unavailable`/`queued` past the configured wait and leaves the queue;
+`controller.heavyStatus` exposes a pod's queued or admitted phases and position.
 
-- The advisory lock lives in each environment's database, so preprod and prod
-  heavy phases do not serialize with each other on the shared node. That relies
-  on the preprod quota window (pods 0 during owner sessions) until a shared lock
-  or a split node exists; keep preprod plus prod admission at most 4 slots.
-- If the API crashes mid-phase, its connection closes and the lock frees while
-  the pod may still run that heavy step. Another phase can then overlap it, at
-  most until the 5-minute phase deadline. After the restart the host calls
-  `recover`, which fences and tears down that intent before any replacement.
+Known limits of the heavy-phase queue:
+
+- The queue state lives in each environment's database, so preprod and prod do
+  not share one node budget; each environment needs its own share of the node in
+  configuration until the node is split or the queue store is shared.
+- With the provisional costs, a pre-bundle fits beside at most one live, and four
+  lives exceed 1706 MiB once the pod base is above 8 MiB.
+- Tickets renew at a third of the entry TTL. If the API crashes mid-phase, its
+  admitted ticket stays counted until the TTL expires while the pod may still
+  run that step; queued tickets expire the same way. After the restart the gate
+  re-seeds the pod and live holds from the durable runtimes, and the host calls
+  `recover` on interrupted intents before any replacement.
 
 Idle builds always use the last verified commit and the existing pod, never
-the dirty draft. A conflict/divergence skips the build. An unchanged head still
+the dirty draft. The reaper stops the live first, prepares the pod, then waits in
+BUILD_QUEUED: every scheduler pass renews its ticket, and the build runs once
+admitted; a wake cancels it. A conflict/divergence skips the build. An unchanged head still
 builds, while publication additionally requires autoPublish, current policy,
 new durable progress or the separately persisted initial exception, and the
 release CAS. Wake and publication serialize on the same binding row lock.
