@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fixture, key } from './fixture';
+import { fixture, key, placement } from './fixture';
 import { builderPod, podName } from '../../../src/services/artifacts/live/pods';
 import { BUILDER_IMAGE } from '../../../src/services/artifacts/live/recipes';
 
 describe('builder pod admission and recovery', () => {
   it('should emit the exact VAP/PSA manifest without credentials or persistent volumes', async () => {
-    const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted');
+    const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted', placement);
     expect(pod.spec).toMatchObject({ serviceAccountName: 'artifact-builder', automountServiceAccountToken: false,
       restartPolicy: 'Never', securityContext: { runAsNonRoot: true } });
     expect(pod.spec).not.toHaveProperty('activeDeadlineSeconds');
