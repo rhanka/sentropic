@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ARTIFACT, SHA_A, SHA_B, gitToolsWorld } from './fixtures/git-tools-world.js';
 
 const attach = { artifactId: ARTIFACT, repoId: 'repo-a', baseRef: 'main', idempotencyKey: 'k-attach' };
@@ -95,10 +95,82 @@ describe('artifacts_git_attach', () => {
     const out: any = await w.call('git_attach', { ...attach, executor: 'sandbox' });
     expect(out.result.body.git.executor).toBe('sandbox');
   });
-  it('should require owner, host write scope, repoId and the code right', async () => {
+  it('should require owner, host write scope and repoId', async () => {
     expect(await gitToolsWorld().call('git_attach', attach, 'bob')).toMatchObject(refused(403, 'access_denied'));
     expect(await gitToolsWorld({ canWrite: false }).call('git_attach', attach)).toMatchObject(refused(403, 'access_denied'));
     expect(await gitToolsWorld().call('git_attach', { artifactId: ARTIFACT, idempotencyKey: 'k' })).toMatchObject(refused(400, 'invalid_request'));
+  });
+  it('should check the code right on every attach path before any registry or forge call', async () => {
+    const denied = gitToolsWorld({ rights: false });
+    expect(await denied.call('git_attach', attach)).toMatchObject(refused(403, 'access_denied'));
+    expect(denied.registry.get).not.toHaveBeenCalled();
+    expect(denied.git.resolveRef).not.toHaveBeenCalled();
+    expect(denied.git.createBranch).not.toHaveBeenCalled();
+    const w = gitToolsWorld();
+    await w.call('git_attach', attach);
+    await w.call('git_attach', { artifactId: ARTIFACT, pause: true, idempotencyKey: 'p' });
+    w.access.rights = false;
+    const forge = w.git.resolveRef.mock.calls.length;
+    const registry = vi.mocked(w.registry.get).mock.calls.length;
+    for (const [extra, key] of [[{ pause: false }, 'r'], [{ detach: true }, 'd'], [{ autoPublish: false }, 'c']] as const) {
+      expect(await w.call('git_attach', { artifactId: ARTIFACT, idempotencyKey: key, ...extra }))
+        .toMatchObject(refused(403, 'access_denied'));
+    }
+    expect(w.git.resolveRef).toHaveBeenCalledTimes(forge);
+    expect(w.registry.get).toHaveBeenCalledTimes(registry);
+    expect(await w.bindings.get('scope-a', ARTIFACT)).toMatchObject({ state: 'paused' });
+  });
+  it('should gate the omitted caller default through the build port and keep the bound executor', async () => {
+    const w = gitToolsWorld({ build: { admits: async executor => executor === 'sandbox',
+      request: async () => ({ jobId: 'j', state: 'build_pending' }) } });
+    expect(await w.call('git_attach', attach)).toMatchObject(refused(503, 'builder_unavailable'));
+    expect(w.git.createBranch).not.toHaveBeenCalled();
+    expect(await w.bindings.get('scope-a', ARTIFACT)).toBeUndefined();
+    await w.call('git_attach', { ...attach, executor: 'sandbox', idempotencyKey: 'k-s' });
+    expect(await w.call('git_attach', { artifactId: ARTIFACT, autoPublish: false, idempotencyKey: 'k-c' }))
+      .toMatchObject({ ok: true, result: { body: { git: { executor: 'sandbox', autoPublish: false } } } });
+  });
+  it('should record branchCreated only on the attach that created the branch', async () => {
+    const w = gitToolsWorld();
+    await w.call('git_attach', attach);
+    await w.call('git_attach', { artifactId: ARTIFACT, detach: true, idempotencyKey: 'd' });
+    const again: any = await w.call('git_attach', { ...attach, idempotencyKey: 'k2' });
+    expect(again.result.body.git.autoPublish).toBe(false);
+    const events = await w.bindings.events('scope-a', ARTIFACT);
+    expect(events.map(e => e.action)).toEqual(['attach', 'detach', 'attach']);
+    expect(events[0].branchCreated).toBe(true);
+    expect(events[1]).not.toHaveProperty('branchCreated');
+    expect(events[2]).not.toHaveProperty('branchCreated');
+  });
+  it('should keep the created-branch outcome when the binding write is lost after createBranch', async () => {
+    const w = gitToolsWorld();
+    vi.spyOn(w.bindings, 'write').mockRejectedValueOnce(new Error('crash'));
+    expect(await w.call('git_attach', attach)).toMatchObject({ ok: false });
+    w.heads.set('main', SHA_B);
+    const out: any = await w.call('git_attach', attach);
+    expect(out.result.body.git).toMatchObject({ autoPublish: true, headCommitSha: SHA_A, baseCommitSha: SHA_A });
+    expect(w.git.createBranch).toHaveBeenCalledTimes(1);
+    expect(await w.bindings.events('scope-a', ARTIFACT)).toMatchObject([{ action: 'attach', branchCreated: true }]);
+  });
+  it('should create the branch at the intent base when the crash precedes createBranch', async () => {
+    const w = gitToolsWorld();
+    w.git.createBranch.mockRejectedValueOnce(new Error('crash'));
+    expect(await w.call('git_attach', attach)).toMatchObject({ ok: false });
+    w.heads.set('main', SHA_B);
+    const out: any = await w.call('git_attach', attach);
+    expect(w.git.createBranch).toHaveBeenLastCalledWith(expect.anything(), SHA_A);
+    expect(out.result.body.git).toMatchObject({ autoPublish: true, headCommitSha: SHA_A });
+  });
+  it('should not claim creation for a moved head or another command under the same key', async () => {
+    const w = gitToolsWorld();
+    vi.spyOn(w.bindings, 'write').mockRejectedValueOnce(new Error('crash'));
+    await w.call('git_attach', attach);
+    expect(await w.call('git_attach', { ...attach, autoPublish: false })).toMatchObject({ ok: false, failure: { httpStatus: 409 } });
+    const branch = [...w.heads.keys()].find(ref => ref.startsWith('artifact/p/'))!;
+    w.heads.set(branch, SHA_B);
+    const out: any = await w.call('git_attach', attach);
+    expect(out.result.body.git).toMatchObject({ autoPublish: false, headCommitSha: SHA_B });
+    expect((await w.bindings.events('scope-a', ARTIFACT))[0]).not.toHaveProperty('branchCreated');
   });
   it('should pause, resume and detach, and refuse mixed detach arguments', async () => {
     const w = gitToolsWorld();
