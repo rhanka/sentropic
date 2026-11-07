@@ -13,7 +13,8 @@ import { currentBinding, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
   return {
-    /** Host scheduler calls this for active bindings; source grants never keep revoked pods alive. */
+    /** Host scheduler calls this for active bindings; source grants never keep revoked pods alive. A LIVE session idle
+     * for more than 900 s is reaped here, ending on the clean build. */
     async reconcile(key: LiveKey) {
       const state = await ports.store.read(key);
       if (!state || state.runtime.phase === 'DORMANT') return;
@@ -21,8 +22,8 @@ export function createLiveController(ports: LivePorts) {
       let binding;
       try { binding = await ports.binding(key); }
       catch (error) { await failed(ports, key, runtime, error); return; }
-      if (!binding.healthy || binding.generation !== runtime.generation || ports.now() >= runtime.maximumLifetimeAt) {
-        return teardown(ports, key, runtime, 'authority_or_lifetime');
+      if (!binding.healthy || binding.generation !== runtime.generation) {
+        return teardown(ports, key, runtime, 'authority');
       }
       if (runtime.phase === 'LIVE') {
         try { await ports.pods.ensure(key, runtime); }
@@ -33,15 +34,15 @@ export function createLiveController(ports: LivePorts) {
       // Recovery of an in-flight operation belongs to startup after its old API executor is fenced.
     },
     start: (key: LiveKey) => revive(ports, key),
-    idle: (key: LiveKey) => idleBuild(ports, key),
     buildOnly: (key: LiveKey, admittedJobId: string) => buildOnly(ports, key, admittedJobId),
     project: (key: LiveKey, durableRevision: string) => projectRevision(ports, key, durableRevision),
     /** Owner or invitee route grant for the host live assertion; writes are the binding owner's only. */
     authorize: (key: LiveKey, actor: LiveActor, access: 'read' | 'write') => authorizeLive(ports, key, actor, access),
     /** Only the authenticated host calls this after an admitted source operation or visible interaction. Edits come
      * from the binding owner only; invited foreground viewing and reads may extend the session (A-LIVE §5.3). */
-    async activity(key: LiveKey, sessionId: string, kind: 'edit' | 'read' | 'foreground' | 'heartbeat' | 'status', actor: LiveActor) {
-      if (kind === 'heartbeat' || kind === 'status') return;
+    async activity(key: LiveKey, sessionId: string, kind: 'edit' | 'read' | 'foreground' | 'heartbeat' | 'status' | 'ping',
+      actor: LiveActor) {
+      if (kind === 'heartbeat' || kind === 'status' || kind === 'ping') return;
       const binding = await currentBinding(ports, key);
       const fence = await ports.invitations.current(key, binding.generation);
       await ports.store.transaction(key, async unit => {
@@ -102,12 +103,8 @@ export function createLiveController(ports: LivePorts) {
       });
       return teardown(ports, key, runtime, 'recovered');
     },
-    /** Absolute lifetime never forces publication before the idle threshold. */
-    async reap(key: LiveKey) {
-      const state = await ports.store.read(key);
-      if (!state || state.runtime.phase === 'DORMANT' || ports.now() < state.runtime.maximumLifetimeAt) return;
-      return teardown(ports, key, state.runtime, 'maximum_lifetime');
-    },
+    /** The idle reaper (Amendment 1): no absolute lifetime; strictly after 900 s idle it ends on the clean build. */
+    reap: (key: LiveKey) => idleBuild(ports, key),
   };
 }
 export type { LiveKey, LiveRuntime };

@@ -1,5 +1,5 @@
 import type { LivePorts } from './ports';
-import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
+import { conflict, LiveError, liveRevision, type LiveKey, type LiveRuntime } from './records';
 import { podName } from './pods';
 import { releaseIfDormant } from './admission';
 import { currentBinding, failed } from './transitions';
@@ -12,6 +12,7 @@ export async function revive(ports: LivePorts, key: LiveKey, phase: 'revive' | '
   const binding = await currentBinding(ports, key);
   const draft = await ports.drafts.current(key, binding.generation);
   if (draft.generation !== binding.generation) conflict('stale_fence');
+  const revision = liveRevision(draft.revision);
   const invitation = await ports.invitations.current(key, binding.generation);
   // The acting user is the binding owner: admission is fair across owners.
   await ports.admission.acquire(key, binding.ownerId);
@@ -24,8 +25,8 @@ export async function revive(ports: LivePorts, key: LiveKey, phase: 'revive' | '
         const now = ports.now();
         const runtime: LiveRuntime = { generation: binding.generation, ownerId: binding.ownerId,
           sessionId: ports.id(), phase: 'REVIVING', leaseEpoch: epoch, rowVersion: previous?.runtime.rowVersion ?? 0,
-          podName: podName(key), podUid: null, sourceRevision: draft.revision, appliedRevision: null,
-          baseHeadSha: draft.baseHeadSha, liveTreeSha: draft.treeSha, lastAccessAt: now, maximumLifetimeAt: now + 3_600_000,
+          podName: podName(key), podUid: null, sourceRevision: revision, appliedRevision: null,
+          baseHeadSha: draft.baseHeadSha, liveTreeSha: draft.treeSha, lastAccessAt: now,
           routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1, invitationEpoch: invitation.epoch,
           invitationExpiresAt: invitation.expiresAt, pendingWake: false, attempt: null,
           crashRestores: phase === 'crash_restore' ? (previous?.runtime.crashRestores ?? 0) + 1 : 0 };
