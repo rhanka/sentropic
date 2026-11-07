@@ -72,7 +72,7 @@
 - [x] BR90-EX7 (W8 BRW8-EX2): `@sentropic/cluster-mesh` durable FIFO heavy-phase queue (one module, one root export); version bump and changelog. Rollback: revert the wagon commits and the bump together.
 - [x] BR90-EX8 (h2a CLI OAuth client): `@sentropic/auth-hono` RFC 8252 §7.3 port-less loopback redirect matching for public clients; patch bump 0.18.0 to 0.18.1 keeps every `^0.18.0` consumer range (the package has no changelog). Rollback: revert the commit and the bump together.
 - [x] BR90-EX9: root and api lock workspace entries follow the three version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1; registry latest 0.2.20, 0.25.0, 0.18.0). Rollback: revert with the bumps.
-- [x] BR90-EX10: the cluster-mesh selected packaging fixture follows the cluster-mesh candidate archive name (dev.15). Rollback: revert with the bump.
+- [x] BR90-EX10: the cluster-mesh selected packaging fixture follows the candidate tuple: cluster-mesh archive dev.15, same-PR BLOCK siblings artifacts 0.2.21 (guarded sha256 `a8919b4780fa34414ebc664e9ecae57f4efcef25793125bf305b441abad6895b`) and auth-hono 0.18.1 (sha256 `f469a751e6d31b4f2d9b73ed80f1654e3d72198838bfe9783fa5eca0b65b2923`) through `make pack-candidate-siblings` (CI-equivalent pull_request context) and `refresh-lazy-package-lock`; tuple-spec integrity pin updated. Rollback: revert with the bump.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
