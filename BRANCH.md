@@ -29,21 +29,28 @@
   - `.github/workflows/**`
 
 ## Feedback Loop
-- [ ] `attention`: W3 port has no method to export the verified candidate bytes; W7 injects a `CandidateExport` port (open question to W3).
-- [ ] `attention`: the host-side verifier must be packaged for immo (W10); placement is an open question.
+- [x] `resolved` (s-archi batch review): W3's `QualifiedSupervisor` exposes the verified snapshot export; W7 consumes it and keeps no own port once W3 lands it.
+- [x] `resolved` (s-archi batch review): the host verifier, the single `candidateDigest` and the handoff types live in `@sentropic/artifacts/live-host` (lane s-opus-live-host).
+- [ ] `attention`: `apps/artifact-content/src/live.ts` still hard-codes the builders service domain (W9 scope, outside this branch).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Multi-branch** (wagon merged by the train integration lane)
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — SG4b two-step handoff**
-  - [ ] Ed25519 single-use authorization bound to job, generation, commit, candidate, run and attempt; 10-minute lifetime.
-  - [ ] Host verifier: mandatory evidence, foreign scope/job, replay, expiry, altered bytes, stored-bytes re-read, response-loss replay.
-  - [ ] Builder publication port: anti-repack check, durable intent, bounded resend, receipt verification, idempotent record.
+- [x] **Lot 1 — SG4b two-step handoff**
+  - [x] Ed25519 single-use authorization bound to job, generation, commit, candidate, run and attempt; 10-minute lifetime.
+  - [x] Host verifier: mandatory evidence, foreign scope/job, replay, expiry, altered bytes, stored-bytes re-read, response-loss replay.
+  - [x] Builder publication port: anti-repack check, durable intent, bounded resend, receipt verification, idempotent record.
+- [ ] **Lot 1b — s-archi changes**
+  - [x] Builder namespace and service domain from per-environment configuration (`builderPlacement`).
+  - [x] In-pod install `npm ci --offline --ignore-scripts`, no registry, no script allowlist.
+  - [ ] Job admission: `binding.pendingJobId === jobId` and a matching generation.
+  - [ ] `expect()` contract: every A-LIVE §8.3 recheck, one test per refusal.
+  - [ ] Import `candidateDigest`, the handoff types and the verifier from `@sentropic/artifacts/live-host`; `kid` in claims and receipt; delete the api copy.
 - [ ] **Lot 2 — Host build API and builder service**
   - [ ] Authenticated host identity; job by id; asynchronous build with job-bound status.
   - [ ] Scheduler sweep (reconcile, reap, recover) exposed, never started.
-  - [ ] Composition with the handoff publication; host-selected live recipe path.
+  - [ ] Host-selected live recipe path instead of the hard-coded `ui/` Vite config.
 - [ ] **Lot 3 — Gate**
   - [ ] Scoped checks: `make -f .tmp/packets/alive-w7-ops.mk w7-check` (tsc + vitest on api/tests/unit/artifacts-live).
   - [ ] Push the wagon; report .tmp/rv/alive-W3-W7.md.

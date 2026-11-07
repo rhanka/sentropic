@@ -4,8 +4,11 @@ import type { LiveState } from '../../../src/services/artifacts/live/records';
 import { createLiveController } from '../../../src/services/artifacts/live/controller';
 import { createBuilderPods, type KubernetesCore } from '../../../src/services/artifacts/live/pods';
 import type { CacheReceipt } from '../../../src/services/artifacts/live/cache';
+import { builderPlacement } from '../../../src/services/artifacts/live/placement';
 
 export const key = { storageScopeId: 'scope-a', artifactId: 'artifact-a' };
+export const placement = builderPlacement({ ARTIFACT_BUILDER_NAMESPACE: 'artifact-builders-test',
+  ARTIFACT_BUILDER_SERVICE_DOMAIN: 'artifact-builders-test.svc.cluster.local' });
 export function fixture() {
   let state: LiveState | undefined;
   let tail = Promise.resolve(); let sequence = 0; let now = 0;
@@ -47,7 +50,7 @@ export function fixture() {
         cacheIdentity: {} as never, stagingRef: `clean-${headSha}`, descriptorDigest: `descriptor-${headSha}` })) },
     drafts: { current: vi.fn(async () => ({ ...draft })), checkpoint: vi.fn(async () => { events.push('checkpoint'); }),
       advanceClean: vi.fn(async (_key, _expected, headSha) => (draft = { ...draft, baseHeadSha: headSha, treeSha: `tree-${headSha}` })) },
-    pods: createBuilderPods(core, 'setInterval(() => {}, 1000)'),
+    pods: createBuilderPods(core, 'setInterval(() => {}, 1000)', placement),
     cache: { acquire: vi.fn(async () => ({ key: 'cache', identity: { lockSha256: 'lock-sha', nodeVersion: 'v24', npmVersion: '11' } } as CacheReceipt)) },
     worker: {
       clean: vi.fn(async () => { events.push('clean'); }),
