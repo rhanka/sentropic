@@ -12,6 +12,9 @@ import { createHash } from 'node:crypto';
 import { captureRecords, executionSeconds, durationSeconds } from './ci-run-metrics.mjs';
 
 const policyDigest = workflow => createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
+// Executed peak, a lower bound and not the account quota: PR run 42393158936 (2026-11-07) ran 28 jobs
+// at once (half-open spans, concurrencyPeak semantics; previous reference peak 17).
+export const OBSERVED_SLOTS_LOWER_BOUND = 28;
 
 export function independentValidators(workflow) {
   const consumers = new Set(['validate-cluster-mesh', 'validate-llm-mesh',
@@ -67,7 +70,7 @@ export function capacityCapture(workflow, run, jobs, manifest) {
     endpoints: { qualification: ['ci-gate'], images: selected.filter(name => /^publish-.*-image$/.test(name)),
       preproduction: selected.filter(name => name === 'deploy-preprod'),
       packages: selected.filter(name => name.startsWith('publish-') && !name.endsWith('-image')) },
-    capacity: { availableSlots: 17, reserveSlots: run.event === 'pull_request' ? 2 : 0 },
+    capacity: { availableSlots: OBSERVED_SLOTS_LOWER_BOUND, reserveSlots: run.event === 'pull_request' ? 2 : 0 },
     timings: { classificationSeconds: span('changes'), verdictSeconds: span('ci-gate') } };
 }
 
@@ -384,9 +387,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
       const proofs = args.flatMap((arg, i) => arg === '--proof-file' ? [JSON.parse(fs.readFileSync(args[i + 1], 'utf8'))] : []);
       const proof = wallClockProof(proofs, policyDigest(workflow));
       const shapeValid = independent && noCapacityMutexes && matrixWidths.api === 20 && matrixWidths.e2e === 6;
-      console.log(JSON.stringify({ perRunSlots: demand, observedSlotsLowerBound: 17, releaseGroups: 2,
+      console.log(JSON.stringify({ perRunSlots: demand, observedSlotsLowerBound: OBSERVED_SLOTS_LOWER_BOUND, releaseGroups: 2,
         scenarios, independentValidators: independent, noCapacityMutexes, matrixWidths, shapeValid, wallClockProof: proof,
-        source: 'Per-run DAG demand; hosted-runner admission and account quota remain to-measure', admitted: null }, null, 2));
+        source: 'Per-run DAG demand; observed slots = executed peak of run 42393158936; account quota remains to-measure', admitted: null }, null, 2));
       process.exit(shapeValid && (!args.includes('--require-proof') || proof.accepted) ? 0 : 1);
     }
     const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);
