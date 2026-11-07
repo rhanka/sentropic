@@ -1,5 +1,5 @@
 /**
- * Lot 1a — sentropic api binding for persistent reader consent
+ * Generic host binding for persistent reader consent
  * (design-merged §4.1, §4.3). Thin host binding over the generic
  * ArtifactReaderStore, scoped to one storage scope per service instance: the
  * reader revokes only their own consents resolved from the verified session
@@ -8,8 +8,8 @@
  * — the owner's instrument is share revocation. Revoking for an unreadable
  * artifact reads `not_found`, never 403, so the existence oracle stays closed.
  */
-import { assertConsentScopeId, decideGateB, type FreshRights, type GateBDecision } from '@sentropic/artifacts/server/consent';
-import type { ArtifactReaderStore } from '@sentropic/artifacts/server/reader-store';
+import { assertConsentScopeId, decideGateB, type FreshRights, type GateBDecision } from './consent.js';
+import type { ArtifactReaderStore } from './reader-store.js';
 
 export interface ConsentGrantInput {
   readerAccountId: string;

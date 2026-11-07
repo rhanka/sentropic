@@ -79,6 +79,10 @@
       "types": "./dist/server/consent.d.ts",
       "import": "./dist/server/consent.js"
     },
+    "./server/consent-grant": {
+      "types": "./dist/server/consent-grant.d.ts",
+      "import": "./dist/server/consent-grant.js"
+    },
     "./server/mime": {
       "types": "./dist/server/mime.d.ts",
       "import": "./dist/server/mime.js"
