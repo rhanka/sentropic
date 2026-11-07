@@ -76,6 +76,8 @@
   - [x] IntegrityEvidence digest = SHA-256 of the qualification file; cache inventory from the W5 coverage (local copy deleted).
   - [x] Remote host base URL from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (preprod `https://preprod.immo.sent-tech.ca/api/v1/artifacts`).
   - [x] Key env names and rotation documented with the remote host and the qualification file.
+- [x] **Lot 6 — s-archi 16:35 (job resolution retry)**
+  - [x] A 409 `job_not_pending` on the first job resolution is retried freshly signed (6 tries, 250 ms to 4 s, 7.75 s), then fails for good; every other answer is handled as is.
 - [x] **Lot 3 — Gate**
   - [x] Scoped checks: `make -f .tmp/packets/alive-w7-livehost.mk w7-check-livehost` against the pushed live-host tree (tsc + vitest, 70 tests).
   - [x] Push the wagon; report .tmp/rv/alive-W3-W7.md; `make down-volumes ENV=test-alive-w7`.
