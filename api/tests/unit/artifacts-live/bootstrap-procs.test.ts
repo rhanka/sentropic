@@ -1,7 +1,9 @@
 import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BUILD_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, PREBUNDLE_RECIPE, artifactEnvironment } from '../../../src/services/artifacts/live/recipes';
+import {
+  BUILD_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment,
+} from '../../../src/services/artifacts/live/recipes';
 import { fakeSpawn, fence, file, harness, type Spawned } from './bootstrap-harness';
 
 type Pod = Awaited<ReturnType<typeof harness>>;
@@ -40,27 +42,31 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
 
   it('should refuse repository processes before sealed dependencies, while stopped or without the host config', async () => {
     const pod = await harness();
-    await expect(pod.send('dev', { recipe: 'live' })).rejects.toThrow('failed:phase_refused');
+    await expect(pod.send('prebundle', { recipe: 'prebundle' })).rejects.toThrow('failed:phase_refused');
     const noConfig = await harness(); await ready(noConfig, false);
-    await expect(noConfig.send('dev', { recipe: 'live' })).rejects.toThrow('failed:host_config_missing');
+    await expect(noConfig.send('prebundle', { recipe: 'prebundle' })).rejects.toThrow('failed:host_config_missing');
     const stopped = await harness(); await ready(stopped); await stopped.send('phase', { phase: 'stopped' });
     await expect(stopped.send('build', BUILD)).rejects.toThrow('failed:phase_refused');
     await expect(stopped.send('dev', { recipe: 'build' })).rejects.toThrow('failed:invalid_recipe');
+    await expect(stopped.send('prebundle', { recipe: 'live' })).rejects.toThrow('failed:invalid_recipe');
     await expect(stopped.send('build', { ...BUILD, recipe: 'live' })).rejects.toThrow('failed:invalid_args');
   });
 
-  it('should pre-bundle in the pod, then serve Vite from frozen recipes with the host env, idempotently', async () => {
+  it('should pre-bundle as its own queued phase, then serve Vite from frozen recipes with the host env, idempotently', async () => {
     const calls: Spawned[] = [];
     const pod = await harness({ spawn: fakeSpawn(calls, call => (call.args[0] === PREBUNDLE_RECIPE.args[0] ? Promise.resolve(0)
       : new Promise(() => undefined))) });
     await ready(pod);
     await pod.send('overlay', { ...await pod.transfer('overlay', []), deletes: [], revision: 'r1', generation: 1, baseHeadSha: SHA, treeSha: SHA });
+    await expect(pod.send('dev', { recipe: 'live' })).rejects.toThrow('failed:prebundle_missing');
+    expect(calls).toEqual([]);
+    expect(await pod.send('prebundle', { recipe: 'prebundle' })).toEqual({ prebundled: true });
+    expect(await readFile(pod.path('tmp/artifact-vite-prebundle.mjs'), 'utf8')).toBe(LIVE_PREBUNDLE_SCRIPT);
     expect(await pod.send('dev', { recipe: 'live' }, fence(3))).toEqual({ revision: 'r1', routeEpoch: 3 });
     expect(pod.agent.isLive()).toBe(true);
     expect(await pod.send('dev', { recipe: 'live' }, fence(4))).toEqual({ revision: 'r1', routeEpoch: 4 });
     expect(calls.map(c => [c.executable, c.args])).toEqual([[PREBUNDLE_RECIPE.executable, PREBUNDLE_RECIPE.args],
       [LIVE_RECIPE.executable, LIVE_RECIPE.args]]);
-    expect(await readFile(pod.path('tmp/artifact-vite-prebundle.mjs'), 'utf8')).toBe(LIVE_PREBUNDLE_SCRIPT);
     for (const call of calls) {
       expect(call.options).toEqual({ cwd: pod.path('workspace'), env: artifactEnvironment(), shell: false, detached: true, stdio: 'ignore' });
     }
@@ -69,20 +75,26 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
     expect(pod.groups).toEqual(expect.arrayContaining([4001, 4002]));
     expect(await pod.send('dev', { recipe: 'live' }, fence(5))).toEqual({ revision: 'r1', routeEpoch: 5 });
     expect(calls.map(c => c.args[0])).toEqual([PREBUNDLE_RECIPE.args[0], LIVE_RECIPE.args[0], LIVE_RECIPE.args[0]]);
+    await pod.send('clear', { paths: ['/tmp'] }, fence(5));
+    await expect(pod.send('dev', { recipe: 'live' }, fence(5))).rejects.toThrow('failed:prebundle_missing');
     const hang = (code: number) => (call: Spawned) => (call.args[0] === PREBUNDLE_RECIPE.args[0] ? Promise.resolve(code) : new Promise<number>(() => undefined));
     const failed = await harness({ spawn: fakeSpawn([], hang(1)) }); await ready(failed);
-    await expect(failed.send('dev', { recipe: 'live' })).rejects.toThrow('failed:prebundle_failed');
+    await expect(failed.send('prebundle', { recipe: 'prebundle' })).rejects.toThrow('failed:prebundle_failed');
+    await expect(failed.send('dev', { recipe: 'live' })).rejects.toThrow('failed:prebundle_missing');
     const down = await harness({ spawn: fakeSpawn([], hang(0)), waitPort: async () => { throw new Error('closed'); } }); await ready(down);
+    await down.send('prebundle', { recipe: 'prebundle' });
     await expect(down.send('dev', { recipe: 'live' })).rejects.toThrow('failed:dev_unavailable');
     expect(down.agent.isLive()).toBe(false);
   });
 
-  it('should build with the frozen recipe, then page a stable output snapshot in contiguous slices', async () => {
+  it('should build with the frozen recipe and the build heap, then page a stable output snapshot in contiguous slices', async () => {
     const calls: Spawned[] = []; const big = Buffer.alloc(900 * 1024, 7);
     const pod = await harness({ spawn: fakeSpawn(calls, outputs({ 'index.html': '<html>', 'assets/a.js': 'a', 'assets/big.bin': big })) });
     await ready(pod);
     expect(await pod.send('build', BUILD)).toEqual({ exitCode: 0 });
     expect(calls.map(c => [c.executable, c.args])).toEqual([[BUILD_RECIPE.executable, BUILD_RECIPE.args]]);
+    expect(calls[0].options.env).toEqual(buildEnvironment());
+    expect(calls[0].options.env.NODE_OPTIONS).toBe('--max-old-space-size=1024');
     const { entries, count } = await pages(pod, 'output');
     expect(count).toBe(3);
     expect(entries.map(e => [e.path, e.offset, e.size])).toEqual([['assets/a.js', 0, 1], ['assets/big.bin', 0, big.length],

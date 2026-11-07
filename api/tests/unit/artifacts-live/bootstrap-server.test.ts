@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AGENT_SOURCE } from '../../../src/services/artifacts/live/bootstrap-agent';
 import { SERVER_SOURCE, SUPERVISOR_PATH } from '../../../src/services/artifacts/live/bootstrap-server';
 import { MAX_BOOTSTRAP_BYTES, bootstrapConfig, createBootstrapSource } from '../../../src/services/artifacts/live/bootstrap';
-import { artifactEnvironment } from '../../../src/services/artifacts/live/recipes';
+import { artifactEnvironment, buildEnvironment } from '../../../src/services/artifacts/live/recipes';
 import { harness, seal } from './bootstrap-harness';
 
 let loaded: Promise<any> | undefined;
@@ -94,6 +94,7 @@ describe('pod bootstrap program', () => {
     const config = bootstrapConfig(spki);
     expect(config).toMatchObject({ PUBLIC_KEY: spki, CONTROL_PORT: 5173, UPSTREAM_PORT: 5174, ENV: artifactEnvironment() });
     expect(config.ENV.NODE_OPTIONS).toBe('--max-old-space-size=384');
+    expect(config.BUILD_ENV).toEqual(buildEnvironment()); expect(config.BUILD_ENV.NODE_OPTIONS).toBe('--max-old-space-size=1024');
     for (const banned of ['activeDeadlineSeconds', 'createHmac', 'PRIVATE KEY', '/run/', "shell: true", 'execSync']) {
       expect(source).not.toContain(banned);
     }
