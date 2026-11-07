@@ -41,12 +41,15 @@
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR84-EX1; `Makefile` under BR84-EX2.
+  - [x] Dossier `tsconfig.json`, `eslint.config.mjs`, `playwright.config.ts`, `src/DiagramEdge.svelte` and `vendor/diagram-source.tgz` under BR84-EX3.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
 - [ ] BR84-EX1 — Planned workflow exception: finalize `changes`, `ci-gate`, and `deploy-preprod` evidence publication and performance acceptance without substituting timeout for success. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR84-EX2 — Planned Makefile exception: add `test-ci-performance-report`, `ci-performance-report`, `build-ci-dossier`, and `test-ci-dossier`; include TypeScript/Svelte and lint gates, then build/test the portable presentation in pinned isolated tooling. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR84-EX3 — Retain the private DS generator as a source archive and add the dossier compiler/linter/browser configuration and edge adapter. Reason: reproducible portable tooling; impact: dossier only; rollback: remove the supporting files with the dossier.
+- [x] Owner override 2026-11-06: wagon only, no PR, no package versions or root lock regeneration; conductor imports Track and performs the consolidated train review. Started on train 01429a910, rebased onto main 165ce5b93 after #930 merged. No local image build.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -68,7 +71,7 @@
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Complete real-run acceptance campaign**
-  - [ ] Add `ci-performance-report.mjs` and its test; extend the named metrics test for percentiles, maxima, incomplete endpoints, reruns, missing data, finite capacity, and mixed application/package publication dependencies.
+  - [x] Add `ci-performance-report.mjs` and its test; extend the named metrics test for percentiles, maxima, incomplete endpoints, reruns, missing data, finite capacity, and mixed application/package publication dependencies.
   - [ ] Populate `runs.json` and `acceptance.md` (new) with sanitized run/attempt/job URLs, SHAs, workflow versions, exact artifacts/tuples, case/cache/traffic profiles, expected/executed tests, retries, phase spans, costs, and every breach.
   - [ ] Collect at least 30 complete full-product runs across warm/source-miss/lock-miss/full-cold/concurrent-traffic profiles; report per-profile counts. Include API-only, UI-only, mixed, shared asset, tooling/lock, and fresh selected releases; library-only cases supplement this set.
   - [ ] Lot gate: `make test-ci-performance-report ci-performance-report ENV=test-ci-ten-minute-proof`; compare four endpoints directly to GitHub/registry/preproduction evidence; record daily provider results separately.
@@ -85,6 +88,10 @@
   - [ ] Rollback drill: withdraw any unsupported latency claim and restore the last validated presentation/data model; retain all run evidence, classify unmet budgets as open work, and route implementation regressions to the owning branch rollback without hiding failures.
 - [ ] **Lot 4 — Docs consolidation**
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
+  - [x] Versioned acceptance.md and runs.json retain 33 real attempts and every failure/unknown. Baseline PR n=9 median 1169s/max 1342s; main n=5 median 1049s/max 1142s. #930 critical qualification path: 945s execution +381s scheduling. First after run 42306459107: API static 138s versus 682s, but workflow ≥1326s at 23:02:22Z; no ten-minute claim accepted.
+  - [x] Source-backed portable dossier, retained DS generator/theme, in-canvas controls, matrix/job/step provenance, unknown-case handling and explicit budgets are implemented. Scope: compiler/linter programs retained; unit 2 shards, endpoints 8, app host 2; artifact/dossier lanes remain required.
+  - [x] Local deterministic gates: 36 metrics, 8 performance, 28 expected-result, 8 DAG and 11 lock-install fixtures; TypeScript/Svelte with zero warnings, ESLint, portable build, 2 path tests and 23 browser controls pass. Full runtime qualification stays in CI.
+  - [ ] Acceptance: final-head CI/consolidated review, sufficient ready-runner capacity and ≥30 complete after product samples with every planned profile/tuple/test/publication receipt remain required. Owner: CI maintainers / train conductor. The proof CLI rejects missing or breached evidence.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: require complete TypeScript/Svelte checks and lint of the listed dossier sources inside `make build-ci-dossier ENV=test-ci-ten-minute-proof`, before producing the portable artifact; application compiler/linter programs are unchanged.

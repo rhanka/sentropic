@@ -58,18 +58,19 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 24);
+  assert.equal(validators.length, 25);
   assert.equal(independentValidators(workflow), true);
   for (const [name, job] of validators) {
     const consumers = ['validate-cluster-mesh', 'validate-llm-mesh', 'validate-llm-gateway'];
-    assert.deepEqual(job.needs, consumers.includes(name) ? ['changes', 'package-candidates'] : ['changes'], name);
+    assert.deepEqual(job.needs, name === 'validate-artifacts' ? ['changes', 'artifacts-qualification']
+      : consumers.includes(name) ? ['changes', 'package-candidates'] : ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
   }
   for (const [name, job] of Object.entries(workflow.jobs)) {
     assert.ok(!job.concurrency?.group.startsWith('ci-capacity-'), name);
   }
   assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
-  assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 5);
+  assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 6);
 });
 
 test('should reject validator serialization beyond the immutable candidate producer', () => {
@@ -81,6 +82,8 @@ test('should reject validator serialization beyond the immutable candidate produ
     ['validate-publishable-manifests', ['changes', 'package-candidates', 'validate-llm-mesh']],
     ['validate-chat-core', ['changes', 'package-candidates']],
     ['memory-l5-qualification', ['changes', 'validate-mcp-platform']],
+    ['artifacts-qualification', ['changes', 'validate-chat-core']],
+    ['validate-artifacts', ['changes']],
   ]) {
     const changed = structuredClone(workflow);
     changed.jobs[name].needs = needs;

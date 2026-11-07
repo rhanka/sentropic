@@ -4,6 +4,18 @@ Status: retained study and implementation plan; documentation only, 2026-10-18.
 Evidence baseline: `441453966a4dfac12c220f154508d7ab1ee3c237`; documentation base: `9ed96eb83cd77da710f1adeb83a19e425d6c4910`.
 Charter: qualify the complete selected CI/CD path within ten minutes, preserving tests, security, artifact identity, and visible delivery outcomes.
 
+## BR-84 execution evidence — 2026-11-06
+
+The [acceptance record](ci-cd-ten-minutes/acceptance.md) and versioned
+[`runs.json`](ci-cd-ten-minutes/runs.json) supersede historical examples for this
+campaign. Recent successful PR runs have median 1,169s and maximum 1,342s;
+successful main runs have median 1,049s and maximum 1,142s. The first after
+execution measures API static at 138s versus #930's 682s, but its workflow has
+already breached 600s under runner queue contention. **Ten-minute acceptance
+remains open.** No projected gain, manual dispatch, failed run or missing tuple
+substitutes for the complete PR/main campaign. The portable dossier now builds
+from versioned inputs with `make build-ci-dossier test-ci-dossier ENV=test-ci-ten-minute-proof`.
+
 ## 1. Decision and owner constraints
 
 Retain the fresh nine-step plan: remove repeated preparation, reuse immutable artifacts, execute independent work concurrently, make PR/merge provider journeys deterministic, and qualify real providers daily. The previous acceleration experiment is superseded and supplies no implementation dependency. This PR changes documentation only; none of the proposed timing improvements has been measured as an implemented result.
