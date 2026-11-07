@@ -8,7 +8,7 @@ import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/art
 import { createPrivateArtifactStorage } from '../../../api/src/services/artifacts/lifecycle';
 import { createContentRuntime } from './runtime';
 import { createLiveUpgrade } from './live-upgrade';
-import { liveFromEnv } from './live-config';
+import { liveFromEnv, withRemoteAddress } from './live-config';
 import type { LiveProxy } from './live';
 
 /** TLS terminates at the dedicated W3.d ingress; Host is validated, forwarded identity is ignored. */
@@ -56,14 +56,15 @@ export async function startContentServer(options: {
         return runtime.fetch(request);
       };
     }
-    const server = serve({ hostname: options.hostname ?? '0.0.0.0', port, fetch: request => {
+    const server = serve({ hostname: options.hostname ?? '0.0.0.0', port, fetch: (request, bindings) => {
       const url = new URL(request.url);
       if (url.pathname === '/healthz' && request.method === 'GET') return new Response('ok', {
         headers: { 'content-type': 'text/plain', 'cache-control': 'no-store' },
       });
       // The cleartext listener is internal-only. Never use X-Forwarded-Host/Proto as routing authority.
       url.protocol = 'https:';
-      return handle(new Request(url, request));
+      // The socket address is the only authority for a replica-relayed live push (never a forwarded header).
+      return handle(withRemoteAddress(new Request(url, request), bindings.incoming.socket.remoteAddress));
     } }) as Server;
     if (live && env.APP_ARTIFACT_CONTENT_BASE_DOMAIN) {
       server.on('upgrade', createLiveUpgrade({ live,
