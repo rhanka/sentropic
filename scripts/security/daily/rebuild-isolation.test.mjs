@@ -9,9 +9,9 @@ const sourceSha = '2ea238790fe992cdbb8e0202b1a73a937b6a1793';
 const builderDigest = digest('admitted-builder-binary');
 const admittedBuilders = [builderDigest];
 const builder = { digest: builderDigest, inventory: ['usr/local/bin/builder', 'usr/local/bin/cc'] };
-const target = { key: 'api-production', ref: `registry.example/nc-reg/sentropic-api@${digest('manifest')}`,
+const target = { key: 'api-production', ref: `ghcr.io/rhanka/sentropic-api@${digest('manifest')}`,
   sourceSha, platform: policy.platform, configDigest: digest('config'),
-  provenance: { verified: true, sourceSha, imageRef: `registry.example/nc-reg/sentropic-api@${digest('manifest')}`,
+  provenance: { verified: true, sourceSha, imageRef: `ghcr.io/rhanka/sentropic-api@${digest('manifest')}`,
     platform: policy.platform, receiptHash: digest('receipt') } };
 const recipeDigest = digest('recipe');
 

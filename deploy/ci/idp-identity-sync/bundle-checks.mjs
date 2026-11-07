@@ -5,7 +5,7 @@ export const s5cmdImage = 'peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6
 // api image (same convention as the base Jobs; release pins it via kustomize
 // `images: newTag`, commented in both parent overlays). The gate allowlists the
 // exact convention string and binds it to the two runner containers only.
-export const apiImage = 'rg.fr-par.scw.cloud/nc-reg/sentropic-api:main';
+export const apiImage = 'ghcr.io/rhanka/sentropic-api:main';
 const runnerContainers = ['export-replica', 'replica-sync'];
 export const envValue = (container, name) => container.env.find(e => e.name === name)?.value;
 export function checkBundle(objects, tier) {

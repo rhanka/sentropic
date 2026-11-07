@@ -49,14 +49,14 @@ DEFAULT_TAG="fa56b6"
 
 run_guard() {
   local scenario="$1"
-  local reg="${2-registry.test.example/sentropic}"
+  local reg="${2-ghcr.io/rhanka}"
   local ver="${3-$DEFAULT_TAG}"
   : > "$scratch/calls"; : > "$scratch/output"
   PATH="$PWD/$scratch:$PATH" DOCKER_CALL_LOG="$PWD/$scratch/calls" GUARD_SCENARIO="$scenario" \
   MOCK_LOCAL_DIGEST="$LOCAL_DIGEST" MOCK_REMOTE_DIGEST="$REMOTE_DIGEST" \
   API_IMAGE_RECEIPT="$TEST_RECEIPT" API_IMAGE_REF="$LOCAL_DIGEST" \
   MANIFEST_DIR="$scratch/manifests" API_VERSION="$ver" \
-  REGISTRY="$reg" \
+  REGISTRY="$reg" DOCKER_USERNAME=fixture DOCKER_PASSWORD=fixture \
   make --no-print-directory publish-api-image REGISTRY="$reg" ENV="${ENV:-test-ci-tag-guard}" > "$scratch/output" 2>&1
 }
 
@@ -77,7 +77,7 @@ test_exists_same() {
 test_absent() {
   run_guard absent || { cat "$scratch/output" >&2; echo "FAIL: absent should succeed" >&2; return 1; }
   grep -q "is absent from registry. Pushing..." "$scratch/output" || { echo "FAIL: missing push message" >&2; return 1; }
-  grep -q "push registry.test.example/sentropic/sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: target not pushed" >&2; return 1; }
+  grep -q "push ghcr.io/rhanka/sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: target not pushed" >&2; return 1; }
   echo "PASS: absent tag publishes successfully"
 }
 
@@ -136,7 +136,7 @@ test_empty_registry() {
 test_moving_tags() {
   local invalid_tags=("main" "latest" "staging" "v1" "fa56b" "fa56b67" "fa56bg" "FA56B6")
   for tag in "${invalid_tags[@]}"; do
-    ! run_guard absent "registry.test.example/sentropic" "$tag" || { echo "FAIL: invalid tag '$tag' should fail in publish-api-image" >&2; return 1; }
+    ! run_guard absent "ghcr.io/rhanka" "$tag" || { echo "FAIL: invalid tag '$tag' should fail in publish-api-image" >&2; return 1; }
     grep -q "Invalid API_VERSION" "$scratch/output" || { echo "FAIL: missing tag refusal error for '$tag'" >&2; return 1; }
     ! grep -q "push .*sentropic-api:$tag" "$scratch/calls" || { echo "FAIL: invalid tag '$tag' pushed through publish-api-image" >&2; return 1; }
   done

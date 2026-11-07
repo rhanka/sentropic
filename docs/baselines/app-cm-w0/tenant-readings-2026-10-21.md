@@ -18,7 +18,7 @@ Three additional GETs per namespace projected pod ownerReferences/container name
 
 ## Running images and pod identities
 
-API/IdP images use repository `rg.fr-par.scw.cloud/nc-reg/sentropic-api`; UI uses `rg.fr-par.scw.cloud/nc-reg/sentropic-ui`. Remote repositories are `ghcr.io/rhanka/sentropic-remote-control-plane` and `ghcr.io/rhanka/sentropic-remote-llm-gateway`. Digests are actual container-status `imageID` values with repository prefixes omitted.
+API/IdP images use repository `ghcr.io/rhanka/sentropic-api`; UI uses `ghcr.io/rhanka/sentropic-ui`. Remote repositories are `ghcr.io/rhanka/sentropic-remote-control-plane` and `ghcr.io/rhanka/sentropic-remote-llm-gateway`. Digests are actual container-status `imageID` values with repository prefixes omitted.
 
 | Namespace | Deployment / container | Pod | Pod UID | Start time UTC | Image digest |
 |---|---|---|---|---|---|

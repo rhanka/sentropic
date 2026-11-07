@@ -16,7 +16,7 @@ The standalone [readings.mk](readings.mk) contains the complete commands and out
 | OVH preprod access denial | 00:15:32 | `w0-roles W0_KUBECONFIG=/home/antoinefa/.kube/ovh.conf W0_NS=sentropic-preprod`; Forbidden |
 | Public hostname, old ingress and local DB access cross-check | 00:20:13 | `w0-access`; DNS returned `51.79.100.177`, both expected app/IdP ingress names had empty loadBalancer status, PG connection variables were unset and both PostgreSQL credential/service files absent |
 
-All six Deployments have desired replicas **0**; no pod UID/start time/`imageID` exists in these namespace pod lists. No content Deployment was listed there. Absence on this cluster does not establish content-role absence on the serving cluster. Requested images use prefix `rg.fr-par.scw.cloud/nc-reg/`:
+All six Deployments have desired replicas **0**; no pod UID/start time/`imageID` exists in these namespace pod lists. No content Deployment was listed there. Absence on this cluster does not establish content-role absence on the serving cluster. Requested images use prefix `ghcr.io/rhanka/`:
 
 | Namespace | Role | Deployment UID | Generation / revision | resourceVersion | Requested image suffix |
 |---|---|---|---|---|---|

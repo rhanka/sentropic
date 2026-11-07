@@ -62,7 +62,7 @@ spec:
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
           resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
         - name: replica-sync
-          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          image: ghcr.io/rhanka/sentropic-api:main
           workingDir: /work/in
           command: ["sh", "-c", "node /app/dist/scripts/identity-replica-sync.js --relay-dir=/work/in > /work/cm-sync.log 2>&1; code=$?; cat /work/cm-sync.log; exit $code"]
           env:

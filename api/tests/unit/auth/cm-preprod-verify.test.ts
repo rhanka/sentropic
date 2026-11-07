@@ -12,7 +12,7 @@ vi.mock('../../../src/services/identity/cm-cutover-checkpoint', () => ({ loadCmC
 vi.mock('../../../src/scripts/cm-preprod-contract', async original => ({
   ...await original<typeof import('../../../src/scripts/cm-preprod-contract')>(),
   protectedJson: async () => ({ format: 'preprod-a4-request/1', namespace: 'sentropic-preprod', operationId: 'verify-a4',
-    candidateCommit: 'a'.repeat(40), candidateImage: `rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:${'b'.repeat(64)}`,
+    candidateCommit: 'a'.repeat(40), candidateImage: `ghcr.io/rhanka/sentropic-api@sha256:${'b'.repeat(64)}`,
     backupTemplateSha256: 'b'.repeat(64), authorizationRef: 'track:approval', writerFenceRef: 'track:fence',
     rollbackCheckpointRef: 'track:rollback', rollbackLimitsRef: 'track:limits', sourceMetadataDispositionRef: 'track:metadata',
     remoteSnapshotRef: 'custody:remote', remoteSnapshotDigest: 'b'.repeat(64), legacyWritersStopped: true, remoteFileWriterStopped: true }),

@@ -58,10 +58,10 @@ describe('Sentropic infra identity', () => {
 
   it('keeps deployed k8s images on canonical Sentropic names', () => {
     expect(readRootFile('deploy/k8s/base/30-api.yaml')).toContain(
-      'rg.fr-par.scw.cloud/nc-reg/sentropic-api:main',
+      'ghcr.io/rhanka/sentropic-api:main',
     );
     expect(readRootFile('deploy/k8s/base/40-ui.yaml')).toContain(
-      'rg.fr-par.scw.cloud/nc-reg/sentropic-ui:main',
+      'ghcr.io/rhanka/sentropic-ui:main',
     );
   });
 });

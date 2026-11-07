@@ -51,7 +51,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: register
-          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          image: ghcr.io/rhanka/sentropic-api:main
           imagePullPolicy: Always
           workingDir: /workspace/api
           command: ["node", "dist/scripts/oauth-register-client.js"]

@@ -3,15 +3,15 @@
 State of this branch (`feat/deploy-poc-k8s`) :
 
 - New `deploy/scw/` tenant manifests (RBAC + Postgres StatefulSet + api/ui Deployments + optional Ingress).
-- Updated `.github/workflows/ci.yml` publishing `sentropic-api` and `sentropic-ui` to the SCW Container Registry, then running the neutral `deploy-k8s` job on branch/main pushes.
-- New Makefile targets `scw-deploy`, `scw-undeploy`, `scw-bundle-secret`, `scw-registry-secret`, `scw-status`, `scw-debug`, `scw-logs`, `scw-smoke`, `scw-api-netcheck`, `scw-email-smoke`.
+- Updated `.github/workflows/ci.yml` publishing `sentropic-api` and `sentropic-ui` to the public GHCR packages, then running the neutral `deploy-k8s` job on branch/main pushes.
+- New Makefile targets `scw-deploy`, `scw-undeploy`, `scw-bundle-secret`, `scw-status`, `scw-debug`, `scw-logs`, `scw-smoke`, `scw-api-netcheck`, `scw-email-smoke`.
 - This UAT note.
 
 ## Prerequisites
 
 1. **Cluster up** : `~/src/poc-k8s` bootstrapped, `~/.kube/poc.yaml` fetched.
    `make -C ~/src/poc-k8s apply-platform apply-sentropic` already done.
-2. **Registry pull secret ready** : create an SCW IAM API key with read-only access to the SCW Container Registry, then run `make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s`.
+2. **Public images**: verify anonymous pulls from `ghcr.io/rhanka`; no registry key or pull secret is required (migration 2026-11-06).
 3. **GitHub kubeconfig secret ready** : create repository secret `KUBECONFIG_B64` with the base64 content of `~/.kube/poc.yaml`.
 4. **`.env` populated** with at minimum: `POSTGRES_PASSWORD` (otherwise defaults to `app`), `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. For outbound email in the POC, prefer active `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM`; `MAIL_FROM` defaults to `no-reply@sent-tech.ca`. The legacy POC `.env` format with commented `#export MAIL_USERNAME=...` and `#export MAIL_PASSWORD=...` is also supported by `make scw-bundle-secret`; when those credentials are present and `MAIL_HOST` is absent, the target derives Scaleway TEM SMTP as `smtp.tem.scaleway.com:465` with `MAIL_SECURE=true`.
 
@@ -25,12 +25,11 @@ State of this branch (`feat/deploy-poc-k8s`) :
   cluster: pod, PVC, and auth Secret all return `NotFound`.
 - The `sentropic` tenant baseline was applied on 2026-05-17: namespace,
   ResourceQuota, LimitRange, NetworkPolicy, and tenant ServiceAccount exist.
-- The api/ui manifests target `rg.fr-par.scw.cloud/nc-reg/sentropic-api:feat-deploy-poc-k8s`
-  and `rg.fr-par.scw.cloud/nc-reg/sentropic-ui:feat-deploy-poc-k8s`.
+- The api/ui manifests target `ghcr.io/rhanka/sentropic-api:feat-deploy-poc-k8s`
+  and `ghcr.io/rhanka/sentropic-ui:feat-deploy-poc-k8s`.
 - Secrets were bundled on 2026-05-17 from the root `.env`: `sentropic-postgres`
   and `sentropic-api` exist in namespace `sentropic`.
-- Remaining rollout gate: the namespace must have the `sentropic-registry`
-  imagePullSecret before applying the workload.
+- Public GHCR images need no imagePullSecret (migration 2026-11-06).
 
 ```bash
 # 0) sanity
@@ -41,9 +40,7 @@ make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 make scw-bundle-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s
 # expected: "Secrets sentropic-postgres + sentropic-api ready in sentropic."
 
-# 2) inject the SCW Registry pull secret
-make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s
-# expected: "Image pull secret sentropic-registry ready in sentropic."
+# 2) verify the public GHCR image references before the separately approved deploy
 
 # 3) deploy
 make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
@@ -93,9 +90,9 @@ persistentvolumeclaim/data-postgres-0   Bound  1Gi   scw-bssd
 
 ## Live evidence (2026-05-20, updated 2026-05-22)
 
-- `make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s` created `sentropic-registry`.
+- Registry credentials were retired by the 2026-11-06 public GHCR migration.
 - `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` rolled out api and ui successfully after:
-  - aligning manifests to `rg.fr-par.scw.cloud/nc-reg/sentropic-{api,ui}:feat-deploy-poc-k8s`;
+  - aligning manifests to `ghcr.io/rhanka/sentropic-{api,ui}:feat-deploy-poc-k8s`;
   - using `strategy: Recreate` for api/ui under the tight tenant quota;
   - adding workload NetworkPolicies for api -> postgres and ui -> api;
   - adding an api `startupProbe` so startup migrations are not killed by liveness.

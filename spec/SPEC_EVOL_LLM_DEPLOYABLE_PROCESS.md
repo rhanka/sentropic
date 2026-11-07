@@ -119,7 +119,7 @@ The host consumes **WORKSPACE packages**: `api/Dockerfile` installs/builds the m
 | Planned resource | Required wiring |
 |---|---|
 | `deploy/k8s/base/36-llm-gateway.yaml` | ConfigMap, ClusterIP Service `llm-gateway` with TCP port/targetPort 3001, Deployment `llm-gateway`; labels `app.kubernetes.io/name: sentropic`, component `llm-gateway`; added to base kustomization. |
-| Deployment | One replica, `Recreate`, `enableServiceLinks: false`, `automountServiceAccountToken: false`, existing `sentropic-app` image-pull identity/`sentropic-registry`. No Secret API permissions. Service routing requires readiness. |
+| Deployment | One replica, `Recreate`, `enableServiceLinks: false`, `automountServiceAccountToken: false`, existing `sentropic-app` ServiceAccount and public GHCR images without pull credentials. No Secret API permissions. Service routing requires readiness. |
 | Security/resources | Read-only root filesystem, drop all capabilities, `allowPrivilegeEscalation: false`, runtime-default seccomp, `runAsUser/runAsGroup/fsGroup: 1000`; writable memory-backed `/tmp` only. Initial requests 100m/256Mi, limits 500m/512Mi; verify live namespace quota headroom before apply, not from old IdP comments. |
 | Probes | Startup `/healthz`: 5-second period, 30 failures; liveness `/healthz`: 15-second period, 3 failures; readiness `/readyz`: 5-second period, 2 failures; HTTP timeout 2 seconds, named port `http`. Dependency outages affect readiness, not liveness. |
 | Lifecycle | 40-second termination grace, D3 bounded drain. No gateway PVC; durable state resides in existing Postgres. Replicas greater than one require shared affinity/lease/refresh/DPoP state tests first; one replica still requires persistent budgets. |

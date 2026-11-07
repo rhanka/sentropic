@@ -1,7 +1,7 @@
-# Scaleway Kubernetes deployment (tenant)
+# OVH Kubernetes deployment (tenant)
 
 This directory ships the tenant-owned manifests for the `sentropic` workload
-on the shared **poc-k8s** Scaleway Kubernetes cluster
+on the shared **poc-k8s** OVH Kubernetes cluster
 (<https://github.com/rhanka/poc-k8s>).
 
 The **namespace, ResourceQuota, LimitRange, NetworkPolicy baseline** are owned
@@ -27,9 +27,8 @@ rollback and credential rotation are documented in
 [the IdP sync runbook](../ci/idp-identity-sync/README.md) and
 [its credential cycle](../ci/idp-identity-sync/CRED_CYCLE.md).
 
-- `10-rbac.yaml` — namespace-scoped ServiceAccount used by every Pod, with
-  `imagePullSecrets: [{ name: sentropic-registry }]` so every Pod can pull
-  from the SCW Container Registry.
+- `10-rbac.yaml` — namespace-scoped ServiceAccount. Public GHCR images require
+  no image pull credentials.
 - `15-networkpolicy.yaml` — workload-scoped ingress allowances for the
   tenant default-deny baseline: api -> postgres, ui -> api, pgbackup -> postgres,
   and the cluster Traefik namespace -> ui (public ingress).
@@ -40,11 +39,11 @@ rollback and credential rotation are documented in
   `s3://$S3_BUCKET/pg/<ts>.sql.gz` (see "Postgres backup" below).
 - `20-postgres.yaml` — Postgres 17 StatefulSet + headless Service + 1Gi PVC on
   `k8s-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
-- `30-api.yaml` — `sentropic-api` SCW Container Registry image + ClusterIP
+- `30-api.yaml` — `sentropic-api` public GHCR image + ClusterIP
   Service (port 8787) + non-secret ConfigMap. The ConfigMap sets
   `NODE_OPTIONS=--dns-result-order=ipv4first` so Node prefers IPv4 where its
   DNS path honors the option on this IPv4-only POC egress path.
-- `40-ui.yaml` — `sentropic-ui` SCW Container Registry image + ClusterIP
+- `40-ui.yaml` — `sentropic-ui` public GHCR image + ClusterIP
   Service (port 5173) + placeholder ConfigMap for future overlays.
 - `overlays/prod/ingress.yaml` — public Traefik Ingress for `sentropic.sent-tech.ca`
   (single host → `ui`; nginx proxies `/api`→api:8787) with cert-manager TLS via
@@ -61,7 +60,7 @@ wired in BR-55c). It mirrors `overlays/prod/` and diverges only where the tier
 requires isolation:
 
 - **Namespace** — `namespace: sentropic-preprod`. The Namespace, ResourceQuota,
-  LimitRange, default-deny NetworkPolicy and `sentropic-registry` pull-secret are
+  LimitRange and default-deny NetworkPolicy are
   owned by the poc-k8s operator (k8s-ops `#37`/`#39`), like prod. The base ships
   no Namespace resource, so the `namespace:` transformer is sufficient (no
   `$patch:delete`). Postgres is the base StatefulSet re-stamped here → its OWN
@@ -95,17 +94,9 @@ make apply-platform             # cert-manager + traefik labels
 make apply-sentropic            # namespace + RQ + LimitRange + NetPol
 ```
 
-The namespace pull secret is managed from this repo with:
-
-```bash
-make k8s-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml K8S_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s
-```
-
-The target creates the `sentropic-registry` `dockerconfigjson` Secret in the
-`sentropic` namespace. It reads `REGISTRY`, `DOCKER_USERNAME`, and either
-`SCW_REGISTRY_TOKEN` or `DOCKER_PASSWORD` from `K8S_ENV_FILE`; it does not
-print the secret value. Prefer a token with **read-only** access to the SCW
-Container Registry. Rotate the token by re-running the target.
+Images are public GHCR packages under `ghcr.io/rhanka`. No pull secret is
+required. Existing registry Secret objects are removed later by the cluster
+operator after a separate owner GO; this train does not delete them.
 
 ## Secret bundle (operator side, once)
 
@@ -157,14 +148,22 @@ so the API does not fall back to its local `maildev` default. When `MAIL_HOST`
 is set, `MAIL_USERNAME` and `MAIL_PASSWORD` must also be set or recoverable;
 `MAIL_FROM` defaults to `no-reply@sent-tech.ca`.
 
-The api and ui manifests target the `main` alias tag on
-`rg.fr-par.scw.cloud/nc-reg/sentropic-api` and
-`rg.fr-par.scw.cloud/nc-reg/sentropic-ui`. The `publish-{api,ui}-image`
-jobs in `.github/workflows/ci.yml` push two tags per image: a
-content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and the
-floating `main` alias. `imagePullPolicy: Always` plus the `deploy-k8s` CI job running
-`make k8s-deploy` guarantee Kubernetes picks up manifest changes and the latest
-digest without any imperative `kubectl set image`.
+The API, IdP, content and UI images use public `ghcr.io/rhanka/sentropic-api`
+and `ghcr.io/rhanka/sentropic-ui`; CI also publishes `sentropic-e2e`. Publishers
+use only `GITHUB_TOKEN` with job-scoped `packages:write`, load the qualified
+image archive, reject config-digest collisions, and retain the registry manifest
+digest in `*-image.published.json`. Aliases are promoted from the tested image ID.
+
+Main merges publish images and apply the **preprod** overlay only. The recovery
+pin remains in force until the separately approved A4 execution. Prod has no
+automatic deployment workflow: the referenced BR-55d release workflow is absent.
+After this train merges, the owner must approve a prod deployment and the cluster
+operator runs `make k8s-deploy KUBECONFIG=<prod-file> ENV=prod-release` from the
+merged checkout. This applies the prod overlay and restarts API, IdP and UI.
+Review the rendered overlay and its exact image digests before that GO; applying
+this overlay also includes any other pending main manifest changes. Merely
+merging the train or pushing a GHCR tag does not change running prod Pods.
+
 `make k8s-bundle-secret`
 reads `~/src/sentropic/.env` and creates both Secrets in-cluster,
 replacing the previous version. Re-run after rotating a key or updating a
