@@ -1,70 +1,25 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { parseContentHost } from '@sentropic/artifacts/content/routing';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
+import { ASSERTION_HEADER, MAX_ASSERTION_SECONDS, verifyLiveAssertion } from './live-format';
 import type { LiveProxyPorts, LiveRoute } from './live';
 
 /**
- * A-LIVE §8.2 live edge for a host-owned pages domain (W9 / M4-E).
- * The host (immo's content host) evaluates the reader gate (owner or invitee, code rights, live consent),
- * strips browser credentials, and forwards with ONE signed assertion per live session. This edge never
- * evaluates the gate itself and never forwards the assertion or any credential to Vite.
+ * A-LIVE §8.2 live edge for a host-owned pages domain (W9 / M4-E). The host (immo) evaluates the reader gate, strips
+ * browser credentials and forwards with a signed assertion; this edge re-verifies it on every request, keeps the
+ * session-bound record, and closes sockets when the host revokes or the controller fences. Nothing reaches Vite.
  */
-export const ASSERTION_HEADER = 'x-live-host-assertion';
-export const MIN_KEY_BYTES = 32;
-export const MAX_ASSERTION_SECONDS = 3600;
-const MAX_SKEW_SECONDS = 30;
-
-export interface LiveAssertionClaims {
-  v: 1; kid: string; host: string; artifactId: string; storageScopeId: string; sessionId: string;
-  generation: number; routeEpoch: number; podUid: string; podName: string; sourceRevision: number;
-  principalId: string; role: 'binding_owner' | 'invitee'; invitationId: string; invitationEpoch: number; invitationExp: number;
-  iat: number; exp: number;
-}
-const FIELDS: Record<keyof LiveAssertionClaims, 'string' | 'number'> = {
-  v: 'number', kid: 'string', host: 'string', artifactId: 'string', storageScopeId: 'string', sessionId: 'string',
-  generation: 'number', routeEpoch: 'number', podUid: 'string', podName: 'string', sourceRevision: 'number',
-  principalId: 'string', role: 'string', invitationId: 'string', invitationEpoch: 'number', invitationExp: 'number', iat: 'number', exp: 'number',
-};
-const mac = (key: Uint8Array, body: string) => createHmac('sha256', key).update(`v1.${body}`).digest();
-
-export function signLiveAssertion(claims: LiveAssertionClaims, key: Uint8Array): string {
-  if (key.length < MIN_KEY_BYTES) throw new Error('Live assertion key must contain at least 32 bytes');
-  const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  return `v1.${body}.${mac(key, body).toString('base64url')}`;
-}
-const INVITATION_ID = /^[A-Za-z0-9_-]{1,128}$/;
-/** Owner claims carry no invitation; an invitee claim must name a live invitation that outlasts the assertion. */
-function validRole(c: LiveAssertionClaims, now: number) {
-  if (c.role === 'binding_owner') return c.invitationId === '' && c.invitationEpoch === 0 && c.invitationExp === 0;
-  return c.role === 'invitee' && INVITATION_ID.test(c.invitationId) && c.invitationEpoch >= 1
-    && c.invitationExp > now && c.exp <= c.invitationExp;
-}
-export interface VerifyOptions { key(kid: string): Uint8Array | undefined; now(): number }
-export function verifyLiveAssertion(token: string, options: VerifyOptions): LiveAssertionClaims | undefined {
-  const parts = token.split('.');
-  if (parts.length !== 3 || parts[0] !== 'v1' || token.length > 2048) return;
-  let claims: LiveAssertionClaims;
-  try {
-    claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    if (!claims || typeof claims !== 'object' || claims.v !== 1
-      || Object.keys(claims).sort().join() !== Object.keys(FIELDS).sort().join()
-      || Object.entries(FIELDS).some(([name, type]) => typeof claims[name as keyof LiveAssertionClaims] !== type)) return;
-  } catch { return; }
-  const key = options.key(claims.kid);
-  if (!key || key.length < MIN_KEY_BYTES) return;
-  const given = Buffer.from(parts[2], 'base64url'); const expected = mac(key, parts[1]);
-  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return;
-  const now = options.now() / 1000;
-  if (!validRole(claims, now)) return;
-  if (claims.exp <= now || claims.iat > now + MAX_SKEW_SECONDS || claims.exp - claims.iat > MAX_ASSERTION_SECONDS) return;
-  return claims;
-}
-
-/** In-memory revocation state pushed by the host/controller; watchers close live sockets immediately. */
-export function createLiveFences() {
+/**
+ * Revocation state pushed by the host/controller, plus the session-bound live authorization record (A-LIVE §8.2):
+ * a session keeps one generation and one owner principal; an invitation binds one principal and one session, and
+ * its highest admitted epoch is its floor. Watchers close live sockets immediately.
+ */
+export function createLiveFences(options: { now?: () => number } = {}) {
+  const now = options.now ?? Date.now;
   const floors = new Map<string, { generation: number; routeEpoch: number }>();
   const invitationFloors = new Map<string, number>(); // `${artifactId}/${invitationId}` -> minimum live epoch
   const revoked = new Map<string, number>(); // `${artifactId}/${sessionId}` -> forget-after (ms)
+  const sessions = new Map<string, { generation: number; ownerId?: string; until: number }>();
+  const invitations = new Map<string, { sessionId: string; principalId: string; until: number }>();
   const watchers = new Map<string, Set<{ route: LiveRoute; close(): void }>>();
   const stale = (route: LiveRoute) => {
     const floor = floors.get(route.artifactId);
@@ -76,19 +31,42 @@ export function createLiveFences() {
   const sweep = (artifactId: string) => {
     for (const entry of [...(watchers.get(artifactId) ?? [])]) if (stale(entry.route)) { watchers.get(artifactId)!.delete(entry); entry.close(); }
   };
+  const raiseInvitation = (artifactId: string, invitationId: string, epoch: number) => {
+    const id = `${artifactId}/${invitationId}`;
+    if (epoch > (invitationFloors.get(id) ?? 0)) { invitationFloors.set(id, epoch); sweep(artifactId); }
+  };
   return {
     isCurrent: (route: LiveRoute) => !stale(route),
+    /** Admits a host-asserted route against the session record; refuses anything inconsistent with it. */
+    admit(route: LiveRoute) {
+      const t = now();
+      for (const map of [sessions, invitations]) for (const [id, entry] of map) if (entry.until <= t) map.delete(id);
+      if (stale(route) || !route.principalId || !route.role) return false;
+      const id = `${route.artifactId}/${route.sessionId}`;
+      const session = sessions.get(id) ?? { generation: route.generation, until: route.expiresAt };
+      if (session.generation !== route.generation) return false;
+      if (route.role === 'binding_owner') {
+        if (session.ownerId !== undefined && session.ownerId !== route.principalId) return false;
+        session.ownerId = route.principalId;
+      } else {
+        const inviteKey = `${route.artifactId}/${route.invitationId}`; const bound = invitations.get(inviteKey);
+        if (!route.invitationId || (bound && (bound.sessionId !== route.sessionId || bound.principalId !== route.principalId))) return false;
+        invitations.set(inviteKey, { sessionId: route.sessionId, principalId: route.principalId,
+          until: Math.max(bound?.until ?? 0, route.expiresAt) });
+        raiseInvitation(route.artifactId, route.invitationId, route.invitationEpoch ?? 0);
+      }
+      session.until = Math.max(session.until, route.expiresAt); sessions.set(id, session);
+      return true;
+    },
     revoke(input: { artifactId: string; sessionId: string; forgetAfter?: number }) {
-      const now = Date.now();
-      for (const [key, until] of revoked) if (until <= now) revoked.delete(key);
-      revoked.set(`${input.artifactId}/${input.sessionId}`, input.forgetAfter ?? now + MAX_ASSERTION_SECONDS * 1000);
+      const t = now();
+      for (const [key, until] of revoked) if (until <= t) revoked.delete(key);
+      revoked.set(`${input.artifactId}/${input.sessionId}`, input.forgetAfter ?? t + MAX_ASSERTION_SECONDS * 1000);
       sweep(input.artifactId);
     },
     /** Invitation revocation: the host bumps the epoch; every older assertion and open socket for it is refused/closed. */
     revokeInvitation(input: { artifactId: string; invitationId: string; epoch: number }) {
-      const id = `${input.artifactId}/${input.invitationId}`;
-      invitationFloors.set(id, Math.max(input.epoch, invitationFloors.get(id) ?? 0));
-      sweep(input.artifactId);
+      raiseInvitation(input.artifactId, input.invitationId, input.epoch);
     },
     fence(input: { artifactId: string; generation: number; routeEpoch: number }) {
       const floor = floors.get(input.artifactId);
@@ -136,7 +114,7 @@ export function createHostAssertionLive(options: HostAssertionLiveOptions): Live
         expiresAt: (claims.role === 'invitee' ? Math.min(claims.exp, claims.invitationExp) : claims.exp) * 1000,
         sourceRevision: claims.sourceRevision, principalId: claims.principalId, role: claims.role,
         ...(claims.role === 'invitee' ? { invitationId: claims.invitationId, invitationEpoch: claims.invitationEpoch } : {}) };
-      return options.fences.isCurrent(route) ? route : undefined;
+      return options.fences.admit(route) ? route : undefined;
     },
     current: async route => options.fences.isCurrent(route),
     admittedPath: options.admittedPath,
