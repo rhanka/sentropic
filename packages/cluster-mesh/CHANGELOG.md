@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.26.0-dev.15
+
+- Add a durable strict-FIFO heavy-phase queue per node (`runtime/heavy-phase-queue`, root export)
+  with an injectable memory or Postgres store: admission when pod bases, live reservations,
+  admitted phases and the phase cost fit the node memory budget, a build only with no other live,
+  ticket TTL, `seed` after a restart and `status` with queue positions.
+
 ## 0.26.0-dev.14
 
 - Add GitHub App enrollment with owner/scope/repository-bound callbacks,
