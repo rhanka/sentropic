@@ -13,7 +13,7 @@ export function checkActivationImage(objects) {
     for (const c of containers) assert.match(c.image, /@sha256:[0-9a-f]{64}$/, 'artifact opening requires digest-pinned API/content images');
   }
 }
-export function checkWorkload(objects, tier) {
+export function checkWorkload(objects, tier, preservedImages) {
   checkActivationImage(objects);
   const ns = tier === 'prod' ? 'sentropic' : 'sentropic-preprod';
   for (const o of objects) assert.equal(o.metadata.namespace, ns, `${o.kind}/${o.metadata.name} namespace`);
@@ -55,8 +55,14 @@ export function checkWorkload(objects, tier) {
   assert.deepEqual(service.selector, component('artifact-content'));
   assert.deepEqual(service.ports, [{ name: 'http', port: 8791, targetPort: 'http' }]);
   const image = object(objects, 'Deployment', 'api').spec.template.spec.containers[0].image;
-  assert.equal(content.image, image);
-  assert.equal(object(objects, 'Deployment', 'auth-idp').spec.template.spec.containers[0].image, image);
+  if (preservedImages) {
+    for (const name of ['api', 'auth-idp', 'artifact-content']) {
+      assert.equal(object(objects, 'Deployment', name).spec.template.spec.containers[0].image, preservedImages[name]);
+    }
+  } else {
+    assert.equal(content.image, image);
+    assert.equal(object(objects, 'Deployment', 'auth-idp').spec.template.spec.containers[0].image, image);
+  }
   // Restore/backup retains its existing own-namespace ingress; content adds no restore authority.
   const restore = object(objects, 'NetworkPolicy', 'allow-pgbackup-to-postgres').spec;
   assert.deepEqual(restore.ingress[0].from, [{ podSelector: { matchLabels: component('pgbackup') } }]);
