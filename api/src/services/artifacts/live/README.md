@@ -112,9 +112,20 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   staged-source/dependency path manifest to `createLiveProxy`. Inject that proxy
   into `startContentServer` for HTTP and websocket handling. Release grants do
   not authorize live source, and release-id routes remain immutable.
-- The API scheduler calls `reconcile` on active bindings and `recover` on
-  interrupted intents only after the previous executor is fenced. `reap`
-  enforces the absolute lifetime without forcing an early publication.
+- The API scheduler (`createLiveScheduler`, one per environment, started by the
+  composition) ticks at most every 30 s. Each tick sends one fenced liveness
+  frame (`worker.renew`) to every pod that is not DORMANT and reconciles every
+  key concurrently, so a crash restore or clean build never delays another key
+  or any frame. `recover` runs on interrupted intents only after the previous
+  executor is fenced.
+
+There is no absolute pod lifetime (A-LIVE Amendment 1). `reap` is the idle
+reaper: strictly after 900 s of server time since `lastAccessAt`, it ends on the
+clean build of the last verified commit (or on the typed conflict, without a
+build). Admitted MCP edits/reads and foreground viewing extend the session;
+status polls, heartbeats, pings and liveness frames never do. Without a valid
+frame for 30 minutes the bootstrap exits; the controller then restores the
+durable draft (§5.5).
 
 The package `LiveService` owns the revision model: revisions are opaque strings
 and an edit is acknowledged once durable. `createLiveWorkerBridge` implements its
@@ -124,11 +135,26 @@ reports `ready` only when the worker applied that exact revision.
 Authority is the binding owner, i.e. the acting user. `authorize` returns the
 route grant the host signs into its live assertion: writes for the binding owner
 only, reads for the owner or an unexpired invitee of the current invitation
-epoch. Pod slots are admitted fairly across users. One heavy phase at a time
+epoch. Revisions are opaque strings of at most 128 characters. Pod slots are
+admitted fairly across users; the capacity comes from per-environment
+configuration, and slots held by pods that are not DORMANT are re-read before
+the first decision after an API restart. One controller replica per environment
+owns admission. One heavy phase at a time
 runs per node (`createPostgresHeavyGate`): cold revive, wake, crash restore and
 the idle or explicit clean build; HMR projection never waits for it. An
 OOM-killed or evicted LIVE pod is replaced, after confirmed deletion, by a
 fenced revive of the acknowledged draft, at most twice in a row.
+
+Known limits of the heavy-phase gate:
+
+- The advisory lock lives in each environment's database, so preprod and prod
+  heavy phases do not serialize with each other on the shared node. That relies
+  on the preprod quota window (pods 0 during owner sessions) until a shared lock
+  or a split node exists; keep preprod plus prod admission at most 4 slots.
+- If the API crashes mid-phase, its connection closes and the lock frees while
+  the pod may still run that heavy step. Another phase can then overlap it, at
+  most until the 5-minute phase deadline. After the restart the host calls
+  `recover`, which fences and tears down that intent before any replacement.
 
 Idle builds always use the last verified commit and the existing pod, never
 the dirty draft. A conflict/divergence skips the build. An unchanged head still
