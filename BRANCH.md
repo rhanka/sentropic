@@ -50,4 +50,4 @@
 - [x] Lot 2: `createSupervisorTransport` implementing every `QualifiedSupervisor` method, tests first.
 - [x] Lot 3: offline clean install over the transport (tarballs staged into the pod npm cache, `npm ci --offline`), tests first.
 - [ ] Lot 4: README transport section; scoped tests and typecheck green; branch pushed.
-- [ ] Lot 5: final pass: the single `candidateDigest` of `@sentropic/artifacts/live-host` replaces `candidateManifestDigest` (tests first); immo installed tree measured against `TREE_LIMITS`.
+- [x] Lot 5: final pass: the single `candidateDigest` of `@sentropic/artifacts/live-host` replaces `candidateManifestDigest` (tests first); immo installed tree measured against `TREE_LIMITS`.
