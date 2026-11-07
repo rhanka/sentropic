@@ -4,7 +4,7 @@ import { gitPath } from './git-port-policy.js';
 import { liveDigest } from './live-crypto.js';
 import type { GitPort } from './git-port.js';
 import type { LiveAuthority, LiveInvocation, LiveSnapshot } from './live-contracts.js';
-import type { LiveDraftRecord, LiveOverlayEntry } from './live-store.js';
+import { LIVE_IDLE_THRESHOLD_MS, type LiveDraftRecord, type LiveOverlayEntry } from './live-store.js';
 import type { LiveBaseTree } from './live-tree.js';
 
 export async function readLivePage(input: { git: GitPort; authority: LiveAuthority; record: LiveDraftRecord;
@@ -68,7 +68,7 @@ export async function readLivePage(input: { git: GitPort; authority: LiveAuthori
   }
   if (kind === 'read' && record.runtime) {
     record.runtime.lastAccessAt = new Date(now).toISOString();
-    record.runtime.idleDeadline = new Date(now + 600000).toISOString();
+    record.runtime.idleDeadline = new Date(now + LIVE_IDLE_THRESHOLD_MS).toISOString();
   }
   return kind === 'read' ? { files, nextCursor } : { diff, files: recipe, deletes, nextCursor };
 }
