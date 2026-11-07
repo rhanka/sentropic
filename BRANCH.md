@@ -46,5 +46,5 @@
 - [x] Lot 1: scripts/ci/api-tool-deps-key.mjs (exact deps-stage inputs, workspace version dropped behind an edge-validity signature, inert manifest fields dropped, fail-closed on unevaluated specs).
 - [x] Lot 2: normalization tests (workspace bump stable; external version/integrity/resolved/edge and workspace add/remove move the key; real-repo release).
 - [x] Lot 3: semver oracle and Dockerfile input coverage tests.
-- [ ] Lot 4: Makefile wiring (BR91-EX1); scoped checks green.
+- [x] Lot 4: Makefile wiring (BR91-EX1); scoped checks green (api-tool-cache 25/25, ci-dag 10/10, unit-graph 7/7, expected-results 28/28, ci-static 3/3, performance-report 8/8, run-metrics 36/36).
 - [ ] Lot N: train CI green on the exact head; BRANCH.md removed at merge.
