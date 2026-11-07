@@ -67,6 +67,19 @@ jobs:
             grep -rnE "(serveStatic|getRequestListener|createAdaptorServer|[^a-zA-Z]serve)\(" dist --include=*.js | grep -vE "^\S+:[0-9]+:\s*//" | cut -c1-200 | head -30
             echo "--- source maps / src present:"; ls /workspace/api/src 2>/dev/null | head -3 || true
           '
+      - name: Bundle inspection on the unpatched base (is node-server inlined?)
+        run: |
+          set -eu
+          base="${IMAGE_REPO}@${{ matrix.base_digest }}"
+          docker run --rm --entrypoint sh "$base" -c '
+            cd /workspace/api
+            echo "--- map sources mentioning node-server:"
+            grep -oE "[^\"]*@hono/node-server[^\"]*" dist/index.js.map | sort -u | head -20
+            echo "--- bundle lines (non-map):"
+            grep -nE "node-server|getRequestListener|createAdaptorServer|serveStatic" dist/index.js | cut -c1-180 | head -30
+            echo "--- bare imports left in bundle:"
+            grep -nE "^import .* from \"[^./]" dist/index.js | cut -c1-140 | head -20
+          '
       - name: Negative control, probe must FAIL on the unpatched base
         run: |
           set -eu
