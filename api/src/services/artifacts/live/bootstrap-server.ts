@@ -113,7 +113,8 @@ export async function startBootstrap(frozen, host = { env: process.env, exit: (c
   const podUid = host.env.ARTIFACT_POD_UID;
   if (typeof podUid !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(podUid)) { console.error('pod_identity_missing'); return host.exit(1); }
   let control = null;
-  const agent = createAgent({ root: '/', recipes: frozen.RECIPES, env: frozen.ENV, publicKey, identity: { podName: serverHostname(), podUid },
+  const agent = createAgent({ root: '/', recipes: frozen.RECIPES, env: frozen.ENV, buildEnv: frozen.BUILD_ENV, publicKey,
+    identity: { podName: serverHostname(), podUid },
     spawn: serverSpawn, processes: podProcesses(), sockets: podSockets, waitPort: podWaitPort, now: Date.now,
     controlPort: frozen.CONTROL_PORT, upstreamPort: frozen.UPSTREAM_PORT,
     exit: (code) => { console.error('liveness_lease_expired'); host.exit(code); }, liveEnded: () => control && control.closeLive() });

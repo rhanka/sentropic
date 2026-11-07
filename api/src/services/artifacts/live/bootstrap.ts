@@ -9,6 +9,7 @@ import { SERVER_SOURCE } from './bootstrap-server';
 import { LiveError } from './records';
 import {
   BUILD_RECIPE, INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, PREBUNDLE_RECIPE, artifactEnvironment,
+  buildEnvironment,
 } from './recipes';
 
 /** DER SPKI of an Ed25519 key: the fixed 12-byte prefix, then the 32-byte key, base64-encoded. */
@@ -18,7 +19,8 @@ export const MAX_BOOTSTRAP_BYTES = 120 * 1024;
 
 export function bootstrapConfig(publicKey: string) {
   if (!ED25519_SPKI.test(publicKey)) throw new LiveError('builder_unavailable');
-  return { PUBLIC_KEY: publicKey, CONTROL_PORT: 5173, UPSTREAM_PORT: LIVE_UPSTREAM_PORT, ENV: artifactEnvironment(),
+  return { PUBLIC_KEY: publicKey, CONTROL_PORT: 5173, UPSTREAM_PORT: LIVE_UPSTREAM_PORT,
+    ENV: artifactEnvironment(), BUILD_ENV: buildEnvironment(),
     RECIPES: { install: INSTALL_RECIPE, prebundle: PREBUNDLE_RECIPE, prebundleScript: LIVE_PREBUNDLE_SCRIPT,
       live: LIVE_RECIPE, build: BUILD_RECIPE } };
 }

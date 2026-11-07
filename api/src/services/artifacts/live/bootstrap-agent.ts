@@ -89,6 +89,7 @@ async function agentUnlock(path) {
 
 export function createAgent(options) {
   const root = options.root || '/';
+  if (!options.env || !options.buildEnv) throw new AgentError('failed', 'environment_missing');
   const ctx = { options, recipes: options.recipes, env: options.env, ops: {}, resets: [],
     at: (path) => agentPath.join(root, path),
     state: { fence: null, phase: 'stopped', live: false, child: null, revision: null, groups: new Set() },
@@ -111,16 +112,16 @@ export function createAgent(options) {
     return false;
   };
   /** Frozen recipes only: own process group, no shell, the host environment built from zero, no inherited stdio. */
-  ctx.spawnRecipe = (recipe, cwd) => {
+  ctx.spawnRecipe = (recipe, cwd, env = ctx.env) => {
     const child = options.spawn(recipe.executable, [...recipe.args],
-      { cwd: ctx.at(cwd), env: { ...ctx.env }, shell: false, detached: true, stdio: 'ignore' });
+      { cwd: ctx.at(cwd), env: { ...env }, shell: false, detached: true, stdio: 'ignore' });
     if (Number.isSafeInteger(child.pid)) ctx.state.groups.add(child.pid);
     ctx.state.child = child;
     return child;
   };
-  ctx.runToExit = (recipe, cwd) => new Promise((resolve) => {
+  ctx.runToExit = (recipe, cwd, env) => new Promise((resolve) => {
     let child;
-    try { child = ctx.spawnRecipe(recipe, cwd); } catch { resolve(-1); return; }
+    try { child = ctx.spawnRecipe(recipe, cwd, env); } catch { resolve(-1); return; }
     const timer = setTimeout(() => { ctx.terminateAll(); }, recipe.timeoutMs);
     if (timer.unref) timer.unref();
     child.once('error', () => { clearTimeout(timer); resolve(-1); });
