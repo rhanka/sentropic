@@ -5,3 +5,5 @@ export * from './props.js';
 export * from './lock.js';
 export * from './probe.js';
 export * from './boundary.js';
+export * from './identity.js';
+export * from './access.js';
