@@ -37,6 +37,10 @@
 //                                three MCP scopes + offline_access). Requires OAUTH_CLIENT_RESOURCE_INDICATORS
 //                                (the MCP_RESOURCE_URI of the target environment); any other OAUTH_CLIENT_*
 //                                variable overrides the preset.
+//                                'h2a-cli': the owner-delegated h2a CLI (public, PKCE, refresh, RFC 8252
+//                                port-less loopback redirect http://127.0.0.1/callback, MCP + artifact scopes +
+//                                offline_access). Requires OAUTH_CLIENT_RESOURCE_INDICATORS and
+//                                OAUTH_CLIENT_ALLOWED_USER_IDS (the owner sub: no service principal).
 //   OAUTH_CLIENT_REQUIRED_ACR    optional minimum ACR: 'urn:sentropic:loa:passkey-fresh'
 //                                (passkey/2FA enforced at authorize) or empty (no policy, default).
 //   OAUTH_CLIENT_ALLOWED_USER_IDS optional comma-separated user ids (subject allowlist,
@@ -52,7 +56,7 @@ import { eq } from 'drizzle-orm';
 
 import { db, pool } from '../db/client';
 import { oauthClients } from '../db/schema';
-import { SENTROPIC_MCP_CLIENT_ID } from '../services/mcp/client-policy';
+import { H2A_CLI_CLIENT_ID, SENTROPIC_MCP_CLIENT_ID } from '../services/mcp/client-policy';
 
 const hashSecret = (secret: string): string => createHash('sha256').update(secret).digest('hex');
 
@@ -106,15 +110,36 @@ export const SENTROPIC_MCP_PRESET: Readonly<Record<string, string>> = Object.fre
   OAUTH_CLIENT_SCOPES: 'mcp:discover,mcp:resources:read,mcp:tools:invoke,offline_access',
 });
 
-const applyPreset = (source: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
-  const preset = (source.OAUTH_CLIENT_PRESET ?? '').trim();
-  if (!preset) return source;
-  if (preset !== SENTROPIC_MCP_CLIENT_ID) throw new Error(`Unknown OAUTH_CLIENT_PRESET '${preset}'.`);
-  if (!source.OAUTH_CLIENT_RESOURCE_INDICATORS?.trim()) {
-    throw new Error('OAUTH_CLIENT_PRESET requires OAUTH_CLIENT_RESOURCE_INDICATORS (the MCP resource URI).');
-  }
-  return { ...SENTROPIC_MCP_PRESET, ...Object.fromEntries(Object.entries(source).filter(([, v]) => v !== undefined)) };
+export const H2A_CLI_PRESET: Readonly<Record<string, string>> = Object.freeze({
+  OAUTH_CLIENT_ID: H2A_CLI_CLIENT_ID,
+  OAUTH_CLIENT_NAME: 'h2a CLI (owner-delegated)',
+  OAUTH_CLIENT_REDIRECT_URIS: 'http://127.0.0.1/callback',
+  OAUTH_CLIENT_TOKEN_AUTH: 'none',
+  OAUTH_CLIENT_GRANT_TYPES: 'authorization_code,refresh_token',
+  OAUTH_CLIENT_SCOPES: 'mcp:discover,mcp:resources:read,mcp:tools:invoke,' +
+    'immo:artifacts:read,immo:artifacts:write,offline_access',
+});
+
+const PRESETS: Readonly<Record<string, { values: Readonly<Record<string, string>>; required: readonly string[] }>> = {
+  [SENTROPIC_MCP_CLIENT_ID]: { values: SENTROPIC_MCP_PRESET, required: ['OAUTH_CLIENT_RESOURCE_INDICATORS'] },
+  [H2A_CLI_CLIENT_ID]: {
+    values: H2A_CLI_PRESET, required: ['OAUTH_CLIENT_RESOURCE_INDICATORS', 'OAUTH_CLIENT_ALLOWED_USER_IDS'],
+  },
 };
+
+const applyPreset = (source: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const name = (source.OAUTH_CLIENT_PRESET ?? '').trim();
+  if (!name) return source;
+  const preset = Object.hasOwn(PRESETS, name) ? PRESETS[name] : undefined;
+  if (!preset) throw new Error(`Unknown OAUTH_CLIENT_PRESET '${name}'.`);
+  const missing = preset.required.filter((key) => !source[key]?.trim());
+  if (missing.length > 0) throw new Error(`OAUTH_CLIENT_PRESET '${name}' requires ${missing.join(', ')}.`);
+  return { ...preset.values, ...Object.fromEntries(Object.entries(source).filter(([, v]) => v !== undefined)) };
+};
+
+/** RFC 8252 §7.3 native-app redirect: loopback IP literal, plain http, NO port (any port at request time). */
+const isPortlessLoopbackRedirectUri = (uri: string): boolean =>
+  /^http:\/\/(?:127\.0\.0\.1|\[::1\])\/[^#]*$/u.test(uri);
 
 export const buildOAuthClientRegistration = (
   rawSource: NodeJS.ProcessEnv = process.env,
@@ -123,21 +148,6 @@ export const buildOAuthClientRegistration = (
   const source = applyPreset(rawSource);
   const clientId = (source.OAUTH_CLIENT_ID ?? 'design-system').trim();
   const name = (source.OAUTH_CLIENT_NAME ?? 'Sentropic Design System').trim();
-
-  const redirectUris = parseList(requireEnv(source, 'OAUTH_CLIENT_REDIRECT_URIS'));
-  if (redirectUris.length === 0) {
-    throw new Error('OAUTH_CLIENT_REDIRECT_URIS must contain at least one redirect URI');
-  }
-  // Guard against accidentally registering dev/localhost URIs in prod.
-  const insecure = redirectUris.filter(
-    (uri) => !uri.startsWith('https://') || /localhost|127\.0\.0\.1/.test(uri),
-  );
-  if (insecure.length > 0) {
-    throw new Error(
-      `Refusing to register insecure/localhost redirect URIs: ${insecure.join(', ')}. ` +
-        'Use absolute https:// URIs only.',
-    );
-  }
 
   // token_endpoint_auth_method: 'client_secret_basic' (confidential, default) or 'none' (public
   // client + PKCE, no secret — e.g. a claude.ai MCP connector via Advanced-settings custom creds).
@@ -149,6 +159,23 @@ export const buildOAuthClientRegistration = (
     );
   }
   const isPublicClient = tokenEndpointAuthMethod === 'none';
+
+  const redirectUris = parseList(requireEnv(source, 'OAUTH_CLIENT_REDIRECT_URIS'));
+  if (redirectUris.length === 0) {
+    throw new Error('OAUTH_CLIENT_REDIRECT_URIS must contain at least one redirect URI');
+  }
+  // Guard against accidentally registering dev/localhost URIs in prod. The only exception is a
+  // PUBLIC native client's port-less loopback IP URI (RFC 8252 §7.3), never a dev URI with a port.
+  const insecure = redirectUris.filter(
+    (uri) => !(isPublicClient && isPortlessLoopbackRedirectUri(uri)) &&
+      (!uri.startsWith('https://') || /localhost|127\.0\.0\.1|\[::1\]/.test(uri)),
+  );
+  if (insecure.length > 0) {
+    throw new Error(
+      `Refusing to register insecure/localhost redirect URIs: ${insecure.join(', ')}. ` +
+        'Use absolute https:// URIs (a public client may also use a port-less loopback IP URI, RFC 8252).',
+    );
+  }
 
   // Public clients carry NO secret (PKCE is the proof); confidential clients require a strong one,
   // stored only as its sha256 hash (plaintext never persisted).
