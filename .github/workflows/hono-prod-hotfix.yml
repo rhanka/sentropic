@@ -1,0 +1,111 @@
+name: hono-prod-hotfix
+
+# One-shot hotfix: derive patched images FROM the exact production digests, replacing only
+# @hono/node-server (GHSA-jpvv-r467-5p4w). Runs on push to the hotfix branch (path-filtered)
+# because a branch-only workflow cannot be dispatched. Deploy is NOT done here.
+on:
+  push:
+    branches: [fix/hono-prod-hotfix]
+    paths:
+      - .github/workflows/hono-prod-hotfix.yml
+      - scripts/security/hono-hotfix/**
+      - scripts/security/hono-node-server.test.mjs
+
+permissions:
+  contents: read
+
+env:
+  PATCHED_VERSION: 1.19.18
+  PATCHED_INTEGRITY: sha512-609kppIP9GITS+EwPyB6Kiq8z2yXONaYD1VHpo7MMP9celRJYbkFr9KakJncHwK0EK/XYtlogqmrLchDv5HX5w==
+  IMAGE_REPO: ghcr.io/rhanka/sentropic-api
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: api
+            base_digest: sha256:19b11b5baffe6b2e743ef6d5bb33e5fdb5ee78fe0e97573c51c37fa2d44e7ad7
+          - role: idp
+            base_digest: sha256:a36c6acaf9c887b4e96e54897f4d8f701456524a7c89976211786b680e543909
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Fetch the patched package and verify its registry integrity
+        run: |
+          set -eu
+          mkdir ctx
+          curl -fsSL "https://registry.npmjs.org/@hono/node-server/-/node-server-${PATCHED_VERSION}.tgz" -o ctx/node-server.tgz
+          got="sha512-$(openssl dgst -sha512 -binary ctx/node-server.tgz | base64 -w0)"
+          [ "$got" = "$PATCHED_INTEGRITY" ] || { echo "integrity mismatch"; exit 1; }
+          cp scripts/security/hono-hotfix/Dockerfile ctx/Dockerfile
+      - name: Pull base and read its user
+        run: |
+          set -eu
+          base="${IMAGE_REPO}@${{ matrix.base_digest }}"
+          docker pull "$base"
+          user="$(docker image inspect --format '{{.Config.User}}' "$base")"
+          echo "ORIG_USER=${user:-root}" >> "$GITHUB_ENV"
+      - name: Negative control, probe must FAIL on the unpatched base
+        run: |
+          set -eu
+          base="${IMAGE_REPO}@${{ matrix.base_digest }}"
+          if docker run --rm --entrypoint node -e HONO_TEST_ROOT=/workspace/api \
+               -v "$PWD/scripts/security:/probe:ro" "$base" --test /probe/hono-node-server.test.mjs; then
+            echo "probe passed on the vulnerable base: probe is not discriminating"; exit 1
+          fi
+          echo "negative control OK (probe fails on base)"
+      - name: Build the derived image
+        run: |
+          set -eu
+          docker build ctx \
+            --build-arg BASE="${IMAGE_REPO}@${{ matrix.base_digest }}" \
+            --build-arg BASE_REF="${IMAGE_REPO}@${{ matrix.base_digest }}" \
+            --build-arg ORIG_USER="$ORIG_USER" \
+            --build-arg SOURCE_REVISION="${{ github.sha }}" \
+            -t "patched-${{ matrix.role }}"
+      - name: Prove the installed tree inside the image
+        run: |
+          set -eu
+          img="patched-${{ matrix.role }}"
+          docker run --rm --entrypoint sh "$img" -c '
+            set -eu
+            find / -xdev -type d -path "*/node_modules/@hono/node-server" -prune -print > /tmp/f
+            test "$(wc -l < /tmp/f)" = 1
+            d="$(cat /tmp/f)"; echo "path: $d"
+            test "$(node -p "require(\"$d/package.json\").version")" = "'"$PATCHED_VERSION"'"
+            echo "version: $(node -p "require(\"$d/package.json\").version")"
+            cd /workspace/api && (npm ls @hono/node-server 2>&1 || true)
+          '
+          docker image inspect --format '{{json .Config.Labels}} user={{.Config.User}} entry={{.Config.Entrypoint}} cmd={{.Config.Cmd}} wd={{.Config.WorkingDir}}' "$img"
+          base="${IMAGE_REPO}@${{ matrix.base_digest }}"
+          for f in User Entrypoint Cmd WorkingDir Env; do
+            a="$(docker image inspect --format "{{json .Config.$f}}" "$base")"; b="$(docker image inspect --format "{{json .Config.$f}}" "$img")"
+            [ "$a" = "$b" ] || { echo "config drift on $f: $a vs $b"; exit 1; }
+          done
+          echo "runtime config identical to base"
+      - name: Backslash regression probe against the patched image
+        run: |
+          set -eu
+          docker run --rm --entrypoint node -e HONO_TEST_ROOT=/workspace/api \
+            -v "$PWD/scripts/security:/probe:ro" "patched-${{ matrix.role }}" --test /probe/hono-node-server.test.mjs
+      - name: Boot smoke, the image still starts its entrypoint
+        run: |
+          set -eu
+          cid="$(docker run -d -e NODE_ENV=production "patched-${{ matrix.role }}")"
+          sleep 8
+          docker logs "$cid" 2>&1 | tail -n 15 | cut -c1-200 || true
+          docker rm -f "$cid" >/dev/null
+      - name: Push by tag and report the digest
+        run: |
+          set -eu
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          tag="hono-${PATCHED_VERSION}-${{ matrix.role }}-${{ github.run_id }}"
+          docker tag "patched-${{ matrix.role }}" "${IMAGE_REPO}:${tag}"
+          docker push "${IMAGE_REPO}:${tag}" | tee push.log
+          digest="$(grep -o 'digest: sha256:[0-9a-f]*' push.log | head -1 | cut -d' ' -f2)"
+          echo "role=${{ matrix.role }} tag=${tag} digest=${digest} base=${{ matrix.base_digest }}" | tee -a "$GITHUB_STEP_SUMMARY"
