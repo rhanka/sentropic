@@ -10,6 +10,10 @@ import { LiveError } from './records';
 export const BUILDER_KEY_ENV = Object.freeze({
   signing: 'ARTIFACT_BUILDER_HANDOFF_SIGNING_KEY_JSON', hostReceipts: 'ARTIFACT_BUILDER_HOST_RECEIPT_KEYS_JSON',
 });
+/** Env name of the supervisor frame key (s-archi 16:40 FIX5, owner sentropic): {"kid","privateKey"}, Ed25519 PKCS#8 DER
+ * base64. The API signs every supervisor frame with it; a pod holds only its public half, embedded in the bootstrap.
+ * Rotation: README.md « Supervisor frame key ». */
+export const SUPERVISOR_KEY_ENV = 'ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON';
 const MAX_RING = 4;
 const unconfigured = (): never => { throw new LiveError('builder_unavailable', 'keys_unconfigured'); };
 const ed25519 = (key: KeyObject) => (key.asymmetricKeyType === 'ed25519' ? key : unconfigured());
@@ -22,12 +26,17 @@ function json(value: string | undefined): unknown {
   try { return JSON.parse(value ?? ''); } catch { return unconfigured(); }
 }
 
+function signing(value: string | undefined): SigningKey {
+  const own = entry(json(value), 'privateKey');
+  try { return Object.freeze({ kid: own.kid, key: ed25519(createPrivateKey({ key: own.der, format: 'der', type: 'pkcs8' })) }); }
+  catch { return unconfigured(); }
+}
+/** Supervisor frame key of this environment; an absent or invalid value refuses to compose the live service. */
+export const supervisorKey = (env: Readonly<Record<string, string | undefined>>) => signing(env[SUPERVISOR_KEY_ENV]);
+
 /** Builder keys of this environment; any absent or invalid value refuses to compose the builder service. */
 export function builderKeys(env: Readonly<Record<string, string | undefined>>): { signingKey(): SigningKey; hostKeys: KeyResolver } {
-  const own = entry(json(env[BUILDER_KEY_ENV.signing]), 'privateKey');
-  let signer: SigningKey;
-  try { signer = Object.freeze({ kid: own.kid, key: ed25519(createPrivateKey({ key: own.der, format: 'der', type: 'pkcs8' })) }); }
-  catch { return unconfigured(); }
+  const signer = signing(env[BUILDER_KEY_ENV.signing]);
   const ring = json(env[BUILDER_KEY_ENV.hostReceipts]);
   if (!Array.isArray(ring) || ring.length < 1 || ring.length > MAX_RING) return unconfigured();
   const keys = new Map<string, KeyObject>();
