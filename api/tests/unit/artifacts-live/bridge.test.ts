@@ -42,4 +42,9 @@ describe('live worker bridge (package LiveService <-> controller)', () => {
     await bridge.stop({ ...identity, ...session, });
     expect((await f.state())?.runtime.phase).toBe('DORMANT');
   });
+  it('should refuse a stop from a stale lease epoch of the same package session', async () => {
+    const f = fixture(); const bridge = bridgeOf(f); await bridge.reconcile(identity);
+    await expect(bridge.stop({ ...identity, ...session, leaseEpoch: 6 })).rejects.toMatchObject({ reason: 'stale_session' });
+    expect((await f.state())?.runtime.phase).toBe('LIVE');
+  });
 });
