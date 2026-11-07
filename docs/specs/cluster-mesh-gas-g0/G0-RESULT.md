@@ -11,11 +11,11 @@ Status: BLOCKED — not run. No pass/fail verdict exists. G1 is not started (it 
 - Node-side results would not be GAS evidence (the questions are about the GAS runtime itself), so none is recorded.
 
 ## What is delivered
-- `Code.gs`: a single-function probe `runG0()` that answers each G0 question and logs one JSON line. No network, no
+- `g0-probe.gs`: a single-function probe `runG0()` that answers each G0 question and logs one JSON line. No network, no
   dossier data; throwaway Properties keys `g0:*` are deleted.
 
 ## How to run (owner-run, Airbus tenant)
-1. New Apps Script project, runtime V8 (`appsscript.json` `runtimeVersion: V8`), paste `Code.gs`.
+1. New Apps Script project, runtime V8 (`appsscript.json` `runtimeVersion: V8`), paste `g0-probe.gs`.
 2. Run `runG0` as the Airbus user; copy the logged JSON line into `G0-RESULT-DATA.json` on this branch.
 3. Quotas (project/file size) are read from the script editor/Google docs for the tenant and noted beside it.
 
