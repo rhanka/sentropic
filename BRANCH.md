@@ -1,7 +1,7 @@
 # fix: preserve the canonical GHCR UI image before qualification
 
 ## Objective
-- [ ] Fix main run 42327588560 without weakening any tested/published config or manifest digest check; deliver one READY PR and exit after push.
+- [x] Fix main run 42327588560 without weakening any tested/published config or manifest digest check; locally validated hotfix prepared for one READY PR and exit after push.
 
 ## Scope / Guardrails
 - [x] Branch fix/ghcr-ui-publish-digest from origin/main e671644444c37e2f9aab48007a091c7095460609; worktree tmp/worktrees/ghcr-ui-fix.
@@ -53,4 +53,4 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Evidence**: mechanical harness branch check; failed UI and successful API logs; inspect public UI manifest; archive the migration plan without losing Track source.
 - [x] **Lot 1 — Fix and regression**: complete UI input/profile identity, canonical resolution before tests, unchanged publisher assertions; make test-ghcr-images PASS (20/20 plus login and input-version fixtures), make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs PASS (40/40), make test-ci-api-tooling CI_TOOLING_CASE=layers PASS, make check-ci-version-filters PASS. Actual Make production/uat profiles produce distinct tags.
-- [ ] **Lot 2 — Review and handoff**: independent code review; make scope-check; atomic make commit; make down-volumes; push; one READY PR; write .tmp/rv/ghcr-ui-fix.md and exit without CI polling. Conductor owns CI observation, merge and Track import.
+- [x] **Lot 2 — Local handoff ready**: two independent Astra xhigh final reviews PASS on ee39fb3a6; all findings closed, full-branch mechanical scope PASS, atomic make commits and make down-volumes complete. Push, one READY PR and .tmp/rv/ghcr-ui-fix.md follow immediately; exit without CI polling. Conductor owns CI observation, merge and Track import. This final plan update changes documentation only.
