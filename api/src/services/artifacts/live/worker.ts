@@ -15,8 +15,9 @@ export interface QualifiedSupervisor {
   dependencies(runtime: LiveRuntime, cache: CacheReceipt, options: { readOnly: true; verifyHash: true }): Promise<void>;
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
-  /** Separate heavy phase. The pod bootstrap writes its frozen LIVE_PREBUNDLE_SCRIPT itself (no hostFile) and runs it
-   * to completion; it writes only the emptyDir cacheDir, never the shared dependency cache. */
+  /** Separate heavy phase, op `prebundle { recipe: 'prebundle' }` (W3). The pod bootstrap writes its frozen
+   * LIVE_PREBUNDLE_SCRIPT itself (no hostFile) and runs it to completion; it writes only the emptyDir cacheDir, never the
+   * shared dependency cache; `dev` refuses before it. */
   prebundle(runtime: LiveRuntime, command: typeof PREBUNDLE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
     Promise<{ prebundled: true }>;
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
@@ -42,11 +43,11 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
       await supervisor.phase(runtime, 'offline');
     },
     restore: (runtime, draft) => supervisor.overlay(runtime, draft),
-    async live(runtime) {
+    async prebundle(runtime) {
       await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName));
       await supervisor.prebundle(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
-      return supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment());
     },
+    live: runtime => supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment()),
     async build(runtime, attempt) {
       const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, buildEnvironment());
       await supervisor.terminate(runtime);
