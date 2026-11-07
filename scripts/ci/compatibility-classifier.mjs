@@ -27,7 +27,8 @@ export function classifyFileArea(file) {
   if (typeof file !== 'string' || file.length === 0) return 'unknown';
   if (file.endsWith('.md') || file === 'LICENSE') return 'unrelated';
   if (file === 'package.json' || file === 'package-lock.json') return 'root-lock';
-  if (file.startsWith('deploy/k8s/') || file.startsWith('deploy/ci/')) return 'deployment';
+  if ((file.startsWith('deploy/k8s/') && /\.(?:yaml|yml|json)$/.test(file))
+    || file.startsWith('deploy/ci/')) return 'deployment';
   if (file === 'Makefile' || file === 'api/Dockerfile' || file === 'ui/Dockerfile'
     || file === '.dockerignore' || file.startsWith('.github/workflows/')
     || file.startsWith('scripts/') || file.startsWith('tools/')
