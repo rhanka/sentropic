@@ -42,3 +42,11 @@ export function createHttpRemoteHost(options: {
     },
   };
 }
+/** Env name of the content host build API base, per environment (owner sentropic, no secret). Preprod:
+ * `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls `<base>/live-host/v1/{job,handoff}`. */
+export const BUILDER_REMOTE_HOST_ENV = 'ARTIFACT_BUILDER_REMOTE_HOST_URL';
+/** The configured content host; an absent or invalid base refuses to compose the builder service. */
+export function builderRemoteHost(env: Readonly<Record<string, string | undefined>>,
+  options: Omit<Parameters<typeof createHttpRemoteHost>[0], 'baseUrl'>): RemoteHost {
+  return createHttpRemoteHost({ ...options, baseUrl: env[BUILDER_REMOTE_HOST_ENV] ?? '' });
+}
