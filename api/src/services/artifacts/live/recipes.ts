@@ -12,13 +12,20 @@ export function artifactEnvironment() {
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
     npm_config_update_notifier: 'false', ...ARTIFACT_PUBLIC_ENV };
 }
+/** W2 static deny: verified tarballs are staged in the npm cache; the relay is never contacted from a pod. */
 export const INSTALL_RECIPE = Object.freeze({
-  executable: '/usr/local/bin/npm', args: ['ci', '--ignore-scripts', '--no-audit', '--no-fund',
-    '--registry', NPM_RELAY], timeoutMs: 300_000,
+  executable: '/usr/local/bin/npm', args: ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], timeoutMs: 300_000,
 });
+/** The pod bootstrap owns :5173 in every phase and forwards live traffic to Vite on loopback. */
+export const LIVE_UPSTREAM_PORT = 5174;
 export const LIVE_RECIPE = Object.freeze({
   executable: '/usr/local/bin/node', args: ['/workspace/node_modules/vite/bin/vite.js',
-    '--config', '/tmp/artifact-vite.config.mjs', '--host', '0.0.0.0', '--port', '5173', '--strictPort'], timeoutMs: 300_000,
+    '--config', '/tmp/artifact-vite.config.mjs', '--host', '127.0.0.1', '--port', String(LIVE_UPSTREAM_PORT), '--strictPort'], timeoutMs: 300_000,
+});
+/** Runs in the worker pod only; its output stays in the pod's /tmp/vite-cache and never enters the dependency cache. */
+export const PREBUNDLE_RECIPE = Object.freeze({
+  executable: '/usr/local/bin/node', args: ['/workspace/node_modules/vite/bin/vite.js', 'optimize',
+    '--config', '/tmp/artifact-vite.config.mjs'], timeoutMs: 300_000,
 });
 export const BUILD_RECIPE = Object.freeze({
   executable: '/usr/local/bin/npm', args: ['--ignore-scripts', '--offline', 'run', 'build:artifact'], timeoutMs: 300_000,
@@ -30,7 +37,7 @@ export function liveViteConfig(sessionId: string, podName: string) {
 const loaded = await loadConfigFromFile({command:'serve', mode:'development'}, '/workspace/ui/vite.config.ts');
 const repo = loaded?.config ?? {};
 export default {...repo, root:'/workspace/ui', envDir:'/tmp/artifact-empty-env', cacheDir:'/tmp/vite-cache',
-  server:{host:'0.0.0.0', port:5173, strictPort:true, proxy:{}, cors:false,
+  server:{host:'127.0.0.1', port:${LIVE_UPSTREAM_PORT}, strictPort:true, proxy:{}, cors:false,
     allowedHosts:[${JSON.stringify(`${podName}.sentropic-artifact-builders.svc.cluster.local`)}],
     hmr:{protocol:'wss', clientPort:443, path:${JSON.stringify(`/_live/${sessionId}/hmr`)}},
     fs:{strict:true, allow:['/workspace','/dependencies'], deny:['**/.env*','**/.git/**','**/*.pem','**/*.key']}}};`;
