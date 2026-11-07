@@ -79,6 +79,6 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 1: hono fix, SCA gate and CI10 train merged on feat/ci-sca-gate.
-- [ ] Lot 2: scoped make checks (inventory, SCA gate, hono lock, ci-expected-results, ci-dag).
+- [x] Lot 2: scoped make checks green (inventory 15/15, SCA gate 0 unregistered, hono lock, expected-results 28/28, ci-dag 10/10).
 - [ ] Lot 3: push, retitle PR #940, close #938 and #939.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
