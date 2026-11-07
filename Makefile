@@ -7,6 +7,9 @@ export REGISTRY := $(if $(filter local ghcr.io/rhanka,$(REGISTRY)),$(REGISTRY),g
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
 DOCKER_COMPOSE  ?= docker compose
+# BR06-EX1: opt in with DISK_HYGIENE_THRESHOLD=90 (empty disables the guard).
+export DISK_HYGIENE_THRESHOLD ?=
+DISK_HYGIENE_GUARD = bash scripts/check-disk-space.sh
 # BR861-EX1: preserve the package recipes while qualifying inside Compose.
 ARTIFACTS_RUN = docker run --rm
 ARTIFACTS_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
@@ -316,6 +319,7 @@ build: build-ui build-api ## Build UI and API artifacts
 
 .PHONY: build-ui-image
 build-ui-image: ## Build the UI Docker image for production
+	@$(DISK_HYGIENE_GUARD)
 	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build \
 		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE_BUILD) \
 		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL_BUILD) \
@@ -582,6 +586,7 @@ load-ui:
 build-api-image: ## Reuse the canonical production image when its tag exists; build only on established absence
 	@REGISTRY="$(REGISTRY)" API_IMAGE_NAME="$(API_IMAGE_NAME)" API_VERSION="$(API_VERSION)" API_IMAGE_RECEIPT="$(API_IMAGE_RECEIPT)" DOCKER_COMPOSE="$(DOCKER_COMPOSE)" bash scripts/resolve-api-image.sh
 build-api-image-fresh: ## Force a no-cache production build and record its identity (bypasses canonical-tag reuse)
+	@$(DISK_HYGIENE_GUARD)
 	API_IMAGE_REF= TARGET=production $(DOCKER_COMPOSE) build --no-cache api
 	@$(MAKE) record-api-image ENV=$(ENV)
 
@@ -650,7 +655,7 @@ build-api-tool-image: ## Reuse the toolbox locally or from the registry; build o
 	elif docker pull $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
 		echo "Reusing registry toolbox $(API_TOOL_IMAGE)"; \
 	else \
-		docker build --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .; \
+		$(DISK_HYGIENE_GUARD) && docker build --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .; \
 	fi
 
 check-api-tool-image: ## Check the toolbox tag in the registry (uses existing Docker credentials)
@@ -682,7 +687,7 @@ export IMAGE_PLATFORM ?= linux/amd64
 CI_IMAGE_CACHE ?= 0
 CI_IMAGE_CACHE_FLAGS = $(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM) --cache-to type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM)$(comma)mode=max,--no-cache)
 comma := ,
-CI_IMAGE_BUILD = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+CI_IMAGE_BUILD = $(DISK_HYGIENE_GUARD) && docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
 .PHONY: ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e
 ci-build-api:
 	@$(MAKE) ci-build-api-target IMAGE_KIND=api ENV=$(ENV)
@@ -708,6 +713,7 @@ ci-build-desktop: ci-test-env ## Independent embedded desktop producer (BR79-EX2
 	@test -s ui/static/cowork-desktop/cowork.exe && test -s ui/static/cowork-desktop/cowork-desktop-metadata.json
 
 ci-test-ui: ci-test-env
+	@$(DISK_HYGIENE_GUARD)
 	@docker buildx build --platform $(IMAGE_PLATFORM) --no-cache-filter=ui-tests \
 		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
 		--target ui-test-output --output type=local,dest=.tmp/ci-ui-tests -f ui/Dockerfile \
@@ -720,6 +726,7 @@ ci-test-ui: ci-test-env
 ci-build-ui-static:
 	@$(MAKE) ci-build-ui-static-target IMAGE_KIND=ui-static ENV=$(ENV)
 ci-build-ui-static-target:
+	@$(DISK_HYGIENE_GUARD)
 	@docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) \
 		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
 		--target static-output --output type=local,dest=ui/build -f ui/Dockerfile \
@@ -798,6 +805,17 @@ check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every
 .PHONY: check-down-volumes
 check-down-volumes: ## Assert make down-volumes refuses empty/dev/non-test ENV and dry-runs down --volumes --remove-orphans for test-*/e2e-* (BRDV-EX1)
 	@./scripts/check-down-volumes-guard.sh
+
+# BR06-EX1: host-wide cache/image cleanup; no volume or container operations.
+.PHONY: disk-hygiene check-disk-hygiene
+disk-hygiene: ## Reclaim Docker cache (keep 5G), dangling images and unused images older than 24h; preserve volumes
+	@echo "Reclaiming Docker disk space (each prune prints its reclaimed space):"
+	docker builder prune --all --force --keep-storage 5G
+	docker image prune --force
+	docker image prune --all --force --filter until=24h
+
+check-disk-hygiene: ## Dry-run hygiene recipes and stub-test the disk guard without touching Docker
+	@bash scripts/check-disk-hygiene.sh
 
 # BRCI-EX1 — publishable manifest guard (spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md).
 # Every npm pack/publish lane inspects the real archive; tools are pinned in ephemeral dirs.
@@ -2751,6 +2769,7 @@ wait-ready-api:
 
 .PHONY: build-e2e
 build-e2e:
+	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml build e2e
 
 .PHONY: save-e2e
@@ -2948,24 +2967,29 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
 prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
 
 .PHONY: dev
 dev: prepare-node-workspace ## Start UI and API in watch mode
+	@$(DISK_HYGIENE_GUARD)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 .PHONY: dev-ui
 dev-ui:
+	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) up --build ui
 
 .PHONY: dev-api
 dev-api: prepare-node-workspace
+	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) up --build api
 
 .PHONY: up
 up: prepare-node-workspace ## Start the full stack in detached mode
+	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
 
 .PHONY: up-e2e
@@ -2990,10 +3014,12 @@ logs-e2e-vscode: ## Stream VSCode E2E logs
 
 .PHONY: up-api
 up-api: prepare-node-workspace ## Start the api stack in detached mode
+	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test
 up-api-test: ci-test-env prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
+	@$(DISK_HYGIENE_GUARD)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml $(CI_PROVIDER_OVERLAY) up --build -d api --wait api
 
 .PHONY: up-api-test-ci
@@ -3079,6 +3105,7 @@ smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
+	@$(DISK_HYGIENE_GUARD)
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui --wait ui
 
 .PHONY: down

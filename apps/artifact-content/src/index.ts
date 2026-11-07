@@ -7,10 +7,13 @@ import { Pool } from 'pg';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
 import { createPrivateArtifactStorage } from '../../../api/src/services/artifacts/lifecycle';
 import { createContentRuntime } from './runtime';
+import { createLiveUpgrade } from './live-upgrade';
+import type { LiveProxy } from './live';
 
 /** TLS terminates at the dedicated W3.d ingress; Host is validated, forwarded identity is ignored. */
 export async function startContentServer(options: {
   env?: NodeJS.ProcessEnv; hostname?: string; port?: number;
+  live?: LiveProxy;
 } = {}): Promise<Server> {
   const env = options.env ?? process.env;
   const enabled = () => env.APP_ARTIFACT_CONTENT_ENABLED === '1';
@@ -40,7 +43,7 @@ export async function startContentServer(options: {
         } });
       const storage = await createPrivateArtifactStorage({ client: s3, bucket });
       pool = new Pool({ connectionString, max: 10 });
-      const runtime = createContentRuntime({ pool, baseDomain, signingSecret, enabled,
+      const runtime = createContentRuntime({ pool, baseDomain, signingSecret, enabled, live: options.live,
         profileDigest: compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE).profileDigest,
         blobs: { getBlob: key => storage.blobs.getBlob(key) } });
       handle = request => {
@@ -59,6 +62,10 @@ export async function startContentServer(options: {
       url.protocol = 'https:';
       return handle(new Request(url, request));
     } }) as Server;
+    if (options.live && env.APP_ARTIFACT_CONTENT_BASE_DOMAIN) {
+      server.on('upgrade', createLiveUpgrade({ live: options.live,
+        baseDomain: env.APP_ARTIFACT_CONTENT_BASE_DOMAIN, enabled }));
+    }
     server.once('close', () => { void pool?.end(); s3?.destroy(); });
     return await new Promise<Server>((resolve, reject) => {
       server.once('error', reject);

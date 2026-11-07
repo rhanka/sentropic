@@ -40,6 +40,9 @@ function checkNetwork(objects) {
     ingress: [{ from: [{ namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'traefik' } },
       podSelector: { matchLabels: { 'app.kubernetes.io/name': 'traefik' } } }], ports: [{ protocol: 'TCP', port: 8791 }] }],
     egress: [
+      { to: [{ namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'sentropic-artifact-builders' } },
+        podSelector: { matchExpressions: [{ key: 'sentropic.dev/artifact-binding', operator: 'Exists' }] } }],
+        ports: [{ protocol: 'TCP', port: 5173 }] },
       { to: [{ namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'kube-system' } },
         podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } } }], ports: [{ protocol: 'UDP', port: 53 }, { protocol: 'TCP', port: 53 }] },
       { to: [{ podSelector: { matchLabels: component('postgres') } }], ports: [{ protocol: 'TCP', port: 5432 }] },
@@ -85,7 +88,12 @@ for (const tier of ['prod', 'preprod']) {
   deny('reader enabled by main deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_READER_ENABLED').value = '1'; });
   deny('content flag inherited from a secret', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].env = []; });
   deny('broad app credentials', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.name = 'sentropic-api'; });
-  deny('cross-environment PG access', o => { object(o, 'NetworkPolicy', 'artifact-content').spec.egress[1].to[0].namespaceSelector = {}; });
+  deny('cross-environment PG access', o => {
+    object(o, 'NetworkPolicy', 'artifact-content').spec.egress.find(rule => rule.ports.some(p => p.port === 5432)).to[0].namespaceSelector = {};
+  });
+  deny('builder egress without namespace isolation', o => { delete object(o, 'NetworkPolicy', 'artifact-content').spec.egress[0].to[0].namespaceSelector; });
+  deny('builder egress without binding isolation', o => { delete object(o, 'NetworkPolicy', 'artifact-content').spec.egress[0].to[0].podSelector; });
+  deny('builder egress on another port', o => { object(o, 'NetworkPolicy', 'artifact-content').spec.egress[0].ports[0].port = 8787; });
   deny('unrestricted object-store egress', o => { object(o, 'NetworkPolicy', 'artifact-content').spec.egress.push({}); });
   deny('missing content wildcard TLS', o => { object(o, 'Ingress', 'artifact-content').spec.tls[0].hosts.pop(); });
   deny('second pinned wildcard host', o => {

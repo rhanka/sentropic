@@ -3,9 +3,7 @@ import { createOptionalAuth, createRequireAuth, type AuthHonoAuthContext,
 import { Hono } from 'hono';
 import { withAppCmAuth } from './cm-auth-runtime';
 import { assertCmHostHealthy } from './cm-host-scope';
-import { pool } from '../../db/client';
-import { logger } from '../../logger';
-import { cmErrorCode } from './cm-error-code';
+import { touchCmSessionActivity } from './cm-session-activity';
 
 export type CmHttpPrincipal = Omit<AuthHonoAuthContext, 'token'>;
 type PrincipalResult =
@@ -25,16 +23,7 @@ export const authenticateCmHttpRequest = (request: Request, required: boolean): 
     // and a lost touch only stales last-activity display (logged, never
     // thrown). The serializable attempt itself stays read-only and therefore
     // write-free: no subject locks, no custody writes, no self-conflict.
-    const touch: typeof binding.ports.sessions.touch = async (id, at) => {
-      try {
-        await pool.query(
-          'UPDATE "cm_identity"."identity_login_token_bindings" SET "last_activity_at" = $2 WHERE "session_id" = $1',
-          [id, at.toISOString()],
-        );
-      } catch (error) {
-        logger.warn({ code: cmErrorCode(error), sessionId: id }, 'CM session activity touch unavailable');
-      }
-    };
+    const touch: typeof binding.ports.sessions.touch = touchCmSessionActivity;
     const router = new Hono<AuthHonoMiddlewareEnv>();
     router.onError(error => { throw error; });
     router.use('*', (required ? createRequireAuth : createOptionalAuth)(

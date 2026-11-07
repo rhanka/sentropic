@@ -43,6 +43,9 @@ export type { WorkEventInput, WorkEventContext } from './run/work-event.js';
 export type { HarnessProfile } from './profile/profile.js';
 export { sentropicProfile } from './profile/sentropic.js';
 export { stubProfile } from './profile/stub.js';
+export { parseHarnessProfile, toProfileDocument, ProfileValidationError } from './profile/document.js';
+export type { HarnessProfileDocument, ProfileErrorCode } from './profile/document.js';
+export { resolveProfile, loadProfileFile, findRepoRoot } from './profile/resolve.js';
 
 // BRANCH.md parser.
 export { parseBranchMd } from './branch-md/parse.js';

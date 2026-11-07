@@ -11,6 +11,7 @@ export function createContentRuntime(options: {
   pool: Pool; baseDomain: string; profileDigest: string; enabled(): boolean;
   signingSecret(): string | Uint8Array;
   blobs: ContentHostOptions['blobs'];
+  live?: ContentHostOptions['live'];
 }) {
   const { pool } = options;
   const store = createPostgresArtifactStore(pool);

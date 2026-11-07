@@ -4,7 +4,7 @@
  * Runs inside an isolated consumer directory where ONLY the packed
  * `@sentropic/artifacts` and `@sentropic/mcp-platform` tarballs are
  * installed (no workspace source; fetch is trapped before any import).
- * Proves the packed candidate exposes the 24-name contract and selected
+ * Proves the packed candidate exposes the 35-name contract and selected
  * `sentropic.artifacts` tools, compiles through the platform kernel, and drives
  * the full ensure → publish → get → list round-trip. Prints
  * `PACKED_CONSUMER_OK` on success; any failure throws.
@@ -85,6 +85,11 @@ const EXPECTED_TOOLS = [
   // Files parity LOT 2 — appended last, same order as ARTIFACT_CAPABILITY_NAMES.
   "artifacts_create_upload_page", "artifacts_list_assets",
   "artifacts_publish_bundle_v2",
+  // Frozen G0 and A-LIVE catalogue additions, after the original 24.
+  "artifacts_list_app_sources", "artifacts_fetch_app_source",
+  "artifacts_git_attach", "artifacts_git_commit", "artifacts_git_publish",
+  "artifacts_git_live", "artifacts_live_write", "artifacts_live_read",
+  "artifacts_live_reset", "artifacts_live_status", "artifacts_live_control",
 ];
 if (JSON.stringify([...mcp.ARTIFACTS_TOOL_NAMES]) !== JSON.stringify(EXPECTED_TOOLS)) {
   throw new Error("tool name mismatch");

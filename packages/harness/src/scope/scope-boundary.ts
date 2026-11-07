@@ -39,7 +39,8 @@ export function matchGlob(glob: string, path: string): boolean {
  * forbidden globs (C2 scope-check core).
  *
  * Precedence (first match wins):
- *   explicit allowed > explicit forbidden > explicit conditional > profile default-forbidden > unknown
+ *   explicit allowed > explicit forbidden > explicit conditional >
+ *   profile default-forbidden > profile default-conditional > profile default-allowed > unknown
  *
  * `allowed` wins over `forbidden` so an explicitly-granted subtree (e.g. `packages/harness/**`)
  * is `allowed` even when a broader `packages/**` is forbidden — the Allowed list is the granted
@@ -55,5 +56,7 @@ export function classifyPath(
   if (boundary.forbidden.some((g) => matchGlob(g, path))) return 'forbidden';
   if (boundary.conditional.some((g) => matchGlob(g, path))) return 'conditional';
   if (profile.forbiddenPathDefaults.some((g) => matchGlob(g, path))) return 'forbidden';
+  if (profile.conditionalPathDefaults?.some((g) => matchGlob(g, path))) return 'conditional';
+  if (profile.allowedPathDefaults?.some((g) => matchGlob(g, path))) return 'allowed';
   return 'unknown';
 }

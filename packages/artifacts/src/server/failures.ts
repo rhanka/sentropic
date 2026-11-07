@@ -1,12 +1,18 @@
+import { LIVE_FAILURE_STATUS, type LiveErrorCode } from './live-errors.js';
 /** Trusted server failures (r2 E1–E3). No driver text participates in classification. */
 export type ArtifactCommitState = 'not_committed' | 'committed' | 'unknown';
 /** Structurally identical to L0's server-derived SHA-256 internal key, never a caller key. */
 export type ArtifactInternalKey = string & { readonly __brand: 'internal-key' };
 export type ArtifactErrorKind =
+  | LiveErrorCode
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
   | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed'
-  | 'edit_mismatch' | 'precondition_required';
+  | 'edit_mismatch' | 'precondition_required'
+  | 'git_binding_conflict' | 'git_repo_not_registered' | 'git_ref_not_allowed'
+  | 'git_head_moved' | 'git_path_refused' | 'git_branch_missing'
+  | 'build_descriptor_invalid' | 'build_script_missing' | 'lock_missing'
+  | 'dep_outside_lock' | 'install_script_not_allowlisted';
 
 /** Optimistic-concurrency payload: the caller re-reads and merges against this. */
 export interface ArtifactConflictDetails {
@@ -55,7 +61,12 @@ export interface ArtifactOperationalFailure extends ArtifactFailureFields {
 
 export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
   readonly kind: 'ordinary';
-  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required';
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded'
+  | LiveErrorCode
+  | 'unprocessable' | 'verification_failed' | 'edit_mismatch' | 'precondition_required'
+  | 'build_descriptor_invalid' | 'build_script_missing' | 'lock_missing'
+  | 'dep_outside_lock' | 'install_script_not_allowlisted'
+  | 'git_path_refused' | 'git_branch_missing' | 'git_ref_not_allowed' | 'git_repo_not_registered';
   readonly retriable: false;
 }
 
@@ -126,6 +137,9 @@ const DOMAIN_STATUS = {
   invalid_request: 400, anonymous: 401, access_denied: 403,
   not_found: 404, gone: 410, release_unavailable: 410, limit_exceeded: 413, unprocessable: 422, verification_failed: 422, edit_mismatch: 422,
   precondition_required: 428,
+  build_descriptor_invalid: 422, build_script_missing: 422, lock_missing: 422,
+  dep_outside_lock: 422, install_script_not_allowlisted: 422,
+  git_path_refused: 422, git_branch_missing: 422, git_ref_not_allowed: 422, git_repo_not_registered: 422,
 } as const;
 
 function field(value: unknown, name: string): unknown {
@@ -158,8 +172,24 @@ const internal = (): Projection => ({ kind: 'operational', category: 'provider_e
 
 function operationProjection(error: ArtifactOperationError): Projection {
   const { kind } = error;
+  if (Object.hasOwn(LIVE_FAILURE_STATUS, kind)) {
+    const status = LIVE_FAILURE_STATUS[kind as LiveErrorCode];
+    const details = error.details.publicDetails;
+    if (kind === 'git_live_conflict' && !['invalid_phase', 'active_session', 'pending_publication',
+      'commit_indeterminate', 'stale_session', 'stale_fence', 'transition_busy'].includes(String(details?.reason))) return internal();
+    if (status === 409) return { ...conflict(kind), publicCode: kind, details };
+    if (status === 503) return { kind: 'operational', category: 'provider_unavailable',
+      httpStatus: status, publicCode: kind, retriable: true, details };
+    return { kind: 'ordinary', category: kind as LiveErrorCode, httpStatus: status,
+      publicCode: kind, retriable: false, details };
+  }
   switch (kind) {
+    case 'git_head_moved': return { ...conflict(kind), publicCode: kind, details: error.details.publicDetails };
+    case 'git_path_refused': case 'git_branch_missing': case 'git_ref_not_allowed': case 'git_repo_not_registered':
+      return { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind,
+        retriable: false, details: error.details.publicDetails };
     case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
+    case 'git_binding_conflict': return { ...conflict(kind), publicCode: kind, details: error.details.publicDetails };
     case 'command_conflict': case 'pointer_conflict': {
       const base = conflict(kind);
       return error.details.conflict === undefined ? base : { ...base, conflict: error.details.conflict };
@@ -184,8 +214,11 @@ function operationProjection(error: ArtifactOperationError): Projection {
     case 'anonymous': case 'access_denied':
       return { kind: 'admission', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
     default: {
-      const base = { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false } as const;
+      const base = { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind as keyof typeof DOMAIN_STATUS], publicCode: kind, retriable: false } as const;
       if (kind === 'precondition_required') return { ...base, details: error.details.publicDetails };
+      if (kind === 'limit_exceeded' && error.details.publicDetails?.quota === 'git_write' &&
+        ['principal', 'artifact'].includes(String(error.details.publicDetails.scope))) return { ...base,
+        details: { quota: 'git_write', scope: error.details.publicDetails.scope } };
       if (kind === 'release_unavailable' && error.details.release !== undefined) return { ...base, release: error.details.release };
       return kind === 'edit_mismatch' && error.details.edit !== undefined ? { ...base, edit: error.details.edit } : base;
     }
