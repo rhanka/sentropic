@@ -8,6 +8,13 @@ import { ARTIFACTS_TOOL_SPECS } from '@sentropic/artifacts/mcp-core';
  */
 export const SENTROPIC_MCP_CLIENT_ID = 'sentropic-mcp';
 
+/**
+ * Owner-delegated h2a CLI (public, PKCE S256, RFC 8252 loopback redirect, rotating refresh). It is
+ * NOT read-only: it publishes artifacts. Its restriction is the AS subject allowlist
+ * (`allowed_user_ids` = the owner), never a service principal.
+ */
+export const H2A_CLI_CLIENT_ID = 'h2a-cli';
+
 /** Clients bound to the read-only allowlist. Every other client keeps the full surface. */
 export const READ_ONLY_CLIENT_IDS: ReadonlySet<string> = new Set([SENTROPIC_MCP_CLIENT_ID]);
 
