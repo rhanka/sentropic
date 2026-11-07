@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  ASSERTION_HEADER, createHostAssertionLive, createLiveFences, signLiveAssertion, verifyLiveAssertion,
+  ASSERTION_HEADER, CONTROL_HEADER, createHostAssertionLive, createLiveFences, signLiveAssertion, signLiveControl,
+  verifyLiveAssertion, verifyLiveControl, type LiveControlClaims,
   type LiveAssertionClaims,
 } from '../src/live-assertion';
 import { createContentHost } from '../src/host';
-import { createLiveProxy } from '../src/live';
+import { createLiveProxy, LIVE_CONTROL_PATH } from '../src/live';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 
 const artifactId = '11111111-1111-4111-8111-111111111111';
@@ -22,7 +23,7 @@ function claims(over: Partial<LiveAssertionClaims> = {}): LiveAssertionClaims {
   return base;
 }
 function fixture(time = { now: t0 }) {
-  const fences = createLiveFences();
+  const fences = createLiveFences({ now: () => time.now });
   const admittedPath = vi.fn(async () => true);
   const live = createHostAssertionLive({ hosts: [{ pagesDomain, keyIds: ['immo-1'] }],
     key: kid => kid === 'immo-1' ? key : undefined, fences, admittedPath, now: () => time.now,
@@ -112,7 +113,7 @@ describe('host assertion live edge', () => {
     expect(close).toHaveBeenCalledTimes(1); expect(await f.live.current(route)).toBe(false);
     unwatch(); const other = vi.fn(); f.live.watch({ ...route, routeEpoch: 2 }, other); unwatch();
     f.fences.fence({ artifactId, generation: 2, routeEpoch: 1 }); expect(other).toHaveBeenCalledTimes(1);
-    const fresh = await f.live.authorize(f.req(sign(claims({ generation: 2, routeEpoch: 3 }))), artifactId);
+    const fresh = await f.live.authorize(f.req(sign(claims({ sessionId: 'session-2', generation: 2, routeEpoch: 3 }))), artifactId);
     expect(fresh).toBeDefined();
   });
   it('should delegate source admission to the host manifest port', async () => {
@@ -179,6 +180,74 @@ describe('invitee role (multi-user live)', () => {
   });
 });
 
+describe('session-bound live authorization record', () => {
+  it('should bind a session to one owner principal and one generation', async () => {
+    const f = fixture(); expect(await f.live.authorize(f.req(sign()), artifactId)).toBeDefined();
+    expect(await f.live.authorize(f.req(sign(claims({ principalId: 'intruder' }))), artifactId)).toBeUndefined();
+    expect(await f.live.authorize(f.req(sign(claims({ generation: 2 }))), artifactId)).toBeUndefined();
+    expect(await f.live.authorize(f.req(sign(claims({ sessionId: 'session-2', generation: 2 }))), artifactId)).toBeDefined();
+  });
+  it('should bind an invitation to one principal and one session', async () => {
+    const f = fixture(); expect(await f.live.authorize(f.req(sign(invitee())), artifactId)).toBeDefined();
+    expect(await f.live.authorize(f.req(sign(invitee({ principalId: 'copied' }))), artifactId)).toBeUndefined();
+    expect(await f.live.authorize(f.req(sign(invitee({ sessionId: 'session-2' }))), artifactId)).toBeUndefined();
+  });
+  it('should take a newer invitation epoch as its floor and close the older epoch sockets', async () => {
+    const f = fixture(); const old = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
+    const close = vi.fn(); f.live.watch(old, close);
+    expect(await f.live.authorize(f.req(sign(invitee({ invitationEpoch: 2 }))), artifactId)).toBeDefined();
+    expect(close).toHaveBeenCalledTimes(1); expect(await f.live.authorize(f.req(sign(invitee())), artifactId)).toBeUndefined();
+  });
+  it('should forget a session record once every assertion for it has expired', async () => {
+    const f = fixture(); expect(await f.live.authorize(f.req(sign()), artifactId)).toBeDefined();
+    f.time.now = t0 + 601_000; const later = { iat: t0 / 1000 + 601, exp: t0 / 1000 + 1200 };
+    expect(await f.live.authorize(f.req(sign(claims({ ...later, principalId: 'next-owner' }))), artifactId)).toBeDefined();
+  });
+});
+
+const control = (over: Partial<LiveControlClaims> = {}): LiveControlClaims => ({ v: 1, kid: 'immo-1', host, artifactId,
+  op: 'revoke_invitation', sessionId: '', invitationId: 'inv-1', epoch: 2, generation: 0, routeEpoch: 0,
+  iat: t0 / 1000, exp: t0 / 1000 + 60, ...over });
+const post = (token?: string, path = LIVE_CONTROL_PATH, method = 'POST') => new Request(origin + path,
+  { method, headers: token ? { [CONTROL_HEADER]: token } : {} });
+describe('signed host control port', () => {
+  it('should close sockets on a signed invitation revocation, fence and session revocation', async () => {
+    const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
+    const owner = (await f.live.authorize(f.req(sign()), artifactId))!;
+    const closeGuest = vi.fn(); const closeOwner = vi.fn(); f.live.watch(guest, closeGuest); f.live.watch(owner, closeOwner);
+    expect((await f.live.control(post(signLiveControl(control(), key)), artifactId))?.status).toBe(204);
+    expect(closeGuest).toHaveBeenCalledTimes(1); expect(closeOwner).not.toHaveBeenCalled();
+    const fence = control({ op: 'fence', invitationId: '', epoch: 0, generation: 1, routeEpoch: 2 });
+    expect((await f.live.control(post(signLiveControl(fence, key)), artifactId))?.status).toBe(204);
+    expect(closeOwner).toHaveBeenCalledTimes(1);
+    const stop = control({ op: 'revoke_session', sessionId: 'session-2', invitationId: '', epoch: 0 });
+    expect((await f.live.control(post(signLiveControl(stop, key)), artifactId))?.status).toBe(204);
+    expect(await f.live.authorize(f.req(sign(claims({ sessionId: 'session-2', generation: 2 }))), artifactId)).toBeUndefined();
+    expect(verifyLiveControl(signLiveControl(stop, key), { key: () => key, now: () => t0 })).toEqual(stop);
+  });
+  it.each([
+    ['no token', () => post()],
+    ['a GET', () => post(signLiveControl(control(), key), LIVE_CONTROL_PATH, 'GET')],
+    ['a query string', () => post(signLiveControl(control(), key), `${LIVE_CONTROL_PATH}?x=1`)],
+    ['an assertion used as control', () => post(sign())],
+    ['a wrong host', () => post(signLiveControl(control({ host: `x.${pagesDomain}` }), key))],
+    ['a wrong artifact', () => post(signLiveControl(control({ artifactId: '22222222-2222-4222-8222-222222222222' }), key))],
+    ['an unlisted key id', () => post(signLiveControl(control({ kid: 'other' }), key))],
+    ['a wrong key', () => post(signLiveControl(control(), Buffer.alloc(32, 9)))],
+    ['an invitation revocation naming a session', () => post(signLiveControl(control({ sessionId: 'session' }), key))],
+    ['epoch zero', () => post(signLiveControl(control({ epoch: 0 }), key))],
+    ['a fractional epoch', () => post(signLiveControl(control({ epoch: 1.5 }), key))],
+    ['an unknown op', () => post(signLiveControl(control({ op: 'grant' as never }), key))],
+    ['an expired message', () => post(signLiveControl(control({ exp: t0 / 1000 }), key))],
+    ['an over-long message', () => post(signLiveControl(control({ exp: t0 / 1000 + 301 }), key))],
+  ])('should refuse %s with no effect', async (_name, build) => {
+    const f = fixture(); const guest = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
+    const close = vi.fn(); f.live.watch(guest, close);
+    expect(await f.live.control(build(), artifactId)).toBeUndefined();
+    expect(close).not.toHaveBeenCalled(); expect(await f.live.current(guest)).toBe(true);
+  });
+});
+
 describe('content host routing for the pages domain', () => {
   const unused = async () => { throw new Error('release path must not run'); };
   function hostFor(live: ReturnType<typeof createLiveProxy>) {
@@ -193,5 +262,10 @@ describe('content host routing for the pages domain', () => {
     expect((await h.fetch(f.req(undefined))).status).toBe(404);
     expect((await h.fetch(f.req(undefined, '/_reader/nonce'))).status).toBe(404);
     expect((await h.fetch(new Request(`https://${artifactId}.unknown.example/`, { headers: { [ASSERTION_HEADER]: sign() } }))).status).toBe(404);
+  });
+  it('should route the signed control port on the pages domain', async () => {
+    const f = fixture(); const h = hostFor(f.proxy);
+    expect((await h.fetch(post(signLiveControl(control(), key)))).status).toBe(204);
+    expect((await h.fetch(post())).status).toBe(404);
   });
 });
