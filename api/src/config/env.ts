@@ -172,6 +172,10 @@ const envSchema = z.object({
   GITHUB_APP_PUBLIC_BASE_URL: z.string().optional(),
   GITHUB_APP_TARGETS_JSON: z.string().optional(),
   GITHUB_APP_BROKER_BINDINGS_JSON: z.string().optional(),
+  // A-LIVE W7 builder mount: [{clientId, hostId, storageScopeId}] mapping an
+  // `artifacts:builder` service client to its content host. Absent or invalid
+  // binds nothing (default deny). Deploy-time host registry data, no secret.
+  ARTIFACT_BUILDER_HOST_BINDINGS_JSON: z.string().optional(),
   // Dev/test self-S2S dogfood client (BR39d-D10)
   OAUTH_SELF_SERVICE_CLIENT_ID: z.string().optional(),
   OAUTH_SELF_SERVICE_CLIENT_SECRET: z.string().optional(),
