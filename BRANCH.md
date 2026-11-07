@@ -58,5 +58,8 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 1: wagons cherry-picked onto main without code conflict.
 - [x] Lot 2: version 0.2.20, merged changelog, lock entry.
+- [x] Lot 2b (CI run 42411674268 fixes): APP-P1 digest computed through `make test-artifacts` probe (0.2.20 `6faa661d…`, 0.2.18 override `d55df3ad…`); selected fixture refreshed; `test-cluster-mesh SCOPE=tests/packaging` 85 pass, `test-lazy-package` with sibling receipts 136/136.
+- [x] Lot 2c (CI wagon BR89-EX1): ci-dag 10/10, unit-graph 7/7, expected-results 28/28, ci-static 3/3, performance-report 8/8, run-metrics 36/36, package-qualification-dag 9/9, package-candidate 9/9, consumer-contracts 25/25, ci-capacity-policy shapeValid.
+- [ ] Lot 2d: API `tests/api/app-mcp-registry.test.ts` and `tests/api/app-mcp-installed.test.ts` run in the train CI app-cluster-mesh shards (local API stack needs an image rebuild, refused at 91% disk).
 - [ ] Lot 3: push, open PR, CI and GLM review in parallel.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
