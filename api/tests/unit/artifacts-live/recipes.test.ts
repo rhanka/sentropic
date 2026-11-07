@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  INSTALL_RECIPE, LIVE_RECIPE, LIVE_UPSTREAM_PORT, PREBUNDLE_RECIPE, artifactEnvironment, liveViteConfig,
+  INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, NODE_HEAP_OPTIONS, PREBUNDLE_RECIPE,
+  artifactEnvironment, liveViteConfig,
 } from '../../../src/services/artifacts/live/recipes';
 
 const POD = `artifact-${'a'.repeat(40)}`;
@@ -12,9 +13,17 @@ describe('offline pod recipes (W2 static deny)', () => {
     expect(artifactEnvironment().npm_config_cache).toBe('/tmp/npm-cache');
   });
 
-  it('should pre-bundle through the host-owned Vite wrapper into pod scratch only', () => {
-    expect(PREBUNDLE_RECIPE).toEqual({ executable: '/usr/local/bin/node', args: [
-      '/workspace/node_modules/vite/bin/vite.js', 'optimize', '--config', '/tmp/artifact-vite.config.mjs'], timeoutMs: 300_000 });
+  it('should cap every worker Node heap with a host-owned NODE_OPTIONS', () => {
+    expect(NODE_HEAP_OPTIONS).toBe('--max-old-space-size=384');
+    expect(artifactEnvironment().NODE_OPTIONS).toBe('--max-old-space-size=384');
+    expect(artifactEnvironment()).not.toBe(artifactEnvironment());
+  });
+
+  it('should pre-bundle through the host-owned driver and live wrapper into pod scratch only', () => {
+    expect(PREBUNDLE_RECIPE).toEqual({ executable: '/usr/local/bin/node', args: ['/tmp/artifact-vite-prebundle.mjs'], timeoutMs: 300_000 });
+    expect(LIVE_PREBUNDLE_SCRIPT).toContain("configFile:'/tmp/artifact-vite.config.mjs'");
+    expect(LIVE_PREBUNDLE_SCRIPT).toContain("existsSync('/tmp/vite-cache/deps/_metadata.json')");
+    expect(LIVE_PREBUNDLE_SCRIPT).toContain('middlewareMode:true, ws:false, watch:null');
     expect(liveViteConfig('s1', POD)).toContain("cacheDir:'/tmp/vite-cache'");
   });
 
