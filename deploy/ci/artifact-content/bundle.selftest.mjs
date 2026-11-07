@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { checkActivationImage, checkWorkload, closed, component, object } from './bundle-checks.mjs';
-import { checkConnectivity } from './network.selftest.mjs';
+import { checkConnectivity, checkNoOpenPolicy } from './network.selftest.mjs';
 import { checkReservedHosts } from './routing.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/content-tools/package.json')('yaml');
 const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => {
@@ -167,5 +167,26 @@ check('reject an extra policy opening content across namespaces', () => {
   copy.push({ kind: 'NetworkPolicy', metadata: { name: 'accidental-open', namespace: 'sentropic' },
     spec: { podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress'], ingress: [{}] } });
   assert.throws(() => checkConnectivity(copy));
+});
+check('both environments: no rendered policy widens the default-deny', () => checkNoOpenPolicy(combined));
+check('reject an allow-all rule beside the default-deny', () => {
+  const copy = structuredClone(combined);
+  copy.find(o => o.kind === 'NetworkPolicy' && o.metadata.name === 'allow-ui-to-api').spec.ingress
+    .push({ ports: [{ protocol: 'TCP', port: 8787 }] });
+  assert.throws(() => checkNoOpenPolicy(copy), /without peers/);
+});
+const relayRule = { to: [{ namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'npm-relay' } },
+  podSelector: { matchLabels: { 'app.kubernetes.io/name': 'npm-relay' } } }], ports: [{ protocol: 'TCP', port: 4873 }] };
+const httpsRule = { to: [{ ipBlock: { cidr: '0.0.0.0/0' } }], ports: [{ protocol: 'TCP', port: 443 }, { protocol: 'TCP', port: 6443 }] };
+for (const [name, egress, error] of [
+  ['relay and Kubernetes API only, isolating the API', [relayRule, httpsRule], /DNS|PostgreSQL/],
+  ['an API allowlist without the relay', [httpsRule, { to: [{ podSelector: { matchLabels: component('postgres') } }] },
+    { to: [{ podSelector: { matchLabels: component('auth-idp') } }] },
+    { to: [{ namespaceSelector: {}, podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } } }] }], /npm relay/],
+]) check(`reject an API egress policy with ${name}`, () => {
+  const copy = structuredClone(combined);
+  copy.push({ kind: 'NetworkPolicy', metadata: { name: 'api-egress', namespace: 'sentropic-preprod' },
+    spec: { podSelector: { matchLabels: component('api') }, policyTypes: ['Egress'], egress } });
+  assert.throws(() => checkConnectivity(copy), error);
 });
 console.log(`${passed} PASS, 0 failures`);

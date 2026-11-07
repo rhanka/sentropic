@@ -32,6 +32,14 @@ rollback and credential rotation are documented in
 - `15-networkpolicy.yaml` — workload-scoped ingress allowances for the
   tenant default-deny baseline: api -> postgres, ui -> api, pgbackup -> postgres,
   and the cluster Traefik namespace -> ui (public ingress).
+- Egress posture (A-LIVE W2). The tenant baseline is ingress-only, so only
+  `artifact-content` is egress-isolated: workers on TCP 5173 (labelled
+  `sentropic.dev/artifact-binding` in `sentropic-artifact-builders`), DNS, and its
+  own Postgres. The API is not egress-isolated, so it already reaches the npm relay
+  (:4873, gated by the relay ingress that k8s owns) and the Kubernetes API.
+  Any Egress policy on the API isolates it. Such a policy must keep the relay,
+  the Kubernetes API, DNS, Postgres, the IdP and HTTPS providers. The test
+  `make test-artifact-content-manifests` enforces this.
 - `07-sealed-sentropic-pgbackup.yaml` — SealedSecret `sentropic-pgbackup`
   (`S3_ACCESS_KEY`/`S3_SECRET_KEY` reused from DOC_STORAGE, `S3_BUCKET`,
   `S3_REGION`, `S3_ENDPOINT`) for the Postgres backup CronJob.
