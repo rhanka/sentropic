@@ -114,7 +114,12 @@ test('the Make wrapper guards the 0600 file, pins the image, records the reason 
   // lock purge): the wrapper refuses before creating anything unless the namespace serves the script mode.
   const preflight = body.indexOf("get configmap sentropic-a4-runtime -o jsonpath='{.data.launch\\.mjs}'");
   assert.ok(preflight > 0, 'launcher preflight reads the namespace runtime ConfigMap');
-  assert.ok(body.includes(`grep -qF "args[0] === '--script'"`), 'preflight requires the --script mode');
+  const marker = "args[0] === '--script'";
+  assert.ok(read('deploy/k8s/overlays/preprod/a4-runtime/launch.mjs').includes(marker), 'the shipped launcher carries the marker');
+  const check = body.slice(preflight, body.indexOf('trap '));
+  assert.ok(check.includes(`grep -qF "${marker}"`), 'preflight requires the --script mode');
+  assert.match(check, /\|\| \{ echo "ERROR: [^"]+"; exit 1; \}; \\\n\t$/, 'a missing mode refuses with exit 1');
+  assert.ok(!check.includes('2>/dev/null'), 'kubectl errors (RBAC, connection) stay visible');
   assert.ok(preflight < body.indexOf('trap ') && preflight < body.indexOf('create secret generic'), 'preflight runs first');
   assert.ok(!/cat |echo "\$\$\(cat/.test(body), 'the env file is never printed');
 });
