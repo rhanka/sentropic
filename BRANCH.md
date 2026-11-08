@@ -48,9 +48,9 @@
 - [x] **Lot 1 — Tests first**
   - [x] `api/tests/api/auth/oauth-consent-optional-tenant.test.ts`: non-member + tenant-optional client gets a tenant-less offline consent, a refresh token and refreshes without `tid`; tenant-bound client refuses a non-member (no consent row, no CM authority); member tenant-keyed grant kept apart from a later tenant-less grant; consent withdrawal and client tightening revoke the tenant-less refresh family.
   - [x] `api/tests/api/tenancy/arch11-tenant-data.test.ts`: an insert without tenant is tenant-less (no default) and unique per (user, client).
-- [ ] **Lot 2 — Schema and control migration**
-  - [ ] `oauth_clients.require_tenant` (NOT NULL DEFAULT true; immo-mcp set false); `oauth_consents.tenant_id` nullable, no default, unique key NULLS NOT DISTINCT.
-  - [ ] Refresh-family triggers: consent invalidation matches the tenant with IS NOT DISTINCT FROM; client tightening of `require_tenant` revokes the client's families.
+- [x] **Lot 2 — Schema and control migration**
+  - [x] `oauth_clients.require_tenant` (NOT NULL DEFAULT true; immo-mcp set false); `oauth_consents.tenant_id` nullable, no default, unique key NULLS NOT DISTINCT.
+  - [x] Refresh-family triggers: consent invalidation matches the tenant with IS NOT DISTINCT FROM; client tightening of `require_tenant` revokes the client's families.
 - [ ] **Lot 3 — Consent store**
   - [ ] Tenant-less key for a tenant-optional client: app row tenant NULL, CM authority row with its own consent id under the client's active registry tenant; tenant-bound clients keep the no-op.
 - [ ] **Lot 4 — Validation**

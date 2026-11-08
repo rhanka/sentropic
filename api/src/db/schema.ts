@@ -183,6 +183,8 @@ export const oauthClients = pgTable('oauth_clients', {
   // C1: per-client subject allowlist (empty = no restriction, zero change for
   // existing clients). Enforced at authorize before consent with `access_denied`.
   allowedUserIds: text('allowed_user_ids').array().notNull().default(sql`'{}'`),
+  // A1: false = a user with no approved tenant membership may keep a tenant-less consent (no `tid`).
+  requireTenant: boolean('require_tenant').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
@@ -294,7 +296,8 @@ export const oauthConsents = pgTable('oauth_consents', {
   clientId: text('client_id')
     .notNull()
     .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
-  tenantId: text('tenant_id').notNull().default('sentropic'),
+  // A1: NULL = tenant-less consent; the unique key is NULLS NOT DISTINCT (control 0022).
+  tenantId: text('tenant_id'),
   scopes: text('scopes').array().notNull().default(sql`'{}'`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
