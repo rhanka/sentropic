@@ -557,15 +557,19 @@ test('capture records retain head ref context for supersession receipts', () => 
 test('should accept a same-tree PR run as qualification evidence and report an invalid reference', () => {
   const run = { id: 900 };
   const tree = 'c'.repeat(40);
-  assert.deepEqual(qualificationReceipt({ run }), { mode: 'in-run', status: 'in-run', runId: null, url: null,
-    tree: null, satisfiedJobs: 0, problems: [] });
-  const tested = qualificationReceipt({ run, qualification: { mode: 'tested-tree', runId: 800, tree,
+  const mergeSha = 'a'.repeat(40);
+  assert.deepEqual(qualificationReceipt({ run }), { mode: 'in-run', status: 'in-run', mergeSha: null, runId: null,
+    attempt: null, url: null, tree: null, satisfiedJobs: 0, problems: [] });
+  const ref = { mode: 'tested-tree', mergeSha, runId: 800, attempt: 2, tree };
+  const tested = qualificationReceipt({ run, sourceSha: mergeSha, qualification: { ...ref,
     url: 'https://github.com/rhanka/sentropic/actions/runs/800', satisfied: [{ job: 'test-e2e (1)' }] } });
   assert.equal(tested.status, 'satisfied-by-run');
   assert.equal(tested.runId, 800);
+  assert.equal(tested.attempt, 2);
+  assert.equal(tested.mergeSha, mergeSha);
   assert.equal(tested.satisfiedJobs, 1);
-  for (const qualification of [{ mode: 'tested-tree', runId: 900, tree }, { mode: 'tested-tree', tree },
-    { mode: 'tested-tree', runId: 800 }, { mode: 'replayed' }]) {
-    assert.equal(qualificationReceipt({ run, qualification }).status, 'invalid', JSON.stringify(qualification));
+  for (const qualification of [{ ...ref, runId: 900 }, { ...ref, runId: undefined }, { ...ref, tree: undefined },
+    { ...ref, attempt: undefined }, { ...ref, mergeSha: undefined }, { ...ref, mergeSha: 'b'.repeat(40) }, { mode: 'replayed' }]) {
+    assert.equal(qualificationReceipt({ run, sourceSha: mergeSha, qualification }).status, 'invalid', JSON.stringify(qualification));
   }
 });

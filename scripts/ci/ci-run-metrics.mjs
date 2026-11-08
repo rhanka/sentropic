@@ -10,9 +10,10 @@ import { qualificationProblems } from './tested-tree.mjs';
 // The receipt carries the reference; an invalid one is reported, never hidden.
 export function qualificationReceipt(captured) {
   const qualification = captured?.qualification ?? { mode: 'in-run' };
-  const problems = qualificationProblems(qualification, { runId: captured?.run?.id ?? null });
+  const problems = qualificationProblems(qualification, { runId: captured?.run?.id ?? null, sha: captured?.sourceSha ?? null });
   const status = problems.length ? 'invalid' : qualification.mode === 'tested-tree' ? 'satisfied-by-run' : 'in-run';
-  return { mode: qualification.mode ?? 'in-run', status, runId: qualification.runId ?? null, url: qualification.url ?? null,
+  return { mode: qualification.mode ?? 'in-run', status, mergeSha: qualification.mergeSha ?? null,
+    runId: qualification.runId ?? null, attempt: qualification.attempt ?? null, url: qualification.url ?? null,
     tree: qualification.tree ?? null, satisfiedJobs: qualification.satisfied?.length ?? 0, problems };
 }
 

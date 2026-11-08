@@ -334,7 +334,8 @@ export function reconcileRun(manifest, capture, needs = null) {
   // to another run, and only for that exact run.
   const qualification = manifest.qualification ?? { mode: 'in-run' };
   verdict.qualification = qualification;
-  for (const problem of qualificationProblems(qualification, { runId: manifest.identity?.runId ?? null })) {
+  for (const problem of qualificationProblems(qualification, { runId: manifest.identity?.runId ?? null,
+    sha: manifest.identity?.headSha ?? null })) {
     verdict.failures.push({ job: 'manifest', reason: `qualification: ${problem}` });
   }
   for (const row of verdict.satisfied) {
