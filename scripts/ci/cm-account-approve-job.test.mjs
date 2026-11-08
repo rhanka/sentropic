@@ -15,6 +15,11 @@ const JOB_FILE = 'deploy/k8s/base/38-cm-account-approve-job.yaml';
 const JOB = 'cm-account-approve';
 const SECRET = 'cm-account-approval';
 const DIST = 'dist/scripts/cm-account-approve.js';
+// The A4 launcher composes the email-code HMAC custody exactly as for the api pod, then runs the script.
+const LAUNCH = ['node', '/run/cm-runtime/launch.mjs', '--script', 'cm-account-approve'];
+const HMAC = ['EMAIL_CODE_HMAC_KEY_ACTIVE', 'EMAIL_CODE_HMAC_KEY_ACTIVE_REF',
+  'EMAIL_CODE_HMAC_KEY_PREVIOUS', 'EMAIL_CODE_HMAC_KEY_PREVIOUS_REF'];
+const A4_API_PATCH = 'deploy/k8s/overlays/preprod-a4/patch-api-a4.yaml';
 
 // What the Make target applies: the versioned Job with the `approve` image pinned
 // (`kubectl set image --local ... approve=<api image>`).
@@ -33,7 +38,7 @@ const recipe = () => {
   return makefile.slice(start, end);
 };
 
-test('the rendered Job runs the dist script once with the pinned image and envFrom only', () => {
+test('the rendered Job runs the dist script once through the A4 launcher with the pinned image', () => {
   const image = 'ghcr.io/rhanka/sentropic-api@sha256:' + 'b'.repeat(64);
   const job = render(image);
   assert.equal(job.kind, 'Job');
@@ -48,8 +53,7 @@ test('the rendered Job runs the dist script once with the pinned image and envFr
   const [container] = pod.containers;
   assert.equal(container.image, image);
   assert.equal(container.workingDir, '/workspace/api');
-  assert.deepEqual(container.command, ['node', DIST]);
-  assert.equal(container.env, undefined, 'no literal env: inputs arrive through envFrom only');
+  assert.deepEqual(container.command, LAUNCH);
   assert.equal(container.args, undefined, 'no CLI literals');
   assert.equal(container.securityContext.allowPrivilegeEscalation, false);
   assert.deepEqual(container.envFrom, [
@@ -57,6 +61,23 @@ test('the rendered Job runs the dist script once with the pinned image and envFr
     { secretRef: { name: 'sentropic-api' } },
     { secretRef: { name: SECRET } },
   ]);
+});
+
+test('the Job receives the same HMAC custody wiring and runtime volume as the A4 api pod, nothing more', () => {
+  const pod = render('ghcr.io/rhanka/sentropic-api:main').spec.template.spec;
+  const [container] = pod.containers;
+  assert.deepEqual(container.env.map((entry) => entry.name), HMAC);
+  for (const entry of container.env) {
+    assert.equal(entry.value, undefined, `${entry.name}: no literal value`);
+    assert.equal(entry.valueFrom.secretKeyRef.name, 'email-code-hmac');
+  }
+  const [deployment] = load(A4_API_PATCH);
+  const api = deployment.spec.template.spec;
+  const apiContainer = api.containers.find((candidate) => candidate.name === 'api');
+  assert.deepEqual(container.env, HMAC.map((name) => apiContainer.env.find((entry) => entry.name === name)));
+  assert.deepEqual(container.volumeMounts, [{ name: 'cm-runtime', mountPath: '/run/cm-runtime', readOnly: true }]);
+  assert.deepEqual(pod.volumes, [api.volumes.find((volume) => volume.name === 'cm-runtime')]);
+  assert.equal(pod.volumes[0].configMap.name, 'sentropic-a4-runtime');
 });
 
 test('the dist script is built into the api image and the Job stays out of kustomize', () => {
