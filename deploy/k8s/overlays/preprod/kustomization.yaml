@@ -34,14 +34,14 @@ patches:
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
 
-# Repin to the 4c5f7be5c main build (2026-11-08): API sha256:ea366543…f6 from main CI run 42467148857
-# (publish-api-image + release-receipts success, receipts and GHCR manifest verified; publish-ui-image
-# skips on this head — no ui path changed — so the UI stays on the digest published by the 7990bc182
-# build, run 42463322455). Brings preprod to the forge-lease-reader runtime (#955) over the GB4
-# configuration of #952/#953 (incl. cm-account-approve job assets).
+# Repin to the 7106defa7 main build (2026-11-08): API sha256:16cbd3dc…3c and UI sha256:bf1aa509…e0
+# from main CI run 42485651003 (publish-api-image / publish-ui-image success, receipts and GHCR
+# manifest verified). Brings preprod to the GitHub App form-origin fix (#960: same-origin referrer
+# policy on the enrollment forms, manifest without default_events, install-state re-mint) over the
+# forge-lease-reader runtime (#955) and the GB4 configuration of #952/#953.
 # Continuous deployment applies ../preprod-a4 (this overlay plus the A4 runtime wiring).
 images:
   - name: ghcr.io/rhanka/sentropic-api
-    digest: sha256:ea36654306736125b08cb6902722a9ea765f887d22d48095b93be73ec1139ef6
+    digest: sha256:16cbd3dc8eca86961e0b23ced70dad9bd4e20e74b970fcc9ae635b3104b4723c
   - name: ghcr.io/rhanka/sentropic-ui
-    digest: sha256:ec201329c2d6fed7fb725c412b46994fe7f36d8bf1bf560d53e1d7200d04ee54
+    digest: sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0
