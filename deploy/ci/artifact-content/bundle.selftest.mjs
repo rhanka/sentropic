@@ -111,7 +111,12 @@ function checkNetwork(objects, tier) {
     ingress: [{ from: [{ namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': immo } },
       podSelector: { matchLabels: { 'app.kubernetes.io/name': 'radar-immobilier', 'app.kubernetes.io/component': 'api' } } }],
     ports: [{ protocol: 'TCP', port: 8791 }] }] });
+  // Supervisor relay (A-LIVE §8.1): the API pods of this namespace only.
+  assert.deepEqual(object(objects, 'NetworkPolicy', 'allow-api-to-artifact-content').spec, {
+    podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress'],
+    ingress: [{ from: [{ podSelector: { matchLabels: component('api') } }], ports: [{ protocol: 'TCP', port: 8791 }] }] });
 }
+const apiRelay = values => object(values, 'NetworkPolicy', 'allow-api-to-artifact-content').spec;
 const liveEdge = values => object(values, 'NetworkPolicy', 'allow-immo-content-host-to-artifact-content').spec;
 for (const tier of ['prod', 'preprod']) {
   const objects = load(`/rendered/${tier}.yaml`);
@@ -168,6 +173,12 @@ for (const tier of ['prod', 'preprod']) {
   deny('live edge from every immo pod', o => { delete liveEdge(o).ingress[0].from[0].podSelector; });
   deny('live edge from any namespace', o => { delete liveEdge(o).ingress[0].from[0].namespaceSelector; });
   deny('live edge on another port', o => { liveEdge(o).ingress[0].ports[0].port = 5173; });
+  deny('missing supervisor relay ingress', o => { o.splice(o.findIndex(v => v.metadata.name === 'allow-api-to-artifact-content'), 1); });
+  deny('supervisor relay from the other environment', o => {
+    apiRelay(o).ingress[0].from[0].namespaceSelector = { matchLabels: { 'kubernetes.io/metadata.name': tier === 'prod' ? 'sentropic-preprod' : 'sentropic' } };
+  });
+  deny('supervisor relay from every app pod', o => { delete apiRelay(o).ingress[0].from[0].podSelector; });
+  deny('supervisor relay on another port', o => { apiRelay(o).ingress[0].ports[0].port = 5173; });
   deny('missing live edge', o => { o.splice(o.findIndex(v => v.metadata.name === 'allow-immo-content-host-to-artifact-content'), 1); });
   deny('missing content wildcard TLS', o => { object(o, 'Ingress', 'artifact-content').spec.tls[0].hosts.pop(); });
   deny('second pinned wildcard host', o => {
@@ -202,6 +213,20 @@ check('reject a content set without the live edge', () => {
   const copy = combined.filter(o => o.metadata.name !== 'allow-immo-content-host-to-artifact-content');
   assert.throws(() => checkConnectivity(copy), /must reach the live edge/);
 });
+check('reject a content set without the supervisor relay ingress', () => {
+  const copy = combined.filter(o => o.metadata.name !== 'allow-api-to-artifact-content');
+  assert.throws(() => checkConnectivity(copy), /must reach the supervisor relay/);
+});
+for (const [ns, peer] of [['sentropic', 'sentropic-preprod'], ['sentropic-preprod', 'sentropic']]) {
+  check(`reject an extra policy admitting the ${peer} API into ${ns} content`, () => {
+    const copy = structuredClone(combined);
+    const extra = structuredClone(copy.find(o => o.metadata.namespace === ns && o.metadata.name === 'allow-api-to-artifact-content'));
+    extra.metadata.name = 'accidental-api-relay';
+    extra.spec.ingress[0].from[0].namespaceSelector = { matchLabels: { 'kubernetes.io/metadata.name': peer } };
+    copy.push(extra);
+    assert.throws(() => checkConnectivity(copy), /cross-environment content ingress denied/);
+  });
+}
 check('both environments: no rendered policy widens the default-deny', () => checkNoOpenPolicy(combined));
 check('reject an allow-all rule beside the default-deny', () => {
   const copy = structuredClone(combined);

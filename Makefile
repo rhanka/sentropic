@@ -79,6 +79,11 @@ export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI
 export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/artifact-content apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell bash scripts/ci/ui-image-version.sh "$(IMAGE_PLATFORM)" "$(VITE_EXTENSION_PROFILE_BUILD)" "$(VITE_EXTENSION_API_BASE_URL_BUILD)" "$(VITE_EXTENSION_APP_BASE_URL_BUILD)" "$(VITE_EXTENSION_WS_BASE_URL_BUILD)" "$(LLM_MESH_NODE_IMAGE)")
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/npm-toolchain e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+# BR92-EX1: GNU Make 4.4 expands every exported variable for each $(shell) call and each
+# recipe line, so these three content hashes ran ~100 times per make invocation (~17 s on a
+# hosted runner). They stay unexported while parsing; the end of this Makefile computes each
+# once, with every input defined, and exports the frozen value (same tag as before).
+unexport API_VERSION UI_VERSION E2E_VERSION
 export API_IMAGE_NAME ?= sentropic-api
 API_IMAGE_RECEIPT ?= .tmp/ci-prod-image/api-image-id
 export API_IMAGE_REF ?= $(shell cat $(API_IMAGE_RECEIPT) 2>/dev/null)
@@ -3317,11 +3322,13 @@ up-ui: ## Start the ui stack in detached mode
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui --wait ui
 
 .PHONY: down
-down: ## Stop and remove containers, networks, volumes
+# BR92-EX1: optional DOWN_TIMEOUT (seconds) shortens the stop grace period for disposable CI
+# stacks whose results are already collected; unset keeps the compose default.
+down: ## Stop and remove containers, networks, volumes (optional DOWN_TIMEOUT=<seconds>)
 ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge test-memory-mcp),)
-	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
+	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans $(if $(DOWN_TIMEOUT),--timeout $(DOWN_TIMEOUT))
 else
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY) down --remove-orphans
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY) down --remove-orphans $(if $(DOWN_TIMEOUT),--timeout $(DOWN_TIMEOUT))
 endif
 
 # BRDV-EX1 (owner-approved 2026-11-02 « Cible make + nettoyage »): down-volumes removes the
@@ -5006,3 +5013,10 @@ test-ghcr-login: ci-test-env ## Exercise the real Make login recipe with fixture
 .PHONY: test-ui-image-version
 test-ui-image-version: ci-test-env ## Prove shipped inputs and production profiles select a new canonical UI tag
 	@bash scripts/ci/ui-image-version.test.sh
+
+# BR92-EX1: freeze the image content hashes once per make invocation, after every input above
+# is defined (see the unexport next to their definitions). Command-line and environment
+# values still win; recipes and sub-makes receive the same exported value as before.
+export API_VERSION := $(API_VERSION)
+export UI_VERSION := $(UI_VERSION)
+export E2E_VERSION := $(E2E_VERSION)
