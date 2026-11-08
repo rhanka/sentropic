@@ -1,0 +1,35 @@
+# GB4 (PREPROD ONLY): artifact-content serves artifacts from an in-cluster
+# S3-compatible object store (tenant precedent: radar-immobilier's MinIO deployment,
+# TCP 9000, radar-minio in radar-immobilier-preprod). This policy is ADDITIVE to
+# the base `artifact-content` NetworkPolicy, which keeps every other egress closed
+# ("object-store destinations require the tenant's reviewed egress/IAM receipt"):
+# content egress is the union of the two policies, and this one admits ONLY
+# same-namespace pods labeled artifact-object-store on TCP 9000.
+#
+# Deliberately NO ipBlock and NO namespaceSelector: Scaleway fr-par (s3.fr-par.scw.cloud)
+# answers GetPublicAccessBlock with 405 NotImplemented, so a managed-provider bucket
+# cannot pass the content startup privacy assertion (lifecycle.ts assertPrivate) and
+# its rotating endpoint IPs are not /32-pinnable — a rotating-provider rule is
+# therefore not just unratified but unsound here. If the store moves, the k8s session
+# re-labels the destination; this rule does not change.
+#
+# Safe to apply before the store exists: no matching pods means no egress anywhere.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-artifact-content-to-object-store
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: artifact-content
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: artifact-object-store
+      ports:
+        - protocol: TCP
+          port: 9000
