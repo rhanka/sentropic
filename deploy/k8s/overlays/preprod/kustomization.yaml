@@ -14,6 +14,8 @@ resources:
   - ingress.yaml
   - artifact-content-ingress.yaml
   - artifact-content-live-edge-networkpolicy.yaml
+  - artifact-content-object-store-networkpolicy.yaml
+  - artifact-object-store
   - idp-identity-sync
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
@@ -21,18 +23,23 @@ resources:
 #     - name: ghcr.io/rhanka/sentropic-api
 #       newTag: vYYYY.MM.DD.N
 # Per-tier host + isolated WebAuthn RP ID overrides (D4 nested hosts, D11R isolated
-# identity). Strategic-merge patches override only the listed ConfigMap keys; the
-# distinct KEK/DB/signing-key SealedSecrets are operator-authored per ns (D6), not here.
+# identity). Strategic-merge patches override only the listed ConfigMap keys
+# (Deployment patches: only the listed env entries — envFrom/volumes are list-replaced
+# and restated in full). The distinct KEK/DB/signing-key SealedSecrets are
+# operator-authored per ns (D6), not here.
 patches:
   - path: patch-artifact-content-config.yaml
+  - path: patch-artifact-content-deployment.yaml
   - path: patch-api-config.yaml
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
 
-# A4 cutover release (2026-11-08, operation sentropic-a4-20261108): API from main ad3be44e7, UI from main fa4a1e4fb.
+# Repin to the 7990bc182 main build (2026-11-08): API sha256:6e382dc1…19 and UI sha256:ec201329…54
+# from main CI run 42463322455 (publish-api-image / publish-ui-image, release receipts), verified in
+# GHCR by manifest inspect. Brings preprod to #951/#954/#956 (incl. cm-account-approve job assets).
 # Continuous deployment applies ../preprod-a4 (this overlay plus the A4 runtime wiring).
 images:
   - name: ghcr.io/rhanka/sentropic-api
-    digest: sha256:92c85bcff42c56c35a39e82ae93b575eb4abbe1d4df31598819109e0e46ec26e
+    digest: sha256:6e382dc1c1c185bee17bebd59d092466a76467401896ab7a54b4bf7d2c0a1719
   - name: ghcr.io/rhanka/sentropic-ui
-    digest: sha256:97c3f3f2863f2c23ebe147b870c298d2801dde4660ab905b75b57d3f449c3da7
+    digest: sha256:ec201329c2d6fed7fb725c412b46994fe7f36d8bf1bf560d53e1d7200d04ee54

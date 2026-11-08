@@ -69,7 +69,26 @@ export function checkConnectivity(objects) {
     assert(!reachable(content, { ...builder, namespace: other }, 5173), 'binding labels in another namespace remain denied');
     assert(!reachable(content, builder, 8787), 'other builder ports remain denied');
     assert(!reachable(content, builder, 5173, 'UDP'), 'builder live egress is TCP only');
-    assert(!reachable(content, { namespace: 'external', labels: {} }, 443), 'object egress awaits tenant receipt');
+    // GB4 object store: preprod content serves from a same-namespace S3-compatible
+    // store (labeled pods, TCP 9000 only — in-cluster, as Scaleway fr-par cannot
+    // answer GetPublicAccessBlock and its endpoint IPs rotate); prod's store egress
+    // stays closed until its own cutover receipt, and no content egress to an
+    // EXTERNAL object endpoint (443) opens in either tier.
+    const storePod = { namespace, labels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'artifact-object-store' } };
+    const storeEgress = (to, port, protocol = 'TCP') => directionAllows(objects, 'Egress', content, to, port, protocol);
+    if (namespace === 'sentropic-preprod') {
+      assert(storeEgress(storePod, 9000), 'preprod content must reach its in-cluster object store');
+      for (const port of [443, 5432, 8787, 8791]) assert(!storeEgress(storePod, port), 'the object store opens only TCP 9000');
+      assert(!storeEgress(storePod, 9000, 'UDP'), 'object-store egress is TCP only');
+      for (const labels of [{}, component('api'), component('postgres'), component('artifact-content')]) {
+        assert(!storeEgress({ ...storePod, labels }, 9000), 'only the labeled object store is reachable');
+      }
+      assert(!storeEgress({ ...storePod, namespace: other }, 9000), 'object stores of the other app namespace stay denied');
+      assert(!storeEgress({ ...storePod, namespace: 'radar-immobilier-preprod' }, 9000), 'tenant namespaces stay denied for content storage');
+    } else {
+      assert(!storeEgress(storePod, 9000), 'prod content storage stays closed until its cutover receipt');
+    }
+    assert(!reachable(content, { namespace: 'external', labels: {} }, 443), 'external object egress stays closed');
     const dns = { namespace: 'kube-system', labels: { 'k8s-app': 'kube-dns' } };
     for (const protocol of ['TCP', 'UDP']) assert(reachable(content, dns, 53, protocol));
     // Live controller (A-LIVE W2): Sentropic owns the API side of API -> npm relay :4873 and

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { checkActivationImage, checkWorkload, closed, component, object } from './bundle-checks.mjs';
+import { checkActivationImage, checkWorkload, closed, component, object, openFlags } from './bundle-checks.mjs';
 import { checkConnectivity, checkNoOpenPolicy } from './network.selftest.mjs';
 import { checkReservedHosts } from './routing.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/content-tools/package.json')('yaml');
@@ -115,6 +115,55 @@ function checkNetwork(objects, tier) {
   assert.deepEqual(object(objects, 'NetworkPolicy', 'allow-api-to-artifact-content').spec, {
     podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress'],
     ingress: [{ from: [{ podSelector: { matchLabels: component('api') } }], ports: [{ protocol: 'TCP', port: 8791 }] }] });
+  // GB4 object store: preprod serves content from a same-namespace S3-compatible
+  // store on exactly TCP 9000; prod keeps its store egress closed until its own
+  // cutover receipt.
+  const store = objects.find(o => o.kind === 'NetworkPolicy' && o.metadata.name === 'allow-artifact-content-to-object-store');
+  if (tier === 'preprod') {
+    assert(store, 'preprod must open its object store');
+    assert.deepEqual(store.spec, {
+      podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Egress'],
+      egress: [{ to: [{ podSelector: { matchLabels: component('artifact-object-store') } }], ports: [{ protocol: 'TCP', port: 9000 }] }] });
+  } else {
+    assert(!store, `${tier}: object-store egress stays closed`);
+  }
+  checkObjectStore(objects, tier);
+}
+// The namespace-local store itself (overlays/preprod/artifact-object-store): digest-pinned, restricted pod, required
+// root Secret, ingress from content and api only on TCP 9000, no egress. Prod renders no store.
+function checkObjectStore(objects, tier) {
+  const named = objects.filter(o => o.metadata.name === 'artifact-object-store');
+  if (tier !== 'preprod') return assert.deepEqual(named, [], `${tier}: no object store`);
+  assert.deepEqual(named.map(o => o.kind).sort(), ['NetworkPolicy', 'Service', 'ServiceAccount', 'StatefulSet']);
+  const sts = object(objects, 'StatefulSet', 'artifact-object-store').spec;
+  const pod = sts.template.spec;
+  const [store] = pod.containers;
+  assert.deepEqual(sts.selector.matchLabels, component('artifact-object-store'));
+  assert.deepEqual(sts.template.metadata.labels, component('artifact-object-store'));
+  assert.equal(pod.containers.length, 1);
+  assert.match(store.image, /^docker\.io\/rustfs\/rustfs:[0-9.]+@sha256:[0-9a-f]{64}$/, 'store image pinned by digest');
+  assert.equal(pod.automountServiceAccountToken, false);
+  assert.equal(pod.enableServiceLinks, false);
+  assert.deepEqual([pod.securityContext.runAsNonRoot, pod.securityContext.seccompProfile], [true, { type: 'RuntimeDefault' }]);
+  assert.deepEqual(store.securityContext, { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ['ALL'] } });
+  assert.deepEqual(store.env.find(e => e.name === 'RUSTFS_CONSOLE_ENABLE'), { name: 'RUSTFS_CONSOLE_ENABLE', value: 'false' });
+  for (const key of ['RUSTFS_ACCESS_KEY', 'RUSTFS_SECRET_KEY']) {
+    assert.deepEqual(store.env.find(e => e.name === key).valueFrom, { secretKeyRef: { name: 'artifact-object-store', key, optional: false } },
+      `${key} is required (RustFS falls back to a default credential)`);
+  }
+  assert.deepEqual(store.ports, [{ name: 's3', containerPort: 9000 }]);
+  assert.deepEqual([store.readinessProbe.httpGet, store.livenessProbe.httpGet], [{ path: '/health/ready', port: 's3' }, { path: '/health', port: 's3' }]);
+  assert.deepEqual(store.resources, { requests: { cpu: '50m', memory: '128Mi' }, limits: { cpu: '500m', memory: '512Mi' } });
+  assert.deepEqual(store.volumeMounts, [{ name: 'data', mountPath: '/data' }, { name: 'logs', mountPath: '/logs' }, { name: 'tmp', mountPath: '/tmp' }]);
+  assert.deepEqual(pod.volumes.map(v => [v.name, Object.keys(v).sort()]), [['logs', ['emptyDir', 'name']], ['tmp', ['emptyDir', 'name']]]);
+  assert.deepEqual(sts.volumeClaimTemplates.map(t => [t.metadata.name, t.spec]), [['data',
+    { accessModes: ['ReadWriteOnce'], storageClassName: 'block-standard', resources: { requests: { storage: '5Gi' } } }]]);
+  const service = object(objects, 'Service', 'artifact-object-store').spec;
+  assert.deepEqual([service.type, service.selector, service.ports], ['ClusterIP', component('artifact-object-store'), [{ name: 's3', port: 9000, targetPort: 's3' }]]);
+  assert.deepEqual(object(objects, 'NetworkPolicy', 'artifact-object-store').spec, {
+    podSelector: { matchLabels: component('artifact-object-store') }, policyTypes: ['Ingress', 'Egress'],
+    ingress: [{ from: [{ podSelector: { matchLabels: component('artifact-content') } }, { podSelector: { matchLabels: component('api') } }],
+      ports: [{ protocol: 'TCP', port: 9000 }] }], egress: [] });
 }
 const apiRelay = values => object(values, 'NetworkPolicy', 'allow-api-to-artifact-content').spec;
 const liveEdge = values => object(values, 'NetworkPolicy', 'allow-immo-content-host-to-artifact-content').spec;
@@ -190,6 +239,55 @@ for (const tier of ['prod', 'preprod']) {
   deny('independent content image', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image = 'other:latest'; });
   deny('world-readable signing key', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.defaultMode = 292; });
   deny('missing signing-key group access', o => { delete object(o, 'Deployment', 'artifact-content').spec.template.spec.securityContext.fsGroup; });
+  // GB4 requiredness: the serving tier must hard-require its runtime Secrets; a closed
+  // tier must keep them optional. Deleting the marker throws in both tiers (deepEqual
+  // is exact), the re-optionalized mutation is preprod-only (prod already optional).
+  deny('runtime Secret requiredness drift', o => { delete object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.optional; });
+  deny('signing Secret requiredness drift', o => { delete object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.optional; });
+  deny('api activation flags inherited from a secret', o => {
+    const env = object(o, 'Deployment', 'api').spec.template.spec.containers[0].env;
+    env.splice(env.findIndex(e => e.name === 'APP_ARTIFACT_HOST_ENABLED'), 1);
+  });
+  deny('a tier-closed flag opened on a workload', o => {
+    const unlisted = closed.find(name =>
+      !(openFlags[tier]['artifact-content'] ?? []).includes(name) && !(openFlags[tier].api ?? []).includes(name));
+    object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].env.find(e => e.name === unlisted).value = '1';
+  });
+  for (const [workload, flags] of Object.entries(openFlags[tier])) for (const flag of flags) {
+    deny(`${workload} ${flag} closed again`, o => {
+      object(o, 'Deployment', workload).spec.template.spec.containers[0].env.find(e => e.name === flag).value = '0';
+    });
+  }
+  if (tier === 'preprod') {
+    deny('runtime Secret re-optionalized', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.optional = true; });
+    deny('signing Secret re-optionalized', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.optional = true; });
+    deny('content flag on the api deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_CONTENT_ENABLED').value = '1'; });
+    deny('host flag on the content deployment', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_HOST_ENABLED').value = '1'; });
+    // s-conductor decision 2026-11-08: the api host surface stays closed in preprod
+    // (no storage credential is minted), so reopening it or its quota must fail.
+    deny('host flag reopened on the api deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_HOST_ENABLED').value = '1'; });
+    deny('artifact quota declared on the closed api host', o => { object(o, 'ConfigMap', 'api').data.APP_ARTIFACT_QUOTA_BYTES = '1073741824'; });
+    deny('missing object-store egress', o => { o.splice(o.findIndex(v => v.metadata.name === 'allow-artifact-content-to-object-store'), 1); });
+    deny('object-store egress without the component label', o => { delete object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].podSelector; });
+    deny('object-store egress to every pod of the namespace', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].podSelector = {}; });
+    deny('object-store egress across namespaces', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].namespaceSelector = {}; });
+    deny('object-store egress on another port', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].ports[0].port = 443; });
+    const storeNp = o => object(o, 'NetworkPolicy', 'artifact-object-store').spec;
+    const storePod = o => object(o, 'StatefulSet', 'artifact-object-store').spec.template.spec;
+    deny('object store image by tag only', o => { storePod(o).containers[0].image = 'docker.io/rustfs/rustfs:1.0.4'; });
+    deny('object store root credential optional', o => { storePod(o).containers[0].env.find(e => e.name === 'RUSTFS_ACCESS_KEY').valueFrom.secretKeyRef.optional = true; });
+    deny('object store console enabled', o => { storePod(o).containers[0].env.find(e => e.name === 'RUSTFS_CONSOLE_ENABLE').value = 'true'; });
+    deny('object store writable root filesystem', o => { storePod(o).containers[0].securityContext.readOnlyRootFilesystem = false; });
+    deny('object store reachable by every pod', o => { storeNp(o).ingress[0].from.push({ podSelector: {} }); });
+    deny('object store reachable across namespaces', o => { storeNp(o).ingress[0].from[0].namespaceSelector = {}; });
+    deny('object store with egress', o => { storeNp(o).egress = [{ ports: [{ protocol: 'TCP', port: 443 }] }]; });
+    deny('object store PVC resized', o => { object(o, 'StatefulSet', 'artifact-object-store').spec.volumeClaimTemplates[0].spec.resources.requests.storage = '50Gi'; });
+    deny('object store readiness on another path', o => { storePod(o).containers[0].readinessProbe.httpGet.path = '/'; });
+    deny('object store memory limit raised', o => { storePod(o).containers[0].resources.limits.memory = '4Gi'; });
+    deny('object store Service exposed', o => { object(o, 'Service', 'artifact-object-store').spec.type = 'NodePort'; });
+    deny('object store missing', o => { o.splice(o.findIndex(v => v.kind === 'StatefulSet' && v.metadata.name === 'artifact-object-store'), 1); });
+    deny('object-store egress widens to a CIDR', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to.push({ ipBlock: { cidr: '0.0.0.0/0' } }); });
+  }
 }
 const combined = [...load('/rendered/prod.yaml'), ...load('/rendered/preprod.yaml')];
 check('both environments: effective additive network reachability and denial matrix', () => checkConnectivity(combined));
