@@ -23,6 +23,10 @@ const terminal = (row: LiveInvitationRecord): never => {
   if (row.status === 'ceased') liveBusy('stale_session');
   throw new ArtifactOperationError(row.status === 'expired' ? 'gone' : 'access_denied');
 };
+/** The onRevoked event of a revoked row; its epoch is frozen once the row leaves the open set. */
+const revokedEvent = (row: LiveInvitationRecord): LiveInvitationRevoked => ({ storageScopeId: row.storageScopeId,
+  artifactId: row.artifactId, liveSessionId: row.liveSessionId, bindingGeneration: row.bindingGeneration,
+  invitationId: row.invitationId, epoch: row.epoch });
 const cursorOf = (session: string, offset: number) => Buffer.from(JSON.stringify([session, offset])).toString('base64url');
 function offsetOf(cursor: unknown, session: string | null): number {
   if (cursor === undefined) return 0;
@@ -67,7 +71,14 @@ export async function executeLiveInvitation(deps: LiveServiceDeps, operation: st
     if (command) {
       const prior = await tx.receipt(command.actorId, command.key);
       if (prior && prior.hash !== command.hash) throw new ArtifactOperationError('command_conflict');
-      if (prior) return { ...prior.result, replayed: true };
+      if (prior) {
+        // A replayed revoke re-invokes the idempotent onRevoked: the first push may have failed after the commit.
+        if (operation === 'live_revoke_invitation' && prior.result.status === 'revoked') {
+          const row = (await ledger.list()).find(entry => entry.invitationId === args.invitationId && entry.status === 'revoked');
+          if (row) revoked = revokedEvent(row);
+        }
+        return { ...prior.result, replayed: true };
+      }
     }
     const rows = await sweep(tx, identity, now, writer);
     const session = currentSession(tx.record);
@@ -117,8 +128,7 @@ export async function executeLiveInvitation(deps: LiveServiceDeps, operation: st
             Object.assign(other, { epoch, rowVersion: other.rowVersion + 1 });
             await ledger.save(other);
           }
-          revoked = { storageScopeId: row.storageScopeId, artifactId: row.artifactId, liveSessionId: row.liveSessionId,
-            bindingGeneration: row.bindingGeneration, invitationId: row.invitationId, epoch };
+          revoked = revokedEvent(row);
         }
         out = { invitationId: row.invitationId, status: 'revoked', epoch: row.epoch };
       }
