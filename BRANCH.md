@@ -33,6 +33,7 @@
 
 ## Feedback Loop
 - [x] `attention`: `instance.ts` keeps the `productPrivateCacheBlobs` export after this branch (outside the allowed paths here); it no longer has any importer on this branch. Follow-up deletion belongs to a lane allowed in `api/src/services/artifacts/instance.ts`.
+- [x] `attention`: CI run 42454878120 (head 1b068f07d) failed one e2e test unrelated to this diff: `tests/02-organizations.spec.ts:391` « détail: champs non éditables » (test-e2e shard 4), signature `TimeoutError: page.waitForURL: Timeout 10000ms exceeded` after the first org card click. The exact base (4b4c8632d) passed the same test on main (run 42452171320), and every API check on this head is green (typecheck, lint, api unit shards, image guards). Recorded per the flake acceptance rule; a fresh CI run is re-triggered by the commit carrying this record.
 
 ## AI Flaky tests
 - Acceptance rule:
