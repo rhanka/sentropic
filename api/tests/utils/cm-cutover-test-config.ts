@@ -15,7 +15,7 @@ import { createCmTokenCustodian } from '../../src/services/identity/cm-token-cus
 /** Synthetic isolated-database evidence, never a deployment/rehearsal receipt. */
 export async function createCmCutoverTestConfiguration(client: PoolClient,
   verifier = { rpId: 'localhost', origins: ['http://localhost:5840'] },
-  purpose: 'rehearsal' | 'cutover' = 'rehearsal') {
+  purpose: 'rehearsal' | 'cutover' = 'rehearsal', remoteRecords: readonly unknown[] = []) {
   if (process.env.NODE_ENV !== 'test') throw new Error('Isolated test environment required');
   const directory = await mkdtemp(join(tmpdir(), 'a4-import-fixture-'));
   const sessionKey = randomBytes(32), ticketKey = randomBytes(32);
@@ -28,7 +28,7 @@ export async function createCmCutoverTestConfiguration(client: PoolClient,
     try { source = await readA4IdentitySource(client); }
     finally { await client.query('ROLLBACK'); }
     const snapshotBytes = JSON.stringify({ rows: [...source.rows], inventory: source.inventory });
-    const remoteBytes = JSON.stringify({ format: 'remote-session-projection-snapshot/1', records: [] });
+    const remoteBytes = JSON.stringify({ format: 'remote-session-projection-snapshot/1', records: remoteRecords });
     const sourceSnapshotPath = join(directory, 'source.json'), remoteSnapshotPath = join(directory, 'remote.json');
     await writeFile(sourceSnapshotPath, snapshotBytes, { mode: 0o600 });
     await writeFile(remoteSnapshotPath, remoteBytes, { mode: 0o600 });

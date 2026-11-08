@@ -1,6 +1,6 @@
 import type { IdentityImportRowV1 } from '@sentropic/cluster-mesh';
 import type { PoolClient } from 'pg';
-import { mapA4Account, mapA4Credential, mapA4Login, mapA4Proof } from './cm-import-mapping';
+import { mapA4Account, mapA4CarriedLogin, mapA4Credential, mapA4Proof } from './cm-import-mapping';
 import { mapA4Invitation, mapA4Social } from './cm-import-continuations';
 import { mapA4OAuthConsent, mapA4ServiceClient, mapA4Tenant, mapA4TenantMembership,
   mapA4Workspace, mapA4WorkspaceMembership } from './cm-import-tenancy';
@@ -41,6 +41,7 @@ export async function readA4IdentitySource(client: PoolClient, readOnly = false)
 
 export async function mapA4IdentitySource(source: A4SourceSnapshot, options: {
   readonly importedAt: string; readonly rpId: string; readonly origins: readonly string[];
+  readonly remotelyRevokedSessionIds: ReadonlySet<string>;
 }): Promise<IdentityImportRowV1[]> {
   assertA4SourceInventory(source.inventory);
   const rows: IdentityImportRowV1[] = [];
@@ -50,11 +51,14 @@ export async function mapA4IdentitySource(source: A4SourceSnapshot, options: {
   for (const [table, kind] of [['webauthn_challenges', 'webauthn_challenge'], ['email_verification_codes', 'email_code'],
     ['magic_links', 'magic_link']] as const) {
     // Owner decision B (2026-11-05), in every mode: validate known source
-    // shapes but carry no ephemeral authentication authority across cutover.
+    // shapes but carry no ephemeral proof authority across cutover.
     for (const row of each(table)) mapA4Proof(kind, row, options);
   }
   for (const row of each('auth_invite_tokens')) rows.push({ entity: 'invitation', record: mapA4Invitation(row) });
-  for (const row of each('user_sessions')) mapA4Login(row, options.importedAt);
+  for (const row of each('user_sessions')) {
+    const login = mapA4CarriedLogin(row, options.importedAt, options.remotelyRevokedSessionIds);
+    if (login) rows.push({ entity: 'login_session', record: login });
+  }
   for (const row of each('identities')) rows.push({ entity: 'social_link', record: mapA4Social(row) });
   for (const row of each('tenants')) rows.push({ entity: 'tenant', record: mapA4Tenant(row) });
   for (const row of each('tenant_memberships')) rows.push({ entity: 'tenant_membership', record: mapA4TenantMembership(row) });

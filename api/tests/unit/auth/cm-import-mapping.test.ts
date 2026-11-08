@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapA4Account, mapA4Credential, mapA4Login, mapA4Proof } from '../../../src/services/identity/cm-import-mapping';
+import { mapA4Account, mapA4CarriedLogin, mapA4Credential, mapA4Login, mapA4Proof } from '../../../src/services/identity/cm-import-mapping';
 import { expectCustodyCode } from '../../utils/cm-custody-assertions';
 
 const created = '2026-10-30T12:34:56.789';
@@ -55,5 +55,15 @@ describe('A4 source mapping preservation', () => {
       rotationVersion: 0, refreshTokenHash: null, login: { mfaVerified: true,
         sessionVersion: Date.parse(`${created}Z`), authTime: Math.floor(Date.parse(`${created}Z`) / 1000) } });
     expect(mapA4Login(source, '2026-11-01T00:00:00.000Z', true).revokedAt).toBe('2026-11-01T00:00:00.000Z');
+  });
+
+  it('should carry only a live, non-revoked login with its exact binding', () => {
+    const source = { id: 'login', user_id: 'subject', session_token_hash: 'a'.repeat(64),
+      refresh_token_hash: 'b'.repeat(64), device_name: null, ip_address: null, user_agent: null, mfa_verified: true,
+      created_at: created, expires_at: '2026-11-30T12:34:56.789', last_activity_at: null };
+    const importedAt = '2026-11-01T00:00:00.000Z';
+    expect(mapA4CarriedLogin(source, importedAt, new Set())).toEqual(mapA4Login(source, importedAt));
+    expect(mapA4CarriedLogin(source, importedAt, new Set(['login']))).toBeNull();
+    expect(mapA4CarriedLogin(source, '2026-11-30T12:34:56.789Z', new Set())).toBeNull();
   });
 });
