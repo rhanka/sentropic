@@ -48,6 +48,11 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
     volumes: Object.entries(VOLUME_LIMITS).map(([name, sizeLimit]) => ({ name, emptyDir: { sizeLimit } })),
   } };
 }
+/** A ResourceQuota refusal of a pod creation (Kubernetes 403 « exceeded quota »): backpressure, never a failure. */
+export const QUOTA_EXCEEDED = 'quota_exceeded';
+export const quotaExceeded = (error: unknown) => error instanceof LiveError && error.reason === QUOTA_EXCEEDED;
+export const quotaRefusal = (statusCode: number, body: string) => statusCode === 403 && /\bexceeded quota\b/.test(body);
+const leaseOf = (pod: Pod) => Number(pod.metadata.labels['sentropic.dev/artifact-lease']);
 interface Pod {
   metadata: { uid: string; labels: Record<string, string>; deletionTimestamp?: string };
   status?: { phase?: string };
@@ -64,6 +69,14 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
     async ensure(key: LiveKey, runtime: LiveRuntime) {
       const expected = labels(key, runtime);
       let pod = await core.get<Pod>('pods', runtime.podName);
+      // No surge: a pod of an older lease of this binding (or a terminating one) still counts against the tenant quota.
+      // A fresh intent deletes it and waits for its 404 (bounded by waitDeleted) before creating the replacement.
+      if (pod && runtime.podUid === null && (leaseOf(pod) < runtime.leaseEpoch
+        || (pod.metadata.deletionTimestamp && leaseOf(pod) <= runtime.leaseEpoch))) {
+        if (!pod.metadata.deletionTimestamp) await core.delete('pods', runtime.podName, pod.metadata.uid);
+        await core.waitDeleted('pods', runtime.podName, pod.metadata.uid);
+        pod = undefined;
+      }
       if (!pod) {
         if (runtime.podUid !== null) throw new LiveError('builder_unavailable');
         try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement)); }

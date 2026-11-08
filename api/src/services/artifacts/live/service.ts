@@ -29,6 +29,9 @@ import { createRemoteDrafts } from './remote-drafts';
 
 /** Live pods admitted on one d2-4 node (owner decision 07/11); memory admission is the heavy-phase queue's. */
 export const LIVE_NODE_CAPACITY = 4;
+/** Builder pods present at once per environment (tenant ResourceQuota pods 5, s-archi 07/11 21:15): every creation
+ * takes one of these pod slots in the heavy-phase queue first. */
+export const MAX_BUILDER_PODS = 4;
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
  * AL-T supplies authenticated owner operations; AL-D supplies the encrypted draft port;
  * SG4 supplies transactional publication. Every supervisor frame rides the artifact-content relay (A-LIVE §8.1):
@@ -44,8 +47,9 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     /** Staged source, AL-D draft and candidate sink; the dependency stream is this service's cache. */
     sources: Omit<SupervisorSources, 'dependencies'>;
     /** Builder node (one d2-4), its memory budget for the cluster-mesh heavy-phase queue (1641 MiB, provisional phase
-     * costs, 19 MiB measured pod base) and the longest interactive wait; tickets renew at a third of the entry TTL. */
-    heavy: { node: string; maxWaitMs: number; pollMs: number; budget: HeavyPhaseBudget };
+     * costs, 19 MiB measured pod base), its pod slots (per-environment configuration, `MAX_BUILDER_PODS` by default) and
+     * the longest interactive wait; tickets renew at a third of the entry TTL. */
+    heavy: { node: string; maxWaitMs: number; pollMs: number; budget: HeavyPhaseBudget; maxPods?: number };
     /** Live pod slots of this environment from per-environment configuration; the owner decision is 4 on one d2-4. */
     admission: { capacity?: number; waiterTtlMs: number };
     cache: Pick<CachePorts, 'signingKey'>;
@@ -54,7 +58,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   const store = createPostgresLiveStore(options.pool);
   const { node, maxWaitMs, pollMs, budget } = options.heavy;
   const heavy = createQueuedHeavyGate({ node, maxWaitMs, pollMs, renewMs: budget.entryTtlMs / 3, holds: () => liveHolds(store),
-    queue: createHeavyPhaseQueue({ store: createPostgresHeavyQueueStore(options.pool), budget, now: options.now }) });
+    queue: createHeavyPhaseQueue({ store: createPostgresHeavyQueueStore(options.pool), budget, now: options.now,
+      maxPods: options.heavy.maxPods ?? MAX_BUILDER_PODS }) });
   const { bootstrap, supervisor } = composeSupervisor({ key: options.supervisorKey, channel, now: options.now,
     id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS,
     sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });

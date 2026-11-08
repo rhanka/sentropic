@@ -1,9 +1,9 @@
 import type { Pool } from 'pg';
 import { emptyHeavyPhaseQueueState, type HeavyPhaseKind, type HeavyPhaseQueue, type HeavyPhaseQueueState,
-  type HeavyPhaseQueueStore } from '@sentropic/cluster-mesh';
+  type HeavyPhaseQueueStore, type HeavyPhaseSlotKind } from '@sentropic/cluster-mesh';
 import type { CachePorts } from './cache';
 import type { LiveStore } from './ports';
-import { podName } from './pods';
+import { podName, quotaExceeded } from './pods';
 import { LiveError } from './records';
 
 /** Phases whose memory peaks stack on a node: the in-pod install, the Vite pre-bundle, the dev server start (which
@@ -16,11 +16,15 @@ export interface LiveHeavyGate {
    * `builder_unavailable`/`queued` and leaves the queue, unless `keep` (a durable waiter re-requesting every pass). */
   run<T>(subject: string, phase: LiveHeavyPhase, work: () => Promise<T>,
     options?: { waitMs?: number; keep?: boolean; live?: boolean }): Promise<T>;
+  /** Every pod creation first takes a pod slot in the same FIFO (at most `maxPods` pods; `blockedBy: 'pods'`), then runs
+   * `create`. A ResourceQuota refusal is backpressure: the slot is given back, the ticket requeues at the tail and the
+   * creation retries. Past the wait bound it throws `builder_unavailable`/`queued`, like any waiter. */
+  pod<T>(subject: string, create: () => Promise<T>, options?: { waitMs?: number }): Promise<T>;
   hold(subject: string, holds: { pod?: boolean; live?: boolean }): Promise<void>;
   /** Drops every ticket of the pod (teardown, wake). */
   cancel(subject: string): Promise<void>;
   /** The pod's admitted or queued phases, for the live status surface. */
-  status(subject: string): Promise<Array<{ kind: LiveHeavyPhase; state: 'admitted' | 'queued'; position: number }>>;
+  status(subject: string): Promise<Array<{ kind: HeavyPhaseSlotKind; state: 'admitted' | 'queued'; position: number }>>;
 }
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -40,6 +44,25 @@ export function createQueuedHeavyGate(options: { queue: HeavyPhaseQueue; node: s
       if (running.has(id)) throw new LiveError('builder_unavailable', 'queued');
       running.add(id);
       try { return await admitted(ticket, work, run); } finally { running.delete(id); }
+    },
+    async pod(subject, create, run = {}) {
+      await seed();
+      const ticket = { subject, kind: 'pod' as const };
+      for (let waited = 0; ; waited += options.pollMs) {
+        if ((await queue.request(node, ticket)).state === 'admitted') {
+          try { return await create(); }
+          catch (error) {
+            // Any other failure keeps the slot: the caller's teardown removes the pod, then frees it.
+            if (!quotaExceeded(error)) throw error;
+            await queue.hold(node, { subject, pod: false });
+          }
+        }
+        if (waited >= (run.waitMs ?? options.maxWaitMs)) {
+          await queue.finish(node, ticket);
+          throw new LiveError('builder_unavailable', 'queued');
+        }
+        await delay(options.pollMs);
+      }
     },
     async hold(subject, holds) { await seed(); await queue.hold(node, { subject, ...holds }); },
     async cancel(subject) { await seed(); await queue.cancel(node, subject); },

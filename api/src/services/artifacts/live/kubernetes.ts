@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { KubernetesCore } from './pods';
+import { QUOTA_EXCEEDED, quotaRefusal, type KubernetesCore } from './pods';
 import type { BuilderPlacement } from './placement';
 import { conflict, LiveError } from './records';
 
@@ -32,7 +32,9 @@ export function createInClusterKubernetes(placement: BuilderPlacement, options: 
         response.on('end', () => {
           if (response.statusCode === 404 && ['GET', 'DELETE'].includes(method)) { resolve(undefined); return; }
           if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
-            reject(new LiveError('builder_unavailable')); return;
+            const quota = method === 'POST' && resource === 'pods'
+              && quotaRefusal(response.statusCode ?? 0, Buffer.concat(chunks).toString('utf8'));
+            reject(new LiveError('builder_unavailable', quota ? QUOTA_EXCEEDED : undefined)); return;
           }
           try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as T); }
           catch { reject(new LiveError('builder_unavailable')); }
