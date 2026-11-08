@@ -38,6 +38,8 @@ export function createLiveController(ports: LivePorts) {
     project: (key: LiveKey, durableRevision: string) => projectRevision(ports, key, durableRevision),
     /** Owner or invitee route grant for the host live assertion; writes are the binding owner's only. */
     authorize: (key: LiveKey, actor: LiveActor, access: 'read' | 'write') => authorizeLive(ports, key, actor, access),
+    /** Route fence after the host revocation epoch moved (remote grant): returns false when the session is not LIVE. */
+    fenceInvitations: (key: LiveKey) => fenceInvitations(ports, key),
     /** Only the authenticated host calls this after an admitted source operation or visible interaction. Edits come
      * from the binding owner only; invited foreground viewing and reads may extend the session (A-LIVE §5.3). */
     async activity(key: LiveKey, sessionId: string, kind: 'edit' | 'read' | 'foreground' | 'heartbeat' | 'status' | 'ping',

@@ -7,9 +7,14 @@ export const ARTIFACT_PUBLIC_ENV = Object.freeze({ VITE_ARTIFACT_MODE: '1', VITE
 export const NODE_HEAP_OPTIONS = '--max-old-space-size=384';
 /** The clean build alone needs a 1 GiB heap (immo measured: heap OOM at 384 and 768); its pod limit is 1536Mi. */
 export const NODE_BUILD_HEAP_OPTIONS = '--max-old-space-size=1024';
+/** Host-owned native memory caps for every phase (one live pod in its cgroup, 2026-11-07): glibc keeps 2 malloc
+ * arenas (Vite node at rest about 20 MiB lower) and esbuild's Go runtime collects at 256 MiB, which brings the
+ * pre-bundle peak from 1156-1208 to 945-959 MiB, under a 1200 MiB cap. */
+export const NATIVE_MEMORY_ENV = Object.freeze({ MALLOC_ARENA_MAX: '2', GOMEMLIMIT: '256MiB' });
 /** Construct from zero. Never inherit API, forge, npm credentials or branch-controlled config. No registry: W2 offline. */
 export function artifactEnvironment() {
   return { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/tmp/home', TMPDIR: '/tmp', NODE_OPTIONS: NODE_HEAP_OPTIONS,
+    ...NATIVE_MEMORY_ENV,
     npm_config_userconfig: '/tmp/host-npmrc', npm_config_globalconfig: '/tmp/host-global-npmrc',
     npm_config_cache: '/tmp/npm-cache', npm_config_offline: 'true',
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',

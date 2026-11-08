@@ -2,9 +2,11 @@ import type { Pool, PoolClient } from 'pg';
 import type { LiveStore } from './ports';
 import type { LiveKey, LiveState } from './records';
 import type { BuildJobRecord, RecordStore } from './build-jobs';
+import type { RemoteRows } from './remote-live';
 
 const namespace = 'artifact-live-runtime/v1';
 const jobNamespace = 'artifact-build-jobs/v1';
+const remoteNamespace = 'artifact-live-remote/v1';
 const rowKey = (key: LiveKey) => JSON.stringify([key.storageScopeId, key.artifactId]);
 const SELECT = 'SELECT value FROM control.artifact_host_kv WHERE storage_scope_id=$1 AND key=$2';
 
@@ -61,5 +63,12 @@ export function createPostgresBuildJobStore(pool: Pool): RecordStore {
       const { next, result } = change(current);
       return { value: next, result };
     }),
+  };
+}
+/** The remote host live state (package fences, session invitation state, staged draft pages), in the same host KV. */
+export function createPostgresRemoteLiveRows(pool: Pool): RemoteRows {
+  return {
+    read: key => readRow(pool, remoteNamespace, key),
+    update: (key, change) => lockedRow(pool, remoteNamespace, key, async current => change(current as never)),
   };
 }

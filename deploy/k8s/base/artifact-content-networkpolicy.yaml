@@ -73,3 +73,25 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+---
+# A-LIVE §8.1 supervisor relay and the controller's fence push: the API pods of the SAME namespace
+# reach artifact-content on its single listener (TCP 8791). No namespaceSelector: no other environment.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-artifact-content
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: artifact-content
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 8791

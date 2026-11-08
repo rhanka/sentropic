@@ -6,7 +6,7 @@ import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall } fr
 import type { LiveRuntime } from '../../../src/services/artifacts/live/records';
 
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
-const budget = { budgetMiB: 1706, podBaseMiB: 40, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 60_000 };
+const budget = { budgetMiB: 1641, podBaseMiB: 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 60_000 };
 function world(options: { maxWaitMs?: number; store?: HeavyPhaseQueueStore;
   holds?: () => Promise<{ pods: string[]; lives: string[] }> } = {}) {
   const queue = createHeavyPhaseQueue({ store: options.store ?? createMemoryHeavyPhaseQueueStore(), now: () => 0, budget });
