@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { key } from './fixture';
-import { fences, file, grant, HEAD, reconcile, session, setup, stop, TREE } from './host-live-harness';
+import { LiveError } from '../../../src/services/artifacts/live/records';
+import { binding, fences, file, grant, HEAD, reconcile, session, setup, stop, TREE } from './host-live-harness';
 
 describe('host live API (remote host D0)', () => {
   it('refuses a host bound to no scope on every route before reading the body', async () => {
@@ -16,6 +17,15 @@ describe('host live API (remote host D0)', () => {
     const response = await s.call('reconcile', reconcile());
     expect(await response.json()).toEqual({ ...fences, revision: 'r1', ready: true });
     expect((await s.f.state())?.runtime).toMatchObject({ phase: 'LIVE', ownerId: 'owner', appliedRevision: 'r1' });
+    expect(s.bind).toHaveBeenCalledWith({ ...key, bindingGeneration: 1 }, 1, binding);
+  });
+  it('refuses a reconcile whose git binding is refused before recording any fence', async () => {
+    const s = setup(); await s.stage('r1');
+    s.bind.mockRejectedValueOnce(new LiveError('binding_conflict'));
+    const response = await s.call('reconcile', reconcile());
+    expect(response.status).toBe(409); expect(await response.json()).toEqual({ error: 'binding_conflict' });
+    expect(await s.f.state()).toBeUndefined();
+    expect((await s.call('grant', grant({ principalId: 'owner' }))).status).toBe(409);
   });
   it('answers ready=false with the current revision while the applied revision differs', async () => {
     const s = setup(50); await s.stage('r1'); await s.call('reconcile', reconcile());
@@ -71,6 +81,9 @@ describe('host live API (remote host D0)', () => {
       ['reconcile', { ...reconcile(), invitation: undefined }], ['reconcile', reconcile({ invitation: { epoch: 1 } })],
       ['reconcile', reconcile({ invitation: { epoch: 1, expiresAt: '9000' } })], ['reconcile', reconcile({ invitation: session(-1) })],
       ['reconcile', reconcile({ invitation: { ...session(1), id: 'i' } })],
+      // The git binding is required and closed (forge-lease-reader contract §6.2).
+      ['reconcile', { ...reconcile(), binding: undefined }], ['reconcile', reconcile({ binding: { ...binding, extra: 1 } })],
+      ['reconcile', reconcile({ binding: { repoId: binding.repoId, branch: binding.branch } })],
       ['grant', { ...grant({ principalId: 'owner' }), invitation: undefined, invitationEpoch: 1 }],
       ['grant', grant({ principalId: 'owner' }, null)], ['grant', grant({ principalId: 'owner' }, { epoch: 1.5, expiresAt: null })],
       ['stop', stop({ routeEpoch: 9 })], ['grant', { ...grant({ principalId: 'owner' }), access: 'write' }],

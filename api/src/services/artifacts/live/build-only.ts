@@ -39,6 +39,8 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
   try {
     job = await ports.publication.job(key, jobId, { runId: runtime.sessionId, attempt: runtime.leaseEpoch });
     if (job.jobId !== jobId || job.generation !== binding.generation) throw new LiveError('git_live_conflict', 'job_not_pending');
+    // R1: the job's own binding, recorded at job.generation (the runtime generation every forge read resolves).
+    await ports.jobBinding(key, jobId, job.generation);
     if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
   } catch (error) {
     await transition(ports, key, runtime, state => {
