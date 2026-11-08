@@ -35,6 +35,9 @@
 - [x] `BRCMA-EX2` deploy/k8s/base: new one-off Job `38-cm-account-approve-job.yaml` (not in kustomization resources) and one additive NetworkPolicy `allow-cm-account-approve-to-postgres` (reason: default-deny-ingress baseline; impact: admits only pods labelled component cm-account-approve to postgres:5432; rollback: delete the yaml and the policy).
 - [x] `attention`: the cluster-mesh `account.approved` audit event has no reason field; the reason is recorded as the Job annotation `sentropic.io/approval-reason` and in the wrapper receipt line, persisted in the run report (source-gap for a durable cm_identity reason column).
 
+- [x] `acknowledge`: GLM 5.3 review of b60435eff = APPROVE (.h2a/reviews/pr-956-glm.md); non-blocking findings applied: first error line only on stderr, whitespace-only values refused by the wrapper, doc note on a `kubectl wait` timeout. Deferred: durable reason column (source-gap above), dedicated governance runbook.
+- [x] `attention`: CI run 42459620840 on b60435eff: `test-e2e (1)` failed on `tests/07-matrix.spec.ts:477` (Matrix lock/presence, User B can lock, 2 s predicate); this diff touches no UI, matrix or lock code; fresh run on the next head, no rerun.
+
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
 - Rationale: one small change, one PR, one CI.

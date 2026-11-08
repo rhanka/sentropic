@@ -1696,7 +1696,7 @@ cm-account-approve-job: ## Approve one cm_identity account role via the versione
 	test -s "$$FILE" || { echo "ERROR: SECRET_FILE is missing or empty (0600 file with CM_ACCOUNT_APPROVE_* vars)"; exit 1; }; \
 	case "$$(stat -c %a "$$FILE")" in 600|400) ;; *) echo "ERROR: SECRET_FILE must be mode 0600 or 0400"; exit 1 ;; esac; \
 	if grep -Evq '^(#.*|[[:space:]]*|CM_ACCOUNT_APPROVE_(ACTOR_ID|USER_ID|ROLE|REASON)=.*)$$' "$$FILE"; then echo "ERROR: SECRET_FILE may only hold the four CM_ACCOUNT_APPROVE_* assignments"; exit 1; fi; \
-	for k in ACTOR_ID USER_ID ROLE REASON; do test "$$(grep -c "^CM_ACCOUNT_APPROVE_$$k=." "$$FILE")" = 1 || { echo "ERROR: SECRET_FILE needs exactly one non-empty CM_ACCOUNT_APPROVE_$$k"; exit 1; }; done; \
+	for k in ACTOR_ID USER_ID ROLE REASON; do test "$$(grep -c "^CM_ACCOUNT_APPROVE_$$k=[^[:space:]]" "$$FILE")" = 1 || { echo "ERROR: SECRET_FILE needs exactly one non-empty CM_ACCOUNT_APPROVE_$$k"; exit 1; }; done; \
 	REASON="$$(sed -n 's/^CM_ACCOUNT_APPROVE_REASON=//p' "$$FILE")"; \
 	IMG="$(CM_ACCOUNT_APPROVE_JOB_IMAGE)"; \
 	test -n "$$IMG" || IMG="$$(kubectl -n "$$NS" get deployment/api -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].image}')"; \

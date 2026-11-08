@@ -86,6 +86,8 @@ as by the admin API. Run it only on a recorded owner authorization.
 3. The Job prints one JSON line `{userId, roleBefore, roleAfter, status}` and
    exits non-zero on any refusal (self-approval, missing or invalid variable,
    unknown target, actor not an active admin_app, missing custody profile).
+   A `kubectl wait` timeout (slow image pull) does not mean the approval was
+   not committed: rerun the Job and read `roleBefore` in the JSON line.
 4. Keep the receipt line and the JSON line in the run report: the cluster-mesh
    `account.approved` audit event carries the actor and the subject but no
    reason field, so the reason is persisted only in that report.
