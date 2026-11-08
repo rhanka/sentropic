@@ -10,16 +10,19 @@
 --   and SELECT + DELETE on artifact_host.activation_tickets. No DDL, no publication
 --   authority, no write to artifacts, cm_identity or control, no other identity table.
 -- NOT granted (open finding, fail-closed): the activation consume transaction also
--- needs INSERT on artifact_host.activation_namespaces and UPDATE privilege for its
--- FOR SHARE / FOR UPDATE row locks (artifact_host, artifacts, cm_identity tables);
--- that write surface is an architecture decision, not an operator grant.
+-- needs artifact_host.activation_namespaces SELECT + INSERT + UPDATE (ON CONFLICT
+-- insert, FOR SHARE), artifact_host.browser_flows SELECT + UPDATE (peek, FOR UPDATE),
+-- artifact_host.activation_tickets UPDATE (FOR UPDATE), and UPDATE privilege for the
+-- FOR SHARE row locks of currentPolicy on artifacts.{artifacts,releases,
+-- artifact_current,artifact_access} and the four cm_identity tables. That write
+-- surface is an architecture decision, not an operator grant.
 \set ON_ERROR_STOP on
+SET log_statement = 'none';
 SELECT length(:'pw') >= 32 AS pw_ok \gset
 \if :pw_ok
 \else
   DO $guard$ BEGIN RAISE EXCEPTION 'pw shorter than 32 characters (fail-closed)'; END $guard$;
 \endif
-SET log_statement = 'none';
 
 BEGIN;
 SET LOCAL statement_timeout = '60s';

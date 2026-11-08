@@ -38,6 +38,13 @@ Secret `artifact-object-store` (`RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY`, requir
    change the block, public bucket policy refused. Record the receipt with its sha256.
 5. Rotation: same steps with new values; restart `artifact-content` / `api` after the
    Secret change. Cycle: 90 days maximum, or at once on exposure.
+6. After any apply or image change: confirm `artifact-object-store-0` is Ready
+   (`/health/ready`; an earlier upstream alpha routed it through S3 auth) before relying on it.
+
+## Capacity
+The PVC brings `sentropic-preprod` to 4/4 `persistentvolumeclaims` (postgres, IdP session
+authority, A4 custody, this store): the store stays single-replica and any new PVC in the
+namespace needs a quota raise from the platform operator first.
 
 ## Database role `artifact_content`
 `artifact-content-db-role.sql` is idempotent. Feed `\set pw '<48 hex>'` and the file on
