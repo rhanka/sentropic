@@ -101,6 +101,12 @@ data:
   # runs the same image against the same database and shares the JWKS rows and OAUTH_SIGNING_KEK
   # (deploy/k8s/base/35-auth-idp.yaml), so those are the keys that signed the token.
   MCP_AUTHORIZATION_SERVER_URL: "https://preprod.auth.sent-tech.ca"
+  # GB4 note (PREPROD ONLY): the api artifact host stays CLOSED on this tier
+  # (s-conductor decision 2026-11-08 — with #954 the builder composition no longer
+  # reads APP_ARTIFACT_HOST_ENABLED and no APP_ARTIFACT_S3_* credential is minted
+  # in Secret/sentropic-api, so there is no storage behind an opened host). No
+  # APP_ARTIFACT_QUOTA_BYTES either: instance.ts only asks for one when the host
+  # is enabled, and the base env keeps it at "0".
   # GB4 builder composition (s-archi builder-composition contract, 2026-11-08; owner GO 2026-11-07 « Oui, GB4 GO
   # préprod »). PREPROD ONLY. ARTIFACT_BUILDER_ENABLED=1 is fail-closed: with the flag on, a missing or invalid value
   # below refuses the builder gracefully (#954: `artifact_builder_refused`, builder routes 503, api process up). Secrets (handoff, receipt, supervisor, live controller and dependency cache keys) stay in
