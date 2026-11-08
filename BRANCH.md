@@ -38,8 +38,8 @@
 - Rationale: one wagon, one PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — Tests first (contract §6, seven groups)**
-  - [ ] mapping, host bodies, head/reachable, snapshot filters and limits, `source()` re-verification, GET-only and token hygiene, fail-closed configuration.
+- [x] **Lot 1 — Tests first (contract §6, seven groups)**
+  - [x] mapping, host bodies, head/reachable, snapshot filters and limits, `source()` re-verification, GET-only and token hygiene, fail-closed configuration.
 - [ ] **Lot 2 — Binding mapping and configuration**
   - [ ] `forge-binding.ts`: `ARTIFACT_BUILDER_REPOSITORIES_JSON`, validation order, binding immutable per generation (409 `binding_conflict`).
   - [ ] Host build and live APIs parse and validate `binding` before scheduling anything.
