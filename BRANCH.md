@@ -68,9 +68,9 @@
   - [x] Read verdict A1-A5, inventory §3.1.4, `.tmp/rv/idp-passkey-diag.md` F2/F3, GLM #948 review.
   - [x] Worktree on origin/main `c22163106`, ENV and ports above.
 - [ ] **Lot 1 — Import RP guard and mapping digest (tests first)**
-  - [ ] `api/tests/unit/auth/cm-import-source-rp.test.ts`: same RP stamps every credential; differing or undeclared IdP RP refuses with `identity_import_invalid`; a source without credentials imports whatever the declaration; the digest covers `mapA4IdentitySource` and `readA4IdentitySource`.
-  - [ ] `cm-import-source.ts` guard + `idpRpId` option; `cm-cutover-config.ts` reads `CM_IDENTITY_CUTOVER_IDP_RP_ID`; `cm-preprod-state.ts` passes it; test configs declare it.
-  - [ ] `cm-import-manifest.ts` hashes the source module and table list.
+  - [x] `api/tests/unit/auth/cm-import-source-rp.test.ts`: same RP stamps every credential; differing or undeclared IdP RP refuses with `identity_import_invalid`; a source without credentials imports whatever the declaration; the digest covers `mapA4IdentitySource` and `readA4IdentitySource`.
+  - [x] `cm-import-source.ts` guard + `idpRpId` option; `cm-cutover-config.ts` reads `CM_IDENTITY_CUTOVER_IDP_RP_ID`; `cm-preprod-state.ts` passes it; test configs declare it.
+  - [x] `cm-import-manifest.ts` hashes the source module and table list.
 - [ ] **Lot 2 — Replica sync rpId convergence (tests first)**
   - [ ] `replica-sync.spec.ts`: a source rpId converges onto a live replica credential (counter kept, revision bumped, `updated`); a locally revoked credential keeps its rpId.
   - [ ] `replica-sync.ts`: rpId leaves the conflict material set; apply converges it.
