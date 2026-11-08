@@ -18,6 +18,23 @@ describe('GitHub App host routes', () => {
     expect((await app.request(`/github-app/${entry.installationRef}`)).status).toBe(403);
   });
 
+  it('should post a manifest GitHub accepts: no default installation events, webhook URL kept', async () => {
+    const f = fixture();
+    const entry = await f.service.begin(owner);
+    const app = createGitHubAppRouter({ service: f.service, publicBaseUrl: 'https://mesh.example',
+      resolveOwner: async () => owner, authenticateBroker: async () => null });
+    const html = await (await app.request(`/github-app/${entry.installationRef}`)).text();
+    const encoded = /name="manifest" value="([^"]*)"/.exec(html)?.[1] ?? '';
+    const manifest = JSON.parse(encoded.replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+    // GitHub delivers these to every App webhook and rejects a manifest listing them.
+    const events: unknown[] = manifest.default_events ?? [];
+    expect(events).not.toContain('installation');
+    expect(events).not.toContain('installation_repositories');
+    expect(manifest.hook_attributes).toEqual({
+      url: `https://mesh.example/github-app/${entry.installationRef}/events`, active: true });
+  });
+
   it('should authenticate the broker and reject tuple substitution and permission overrides', async () => {
     const f = fixture();
     const entry = await f.ready();
