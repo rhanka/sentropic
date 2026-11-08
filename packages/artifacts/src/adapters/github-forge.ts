@@ -21,12 +21,20 @@ async function absentAsMissing<T>(request: Promise<T>): Promise<T> {
 /** Fixed public GitHub origins. The SG0-net host owns network admission and egress receipts. */
 export function createGitHubForge(fetcher: GitHubFetch = globalThis.fetch): GitForge {
   const api = githubApi(fetcher);
-  /** Exact branch lookup; each ref segment is encoded on its own so « artifact/p/x » keeps its path slashes. */
-  async function branchHead(context: GitForgeContext, branch: string): Promise<string> {
-    const path = branch.split('/').map(encodeURIComponent).join('/');
-    const result = await absentAsMissing(api(context, `/git/ref/heads/${path}`));
-    if (result?.ref !== `refs/heads/${branch}` || result?.object?.type !== 'commit') throw new GitForgeError('unavailable');
-    return sha(result.object.sha);
+  /** Each ref segment is encoded on its own so « artifact/p/x » keeps its path slashes. */
+  const segments = (ref: string) => ref.split('/').map(encodeURIComponent).join('/');
+  /** Exact branch lookup first; artifact branches never resolve as anything else. */
+  async function refHead(context: GitForgeContext, ref: string): Promise<string> {
+    try {
+      const result = await absentAsMissing(api(context, `/git/ref/heads/${segments(ref)}`));
+      if (result?.ref !== `refs/heads/${ref}` || result?.object?.type !== 'commit') throw new GitForgeError('unavailable');
+      return sha(result.object.sha);
+    } catch (error) {
+      if (ref.startsWith('artifact/') || !(error instanceof GitForgeError && error.code === 'missing')) throw error;
+    }
+    // Registered sources may also be read at a tag or an abbreviated commit SHA (docs/git-port.md).
+    const result = await absentAsMissing(api(context, `/commits/${segments(ref)}`));
+    return sha(result?.sha);
   }
   return {
     async repositoryId(context) {
@@ -36,7 +44,7 @@ export function createGitHubForge(fetcher: GitHubFetch = globalThis.fetch): GitF
       return String(result.id);
     },
     async resolve(context, ref) {
-      const commitSha = /^[0-9a-f]{40}$/.test(ref) ? ref : await branchHead(context, ref);
+      const commitSha = /^[0-9a-f]{40}$/.test(ref) ? ref : await refHead(context, ref);
       const result = await absentAsMissing(api(context, `/commits/${commitSha}`));
       if (result?.sha !== commitSha || !Array.isArray(result?.parents) || typeof result?.commit?.message !== 'string' ||
         [result.commit.author, result.commit.committer].some(person => typeof person?.name !== 'string' || typeof person?.email !== 'string')) {
