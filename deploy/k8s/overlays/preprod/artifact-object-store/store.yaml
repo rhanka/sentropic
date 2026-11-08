@@ -5,7 +5,7 @@
 # 501 NotImplemented, so it cannot pass the content startup privacy assertion
 # (api/src/services/artifacts/lifecycle.ts assertPrivate). RustFS 1.0.4 stores the
 # PublicAccessBlock configuration per bucket and refuses public bucket policies while
-# BlockPublicPolicy is set. Qualification receipt: see README.md in this directory.
+# BlockPublicPolicy is set. Bootstrap, qualification, rotation: deploy/ci/artifact-content/object-store.
 #
 # Root credentials come from the operator-created Secret `artifact-object-store`
 # (names only in Git). They are REQUIRED: without them RustFS falls back to a
