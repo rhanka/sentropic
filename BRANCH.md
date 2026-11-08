@@ -93,7 +93,7 @@
 - [ ] `attention`: W4 PORTS 6 (pod `/_supervisor/v1/frame` relay) has no `SupervisorChannel.send` implementation in the train yet (W7 open item: product composition of `createBuilderService`); owner W7.
 - [x] `attention`: `ARTIFACTS_PROVIDER_VERSION` is 0.2.21 under BR90-EX12: holding it at 0.2.20 failed the packed-consumer probe; tool definitions stay byte-stable and the APP-P1 digest is repinned to `5150544a…`.
 - [x] `acknowledge`: W7 (BRW7-EX1, BRW7-EX4) merged W3, W4, W5 and W8; its merge resolutions are carried as two train commits (8.4 evidence at BUILD_QUEUED; W3/W4/W8 tests on string revisions, the streaming cache and the builder placement).
-- [ ] `attention`: W4 `api/tests/unit/artifacts-live/bootstrap-server.test.ts:31,34` implicit any under strict test typing (`make typecheck-api` covers `src` only); owner W4.
+- [x] `attention`: W4 `api/tests/unit/artifacts-live/bootstrap-server.test.ts:31,34` implicit any fixed (`socket: Socket`); strict live src+tests tsc clean.
 - [ ] `attention`: not run locally (no local image build): the full API endpoint, smoke and queue suites (`tests/smoke/api-health.test.ts` needs a running API server), artifact-content `process`/`runtime` tests; the PR CI covers them.
 
 ## AI Flaky tests
@@ -119,4 +119,5 @@
 - [x] Lot 9: push, open PR #945, GLM review of the full diff (APPROVE on a00797885).
 - [x] Lot 10: MCP workspaces_list (5b13de0a6) cherry-picked after L1; transport.ts union (access_denied discovery + read-only filter); registry-dispatch read-only gate; L1 `tid` test fixture; full API `tsc` clean, `lint` 0 errors, API unit 2104 passed (2 pre-existing skips), wagon API files 145/145 with Postgres, 36/37 touched API files (smoke needs a server), ui nginx 3/3, artifacts-live 258/258.
 - [x] Lot 11: CI10 toolbox deps key (713372f54) cherry-picked last with the version-only guard; `make test-ci-api-tool-cache` 25/25 (mutation with the former field list fails 2), `test-ci-dag` 10/10, `test-ci-unit-graph` 7/7, `test-ci-expected-results` 28/28, `test-ci-static` 3/3, `test-ci-performance-report` 8/8, `test-ci-run-metrics` 36/36.
+- [x] Lot 12: PR #945 static-package fix (BR90-EX12) and M2 typing; static-package step (`typecheck/build/lint/pack-artifacts probe-artifacts-packed-consumer`) PACKED_CONSUMER_OK version=0.2.21, `make test-artifacts` 967/967, `make test-cluster-mesh SCOPE=tests/packaging` 85 pass, `test-lazy-package` with sibling receipts 136/136, API app-mcp-registry 25/25, mcp-workspaces-list-dispatch 14/14, bootstrap-server 5/5, app-mcp-installed physical-install case 1/1 (bundle case needs the API image esbuild: PR CI).
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
