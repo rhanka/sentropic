@@ -1,7 +1,7 @@
 # Feature: Preprod S2S service-token issuer for the github-app broker and artifact builder
 
 ## Objective
-- [x] Accept the standalone IdP S2S tokens of immo-preprod-host on `/api/v1/github-app/broker/*` and `/api/v1/artifacts/builder`: the guards expected `iss` = request origin (preprod.sentropic.sent-tech.ca) while the IdP mints `iss` = https://preprod.auth.sent-tech.ca, so every broker call answered 403 access_denied.
+- [x] Accept the standalone IdP S2S tokens of immo-preprod-host on `/api/v1/github-app/broker/*` and `/api/v1/artifacts/builder`: the guards expected `iss` and `aud` = request origin, which is `http://preprod.sentropic.sent-tech.ca` behind the plain-HTTP ui nginx (`X-Forwarded-Proto $scheme`), while the IdP mints `iss=https://preprod.auth.sent-tech.ca` and `aud=https://preprod.sentropic.sent-tech.ca`, so every broker call answered 403 access_denied.
 
 ## Scope / Guardrails
 - [x] Branch fix/preprod-s2s-service-issuer from main 39bf243b4 (exact 39bf243b4); worktree tmp/fix-s2s-service-issuer; ENV=test-s2s-issuer.
@@ -35,6 +35,8 @@
 
 ## Feedback Loop
 - [x] `attention`: the ConfigMap key is read at api start only; after merge the preprod api needs a rollout (`kubectl rollout restart deploy/api -n sentropic-preprod`) and a repin to an image that carries this code.
+- [x] `attention`: live probe 2026-11-08: pod env has no OAUTH_SERVICE_RESOURCE_URI; ui nginx forwards `X-Forwarded-Proto: http`; auth-idp reads ConfigMap auth-idp only.
+- [x] `deferred`: guard-level test with a signed token on the nginx header shape (review F3) — follow-up.
 - [x] `attention`: `service-s2s` `/ping` keeps `resolveOAuthIssuer` on purpose: its `/self-check` mints from this api's own token endpoint.
 
 ## Orchestration Mode (AI-selected)
@@ -49,9 +51,9 @@
   - [x] `api/src/config/env.ts`: OAUTH_SERVICE_ISSUER_URL (optional).
   - [x] `api/src/routes/auth/oauth.ts`: `resolveOAuthServiceIssuer` (env, else `resolveOAuthIssuer`).
   - [x] `api/src/routes/github-app.ts`, `api/src/routes/artifacts-builder.ts`: guards use `resolveOAuthServiceIssuer`.
-  - [x] `deploy/k8s/overlays/preprod/patch-api-config.yaml`: OAUTH_SERVICE_ISSUER_URL=https://preprod.auth.sent-tech.ca.
-  - [x] `api/tests/unit/auth/oauth-service-issuer.test.ts`: configured and fallback cases.
+  - [x] `deploy/k8s/overlays/preprod/patch-api-config.yaml`: OAUTH_SERVICE_ISSUER_URL=https://preprod.auth.sent-tech.ca and OAUTH_SERVICE_RESOURCE_URI=https://preprod.sentropic.sent-tech.ca (review pr-963-opus F1/F2).
+  - [x] `api/tests/unit/auth/oauth-service-issuer.test.ts`: configured and fallback cases on the real nginx header shape (`x-forwarded-proto: http`).
 - [ ] **Lot 2 — Final validation**
-  - [ ] `make typecheck-api ENV=test-s2s-issuer` PASS.
-  - [ ] `make test-api-unit SCOPE=tests/unit/auth/oauth-service-issuer.test.ts ENV=test-s2s-issuer` PASS.
-  - [ ] PR, CI green on the exact head, Opus review `.h2a/reviews/pr-<n>-opus.md`.
+  - [x] `make typecheck-api ENV=test-s2s-issuer`: local image build blocked by an npm network error; CI run 42492944203 green on head 2451b005d.
+  - [ ] CI green on the final head (typecheck + unit shards).
+  - [x] PR #963 opened; Opus review `.h2a/reviews/pr-963-opus.md` REQUEST_CHANGES on 2451b005d (F1 audience, F2 comments) addressed in the next head.
