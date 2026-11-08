@@ -22,3 +22,8 @@ ci-artifacts-join: ci-test-env
 
 test-ci-static: ci-test-env
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-static.test.mjs'
+
+# BR92-EX1: tested-tree shortcut, same-tree PR evidence or the complete run.
+.PHONY: test-ci-tested-tree
+test-ci-tested-tree: ci-test-env
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/tested-tree.test.mjs'
