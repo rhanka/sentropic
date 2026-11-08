@@ -22,6 +22,7 @@
   - `deploy/ci/artifact-content/bundle.selftest.mjs`
   - `deploy/ci/artifact-content/network.selftest.mjs`
   - `deploy/k8s/overlays/preprod/artifact-object-store/**`
+  - `deploy/ci/artifact-content/object-store/**`
   - `deploy/ci/preprod-a4/topology.selftest.mjs` (BRAOS-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -70,6 +71,6 @@
   - [x] Push branch; `gh pr create --draft` with the BRANCH.md-derived body starting with « DRAFT — merge only after the Secrets listed below exist »; CI may run; no merge request.
 - [x] **Lot 4 — Namespace-local object store (s-conductor 2026-11-08; owner preprod secrets GO 01:58)**
   - [x] `artifact-object-store/`: ServiceAccount, Service :9000, StatefulSet (RustFS 1.0.4 digest-pinned, restricted pod, required root Secret, console off, 5Gi PVC), NetworkPolicy (ingress content + api on 9000, no egress), wired in `kustomization.yaml`.
-  - [x] Bootstrap material: `iam/*.json` (content read on `artifacts`, builder cache read/write on `artifact-builder-cache`), `public-access-block.xml`, `artifact-content-db-role.sql`, `README.md` (bootstrap, rotation, rollback).
+  - [x] Bootstrap material in `deploy/ci/artifact-content/object-store/` (deployment-classified path): `iam/*.json` (content read on `artifacts`, builder cache read/write on `artifact-builder-cache`), `public-access-block.xml`, `artifact-content-db-role.sql`, `README.md` (bootstrap, rotation, rollback).
   - [x] Selftests: preprod store expectations (prod renders none) and deny cases (tag-only image, optional root credential, console, writable root, open ingress, cross-namespace, egress, missing store).
   - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep`.
