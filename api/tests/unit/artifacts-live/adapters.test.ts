@@ -107,7 +107,7 @@ describe('trusted live adapters', () => {
       async get(ref) { return blobs.get(ref); }, async delete(ref) { blobs.delete(ref); } });
     const digest = 'c'.repeat(64);
     await storage.putFile(digest, Buffer.from('x'));
-    expect([...blobs.keys()]).toEqual([`dependency-cache/v1/files/${digest}`]);
+    expect([...blobs.keys()]).toEqual([`artifact-builder-cache/v1/files/${digest}`]);
     expect(await storage.getFile(digest)).toEqual(Buffer.from('x'));
     expect(await storage.getFile('d'.repeat(64))).toBeUndefined();
     for (const bad of ['../x', 'C'.repeat(64), 'c'.repeat(63)]) {
