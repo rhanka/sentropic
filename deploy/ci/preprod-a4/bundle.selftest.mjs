@@ -12,7 +12,7 @@ for (const objects of [base, preprod]) {
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
   const tag = name === 'ui'
     ? 'sentropic-ui@sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0'
-    : 'sentropic-api@sha256:16cbd3dc8eca86961e0b23ced70dad9bd4e20e74b970fcc9ae635b3104b4723c';
+    : 'sentropic-api@sha256:f9e11434aa5fe23c87f3446b2c133bad438fc22105998f167f1267ca4cc610c2';
   for (const objects of [base, preprod]) assert.equal(object(objects, 'Deployment', name).spec.template.spec.containers[0].image, `ghcr.io/rhanka/${tag}`);
   console.log(`PASS: deploy-preprod (preprod-a4) would deploy ${name} on ${tag}`);
 }
