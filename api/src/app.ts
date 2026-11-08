@@ -5,7 +5,13 @@ import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
 import { logger } from './logger';
 import { createRemoteEvidenceRouter } from './routes/auth/remote-evidence';
-import { createProductArtifactBuilderRouter } from './routes/artifacts-builder';
+import { authenticateBuilderHost, createProductArtifactBuilderRouter } from './routes/artifacts-builder';
+import { pool } from './db/client';
+import { productPrivateCacheBlobs } from './services/artifacts/instance';
+import { createProductBuilder } from './services/artifacts/live/product-builder';
+import { createInClusterKubernetes } from './services/artifacts/live/kubernetes';
+import { UNCONFIGURED_FORGE_READS } from './services/artifacts/live/forge';
+import { LiveError } from './services/artifacts/live/records';
 import { remoteRevocationError } from './services/auth/remote-revocation-error';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
@@ -442,10 +448,21 @@ app.use('*', async (c, next) => {
 applyAuthRateLimiters(app);
 app.route('/api/v1/auth/session/remote-action-evidence', createRemoteEvidenceRouter({ role: 'product' }));
 // A-LIVE W7 (M3-B): builder host build API under /api/v1/artifacts/builder, behind
-// the artifacts:builder S2S guard and the default-deny host bindings. Code only
-// until the GB4-P go (A-LIVE §10): no builder service is composed here, so a bound
-// host gets 503 builder_unavailable and any other caller is refused.
-app.route('/', createProductArtifactBuilderRouter(null));
+// the artifacts:builder S2S guard and the default-deny host bindings. Without
+// ARTIFACT_BUILDER_ENABLED=1 no builder service is composed, so a bound host gets
+// 503 builder_unavailable; with it, an incomplete configuration refuses to boot.
+const productBuilder = createProductBuilder(process.env, {
+  pool, cacheBlobs: productPrivateCacheBlobs, authenticate: authenticateBuilderHost,
+  kubernetes: placement => createInClusterKubernetes(placement), forge: UNCONFIGURED_FORGE_READS,
+  // Codes and reasons only: a builder error never carries a key, a token or a body.
+  log: (event, error) => logger.error({ event, code: error instanceof LiveError ? error.code : 'unknown',
+    reason: error instanceof LiveError ? error.reason : undefined }, event),
+});
+app.route('/', createProductArtifactBuilderRouter(productBuilder));
+if (productBuilder) {
+  const scheduler = productBuilder.start();
+  process.once('exit', () => scheduler.stop());
+}
 
 app.route('/.well-known', createOAuthWellKnownProjection({
   compositionRoot: 'product',
