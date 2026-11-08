@@ -7,6 +7,14 @@ export const object = (objects, kind, name) => {
   return found[0];
 };
 export const closed = ['APP_ARTIFACT_HOST_ENABLED', 'APP_ARTIFACT_CONTENT_ENABLED', 'APP_ARTIFACT_READER_ENABLED'];
+// GB4 tier gates. The base pins every activation flag to "0" (explicit Deployment env,
+// which outranks envFrom); a tier opens a flag ONLY through its own overlay's explicit
+// Deployment env. artifact-content serves content; the api hosts the artifact surface
+// and the builder. Any open flag makes checkActivationImage require digest pinning.
+export const openFlags = {
+  prod: {},
+  preprod: { 'artifact-content': ['APP_ARTIFACT_CONTENT_ENABLED'], api: ['APP_ARTIFACT_HOST_ENABLED'] },
+};
 export function checkActivationImage(objects) {
   const containers = ['api', 'artifact-content'].flatMap(name => object(objects, 'Deployment', name).spec.template.spec.containers);
   if (containers.some(c => c.env?.some(e => closed.includes(e.name) && e.value === '1'))) {
@@ -42,18 +50,34 @@ export function checkWorkload(objects, tier, preservedImages) {
   assert.equal(cm.data.ARTIFACT_CONTENT_PORT, '8791');
   assert.equal(cm.data.APP_ARTIFACT_CONTENT_SIGNING_KEY_FILE, '/var/run/artifact-content/key');
   for (const name of closed) {
-    assert.equal(cm.data[name], '0');
-    for (const c of [content, object(objects, 'Deployment', 'api').spec.template.spec.containers[0]]) {
-      assert.deepEqual(c.env.find(e => e.name === name), { name, value: '0' }, `explicit ${name} overrides envFrom secrets`);
+    for (const [workload, container] of [['artifact-content', content], ['api', object(objects, 'Deployment', 'api').spec.template.spec.containers[0]]]) {
+      const expected = (openFlags[tier][workload] ?? []).includes(name) ? '1' : '0';
+      assert.deepEqual(container.env.find(e => e.name === name), { name, value: expected },
+        `explicit ${workload} ${name} is the tier gate and must stay explicit`);
     }
+    const inspection = (openFlags[tier]['artifact-content'] ?? []).includes(name) ? '1' : '0';
+    assert.equal(cm.data[name], inspection, `ConfigMap ${name} must match the tier's enabled set`);
+  }
+  // GB4: a tier that opens the api host must declare an explicit positive artifact
+  // quota (instance.ts module-load guard); closed tiers declare none.
+  const apiCm = object(objects, 'ConfigMap', 'api');
+  if ((openFlags[tier].api ?? []).includes('APP_ARTIFACT_HOST_ENABLED')) {
+    assert.ok(Number(apiCm.data.APP_ARTIFACT_QUOTA_BYTES) > 0, 'api host requires a positive APP_ARTIFACT_QUOTA_BYTES');
+  } else {
+    assert.equal(apiCm.data.APP_ARTIFACT_QUOTA_BYTES, undefined, 'closed tiers declare no api artifact quota');
   }
   // Live edge (W9): inert in every tier; pages domain and kids are per-tier placeholders until both rings are minted.
   const live = tier === 'prod' ? ['pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
     : ['pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
   assert.deepEqual([cm.data.APP_ARTIFACT_LIVE_ENABLED, cm.data.APP_ARTIFACT_LIVE_PAGES_DOMAINS, cm.data.APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS],
     ['0', ...live], 'live edge stays inert with its per-tier pages domain and kids');
-  assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional: true } }]);
-  assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional: true, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
+  // GB4: the tier that serves content REQUIRES its runtime Secrets (owner-created
+  // out-of-band): the pod must refuse to start without them rather than boot
+  // half-configured; closed tiers keep both refs optional.
+  const serving = (openFlags[tier]['artifact-content'] ?? []).includes('APP_ARTIFACT_CONTENT_ENABLED');
+  const optional = serving ? false : true;
+  assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional } }]);
+  assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
   assert.deepEqual(content.volumeMounts, [{ name: 'signing-key', mountPath: '/var/run/artifact-content', readOnly: true }]);
   const service = object(objects, 'Service', 'artifact-content').spec;
   assert.equal(service.type, 'ClusterIP');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { checkActivationImage, checkWorkload, closed, component, object } from './bundle-checks.mjs';
+import { checkActivationImage, checkWorkload, closed, component, object, openFlags } from './bundle-checks.mjs';
 import { checkConnectivity, checkNoOpenPolicy } from './network.selftest.mjs';
 import { checkReservedHosts } from './routing.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/content-tools/package.json')('yaml');
@@ -115,6 +115,18 @@ function checkNetwork(objects, tier) {
   assert.deepEqual(object(objects, 'NetworkPolicy', 'allow-api-to-artifact-content').spec, {
     podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress'],
     ingress: [{ from: [{ podSelector: { matchLabels: component('api') } }], ports: [{ protocol: 'TCP', port: 8791 }] }] });
+  // GB4 object store: preprod serves content from a same-namespace S3-compatible
+  // store on exactly TCP 9000; prod keeps its store egress closed until its own
+  // cutover receipt.
+  const store = objects.find(o => o.kind === 'NetworkPolicy' && o.metadata.name === 'allow-artifact-content-to-object-store');
+  if (tier === 'preprod') {
+    assert(store, 'preprod must open its object store');
+    assert.deepEqual(store.spec, {
+      podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Egress'],
+      egress: [{ to: [{ podSelector: { matchLabels: component('artifact-object-store') } }], ports: [{ protocol: 'TCP', port: 9000 }] }] });
+  } else {
+    assert(!store, `${tier}: object-store egress stays closed`);
+  }
 }
 const apiRelay = values => object(values, 'NetworkPolicy', 'allow-api-to-artifact-content').spec;
 const liveEdge = values => object(values, 'NetworkPolicy', 'allow-immo-content-host-to-artifact-content').spec;
@@ -190,6 +202,41 @@ for (const tier of ['prod', 'preprod']) {
   deny('independent content image', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image = 'other:latest'; });
   deny('world-readable signing key', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.defaultMode = 292; });
   deny('missing signing-key group access', o => { delete object(o, 'Deployment', 'artifact-content').spec.template.spec.securityContext.fsGroup; });
+  // GB4 requiredness: the serving tier must hard-require its runtime Secrets; a closed
+  // tier must keep them optional. Deleting the marker throws in both tiers (deepEqual
+  // is exact), the re-optionalized mutation is preprod-only (prod already optional).
+  deny('runtime Secret requiredness drift', o => { delete object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.optional; });
+  deny('signing Secret requiredness drift', o => { delete object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.optional; });
+  deny('api activation flags inherited from a secret', o => {
+    const env = object(o, 'Deployment', 'api').spec.template.spec.containers[0].env;
+    env.splice(env.findIndex(e => e.name === 'APP_ARTIFACT_HOST_ENABLED'), 1);
+  });
+  deny('a tier-closed flag opened on a workload', o => {
+    const unlisted = closed.find(name =>
+      !(openFlags[tier]['artifact-content'] ?? []).includes(name) && !(openFlags[tier].api ?? []).includes(name));
+    object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].env.find(e => e.name === unlisted).value = '1';
+  });
+  for (const [workload, flags] of Object.entries(openFlags[tier])) for (const flag of flags) {
+    deny(`${workload} ${flag} closed again`, o => {
+      object(o, 'Deployment', workload).spec.template.spec.containers[0].env.find(e => e.name === flag).value = '0';
+    });
+  }
+  if (openFlags[tier].api?.includes('APP_ARTIFACT_HOST_ENABLED')) {
+    deny('api host opened without its artifact quota', o => { delete object(o, 'ConfigMap', 'api').data.APP_ARTIFACT_QUOTA_BYTES; });
+    deny('api host quota is not a positive number', o => { object(o, 'ConfigMap', 'api').data.APP_ARTIFACT_QUOTA_BYTES = '0'; });
+  }
+  if (tier === 'preprod') {
+    deny('runtime Secret re-optionalized', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.optional = true; });
+    deny('signing Secret re-optionalized', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.optional = true; });
+    deny('content flag on the api deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_CONTENT_ENABLED').value = '1'; });
+    deny('host flag on the content deployment', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_HOST_ENABLED').value = '1'; });
+    deny('missing object-store egress', o => { o.splice(o.findIndex(v => v.metadata.name === 'allow-artifact-content-to-object-store'), 1); });
+    deny('object-store egress without the component label', o => { delete object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].podSelector; });
+    deny('object-store egress to every pod of the namespace', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].podSelector = {}; });
+    deny('object-store egress across namespaces', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].namespaceSelector = {}; });
+    deny('object-store egress on another port', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].ports[0].port = 443; });
+    deny('object-store egress widens to a CIDR', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to.push({ ipBlock: { cidr: '0.0.0.0/0' } }); });
+  }
 }
 const combined = [...load('/rendered/prod.yaml'), ...load('/rendered/preprod.yaml')];
 check('both environments: effective additive network reachability and denial matrix', () => checkConnectivity(combined));
