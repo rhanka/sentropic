@@ -1,47 +1,41 @@
-# Feature: Keep the Origin on the GitHub App enrollment forms
+# Feature: Preprod builder repository registration
 
 ## Objective
-- [x] Fix the preprod enroll defect (08/11 06:09, owner signed in as admin_app): `POST /api/v1/github-app/enroll?target=radar-immobilier` answered `{"error":"access_denied"}` because every SG0-app page was served with `referrer-policy: no-referrer`, under which a browser sends `Origin: null` on a non-CORS form POST (Fetch "append a request Origin header"), so the router's own forms always failed the strict `csrf()` Origin equality. Serve `referrer-policy: same-origin` instead; the strict Origin equality stays (no "null" accepted, CSRF kept).
-- [x] Fix the next enroll step (i-cond, 08/11): github.com rejected the App manifest (« Default events unsupported: installation and installation_repositories »); the manifest carries no `default_events` (GitHub delivers both events to every App webhook without a subscription); `hook_attributes` and the webhook handler unchanged (commit 3b6b434c9, fix-manifest-events lane, report `.tmp/rv/fix-manifest-events.md`).
-- [x] Fix the lost installation redirect (i-cond, 08/11 06:45): the convert response carrying the install-phase state was lost (ERR_NETWORK_CHANGED), so the setup redirect came back without `state` and `install()` answered `access_denied` with no way to re-mint it; `prompt` (GET /github-app/:ref, owner-checked) now also serves `install` records with an App: it overwrites the state with a fresh one-time digest (10 min) and links to `https://github.com/apps/<slug>/installations/new?state=<state>`; owner binding, one-time state, expiry, permissions and single-repo checks unchanged.
+- [x] Register the immo builder repository on the preprod tier: set `ARTIFACT_BUILDER_REPOSITORIES_JSON` in the preprod api ConfigMap patch with the SG0-app enrollment ref of the immo installation, so the forge-lease reader (#955) stops refusing `forge_unconfigured`.
 
 ## Scope / Guardrails
-- [x] Branch fix/github-app-form-origin from origin/main 0aa3b4043; worktree tmp/worktrees/fix-github-app-form-origin; ENV=test-ghapp-origin; ports API_PORT=9387 UI_PORT=5587 MAILDEV_UI_PORT=1487.
-- [x] Make only; no Python, no attribution trailers, no CI skips or reruns; never ENV=dev.
+- [x] Branch deploy/preprod-builder-repository from origin/main 0aa3b4043 (merge of #959 deploy/preprod-final-live); worktree tmp/worktrees/preprod-builder-repository; ENV=test-builder-repo.
+- [x] PREPROD ONLY: prod overlays and base untouched; no Secret value in Git (the enrollment ref is an opaque registry handle, not a credential).
+- [x] Value shape per forge-binding.ts `forgeConfig`: exactly five keys, `installationRef` = SG0-app enrollment ref `enroll_<36 hex/dash>` (read from `.tmp/rv/enrollment-ref.txt`, checked non-numeric), entry equal to the GITHUB_APP_TARGETS_JSON target, `allowedSubPaths: [""]`.
+- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/cluster-mesh/src/forge/hono.ts`
-  - `packages/cluster-mesh/src/forge/enrollment.ts`
-  - `packages/cluster-mesh/tests/forge/github-app-http.spec.ts`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/CHANGELOG.md`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `package-lock.json`
-  - `api/package-lock.json`
-  - `api/src/services/cluster-mesh/github-app-host.ts`
-  - `api/src/app.ts`
-  - `api/tests/unit/services/cluster-mesh/github-app-host.test.ts`
-  - `api/tests/api/github-app-product-mount.test.ts`
+  - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
+  - `deploy/ci/artifact-content/bundle-checks.mjs`
+  - `deploy/ci/artifact-content/bundle.selftest.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `deploy/**`
-  - `ui/**`
+  - `api/**`
+  - `apps/**`
+  - `packages/**`
+  - `deploy/k8s/base/**`
+  - `deploy/k8s/overlays/prod/**`
+  - `deploy/k8s/overlays/preprod-a4/**`
+  - `deploy/k8s/overlays/preprod/kustomization.yaml`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `attention`: CI run 42476781460 on c53ff8434: `ci-capacity-receipts` fails after 4 attempts (GitHub jobs API 502 / release-asset CDN outage 08/11 ~06:30-07:30); every functional job green; fresh run on this head (s-conductor, 08/11 07:45).
-- [x] `attention`: cluster-mesh 0.26.0-dev.18 is required by enforce-package-bump (src change); root/api lock workspace entries and the selected packaging fixture follow the version string only (the cluster-mesh fixture entry is a `file:` archive without integrity pin).
-- [x] `attention`: the manifest form still posts cross-origin to github.com with no referrer and Origin "null" under same-origin, exactly as under no-referrer (unchanged for GitHub).
+- [x] `attention`: a ConfigMap change restarts nothing; the api reads `ARTIFACT_BUILDER_REPOSITORIES_JSON` at its next rollout. After merge, s-conductor runs `rollout restart deploy/api` if the CD apply alone does not roll the api out.
+- [x] `acknowledge`: closes the `blocked` item of #959 (enrollment ref missing at its deadline); no image repin here, the pins of #959 stay.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
@@ -51,17 +45,11 @@
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Referrer policy and tests**
-  - [x] `packages/cluster-mesh/src/forge/hono.ts`: `referrer-policy: same-origin` on every router response.
-  - [x] `api/src/services/cluster-mesh/github-app-host.ts`: host header set `referrer-policy: same-origin`; `api/src/app.ts` comment aligned.
-  - [x] `packages/cluster-mesh/tests/forge/github-app-http.spec.ts`: header value; enroll POST passes only with the exact public origin ("null", foreign, http, other port refused); browser regression: landing and rotation forms submitted with the Origin the served policy yields pass csrf(), the manifest form to github.com yields Origin "null".
-  - [x] `api/tests/unit/services/cluster-mesh/github-app-host.test.ts`: header expectations; landing form action keeps `/api/v1` and `?target=radar-immobilier`; the browser-derived Origin passes (303 to the public prompt), Origin "null" stays access_denied.
-  - [x] `api/tests/api/github-app-product-mount.test.ts`: header expectation.
-  - [x] `packages/cluster-mesh/src/forge/enrollment.ts`: manifest without `default_events`; `github-app-http.spec.ts` asserts the manifest POSTed to github.com excludes `installation` and `installation_repositories` and keeps `hook_attributes` (3b6b434c9).
-  - [x] cluster-mesh 0.26.0-dev.18: package.json, CHANGELOG, root/api lock entries, selected packaging fixture.
-- [ ] **Lot 2 — Validation**
-  - [x] `docker-slot.sh make test-cluster-mesh SCOPE=tests/forge/github-app-http.spec.ts ENV=test-ghapp-origin` PASS 5/5.
-  - [x] `docker-slot.sh make test-cluster-mesh SCOPE=tests/forge ENV=test-fix-manifest-events` PASS 58/58 (fix-manifest-events lane, head 3b6b434c9).
-  - [x] `make lint-cluster-mesh`, `make typecheck-cluster-mesh`, `make typecheck-api`, `make lint-api` (0 errors) ENV=test-ghapp-origin PASS.
-  - [ ] `docker-slot.sh make test-api-unit SCOPE=tests/unit/services/cluster-mesh/github-app-host.test.ts API_PORT=9387 UI_PORT=5587 MAILDEV_UI_PORT=1487 ENV=test-ghapp-origin`.
-  - [ ] PR « fix(github-app): keep the Origin on the enrollment forms », CI green on the exact head, GLM review `.h2a/reviews/pr-<n>-glm.md`.
+- [x] **Lot 1 — Register the builder repository**
+  - [x] `deploy/k8s/overlays/preprod/patch-api-config.yaml`: `ARTIFACT_BUILDER_REPOSITORIES_JSON` = `[{"storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier","locator":"rhanka/radar-immobilier","installationRef":"enroll_d6fac2e1-8328-4e74-8bc4-08aeafe54f11","allowedSubPaths":[""]}]`.
+  - [x] `deploy/ci/artifact-content/bundle-checks.mjs`: the same exact value in `preprodBuilder` (deepEqual gate over every `ARTIFACT_*`/`GITHUB_APP_*` key; prod keeps none).
+  - [x] `deploy/ci/artifact-content/bundle.selftest.mjs`: runtime-parser coherence (five keys, `enroll_` ref, equal to the GitHub App target, root-only subPath) and deny cases (numeric installation id, other storage scope, extra subPath, value dropped on preprod).
+- [ ] **Lot 2 — Final validation**
+  - [x] `docker-slot.sh make test-artifact-content-manifests ENV=test-builder-repo` PASS (211 PASS, 0 failures: the seven new builder repository deny cases and the runtime-parser coherence check included; A4 unit 32/32; A4 bundle selftest on the #959 pins unchanged).
+  - [x] `make scope-check` PASS (C2).
+  - [ ] PR « deploy(preprod): register the builder repository radar-immobilier », CI green on the exact head, Opus read-only review `.h2a/reviews/pr-<n>-opus.md`, merge by s-conductor.
