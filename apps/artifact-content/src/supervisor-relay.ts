@@ -23,7 +23,7 @@ export interface SupervisorRelayOptions {
   /** Test seam for the pod hop: Service DNS resolution and port. */
   upstream?: { port?: number; lookup?: LookupFunction };
 }
-type Forwarded = { status: 200; body: Uint8Array<ArrayBuffer> } | { status: 403 | 502 };
+type Forwarded = { status: 200; body: Uint8Array } | { status: 403 | 502 };
 
 /**
  * A-LIVE §8.1 supervisor relay: artifact-content is the workers' only ingress. Before touching the pod, a request needs
