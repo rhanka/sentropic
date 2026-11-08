@@ -4,6 +4,7 @@ import { createArtifactTransport } from '../../src/services/artifacts/transport'
 import { createArtifactHttpRouter } from '../../src/routes/namespaces/artifacts';
 import { createRegistryDispatchRouter } from '../../src/services/mcp/registry-dispatch';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
+import { ArtifactOperationError } from '@sentropic/artifacts/server/outcome-contract';
 
 const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'client-a', credentialId: 'token-a' };
 function fixture() {
@@ -51,6 +52,8 @@ describe('compiled app artifact transports', () => {
       .toEqual(['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish']);
     bind.mockRejectedValueOnce(new Error('revoked'));
     await expect(transport.discover(identity, 'workspace-a', ['mcp:discover'])).rejects.toThrow();
+    bind.mockRejectedValueOnce(new ArtifactOperationError('access_denied'));
+    expect(await transport.discover(identity, '', ['mcp:discover'])).toEqual([]);
     expect(await transport.discover(identity, 'workspace-a', [])).toEqual([]);
   });
   it('should mount HTTP effects with host identity and preserve package status', async () => {
@@ -79,13 +82,15 @@ describe('compiled app artifact transports', () => {
     const { transport, mcp } = fixture();
     const authorize = vi.fn(async () => ({ allowed: true as const }));
     const app = new Hono().route('/api/v1/mcp', createRegistryDispatchRouter({
-      transport: async () => transport, enabled: () => true, authorize,
+      transport: async () => transport, enabled: () => true, authorize, workspaces: async () => ({ workspaces: [] }),
       authenticate: async () => ({ identity, workspaceId: 'workspace-a', scopes: ['mcp:discover', 'mcp:tools:invoke'] }),
     })).post('/api/v1/mcp', c => c.json({ legacy: true })).post('/api/v1/mcp/resources/read', c => c.json({ resource: true }));
     const request = (body: unknown) => app.request('/api/v1/mcp', { method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const list = await request({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
-    expect((await list.json()).result.tools).toHaveLength(4);
+    // The four compiled APP-P1 tools, then the host-only workspaces_list.
+    expect((await list.json()).result.tools.map((tool: { name: string }) => tool.name))
+      .toEqual(['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish', 'workspaces_list']);
     const called = await request({ jsonrpc: '2.0', id: 2, method: 'tools/call',
       params: { name: 'artifacts_ensure', arguments: { bindingName: 'report', idempotencyKey: 'key' } } });
     expect((await called.json()).result.isError).toBe(false);

@@ -26,6 +26,7 @@ export * from './runtime/custody-types.js';
 export * from './runtime/custody-state.js';
 export * from './runtime/custody-wire.js';
 export * from './runtime/generation.js';
+export * from './runtime/heavy-phase-queue.js';
 export * from './runtime/mcp-supervisor.js';
 export * from './runtime/namespace-registry.js';
 export * from './runtime/receipts.js';

@@ -4,6 +4,9 @@ metadata:
   name: artifact-content
 data:
   APP_ARTIFACT_CONTENT_BASE_DOMAIN: "preprod.sentropic.sent-tech.ca"
+  # Live edge (README « Live edge »): inert while APP_ARTIFACT_LIVE_ENABLED is "0"; key material lives in the Secret.
+  APP_ARTIFACT_LIVE_PAGES_DOMAINS: "pages.preprod.immo.sent-tech.ca=immo-preprod-live-1"
+  APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS: "sentropic-preprod-live-1"
 ---
 apiVersion: v1
 kind: ConfigMap

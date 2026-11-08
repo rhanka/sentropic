@@ -1,9 +1,15 @@
 import type { PoolClient } from 'pg';
-import type { LiveAttempt, LiveKey, LiveRuntime, LiveState } from './records';
+import type { LiveAttempt, LiveKey, LivePhase, LiveRuntime, LiveState } from './records';
+import type { LiveAdmission } from './admission';
+import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
+import type { AttemptFence, HostJob } from '@sentropic/artifacts/live-host';
+import type { Gb1Source } from './gb1-qualification';
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
+  /** Every runtime that is not DORMANT (this environment): the scheduler set and the admission slots after a restart. */
+  active(): Promise<Array<{ key: LiveKey; ownerId: string; phase: LivePhase }>>;
   /** Serializes one binding across API replicas. Exceptions roll back state AND release writes. */
   transaction<T>(key: LiveKey, work: (unit: {
     state: LiveState | undefined; save(state: LiveState): void; client?: PoolClient;
@@ -16,15 +22,25 @@ export interface LiveBinding {
   initialUnpublishedBranchEligible: boolean;
 }
 export interface DraftSnapshot {
-  generation: number; revision: number; baseHeadSha: string; treeSha: string; dirty: boolean;
+  generation: number; revision: string; baseHeadSha: string; treeSha: string; dirty: boolean;
 }
 export interface SourceSnapshot {
   headSha: string; treeSha: string; lockfile: Uint8Array; cacheIdentity: CacheIdentity;
   /** Trusted, path-filtered staging reference. No forge credentials or environment files. */
   stagingRef: string;
+  /** GB1 inputs read at this exact commit, qualified by the builder (`qualifyBuild`), never trusted as a digest. */
+  gb1: Gb1Source;
 }
 export interface LivePorts {
   store: LiveStore;
+  /** Live pod slots (r3.5: four on one d2-4 node) shared fairly by users; refusal is `builder_unavailable`. */
+  admission: LiveAdmission;
+  /** Node client of the cluster-mesh heavy-phase queue: install, pre-bundle, dev start and clean build are admitted in
+   * strict FIFO under the node memory budget (cold revive, wake, crash restore and builds alike). */
+  heavy: LiveHeavyGate;
+  /** Host-owned invitation fence of the binding generation: a monotonic revocation epoch (an invitation is valid only
+   * when issued at the current epoch) and the earliest live invitation expiry. */
+  invitations: { current(key: LiveKey, generation: number): Promise<{ epoch: number; expiresAt: number | null }> };
   now(): number;
   id(): string;
   /** Rechecks binding policy, owner/code rights, generation and sandbox qualification. */
@@ -54,18 +70,24 @@ export interface LivePorts {
   worker: {
     prepare(runtime: LiveRuntime, source: SourceSnapshot, cache: CacheReceipt): Promise<void>;
     restore(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
-    live(runtime: LiveRuntime): Promise<{ revision: number; routeEpoch: number }>;
+    /** Vite dependency pre-bundle in the pod, a separate supervisor op that must precede `live` in every pod. */
+    prebundle(runtime: LiveRuntime): Promise<void>;
+    live(runtime: LiveRuntime): Promise<{ revision: string; routeEpoch: number }>;
     quiesce(runtime: LiveRuntime): Promise<void>;
     /** Removes ALL writable phase residue, including dependency overlays and old output. */
     clean(runtime: LiveRuntime): Promise<void>;
     build(runtime: LiveRuntime, attempt: LiveAttempt): Promise<{ candidateDigest: string }>;
     verify(runtime: LiveRuntime, attempt: LiveAttempt): Promise<void>;
+    /** Liveness lease (A-LIVE Amendment 1 §3): one authenticated, fenced frame with no side effect. Without one for
+     * 30 minutes the bootstrap kills the process tree and exits. */
+    renew(runtime: LiveRuntime): Promise<void>;
   };
   routes: { revoke(key: LiveKey, runtime: LiveRuntime): Promise<void>; ready(key: LiveKey, runtime: LiveRuntime): Promise<void> };
   publication: {
-    /** Resolve and authorize the immutable admitted SG3/SG4 job, never a caller-supplied SHA or CAS. */
-    job(key: LiveKey, jobId: string): Promise<{ headSha: string; expectedReleaseId: string | null }>;
+    /** Resolve the binding's pending SG3/SG4 job at its generation, never a caller-supplied SHA or CAS. The host
+     * records `fence` (this run and attempt) monotonically; only that attempt's handoff can publish. */
+    job(key: LiveKey, jobId: string, fence: AttemptFence): Promise<HostJob>;
     /** Atomic SG4 release/index/receipt writes in the supplied store transaction; never network publication here. */
-    commit(unit: { client?: PoolClient }, key: LiveKey, attempt: LiveAttempt): Promise<{ releaseId: string }>;
+    commit(unit: { client?: PoolClient }, key: LiveKey, attempt: LiveAttempt, runtime: LiveRuntime): Promise<{ releaseId: string }>;
   };
 }

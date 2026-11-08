@@ -1,7 +1,8 @@
 import type { CacheReceipt } from './cache';
 import type { DraftSnapshot, LivePorts, SourceSnapshot } from './ports';
 import type { LiveAttempt, LiveRuntime } from './records';
-import { artifactEnvironment, BUILD_RECIPE, LIVE_RECIPE, liveViteConfig } from './recipes';
+import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, liveViteConfig, PREBUNDLE_RECIPE } from './recipes';
+import type { BuilderPlacement } from './placement';
 
 /** GB4's bounded trusted transport; repository processes cannot invoke this interface.
  * It enforces monotonic session/lease/route fences and whole-process-tree cancellation.
@@ -15,14 +16,22 @@ export interface QualifiedSupervisor {
   dependencies(runtime: LiveRuntime, cache: CacheReceipt, options: { readOnly: true; verifyHash: true }): Promise<void>;
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
+  /** Separate heavy phase, op `prebundle { recipe: 'prebundle' }` (W3). The pod bootstrap writes its frozen
+   * LIVE_PREBUNDLE_SCRIPT itself (no hostFile) and runs it to completion; it writes only the emptyDir cacheDir, never the
+   * shared dependency cache; `dev` refuses before it. */
+  prebundle(runtime: LiveRuntime, command: typeof PREBUNDLE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
+    Promise<{ prebundled: true }>;
   dev(runtime: LiveRuntime, command: typeof LIVE_RECIPE, env: ReturnType<typeof artifactEnvironment>):
-    Promise<{ revision: number; routeEpoch: number }>;
+    Promise<{ revision: string; routeEpoch: number }>;
   build(runtime: LiveRuntime, attempt: LiveAttempt, command: typeof BUILD_RECIPE,
-    env: ReturnType<typeof artifactEnvironment>): Promise<{ candidateDigest: string }>;
+    env: ReturnType<typeof buildEnvironment>): Promise<{ candidateDigest: string }>;
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
   verify(runtime: LiveRuntime, attempt: LiveAttempt, limits: { files: 255; fileBytes: 16777216; totalBytes: 67108864 }): Promise<void>;
+  /** Liveness lease (A-LIVE Amendment 1 §3, W8 port): fenced, side-effect free; the controller sends it at least every
+   * 60 s outside DORMANT. */
+  renew(runtime: LiveRuntime): Promise<void>;
 }
-export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['worker'] {
+export function createLiveWorker(supervisor: QualifiedSupervisor, placement: BuilderPlacement): LivePorts['worker'] {
   return {
     async quiesce(runtime) { await supervisor.phase(runtime, 'stopped'); await supervisor.terminate(runtime); },
     async clean(runtime) {
@@ -35,15 +44,18 @@ export function createLiveWorker(supervisor: QualifiedSupervisor): LivePorts['wo
       await supervisor.phase(runtime, 'offline');
     },
     restore: (runtime, draft) => supervisor.overlay(runtime, draft),
-    async live(runtime) {
-      await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName));
-      return supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment());
+    async prebundle(runtime) {
+      await supervisor.hostFile(runtime, '/tmp/artifact-vite.config.mjs', liveViteConfig(runtime.sessionId, runtime.podName, placement));
+      await supervisor.prebundle(runtime, PREBUNDLE_RECIPE, artifactEnvironment());
     },
+    live: runtime => supervisor.dev(runtime, LIVE_RECIPE, artifactEnvironment()),
     async build(runtime, attempt) {
-      const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, artifactEnvironment());
+      // FIX3 (s-archi 16:40): the clean build alone runs with the W4 build heap (1024).
+      const candidate = await supervisor.build(runtime, attempt, BUILD_RECIPE, buildEnvironment());
       await supervisor.terminate(runtime);
       return candidate;
     },
     verify: (runtime, attempt) => supervisor.verify(runtime, attempt, { files: 255, fileBytes: 16777216, totalBytes: 67108864 }),
+    renew: runtime => supervisor.renew(runtime),
   };
 }

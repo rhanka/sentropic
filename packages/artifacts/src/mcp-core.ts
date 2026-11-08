@@ -16,7 +16,7 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.20';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.21';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
