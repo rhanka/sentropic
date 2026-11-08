@@ -22,17 +22,26 @@ export const QUALIFIED_MAIN_SELECTOR = {
   singleJobs: ['e2e-vscode', 'publish-api-image', 'publish-ui-image'],
 };
 
+// BR92-EX1: a tested-tree main run publishes the tuple while its test lanes were
+// executed by a green same-repository pull_request run of the identical tree.
+const sameTreePullRequest = (row, pr) => pr?.event === 'pull_request' && pr.status === 'completed'
+  && pr.conclusion === 'success' && /^[a-f0-9]{40}$/.test(row.head_commit?.tree_id ?? '')
+  && pr.head_commit?.tree_id === row.head_commit.tree_id && pr.head_repository?.full_name === row.repository?.full_name
+  && pr.repository?.full_name === row.repository?.full_name && String(pr.workflow_id) === String(row.workflow_id);
+
 export function qualifiedMain(runs) {
+  const lanes = row => row.qualifiedBy === undefined ? row.jobs : sameTreePullRequest(row, row.qualifiedBy) ? row.qualifiedBy.jobs : [];
   const run = runs.find(row => row.head_branch === 'main' && row.event === 'push'
     && row.status === 'completed' && row.conclusion === 'success'
     && [QUALIFIED_MAIN_SELECTOR.aiPrefix, QUALIFIED_MAIN_SELECTOR.e2ePrefix, 'e2e-vscode'].every(prefix =>
-      row.jobs?.some(job => job.name.startsWith(prefix) && job.conclusion === 'success'))
+      lanes(row)?.some(job => job.name.startsWith(prefix) && job.conclusion === 'success'))
     && QUALIFIED_MAIN_SELECTOR.singleJobs.filter(name => name.startsWith('publish')).every(name =>
       row.jobs?.some(job => job.name === name && job.conclusion === 'success'))
-    && row.jobs.filter(job => job.name.startsWith(QUALIFIED_MAIN_SELECTOR.aiPrefix) && job.conclusion === 'success').length === QUALIFIED_MAIN_SELECTOR.aiCount
-    && row.jobs.filter(job => job.name.startsWith(QUALIFIED_MAIN_SELECTOR.e2ePrefix) && job.conclusion === 'success').length === QUALIFIED_MAIN_SELECTOR.e2eCount);
+    && lanes(row).filter(job => job.name.startsWith(QUALIFIED_MAIN_SELECTOR.aiPrefix) && job.conclusion === 'success').length === QUALIFIED_MAIN_SELECTOR.aiCount
+    && lanes(row).filter(job => job.name.startsWith(QUALIFIED_MAIN_SELECTOR.e2ePrefix) && job.conclusion === 'success').length === QUALIFIED_MAIN_SELECTOR.e2eCount);
   if (!run || !/^[a-f0-9]{40}$/.test(run.head_sha)) throw new Error('No complete qualified main tuple');
-  return { sourceSha: run.head_sha, workflowSha: run.head_sha, run: run.id, attempt: run.run_attempt };
+  return { sourceSha: run.head_sha, workflowSha: run.head_sha, run: run.id, attempt: run.run_attempt,
+    ...(run.qualifiedBy ? { qualifiedBy: run.qualifiedBy.id } : {}) };
 }
 
 export function* readPages(readPage, key) {
@@ -96,10 +105,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (command === 'select') {
     const runs = readPages(page => api(`repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=${page}`), 'workflow_runs');
     let selected = false;
+    let pullRequests = null;
     for (const run of runs) {
       run.jobs = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/jobs`, 'jobs');
       let selection;
-      try { selection = qualifiedMain([run]); } catch { continue; }
+      try { selection = qualifiedMain([run]); } catch {
+        // Tested-tree main run: its lanes ran in the newest same-tree PR run.
+        pullRequests ??= api('repos/rhanka/sentropic/actions/workflows/ci.yml/runs?event=pull_request&status=completed&per_page=100').workflow_runs;
+        const pr = pullRequests.filter(row => row.head_commit?.tree_id === run.head_commit?.tree_id
+          && row.head_repository?.full_name === run.repository?.full_name).sort((a, b) => b.id - a.id)[0];
+        if (!pr) continue;
+        pr.jobs = pages(`repos/rhanka/sentropic/actions/runs/${pr.id}/jobs`, 'jobs');
+        try { selection = qualifiedMain([{ ...run, qualifiedBy: pr }]); } catch { continue; }
+      }
       const artifacts = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/artifacts`, 'artifacts');
       if (!['live-provider-api-identity', 'live-provider-ui-identity'].every(name => artifacts.some(row => row.name === name && !row.expired))) continue;
       writeFileSync(`${dir}/selection.json`, JSON.stringify(selection, null, 2));
