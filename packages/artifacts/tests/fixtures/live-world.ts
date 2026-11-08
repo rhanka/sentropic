@@ -3,8 +3,11 @@ import { createLiveService } from '../../src/server/live-service.js';
 import { createMemoryLiveStore, type LiveStore } from '../../src/server/live-store.js';
 import { gitBinding } from './git-binding-conformance.js';
 import { liveTreeSha } from '../../src/server/live-tree.js';
+import type { LiveAuthority, LiveServiceDeps } from '../../src/server/live-contracts.js';
 
-export function liveWitness(options: { store?: LiveStore; now?: () => number; invited?: (actorId: string) => boolean } = {}) {
+export function liveWitness(options: { store?: LiveStore; now?: () => number; invited?: (actorId: string) => boolean;
+  rights?: (actorId: string) => Partial<Pick<LiveAuthority, 'canReadCode' | 'canWrite' | 'humanLinked'>>;
+  invitations?: LiveServiceDeps['invitations'] } = {}) {
   let head = 'a'.repeat(40);
   let canReadCode = true;
   const binding = { ...gitBinding(), channel: 'personal' as const, executor: 'sandbox' as const, personalPrincipalId: 'alice', headCommitSha: head };
@@ -27,9 +30,10 @@ export function liveWitness(options: { store?: LiveStore; now?: () => number; in
   const worker = { reconcile: vi.fn(async () => undefined), stop: vi.fn(async () => undefined) };
   const store = options.store ?? createMemoryLiveStore();
   const service = createLiveService({ store, git, worker, ...(options.now ? { now: options.now } : {}),
+    ...(options.invitations ? { invitations: options.invitations } : {}),
     keys: { current: async () => ({ version: 'k1', key: Buffer.alloc(32, 3) }), resolve: async () => Buffer.alloc(32, 3) },
     authorize: async invocation => ({ binding, ownerId: 'alice', canReadCode, canWrite: true, humanLinked: true,
-      invited: options.invited?.(invocation.actorId) ?? false,
+      invited: options.invited?.(invocation.actorId) ?? false, ...options.rights?.(invocation.actorId),
       qualified: true, target: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, branch: binding.branch,
         subPath: '', principalId: invocation.actorId, outputDir: 'dist' },
       repository: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, locator: '', installationRef: '',
