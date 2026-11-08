@@ -152,7 +152,14 @@ function checkObjectStore(objects, tier) {
       `${key} is required (RustFS falls back to a default credential)`);
   }
   assert.deepEqual(store.ports, [{ name: 's3', containerPort: 9000 }]);
-  assert.deepEqual(object(objects, 'Service', 'artifact-object-store').spec.ports, [{ name: 's3', port: 9000, targetPort: 's3' }]);
+  assert.deepEqual([store.readinessProbe.httpGet, store.livenessProbe.httpGet], [{ path: '/health/ready', port: 's3' }, { path: '/health', port: 's3' }]);
+  assert.deepEqual(store.resources, { requests: { cpu: '50m', memory: '128Mi' }, limits: { cpu: '500m', memory: '512Mi' } });
+  assert.deepEqual(store.volumeMounts, [{ name: 'data', mountPath: '/data' }, { name: 'logs', mountPath: '/logs' }, { name: 'tmp', mountPath: '/tmp' }]);
+  assert.deepEqual(pod.volumes.map(v => [v.name, Object.keys(v).sort()]), [['logs', ['emptyDir', 'name']], ['tmp', ['emptyDir', 'name']]]);
+  assert.deepEqual(sts.volumeClaimTemplates.map(t => [t.metadata.name, t.spec]), [['data',
+    { accessModes: ['ReadWriteOnce'], storageClassName: 'block-standard', resources: { requests: { storage: '5Gi' } } }]]);
+  const service = object(objects, 'Service', 'artifact-object-store').spec;
+  assert.deepEqual([service.type, service.selector, service.ports], ['ClusterIP', component('artifact-object-store'), [{ name: 's3', port: 9000, targetPort: 's3' }]]);
   assert.deepEqual(object(objects, 'NetworkPolicy', 'artifact-object-store').spec, {
     podSelector: { matchLabels: component('artifact-object-store') }, policyTypes: ['Ingress', 'Egress'],
     ingress: [{ from: [{ podSelector: { matchLabels: component('artifact-content') } }, { podSelector: { matchLabels: component('api') } }],
@@ -274,6 +281,10 @@ for (const tier of ['prod', 'preprod']) {
     deny('object store reachable by every pod', o => { storeNp(o).ingress[0].from.push({ podSelector: {} }); });
     deny('object store reachable across namespaces', o => { storeNp(o).ingress[0].from[0].namespaceSelector = {}; });
     deny('object store with egress', o => { storeNp(o).egress = [{ ports: [{ protocol: 'TCP', port: 443 }] }]; });
+    deny('object store PVC resized', o => { object(o, 'StatefulSet', 'artifact-object-store').spec.volumeClaimTemplates[0].spec.resources.requests.storage = '50Gi'; });
+    deny('object store readiness on another path', o => { storePod(o).containers[0].readinessProbe.httpGet.path = '/'; });
+    deny('object store memory limit raised', o => { storePod(o).containers[0].resources.limits.memory = '4Gi'; });
+    deny('object store Service exposed', o => { object(o, 'Service', 'artifact-object-store').spec.type = 'NodePort'; });
     deny('object store missing', o => { o.splice(o.findIndex(v => v.kind === 'StatefulSet' && v.metadata.name === 'artifact-object-store'), 1); });
     deny('object-store egress widens to a CIDR', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to.push({ ipBlock: { cidr: '0.0.0.0/0' } }); });
   }
