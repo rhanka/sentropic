@@ -9,6 +9,8 @@
 // by identifier as `unreadable` (record it as lost). Output: one JSON line; never a value or a key.
 // Exit 0: done; 2: some envelopes unreadable; 1: refused or failed (rolled back).
 // Out of scope: the SG0-app custody, sealed only under a provisioned key (github-app-host.ts gate).
+import type { PoolClient } from 'pg';
+
 import { DEVELOPMENT_SECRET_SEED, isProvisionedDeploymentSecret } from '../config/deployment-secrets';
 import { resealConnectorEnvelope, type ConnectorCustodyEnvelope } from '../services/identity/cm-connector-envelope';
 import { deriveConnectorRevocationKey, deriveV1Key, openSecretWithKey, sealSecretWithKey } from '../services/secret-crypto';
@@ -118,7 +120,7 @@ export async function runSecretReencrypt(query: ReencryptQuery, keys: ReencryptK
 
 export async function runSecretReencryptCli(): Promise<void> {
   const { pool } = await import('../db/client');
-  let client: Awaited<ReturnType<typeof pool.connect>> | undefined;
+  let client: PoolClient | undefined;
   let apply = false;
   try {
     const request = parseSecretReencryptRequest(process.env, process.argv);
