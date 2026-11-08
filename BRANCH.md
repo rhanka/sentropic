@@ -39,6 +39,7 @@
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- [x] `attention`: CI run 42476781460 on c53ff8434: `ci-capacity-receipts` fails after 4 attempts (GitHub jobs API 502 / release-asset CDN outage 08/11 ~06:30-07:30); every functional job green; fresh run on this head (s-conductor, 08/11 07:45).
 - [x] `attention`: cluster-mesh 0.26.0-dev.18 is required by enforce-package-bump (src change); root/api lock workspace entries and the selected packaging fixture follow the version string only (the cluster-mesh fixture entry is a `file:` archive without integrity pin).
 - [x] `attention`: the manifest form still posts cross-origin to github.com with no referrer and Origin "null" under same-origin, exactly as under no-referrer (unchanged for GitHub).
 
