@@ -56,3 +56,12 @@ Key rotation, for either ring (keys are read at startup):
 3. Switch the signer (immo content host for host keys, Sentropic API for controller keys) to the new kid.
 4. After the longest message lifetime plus skew (3630 s host, 330 s controller), remove the old kid from the ConfigMap and the Secret. Roll out.
 Rotate at least every 90 days, and at once on suspected exposure.
+
+## Supervisor relay (A-LIVE §8.1)
+
+artifact-content is the workers' only ingress, so every supervisor frame from the API rides `POST /_live-supervisor/v1/<podName>` on the internal Service Host (`artifact-content.<namespace>.svc.cluster.local:8791`). Public content and pages hosts answer 404. The listener mounts the route ahead of content serving, so it is off unless `APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED=1`, independent of `APP_ARTIFACT_CONTENT_ENABLED` and `APP_ARTIFACT_LIVE_ENABLED`.
+
+- `APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS` (ConfigMap, public): whitespace-separated Ed25519 SPKI DER base64, the `supervisorPublicKey` of the key in the API's `ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON`; two entries during a rotation. No new secret: the private key stays in the API.
+- `APP_ARTIFACT_LIVE_BUILDER_NAMESPACE` (default `sentropic-artifact-builders`) names the pods' Service namespace.
+
+Before the pod is touched: pod name `artifact-<40 hex>`, `application/octet-stream`, 65 bytes to 2 MiB (413 otherwise), a W3 frame verified with a configured key whose fence names the same pod (else an empty 403). The same bytes go to `http://<podName>.<namespace>.svc.cluster.local:5173/_supervisor/v1/frame` with no other header, over node:http (no undici headers timeout) bounded at 330 s, aborted when the API client closes. No queue; concurrent frames per pod are allowed. Pod 200 gives 200 with its body (over 2 MiB gives 502), pod 403 gives 403, anything else 502. Nothing about a frame is logged. The API side (`ARTIFACT_SUPERVISOR_RELAY_URL`) bounds each command at 320 s.
