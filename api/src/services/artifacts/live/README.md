@@ -250,9 +250,12 @@ The host authenticates receipts and verifies safe tree hashes at every use.
 Missing integrity, including script-package literal pins, blocks admission.
 
 The trusted cache streams (decision 07/11 (a')), because the API runs under a
-512Mi limit. Each distinct installed file is one private object at
-`dependency-cache/v1/files/<sha256>`, shared by every entry. The Postgres
-pointer names one manifest object, `{ receipt, manifest }`, where each manifest
+512Mi limit. Every stored object lives under the builder-cache prefix
+`artifact-builder-cache/v1/` (s-conductor decision, « F1 names »): each
+distinct installed file is one private object at
+`artifact-builder-cache/v1/files/<sha256>`, shared by every entry. The Postgres
+pointer names one manifest object, `{ receipt, manifest }`, at
+`artifact-builder-cache/v1/<lockSha>/<keySha>/<uuid>`, where each manifest
 row is `[path, mode, size, sha256]`. The sealed receipt tree digest is unchanged:
 the sha256 of the sorted `[path, mode, sha256]` rows. During a cold install,
 tarballs are fetched and verified one at a time. Each exported file is written
@@ -355,7 +358,12 @@ frames and reconciles every 30 s); the API stops it on exit.
   `ARTIFACT_BUILDER_CACHE_S3_REGION`, `ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID`
   and `ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY` (owner sentropic,
   environment secret; optional `ARTIFACT_BUILDER_CACHE_S3_ENDPOINT` for
-  S3-compatible storage, which then uses path-style addressing). A missing
+  S3-compatible storage, which then uses path-style addressing). The store is
+  the builder's own: every key stays under `artifact-builder-cache/v1/`
+  (files at `files/<sha256>`, manifests at `<lockSha>/<keySha>/<uuid>`), any
+  other key is refused before any S3 call, it only puts, gets and deletes —
+  never lists — and every effect fails closed unless the bucket answers the
+  public-access-block check private, like the artifact host writer. A missing
   value follows the graceful refusal above: the API boots, the log names the
   first missing variable in that order, and the builder mount stays 503
   `builder_unavailable`.
