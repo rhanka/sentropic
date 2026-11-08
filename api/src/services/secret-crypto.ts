@@ -27,8 +27,15 @@ const CURRENT_KEY_VERSION = 'v1';
  * Do not "simplify" by trimming, normalising, or base64-decoding the seed: each changes the sha256 and
  * bricks every stored secret.
  */
+/** sha256 of a seed: the `v1` key. Exported for the re-encryption tool, which holds two seeds at once. */
+export const deriveV1Key = (seed: string): Buffer => createHash('sha256').update(seed).digest();
+
 const resolveV1Key = (): Buffer =>
-  createHash('sha256').update(resolveDeploymentSecret('SECRET_ENCRYPTION_KEY', DEVELOPMENT_SECRET_SEED)).digest();
+  deriveV1Key(resolveDeploymentSecret('SECRET_ENCRYPTION_KEY', DEVELOPMENT_SECRET_SEED));
+
+/** The connector revocation custody key derived from a `v1` key (HKDF; parameters are part of the data format). */
+export const deriveConnectorRevocationKey = (v1Key: Buffer): Buffer =>
+  Buffer.from(hkdfSync('sha256', v1Key, 'sentropic-secret-custody-v1', 'A2.0b/connector-revocation/v1', 32));
 
 /**
  * The keyring. A version present here is READABLE; a version absent is REJECTED, never guessed.
@@ -51,7 +58,7 @@ export function withConnectorRevocationKey<T>(keyRef: string, operation: (key: B
   const source = resolveKey();
   let dedicated: Buffer | undefined;
   try {
-    dedicated = Buffer.from(hkdfSync('sha256', source, 'sentropic-secret-custody-v1', 'A2.0b/connector-revocation/v1', 32));
+    dedicated = deriveConnectorRevocationKey(source);
     return operation(dedicated);
   } finally { dedicated?.fill(0); source.fill(0); }
 }
@@ -104,13 +111,33 @@ export const resetLegacyPlaintextReadCount = (): void => {
   legacyPlaintextReads = 0;
 };
 
-export const encryptSecret = (value: string): string => {
+/** Seal `value` as a `v1` envelope under an explicit key (the writer below and the re-encryption tool). */
+export const sealSecretWithKey = (value: string, key: Buffer): string => {
   const iv = randomBytes(12);
-  const key = KEYRING[CURRENT_KEY_VERSION]();
   const cipher = createCipheriv('aes-256-gcm', key, iv, { authTagLength: GCM_AUTH_TAG_LENGTH });
   const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${ENVELOPE_NAMESPACE}${CURRENT_KEY_VERSION}:${iv.toString('base64url')}:${tag.toString('base64url')}:${encrypted.toString('base64url')}`;
+};
+
+export const encryptSecret = (value: string): string => sealSecretWithKey(value, KEYRING[CURRENT_KEY_VERSION]());
+
+const decipherPayload = (key: Buffer, ivRaw: string, tagRaw: string, bodyRaw: string): string => {
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivRaw, 'base64url'), {
+    authTagLength: GCM_AUTH_TAG_LENGTH,
+  });
+  decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
+  return Buffer.concat([decipher.update(Buffer.from(bodyRaw, 'base64url')), decipher.final()]).toString('utf8');
+};
+
+/** Open a `v1` envelope under an explicit key (re-encryption tool). Throws on another version or a key mismatch. */
+export const openSecretWithKey = (value: string, key: Buffer): string => {
+  const [version, ivRaw, tagRaw, bodyRaw] = value.startsWith(ENVELOPE_NAMESPACE)
+    ? value.slice(ENVELOPE_NAMESPACE.length).split(':') : [];
+  if (version !== CURRENT_KEY_VERSION || !ivRaw || !tagRaw || !bodyRaw) {
+    throw new SecretEnvelopeError('Not a v1 envelope.', { reason: 'unsupported_version', version: version || null });
+  }
+  return decipherPayload(key, ivRaw, tagRaw, bodyRaw);
 };
 
 export const decryptSecret = (value: string): string => {
@@ -147,15 +174,7 @@ export const decryptSecret = (value: string): string => {
     });
   }
 
-  const decipher = createDecipheriv('aes-256-gcm', resolveKey(), Buffer.from(ivRaw, 'base64url'), {
-    authTagLength: GCM_AUTH_TAG_LENGTH,
-  });
-  decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(bodyRaw, 'base64url')),
-    decipher.final(),
-  ]);
-  return decrypted.toString('utf8');
+  return decipherPayload(resolveKey(), ivRaw, tagRaw, bodyRaw);
 };
 
 export const decryptSecretOrNull = (value: string | null | undefined): string | null => {
