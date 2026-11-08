@@ -127,6 +127,36 @@ function checkNetwork(objects, tier) {
   } else {
     assert(!store, `${tier}: object-store egress stays closed`);
   }
+  checkObjectStore(objects, tier);
+}
+// The namespace-local store itself (overlays/preprod/artifact-object-store): digest-pinned, restricted pod, required
+// root Secret, ingress from content and api only on TCP 9000, no egress. Prod renders no store.
+function checkObjectStore(objects, tier) {
+  const named = objects.filter(o => o.metadata.name === 'artifact-object-store');
+  if (tier !== 'preprod') return assert.deepEqual(named, [], `${tier}: no object store`);
+  assert.deepEqual(named.map(o => o.kind).sort(), ['NetworkPolicy', 'Service', 'ServiceAccount', 'StatefulSet']);
+  const sts = object(objects, 'StatefulSet', 'artifact-object-store').spec;
+  const pod = sts.template.spec;
+  const [store] = pod.containers;
+  assert.deepEqual(sts.selector.matchLabels, component('artifact-object-store'));
+  assert.deepEqual(sts.template.metadata.labels, component('artifact-object-store'));
+  assert.equal(pod.containers.length, 1);
+  assert.match(store.image, /^docker\.io\/rustfs\/rustfs:[0-9.]+@sha256:[0-9a-f]{64}$/, 'store image pinned by digest');
+  assert.equal(pod.automountServiceAccountToken, false);
+  assert.equal(pod.enableServiceLinks, false);
+  assert.deepEqual([pod.securityContext.runAsNonRoot, pod.securityContext.seccompProfile], [true, { type: 'RuntimeDefault' }]);
+  assert.deepEqual(store.securityContext, { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ['ALL'] } });
+  assert.deepEqual(store.env.find(e => e.name === 'RUSTFS_CONSOLE_ENABLE'), { name: 'RUSTFS_CONSOLE_ENABLE', value: 'false' });
+  for (const key of ['RUSTFS_ACCESS_KEY', 'RUSTFS_SECRET_KEY']) {
+    assert.deepEqual(store.env.find(e => e.name === key).valueFrom, { secretKeyRef: { name: 'artifact-object-store', key, optional: false } },
+      `${key} is required (RustFS falls back to a default credential)`);
+  }
+  assert.deepEqual(store.ports, [{ name: 's3', containerPort: 9000 }]);
+  assert.deepEqual(object(objects, 'Service', 'artifact-object-store').spec.ports, [{ name: 's3', port: 9000, targetPort: 's3' }]);
+  assert.deepEqual(object(objects, 'NetworkPolicy', 'artifact-object-store').spec, {
+    podSelector: { matchLabels: component('artifact-object-store') }, policyTypes: ['Ingress', 'Egress'],
+    ingress: [{ from: [{ podSelector: { matchLabels: component('artifact-content') } }, { podSelector: { matchLabels: component('api') } }],
+      ports: [{ protocol: 'TCP', port: 9000 }] }], egress: [] });
 }
 const apiRelay = values => object(values, 'NetworkPolicy', 'allow-api-to-artifact-content').spec;
 const liveEdge = values => object(values, 'NetworkPolicy', 'allow-immo-content-host-to-artifact-content').spec;
@@ -235,6 +265,16 @@ for (const tier of ['prod', 'preprod']) {
     deny('object-store egress to every pod of the namespace', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].podSelector = {}; });
     deny('object-store egress across namespaces', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].namespaceSelector = {}; });
     deny('object-store egress on another port', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].ports[0].port = 443; });
+    const storeNp = o => object(o, 'NetworkPolicy', 'artifact-object-store').spec;
+    const storePod = o => object(o, 'StatefulSet', 'artifact-object-store').spec.template.spec;
+    deny('object store image by tag only', o => { storePod(o).containers[0].image = 'docker.io/rustfs/rustfs:1.0.4'; });
+    deny('object store root credential optional', o => { storePod(o).containers[0].env.find(e => e.name === 'RUSTFS_ACCESS_KEY').valueFrom.secretKeyRef.optional = true; });
+    deny('object store console enabled', o => { storePod(o).containers[0].env.find(e => e.name === 'RUSTFS_CONSOLE_ENABLE').value = 'true'; });
+    deny('object store writable root filesystem', o => { storePod(o).containers[0].securityContext.readOnlyRootFilesystem = false; });
+    deny('object store reachable by every pod', o => { storeNp(o).ingress[0].from.push({ podSelector: {} }); });
+    deny('object store reachable across namespaces', o => { storeNp(o).ingress[0].from[0].namespaceSelector = {}; });
+    deny('object store with egress', o => { storeNp(o).egress = [{ ports: [{ protocol: 'TCP', port: 443 }] }]; });
+    deny('object store missing', o => { o.splice(o.findIndex(v => v.kind === 'StatefulSet' && v.metadata.name === 'artifact-object-store'), 1); });
     deny('object-store egress widens to a CIDR', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to.push({ ipBlock: { cidr: '0.0.0.0/0' } }); });
   }
 }
