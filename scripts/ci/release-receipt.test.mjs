@@ -507,7 +507,7 @@ test('CLI assess-chain builds evidence from a needs file', () => {
   assert.deepEqual(receipt.evidence.qualification, { mode: 'in-run' });
 });
 
-// BR92-EX1: a tested-tree release names the same-tree run that qualified it.
+// BR92-EX3: a tested-tree release names the same-tree run that qualified it.
 const tree = 'd'.repeat(40);
 const prHead = 'b'.repeat(40);
 const testedTree = (overrides = {}) => ({ mode: 'tested-tree', mergeSha: sha, runId: '4100', attempt: '1', tree,

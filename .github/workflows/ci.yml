@@ -265,11 +265,11 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      # BR92-EX1: read-only lookup of the same-tree pull_request run.
+      # BR92-EX3: read-only lookup of the same-tree pull_request run.
       actions: read
     outputs:
       expected_attempt: ${{ steps.ci_expected.outputs.attempt }}
-      # BR92-EX1: 'true' only when the expected manifest accepted same-tree PR
+      # BR92-EX3: 'true' only when the expected manifest accepted same-tree PR
       # evidence; empty or 'false' runs every test member (fail-safe).
       tested_tree: ${{ steps.tested_tree.outputs.tested_tree }}
       tested_run: ${{ steps.tested_tree.outputs.run }}
@@ -734,7 +734,7 @@ jobs:
         env:
           SELECTED: ${{ (github.base_ref == 'feat/engram-e2-integration' || (github.base_ref == 'main' && github.head_ref == 'feat/engram-e2-integration')) && steps.filter.outputs.engram_e2 == 'true' }}
         run: echo "selected=$SELECTED" >> "$GITHUB_OUTPUT"
-      # BR92-EX1: capture only (read-only token). The Make manifest below accepts
+      # BR92-EX3: capture only (read-only token). The Make manifest below accepts
       # same-tree pull_request evidence only when every same-tree candidate of
       # this workflow is green on every attempt (no newest-wins) and the reused
       # attempt started within the age bound; an API error keeps the full run.
@@ -822,13 +822,13 @@ jobs:
             "identity": {"runId": "${{ github.run_id }}", "attempt": "${{ github.run_attempt }}",
             "headSha": "${{ github.event.pull_request.head.sha || github.sha }}"}}
         run: |
-          # BR92-EX1: identify the tree this run actually checks out (the PR merge ref on pull_request).
+          # BR92-EX3: identify the tree this run actually checks out (the PR merge ref on pull_request).
           export CHECKOUT_TREE="$(git rev-parse 'HEAD^{tree}')"
           export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.identity.tree = process.env.CHECKOUT_TREE; context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; if (context.inputs.capacity_publish_dry_run) for (const key of Object.keys(context.changes)) if (key.endsWith("_publish")) context.changes[key] = "true"; process.stdout.write(JSON.stringify(context));')"
           make ci-expected-manifest ENV=test-ci-62
-      # BR92-EX1: the manifest is the single decision; skipped members record
+      # BR92-EX3: the manifest is the single decision; skipped members record
       # the PR run and job that satisfied them.
-      - name: Publish the tested-tree decision and its evidence (BR92-EX1)
+      - name: Publish the tested-tree decision and its evidence (BR92-EX3)
         id: tested_tree
         run: |
           set -eu
@@ -2735,7 +2735,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # BR92-EX1: the transported builds always gate; a skipped test barrier counts
+    # BR92-EX3: the transported builds always gate; a skipped test barrier counts
     # only on a tested tree (same-tree PR run recorded by changes), a failed never.
     needs: [changes, build-ui, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
     if: >-
@@ -2780,7 +2780,7 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    # BR92-EX1: the transported builds and the image guards always gate; a skipped
+    # BR92-EX3: the transported builds and the image guards always gate; a skipped
     # test barrier counts only on a tested tree (recorded by changes), a failed never.
     needs: [changes, build-api-image, build-e2e, api-image-guards, api-tool-qualification, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-

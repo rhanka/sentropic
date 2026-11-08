@@ -1,4 +1,4 @@
-// Tested-tree qualification (BR92-EX1). A push to main may reuse the verdict of
+// Tested-tree qualification (BR92-EX3). A push to main may reuse the verdict of
 // a completed pull_request run of the same workflow, from the same repository,
 // whose head commit carries the identical tree. Pure assessment over evidence
 // captured read-only by the `changes` job: anything missing, foreign, failed,

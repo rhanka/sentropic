@@ -1,4 +1,4 @@
-// Tested-tree shortcut (BR92-EX1): a main push skips test members only with
+// Tested-tree shortcut (BR92-EX3): a main push skips test members only with
 // identified same-tree PR evidence; every other case keeps the complete run.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
