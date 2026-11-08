@@ -7,6 +7,22 @@ export const object = (objects, kind, name) => {
   return found[0];
 };
 export const closed = ['APP_ARTIFACT_HOST_ENABLED', 'APP_ARTIFACT_CONTENT_ENABLED', 'APP_ARTIFACT_READER_ENABLED'];
+// GB4 preprod (owner GO 2026-11-07): supervisor relay and builder composition exist in preprod only; prod declares none.
+// The relay key is the public half of the api's ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON (kid sentropic-preprod-supervisor-1).
+const internal = 'http://artifact-content.sentropic-preprod.svc.cluster.local:8791';
+export const preprodRelay = { APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED: '1',
+  APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS: 'MCowBQYDK2VwAyEA9PIIB+0LkY47bMnczyWol6Swl8UeFepUjNjg+lxZFbY=' };
+export const preprodBuilder = {
+  ARTIFACT_BUILDER_ENABLED: '1', ARTIFACT_BUILDER_NAMESPACE: 'sentropic-artifact-builders',
+  ARTIFACT_BUILDER_SERVICE_DOMAIN: 'sentropic-artifact-builders.svc.cluster.local', ARTIFACT_BUILDER_NODE: 'd2-4-preprod',
+  ARTIFACT_SUPERVISOR_RELAY_URL: internal, ARTIFACT_LIVE_EDGE_INTERNAL_URL: internal,
+  ARTIFACT_BUILDER_REMOTE_HOST_URL: 'https://preprod.immo.sent-tech.ca/api/v1/artifacts',
+  ARTIFACT_BUILDER_HOST_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier-preprod"}]',
+  GITHUB_APP_PUBLIC_BASE_URL: 'https://preprod.sentropic.sent-tech.ca',
+  GITHUB_APP_TARGETS_JSON: '[{"locator":"rhanka/radar-immobilier","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]',
+  GITHUB_APP_BROKER_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]',
+};
+export const pick = (data, pattern) => Object.fromEntries(Object.entries(data ?? {}).filter(([key]) => pattern.test(key)));
 export function checkActivationImage(objects) {
   const containers = ['api', 'artifact-content'].flatMap(name => object(objects, 'Deployment', name).spec.template.spec.containers);
   if (containers.some(c => c.env?.some(e => closed.includes(e.name) && e.value === '1'))) {
@@ -47,11 +63,14 @@ export function checkWorkload(objects, tier, preservedImages) {
       assert.deepEqual(c.env.find(e => e.name === name), { name, value: '0' }, `explicit ${name} overrides envFrom secrets`);
     }
   }
-  // Live edge (W9): inert in every tier; pages domain and kids are per-tier placeholders until both rings are minted.
-  const live = tier === 'prod' ? ['pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
-    : ['pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
+  // Live edge (W9): prod stays inert with placeholders; preprod arms it (GB4), still inert while content serving is closed.
+  const live = tier === 'prod' ? ['0', 'pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
+    : ['1', 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
   assert.deepEqual([cm.data.APP_ARTIFACT_LIVE_ENABLED, cm.data.APP_ARTIFACT_LIVE_PAGES_DOMAINS, cm.data.APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS],
-    ['0', ...live], 'live edge stays inert with its per-tier pages domain and kids');
+    live, 'live edge flag, pages domain and kids per tier');
+  assert.deepEqual(pick(cm.data, /^APP_ARTIFACT_SUPERVISOR_/), tier === 'prod' ? {} : preprodRelay, 'supervisor relay per tier');
+  assert.deepEqual(pick(object(objects, 'ConfigMap', 'api').data, /^(ARTIFACT_|GITHUB_APP_)/), tier === 'prod' ? {} : preprodBuilder,
+    'builder composition and GitHub App broker configuration per tier');
   assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional: true } }]);
   assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional: true, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
   assert.deepEqual(content.volumeMounts, [{ name: 'signing-key', mountPath: '/var/run/artifact-content', readOnly: true }]);
