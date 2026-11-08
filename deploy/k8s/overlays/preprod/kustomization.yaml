@@ -14,6 +14,7 @@ resources:
   - ingress.yaml
   - artifact-content-ingress.yaml
   - artifact-content-live-edge-networkpolicy.yaml
+  - artifact-content-object-store-networkpolicy.yaml
   - idp-identity-sync
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
@@ -21,10 +22,14 @@ resources:
 #     - name: ghcr.io/rhanka/sentropic-api
 #       newTag: vYYYY.MM.DD.N
 # Per-tier host + isolated WebAuthn RP ID overrides (D4 nested hosts, D11R isolated
-# identity). Strategic-merge patches override only the listed ConfigMap keys; the
-# distinct KEK/DB/signing-key SealedSecrets are operator-authored per ns (D6), not here.
+# identity). Strategic-merge patches override only the listed ConfigMap keys
+# (Deployment patches: only the listed env entries — envFrom/volumes are list-replaced
+# and restated in full). The distinct KEK/DB/signing-key SealedSecrets are
+# operator-authored per ns (D6), not here.
 patches:
   - path: patch-artifact-content-config.yaml
+  - path: patch-artifact-content-deployment.yaml
+  - path: patch-api-artifact-host.yaml
   - path: patch-api-config.yaml
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
