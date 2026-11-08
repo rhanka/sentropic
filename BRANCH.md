@@ -55,7 +55,8 @@
 - [x] BRLW-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.24 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive, sha256 e899aa65… after the CHANGELOG wording fix equals the manifest guard; pack deterministic over two runs), mirrored in `artifacts-tuple.spec.ts`, as BRGH-EX2 did. Impact: test fixtures only. Rollback: revert with the bump. Stager lane: repacked at f12786e0c (sha256 a178af46…, identical over two packs), integrity sha512-3LjItdWd… pinned in both files.
 
 ## AI Flaky tests
-- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
+- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command).
+- [ ] test-e2e (1) failed on c5357329d (run 42527741978: 01-admin-users:65, 07-import-export:97, 07-matrix:420 and :477, element not found). Same tests passed on 8abe1a710 (run 42510180944) and on the #967 head; the delta touches no ui/admin/matrix path (packages/artifacts live-host stager, api unit test, main merge of #967/#968). Not accepted as flaky until a fresh run on this head passes; no rerun, no skip, no timeout change.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
