@@ -46,7 +46,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot 1 — Auto-repin**
   - [x] Tests first: `scripts/ci/preprod-repin.test.mjs` (same-run publication, content-tag pin for an unpublished kind, stale receipt, tag/publication mismatch, fail closed, hold, layout, CI step order).
-  - [ ] `scripts/ci/preprod-repin.mjs` + committed overlay comment (pins = render baseline; `# preprod-image-hold: <reason>` keeps them).
+  - [x] `scripts/ci/preprod-repin.mjs` + committed overlay comment (pins = render baseline; `# preprod-image-hold: <reason>` keeps them).
 - [ ] **Lot 2 — Artifact data guard**
   - [ ] Tests first: `deploy/ci/artifact-data-guard/guard.test.mjs` (SQL, commands, rendered tiers, restore refusal).
   - [ ] `guard.mjs` (whole-tree scan + rendered prod/preprod/preprod-a4) and `refuse-artifact-data.sql`.
