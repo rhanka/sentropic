@@ -33,7 +33,7 @@
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`, `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` under BR90-EX20.
 
 ## Feedback Loop
-- [ ] BR90-EX17: `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.22); APP-P1 digest repinned (version field only, four-tool selection unchanged). Rollback: revert with the bump.
+- [x] BR90-EX17: `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.22); APP-P1 digest repinned (version field only, four-tool selection unchanged). Rollback: revert with the bump.
 - [ ] BR90-EX18: heavy-phase queue pod slots (`maxPods`, blocker `pods`) and build cost 1261 MiB (1280Mi limit minus the 19 MiB pod base); `@sentropic/cluster-mesh` 0.26.0-dev.16 to 0.26.0-dev.17 with changelog. Rollback: revert the queue, the tests and the bump together.
 - [ ] BR90-EX19: root and api lock workspace entries follow artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 (version strings only). Rollback: revert with the bumps.
 - [ ] BR90-EX20: the selected packaging fixture names the artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 archives with the regenerated artifacts integrity pin. Rollback: revert with the bumps.
@@ -51,7 +51,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 1: feat/artifacts-live-invitations (307cab2be) cherry-picked without conflict (10 commits, 2 BRANCH.md-only commits skipped).
-- [ ] Lot 2: provider version 0.2.22 and APP-P1 repin.
+- [x] Lot 2: provider version 0.2.22 and APP-P1 repin: manifest at version 0.2.21 still hashes 5150544a (the four new tools are outside the APP-P1 selection), 0.2.22 hashes 61c50b33.
 - [ ] Lot 3: pod quota fit (addendum A).
 - [ ] Lot 4: controller pod slots, quota backpressure and no surge (addendum B rules 1-3).
 - [ ] Lot 5: cluster-mesh bump, locks and selected fixture.
