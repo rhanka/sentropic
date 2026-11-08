@@ -15,6 +15,16 @@
 - Status, start and reset no longer validate the whole tree (walk limits, entry names); those checks stay
   with the reads that list base entries. A host GitPort without `snapshot` now gets `capability_unselected`
   before the transaction.
+- `@sentropic/artifacts/live-host` ships the host live worker: `createLiveWorkerClient` is the HTTP
+  `LiveWorkerPort` over the builder host live API (`v1/live/reconcile`, `v1/live/stop`). Before every
+  reconcile it stages the current durable draft: `v1/live/draft/page` for each non-empty page (at most
+  1 MiB of file bytes, 32 pages; overlay at most 255 paths, 1 MiB per file, 8 MiB), then
+  `v1/live/draft/seal` (a clean draft is `pages: 0`, `deletes: []`, `treeSha` = the live tree). The
+  reconcile body carries `ownerId` from the live record runtime. A refused page or seal stops before the
+  reconcile (`provider_unavailable`); an overlay over the limits fails before any call (`limit_exceeded`).
+- Host ports of the worker: `fences` (owner and fences of the runtime), `bindings`, `sessionState` and
+  `drafts` (the current draft overlay). `liveStoreFences(store)` and `liveStoreDrafts(store, keys)` supply
+  them from the package `LiveStore`. `planLiveDraft`, `stageLiveDraft` and `LIVE_DRAFT_LIMITS` are exported.
 
 ## 0.2.23
 

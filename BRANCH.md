@@ -1,13 +1,16 @@
-# Feature: Artifacts live status/start without tree walk under the lock (0.2.24)
+# Feature: Artifacts live status/start without tree walk under the lock, and the generic live worker draft stager (0.2.24)
 
 ## Objective
 - [x] `artifacts_live_status` returns `liveRevision`, head, `bindingGeneration` and draft state without a tree walk; no forge call inside the per-artifact advisory-locked draft transaction (immo preprod 08/11 13:00: 502, `idle in transaction` on `live_drafts`, advisory lock timeouts).
 - [x] `artifacts_live_control` start resolves the head and base tree SHA outside the locked transaction, with no snapshot walk.
 - [ ] `live_read` narrow path set without a full tree walk: not covered in 0.2.24 (the walk now runs outside the lock; per-file reads stay under it).
+- [x] `@sentropic/artifacts/live-host` `createLiveWorkerClient`: stages the current draft (`v1/live/draft/page` x N, then `v1/live/draft/seal`) before every `v1/live/reconcile`, sends `ownerId` from the live record runtime, and takes the draft overlay from a host port (`drafts`), so every host supplies it (Track 01M6Y6VN91VYTJCZ8J10A87MSB; replaces the immo bridge #1042).
 - [x] Release `@sentropic/artifacts` 0.2.24 with `ARTIFACTS_PROVIDER_VERSION`, the APP-P1 digest repin and the cluster-mesh selected fixture.
 
 ## Scope / Guardrails
 - [x] Branch fix/artifacts-live-status-no-walk from origin/main c22163106; worktree tmp/worktrees/artifacts-0224; ENV=test-art-0224.
+- [x] Stager lane: local branch feat/artifacts-live-worker-stager from origin/fix/artifacts-live-status-no-walk 8abe1a710, fast-forward pushes only; worktree tmp/worktrees/artifacts-live-stager; ENV=test-art-stager; ports API 9263, UI 5463, Maildev 1363.
+- [x] A-LIVE v2 frozen surface: additive host code only (no frozen JSON definition, descriptor, manifest, codec or tool change); no amendment required.
 - [x] Make only; no Python; no attribution trailers; no CI skip or rerun; never ENV=dev.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
@@ -23,6 +26,12 @@
   - `api/tests/api/app-mcp-installed.test.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
+  - `packages/artifacts/src/live-host/index.ts`
+  - `packages/artifacts/src/live-host/draft-stager.ts`
+  - `packages/artifacts/src/live-host/worker-client.ts`
+  - `packages/artifacts/tests/live-host-worker-client.test.ts`
+  - `packages/artifacts/tests/fixtures/live-worker.ts`
+  - `api/tests/unit/artifacts-live/host-live-worker-client.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -59,6 +68,10 @@
 - [x] **Lot 3 — Release 0.2.24**
   - [x] package, locks, `ARTIFACTS_PROVIDER_VERSION`, APP-P1 digest 428a7527 to 858aba03 (version field only), cluster-mesh selected fixture, CHANGELOG.
   - [x] Opus review r1 (.h2a/reviews/pr-966-opus.md) APPROVE; minor-1: CHANGELOG and comment narrowed to the tree walk, commit lookup and ancestry checks (live_read page and live_write edit reads stay under the lock); archive repacked and fixture integrity repinned.
+- [x] **Lot 3b — Generic live worker draft stager (0.2.24)**
+  - [x] `live-host/draft-stager.ts`: `planLiveDraft` (closed PAGE and SEAL bodies; 255 paths, 1 MiB per file, 8 MiB, 1 MiB per page, 32 non-empty pages; clean draft = `pages: 0`, `deletes: []`, `treeSha` = live tree), `stageLiveDraft`, `liveStoreDrafts(store, keys)`.
+  - [x] `live-host/worker-client.ts`: `createLiveWorkerClient` (binding of the exact generation, runtime fences and `ownerId`, stage, then reconcile; stop 204), `liveStoreFences(store)`.
+  - [x] `tests/live-host-worker-client.test.ts` against a fake builder host with the host live API rules (8 tests); `api/tests/unit/artifacts-live/host-live-worker-client.test.ts` against the real `createHostLiveApi`.
 - [ ] **Lot 4 — Final validation**
   - [x] `docker-slot.sh make test-artifacts ENV=test-art-0224` PASS (98 files, 990 tests); `make typecheck-artifacts` PASS.
   - [ ] PR #966, CI green on the exact head (run 42509099686: only test-e2e (1) failed on the known 07-matrix:477 lock/presence flake, same signature as run 42459620840), merge by s-conductor.
