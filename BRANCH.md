@@ -1,65 +1,53 @@
-# Feature: Train 1d 2026-11-07 A-LIVE live invitations, pod quota fit and controller pod slots
+# Feature: A4 import keeps valid login sessions
 
 ## Objective
-- [ ] One train, one PR, one CI on main c754d639d (#946 merged): feat/artifacts-live-invitations (307cab2be + the s-archi R1 replay fix 50cf410a) as @sentropic/artifacts 0.2.22, the pod quota fit (s-archi addendum A) and the controller pod slots (addendum B rules 1-3); wagon BRANCH.md edits dropped.
-- [x] Frozen: `packages/artifacts/src/live-host` byte-identical to a5d8dee87.
-- [x] perf/ci-tested-tree r2 (da7a752f2) rides as the second push: 13 commits cherry-picked without conflict (2 BRANCH.md-only commits skipped), change lines identical to the wagon; binding checks (a)-(h) re-run below.
+- [x] Owner 2026-11-07 22:15 (S, partial revert of decision B bf3064b60 for sessions ONLY): the A4 import carries every live, non-revoked `user_sessions` login into the cm_identity session stores with the same id, expiry and token binding, so existing cookies stay valid after the cutover.
+- [x] Email codes, email tickets, WebAuthn challenges and magic links stay invalidated; expired or remotely revoked logins are dropped and counted.
 
 ## Scope / Guardrails
-- [x] Branch train/2026-11-07-alive-1d from origin/main c754d639d; worktree tmp/worktrees/train1d; ENV=test-train1d.
-- [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling; no local image build (API checks run in the existing node image).
-- [x] Scoped local checks only; full suites run in the PR CI.
+- [x] Branch fix/a4-preserve-sessions from origin/main c754d639d; worktree tmp/worktrees/a4-preserve-sessions; ENV=test-a4-sessions (API_PORT=9645 UI_PORT=5845 MAILDEV_UI_PORT=1745).
+- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
+- [x] Fail closed: remote snapshot divergence and unknown source shapes still refuse the import.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/**` except `packages/artifacts/src/live-host/**`
-  - `api/src/services/artifacts/live/**`
-  - `api/tests/unit/artifacts-live/**`
-  - `packages/cluster-mesh/tests/heavy-phase-queue.spec.ts`
+  - `api/src/services/identity/cm-import-*.ts`
+  - `api/src/services/identity/cm-cutover-import.ts`
+  - `api/src/scripts/cm-preprod-state.ts`
+  - `api/tests/unit/auth/cm-*.test.ts`
+  - `api/tests/utils/cm-cutover-test-config.ts`
 - **Forbidden Paths (must not change in this branch)**:
-  - `packages/artifacts/src/live-host/**`
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `plan/NN-BRANCH_*.md`
-- **Conditional Paths (allowed with declared exception)**:
-  - `api/src/services/mcp/cluster-registry.ts`, `api/tests/api/app-mcp-installed.test.ts`, `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/mcp-workspaces-list-dispatch.test.ts` under BR90-EX17.
-  - `packages/cluster-mesh/src/runtime/heavy-phase-queue.ts`, `packages/cluster-mesh/src/index.ts`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/CHANGELOG.md` under BR90-EX18.
-  - `package-lock.json`, `api/package-lock.json` under BR90-EX19.
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`, `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` under BR90-EX20.
-  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` under BR90-EX21.
-  - `.github/workflows/ci.yml`, `scripts/ci/**` under BR92-EX3.
+  - `deploy/**`
+  - `packages/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (none planned)
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] BR90-EX17: `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.22); APP-P1 digest repinned (version field only, four-tool selection unchanged). Rollback: revert with the bump.
-- [x] BR90-EX18: heavy-phase queue pod slots (`maxPods`, blocker `pods`) and build cost 1370 MiB (the measured clean-build peak at the 1536Mi pod limit, 1388.6 MiB, minus the 19 MiB pod base; owner quota push 2026-11-08); `@sentropic/cluster-mesh` 0.26.0-dev.16 to 0.26.0-dev.17 with changelog. Rollback: revert the queue, the tests and the bump together.
-- [x] BR90-EX19: root and api lock workspace entries follow artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 (version strings only). Rollback: revert with the bumps.
-- [x] BR90-EX20: the selected packaging fixture names the artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 archives with the regenerated artifacts integrity pin (guarded sibling sha256 57a0e4908f0fdc8debece64e8bb0ed2cfd24412032ab3d49f473d4908b1b4a62, from pack-candidate-siblings then refresh-lazy-package-lock). Rollback: revert with the bumps.
-- [x] BR90-EX21: the exact tool-name pins of the packed consumer probe (`packages/artifacts/probe/packed-consumer.mjs`) and of the cluster-mesh artifacts surface spec append the four frozen invitation tools (exact equality kept; the wagon had not run them). Rollback: revert with the wagon.
-- [x] BR92-EX3 (perf/ci-tested-tree, renumbered from its wagon BR92-EX1, which main's Makefile already uses for ci10): a push to main reuses a completed same-tree pull_request run only when every same-tree candidate and attempt is green, the reused attempt is under 24 h old, ci-gate and its expected set succeeded and every dropped member succeeded; any capture or API error keeps the complete run. Only `actions: read` added (changes job); builds still gate every publisher. Rollback: revert the workflow and scripts/ci together; an absent `tested_tree` means a full run.
-- [ ] `attention`: tested-tree residuals: a dropped member is proven by its job conclusion only (a job whose steps were all skipped concludes success); multiple green same-tree candidates reuse the newest instead of a full run (all-green rule, not a refusal); first observation point is the first main push after merge.
-- [x] `attention` build-1280: resolved by the owner quota push (k8s dd7620f, pod memory limit 1536Mi): the in-pod clean build fits the quota-fit pod and `NODE_BUILD_HEAP_OPTIONS` stays 1024, verified at 1536Mi: peak 1388.6 MiB. Owner s-archi.
-- [ ] `attention`: preprod and prod builder namespaces share the d2-4 pool while each environment's W8 queue assumes the full 1641 MiB; prod-activation blocker (prod live is OFF). Owner s-archi/k8s.
-
-## AI Flaky tests
-- [x] No flaky allowance, timeout increase or new skip.
+- [x] `acknowledge`: owner answer « S+L … tu te debrouilles dans tous les cas » (owner-authorization.md 22:15) scopes the revert to login sessions only.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [x] **Multi-branch**
-- [x] Rationale: wagon branches built separately, integrated into one dated train with one version assignment, one PR and one CI.
-
-## UAT Management (in orchestration context)
-- [ ] Exact-head pull_request CI result retained in the PR.
+- [x] **Mono-branch + cherry-pick**
+- Rationale: one small identity import change with its tests; one PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: feat/artifacts-live-invitations (307cab2be) cherry-picked without conflict (10 commits, 2 BRANCH.md-only commits skipped). The s-archi R1 replay fix (wagon 50cf410a, its BRANCH.md hunk dropped) applied on top; make test-artifacts on test-train1d-fu green (96 files / 979 tests).
-- [x] Lot 2: provider version 0.2.22 and APP-P1 repin: manifest at version 0.2.21 still hashes 5150544a (the four new tools are outside the APP-P1 selection), 0.2.22 hashes 61c50b33.
-- [x] Lot 3: pod quota fit (addendum A; sizes per the owner quota push 2026-11-08, k8s dd7620f limits.memory 6Gi): requests 250m/420Mi/0, limits 1/1536Mi/2560Mi, emptyDir source 384Mi, scratch 1536Mi, dependencies 1152Mi on disk (no emptyDir medium; each sizeLimit <= its role cap, total bounded by the 2560Mi container limit); the pod test asserts the tenant LimitRange and ResourceQuota fit for four pods.
-- [x] Lot 4: controller pod slots, quota backpressure and no surge (addendum B rules 1-3): `heavy.pod` takes a FIFO pod slot (`MAX_BUILDER_PODS` 4, `blockedBy: 'pods'`) before every create; a 403 exceeded quota gives the slot back, requeues and retries (past the wait bound `builder_unavailable`/`queued`); a fresh intent deletes an older or terminating pod and waits for its 404 before creating. pod-slots.test.ts 8/8; artifacts-live 43 files 296/296; API tsc clean, lint 0 errors.
-- [x] Lot 5: cluster-mesh bump, locks and selected fixture; heavy-phase-queue spec 8/8; cluster-mesh packaging scope 85 pass / 60 skipped; lazy package: lock integrity matches the 0.2.22 sibling, 134/136 locally (optional-install spawn cases over the 5 s test timeout under host load: suite 72 s vs 28 s on train 1b; the PR CI decides).
-- [ ] Lot 6: scoped checks, push, open the PR (#947), GLM review of the full diff. Tested-tree checks: test-ci-tested-tree 11/11, expected-results 28/28, ci-dag 10/10, ci-static 3/3, run-metrics 37/37, release-receipts 43/43, unit-graph 7/7, performance-report 8/8, live-provider-receipt 13/13, package-qualification-dag 9/9, browser-shards 6/6, consumer-contracts 25/25, wiring 70/70, security-daily 333/333.
-- [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read cm-import-source.ts, cm-cutover-import.ts, cm-import-continuations.ts, the decision B diff and the CM login_session importer.
+  - [x] Confirm the pre-A4 session JWT claims (userId, sessionId, role, login, tokenUse) verify under the CM token custodian.
+- [x] **Lot 1 — Carry live sessions**
+  - [x] `mapA4CarriedLogin` (hash-bound mapping): live and not remotely revoked, else dropped.
+  - [x] `mapA4IdentitySource` imports carried logins as `login_session` rows; `a4InvalidatedProofCounts` counts only dropped logins.
+  - [x] `cm-preprod-state` inspection applies the same carry decision.
+  - [x] Tests: live legacy session imported with exact binding and usable claims (rehearsal and cutover); expired and revoked dropped and counted; proofs stay invalidated.
+  - [x] Lot gate (31/31; 105/105 on all cm-cutover/import/preprod unit tests): `make test-api-unit SCOPE="tests/unit/auth/cm-cutover-migration.test.ts tests/unit/auth/cm-import-continuations.test.ts tests/unit/auth/cm-import-mapping.test.ts" ENV=test-a4-sessions`
+  - [x] Lot gate (0 errors): `make typecheck-api ENV=test-a4-sessions` and `make lint-api ENV=test-a4-sessions`
+- [ ] **Lot 2 — PR**
+  - [ ] PR « fix(identity): keep valid sessions across the A4 import », CI green on the exact head, GLM review.

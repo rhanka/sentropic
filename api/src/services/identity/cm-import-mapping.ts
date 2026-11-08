@@ -53,3 +53,12 @@ export function mapA4Login(row: A4SourceRow, importedAt: string, remotelyRevoked
     userAgent: nullable(row.user_agent), lastActivityAt: nullableTime(row.last_activity_at),
   };
 }
+
+/** Owner 2026-11-07 (sessions only, partial revert of decision B): a live login keeps its
+ * id, expiry and token binding so existing cookies stay valid; an expired or remotely
+ * revoked login is dropped. Proofs, codes, challenges and links stay invalidated. */
+export function mapA4CarriedLogin(row: A4SourceRow, importedAt: string,
+  remotelyRevoked: ReadonlySet<string>): BoundLoginSessionV1 | null {
+  const login = mapA4Login(row, importedAt);
+  return Date.parse(login.expiresAt) > Date.parse(importedAt) && !remotelyRevoked.has(login.sessionId) ? login : null;
+}

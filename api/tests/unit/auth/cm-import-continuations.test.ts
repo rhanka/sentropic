@@ -8,8 +8,9 @@ describe('A4 continuation source mapping', () => {
       ['webauthn_challenges', [{ challenge: 'private-challenge' }]],
       ['email_verification_codes', [{ verification_token: null }, { verification_token: 'old-seed-ticket' }]],
       ['magic_links', [{ token_hash: 'private-hash' }]],
-      ['user_sessions', [{ refresh_token_hash: null }, { refresh_token_hash: 'private-hash' }]],
-    ]))).toEqual({ webauthn_challenge: 1, email_code: 2, email_ticket: 1,
+      ['user_sessions', [{ id: 'dropped', refresh_token_hash: null }, { id: 'expired', refresh_token_hash: 'private-hash' },
+        { id: 'carried', refresh_token_hash: 'private-hash' }]],
+    ]), new Set(['carried']))).toEqual({ webauthn_challenge: 1, email_code: 2, email_ticket: 1,
       magic_link: 1, login_session: 2, login_refresh_token: 1 });
   });
 
