@@ -89,11 +89,11 @@ ifndef API_TOOL_VERSION
 API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json e2e/tests/fixtures | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 endif
 export API_TOOL_VERSION
-# CI10-S4: dependency-only toolbox identity. True inputs only: lockfile, workspace manifests,
-# tool locks and installers, audit gate, .dockerignore and the Dockerfile (which pins the
-# Node/Go base digests and every dependency/tool stage). No workspace source bytes.
+# CI10-S4: dependency-only toolbox identity over exactly the build-context files the ci-tool-deps
+# stages copy (lock, workspace manifests, tool locks, audit gate, .dockerignore, Dockerfile).
+# Release-only workspace fields are normalized: scripts/ci/api-tool-deps-key.mjs.
 ifndef API_TOOL_DEPS_VERSION
-API_TOOL_DEPS_VERSION := tooldeps-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api/Dockerfile api/package.json 'packages/*/package.json' 'apps/*/package.json' package.json package-lock.json .dockerignore scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+API_TOOL_DEPS_VERSION := $(shell node scripts/ci/api-tool-deps-key.mjs)
 endif
 export API_TOOL_DEPS_VERSION
 API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
@@ -744,7 +744,7 @@ push-api-tool-deps-registry: ## Publish the verified dependency toolbox and its 
 ci-build-api-tool-deps: ## Build the dependency-only toolbox (main publication path)
 	@$(CI_IMAGE_BUILD) --target ci-tool-deps -f api/Dockerfile -t $(API_TOOL_DEPS_IMAGE) .
 test-ci-api-tool-cache: ci-test-env
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs scripts/ci/api-tool-build.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs scripts/ci/api-tool-build.test.mjs scripts/ci/api-tool-deps-key.test.mjs scripts/ci/api-tool-deps-key-inputs.test.mjs
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
@@ -1076,7 +1076,7 @@ publishable-manifests-inventory: ## Internal step of check-publishable-manifests
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN_IMAGE),$(MANIFEST_GUARD_IMAGE)) \
-		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir" CI_EXPECTED_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/cluster-mesh-publish-decision.test.mjs scripts/ci/eradicated-packages.test.mjs)'
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir" CI_EXPECTED_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/cluster-mesh-publish-decision.test.mjs scripts/ci/eradicated-packages.test.mjs scripts/ci/oauth-service-client-job.test.mjs)'
 
 .PHONY: check-eradicated-packages
 check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
@@ -1647,6 +1647,35 @@ oauth-register-client-job: ## Register one oauth_clients row via the versioned J
 	kubectl -n "$$NS" apply -f deploy/k8s/base/36-oauth-register-client-job.yaml; \
 	kubectl -n "$$NS" wait --for=condition=complete job/oauth-register-client --timeout=120s; \
 	kubectl -n "$$NS" logs job/oauth-register-client
+
+# BRSVC-EX1 (feat/oauth-service-client-provisioner): governed one-off client_credentials
+# service client provisioning Job. Reason: service_clients rows had no governed path.
+# Impact: one additive target; no existing target touched. Rollback: delete this target;
+# the versioned Job yaml stays valid for a direct kubectl apply. The SECRET_FILE (0600)
+# may hold only OAUTH_SERVICE_CLIENT_* lines; the image defaults to the namespace's api.
+# Usage: make oauth-register-service-client-job SECRET_FILE=<0600 env file> [OAUTH_SERVICE_CLIENT_JOB_NAMESPACE=sentropic] [OAUTH_SERVICE_CLIENT_JOB_IMAGE=<image>] [KUBECONFIG=<file>] ENV=<env>
+OAUTH_SERVICE_CLIENT_JOB_NAMESPACE ?= sentropic
+OAUTH_SERVICE_CLIENT_JOB_IMAGE ?=
+.PHONY: oauth-register-service-client-job
+oauth-register-service-client-job: ## Provision one client_credentials service_clients row via the versioned Job (SECRET_FILE required)
+	@set -eu; NS="$(OAUTH_SERVICE_CLIENT_JOB_NAMESPACE)"; FILE="$(SECRET_FILE)"; export KUBECONFIG="$(KUBECONFIG)"; \
+	test -s "$$FILE" || { echo "ERROR: SECRET_FILE is missing or empty (0600 file with OAUTH_SERVICE_CLIENT_* vars)"; exit 1; }; \
+	case "$$(stat -c %a "$$FILE")" in 600|400) ;; *) echo "ERROR: SECRET_FILE must be mode 0600 or 0400"; exit 1 ;; esac; \
+	if grep -Evq '^(#.*|[[:space:]]*|OAUTH_SERVICE_CLIENT_[A-Z_]+=.*)$$' "$$FILE"; then echo "ERROR: SECRET_FILE may only hold OAUTH_SERVICE_CLIENT_* assignments"; exit 1; fi; \
+	grep -q '^OAUTH_SERVICE_CLIENT_SECRET=' "$$FILE" || { echo "ERROR: SECRET_FILE lacks OAUTH_SERVICE_CLIENT_SECRET"; exit 1; }; \
+	IMG="$(OAUTH_SERVICE_CLIENT_JOB_IMAGE)"; \
+	test -n "$$IMG" || IMG="$$(kubectl -n "$$NS" get deployment/api -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].image}')"; \
+	test -n "$$IMG" || { echo "ERROR: cannot resolve the api image in $$NS; set OAUTH_SERVICE_CLIENT_JOB_IMAGE"; exit 1; }; \
+	echo "Provisioning in namespace $$NS with image $$IMG"; \
+	trap 'kubectl -n "$$NS" delete job/oauth-register-service-client --ignore-not-found >/dev/null 2>&1 || true; kubectl -n "$$NS" delete secret/oauth-service-client-registration --ignore-not-found >/dev/null 2>&1 || true' EXIT; \
+	kubectl -n "$$NS" delete job/oauth-register-service-client --ignore-not-found >/dev/null 2>&1 || true; \
+	kubectl -n "$$NS" delete secret/oauth-service-client-registration --ignore-not-found >/dev/null 2>&1 || true; \
+	kubectl -n "$$NS" create secret generic oauth-service-client-registration --from-env-file="$$FILE" >/dev/null; \
+	kubectl set image --local -f deploy/k8s/base/37-oauth-register-service-client-job.yaml register="$$IMG" -o yaml | kubectl -n "$$NS" apply -f -; \
+	if ! kubectl -n "$$NS" wait --for=condition=complete job/oauth-register-service-client --timeout=120s; then \
+		kubectl -n "$$NS" logs job/oauth-register-service-client || true; echo "ERROR: service client provisioning failed"; exit 1; \
+	fi; \
+	kubectl -n "$$NS" logs job/oauth-register-service-client
 
 .PHONY: publish-llm-mesh
 publish-llm-mesh: check-llm-model-equivalences verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing

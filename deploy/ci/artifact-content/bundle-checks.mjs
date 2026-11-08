@@ -47,6 +47,11 @@ export function checkWorkload(objects, tier, preservedImages) {
       assert.deepEqual(c.env.find(e => e.name === name), { name, value: '0' }, `explicit ${name} overrides envFrom secrets`);
     }
   }
+  // Live edge (W9): inert in every tier; pages domain and kids are per-tier placeholders until both rings are minted.
+  const live = tier === 'prod' ? ['pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
+    : ['pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
+  assert.deepEqual([cm.data.APP_ARTIFACT_LIVE_ENABLED, cm.data.APP_ARTIFACT_LIVE_PAGES_DOMAINS, cm.data.APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS],
+    ['0', ...live], 'live edge stays inert with its per-tier pages domain and kids');
   assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional: true } }]);
   assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional: true, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
   assert.deepEqual(content.volumeMounts, [{ name: 'signing-key', mountPath: '/var/run/artifact-content', readOnly: true }]);
