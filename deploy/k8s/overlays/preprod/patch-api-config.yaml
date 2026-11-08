@@ -138,3 +138,8 @@ data:
   GITHUB_APP_PUBLIC_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
   GITHUB_APP_TARGETS_JSON: '[{"locator":"rhanka/radar-immobilier","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]'
   GITHUB_APP_BROKER_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]'
+  # Builder repositories (forge-binding.ts forgeConfig, #955): the forge the builder reads through the SG0-app lease.
+  # installationRef is the SG0-app enrollment ref of the immo installation (`enroll_<36 hex/dash>`), never a numeric
+  # GitHub installation id; the entry must match the GITHUB_APP_TARGETS_JSON target above. allowedSubPaths stays ['']
+  # until the pod bootstrap is subPath-aware. Absent or invalid, every forge read and binding refuses forge_unconfigured.
+  ARTIFACT_BUILDER_REPOSITORIES_JSON: '[{"storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier","locator":"rhanka/radar-immobilier","installationRef":"enroll_d6fac2e1-8328-4e74-8bc4-08aeafe54f11","allowedSubPaths":[""]}]'
