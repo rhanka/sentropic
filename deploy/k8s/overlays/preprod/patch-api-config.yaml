@@ -107,3 +107,34 @@ data:
   # in Secret/sentropic-api, so there is no storage behind an opened host). No
   # APP_ARTIFACT_QUOTA_BYTES either: instance.ts only asks for one when the host
   # is enabled, and the base env keeps it at "0".
+  # GB4 builder composition (s-archi builder-composition contract, 2026-11-08; owner GO 2026-11-07 « Oui, GB4 GO
+  # préprod »). PREPROD ONLY. ARTIFACT_BUILDER_ENABLED=1 is fail-closed: with the flag on, a missing or invalid value
+  # below refuses the builder gracefully (#954: `artifact_builder_refused`, builder routes 503, api process up). Secrets (handoff, receipt, supervisor, live controller and dependency cache keys) stay in
+  # Secret sentropic-api. A ConfigMap change restarts nothing: it is read at the next api rollout.
+  ARTIFACT_BUILDER_ENABLED: "1"
+  # Worker placement (placement.ts): pods and their Services live in the per-environment builder namespace.
+  ARTIFACT_BUILDER_NAMESPACE: "sentropic-artifact-builders"
+  ARTIFACT_BUILDER_SERVICE_DOMAIN: "sentropic-artifact-builders.svc.cluster.local"
+  # Logical node of the cluster-mesh heavy-phase queue: one d2-4 builder node for this environment.
+  ARTIFACT_BUILDER_NODE: "d2-4-preprod"
+  # Both ride the internal Service of this namespace (never a public host): supervisor frames through the relay, and the
+  # f1 route fences (POST /_live-fence/v1) to the live edge.
+  ARTIFACT_SUPERVISOR_RELAY_URL: "http://artifact-content.sentropic-preprod.svc.cluster.local:8791"
+  ARTIFACT_LIVE_EDGE_INTERNAL_URL: "http://artifact-content.sentropic-preprod.svc.cluster.local:8791"
+  # Remote host live API of immo preprod (remote-host.ts BUILDER_REMOTE_HOST_ENV).
+  ARTIFACT_BUILDER_REMOTE_HOST_URL: "https://preprod.immo.sent-tech.ca/api/v1/artifacts"
+  # Verified service client -> host identity (default deny without it): the immo preprod service client
+  # (client_credentials, scopes github-app:broker artifacts:builder), its host and its storage scope.
+  ARTIFACT_BUILDER_HOST_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier-preprod"}]'
+  # Own dependency-cache storage of the builder (F1, cache-storage.ts): dedicated private bucket on the namespace-local
+  # object store (overlays/preprod/artifact-object-store, qualified by a signed GetPublicAccessBlock, 4 x true). The
+  # endpoint forces path-style URLs. The bucket-scoped read/write credential pair stays in Secret sentropic-api
+  # (ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID, ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY).
+  ARTIFACT_BUILDER_CACHE_S3_BUCKET: "artifact-builder-cache"
+  ARTIFACT_BUILDER_CACHE_S3_REGION: "us-east-1"
+  ARTIFACT_BUILDER_CACHE_S3_ENDPOINT: "http://artifact-object-store.sentropic-preprod.svc.cluster.local:9000"
+  # SG0-app GitHub App broker. repoId is the opaque handle immo sends (IMMO_GIT_REPO_ID); the numeric GitHub id is
+  # resolved from the locator at enrollment and checked at every mint.
+  GITHUB_APP_PUBLIC_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
+  GITHUB_APP_TARGETS_JSON: '[{"locator":"rhanka/radar-immobilier","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]'
+  GITHUB_APP_BROKER_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]'
