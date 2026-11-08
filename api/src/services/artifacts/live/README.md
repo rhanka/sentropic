@@ -386,8 +386,12 @@ frames and reconciles every 30 s); the API stops it on exit.
   `ARTIFACT_BUILDER_REPOSITORIES_JSON` =
   `[{storageScopeId, repoId, locator, installationRef, allowedSubPaths}]`
   (`git_repo_not_registered`, `git_ref_not_allowed`), then recorded per binding
-  generation (another value is 409 `binding_conflict`); a build records it for
-  the generation of the last reconcile. Every read uses the recorded value.
+  generation (another value is 409 `binding_conflict`). A build stores it with
+  its job (immutable per job) and the build-only run records it at the HostJob
+  generation right after resolving the job, before any forge read; no live
+  reconcile is involved. Every read uses the value recorded for the generation
+  of the controller's current runtime (job generation for a build, binding
+  generation for live), or of the last reconcile when the runtime is DORMANT.
   Without the GitHub App host or a valid `ARTIFACT_BUILDER_REPOSITORIES_JSON`
   (an `installationRef` is required), every binding and read refuses
   `forge_unconfigured`. The staged tree is relative to `subPath` while the pod

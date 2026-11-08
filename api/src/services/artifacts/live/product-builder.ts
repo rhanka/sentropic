@@ -9,8 +9,8 @@ import { BUILDER_REMOTE_HOST_ENV, builderRemoteHost } from './remote-host';
 import { controllerFenceKey, createLiveFenceRoutes, LIVE_CONTROLLER_KEY_ENV, LIVE_EDGE_URL_ENV, liveEdgeUrl } from './live-fence';
 import { remoteHostForge } from './forge';
 import { createForgeBindings, forgeConfig, type ForgeLeaseHost } from './forge-binding';
-import { createLeaseForgeReads } from './forge-lease';
-import { createPostgresRemoteLiveRows } from './postgres';
+import { createLeaseForgeReads, runtimeGeneration } from './forge-lease';
+import { createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
 import { parseBuilderHostBindings } from './builder-mount';
 import { createLiveScheduler } from './scheduler';
 import { readBuilderCacheStorage, type BuilderCacheStorage, type PrivateCacheBlobs } from './cache-storage';
@@ -105,11 +105,11 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   if (typeof cacheStorage === 'string') refuse(cacheStorage);
 
   let service: ReturnType<typeof createBuilderService>;
-  // Forge reads through the in-process SG0-app lease at the binding the host recorded for its reconciled generation.
+  // Forge reads through the in-process SG0-app lease at the binding recorded for the controller's runtime generation.
   const config = forgeConfig(env, deps.gitHubApp);
   const forgeBindings = createForgeBindings(createPostgresRemoteLiveRows(deps.pool), config);
   const reads = createLeaseForgeReads({ config, bindings: forgeBindings, fetch: deps.fetch, now, id,
-    generation: async key => (await service.remote.session(key)).generation });
+    generation: runtimeGeneration(createPostgresLiveStore(deps.pool), key => service.remote.session(key)) });
   // D0 binding view: generation and owner of the host's last reconcile; publication stays explicit (R4, no autoPublish).
   const binding: LivePorts['binding'] = async key => {
     const { generation, ownerId } = await service.remote.session(key);

@@ -4,7 +4,7 @@ import { admitBinding, unconfigured, type BuilderRepository, type ForgeBinding, 
 import { readForgeTarball, unstable, type ForgeTree } from './forge-tar';
 import { GB1_QUALIFICATION_PATH } from './gb1-qualification';
 import { sha256 } from './integrity';
-import type { SourceSnapshot } from './ports';
+import type { LiveStore, SourceSnapshot } from './ports';
 import { LiveError, type LiveKey } from './records';
 import { CODELOAD, createLeasedGitHub, discard, field, FORGE_TIMEOUTS, json, unavailable, USER_AGENT } from './forge-github';
 import { BUILDER_IMAGE, BUILDER_TOOLCHAIN, INSTALL_RECIPE, NPM_RELAY } from './recipes';
@@ -18,14 +18,22 @@ interface Staged { target: Target; sha: string; manifest: Row[]; expiresAt: numb
 const rowsOf = (tree: ForgeTree): Row[] => tree.files.map(f => ({ path: f.path, mode: f.mode, size: f.bytes.byteLength,
   sha256: sha256(f.bytes) })).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
+/** Generation of the forge reads (R1): the controller's current runtime for the key (build-only: the job generation;
+ * live: the binding generation); a DORMANT or absent runtime falls back to the host's last reconcile (`remote.session`). */
+export const runtimeGeneration = (store: Pick<LiveStore, 'read'>, session: (key: LiveKey) => Promise<{ generation: number }>) =>
+  async (key: LiveKey) => {
+    const runtime = (await store.read(key))?.runtime;
+    return runtime && runtime.phase !== 'DORMANT' ? runtime.generation : (await session(key)).generation;
+  };
+
 /**
- * Forge reads through the in-process SG0-app lease (contract §3-§4): GET only, the stored binding of the generation the
- * host reconciled last, and a `contents: write` token used read-only that never leaves this module (no log, no error,
+ * Forge reads through the in-process SG0-app lease (contract §3-§4): GET only, the stored binding of the runtime
+ * generation (`runtimeGeneration`), and a `contents: write` token used read-only that never leaves this module (no log, no error,
  * no returned value). Fail-closed: no configuration or no recorded binding refuses `forge_unconfigured`.
  */
 export function createLeaseForgeReads(options: {
   config: ForgeConfig | null; bindings: Pick<ForgeBindings, 'read'>;
-  /** Binding generation of the host's last reconcile (`remote.session`). */
+  /** Binding generation of the forge reads (`runtimeGeneration`). */
   generation(key: LiveKey): Promise<number>;
   fetch?: typeof fetch; now?: () => number; id?: () => string;
 }): ForgeReads & { close(): void } {
