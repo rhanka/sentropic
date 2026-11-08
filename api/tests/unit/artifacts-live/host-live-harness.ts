@@ -13,8 +13,10 @@ const hosts: Record<string, { hostId: string; storageScopeId: string }> = {
 export const fences = { liveSessionId: 'package-session', leaseEpoch: 7, routeEpoch: 9 };
 /** The session invitation state the host pushes: its epoch and the latest active expiry (ms) or null. */
 export const session = (epoch: number, expiresAt: number | null = null) => ({ epoch, expiresAt });
+/** The host git binding of the artifact (forge-lease-reader contract §1). */
+export const binding = { repoId: 'repo-immo', branch: 'artifact/demo', subPath: '' };
 export const reconcile = (over: Record<string, unknown> = {}) =>
-  ({ artifactId: key.artifactId, bindingGeneration: 1, ownerId: 'owner', ...fences, invitation: session(1), ...over });
+  ({ artifactId: key.artifactId, bindingGeneration: 1, ownerId: 'owner', ...fences, invitation: session(1), binding, ...over });
 export const stop = (over: Record<string, unknown> = {}) =>
   ({ artifactId: key.artifactId, bindingGeneration: 1, liveSessionId: fences.liveSessionId, leaseEpoch: fences.leaseEpoch, ...over });
 export const grant = (actor: Record<string, unknown>, invitation: unknown = session(1)) =>
@@ -28,7 +30,8 @@ export function setup(waitMs = 5_000) {
   const rows = memoryRows(); const remote = createRemoteLive(rows); const drafts = createRemoteDrafts(rows);
   const controller = createLiveController({ ...f.ports, drafts: drafts.drafts, invitations: remote.invitations });
   const authenticate = vi.fn((c: Context) => hosts[c.req.header('x-test-host') ?? ''] ?? null);
-  const app = createHostLiveApi({ authenticate, controller, store: f.ports.store, remote, drafts, waitMs });
+  const bind = vi.fn(async (_key: unknown, _generation: number, _binding: unknown) => {});
+  const app = createHostLiveApi({ authenticate, controller, store: f.ports.store, remote, drafts, waitMs, bind });
   const call = (path: string, body: unknown, host = 'immo') => app.request(`/v1/live/${path}`, { method: 'POST',
     headers: { 'content-type': 'application/json', 'x-test-host': host }, body: typeof body === 'string' ? body : JSON.stringify(body) });
   async function stage(revision: string, host = 'immo') {
@@ -38,5 +41,5 @@ export function setup(waitMs = 5_000) {
       treeSha: TREE, deletes: [] }, host)).status).toBe(204);
   }
   const routeEpoch = async () => (await f.state())!.runtime.routeEpoch;
-  return { f, drafts, controller, call, stage, routeEpoch };
+  return { f, drafts, controller, call, stage, routeEpoch, bind };
 }
