@@ -391,7 +391,8 @@ frames and reconciles every 30 s); the API stops it on exit.
   generation right after resolving the job, before any forge read; no live
   reconcile is involved. Every read uses the value recorded for the generation
   of the controller's current runtime (job generation for a build, binding
-  generation for live), or of the last reconcile when the runtime is DORMANT.
+  generation for live), or of the last reconcile when the runtime is DORMANT
+  or absent.
   Without the GitHub App host or a valid `ARTIFACT_BUILDER_REPOSITORIES_JSON`
   (an `installationRef` is required), every binding and read refuses
   `forge_unconfigured`. The staged tree is relative to `subPath` while the pod
