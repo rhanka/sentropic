@@ -40,9 +40,9 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 1 — Tests first (contract §6, seven groups)**
   - [x] mapping, host bodies, head/reachable, snapshot filters and limits, `source()` re-verification, GET-only and token hygiene, fail-closed configuration.
-- [ ] **Lot 2 — Binding mapping and configuration**
-  - [ ] `forge-binding.ts`: `ARTIFACT_BUILDER_REPOSITORIES_JSON`, validation order, binding immutable per generation (409 `binding_conflict`).
-  - [ ] Host build and live APIs parse and validate `binding` before scheduling anything.
+- [x] **Lot 2 — Binding mapping and configuration**
+  - [x] `forge-binding.ts`: `ARTIFACT_BUILDER_REPOSITORIES_JSON`, validation order, binding immutable per generation (409 `binding_conflict`).
+  - [x] Host build and live APIs parse and validate `binding` before scheduling anything.
 - [ ] **Lot 3 — Lease reader**
   - [ ] `forge-lease.ts`: lease cache until expiry − 60 s, GitHub REST reads, tarball through one codeload redirect, filters, limits, manifest per `stagingRef`, `source()` re-download and digest re-check.
   - [ ] `createProductBuilder` composes `remoteHostForge(createLeaseForgeReads(...))`; `app.ts` passes the product lease.
