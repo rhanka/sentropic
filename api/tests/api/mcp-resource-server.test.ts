@@ -153,7 +153,8 @@ describe('MCP connector-host routes', () => {
       clock: { now: () => now, addSeconds: (date, seconds) => new Date(date.getTime() + seconds * 1000) },
       jwksPort: jwks,
     }).signJwt(
-      { client_id: 'mcp-route-test-client', scope: scopes.join(' ') },
+      // tid is required on every MCP path (A4 connector admission); membership comes from createTestUser.
+      { client_id: 'mcp-route-test-client', scope: scopes.join(' '), tid: 'tenant-mcp-route-test' },
       {
         audience: resource,
         expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
