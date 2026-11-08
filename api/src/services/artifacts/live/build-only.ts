@@ -48,8 +48,7 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
   }
   try {
     await checkpoint(ports, key, runtime);
-    const pod = await ports.pods.ensure(key, runtime);
-    await ports.heavy.hold(runtime.podName, { pod: true });
+    const pod = await ports.heavy.pod(runtime.podName, () => ports.pods.ensure(key, runtime));
     runtime = await transition(ports, key, runtime, state => { state.runtime.podUid = pod.uid; });
     const source = await ports.forge.snapshot(key, job.headSha);
     if (source.headSha !== job.headSha) throw new LiveError('git_head_moved');
