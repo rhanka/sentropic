@@ -57,6 +57,10 @@ for (const name of ['EMAIL_CODE_HMAC_KEY_ACTIVE', 'EMAIL_CODE_HMAC_KEY_ACTIVE_RE
 for (const name of ['CM_IDENTITY_EMAIL_CODE_POLICY', 'CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF']) {
   assert.equal(object(preprod, 'ConfigMap', 'auth-idp').data[name], config[name]);
 }
+// Preprod IdP shares the parent RP ID with prod: no registration ceremony there (credentials come from the G7 sync).
+for (const objects of [base, preprod]) assert.equal(object(objects, 'ConfigMap', 'auth-idp').data.WEBAUTHN_REGISTRATION, 'disabled');
+assert.equal(config.WEBAUTHN_REGISTRATION, undefined);
+assert.equal(object(prod, 'ConfigMap', 'auth-idp').data.WEBAUTHN_REGISTRATION, undefined);
 assert.equal(object(prod, 'Deployment', 'auth-idp').spec.template.spec.containers[0].command[1], 'apps/auth-idp/dist/index.js');
 assert.match(runtime.data['launch.mjs'], /key\.toString\('base64url'\)/);
 assert.match(runtime.data['stage.mjs'], /'wx', 0o600/);
