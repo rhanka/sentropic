@@ -62,7 +62,8 @@ export const REPO: Entry[] = [
 export const STAGED = ['bin/run.sh', GB1_QUALIFICATION_PATH, 'package-lock.json', 'package.json', 'sentropic.artifact.json', LONG, 'src/main.ts'].sort();
 
 /** Mocked GitHub REST + codeload, and the reader over a recorded generation-1 binding. */
-export async function setup(options: { compare?: Record<string, string>; config?: boolean; record?: boolean } = {}) {
+export async function setup(options: { compare?: Record<string, string>; config?: boolean; record?: boolean;
+  generation?: (k: typeof key) => Promise<number> } = {}) {
   let now = 1_700_000_000_000; let leases = 0; let refs = 0;
   const state = { archive: tarball(REPO), refused: new Set<string>(), location: '', branches: { 'artifact/demo': HEAD } as Record<string, string> };
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -88,8 +89,8 @@ export async function setup(options: { compare?: Record<string, string>; config?
   const config = options.config === false ? null : forgeConfig(reposEnv(), host);
   const bindings = createForgeBindings(memoryRows(), config);
   if (options.record !== false && config) await bindings.admit(key, 1, binding);
-  const reads = createLeaseForgeReads({ config, bindings, generation: async () => 1, fetch: fetch as unknown as typeof globalThis.fetch,
+  const reads = createLeaseForgeReads({ config, bindings, generation: options.generation ?? (async () => 1), fetch: fetch as unknown as typeof globalThis.fetch,
     now: () => now, id: () => `stage-${++refs}` });
-  return { reads, fetch, calls, acquire, subscribers, state, advance(ms: number) { now += ms; } };
+  return { reads, bindings, fetch, calls, acquire, subscribers, state, advance(ms: number) { now += ms; } };
 }
 export const failure = async (work: Promise<unknown>) => { try { await work; } catch (error) { return error as Error & { code: string }; } throw new Error('resolved'); };
