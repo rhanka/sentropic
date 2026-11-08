@@ -24,14 +24,14 @@ const mini = { jobs: {
   'ci-gate': { needs: ['changes', 'unit', 'build'], if: 'always()' },
 } };
 const main = (changes = { api: 'true' }) => ({ changes, event: 'push', ref: 'refs/heads/main',
-  identity: { runId: '900', attempt: '1', headSha: mainSha } });
+  identity: { runId: '900', attempt: '1', headSha: mainSha, tree } });
 const prRun = (overrides = {}) => ({ id: 800, run_attempt: 1, event: 'pull_request', status: 'completed',
   conclusion: 'success', workflow_id: 77, path: '.github/workflows/ci.yml', head_sha: prSha, head_branch: 'topic',
   html_url: 'https://github.com/rhanka/sentropic/actions/runs/800', tree_id: tree,
   head_repository: repository, repository, ...overrides });
 const prJobs = names => names.map((name, index) => ({ id: 100 + index, name, status: 'completed', conclusion: 'success',
   run_id: 800, run_attempt: 1, html_url: `https://github.com/rhanka/sentropic/actions/runs/800/job/${100 + index}` }));
-const prManifest = (workflow, changes) => ({ identity: { runId: '800', attempt: '1', headSha: prSha },
+const prManifest = (workflow, changes) => ({ identity: { runId: '800', attempt: '1', headSha: prSha, tree },
   policyDigest: policyDigest(workflow),
   expected: workflowExpected(workflow, { changes, event: 'pull_request', ref: 'refs/pull/5/merge' }) });
 const evidence = (overrides = {}) => ({ tree, sha: mainSha, repository, workflowId: 77,
@@ -111,8 +111,15 @@ test('should keep the complete run without a green gate, expected set, workflow 
   assert.equal(reason(evidence({ expected: null })), 'missing-expected-set');
   assert.equal(reason(evidence({ expected: { ...prManifest(mini, { api: 'true' }), policyDigest: 'f'.repeat(64) } })),
     'policy-digest-mismatch');
-  assert.equal(reason(evidence({ expected: { ...prManifest(mini, { api: 'true' }), identity: { runId: '799', headSha: prSha } } })),
+  assert.equal(reason(evidence({ expected: { ...prManifest(mini, { api: 'true' }), identity: { runId: '799', headSha: prSha, tree } } })),
     'expected-set-identity-mismatch');
+  // A PR whose merge ref (another base, a stale base) checked out a different tree.
+  assert.equal(reason(evidence({ expected: { ...prManifest(mini, { api: 'true' }),
+    identity: { runId: '800', attempt: '1', headSha: prSha, tree: 'd'.repeat(40) } } })), 'tested-tree-mismatch');
+  assert.equal(reason(evidence({ expected: { ...prManifest(mini, { api: 'true' }),
+    identity: { runId: '800', attempt: '1', headSha: prSha } } })), 'tested-tree-mismatch');
+  assert.equal(reason(evidence(), mini, { ...main(), identity: { ...main().identity, tree: 'd'.repeat(40) } }),
+    'source-tree-mismatch');
   assert.equal(reason(evidence({ run: prRun({ path: '.github/workflows/other.yml' }) })), 'foreign-workflow');
   assert.equal(reason(evidence({ jobs: prJobs(['changes', 'build', 'ci-gate']).map(job => ({ ...job, run_attempt: 2 })) })),
     'job-identity-mismatch');
@@ -143,7 +150,7 @@ test('should skip only test members of the real workflow and keep build, publica
   const full = workflowExpected(ci, context);
   const executedNames = full.filter(row => row.selected).map(row => row.job);
   const realJobs = prJobs([...executedNames, 'ci-gate']);
-  const expected = { identity: { runId: '800', attempt: '1', headSha: prSha }, policyDigest: policyDigest(ci),
+  const expected = { identity: { runId: '800', attempt: '1', headSha: prSha, tree }, policyDigest: policyDigest(ci),
     expected: full.filter(row => !['publish-', 'deploy-', 'release-', 'retain-', 'api-tool-registry']
       .some(prefix => row.job.startsWith(prefix))) };
   const result = qualifiedSelection(ci, context, evidence({ jobs: realJobs, expected }));
