@@ -195,10 +195,32 @@ describe('session-bound live authorization record', () => {
     expect(await f.live.authorize(f.req(sign(claims({ generation: 2 }))), artifactId)).toBeUndefined();
     expect(await f.live.authorize(f.req(sign(claims({ sessionId: 'session-2', generation: 2 }))), artifactId)).toBeDefined();
   });
-  it('should bind an invitation to one principal and one session', async () => {
+  it('should bind an invitation to one principal and one generation', async () => {
     const f = fixture(); expect(await f.live.authorize(f.req(sign(invitee())), artifactId)).toBeDefined();
     expect(await f.live.authorize(f.req(sign(invitee({ principalId: 'copied' }))), artifactId)).toBeUndefined();
+    expect(await f.live.authorize(f.req(sign(invitee({ sessionId: 'session-2', principalId: 'copied' }))), artifactId)).toBeUndefined();
+    expect(await f.live.authorize(f.req(sign(invitee({ sessionId: 'session-2', generation: 2 }))), artifactId)).toBeUndefined();
+  });
+  it('should re-bind the same principal to a crash_restore session of the same generation and retire the old one', async () => {
+    const f = fixture(); const old = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
+    const owner = (await f.live.authorize(f.req(sign()), artifactId))!;
+    const close = vi.fn(); const closeOwner = vi.fn(); f.live.watch(old, close); f.live.watch(owner, closeOwner);
+    const next = (await f.live.authorize(f.req(sign(invitee({ sessionId: 'session-2', routeEpoch: 2 }))), artifactId))!;
+    expect(next).toMatchObject({ sessionId: 'session-2', invitationId: 'inv-1', principalId: 'guest' });
+    expect(close).toHaveBeenCalledTimes(1); expect(closeOwner).not.toHaveBeenCalled();
+    expect(await f.live.current(old)).toBe(false); expect(await f.live.current(next)).toBe(true);
+    expect(await f.live.authorize(f.req(sign(invitee())), artifactId)).toBeUndefined();
+    expect(await f.live.authorize(f.req(sign(invitee({ invitationEpoch: 2 }))), artifactId)).toBeUndefined();
+  });
+  it('should keep the invitation revocation floor across a re-binding', async () => {
+    const f = fixture(); expect(await f.live.authorize(f.req(sign(invitee())), artifactId)).toBeDefined();
+    expect((await f.live.control(post(signLiveControl(control(), key)), artifactId))?.status).toBe(204);
     expect(await f.live.authorize(f.req(sign(invitee({ sessionId: 'session-2' }))), artifactId)).toBeUndefined();
+    const next = (await f.live.authorize(f.req(sign(invitee({ sessionId: 'session-2', invitationEpoch: 2 }))), artifactId))!;
+    const close = vi.fn(); f.live.watch(next, close);
+    expect((await f.live.control(post(signLiveControl(control({ epoch: 3 }), key)), artifactId))?.status).toBe(204);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(await f.live.authorize(f.req(sign(invitee({ sessionId: 'session-3', invitationEpoch: 2 }))), artifactId)).toBeUndefined();
   });
   it('should take a newer invitation epoch as its floor and close the older epoch sockets', async () => {
     const f = fixture(); const old = (await f.live.authorize(f.req(sign(invitee())), artifactId))!;
