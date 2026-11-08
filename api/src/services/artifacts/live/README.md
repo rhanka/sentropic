@@ -123,6 +123,23 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   base from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (no secret); preprod is
   `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls
   `<base>/live-host/v1/job` and `<base>/live-host/v1/handoff`.
+- The same service composes the host live API (`createHostLiveApi`) behind the
+  same gate; the scope always comes from the host identity, never the body.
+  Bodies are closed and bounded (2 KiB control, 2 MiB page, 512 KiB seal).
+  `POST /v1/live/reconcile` records the package fences (`liveSessionId`,
+  `leaseEpoch`, `routeEpoch`, monotonic per generation) and the session
+  `invitation: {epoch, expiresAt}`, then reconciles toward the staged draft and
+  answers the BridgeAck (`ready` = LIVE and applied revision = draft revision).
+  `POST /v1/live/stop` checks the fences (409 `stale_session`), then 204.
+  `POST /v1/live/grant` records the session invitation, fences the route on a
+  higher epoch, then answers `{grant}` (`authorizeLive`), 409 `invalid_phase`
+  or `stale_session`, or 403. The remote `invitations.current` returns the last
+  state received per generation and a lower epoch is 409 `stale_invitation`;
+  `expiresAt` is the latest expiry among the active invitations, so the route
+  epoch moves on a revocation or once the last invitation expired (next tick).
+  `POST /v1/live/draft/page` and `/v1/live/draft/seal` stage the host draft
+  (A-LIVE §3.2 overlay: 255 paths, 1 MiB per file, 8 MiB; at most 32 pages of
+  1 MiB) under its opaque revision; this is the remote `drafts` adapter.
 - The API is mounted under `/api/v1/artifacts/builder` (`createBuilderMount`)
   behind `createRequireServiceAuth` with the `artifacts:builder` scope. The
   verified client maps to its host identity through

@@ -1,4 +1,4 @@
-import type { Context } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { Pool } from 'pg';
 import { createHeavyPhaseQueue, type HeavyPhaseBudget } from '@sentropic/cluster-mesh';
 import type { LivePorts } from './ports';
@@ -6,7 +6,7 @@ import type { CachePorts } from './cache';
 import type { PrivateCacheBlobs } from './cache-storage';
 import { createPostgresCacheStorage } from './cache-storage';
 import { createDependencyCache } from './cache';
-import { createPostgresBuildJobStore, createPostgresLiveStore } from './postgres';
+import { createPostgresBuildJobStore, createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
 import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, liveHolds } from './heavy';
 import { createFairAdmission } from './admission';
 import { createBuilderPods } from './pods';
@@ -22,7 +22,10 @@ import { composeSupervisor } from './supervisor-composition';
 import type { SupervisorSources } from './supervisor';
 import type { SupervisorChannel } from './supervisor-channel';
 import { createBuildJobs, runStaleMs } from './build-jobs';
-import { createHostBuildApi, type HostIdentity } from './host-build-api';
+import { createHostBuildApi, type HostBuildEnv, type HostIdentity } from './host-build-api';
+import { createHostLiveApi } from './host-live-api';
+import { createRemoteLive } from './remote-live';
+import { createRemoteDrafts } from './remote-drafts';
 
 /** Live pods admitted on one d2-4 node (owner decision 07/11); memory admission is the heavy-phase queue's. */
 export const LIVE_NODE_CAPACITY = 4;
@@ -60,23 +63,32 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     pods: createBuilderPods(createInClusterKubernetes(options.placement), bootstrap, options.placement),
     worker: createLiveWorker(supervisor, options.placement) });
 }
-/** M3-B builder service: the live controller composed with the SG4b handoff publication, the Postgres job ledger and
- * the host build API. The sealed candidate holder is both the supervisor sink and the SG4b export.
+/** M3-B builder service: the live controller composed with the SG4b handoff publication, the Postgres job ledger,
+ * the remote host live state (D0: drafts, session invitation state and package fences pushed by the host) and the host API
+ * (builds and live). The sealed candidate holder is both the supervisor sink and the SG4b export.
  * Nothing listens or runs until the host composition mounts `api` and supplies `schedule`. */
-export function createBuilderService(options: Omit<Parameters<typeof createArtifactLiveService>[0], 'publication' | 'sources'> & {
-  sources: Pick<SupervisorSources, 'source' | 'draft'>;
+export function createBuilderService(options: Omit<Parameters<typeof createArtifactLiveService>[0],
+  'publication' | 'sources' | 'drafts' | 'invitations'> & {
+  sources: Pick<SupervisorSources, 'source'>;
   host: RemoteHost; signingKey(): SigningKey; hostKeys: KeyResolver;
   /** `hostAuthenticator(parseBuilderHostBindings(...))` over the S2S guard of the builder mount. */
   authenticate(c: Context): HostIdentity | null; schedule(work: () => Promise<void>): void;
+  /** Longest wait of one host reconcile before it answers `ready: false` (the revive keeps running). */
+  liveWaitMs: number;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
     runStaleMs(options.heavy.maxWaitMs));
   const candidates = createCandidateStore();
   const publication = createHandoffPublication({ host: options.host, candidates, outcomes: jobs,
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });
-  const controller = createArtifactLiveService({ ...options, publication,
-    sources: { ...options.sources, candidate: input => candidates.candidate(input) } });
-  const api = createHostBuildApi({ authenticate: options.authenticate, jobs, schedule: options.schedule,
+  const rows = createPostgresRemoteLiveRows(options.pool);
+  const remote = createRemoteLive(rows); const drafts = createRemoteDrafts(rows);
+  const controller = createArtifactLiveService({ ...options, publication, drafts: drafts.drafts, invitations: remote.invitations,
+    sources: { ...options.sources, draft: drafts.draft, candidate: input => candidates.candidate(input) } });
+  const builds = createHostBuildApi({ authenticate: options.authenticate, jobs, schedule: options.schedule,
     build: async (key, jobId) => { await controller.buildOnly(key, jobId); } });
-  return { controller, api, jobs };
+  const live = createHostLiveApi({ authenticate: options.authenticate, controller, store: createPostgresLiveStore(options.pool),
+    remote, drafts, waitMs: options.liveWaitMs });
+  const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live);
+  return { controller, api, jobs, remote, drafts };
 }
