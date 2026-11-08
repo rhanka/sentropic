@@ -163,6 +163,7 @@ for (const tier of ['prod', 'preprod']) {
   deny('builder relay through the other environment', o => {
     apiData(o).ARTIFACT_SUPERVISOR_RELAY_URL = `http://artifact-content.${tier === 'prod' ? 'sentropic-preprod' : 'sentropic'}.svc.cluster.local:8791`;
   });
+  deny('api and content on different worker namespaces', o => { apiData(o).ARTIFACT_BUILDER_NAMESPACE = 'sentropic-artifact-builders-2'; });
   deny('builder binding to another storage scope', o => {
     apiData(o).ARTIFACT_BUILDER_HOST_BINDINGS_JSON = '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier"}]';
   });
