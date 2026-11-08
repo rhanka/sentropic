@@ -18,6 +18,7 @@
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/api/auth/oauth-consent-optional-tenant.test.ts`
   - `api/tests/api/tenancy/arch11-tenant-data.test.ts`
+  - `spec/DATA_MODEL.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
