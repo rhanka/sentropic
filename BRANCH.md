@@ -54,3 +54,6 @@
   - [x] Version 0.2.22 and changelog.
   - [x] `make typecheck-artifacts`, `make lint-artifacts`, scoped `make test-artifacts`, scoped `make test-artifacts-integration`.
   - [x] Push the wagon; report .tmp/rv/live-invitations.md.
+- [x] **Lot 5 — s-archi review R1**
+  - [x] A replayed `live_revoke_invitation` with status revoked rebuilds the event from the stored row and re-invokes `onRevoked`.
+  - [x] Test: `onRevoked` fails once, the same-key retry replays and re-invokes it with the identical event; full artifacts unit suite green.
