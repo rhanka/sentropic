@@ -20,7 +20,7 @@ import { createHandoffPublication, type RemoteHost } from './handoff-publication
 import { createCandidateStore } from './candidate-store';
 import { composeSupervisor } from './supervisor-composition';
 import type { SupervisorSources } from './supervisor';
-import type { SupervisorChannel } from './supervisor-channel';
+import { createRelaySupervisorChannel, SUPERVISOR_COMMAND_TIMEOUT_MS } from './supervisor-relay';
 import { createBuildJobs, runStaleMs } from './build-jobs';
 import { createHostBuildApi, type HostIdentity } from './host-build-api';
 
@@ -28,7 +28,8 @@ import { createHostBuildApi, type HostIdentity } from './host-build-api';
 export const LIVE_NODE_CAPACITY = 4;
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
  * AL-T supplies authenticated owner operations; AL-D supplies the encrypted draft port;
- * SG4 supplies transactional publication; W9 supplies the relay channel to the pod bootstrap (qualified under GB4).
+ * SG4 supplies transactional publication. Every supervisor frame rides the artifact-content relay (A-LIVE §8.1):
+ * `relayUrl` is `supervisorRelayUrl(process.env)`; an invalid URL refuses to compose before anything else is built.
  * `supervisorKey(process.env)` signs every frame and is the only key the composed bootstrap trusts (FIX5).
  * `placement` comes from per-environment configuration (`builderPlacement(process.env)`), never a constant.
  */
@@ -36,7 +37,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   'binding' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
   | 'invitations'> & {
     pool: Pool; cacheBlobs: PrivateCacheBlobs; placement: BuilderPlacement;
-    supervisorKey: SigningKey; channel: SupervisorChannel;
+    supervisorKey: SigningKey; relayUrl: string;
     /** Staged source, AL-D draft and candidate sink; the dependency stream is this service's cache. */
     sources: Omit<SupervisorSources, 'dependencies'>;
     /** Builder node (one d2-4), its memory budget for the cluster-mesh heavy-phase queue (1706 MiB, provisional phase
@@ -46,12 +47,14 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     admission: { capacity?: number; waiterTtlMs: number };
     cache: Pick<CachePorts, 'signingKey'>;
   }) {
+  const channel = createRelaySupervisorChannel({ baseUrl: options.relayUrl });
   const store = createPostgresLiveStore(options.pool);
   const { node, maxWaitMs, pollMs, budget } = options.heavy;
   const heavy = createQueuedHeavyGate({ node, maxWaitMs, pollMs, renewMs: budget.entryTtlMs / 3, holds: () => liveHolds(store),
     queue: createHeavyPhaseQueue({ store: createPostgresHeavyQueueStore(options.pool), budget, now: options.now }) });
-  const { bootstrap, supervisor } = composeSupervisor({ key: options.supervisorKey, channel: options.channel, now: options.now,
-    id: options.id, sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });
+  const { bootstrap, supervisor } = composeSupervisor({ key: options.supervisorKey, channel, now: options.now,
+    id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS,
+    sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
     fetch: fetchLockedTarball, storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) });
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
