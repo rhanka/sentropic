@@ -1,0 +1,48 @@
+# GB4 (PREPROD ONLY): open content serving. The base Deployment pins
+# APP_ARTIFACT_CONTENT_ENABLED to "0" as an explicit env, which outranks envFrom —
+# the tier gate is therefore THIS patch's explicit env, not the ConfigMap's inspection
+# value and not a Secret key. HOST and READER stay closed on artifact-content: this
+# pod only serves content; the artifact host surface is the api.
+#
+# Runtime inputs come from two required Secrets created out-of-band by the owner
+# (.tmp/rv/owner-0700-content-steps.md), see PR body for the DRAFT-merge ordering:
+#   - Secret/artifact-content-runtime: DATABASE_URL + APP_ARTIFACT_S3_BUCKET,
+#     APP_ARTIFACT_S3_REGION, APP_ARTIFACT_S3_ENDPOINT (optional), and a dedicated
+#     read-only APP_ARTIFACT_S3_ACCESS_KEY_ID / APP_ARTIFACT_S3_SECRET_ACCESS_KEY,
+#     all injected via envFrom below.
+#   - Secret/artifact-content-signing: key `key`, >= 32 raw bytes, mounted as the
+#     signing-key file.
+# optional:false is deliberate on both: without either Secret the pod refuses to
+# start (CreateContainerConfigError) instead of booting half-configured or serving
+# unsigned content.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifact-content
+spec:
+  template:
+    spec:
+      containers:
+        - name: artifact-content
+          env:
+            - name: APP_ARTIFACT_CONTENT_ENABLED
+              value: "1"
+          # envFrom is list-replaced by strategic merge (no merge key): restate BOTH
+          # sources, with the runtime Secret required on this tier.
+          envFrom:
+            - configMapRef:
+                name: artifact-content
+            - secretRef:
+                name: artifact-content-runtime
+                optional: false
+      # volumes (pod level) is list-replaced as well: restate the signing-key volume,
+      # required.
+      volumes:
+        - name: signing-key
+          secret:
+            secretName: artifact-content-signing
+            optional: false
+            defaultMode: 0440
+            items:
+              - key: key
+                path: key
