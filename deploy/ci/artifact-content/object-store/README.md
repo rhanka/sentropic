@@ -3,7 +3,8 @@
 PREPROD ONLY (`sentropic-preprod`). Namespace-local S3-compatible store (RustFS 1.0.4,
 digest-pinned, uid 10001, read-only root filesystem, 5Gi `block-standard` PVC) behind
 Service `artifact-object-store:9000`. Only `artifact-content` and `api` pods reach it;
-it has no egress.
+it has no egress. Manifests: `deploy/k8s/overlays/preprod/artifact-object-store/`; this
+directory holds the operator bootstrap material (IAM policies, block configuration, DB role).
 
 ## Why RustFS, not MinIO
 `createPrivateArtifactStorage` (api/src/services/artifacts/lifecycle.ts) calls
@@ -46,6 +47,6 @@ psql STDIN inside `postgres-0` (`psql -U "$POSTGRES_USER" -d app -v ON_ERROR_STO
 an open architecture item (see the SQL header).
 
 ## Rollback
-Remove `artifact-object-store` from `../kustomization.yaml`, delete the StatefulSet, PVC
+Remove `artifact-object-store` from `deploy/k8s/overlays/preprod/kustomization.yaml`, delete the StatefulSet, PVC
 `data-artifact-object-store-0`, Service, NetworkPolicy and Secret `artifact-object-store`.
 Content serving must be closed first (it refuses startup without its store).
