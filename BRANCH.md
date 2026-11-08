@@ -40,8 +40,8 @@
 - Rationale: T1 wagon; the train lane merges every wagon into one train branch with one PR and one CI.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — Tests first**
-  - [ ] `api/tests/api/auth/tenant-first-member-bootstrap.test.ts`: admin_app self-approval of a `requested` row in a tenant with no approved member (status, decidedBy, `membership.approved` audit by the caller); second self-approval refused once a member exists; non-admin_app refused; `invited`/`suspended`/absent rows refused; self-reject refused, self-suspend unchanged.
+- [x] **Lot 1 — Tests first**
+  - [x] `api/tests/api/auth/tenant-first-member-bootstrap.test.ts`: admin_app self-approval of a `requested` row in a tenant with no approved member (status, decidedBy, `membership.approved` audit by the caller); second self-approval refused once a member exists; non-admin_app refused; `invited`/`suspended`/absent rows refused; self-reject refused, self-suspend unchanged.
 - [ ] **Lot 2 — Guard**
   - [ ] `cm-membership.ts`: the self-decision check runs after the tenant workspace locks, inside the SERIALIZABLE write, and admits only the first-member bootstrap.
 - [ ] **Lot 3 — Validation**
