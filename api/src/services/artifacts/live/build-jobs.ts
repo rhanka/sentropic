@@ -1,5 +1,6 @@
 import type { Handoff, HandoffReceipt } from '@sentropic/artifacts/live-host';
-import type { LiveKey } from './records';
+import { LiveError, type LiveKey } from './records';
+import { unconfigured, type ForgeBinding, type ForgeBindings } from './forge-binding';
 import type { HandoffOutcomes } from './handoff-publication';
 import { PHASE_DEADLINE_MS } from './deadline';
 
@@ -11,7 +12,7 @@ export const runStaleMs = (heavyWaitMs: number) => heavyWaitMs + BUILD_ONLY_PHAS
 /** Builder-side job ledger of the host build API. One run token per admission; only the current run may fail it. */
 export interface BuildJobRecord {
   storageScopeId: string; artifactId: string; jobId: string; state: 'accepted' | 'published' | 'failed';
-  token: string; admittedAt: number; code?: string; reason?: string; handoff?: Handoff; receipt?: HandoffReceipt;
+  token: string; admittedAt: number; binding?: ForgeBinding; code?: string; reason?: string; handoff?: Handoff; receipt?: HandoffReceipt;
 }
 export interface RecordStore {
   read(id: string): Promise<BuildJobRecord | undefined>;
@@ -25,13 +26,15 @@ export function createBuildJobs(store: RecordStore, now: () => number, token: ()
     record && record.storageScopeId === key.storageScopeId && record.artifactId === key.artifactId ? record : undefined;
   return {
     read: async (key: LiveKey, jobId: string) => owned(key, await store.read(buildJobId(key, jobId))),
-    /** `run` is true only for a new run: first admission, after a failure, or after a stale run. */
-    admit: (key: LiveKey, jobId: string) => store.update(buildJobId(key, jobId), current => {
+    /** `run` is true only for a new run: first admission, after a failure, or after a stale run. The validated git
+     * binding is stored with the job (R1), immutable: another value for the same job is 409 `binding_conflict`. */
+    admit: (key: LiveKey, jobId: string, binding: ForgeBinding) => store.update(buildJobId(key, jobId), current => {
       const record = owned(key, current);
+      if (record?.binding && !sameBinding(record.binding, binding)) throw new LiveError('binding_conflict');
       if (record && (record.state === 'published' || (record.state === 'accepted' && now() - record.admittedAt < staleMs))) {
         return { result: { record, run: false } };
       }
-      const next: BuildJobRecord = { ...key, jobId, state: 'accepted', token: token(), admittedAt: now(),
+      const next: BuildJobRecord = { ...key, jobId, state: 'accepted', token: token(), admittedAt: now(), binding: { ...binding },
         ...(record?.handoff ? { handoff: record.handoff } : {}) };
       return { next, result: { record: next, run: true } };
     }),
@@ -57,3 +60,11 @@ export function createBuildJobs(store: RecordStore, now: () => number, token: ()
   } satisfies HandoffOutcomes & Record<string, unknown>;
 }
 export type BuildJobs = ReturnType<typeof createBuildJobs>;
+const sameBinding = (a: ForgeBinding, b: ForgeBinding) => a.repoId === b.repoId && a.branch === b.branch && a.subPath === b.subPath;
+/** `LivePorts.jobBinding` (R1): records the binding stored with the admitted job at the HostJob generation, under the
+ * per-generation immutability rule; a job without one refuses `forge_unconfigured`. */
+export const jobForgeBinding = (jobs: Pick<BuildJobs, 'read'>, bindings: Pick<ForgeBindings, 'admit'>) =>
+  async (key: LiveKey, jobId: string, generation: number): Promise<void> => {
+    const binding = (await jobs.read(key, jobId))?.binding;
+    return binding ? bindings.admit(key, generation, binding) : unconfigured();
+  };

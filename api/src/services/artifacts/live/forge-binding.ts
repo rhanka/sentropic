@@ -78,6 +78,8 @@ export function admitBinding(config: ForgeConfig | null, storageScopeId: string,
 export function createForgeBindings(rows: RemoteRows, config: ForgeConfig | null) {
   const row = (key: LiveKey, generation: number) => rowOf(podName(key), 'binding', generation);
   return {
+    /** Contract §1 checks only: a build stores its binding with the job, recorded at the HostJob generation (R1). */
+    validate: (key: LiveKey, binding: ForgeBinding): void => { admitBinding(config, key.storageScopeId, binding); },
     /** Validates, then records; another value for a recorded generation is 409 `binding_conflict`. */
     async admit(key: LiveKey, generation: number, binding: ForgeBinding): Promise<void> {
       admitBinding(config, key.storageScopeId, binding);
