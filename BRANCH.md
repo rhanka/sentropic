@@ -33,6 +33,8 @@
 - [x] `attention` BR-FLR-EX1: the contract (§3, §5) calls the same SG0-app lifecycle service as `POST /github-app/broker/lease` in process. Reason: the service is built inside `createGitHubAppHostRouter`; it is extracted as `createGitHubAppHostService` (same custody store, key, GitHub API and invalidation bus) and the product lease is composed in `routes/github-app.ts`, then passed by `app.ts` to the builder. Impact: no route or behaviour change for the SG0-app mount. Rollback: revert the three files.
 - [x] `attention`: no node/npm version helper exists for the cache identity; `BUILDER_TOOLCHAIN` records the measured node v26.13.0 of `BUILDER_IMAGE`, and the npm version is `0.0.0-unverified` (source-gap) until measured in the pinned image.
 - [x] `attention`: GLM 5.3 review r1 APPROVE (0 blocker, 0 major). Fixed: README forge and binding doc, malformed-archive test. Deferred: total (192 MiB) and compressed (256 MiB) cap fixtures, subPath-aware pod layout (configure `allowedSubPaths: ['']` meanwhile).
+- [x] `attention`: GLM 5.3 review r2 (delta 4f2ac3983) APPROVE.
+- [x] `attention`: CI run 42456383782 on 4f2ac3983 failed only `test-e2e (4)`: `tests/02-organizations.spec.ts:391` (Read-only viewer, détail: champs non éditables), `page.waitForURL: Timeout 10000ms exceeded`. The delta from a4409fe84 (all 6 e2e shards green in run 42455395884) touches no runtime file (README, BRANCH.md, one unit test), so the failure is not caused by this branch; a fresh pull_request run is triggered by this commit (no rerun).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
