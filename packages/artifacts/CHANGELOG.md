@@ -11,6 +11,8 @@
 - The live runtime record follows A-LIVE Amendment 1: `idleDeadline` is 900 s after the last
   access and the absolute `maximumLifetimeAt` is removed.
 - `@sentropic/artifacts/live-host` is unchanged (HostLedger and AcceptOptions frozen).
+- `ARTIFACTS_PROVIDER_VERSION` is `0.2.21` (it equals the package version). Tool definitions are
+  unchanged; the provider manifest digest changes only through `version`.
 
 ## 0.2.20
 
