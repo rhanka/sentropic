@@ -25,16 +25,23 @@ const mini = { jobs: {
 } };
 const main = (changes = { api: 'true' }) => ({ changes, event: 'push', ref: 'refs/heads/main',
   identity: { runId: '900', attempt: '1', headSha: mainSha, tree } });
-const prRun = (overrides = {}) => ({ id: 800, run_attempt: 1, event: 'pull_request', status: 'completed',
-  conclusion: 'success', workflow_id: 77, path: '.github/workflows/ci.yml', head_sha: prSha, head_branch: 'topic',
-  html_url: 'https://github.com/rhanka/sentropic/actions/runs/800', tree_id: tree,
-  head_repository: repository, repository, ...overrides });
-const prJobs = names => names.map((name, index) => ({ id: 100 + index, name, status: 'completed', conclusion: 'success',
-  run_id: 800, run_attempt: 1, html_url: `https://github.com/rhanka/sentropic/actions/runs/800/job/${100 + index}` }));
-const prManifest = (workflow, changes) => ({ identity: { runId: '800', attempt: '1', headSha: prSha, tree },
+const capturedAt = '2026-11-07T12:00:00Z';
+const hoursBefore = hours => new Date(Date.parse(capturedAt) - hours * 3_600_000).toISOString();
+// One attempt per run unless the override lists them; the last one is the run's state.
+const prRun = (overrides = {}) => {
+  const run = { id: 800, run_attempt: 1, event: 'pull_request', status: 'completed',
+    conclusion: 'success', workflow_id: 77, path: '.github/workflows/ci.yml', head_sha: prSha, head_branch: 'topic',
+    html_url: 'https://github.com/rhanka/sentropic/actions/runs/800', tree_id: tree, run_started_at: hoursBefore(2),
+    head_repository: repository, repository, ...overrides };
+  return { attempts: [{ attempt: 1, status: run.status, conclusion: run.conclusion, run_started_at: run.run_started_at }], ...run };
+};
+const prJobs = (names, attempt = 1) => names.map((name, index) => ({ id: 100 + index, name, status: 'completed',
+  conclusion: 'success', run_id: 800, run_attempt: attempt,
+  html_url: `https://github.com/rhanka/sentropic/actions/runs/800/job/${100 + index}` }));
+const prManifest = (workflow, changes, attempt = '1') => ({ identity: { runId: '800', attempt, headSha: prSha, tree },
   policyDigest: policyDigest(workflow),
   expected: workflowExpected(workflow, { changes, event: 'pull_request', ref: 'refs/pull/5/merge' }) });
-const evidence = (overrides = {}) => ({ tree, sha: mainSha, repository, workflowId: 77,
+const evidence = (overrides = {}) => ({ tree, sha: mainSha, repository, workflowId: 77, capturedAt, maxAgeHours: 24,
   candidates: [prRun()], run: prRun(), jobs: prJobs(['changes', 'unit (1)', 'unit (2)', 'build', 'ci-gate']),
   expected: prManifest(mini, { api: 'true', tested_tree: 'false' }), ...overrides });
 const reason = (input, workflow = mini, context = main()) => qualifiedSelection(workflow, context, input).qualification.reason;
@@ -43,6 +50,11 @@ test('should skip test members with run evidence when the merge tree equals a gr
   const { qualification, expected } = qualifiedSelection(mini, main(), evidence());
   assert.equal(qualification.mode, 'tested-tree');
   assert.equal(qualification.runId, 800);
+  assert.equal(qualification.attempt, 1);
+  assert.equal(qualification.mergeSha, mainSha);
+  assert.equal(qualification.headSha, prSha);
+  assert.equal(qualification.candidates, 1);
+  assert.equal(qualification.ageHours, 2);
   assert.equal(qualification.tree, tree);
   assert.equal(qualification.url, 'https://github.com/rhanka/sentropic/actions/runs/800');
   assert.deepEqual(qualification.satisfied.map(row => [row.job, row.url]), [
@@ -73,7 +85,8 @@ test('should reject a satisfied member that executed and failed, or one without 
   assert.equal(reconcileRun(manifest, { identity, executed }).ok, true);
   for (const [forged, pattern] of [[{ mode: 'in-run' }, /unqualified-satisfied-member/],
     [{ ...qualification, runId: 801 }, /unqualified-satisfied-member/], [{ ...qualification, runId: 900 }, /own run/],
-    [{ ...qualification, tree: 'not-a-tree' }, /without a tree/], [{ mode: 'cached' }, /unknown qualification mode/]]) {
+    [{ ...qualification, tree: 'not-a-tree' }, /without a tree/], [{ mode: 'cached' }, /unknown qualification mode/],
+    [{ ...qualification, attempt: 0 }, /without an attempt/], [{ ...qualification, mergeSha: prSha }, /another merge/]]) {
     const verdict = reconcileRun({ ...manifest, qualification: forged }, { identity, executed });
     assert.equal(verdict.ok, false, JSON.stringify(forged));
     assert.match(verdict.failures.map(row => row.reason).join('\n'), pattern, JSON.stringify(forged));
@@ -91,14 +104,76 @@ test('should run everything when the tree differs, the run is a fork, failed, or
   assert.equal(reason(evidence({ run: prRun({ head_repository: 'someone/sentropic' }) })), 'foreign-repository');
   assert.equal(reason(evidence({ run: prRun({ conclusion: 'failure' }) })), 'run-completed-failure');
   assert.equal(reason(evidence({ run: prRun({ status: 'in_progress', conclusion: null }) })), 'run-in_progress-null');
-  const newest = prRun({ id: 805, conclusion: 'failure' });
-  assert.equal(reason(evidence({ candidates: [prRun(), newest] })), 'evidence-not-newest-run', 'a newer red run wins');
   assert.equal(reason(evidence({ error: 'HTTP 502' })), 'capture-error: HTTP 502');
   assert.match(reason(evidence({ candidates: { broken: true } })), /^assessment-error: /);
   for (const input of [null, evidence({ error: 'HTTP 502' }), evidence({ run: prRun({ conclusion: 'failure' }) })]) {
     const { expected } = qualifiedSelection(mini, main(), input);
     assert.deepEqual(expected, workflowExpected(mini, { ...main(), changes: { api: 'true', tested_tree: 'false' } }));
   }
+});
+
+// (d) no newest-wins: several same-tree candidates are reused only when all agree green.
+test('should reuse the newest run only when every same-tree candidate is green', () => {
+  const newer = prRun({ id: 805, html_url: 'https://github.com/rhanka/sentropic/actions/runs/805' });
+  const both = qualifiedSelection(mini, main(), evidence({ candidates: [prRun(), newer], run: newer,
+    jobs: prJobs(['changes', 'unit (1)', 'unit (2)', 'build', 'ci-gate']).map(job => ({ ...job, run_id: 805 })),
+    expected: { ...prManifest(mini, { api: 'true' }), identity: { runId: '805', attempt: '1', headSha: prSha, tree } } }));
+  assert.equal(both.qualification.mode, 'tested-tree', both.qualification.reason);
+  assert.equal(both.qualification.runId, 805);
+  assert.equal(both.qualification.candidates, 2);
+  assert.equal(reason(evidence({ candidates: [prRun(), newer] })), 'evidence-not-selected-run');
+});
+
+test('should run everything when same-tree candidates disagree or any of them is red', () => {
+  const red = overrides => prRun({ conclusion: 'failure', ...overrides });
+  assert.equal(reason(evidence({ candidates: [prRun(), red({ id: 805 })] })), 'candidate-not-green: 805#1 completed-failure',
+    'a newer red run');
+  assert.equal(reason(evidence({ candidates: [red({ id: 790 }), prRun()] })), 'candidate-not-green: 790#1 completed-failure',
+    'an older red run');
+  assert.equal(reason(evidence({ candidates: [prRun(), red({ id: 805, head_repository: 'someone/sentropic' })] })),
+    'candidate-not-green: 805#1 completed-failure', 'a red fork run of the same tree');
+  assert.equal(reason(evidence({ candidates: [prRun(), prRun({ id: 805, status: 'in_progress', conclusion: null })] })),
+    'candidate-not-green: 805#1 in_progress-null', 'an unfinished same-tree run');
+  assert.equal(reason(evidence({ candidates: [prRun(), prRun({ id: 805, conclusion: 'cancelled' })] })),
+    'candidate-not-green: 805#1 completed-cancelled');
+  assert.equal(reason(evidence({ candidates: [prRun(), prRun({ id: 'x' })] })), 'candidate-invalid-id: x');
+  // A candidate of another tree or workflow is neither evidence nor counter-evidence.
+  const unrelated = [prRun(), red({ id: 805, tree_id: 'd'.repeat(40) }), red({ id: 806, workflow_id: 78 })];
+  assert.equal(qualifiedSelection(mini, main(), evidence({ candidates: unrelated })).qualification.mode, 'tested-tree');
+});
+
+// (a) attempts are explicit: each one is its own conclusion; the concluded one is reused.
+test('should treat every run attempt as its own conclusion and reuse the concluded attempt', () => {
+  const attempt = (number, conclusion = 'success') => ({ attempt: number, status: 'completed', conclusion,
+    run_started_at: hoursBefore(2) });
+  const rerun = prRun({ run_attempt: 2, attempts: [attempt(1), attempt(2)] });
+  const second = { candidates: [rerun], run: rerun, jobs: prJobs(['changes', 'unit (1)', 'unit (2)', 'build', 'ci-gate'], 2),
+    expected: prManifest(mini, { api: 'true' }, '2') };
+  const accepted = qualifiedSelection(mini, main(), evidence(second)).qualification;
+  assert.equal(accepted.mode, 'tested-tree', accepted.reason);
+  assert.equal(accepted.attempt, 2);
+  const flaky = prRun({ run_attempt: 2, attempts: [attempt(1, 'failure'), attempt(2)] });
+  assert.equal(reason(evidence({ ...second, candidates: [flaky], run: flaky })), 'candidate-not-green: 800#1 completed-failure');
+  const partial = prRun({ run_attempt: 2, attempts: [attempt(2)] });
+  assert.equal(reason(evidence({ ...second, candidates: [partial], run: partial })), 'candidate-attempts-incomplete: 800');
+  const stale = prRun({ run_attempt: 2, attempts: [attempt(1), attempt(2, 'failure')] });
+  assert.equal(reason(evidence({ ...second, candidates: [stale], run: stale })), 'candidate-attempt-mismatch: 800');
+  assert.equal(reason(evidence({ ...second, run: prRun() })), 'evidence-not-concluded-attempt');
+  assert.equal(reason(evidence({ ...second, expected: prManifest(mini, { api: 'true' }, '1') })), 'expected-set-identity-mismatch');
+});
+
+// (a) age bound on the reused attempt's start (default 24 h).
+test('should run everything when the reused attempt is older than the age bound', () => {
+  const aged = hours => { const run = prRun({ run_started_at: hoursBefore(hours) }); return { candidates: [run], run }; };
+  assert.equal(reason(evidence(aged(25))), 'run-too-old: 25.0h > 24h');
+  assert.equal(reason(evidence({ ...aged(25), maxAgeHours: undefined })), 'run-too-old: 25.0h > 24h', 'default bound');
+  assert.equal(qualifiedSelection(mini, main(), evidence({ ...aged(23), maxAgeHours: undefined })).qualification.maxAgeHours, 24);
+  assert.equal(qualifiedSelection(mini, main(), evidence({ ...aged(25), maxAgeHours: 48 })).qualification.mode, 'tested-tree');
+  for (const bound of [null, 0, -1, '24']) assert.equal(reason(evidence({ maxAgeHours: bound })), 'invalid-age-bound');
+  assert.equal(reason(evidence(aged(-1))), 'run-started-after-capture');
+  assert.equal(reason(evidence({ capturedAt: undefined })), 'missing-run-time');
+  const unknown = prRun({ run_started_at: null });
+  assert.equal(reason(evidence({ candidates: [unknown], run: unknown })), 'missing-run-time');
 });
 
 test('should keep the complete run without a green gate, expected set, workflow policy or coverage', () => {
@@ -135,10 +210,14 @@ test('should keep the complete run without a green gate, expected set, workflow 
 test('should validate a recorded qualification reference for every receipt consumer', () => {
   assert.deepEqual(qualificationProblems(undefined), []);
   assert.deepEqual(qualificationProblems({ mode: 'in-run' }), []);
-  assert.deepEqual(qualificationProblems({ mode: 'tested-tree', runId: 800, tree }, { runId: 900, tree }), []);
-  assert.equal(qualificationProblems({ mode: 'tested-tree', runId: 'x', tree }).length, 1);
-  assert.equal(qualificationProblems({ mode: 'tested-tree', runId: 900, tree }, { runId: '900' }).length, 1);
-  assert.equal(qualificationProblems({ mode: 'tested-tree', runId: 800, tree }, { tree: 'd'.repeat(40) }).length, 1);
+  const ref = { mode: 'tested-tree', mergeSha: mainSha, runId: 800, attempt: 1, tree };
+  assert.deepEqual(qualificationProblems(ref, { runId: 900, tree, sha: mainSha }), []);
+  assert.equal(qualificationProblems({ ...ref, runId: 'x' }).length, 1);
+  assert.equal(qualificationProblems({ ...ref, runId: 900 }, { runId: '900' }).length, 1);
+  assert.equal(qualificationProblems(ref, { tree: 'd'.repeat(40) }).length, 1);
+  assert.equal(qualificationProblems({ ...ref, attempt: undefined }).length, 1);
+  assert.equal(qualificationProblems({ ...ref, mergeSha: undefined }).length, 1);
+  assert.equal(qualificationProblems(ref, { sha: prSha }).length, 1);
   assert.equal(qualificationProblems({ mode: 'replayed' }).length, 1);
   assert.equal(assessTestedTree({}).mode, 'in-run');
 });
