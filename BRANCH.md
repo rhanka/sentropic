@@ -37,6 +37,7 @@
 - [ ] BR90-EX18: heavy-phase queue pod slots (`maxPods`, blocker `pods`) and build cost 1261 MiB (1280Mi limit minus the 19 MiB pod base); `@sentropic/cluster-mesh` 0.26.0-dev.16 to 0.26.0-dev.17 with changelog. Rollback: revert the queue, the tests and the bump together.
 - [ ] BR90-EX19: root and api lock workspace entries follow artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 (version strings only). Rollback: revert with the bumps.
 - [ ] BR90-EX20: the selected packaging fixture names the artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 archives with the regenerated artifacts integrity pin. Rollback: revert with the bumps.
+- [ ] `attention`: build-1280 verdict NO: no measured build heap passes under 1280Mi with one CPU (1024 and 896 OOM-killed, 768 and 640 V8 heap OOM; 1536Mi passes at peak 1388.6 MiB). `NODE_BUILD_HEAP_OPTIONS` stays 1024 and is unverified; the in-pod clean build does not fit the quota-fit pod. Owner s-archi.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -52,7 +53,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 1: feat/artifacts-live-invitations (307cab2be) cherry-picked without conflict (10 commits, 2 BRANCH.md-only commits skipped).
 - [x] Lot 2: provider version 0.2.22 and APP-P1 repin: manifest at version 0.2.21 still hashes 5150544a (the four new tools are outside the APP-P1 selection), 0.2.22 hashes 61c50b33.
-- [ ] Lot 3: pod quota fit (addendum A).
+- [x] Lot 3: pod quota fit (addendum A): requests 250m/420Mi/0, limits 1/1280Mi/2560Mi, emptyDir source 256Mi, scratch 1280Mi, dependencies 1024Mi; the pod test asserts the tenant LimitRange and ResourceQuota fit for four pods.
 - [ ] Lot 4: controller pod slots, quota backpressure and no surge (addendum B rules 1-3).
 - [ ] Lot 5: cluster-mesh bump, locks and selected fixture.
 - [ ] Lot 6: scoped checks, push, open the PR, GLM review of the full diff.

@@ -15,13 +15,13 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.nodeSelector).toEqual({ nodepool: 'artifact-builders' });
     expect(pod.spec.tolerations).toEqual([{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }]);
     const res = pod.spec.containers[0].resources;
-    expect(res.requests).toEqual({ cpu: '350m', memory: '450Mi', 'ephemeral-storage': '0' });
-    expect(res.limits).toEqual({ cpu: '2', memory: '1536Mi', 'ephemeral-storage': '4Gi' });
+    expect(res.requests).toEqual({ cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' });
+    expect(res.limits).toEqual({ cpu: '1', memory: '1280Mi', 'ephemeral-storage': '2560Mi' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'NODE_OPTIONS', value: '--max-old-space-size=384' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } });
     expect(pod.spec.containers[0].env.filter(entry => 'valueFrom' in entry)).toHaveLength(1);
-    expect(pod.spec.volumes).toEqual([{ name: 'source', emptyDir: { sizeLimit: '512Mi' } },
-      { name: 'scratch', emptyDir: { sizeLimit: '2Gi' } }, { name: 'dependencies', emptyDir: { sizeLimit: '1536Mi' } }]);
+    expect(pod.spec.volumes).toEqual([{ name: 'source', emptyDir: { sizeLimit: '256Mi' } },
+      { name: 'scratch', emptyDir: { sizeLimit: '1280Mi' } }, { name: 'dependencies', emptyDir: { sizeLimit: '1024Mi' } }]);
     expect(pod.metadata.labels['sentropic.dev/artifact-binding']).toBeDefined();
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
   });
@@ -30,10 +30,17 @@ describe('builder pod admission and recovery', () => {
     const { requests, limits } = pod.spec.containers[0].resources;
     const mebibytes = (value: string) => Number(/^(\d+)(Mi|Gi)$/.exec(value)![1]) * (value.endsWith('Gi') ? 1024 : 1);
     const emptyDirs = pod.spec.volumes.reduce((total, volume) => total + mebibytes(volume.emptyDir.sizeLimit), 0);
-    expect(emptyDirs).toBeLessThanOrEqual(mebibytes(limits['ephemeral-storage']));
+    expect(emptyDirs).toBe(mebibytes(limits['ephemeral-storage']));
     // k8s measured the d2-4 node: 1458m CPU free after system pods; only memory limits overcommit.
     expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1458);
     expect(mebibytes(limits.memory)).toBeGreaterThan(mebibytes(requests.memory));
+    // Tenant LimitRange (cpu <= 1 per container) and ResourceQuota (requests.cpu 1, limits.memory 5Gi,
+    // limits.ephemeral-storage 10Gi, pods 5) admit four pods; four memory requests fit the 1706 MiB node share.
+    expect(Number(limits.cpu)).toBeLessThanOrEqual(1);
+    expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1000);
+    expect(4 * mebibytes(limits.memory)).toBeLessThanOrEqual(5 * 1024);
+    expect(4 * mebibytes(limits['ephemeral-storage'])).toBeLessThanOrEqual(10 * 1024);
+    expect(4 * mebibytes(requests.memory)).toBeLessThanOrEqual(1706);
   });
   it('should adopt the matching pod after a creation response is lost', async () => {
     const f = fixture(); const create = vi.mocked(f.core.create).getMockImplementation()!;
