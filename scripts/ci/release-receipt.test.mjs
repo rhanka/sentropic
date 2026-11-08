@@ -509,7 +509,9 @@ test('CLI assess-chain builds evidence from a needs file', () => {
 
 // BR92-EX1: a tested-tree release names the same-tree run that qualified it.
 const tree = 'd'.repeat(40);
-const testedTree = (overrides = {}) => ({ mode: 'tested-tree', runId: '4100', tree, ...overrides });
+const prHead = 'b'.repeat(40);
+const testedTree = (overrides = {}) => ({ mode: 'tested-tree', mergeSha: sha, runId: '4100', attempt: '1', tree,
+  headSha: prHead, ...overrides });
 
 test('chain accepts a release qualified by a same-tree PR run and records the reference', () => {
   const verdict = assessChain({ needs: chainNeeds({ 'publish-api-image': 'success' }),
@@ -518,8 +520,10 @@ test('chain accepts a release qualified by a same-tree PR run and records the re
   assert.deepEqual(verdict.evidence.qualification, testedTree());
 });
 
-test('chain rejects a tested-tree reference to another tree, its own run, no run or no source tree', () => {
+test('chain rejects a tested-tree reference to another tree or merge, its own run, no run, attempt or source tree', () => {
   for (const [qualification, source, pattern] of [
+    [testedTree({ attempt: undefined }), { ...chainSource(), tree }, /without an attempt/],
+    [testedTree({ mergeSha: prHead }), { ...chainSource(), tree }, /another merge/],
     [testedTree({ tree: 'e'.repeat(40) }), { ...chainSource(), tree }, /another tree/],
     [testedTree({ runId: '4242' }), { ...chainSource(), tree }, /its own run/],
     [testedTree({ runId: '' }), { ...chainSource(), tree }, /without a run id/],
@@ -541,12 +545,16 @@ test('CLI assess-chain requires a declared qualification and checks a tested-tre
     '--api', 'true', '--out', path.join(dir, 'receipt.json')];
   const run = (extra) => spawnSync(process.execPath, [cli, ...args, ...extra], { encoding: 'utf8' });
   assert.equal(run([]).status, 2, 'undeclared qualification');
-  assert.equal(run(['--qualification-mode', 'tested-tree', '--qualification-run', '4100',
-    '--qualification-tree', tree, '--source-tree', tree]).status, 0);
+  const reference = ['--qualification-mode', 'tested-tree', '--qualification-run', '4100', '--qualification-attempt', '1',
+    '--qualification-head-sha', prHead, '--qualification-tree', tree];
+  assert.equal(run([...reference, '--source-tree', tree]).status, 0);
   const receipt = JSON.parse(fs.readFileSync(path.join(dir, 'receipt.json'), 'utf8'));
   assert.deepEqual(receipt.evidence.qualification, testedTree());
-  const stale = run(['--qualification-mode', 'tested-tree', '--qualification-run', '4100',
-    '--qualification-tree', tree, '--source-tree', 'e'.repeat(40)]);
+  assert.equal(receipt.evidence.source.sha, sha, 'the main merge commit');
+  const stale = run([...reference, '--source-tree', 'e'.repeat(40)]);
   assert.equal(stale.status, 1);
   assert.match(stale.stderr, /another tree/);
+  const noAttempt = run([...reference.filter(value => !['--qualification-attempt', '1'].includes(value)), '--source-tree', tree]);
+  assert.equal(noAttempt.status, 1);
+  assert.match(noAttempt.stderr, /without an attempt/);
 });
