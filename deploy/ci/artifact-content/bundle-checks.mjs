@@ -19,6 +19,8 @@ export const preprodBuilder = {
   ARTIFACT_SUPERVISOR_RELAY_URL: internal, ARTIFACT_LIVE_EDGE_INTERNAL_URL: internal,
   ARTIFACT_BUILDER_REMOTE_HOST_URL: 'https://preprod.immo.sent-tech.ca/api/v1/artifacts',
   ARTIFACT_BUILDER_HOST_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier-preprod"}]',
+  ARTIFACT_BUILDER_CACHE_S3_BUCKET: 'artifact-builder-cache', ARTIFACT_BUILDER_CACHE_S3_REGION: 'us-east-1',
+  ARTIFACT_BUILDER_CACHE_S3_ENDPOINT: 'http://artifact-object-store.sentropic-preprod.svc.cluster.local:9000',
   GITHUB_APP_PUBLIC_BASE_URL: 'https://preprod.sentropic.sent-tech.ca',
   GITHUB_APP_TARGETS_JSON: '[{"locator":"rhanka/radar-immobilier","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]',
   GITHUB_APP_BROKER_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]',

@@ -120,6 +120,13 @@ data:
   # Verified service client -> host identity (default deny without it): the immo preprod service client
   # (client_credentials, scopes github-app:broker artifacts:builder), its host and its storage scope.
   ARTIFACT_BUILDER_HOST_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier-preprod"}]'
+  # Own dependency-cache storage of the builder (F1, cache-storage.ts): dedicated private bucket on the namespace-local
+  # object store (overlays/preprod/artifact-object-store, qualified by a signed GetPublicAccessBlock, 4 x true). The
+  # endpoint forces path-style URLs. The bucket-scoped read/write credential pair stays in Secret sentropic-api
+  # (ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID, ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY).
+  ARTIFACT_BUILDER_CACHE_S3_BUCKET: "artifact-builder-cache"
+  ARTIFACT_BUILDER_CACHE_S3_REGION: "us-east-1"
+  ARTIFACT_BUILDER_CACHE_S3_ENDPOINT: "http://artifact-object-store.sentropic-preprod.svc.cluster.local:9000"
   # SG0-app GitHub App broker. repoId is the opaque handle immo sends (IMMO_GIT_REPO_ID); the numeric GitHub id is
   # resolved from the locator at enrollment and checked at every mint.
   GITHUB_APP_PUBLIC_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
