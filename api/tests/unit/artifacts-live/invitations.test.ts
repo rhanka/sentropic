@@ -27,6 +27,17 @@ describe('live invitation route fencing', () => {
     f.advance(1); f.invitation.expiresAt = null; await f.controller.reconcile(key);
     expect((await f.state())!.runtime).toMatchObject({ routeEpoch: live.routeEpoch + 1, invitationExpiresAt: null });
   });
+  it('should adopt a later expiry at the same epoch without fencing when another invitation is still active', async () => {
+    const f = fixture(); f.invitation.expiresAt = 1000; const live = await f.controller.start(key); f.events.length = 0;
+    f.invitation.expiresAt = 5000; f.advance(1000); await f.controller.reconcile(key);
+    expect((await f.state())!.runtime).toMatchObject({ routeEpoch: live.routeEpoch, invitationExpiresAt: 5000 });
+    expect(f.events).not.toContain('revoke');
+  });
+  it('should fence once when the last expiry lapsed even if the host still reports it', async () => {
+    const f = fixture(); f.invitation.expiresAt = 1000; const live = await f.controller.start(key);
+    f.advance(1000); await f.controller.reconcile(key); await f.controller.reconcile(key);
+    expect((await f.state())!.runtime).toMatchObject({ routeEpoch: live.routeEpoch + 1, invitationExpiresAt: null });
+  });
   it('should require the worker to confirm the new route epoch before the route reopens', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     f.invitation.epoch = 1; f.events.length = 0;
