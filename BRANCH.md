@@ -48,7 +48,7 @@
 - [x] **Lot 2 — Tools and routing**
   - [x] Four frozen definitions, capability names, profile routes, HTTP and MCP dispatch to `LiveService.execute`.
 - [ ] **Lot 3 — Service and storage**
-  - [ ] Invitation ledger in the live transaction (memory and postgres-live), invitation service, `liveInvitationState`, `liveViewer`.
+  - [x] Invitation ledger in the live transaction (memory and postgres-live), invitation service, `liveInvitationState`, `liveViewer`.
   - [ ] Migration 0013 with the mandatory column and index guard.
 - [ ] **Lot 4 — Release and gate**
   - [ ] Version 0.2.22 and changelog.

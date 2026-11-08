@@ -10,13 +10,24 @@ import { readLivePage } from './live-read.js';
 import { liveBusy, mutateLive } from './live-mutations.js';
 import { executeLiveCommit } from './live-commit.js';
 import { settleLiveWorker } from './live-worker.js';
-import { liveResponse, type LiveService, type LiveServiceDeps } from './live-contracts.js';
+import { liveResponse, type LiveServiceDeps, type LiveSessionService } from './live-contracts.js';
+import { executeLiveInvitation, LIVE_INVITATION_OPERATIONS } from './live-invitations.js';
+import { liveInvitationViews } from './live-invitation-state.js';
 export type * from './live-contracts.js';
+export type { LiveInvitationLedger, LiveInvitationRecord, LiveInvitationStatus } from './live-store.js';
+export { LIVE_INVITATIONS_OPEN_MAX } from './live-invitations.js';
+export { LIVE_INVITATION_TOOL_CLASSES } from '../git-tool-definitions.js';
 
-export function createLiveService(deps: LiveServiceDeps): LiveService {
+export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
   const now = deps.now ?? Date.now;
-  return { async execute(operation, raw, invocation) {
+  return { ...liveInvitationViews(deps), async execute(operation, raw, invocation) {
     const args = structuredClone(raw) as Record<string, any>;
+    if ((LIVE_INVITATION_OPERATIONS as readonly string[]).includes(operation)) {
+      if (!matchesSchema(args, GIT_TOOL_DEFINITIONS[`artifacts_${operation}` as keyof typeof GIT_TOOL_DEFINITIONS].inputSchema)) {
+        throw new ArtifactOperationError('invalid_request');
+      }
+      return executeLiveInvitation(deps, operation, args, invocation);
+    }
     if (!['live_write', 'live_read', 'live_reset', 'live_status', 'live_control', 'git_commit'].includes(operation) ||
       !matchesSchema(args, GIT_TOOL_DEFINITIONS[`artifacts_${operation}` as keyof typeof GIT_TOOL_DEFINITIONS].inputSchema)) {
       throw new ArtifactOperationError('invalid_request');
