@@ -10,7 +10,6 @@ import { pool } from './db/client';
 import { builderCacheBlobs } from './services/artifacts/live/cache-storage';
 import { createProductBuilder } from './services/artifacts/live/product-builder';
 import { createInClusterKubernetes } from './services/artifacts/live/kubernetes';
-import { UNCONFIGURED_FORGE_READS } from './services/artifacts/live/forge';
 import { LiveError } from './services/artifacts/live/records';
 import { remoteRevocationError } from './services/auth/remote-revocation-error';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
@@ -96,7 +95,7 @@ import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
 import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
 import { clusterMeshLiveQualificationRouter } from './routes/cluster-mesh-live-qualification';
-import { createProductGitHubAppRouter } from './routes/github-app';
+import { createProductGitHubAppLease, createProductGitHubAppRouter } from './routes/github-app';
 import { isGitHubAppPath } from './services/cluster-mesh/github-app-host';
 import {
   ReceiverRefusal,
@@ -454,7 +453,7 @@ app.route('/api/v1/auth/session/remote-action-evidence', createRemoteEvidenceRou
 // (F2): the refusal is logged naming the variable and the API keeps serving.
 const productBuilder = createProductBuilder(process.env, {
   pool, cacheBlobs: builderCacheBlobs, authenticate: authenticateBuilderHost,
-  kubernetes: placement => createInClusterKubernetes(placement), forge: UNCONFIGURED_FORGE_READS,
+  kubernetes: placement => createInClusterKubernetes(placement), gitHubApp: createProductGitHubAppLease(),
   // Codes and reasons only: a builder error never carries a key, a token or a body.
   log: (event, error) => logger.error({ event, code: error instanceof LiveError ? error.code : 'unknown',
     reason: error instanceof LiveError ? error.reason : undefined }, event),
