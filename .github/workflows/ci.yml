@@ -274,6 +274,8 @@ jobs:
       tested_tree: ${{ steps.tested_tree.outputs.tested_tree }}
       tested_run: ${{ steps.tested_tree.outputs.run }}
       tested_tree_id: ${{ steps.tested_tree.outputs.tree }}
+      tested_attempt: ${{ steps.tested_tree.outputs.attempt }}
+      tested_head: ${{ steps.tested_tree.outputs.head }}
       global: ${{ steps.filter.outputs.global }}
       idp_sync: ${{ steps.filter.outputs.idp_sync }}
       api: ${{ steps.filter.outputs.api }}
@@ -733,45 +735,73 @@ jobs:
           SELECTED: ${{ (github.base_ref == 'feat/engram-e2-integration' || (github.base_ref == 'main' && github.head_ref == 'feat/engram-e2-integration')) && steps.filter.outputs.engram_e2 == 'true' }}
         run: echo "selected=$SELECTED" >> "$GITHUB_OUTPUT"
       # BR92-EX1: capture only (read-only token). The Make manifest below accepts
-      # or rejects the newest same-repository pull_request run of this workflow
-      # whose head commit carries HEAD's tree; an API error keeps the full run.
+      # same-tree pull_request evidence only when every same-tree candidate of
+      # this workflow is green on every attempt (no newest-wins) and the reused
+      # attempt started within the age bound; an API error keeps the full run.
       - name: Capture same-tree pull_request evidence (main push only)
         id: tested_tree_capture
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
+        env:
+          TESTED_TREE_MAX_AGE_HOURS: '24'
+          TESTED_TREE_LOOKBACK_HOURS: '168'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
             const fs = require('node:fs');
             const { execFileSync } = require('node:child_process');
             fs.mkdirSync('tmp/ci-capacity', { recursive: true });
+            const capturedAt = new Date().toISOString();
+            const maxAgeHours = Number(process.env.TESTED_TREE_MAX_AGE_HOURS);
+            const lookbackHours = Number(process.env.TESTED_TREE_LOOKBACK_HOURS);
             const evidence = { tree: execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim(),
-              sha: context.sha, repository: `${context.repo.owner}/${context.repo.repo}` };
+              sha: context.sha, repository: `${context.repo.owner}/${context.repo.repo}`, capturedAt, maxAgeHours, lookbackHours };
             const keep = run => ({ id: run.id, run_attempt: run.run_attempt, event: run.event, status: run.status,
               conclusion: run.conclusion, workflow_id: run.workflow_id, path: run.path, head_sha: run.head_sha,
               head_branch: run.head_branch, html_url: run.html_url, tree_id: run.head_commit?.tree_id ?? null,
+              run_started_at: run.run_started_at ?? null,
               head_repository: run.head_repository?.full_name ?? null, repository: run.repository?.full_name ?? null });
             try {
+              if (!(maxAgeHours > 0 && lookbackHours >= maxAgeHours)) throw new Error('invalid age bound or lookback');
               const { data: current } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
               evidence.workflowId = current.workflow_id;
-              const { data: list } = await github.rest.actions.listWorkflowRuns({ ...context.repo,
-                workflow_id: current.workflow_id, event: 'pull_request', status: 'completed', per_page: 100 });
-              evidence.candidates = list.workflow_runs.filter(run => run.head_commit?.tree_id === evidence.tree).map(keep);
+              // Every pull_request run of this workflow in the lookback, whatever its status.
+              const since = new Date(Date.parse(capturedAt) - lookbackHours * 3_600_000).toISOString();
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, { ...context.repo,
+                workflow_id: current.workflow_id, event: 'pull_request', created: `>=${since}`, per_page: 100 });
+              if (runs.length >= 1000) throw new Error(`candidate scan truncated at ${runs.length} runs`);
+              const sameTree = [...new Map(runs.filter(run => run.head_commit?.tree_id === evidence.tree)
+                .map(run => [run.id, run])).values()];
+              // Each attempt is its own conclusion; the last one concluded the run.
+              const concluded = new Map();
+              evidence.candidates = [];
+              for (const run of sameTree) {
+                const attempts = [];
+                for (let number = 1; number <= run.run_attempt; number += 1) {
+                  const { data } = await github.rest.actions.getWorkflowRunAttempt({ ...context.repo,
+                    run_id: run.id, attempt_number: number });
+                  attempts.push({ attempt: data.run_attempt, status: data.status, conclusion: data.conclusion,
+                    run_started_at: data.run_started_at ?? null });
+                  concluded.set(run.id, data);
+                }
+                evidence.candidates.push({ ...keep(run), attempts });
+              }
               const chosen = evidence.candidates.filter(run => run.head_repository === evidence.repository
                 && run.repository === evidence.repository).sort((a, b) => b.id - a.id)[0];
-              if (chosen) {
-                const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: chosen.id });
+              if (chosen && concluded.has(chosen.id)) {
+                const run = concluded.get(chosen.id);
                 evidence.run = keep(run);
                 evidence.jobs = (await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, { ...context.repo,
                   run_id: run.id, attempt_number: run.run_attempt, per_page: 100 })).map(job => ({ id: job.id, name: job.name,
                   status: job.status, conclusion: job.conclusion, run_id: job.run_id, run_attempt: job.run_attempt, html_url: job.html_url }));
                 const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
                   { ...context.repo, run_id: run.id, per_page: 100 });
-                const manifest = artifacts.filter(item => !item.expired && item.name.startsWith(`ci-expected-${run.id}-`))
-                  .sort((a, b) => b.id - a.id)[0];
-                if (manifest) {
+                // The manifest of exactly the concluded attempt.
+                const manifests = artifacts.filter(item => !item.expired && item.name === `ci-expected-${run.id}-${run.run_attempt}`);
+                if (manifests.length > 1) throw new Error(`ambiguous expected manifest for run ${run.id}`);
+                if (manifests.length === 1) {
                   const { data } = await github.rest.actions.downloadArtifact({ ...context.repo,
-                    artifact_id: manifest.id, archive_format: 'zip' });
+                    artifact_id: manifests[0].id, archive_format: 'zip' });
                   fs.writeFileSync('tmp/ci-capacity/tested-tree-expected.zip', Buffer.from(data));
                   evidence.expected = JSON.parse(execFileSync('unzip', ['-p', 'tmp/ci-capacity/tested-tree-expected.zip',
                     'expected.json'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
@@ -805,12 +835,12 @@ jobs:
           manifest=tmp/ci-capacity/expected.json
           mode="$(jq -r '.qualification.mode // "in-run"' "$manifest")"
           if [ "$mode" = tested-tree ]; then
-            jq -r '"tested_tree=true", "run=\(.qualification.runId)", "tree=\(.qualification.tree)"' "$manifest" >> "$GITHUB_OUTPUT"
-            jq -r '.qualification as $q | "### Tested tree: satisfied by run [\($q.runId)](\($q.url)) (tree \($q.tree))",
+            jq -r '"tested_tree=true", "run=\(.qualification.runId)", "attempt=\(.qualification.attempt)", "head=\(.qualification.headSha)", "tree=\(.qualification.tree)"' "$manifest" >> "$GITHUB_OUTPUT"
+            jq -r '.qualification as $q | "### Tested tree: satisfied by run [\($q.runId)](\($q.url)) attempt \($q.attempt) (tree \($q.tree), \($q.candidates) green same-tree candidate(s), started \($q.ageHours) h before, bound \($q.maxAgeHours) h)",
               "| job | evidence |", "|---|---|",
               ($q.satisfied[] | "| \(.job) | satisfied by run [\($q.runId)](\(.url)) |")' "$manifest" >> "$GITHUB_STEP_SUMMARY"
           else
-            printf 'tested_tree=false\nrun=\ntree=\n' >> "$GITHUB_OUTPUT"
+            printf 'tested_tree=false\nrun=\nattempt=\nhead=\ntree=\n' >> "$GITHUB_OUTPUT"
             jq -r '"### Complete run: \(.qualification.reason // "in-run")"' "$manifest" >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -3569,6 +3599,8 @@ jobs:
             --api-tag "${{ steps.tags.outputs.api_tag }}" --ui-tag "${{ steps.tags.outputs.ui_tag }}" \
             --qualification-mode "${{ needs.changes.outputs.tested_tree == 'true' && 'tested-tree' || 'in-run' }}" \
             --qualification-run "${{ needs.changes.outputs.tested_run }}" \
+            --qualification-attempt "${{ needs.changes.outputs.tested_attempt }}" \
+            --qualification-head-sha "${{ needs.changes.outputs.tested_head }}" \
             --qualification-tree "${{ needs.changes.outputs.tested_tree_id }}" \
             --source-tree "$(git rev-parse 'HEAD^{tree}')" \
             --out release-receipt.json

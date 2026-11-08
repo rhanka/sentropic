@@ -83,7 +83,7 @@ function priorProblems(prior, source) {
 // identified run of the exact source tree (tested-tree); anything else fails.
 function releaseQualificationProblems(qualification, source) {
   if (qualification?.mode === 'tested-tree' && !source.tree) return ['tested-tree qualification without a source tree'];
-  return qualificationProblems(qualification, { runId: source.runId ?? null, tree: source.tree ?? null });
+  return qualificationProblems(qualification, { runId: source.runId ?? null, tree: source.tree ?? null, sha: source.sha ?? null });
 }
 
 export function assessReleaseReceipt(evidence = {}) {
@@ -224,8 +224,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.stderr.write(`::error::release-receipt: --qualification-mode in-run|tested-tree is required (got ${mode})\n`);
       process.exit(2);
     }
-    const qualification = mode === 'in-run' ? { mode }
-      : { mode, runId: argValue(argv, '--qualification-run'), tree: argValue(argv, '--qualification-tree') };
+    // A tested-tree release names its merge commit and the reused PR run attempt and tree.
+    const qualification = mode === 'in-run' ? { mode } : { mode, mergeSha: source.sha,
+      runId: argValue(argv, '--qualification-run'), attempt: argValue(argv, '--qualification-attempt'),
+      tree: argValue(argv, '--qualification-tree'), headSha: argValue(argv, '--qualification-head-sha') };
     const selections = {
       api: isTrue(argValue(argv, '--api')), ui: isTrue(argValue(argv, '--ui')), global: isTrue(argValue(argv, '--global')),
       meshPublish: isTrue(argValue(argv, '--mesh-publish')), gatewayPublish: isTrue(argValue(argv, '--gateway-publish')),
@@ -235,7 +237,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const verdict = assessChain({ needs, selections, source, qualification });
     fail(verdict, verdict.evidence);
   } else {
-    process.stderr.write('Usage: release-receipt.mjs assess --evidence <file> [--out <file>]\n     release-receipt.mjs assess-chain --needs <file> --sha <sha> --run-id <id> --attempt <n> [--out <file>]\n       --api/--ui/--global/--mesh-publish/--gateway-publish/--cluster-publish true|false [--api-tag T] [--ui-tag T]\n       --qualification-mode in-run|tested-tree [--qualification-run ID --qualification-tree TREE] [--source-tree TREE]\n');
+    process.stderr.write('Usage: release-receipt.mjs assess --evidence <file> [--out <file>]\n     release-receipt.mjs assess-chain --needs <file> --sha <sha> --run-id <id> --attempt <n> [--out <file>]\n       --api/--ui/--global/--mesh-publish/--gateway-publish/--cluster-publish true|false [--api-tag T] [--ui-tag T]\n       --qualification-mode in-run|tested-tree [--qualification-run ID --qualification-attempt N --qualification-tree TREE --qualification-head-sha SHA] [--source-tree TREE]\n');
     process.exit(2);
   }
 }
