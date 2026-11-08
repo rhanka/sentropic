@@ -22,7 +22,10 @@ export interface LiveWorkerClientOptions {
   /** S2S credential of the host (scope artifacts:builder); the builder takes the storage scope from it, never from a body. */
   readonly identity?: { authorization(): Promise<string> } | undefined;
   readonly fetch?: typeof fetch;
+  /** Page, seal and stop calls (default 10 s). */
   readonly timeoutMs?: number;
+  /** Reconcile call (default 30 s): the builder answers within its live wait (25 s in the product builder). */
+  readonly reconcileTimeoutMs?: number;
   /** Host port: owner and fences of the current live runtime (see liveStoreFences). */
   readonly fences: LiveWorkerFences;
   /** Host port: the git binding of the artifact; only an attached binding of the exact generation is sent. */
@@ -84,50 +87,69 @@ function parseAck(raw: unknown): LiveBridgeAck {
  */
 export function createLiveWorkerClient(options: LiveWorkerClientOptions): LiveWorkerPort {
   const base = options.baseUrl !== undefined && options.identity !== undefined ? builderBase(options.baseUrl) : undefined;
-  /** Session epoch floor per (artifact, generation): never lower than an epoch already sent (409 stale_invitation). */
+  const bounded = <V>(map: Map<string, V>, key: string, value: V) => {
+    if (!map.has(key) && map.size >= 4096) map.delete(map.keys().next().value!);
+    map.set(key, value);
+  };
+  /** Session epoch floor per binding generation: never lower than an epoch already sent (409 stale_invitation). */
   const floors = new Map<string, number>();
   const floor = (identity: LiveIdentity, epoch: number) => {
-    const key = JSON.stringify([identity.artifactId, identity.bindingGeneration]);
+    const key = JSON.stringify([identity.storageScopeId, identity.artifactId, identity.bindingGeneration]);
     const next = Math.max(floors.get(key) ?? 0, epoch);
-    if (!floors.has(key) && floors.size >= 4096) floors.delete(floors.keys().next().value!);
-    floors.set(key, next);
+    bounded(floors, key, next);
     return next;
   };
-  async function call(path: string, body: unknown): Promise<{ status: number; payload: unknown }> {
+  /** One stage+reconcile or stop at a time per artifact in this client: a late seal never overwrites a newer revision. */
+  const lanes = new Map<string, Promise<void>>();
+  function serial<T>(identity: LiveIdentity, run: () => Promise<T>): Promise<T> {
+    const key = JSON.stringify([identity.storageScopeId, identity.artifactId]);
+    const next = (lanes.get(key) ?? Promise.resolve()).then(run);
+    const tail = next.then(() => undefined, () => undefined);
+    lanes.set(key, tail);
+    void tail.then(() => { if (lanes.get(key) === tail) lanes.delete(key); });
+    return next;
+  }
+  async function call(path: string, body: unknown, timeoutMs = options.timeoutMs ?? 10_000) {
     if (!base) throw new ArtifactOperationError('builder_unavailable');
     try {
       const response = await (options.fetch ?? fetch)(new URL(path, base), { method: 'POST', redirect: 'error',
         headers: { 'content-type': 'application/json', authorization: await options.identity!.authorization() },
-        body: JSON.stringify(body), signal: AbortSignal.timeout(options.timeoutMs ?? 10_000) });
+        body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
       return { status: response.status, payload: await boundedJson(response) };
     } catch (error) {
       if (error instanceof ArtifactOperationError) throw error;
       throw new ArtifactOperationError('provider_unavailable');
     }
   }
+  async function reconcile(identity: LiveIdentity): Promise<LiveBridgeAck> {
+    const record = await options.bindings.get(identity.storageScopeId, identity.artifactId);
+    if (!record || record.state === 'detached' || record.generation !== identity.bindingGeneration) {
+      throw new ArtifactOperationError('git_not_attached');
+    }
+    const fences = await options.fences.current(identity);
+    if (!fences) throw new ArtifactOperationError('provider_unavailable');
+    await stageLiveDraft(options.drafts, identity, (path, body) => call(path, body));
+    const session = await options.sessionState(identity, fences.liveSessionId);
+    const answer = await call(LIVE_WORKER_PATHS.reconcile, { artifactId: identity.artifactId,
+      bindingGeneration: identity.bindingGeneration, ownerId: fences.ownerId, liveSessionId: fences.liveSessionId,
+      leaseEpoch: fences.leaseEpoch, routeEpoch: fences.routeEpoch,
+      binding: { repoId: record.repoId, branch: record.branch, subPath: record.subPath },
+      invitation: { epoch: floor(identity, session.epoch), expiresAt: session.expiresAt } }, options.reconcileTimeoutMs ?? 30_000);
+    if (answer.status !== 200) throw new ArtifactOperationError('provider_unavailable');
+    return parseAck(answer.payload);
+  }
   return {
     async reconcile(identity) {
       if (!base) throw new ArtifactOperationError('builder_unavailable');
-      const record = await options.bindings.get(identity.storageScopeId, identity.artifactId);
-      if (!record || record.state === 'detached' || record.generation !== identity.bindingGeneration) {
-        throw new ArtifactOperationError('git_not_attached');
-      }
-      const fences = await options.fences.current(identity);
-      if (!fences) throw new ArtifactOperationError('provider_unavailable');
-      await stageLiveDraft(options.drafts, identity, call);
-      const session = await options.sessionState(identity, fences.liveSessionId);
-      const answer = await call(LIVE_WORKER_PATHS.reconcile, { artifactId: identity.artifactId,
-        bindingGeneration: identity.bindingGeneration, ownerId: fences.ownerId, liveSessionId: fences.liveSessionId,
-        leaseEpoch: fences.leaseEpoch, routeEpoch: fences.routeEpoch,
-        binding: { repoId: record.repoId, branch: record.branch, subPath: record.subPath },
-        invitation: { epoch: floor(identity, session.epoch), expiresAt: session.expiresAt } });
-      if (answer.status !== 200) throw new ArtifactOperationError('provider_unavailable');
-      return parseAck(answer.payload);
+      return serial(identity, () => reconcile(identity));
     },
     async stop(input) {
-      const answer = await call(LIVE_WORKER_PATHS.stop, { artifactId: input.artifactId, bindingGeneration: input.bindingGeneration,
-        liveSessionId: input.liveSessionId, leaseEpoch: input.leaseEpoch });
-      if (answer.status !== 204) throw new ArtifactOperationError('provider_unavailable');
+      if (!base) throw new ArtifactOperationError('builder_unavailable');
+      await serial(input, async () => {
+        const answer = await call(LIVE_WORKER_PATHS.stop, { artifactId: input.artifactId, bindingGeneration: input.bindingGeneration,
+          liveSessionId: input.liveSessionId, leaseEpoch: input.leaseEpoch });
+        if (answer.status !== 204) throw new ArtifactOperationError('provider_unavailable');
+      });
     },
   };
 }
