@@ -7,10 +7,10 @@ import {
 } from '../src/runtime/heavy-phase-queue.js';
 
 const node = 'd2-4-a';
-function world(options: { store?: HeavyPhaseQueueStore; podBaseMiB?: number } = {}) {
+function world(options: { store?: HeavyPhaseQueueStore; podBaseMiB?: number; maxPods?: number } = {}) {
   const clock = { now: 0 };
   const store = options.store ?? createMemoryHeavyPhaseQueueStore();
-  const queue = createHeavyPhaseQueue({ store, now: () => clock.now, budget: { budgetMiB: 1641,
+  const queue = createHeavyPhaseQueue({ store, now: () => clock.now, maxPods: options.maxPods ?? 4, budget: { budgetMiB: 1641,
     podBaseMiB: options.podBaseMiB ?? 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 30_000 } });
   return { clock, store, queue };
 }
@@ -69,8 +69,33 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     expect(await queue.request(node, { subject: 'v3', kind: 'dev' })).toMatchObject({ state: 'queued', position: 2, blockedBy: 'fifo' });
     await queue.hold(node, { subject: 'v1', live: false });
     expect(await queue.request(node, { subject: 'v2', kind: 'build' })).toMatchObject({ state: 'admitted' });
-    expect(await queue.status(node)).toMatchObject({ usedMiB: 57 + 1344 });
+    expect(await queue.status(node)).toMatchObject({ usedMiB: 57 + 1261 });
     expect(await queue.request(node, { subject: 'v3', kind: 'dev' })).toMatchObject({ state: 'queued', position: 1, blockedBy: 'budget' });
+  });
+  it('should admit at most maxPods pods: a pod slot waits on the pod count without holding back present pods', async () => {
+    const { queue } = world(); await pods(queue, ['v1', 'v2', 'v3']);
+    expect(await queue.request(node, { subject: 'v4', kind: 'pod' })).toMatchObject({ state: 'admitted' });
+    expect(await queue.request(node, { subject: 'v4', kind: 'pod' })).toMatchObject({ state: 'admitted' });
+    expect(await queue.request(node, { subject: 'v5', kind: 'pod' }))
+      .toMatchObject({ state: 'queued', position: 1, blockedBy: 'pods' });
+    expect(await queue.request(node, { subject: 'v6', kind: 'pod' }))
+      .toMatchObject({ state: 'queued', position: 2, blockedBy: 'pods' });
+    // The phases of present pods are what frees a pod: a waiting pod slot never holds them back.
+    expect(await queue.request(node, { subject: 'v1', kind: 'dev' })).toMatchObject({ state: 'admitted' });
+    expect(await queue.status(node)).toMatchObject({ pods: ['v1', 'v2', 'v3', 'v4'], usedMiB: 76 + 390 });
+    await queue.hold(node, { subject: 'v2', pod: false });
+    expect(await queue.request(node, { subject: 'v5', kind: 'pod' })).toMatchObject({ state: 'admitted' });
+    expect(await queue.request(node, { subject: 'v6', kind: 'pod' }))
+      .toMatchObject({ state: 'queued', position: 1, blockedBy: 'pods' });
+    expect(await queue.status(node)).toMatchObject({ pods: ['v1', 'v3', 'v4', 'v5'],
+      entries: [{ subject: 'v6', kind: 'pod', state: 'queued' }, { subject: 'v1', kind: 'dev', state: 'admitted' }] });
+    // A memory phase that does not fit still holds back a later pod slot (strict FIFO on the budget).
+    expect(await queue.request(node, { subject: 'v4', kind: 'build' })).toMatchObject({ state: 'queued', blockedBy: 'budget' });
+    await queue.hold(node, { subject: 'v3', pod: false });
+    expect(await queue.request(node, { subject: 'v6', kind: 'pod' })).toMatchObject({ state: 'admitted' });
+    await queue.hold(node, { subject: 'v5', pod: false });
+    expect(await queue.request(node, { subject: 'v7', kind: 'pod' }))
+      .toMatchObject({ state: 'queued', position: 2, blockedBy: 'fifo' });
   });
   it('should keep a retry at its position and drop every ticket of a cancelled subject', async () => {
     const { queue } = world();
@@ -92,13 +117,14 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     await before.queue.request(node, { subject: 'v1', kind: 'build' }); await before.queue.request(node, { subject: 'v2', kind: 'build' });
     const after = world({ store: before.store });
     await after.queue.seed(node, { pods: ['v1', 'v2', 'v3'], lives: [] });
-    expect(await after.queue.status(node)).toMatchObject({ pods: ['v1', 'v2', 'v3'], lives: [], usedMiB: 57 + 1344,
+    expect(await after.queue.status(node)).toMatchObject({ pods: ['v1', 'v2', 'v3'], lives: [], usedMiB: 57 + 1261,
       entries: [{ subject: 'v1', state: 'admitted' }, { subject: 'v2', state: 'queued', position: 1 }] });
   });
   it('should refuse a budget that cannot admit every phase on an empty node', () => {
-    expect(() => world({ podBaseMiB: 297 })).not.toThrow(); // 297 + a 1344 MiB build = 1641
-    expect(() => world({ podBaseMiB: 298 })).toThrow('heavy-phase budget');
-    expect(() => createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => 0,
+    expect(() => world({ podBaseMiB: 380 })).not.toThrow(); // 380 + a 1261 MiB build = 1641
+    expect(() => world({ podBaseMiB: 381 })).toThrow('heavy-phase budget');
+    expect(() => world({ maxPods: 0 })).toThrow('maxPods');
+    expect(() => createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => 0, maxPods: 4,
       budget: { budgetMiB: 1641, podBaseMiB: 19, costs: { ...PROVISIONAL_HEAVY_PHASE_COSTS_MIB, dev: 0 }, entryTtlMs: 1 } }))
       .toThrow('heavy-phase budget');
   });
