@@ -2635,21 +2635,24 @@ jobs:
     permissions:
       contents: read
       packages: write
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
+    # BR92-EX1: the transported builds always gate; a skipped test barrier counts
+    # only on a tested tree (same-tree PR run recorded by changes), a failed never.
+    needs: [changes, build-ui, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') &&
       needs.changes.result == 'success' &&
-      needs.typecheck-lint-api.result == 'success' &&
-      needs.typecheck-lint-ui.result == 'success' &&
-      needs.security-sast-sca.result == 'success' &&
-      needs.test-ui.result == 'success' &&
+      needs.build-ui.result == 'success' &&
       needs.build-ui-static.result == 'success' &&
-      needs.test-e2e.result == 'success' &&
-      needs.e2e-vscode.result == 'success' &&
-      needs.security-container.result == 'success' &&
-      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
+      (needs.typecheck-lint-api.result == 'success' || (needs.typecheck-lint-api.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.typecheck-lint-ui.result == 'success' || (needs.typecheck-lint-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-sast-sca.result == 'success' || (needs.security-sast-sca.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-e2e.result == 'success' || (needs.test-e2e.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.e2e-vscode.result == 'success' || (needs.e2e-vscode.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-container.result == 'success' || (needs.security-container.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true') || (needs.security-iac.result == 'skipped' && needs.changes.outputs.tested_tree == 'true'))
     env:
       DOCKER_USERNAME: ${{ github.actor }}
       DOCKER_PASSWORD: ${{ github.token }}
@@ -2677,28 +2680,32 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, api-image-guards, api-tool-qualification, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    # BR92-EX1: the transported builds and the image guards always gate; a skipped
+    # test barrier counts only on a tested tree (recorded by changes), a failed never.
+    needs: [changes, build-api-image, build-e2e, api-image-guards, api-tool-qualification, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') &&
       needs.changes.result == 'success' &&
+      needs.build-api-image.result == 'success' &&
+      needs.build-e2e.result == 'success' &&
       needs.api-image-guards.result == 'success' &&
-      needs.api-tool-qualification.result == 'success' &&
-      needs.typecheck-lint-api.result == 'success' &&
-      needs.typecheck-lint-ui.result == 'success' &&
-      needs.security-sast-sca.result == 'success' &&
-      (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.build-ui-static.result == 'success' || (needs.build-ui-static.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
-      needs.test-api-unit-integration.result == 'success' &&
-      needs.test-api-sut.result == 'success' &&
-      (needs.test-api-ai.result == 'success' || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.ai != 'true' && needs.changes.outputs.global != 'true')) &&
-      needs.test-e2e.result == 'success' &&
-      needs.e2e-vscode.result == 'success' &&
-      needs.smoke-idp-screens.result == 'success' &&
-      needs.test-smoke-restore.result == 'success' &&
-      needs.security-container.result == 'success' &&
-      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
+      (needs.api-tool-qualification.result == 'success' || (needs.api-tool-qualification.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.typecheck-lint-api.result == 'success' || (needs.typecheck-lint-api.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.typecheck-lint-ui.result == 'success' || (needs.typecheck-lint-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-sast-sca.result == 'success' || (needs.security-sast-sca.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true') || (needs.test-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-api-unit-integration.result == 'success' || (needs.test-api-unit-integration.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-api-sut.result == 'success' || (needs.test-api-sut.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-api-ai.result == 'success' || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.ai != 'true' && needs.changes.outputs.global != 'true') || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-e2e.result == 'success' || (needs.test-e2e.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.e2e-vscode.result == 'success' || (needs.e2e-vscode.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.smoke-idp-screens.result == 'success' || (needs.smoke-idp-screens.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-smoke-restore.result == 'success' || (needs.test-smoke-restore.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-container.result == 'success' || (needs.security-container.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true') || (needs.security-iac.result == 'skipped' && needs.changes.outputs.tested_tree == 'true'))
     env:
       DOCKER_USERNAME: ${{ github.actor }}
       DOCKER_PASSWORD: ${{ github.token }}
@@ -2731,7 +2738,7 @@ jobs:
   # own trigger filter and `global` are false), serialized across runs by one concurrency group.
   publish-llm-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
+    needs: [changes, package-candidates, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
     outputs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
@@ -2744,9 +2751,9 @@ jobs:
       needs.changes.result == 'success' &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_mesh_publish == 'true' &&
-      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true'))
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success'))
     concurrency:
       group: npm-publish-train
       cancel-in-progress: false
@@ -2793,7 +2800,7 @@ jobs:
 
   publish-llm-gateway:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
+    needs: [changes, package-candidates, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
     outputs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
@@ -2806,9 +2813,9 @@ jobs:
       needs.changes.result == 'success' &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_gateway_publish == 'true' &&
-      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
       (needs.publish-llm-mesh.result == 'success' || (needs.publish-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh_publish != 'true'))
     concurrency:
       group: npm-publish-train
@@ -2849,7 +2856,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-chat-ui.result == 'success' || (needs.validate-chat-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2872,7 +2879,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-cited-source-viewer]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-cited-source-viewer.result == 'success' || (needs.validate-cited-source-viewer.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.cited_source_viewer_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2895,7 +2902,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-cowork-bridge]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-cowork-bridge.result == 'success' || (needs.validate-cowork-bridge.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.cowork_bridge_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2918,7 +2925,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-oauth-verify]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-oauth-verify.result == 'success' || (needs.validate-oauth-verify.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.oauth_verify_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2945,7 +2952,7 @@ jobs:
     if: >-
       always() && !cancelled() && needs.changes.result == 'success' &&
       needs.changes.outputs.mcp_auth_publish == 'true' &&
-      needs.validate-mcp-auth.result == 'success' &&
+      (needs.validate-mcp-auth.result == 'success' || (needs.validate-mcp-auth.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
       (needs.publish-oauth-verify.result == 'success' || needs.publish-oauth-verify.result == 'skipped') &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true)
     permissions:
@@ -3006,7 +3013,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-mcp-platform]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-mcp-platform.result == 'success' || (needs.validate-mcp-platform.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.mcp_platform_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3029,7 +3036,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-artifacts, publish-mcp-platform]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' &&
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-artifacts.result == 'success' || (needs.validate-artifacts.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
       (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
       (needs.changes.outputs.artifacts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
@@ -3054,7 +3061,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-hono]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-auth-hono.result == 'success' || (needs.validate-auth-hono.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.auth_hono_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3077,7 +3084,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-client]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-auth-client.result == 'success' || (needs.validate-auth-client.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.auth_client_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3100,7 +3107,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-auth-ui.result == 'success' || (needs.validate-auth-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.auth_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3123,7 +3130,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-cowork-desktop]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-cowork-desktop.result == 'success' || (needs.validate-cowork-desktop.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.cowork_desktop_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3146,7 +3153,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-contracts]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-contracts.result == 'success' || (needs.validate-contracts.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.contracts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3169,7 +3176,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-events]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-events.result == 'success' || (needs.validate-events.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.events_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3192,7 +3199,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-core]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-chat-core.result == 'success' || (needs.validate-chat-core.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.chat_core_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3215,7 +3222,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-server]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-chat-server.result == 'success' || (needs.validate-chat-server.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.chat_server_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3238,7 +3245,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-comments]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-comments.result == 'success' || (needs.validate-comments.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.comments_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3261,7 +3268,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-flow]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-flow.result == 'success' || (needs.validate-flow.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.flow_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3284,7 +3291,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-harness]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-harness.result == 'success' || (needs.validate-harness.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.harness_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3308,7 +3315,7 @@ jobs:
   # publisher counts as skipped only when its own `*_publish` filter is false.
   publish-cluster-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform, publish-artifacts]
+    needs: [changes, package-candidates, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform, publish-artifacts]
     outputs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
@@ -3321,9 +3328,9 @@ jobs:
       needs.changes.result == 'success' &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.cluster_mesh_publish == 'true' &&
-      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
       (needs.publish-llm-mesh.result == 'success' || (needs.publish-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh_publish != 'true')) &&
       (needs.publish-llm-gateway.result == 'success' || (needs.publish-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway_publish != 'true')) &&
       (needs.publish-events.result == 'success' || (needs.publish-events.result == 'skipped' && needs.changes.outputs.events_publish != 'true')) &&
