@@ -9,7 +9,8 @@ function deferred() { let resolve!: () => void; const promise = new Promise<void
 const budget = { budgetMiB: 1641, podBaseMiB: 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 60_000 };
 function world(options: { maxWaitMs?: number; store?: HeavyPhaseQueueStore;
   holds?: () => Promise<{ pods: string[]; lives: string[] }> } = {}) {
-  const queue = createHeavyPhaseQueue({ store: options.store ?? createMemoryHeavyPhaseQueueStore(), now: () => 0, budget });
+  const queue = createHeavyPhaseQueue({ store: options.store ?? createMemoryHeavyPhaseQueueStore(), now: () => 0, budget,
+    maxPods: 4 });
   const gate = createQueuedHeavyGate({ queue, node: 'n', maxWaitMs: options.maxWaitMs ?? 1000, pollMs: 1, renewMs: 5,
     holds: options.holds ?? (async () => ({ pods: [], lives: [] })) });
   return { queue, gate };
