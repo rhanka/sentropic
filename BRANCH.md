@@ -2,6 +2,7 @@
 
 ## Objective
 - [x] Fix the preprod enroll defect (08/11 06:09, owner signed in as admin_app): `POST /api/v1/github-app/enroll?target=radar-immobilier` answered `{"error":"access_denied"}` because every SG0-app page was served with `referrer-policy: no-referrer`, under which a browser sends `Origin: null` on a non-CORS form POST (Fetch "append a request Origin header"), so the router's own forms always failed the strict `csrf()` Origin equality. Serve `referrer-policy: same-origin` instead; the strict Origin equality stays (no "null" accepted, CSRF kept).
+- [x] Fix the next enroll step (i-cond, 08/11): github.com rejected the App manifest (« Default events unsupported: installation and installation_repositories »); the manifest carries no `default_events` (GitHub delivers both events to every App webhook without a subscription); `hook_attributes` and the webhook handler unchanged (commit 3b6b434c9, fix-manifest-events lane, report `.tmp/rv/fix-manifest-events.md`).
 
 ## Scope / Guardrails
 - [x] Branch fix/github-app-form-origin from origin/main 0aa3b4043; worktree tmp/worktrees/fix-github-app-form-origin; ENV=test-ghapp-origin; ports API_PORT=9387 UI_PORT=5587 MAILDEV_UI_PORT=1487.
@@ -12,6 +13,7 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/cluster-mesh/src/forge/hono.ts`
+  - `packages/cluster-mesh/src/forge/enrollment.ts`
   - `packages/cluster-mesh/tests/forge/github-app-http.spec.ts`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/CHANGELOG.md`
@@ -53,8 +55,11 @@
   - [x] `packages/cluster-mesh/tests/forge/github-app-http.spec.ts`: header value; enroll POST passes only with the exact public origin ("null", foreign, http, other port refused); browser regression: landing and rotation forms submitted with the Origin the served policy yields pass csrf(), the manifest form to github.com yields Origin "null".
   - [x] `api/tests/unit/services/cluster-mesh/github-app-host.test.ts`: header expectations; landing form action keeps `/api/v1` and `?target=radar-immobilier`; the browser-derived Origin passes (303 to the public prompt), Origin "null" stays access_denied.
   - [x] `api/tests/api/github-app-product-mount.test.ts`: header expectation.
+  - [x] `packages/cluster-mesh/src/forge/enrollment.ts`: manifest without `default_events`; `github-app-http.spec.ts` asserts the manifest POSTed to github.com excludes `installation` and `installation_repositories` and keeps `hook_attributes` (3b6b434c9).
   - [x] cluster-mesh 0.26.0-dev.18: package.json, CHANGELOG, root/api lock entries, selected packaging fixture.
 - [ ] **Lot 2 — Validation**
   - [x] `docker-slot.sh make test-cluster-mesh SCOPE=tests/forge/github-app-http.spec.ts ENV=test-ghapp-origin` PASS 5/5.
+  - [x] `docker-slot.sh make test-cluster-mesh SCOPE=tests/forge ENV=test-fix-manifest-events` PASS 58/58 (fix-manifest-events lane, head 3b6b434c9).
+  - [x] `make lint-cluster-mesh`, `make typecheck-cluster-mesh`, `make typecheck-api`, `make lint-api` (0 errors) ENV=test-ghapp-origin PASS.
   - [ ] `docker-slot.sh make test-api-unit SCOPE=tests/unit/services/cluster-mesh/github-app-host.test.ts API_PORT=9387 UI_PORT=5587 MAILDEV_UI_PORT=1487 ENV=test-ghapp-origin`.
   - [ ] PR « fix(github-app): keep the Origin on the enrollment forms », CI green on the exact head, GLM review `.h2a/reviews/pr-<n>-glm.md`.
