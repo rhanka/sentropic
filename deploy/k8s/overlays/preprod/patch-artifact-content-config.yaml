@@ -9,9 +9,18 @@ data:
   # rank BELOW explicit env; this key is the matching inspection value so the rendered
   # ConfigMap does not claim the tier is closed while its deployment serves content.
   APP_ARTIFACT_CONTENT_ENABLED: "1"
-  # Live edge (README « Live edge »): inert while APP_ARTIFACT_LIVE_ENABLED is "0"; key material lives in the Secret.
+  # Live edge (README « Live edge »), GB4 preprod (owner GO 2026-11-07 « Oui, GB4 GO préprod »): armed here, active
+  # with content serving open on this tier (#953). Key material lives in the Secret.
+  APP_ARTIFACT_LIVE_ENABLED: "1"
   APP_ARTIFACT_LIVE_PAGES_DOMAINS: "pages.preprod.immo.sent-tech.ca=immo-preprod-live-1"
   APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS: "sentropic-preprod-live-1"
+  # Supervisor relay (README « Supervisor relay », A-LIVE §8.1): the workers' only ingress, independent of the content
+  # and live flags. The key is the PUBLIC half (Ed25519 SPKI DER, base64) of the api's ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON,
+  # kid sentropic-preprod-supervisor-1; a rotation lists two entries.
+  APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED: "1"
+  APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS: "MCowBQYDK2VwAyEA9PIIB+0LkY47bMnczyWol6Swl8UeFepUjNjg+lxZFbY="
+  # Worker namespace the relay and the live edge forward to; pinned equal to the api's ARTIFACT_BUILDER_NAMESPACE.
+  APP_ARTIFACT_LIVE_BUILDER_NAMESPACE: "sentropic-artifact-builders"
 ---
 apiVersion: v1
 kind: ConfigMap

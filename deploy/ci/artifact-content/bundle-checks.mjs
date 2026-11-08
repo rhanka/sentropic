@@ -17,6 +17,25 @@ export const openFlags = {
   prod: {},
   preprod: { 'artifact-content': ['APP_ARTIFACT_CONTENT_ENABLED'] },
 };
+// GB4 preprod (owner GO 2026-11-07): supervisor relay and builder composition exist in preprod only; prod declares none.
+// The relay key is the public half of the api's ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON (kid sentropic-preprod-supervisor-1).
+const internal = 'http://artifact-content.sentropic-preprod.svc.cluster.local:8791';
+export const preprodRelay = { APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED: '1',
+  APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS: 'MCowBQYDK2VwAyEA9PIIB+0LkY47bMnczyWol6Swl8UeFepUjNjg+lxZFbY=',
+  APP_ARTIFACT_LIVE_BUILDER_NAMESPACE: 'sentropic-artifact-builders' };
+export const preprodBuilder = {
+  ARTIFACT_BUILDER_ENABLED: '1', ARTIFACT_BUILDER_NAMESPACE: 'sentropic-artifact-builders',
+  ARTIFACT_BUILDER_SERVICE_DOMAIN: 'sentropic-artifact-builders.svc.cluster.local', ARTIFACT_BUILDER_NODE: 'd2-4-preprod',
+  ARTIFACT_SUPERVISOR_RELAY_URL: internal, ARTIFACT_LIVE_EDGE_INTERNAL_URL: internal,
+  ARTIFACT_BUILDER_REMOTE_HOST_URL: 'https://preprod.immo.sent-tech.ca/api/v1/artifacts',
+  ARTIFACT_BUILDER_HOST_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier-preprod"}]',
+  ARTIFACT_BUILDER_CACHE_S3_BUCKET: 'artifact-builder-cache', ARTIFACT_BUILDER_CACHE_S3_REGION: 'us-east-1',
+  ARTIFACT_BUILDER_CACHE_S3_ENDPOINT: 'http://artifact-object-store.sentropic-preprod.svc.cluster.local:9000',
+  GITHUB_APP_PUBLIC_BASE_URL: 'https://preprod.sentropic.sent-tech.ca',
+  GITHUB_APP_TARGETS_JSON: '[{"locator":"rhanka/radar-immobilier","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]',
+  GITHUB_APP_BROKER_BINDINGS_JSON: '[{"clientId":"immo-preprod-host","storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier"}]',
+};
+export const pick = (data, pattern) => Object.fromEntries(Object.entries(data ?? {}).filter(([key]) => pattern.test(key)));
 export function checkActivationImage(objects) {
   const containers = ['api', 'artifact-content'].flatMap(name => object(objects, 'Deployment', name).spec.template.spec.containers);
   if (containers.some(c => c.env?.some(e => closed.includes(e.name) && e.value === '1'))) {
@@ -64,11 +83,19 @@ export function checkWorkload(objects, tier, preservedImages) {
   // tier stays on the instance.ts closed default: no per-tenant artifact quota.
   const apiCm = object(objects, 'ConfigMap', 'api');
   assert.equal(apiCm.data.APP_ARTIFACT_QUOTA_BYTES, undefined, 'closed tiers declare no api artifact quota');
-  // Live edge (W9): inert in every tier; pages domain and kids are per-tier placeholders until both rings are minted.
-  const live = tier === 'prod' ? ['pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
-    : ['pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
+  // Live edge (W9): prod stays inert with placeholders; preprod arms it (GB4) and composes inside
+  // the content serving opened on this tier (#953).
+  const live = tier === 'prod' ? ['0', 'pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
+    : ['1', 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
   assert.deepEqual([cm.data.APP_ARTIFACT_LIVE_ENABLED, cm.data.APP_ARTIFACT_LIVE_PAGES_DOMAINS, cm.data.APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS],
-    ['0', ...live], 'live edge stays inert with its per-tier pages domain and kids');
+    live, 'live edge flag, pages domain and kids per tier');
+  assert.deepEqual(pick(cm.data, /^APP_ARTIFACT_(SUPERVISOR_|LIVE_BUILDER_NAMESPACE$)/), tier === 'prod' ? {} : preprodRelay,
+    'supervisor relay per tier');
+  const apiData = apiCm.data;
+  assert.deepEqual(pick(apiData, /^(ARTIFACT_|GITHUB_APP_)/), tier === 'prod' ? {} : preprodBuilder,
+    'builder composition and GitHub App broker configuration per tier');
+  // The api creates worker pods where the relay and the live edge forward: one namespace on both sides.
+  assert.equal(cm.data.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE, apiData.ARTIFACT_BUILDER_NAMESPACE, 'one worker namespace for api and content');
   // GB4: the tier that serves content REQUIRES its runtime Secrets (owner-created
   // out-of-band): the pod must refuse to start without them rather than boot
   // half-configured; closed tiers keep both refs optional.
