@@ -32,6 +32,7 @@
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- [x] `attention`: GLM review of head 3ce1f0e23 (.h2a/reviews/pr-954-glm.md) raised two blocking findings: the dependency-cache blob store ran through the artifacts host adapter (which refuses every cache key at runtime) and the mandated prefix `artifact-builder-cache/v1/` was absent. Closed in Lot 3 with the dedicated store and its own key discipline; delta review by s-conductor.
 - [x] `attention`: `instance.ts` keeps the `productPrivateCacheBlobs` export after this branch (outside the allowed paths here); it no longer has any importer on this branch. Follow-up deletion belongs to a lane allowed in `api/src/services/artifacts/instance.ts`.
 - [x] `attention`: CI run 42454878120 (head 1b068f07d) failed one e2e test unrelated to this diff: `tests/02-organizations.spec.ts:391` « détail: champs non éditables » (test-e2e shard 4), signature `TimeoutError: page.waitForURL: Timeout 10000ms exceeded` after the first org card click. The exact base (4b4c8632d) passed the same test on main (run 42452171320), and every API check on this head is green (typecheck, lint, api unit shards, image guards). Recorded per the flake acceptance rule; a fresh CI run is re-triggered by the commit carrying this record.
 - [x] `attention`: CI run 42455890449 (head cf83a4476) failed one stack start unrelated to this diff: `test-api-unit-integration (endpoints, 6)` aborted at `up-api-test-ci` with `container test-ci-api-api-1 is unhealthy`, 54 s after the api container start and directly behind a cold `node:24-alpine3.24` image pull; the identical stack was healthy in every other matrix job of the same run (unit shards, endpoints 1-5 and 7-8, app-cluster-mesh, artifact-store) and in run 42454878120 for the same code. The e2e signature above did NOT recur in this run. Recorded as CI-infra timing, not a branch defect; a fresh CI run is re-triggered by the commit carrying this record.
@@ -58,5 +59,10 @@
   - [x] Tests: composes without `APP_ARTIFACT_HOST_ENABLED`; settings carried to `cacheBlobs` from the `ARTIFACT_BUILDER_CACHE_S3_*` values; each missing cache name refuses gracefully.
   - [x] README: F2 refusal behaviour + the new cache env names, `APP_ARTIFACT_HOST_ENABLED` requirement removed.
 - [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
-- [ ] **Lot 3 — PR**
+- [x] **Lot 3 — GLM review fix (blocking 1+2): dedicated builder-cache store under `artifact-builder-cache/v1/`**
+  - [x] `cache-storage.ts`: `createBuilderCacheBlobs` — the builder's own S3 blob store (never the artifacts host adapter nor `assertBlobKey`), put/get/delete only (no listing), each key refused before any S3 call unless it is exactly `artifact-builder-cache/v1/files/<sha256>` or `artifact-builder-cache/v1/<lockSha>/<keySha>/<uuid>`, fail-closed on a non-private bucket like `createPrivateArtifactStorage`; the Postgres pointer namespace stays `artifact-dependency-cache/v1` (s-conductor decision).
+  - [x] Tests (`cache-storage.test.ts`): prefix acceptance and refusal before any S3 call (in/out of prefix, put/get/delete), per-field privacy fail-close, one end-to-end run of the real key generation (putFile -> admit -> getFile -> read) against a command-level fake S3 plus the out-of-prefix refusal; `adapters.test.ts` pins the new file-object key.
+  - [x] README: the file and manifest object keys plus the store's own key discipline and fail-closed privacy.
+  - [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
+- [ ] **Lot 4 — PR**
   - [ ] PR « fix(alive): keep the API up when the builder config is invalid; own cache storage », CI green on the exact head, GLM review, merge by s-conductor.
