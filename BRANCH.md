@@ -35,6 +35,7 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [ ] `deferred`: `make test-preprod-a4-manifests` not run locally: the API tool image tag of this head is absent from GHCR (Error 125 before any test); offline `kubectl kustomize deploy/k8s/overlays/preprod-a4` renders the new launcher; CI runs the selftest.
 - [x] `BRCMAL-EX1` (Makefile, `cm-account-approve-job` target only): Opus review M1, an operator checkout newer than the namespace launcher would boot `dist/index.js` (second api, migrations, `object_locks` purge). Reason: one read-only preflight line refusing before any Secret or Job unless ConfigMap `sentropic-a4-runtime` serves the `--script` mode. Impact: the target fails closed earlier; no other target touched. Rollback: delete the preflight line.
 - [ ] `attention`: the Job now requires the A4 runtime in its namespace (ConfigMap `sentropic-a4-runtime`, Secret `email-code-hmac`, ConfigMap `api` with the Q-K policy); prod gets it from `feat/prod-a4-operator`, whose launcher must keep the `--script` mode and the same ConfigMap name.
 
@@ -64,7 +65,7 @@
   - [x] `scripts/ci/cm-account-approve-job.test.mjs`: command through the launcher; HMAC env only by `secretKeyRef` and identical to the preprod-a4 api wiring; read-only `cm-runtime` ConfigMap volume; no custody PVC; envFrom unchanged.
   - [x] `38-cm-account-approve-job.yaml` and `docs/oauth-client-rotation.md`.
 - [ ] **Lot 3 — Final validation**
-  - [ ] `make test-preprod-a4 ENV=test-t1b-launch`.
-  - [ ] `make test-publishable-manifests SCOPE="scripts/ci/cm-account-approve-job.test.mjs scripts/ci/oauth-service-client-job.test.mjs" ENV=test-t1b-launch`.
+  - [x] `make test-preprod-a4 ENV=test-t1b-launch`: 36/36.
+  - [x] `make test-publishable-manifests SCOPE="scripts/ci/cm-account-approve-job.test.mjs scripts/ci/oauth-service-client-job.test.mjs" ENV=test-t1b-launch`: 9/9.
   - [ ] `make test-preprod-a4-manifests ENV=test-t1b-launch`.
   - [ ] Opus read-only review `.h2a/reviews/t1-cm-account-approve-launcher-opus.md`; push branch (no PR).
