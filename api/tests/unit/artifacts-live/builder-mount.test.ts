@@ -66,10 +66,12 @@ describe('builder mount (/api/v1/artifacts/builder)', () => {
     const rows = new Map<string, BuildJobRecord>(); const store: RecordStore = { read: async id => rows.get(id),
       async update(id, change) { const { next, result } = change(rows.get(id)); if (next) rows.set(id, next); return result; } };
     const jobs = createBuildJobs(store, () => 0, () => 'token', runStaleMs(0)); const build = vi.fn(async () => {});
-    const api = createHostBuildApi({ authenticate, jobs, build, schedule: work => { void work(); } });
+    const validate = vi.fn(() => {}); const binding = { repoId: 'repo-immo', branch: 'artifact/demo', subPath: '' };
+    const api = createHostBuildApi({ authenticate, jobs, build, validate, schedule: work => { void work(); } });
     const response = await mounted(api).request(`${ARTIFACT_BUILDER_BASE_PATH}/v1/builds`, { method: 'POST',
-      headers: { ...bearer(immo.clientId), 'content-type': 'application/json' }, body: JSON.stringify({ artifactId: 'a', jobId: 'j' }) });
+      headers: { ...bearer(immo.clientId), 'content-type': 'application/json' }, body: JSON.stringify({ artifactId: 'a', jobId: 'j', binding }) });
     expect(response.status).toBe(202);
+    expect(validate).toHaveBeenCalledWith({ storageScopeId: 'scope-immo', artifactId: 'a' }, binding);
     expect(build).toHaveBeenCalledWith({ storageScopeId: 'scope-immo', artifactId: 'a' }, 'j');
   });
   it('serves nothing outside its base path', async () => {

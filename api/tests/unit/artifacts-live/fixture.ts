@@ -73,6 +73,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
   const ports: LivePorts = {
     store, now: () => now, id: () => `id-${++sequence}`,
     binding: vi.fn(async k => ({ ...binding, ownerId: owners.get(idOf(k)) ?? binding.ownerId })),
+    jobBinding: vi.fn(async () => {}),
     forge: { head: vi.fn(async () => binding.headSha), fastForward: vi.fn(async (_key, before, after) => before < after),
       reachable: vi.fn(async () => true),
       snapshot: vi.fn(async (_key, headSha) => ({ headSha, treeSha: `tree-${headSha}`, lockfile: new Uint8Array(),

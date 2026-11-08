@@ -11,7 +11,7 @@ import {
   CACHE_S3_SECRET_ACCESS_KEY_ENV,
 } from '../../../src/services/artifacts/live/cache-storage';
 import { createProductBuilder, SCHEDULER_INTERVAL_MS, type ProductBuilderDeps } from '../../../src/services/artifacts/live/product-builder';
-import { remoteHostForge, UNCONFIGURED_FORGE_READS } from '../../../src/services/artifacts/live/forge';
+import { remoteHostForge } from '../../../src/services/artifacts/live/forge';
 import type { KubernetesCore } from '../../../src/services/artifacts/live/pods';
 import { key } from './fixture';
 
@@ -48,7 +48,7 @@ function deps() {
   const authenticate = hostAuthenticator(parseBuilderHostBindings(ENV.ARTIFACT_BUILDER_HOST_BINDINGS_JSON));
   const cacheBlobs = vi.fn(() => ({ put: vi.fn(), get: vi.fn(), delete: vi.fn() }));
   const value: ProductBuilderDeps = { pool, cacheBlobs, authenticate,
-    kubernetes, forge: UNCONFIGURED_FORGE_READS, log: vi.fn(), fetch: vi.fn() as unknown as typeof fetch };
+    kubernetes, gitHubApp: null, log: vi.fn(), fetch: vi.fn() as unknown as typeof fetch };
   return { ...value, query, kubernetes, cacheBlobs };
 }
 const requireService: MiddlewareHandler = async (c, next) => {
@@ -154,11 +154,13 @@ describe('remote-host forge port (D0)', () => {
     expect(reads.head).toHaveBeenCalledWith(key);
   });
 
-  it('should refuse every read until the lease reader is composed', async () => {
-    const forge = remoteHostForge(UNCONFIGURED_FORGE_READS);
-    for (const read of [forge.head(key), forge.reachable(key, 'a'.repeat(40)), forge.snapshot(key, 'a'.repeat(40)),
-      UNCONFIGURED_FORGE_READS.source('ref')]) {
-      await expect(read).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'forge_unconfigured' });
-    }
+  it('should refuse a git binding as forge_unconfigured while the GitHub App host or the repositories are absent', async () => {
+    const d = deps(); const post = mounted(createProductBuilder(ENV, d)!.api as never, d);
+    const response = await post('/v1/live/reconcile', { artifactId: key.artifactId, bindingGeneration: 1, ownerId: 'owner',
+      liveSessionId: 's1', leaseEpoch: 1, routeEpoch: 1, invitation: { epoch: 1, expiresAt: null },
+      binding: { repoId: 'repo-immo', branch: 'artifact/demo', subPath: '' } });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'builder_unavailable', reason: 'forge_unconfigured' });
+    expect(d.query).not.toHaveBeenCalled();
   });
 });

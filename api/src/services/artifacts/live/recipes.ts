@@ -1,6 +1,9 @@
 import type { BuilderPlacement } from './placement';
 export const NPM_RELAY = 'http://npm-relay.npm-relay.svc.cluster.local:4873/';
 export const BUILDER_IMAGE = 'docker.io/library/node@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198bcb09fb998f7dcbf68';
+/** Toolchain of BUILDER_IMAGE in the dependency cache identity and the build evidence: node v26.13.0 is measured in the
+ * pinned image; its npm version is not measured yet (source-gap), so it stays explicitly unverified. */
+export const BUILDER_TOOLCHAIN = Object.freeze({ platform: 'linux/amd64', nodeVersion: '26.13.0', npmVersion: '0.0.0-unverified' });
 /** VITE_BASEMAP_TILE_URL is owned by the repository build wrapper (owner decision 2026-11-07); the host never passes it. */
 export const ARTIFACT_PUBLIC_ENV = Object.freeze({ VITE_ARTIFACT_MODE: '1', VITE_API_BASE_URL: '/__app' });
 /** Host-owned V8 heap cap for every worker Node process (4 live pods per d2-4 node). It never caps esbuild's native memory. */
