@@ -17,9 +17,10 @@
 - The postgres-live adapter persists invitations; host migration `0013_live_invitations.sql` adds
   `artifacts.live_invitations` and `artifacts.live_invitation_epochs` and ends with a guard that
   raises on any foreign column or index (a same-named table from another schema is refused).
-- The 35 previous tool definitions are byte-identical; `ARTIFACTS_PROVIDER_VERSION` and the APP-P1
-  manifest are unchanged in this wagon (train 1c repins them). `@sentropic/artifacts/live-host` is
-  unchanged.
+- The 35 previous tool definitions are byte-identical. `ARTIFACTS_PROVIDER_VERSION` follows the
+  package (0.2.22): the APP-P1 manifest digest changes through its version field only (the four-tool
+  APP-P1 selection is unchanged; the same manifest at version 0.2.21 still hashes to the 0.2.21 pin).
+  `@sentropic/artifacts/live-host` is unchanged.
 
 ## 0.2.21
 
