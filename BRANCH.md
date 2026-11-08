@@ -32,6 +32,7 @@
 ## Feedback Loop
 - [x] `attention` BR-FLR-EX1: the contract (§3, §5) calls the same SG0-app lifecycle service as `POST /github-app/broker/lease` in process. Reason: the service is built inside `createGitHubAppHostRouter`; it is extracted as `createGitHubAppHostService` (same custody store, key, GitHub API and invalidation bus) and the product lease is composed in `routes/github-app.ts`, then passed by `app.ts` to the builder. Impact: no route or behaviour change for the SG0-app mount. Rollback: revert the three files.
 - [x] `attention`: no node/npm version helper exists for the cache identity; `BUILDER_TOOLCHAIN` records the measured node v26.13.0 of `BUILDER_IMAGE`, and the npm version is `0.0.0-unverified` (source-gap) until measured in the pinned image.
+- [x] `attention`: GLM 5.3 review r1 APPROVE (0 blocker, 0 major). Fixed: README forge and binding doc, malformed-archive test. Deferred: total (192 MiB) and compressed (256 MiB) cap fixtures, subPath-aware pod layout (configure `allowedSubPaths: ['']` meanwhile).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
