@@ -72,8 +72,8 @@
   - [x] `cm-import-source.ts` guard + `idpRpId` option; `cm-cutover-config.ts` reads `CM_IDENTITY_CUTOVER_IDP_RP_ID`; `cm-preprod-state.ts` passes it; test configs declare it.
   - [x] `cm-import-manifest.ts` hashes the source module and table list.
 - [ ] **Lot 2 — Replica sync rpId convergence (tests first)**
-  - [ ] `replica-sync.spec.ts`: a source rpId converges onto a live replica credential (counter kept, revision bumped, `updated`); a locally revoked credential keeps its rpId.
-  - [ ] `replica-sync.ts`: rpId leaves the conflict material set; apply converges it.
+  - [x] `replica-sync.spec.ts`: a source rpId converges onto a live replica credential (counter kept, revision bumped, `updated`); a locally revoked credential keeps its rpId.
+  - [x] `replica-sync.ts`: rpId leaves the conflict material set; apply converges it.
 - [ ] **Lot 3 — Preprod IdP enrolment guard (tests first)**
   - [ ] `api/tests/api/auth/passkey-registration-guard.test.ts`: disabled refuses register options/verify with 403 `passkey_registration_disabled` before any author fence write; login options unaffected; enabled keeps registration reachable.
   - [ ] `bundle.selftest.mjs`: preprod-a4 auth-idp ConfigMap carries `WEBAUTHN_REGISTRATION=disabled`; preprod api and prod auth-idp do not.
