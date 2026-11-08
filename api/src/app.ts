@@ -380,7 +380,7 @@ const productSecureHeaders = secureHeaders({
   referrerPolicy: 'strict-origin-when-cross-origin',
 });
 // SG0-app paths carry their own stricter header set (the manifest form posts
-// to github.com; no-referrer). secureHeaders writes AFTER next(), so it must
+// to github.com; same-origin referrers). secureHeaders writes AFTER next(), so it must
 // not run on those paths at all, or it overwrites them (A-LIVE W1).
 app.use('*', (c, next) => (isGitHubAppPath(c.req.path) ? next() : productSecureHeaders(c, next)));
 
