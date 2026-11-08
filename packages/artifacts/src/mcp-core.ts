@@ -280,7 +280,8 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
       switch (input.tool) {
         case 'artifacts_live_write': case 'artifacts_live_read': case 'artifacts_live_reset':
         case 'artifacts_live_status': case 'artifacts_live_control': case 'artifacts_git_commit': case 'artifacts_fetch_app_source':
-        case 'artifacts_git_attach': case 'artifacts_git_publish':
+        case 'artifacts_git_attach': case 'artifacts_git_publish': case 'artifacts_live_invite':
+        case 'artifacts_live_accept_invitation': case 'artifacts_live_revoke_invitation': case 'artifacts_live_invitations':
           request = { method: 'POST', path: '/' + input.tool.slice(10), body: args }; break;
         case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
