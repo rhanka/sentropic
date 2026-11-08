@@ -1,67 +1,68 @@
-# Feature: Artifacts GitHub branch resolution (0.2.23)
+# Feature: Start the cm-account-approve Job through the A4 launcher composition (T1)
 
 ## Objective
-- [x] Resolve a git-backed artifact branch through `GET /repos/{owner}/{repo}/git/ref/heads/{branch}` (per-segment encoding, slashes kept) returning `object.sha`; an absent branch (404 or 422) is `missing`, never `conflict`/`git_ref_not_allowed`, so attach reaches `createBranch` (immo preprod 08/11, i-cond).
-- [x] `resolveRef` returns the exact `refs/heads/<branch>` SHA for a slash branch (the 40-hex check at live-service.ts:100 already held on 0.2.22; the preprod `invalid_request` on live_control start maps to live-service.ts:49-51 or :101, caller arguments, reported to immo).
-- [x] Release `@sentropic/artifacts` 0.2.23 with `ARTIFACTS_PROVIDER_VERSION` and the APP-P1 digest repin.
+- [ ] The governed account approval Job (`deploy/k8s/base/38-cm-account-approve-job.yaml`) starts through `/run/cm-runtime/launch.mjs --script cm-account-approve`, so it receives the same composed email-code HMAC custody as the api pod (preprod 08/11 04:00: the Job could not run and the script was started by hand in the api pod).
+- [ ] The A4 launcher gains a `--script <name>` mode that runs `/workspace/api/dist/scripts/<name>.js` under the same composition; the api, `--idp` and `--custodian` modes are unchanged.
 
 ## Scope / Guardrails
-- [x] Branch fix/artifacts-github-branch-resolve from main 4f4674b50; worktree tmp/worktrees/fix-github-forge-resolve; ENV=test-fix-gh-resolve.
-- [x] Make only; no Python; no attribution trailers; no CI skip or rerun; never ENV=dev.
-- [x] Immo DB untouched: the `git_live_draft_unavailable` requirements go to the lane report only.
-- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [ ] Train T1 wagon (s-archi verdict `.tmp/rv/app-plan-archi-verdict.md`, inventory `.tmp/rv/app-cm-inventory.md` §3.1.3); branch `fix/cm-account-approve-launcher` from origin/main `c22163106`; worktree `tmp/worktrees/t1-cm-account-approve-launcher`; no PR (train lane assembles).
+- [ ] Make-only, Docker-first, no Python; `ENV=test-t1b-launch` last; ports API_PORT=9282 UI_PORT=5482 MAILDEV_UI_PORT=1182 (no stack started by this wagon); never ENV=dev; end with `make down-volumes ENV=test-t1b-launch`.
+- [ ] No version bump, lock, fixture or image pin change (train lane).
+- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/adapters/github-forge.ts`
-  - `packages/artifacts/src/server/git-tools-attach.ts`
-  - `packages/artifacts/src/mcp-core.ts`
-  - `packages/artifacts/tests/github-branch-resolve.test.ts`
-  - `packages/artifacts/package.json`
-  - `packages/artifacts/CHANGELOG.md`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
+  - `deploy/k8s/base/38-cm-account-approve-job.yaml`
+  - `deploy/k8s/overlays/preprod/a4-runtime/launch.mjs`
+  - `deploy/ci/preprod-a4/launch-script.test.mjs`
+  - `scripts/ci/cm-account-approve-job.test.mjs`
+  - `docs/oauth-client-rotation.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
-  - `ui/**`
-  - `deploy/**`
-  - `packages/cluster-mesh/src/**`
-  - `packages/cluster-mesh/package.json`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `**/package.json`, `**/package-lock.json` (train lane)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `package-lock.json`
-  - `api/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `deploy/k8s/overlays/prod/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] BRGH-EX1: root and api lock workspace entries follow artifacts 0.2.23 (version strings only). Rollback: revert with the bump.
-- [x] BRGH-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.23 (`prepare-artifacts.spec.ts` requires the fixture to equal the candidate tuple; CI run 42499490549 lazy/source failed on 0.2.22): fixture `package.json`/`package-lock.json` version strings plus the integrity pin of the locally packed `make pack-artifacts` archive (sha256 fa03b147… equals the manifest guard), mirrored in `artifacts-tuple.spec.ts`, as BR90-EX20 did for 0.2.22. Impact: test fixtures only, no cluster-mesh source or version change. Rollback: revert with the bump.
+- [ ] `attention`: the Job now requires the A4 runtime in its namespace (ConfigMap `sentropic-a4-runtime`, Secret `email-code-hmac`, ConfigMap `api` with the Q-K policy); prod gets it from `feat/prod-a4-operator`, whose launcher must keep the `--script` mode and the same ConfigMap name.
 
 ## AI Flaky tests
-- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**
-- Rationale: one owner-urgent fix PR, one CI.
+- [x] **Multi-branch** (train T1 wagon; the train lane merges the wagon branches)
+- Rationale: owner WAGON MODEL, one PR and one CI per train.
+
+## UAT Management (in orchestration context)
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Branch resolution fix**
-  - [x] `github-forge.ts`: branch refs resolve through `git/ref/heads/<segments>` (`object.type` commit, exact `ref`), commit SHAs through `/commits/<sha>`, other non-`artifact/` refs (tags, abbreviated SHAs) through `/commits/<segments>` after a heads miss; 404/422 map to `missing`.
-  - [x] Review r1 (.h2a/reviews/pr-965-opus.md) majors: tag/abbreviated-SHA resolution restored; live start claim narrowed to bug 1.
-  - [x] `git-tools-attach.ts`: attach treats the port's `git_branch_missing` like `not_found`, so a new personal branch is created from `baseRef`.
-- [x] **Lot 2 — Tests (fake GitHub HTTP)**
-  - [x] `tests/github-branch-resolve.test.ts`: slash branch to full SHA with per-segment URL; 404/422 to `missing`; tag through `/commits` and no fallback for an `artifact/` branch; full SHA without ref lookup; `createBranch` 422 stays `conflict`; 422 on `/commits` to `not_found`; attach creates a new branch; live_control start succeeds on the resolved head.
-- [x] **Lot 3 — Release 0.2.23**
-  - [x] package, locks, `ARTIFACTS_PROVIDER_VERSION`, APP-P1 digest 61c50b33 to 428a7527 (version field only), CHANGELOG.
-- [ ] **Lot 4 — Final validation**
-  - [x] `docker-slot.sh make test-artifacts SCOPE=tests/g ENV=test-fix-gh-resolve` unit files PASS (146 tests; the 3 integration files need postgres and run in CI).
-  - [x] `docker-slot.sh make typecheck-artifacts ENV=test-fix-gh-resolve` PASS.
-  - [ ] PR, CI green on the exact head, review in `.h2a/reviews/`, merge by s-conductor.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read verdict, inventory §3.1.3, `.tmp/rv/cm-account-approve-job.md`, night plan 04:00 entry.
+  - [x] Worktree on origin/main `c22163106`, ENV and ports above.
+- [ ] **Lot 1 — Launcher script mode (tests first)**
+  - [ ] `deploy/ci/preprod-a4/launch-script.test.mjs`: `--script cm-account-approve` maps to the dist script; traversal, empty, uppercase and suffixed names are refused; the main block refuses an invalid target with `launch_target_invalid` before composing secrets; api and `--idp` targets unchanged.
+  - [ ] `launch.mjs`: `--script` mode and distinct target refusal.
+- [ ] **Lot 2 — Job composition (tests first)**
+  - [ ] `scripts/ci/cm-account-approve-job.test.mjs`: command through the launcher; HMAC env only by `secretKeyRef` and identical to the preprod-a4 api wiring; read-only `cm-runtime` ConfigMap volume; no custody PVC; envFrom unchanged.
+  - [ ] `38-cm-account-approve-job.yaml` and `docs/oauth-client-rotation.md`.
+- [ ] **Lot 3 — Final validation**
+  - [ ] `make test-preprod-a4 ENV=test-t1b-launch`.
+  - [ ] `make test-publishable-manifests SCOPE="scripts/ci/cm-account-approve-job.test.mjs scripts/ci/oauth-service-client-job.test.mjs" ENV=test-t1b-launch`.
+  - [ ] `make test-preprod-a4-manifests ENV=test-t1b-launch`.
+  - [ ] Opus read-only review `.h2a/reviews/t1-cm-account-approve-launcher-opus.md`; push branch (no PR).
