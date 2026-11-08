@@ -10,11 +10,13 @@ import { createContentRuntime } from './runtime';
 import { createLiveUpgrade } from './live-upgrade';
 import { liveFromEnv, withRemoteAddress } from './live-config';
 import type { LiveProxy } from './live';
+import { createSupervisorRoute } from './host';
+import { supervisorRelayFromEnv, type SupervisorRelay } from './supervisor-relay';
 
 /** TLS terminates at the dedicated W3.d ingress; Host is validated, forwarded identity is ignored. */
 export async function startContentServer(options: {
   env?: NodeJS.ProcessEnv; hostname?: string; port?: number;
-  live?: LiveProxy;
+  live?: LiveProxy; supervisorRelay?: SupervisorRelay;
 } = {}): Promise<Server> {
   const env = options.env ?? process.env;
   const enabled = () => env.APP_ARTIFACT_CONTENT_ENABLED === '1';
@@ -27,6 +29,9 @@ export async function startContentServer(options: {
     status: 404, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
   });
   try {
+    // The supervisor relay is the workers' only ingress (A-LIVE §8.1): its own flag, independent of content and live.
+    const supervisor = createSupervisorRoute({ relay: options.supervisorRelay ?? supervisorRelayFromEnv(env),
+      baseDomain: env.APP_ARTIFACT_CONTENT_BASE_DOMAIN });
     if (enabled()) {
       const required = (name: string) => {
         const value = env[name];
@@ -64,7 +69,8 @@ export async function startContentServer(options: {
       // The cleartext listener is internal-only. Never use X-Forwarded-Host/Proto as routing authority.
       url.protocol = 'https:';
       // The socket address is the only authority for a replica-relayed live push (never a forwarded header).
-      return handle(withRemoteAddress(new Request(url, request), bindings.incoming.socket.remoteAddress));
+      const internal = withRemoteAddress(new Request(url, request), bindings.incoming.socket.remoteAddress);
+      return supervisor(internal) ?? handle(internal);
     } }) as Server;
     if (live && env.APP_ARTIFACT_CONTENT_BASE_DOMAIN) {
       server.on('upgrade', createLiveUpgrade({ live,

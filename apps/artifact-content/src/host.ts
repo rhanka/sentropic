@@ -3,7 +3,9 @@ import { createContentHandler, type ContentHandlerDeps } from '@sentropic/artifa
 import { contentHeaders, GRANT_COOKIE_NAME, grantCookie, parseGrantCookie, type ContentMode } from '@sentropic/artifacts/content/headers';
 import { CONTENT_GRANT_TTL_SECONDS, type ContentGrantClaims, type GrantSigner, type TicketRecord } from '@sentropic/artifacts/content/grants';
 import { parseContentHost } from '@sentropic/artifacts/content/routing';
+import { SUPERVISOR_RELAY_PATH } from '../../../api/src/services/artifacts/live/supervisor-relay';
 import { LIVE_CONTROL_PATH, LIVE_FENCE_PATH, type LiveProxy } from './live';
+import type { SupervisorRelay } from './supervisor-relay';
 
 export interface ContentActivationInput { flowId: string; ticketId: string; nonce: string; targetOrigin: string }
 export interface ContentHostOptions {
@@ -41,6 +43,25 @@ function json(status: number, value: unknown, headers: Record<string, string> = 
   } });
 }
 const fail = (status: number) => json(status, { error: status === 404 ? 'not_found' : 'content_request_refused' });
+
+/**
+ * `POST /_live-supervisor/v1/:podName` (A-LIVE §8.1): the supervisor relay answers on the internal Service Host only
+ * (`*.svc.cluster.local`, matching Host header), never on a public content or pages host (404), the same rule as the
+ * controller fence path. The listener mounts it ahead of content serving: it depends on its own flag only, not on the
+ * content or live flags. `undefined` means another path.
+ */
+export function createSupervisorRoute(options: { relay?: SupervisorRelay; baseDomain?: string }) {
+  return (request: Request): Promise<Response> | undefined => {
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith(SUPERVISOR_RELAY_PATH)) return undefined;
+    const base = options.baseDomain;
+    const internal = url.hostname.endsWith('.svc.cluster.local')
+      && !(base && (url.hostname === base || url.hostname.endsWith(`.${base}`)))
+      && (!request.headers.has('host') || request.headers.get('host') === url.host);
+    if (!options.relay || !internal) return Promise.resolve(fail(404));
+    return options.relay.relay(request, url.pathname.slice(SUPERVISOR_RELAY_PATH.length));
+  };
+}
 
 /** HTTP adaptation only. Publication and standalone package ticket redemption are unreachable. */
 export function createContentHost(options: ContentHostOptions) {
