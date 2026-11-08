@@ -3293,11 +3293,13 @@ up-ui: ## Start the ui stack in detached mode
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d ui --wait ui
 
 .PHONY: down
-down: ## Stop and remove containers, networks, volumes
+# BR92-EX1: optional DOWN_TIMEOUT (seconds) shortens the stop grace period for disposable CI
+# stacks whose results are already collected; unset keeps the compose default.
+down: ## Stop and remove containers, networks, volumes (optional DOWN_TIMEOUT=<seconds>)
 ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge test-memory-mcp),)
-	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
+	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans $(if $(DOWN_TIMEOUT),--timeout $(DOWN_TIMEOUT))
 else
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY) down --remove-orphans
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY) down --remove-orphans $(if $(DOWN_TIMEOUT),--timeout $(DOWN_TIMEOUT))
 endif
 
 # BRDV-EX1 (owner-approved 2026-11-02 « Cible make + nettoyage »): down-volumes removes the
