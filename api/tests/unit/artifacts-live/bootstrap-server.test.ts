@@ -28,7 +28,7 @@ const call = (port: number, method: string, path: string, headers: Record<string
     req.on('error', reject); req.end(body);
   });
 const upgrade = (port: number, path: string) => new Promise<{ socket: Socket; head: string }>((resolve, reject) => {
-  const socket = connect(port, '127.0.0.1', () => socket.write(`GET ${path} HTTP/1.1\r\nHost: pod\r\nUpgrade: websocket\r\n`
+  const socket: Socket = connect(port, '127.0.0.1', () => socket.write(`GET ${path} HTTP/1.1\r\nHost: pod\r\nUpgrade: websocket\r\n`
     + 'Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nCookie: sid=secret\r\n\r\n'));
   open.push(socket); let head = '';
   socket.on('data', chunk => { head += chunk.toString(); if (head.includes('\r\n\r\n')) resolve({ socket, head }); });
