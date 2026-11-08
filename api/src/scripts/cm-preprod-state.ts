@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg';
 import { identityCustodySchemaAssetV1 } from '@sentropic/cluster-mesh';
 import { connectorCustodyAssetSha256 } from '../services/identity/cm-connector-custody-values';
 import { a4MappingAssetSha256 } from '../services/identity/cm-import-manifest';
-import { mapA4IdentitySource, readA4IdentitySource } from '../services/identity/cm-import-source';
+import { a4DeclaredIdpRpId, mapA4IdentitySource, readA4IdentitySource } from '../services/identity/cm-import-source';
 import { loadA4RemoteSnapshot, reconcileA4RemoteSnapshot } from '../services/identity/cm-import-remote-snapshot';
 import { getWebAuthnConfig } from '../services/webauthn-config';
 import { canonical, custody, protectedBytes, sha256, type PreprodRequest } from './cm-preprod-contract';
@@ -47,7 +47,8 @@ export async function inspectPreprod(client: PoolClient, request: PreprodRequest
     const source = await readA4IdentitySource(client, true);
     const importedAt = new Date().toISOString();
     const reconciled = reconcileA4RemoteSnapshot(source.rows.get('user_sessions') ?? [], remote, importedAt);
-    await mapA4IdentitySource(source, { ...verifier, importedAt, remotelyRevokedSessionIds: reconciled.revokedSessionIds });
+    await mapA4IdentitySource(source, { ...verifier, idpRpId: a4DeclaredIdpRpId(), importedAt,
+      remotelyRevokedSessionIds: reconciled.revokedSessionIds });
     const rows = Object.fromEntries([...source.rows].map(([table, values]) => [table,
       values.map(value => canonical(value)).sort()]));
     return {
