@@ -26,7 +26,7 @@
   - `.github/workflows/ci.yml` under BR92-EX1.
 
 ## Feedback Loop
-- [x] BR92-EX1: on push to main, `changes` captures (read-only token) the newest same-repository pull_request run of ci.yml whose head commit has HEAD's tree; the expected manifest accepts it only with a green run, a green ci-gate, a green expected set, the same policy digest and a success for every member it drops. Impact: test members skip on main with "satisfied by run" evidence; builds, image guards, candidates, publishers, release-receipts, deploy-preprod and the capacity validators still run. Rollback: revert the workflow and scripts/ci together; an absent or false `tested_tree` already runs everything.
+- [x] BR92-EX1: on push to main, `changes` captures (read-only token) every pull_request run of ci.yml whose head commit has HEAD's tree, with every attempt; the expected manifest reuses the newest same-repository one only when every same-tree candidate and attempt is green (no newest-wins) and the reused attempt started within the 24 h bound, with a green run, a green ci-gate, a green expected set, the same policy digest and a success for every member it drops. Impact: test members skip on main with "satisfied by run" evidence; builds, image guards, candidates, publishers, release-receipts, deploy-preprod and the capacity validators still run. Rollback: revert the workflow and scripts/ci together; an absent or false `tested_tree` already runs everything.
 - [ ] Acceptance: first main push after the train merge shows the tested-tree summary and an earlier deploy-preprod end.
 
 ## AI Flaky tests
@@ -47,4 +47,10 @@
 - [x] Lot 3: release receipt and daily live selector accept the PR reference.
 - [x] Lot 4: workflow publishers, test-member guards, `changes` capture and decision.
 - [x] Lot 5: scoped checks green (tested-tree 7/7, expected-results 28/28, ci-dag 10/10, ci-static 3/3, run-metrics 37/37, release-receipts 43/43, unit-graph 7/7, performance-report 8/8, consumer-contracts 25/25, live-provider 13/13, wiring + package DAG 51/51, security-daily 333/333, ci-capacity-policy shapeValid); wagon branch pushed.
+- [ ] Lot 6 (r2, GLM section 9) (d): no newest-wins; every same-tree candidate and every attempt green, else the complete run.
+- [ ] Lot 6 (a): explicit attempts (the concluded attempt is reused) and a 24 h age bound `TESTED_TREE_MAX_AGE_HOURS` on the reused attempt.
+- [ ] Lot 6 (e): the release receipt records the merge sha and the reused PR run id, attempt, head sha and tree.
+- [ ] Lot 6: the daily live selector refuses a tuple with any non-green same-tree PR run.
+- [x] Lot 6: residual recorded: a dropped member is proven by its job conclusion only (a success job with every step skipped is not detectable).
+- [ ] Lot 6: scoped checks green; wagon branch pushed.
 - [ ] Lot N: train CI green on the exact head; BRANCH.md removed at merge.
