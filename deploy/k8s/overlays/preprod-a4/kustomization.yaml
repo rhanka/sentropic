@@ -1,8 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: sentropic-preprod
-# Preview of the runtime installed by the authorized, fenced A4 wire operation.
-# Continuous deployment uses ../preprod and keeps the recovery runtime.
+# A4 runtime of sentropic-preprod, installed by the fenced wire operation of 2026-11-08 and
+# applied by continuous deployment (make k8s-deploy-preprod). ../preprod carries the image pins.
 resources:
   - ../preprod
   - ../preprod/a4-runtime
