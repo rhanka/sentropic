@@ -26,6 +26,7 @@
   - `api/src/routes/github-app.ts` (BR-FLR-EX1)
   - `api/src/services/cluster-mesh/github-app-host.ts` (BR-FLR-EX1)
   - `.github/workflows/**`
+  - `deploy/k8s/overlays/preprod/idp-identity-sync/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 

@@ -24,6 +24,9 @@ export async function verifyRenderedSequence(rendered) {
     }
   }
   for (const cron of objects.filter(item => item.kind === 'CronJob')) cron.spec.suspend = true;
+  // Runbook fence step 2: every non-Postgres StatefulSet is scaled to zero as well (e.g. artifact-object-store).
+  const sets = objects.filter(item => item.kind === 'StatefulSet' && item.metadata.name !== 'postgres');
+  for (const set of sets) { set.spec.replicas = 0; set.status = { replicas: 0 }; }
   const backend = name => object('Ingress', name).spec.rules[0].http.paths[0].backend.service.name;
   assert.equal(backend('sentropic'), 'ui'); assert.equal(backend('auth-idp'), 'auth-idp');
   const calls = [], env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request',
@@ -63,5 +66,6 @@ export async function verifyRenderedSequence(rendered) {
   execute({ ...env, A4_ACTION: 'start-idp', A4_DRY_RUN: '0' }, call, read);
   await verify(http, call, read, probe);
   assert(deployments.filter(item => !['api', 'ui', 'auth-idp'].includes(item.metadata.name)).every(item => item.spec.replicas === 0));
+  assert(sets.every(item => item.spec.replicas === 0));
   console.log('PASS: rendered ingress sequence: internal -> restricted UI -> HTTP -> limited IdP; other writers stopped');
 }
