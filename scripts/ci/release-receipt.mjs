@@ -6,6 +6,7 @@
 // reuse. Runs behind root Make targets in $(LLM_MESH_NODE_IMAGE); never on the host.
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { qualificationProblems } from './tested-tree.mjs';
 
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 
@@ -78,12 +79,20 @@ function priorProblems(prior, source) {
   return [];
 }
 
+// BR92-EX1: the tests behind a release ran in this run (in-run) or in another
+// identified run of the exact source tree (tested-tree); anything else fails.
+function releaseQualificationProblems(qualification, source) {
+  if (qualification?.mode === 'tested-tree' && !source.tree) return ['tested-tree qualification without a source tree'];
+  return qualificationProblems(qualification, { runId: source.runId ?? null, tree: source.tree ?? null });
+}
+
 export function assessReleaseReceipt(evidence = {}) {
   const source = evidence.source ?? {};
   const problems = [
     ...checkProblems(evidence.requiredChecks, evidence.checks),
     ...(evidence.publications ?? []).flatMap((publication) => publicationProblems(publication, source)),
     ...priorProblems(evidence.prior, source),
+    ...releaseQualificationProblems(evidence.qualification, source),
   ];
   const summary = problems.length === 0 ? 'release-receipt: PASS' : `release-receipt: FAIL (${problems.length}): ${problems.join('; ')}`;
   return { ok: problems.length === 0, problems, summary };
@@ -111,7 +120,7 @@ const chainStatus = (result) => result === 'success' ? 'published' : result === 
 
 const pickOutput = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
 
-export function assessChain({ needs = {}, selections = {}, source = {} } = {}) {
+export function assessChain({ needs = {}, selections = {}, source = {}, qualification = { mode: 'in-run' } } = {}) {
   const sel = { api: false, ui: false, global: false, meshPublish: false, gatewayPublish: false, clusterPublish: false, ...selections };
   const requiredChecks = [];
   const checks = [];
@@ -158,7 +167,7 @@ export function assessChain({ needs = {}, selections = {}, source = {} } = {}) {
       requiredChecks.push({ job: 'verify-train-lock-integrity' });
     }
   }
-  const evidence = { source, requiredChecks, checks, publications, prior: null };
+  const evidence = { source, qualification, requiredChecks, checks, publications, prior: null };
   return { ...assessReleaseReceipt(evidence), evidence };
 }
 
@@ -207,17 +216,26 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.stderr.write(`::error::release-receipt: unreadable needs ${needsFile}: ${error.message}\n`);
       process.exit(2);
     }
-    const source = { sha: argValue(argv, '--sha'), runId: argValue(argv, '--run-id'), attempt: argValue(argv, '--attempt') };
+    const source = { sha: argValue(argv, '--sha'), runId: argValue(argv, '--run-id'), attempt: argValue(argv, '--attempt'),
+      tree: argValue(argv, '--source-tree') || undefined };
+    // The qualification is always declared: an undeclared one is not evidence.
+    const mode = argValue(argv, '--qualification-mode');
+    if (!['in-run', 'tested-tree'].includes(mode)) {
+      process.stderr.write(`::error::release-receipt: --qualification-mode in-run|tested-tree is required (got ${mode})\n`);
+      process.exit(2);
+    }
+    const qualification = mode === 'in-run' ? { mode }
+      : { mode, runId: argValue(argv, '--qualification-run'), tree: argValue(argv, '--qualification-tree') };
     const selections = {
       api: isTrue(argValue(argv, '--api')), ui: isTrue(argValue(argv, '--ui')), global: isTrue(argValue(argv, '--global')),
       meshPublish: isTrue(argValue(argv, '--mesh-publish')), gatewayPublish: isTrue(argValue(argv, '--gateway-publish')),
       clusterPublish: isTrue(argValue(argv, '--cluster-publish')),
       apiTag: argValue(argv, '--api-tag'), uiTag: argValue(argv, '--ui-tag'),
     };
-    const verdict = assessChain({ needs, selections, source });
+    const verdict = assessChain({ needs, selections, source, qualification });
     fail(verdict, verdict.evidence);
   } else {
-    process.stderr.write('Usage: release-receipt.mjs assess --evidence <file> [--out <file>]\n     release-receipt.mjs assess-chain --needs <file> --sha <sha> --run-id <id> --attempt <n> [--out <file>]\n       --api/--ui/--global/--mesh-publish/--gateway-publish/--cluster-publish true|false [--api-tag T] [--ui-tag T]\n');
+    process.stderr.write('Usage: release-receipt.mjs assess --evidence <file> [--out <file>]\n     release-receipt.mjs assess-chain --needs <file> --sha <sha> --run-id <id> --attempt <n> [--out <file>]\n       --api/--ui/--global/--mesh-publish/--gateway-publish/--cluster-publish true|false [--api-tag T] [--ui-tag T]\n       --qualification-mode in-run|tested-tree [--qualification-run ID --qualification-tree TREE] [--source-tree TREE]\n');
     process.exit(2);
   }
 }
