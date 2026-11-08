@@ -51,8 +51,10 @@ export const createGitHubAppEnrollment = (input: Omit<GitAppLifecycleInput, 'now
           redirect_url: `${base}/github-app/${ref}/manifest`,
           setup_url: `${base}/github-app/${ref}/installation`,
           hook_attributes: { url: `${base}/github-app/${ref}/events`, active: true },
+          // No default_events: GitHub delivers installation and
+          // installation_repositories to every App webhook without a
+          // subscription and rejects a manifest that lists them.
           default_permissions: GIT_APP_PERMISSIONS,
-          default_events: ['installation', 'installation_repositories'],
         } };
     }),
     convert: (target: GitAppOwnerRepository, ref: string, callback: { state: string; code: string }) =>
