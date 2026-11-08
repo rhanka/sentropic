@@ -3,7 +3,8 @@ import type { HostBuildEnv, HostIdentity } from './host-build-api';
 
 /** S2S scope a content host needs to call the builder (s-archi W7 builder mount, 07/11). */
 export const ARTIFACT_BUILDER_SCOPE = 'artifacts:builder';
-/** Public mount: POST <base>/v1/builds and GET <base>/v1/builds/:artifactId/:jobId. The ui nginx keeps it out of its logs. */
+/** Public mount: <base>/v1/builds (POST, GET :artifactId/:jobId) and <base>/v1/live/* (reconcile, stop, grant, draft
+ * page and seal). The ui nginx keeps it out of its logs. */
 export const ARTIFACT_BUILDER_BASE_PATH = '/api/v1/artifacts/builder';
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_BINDINGS = 16;
