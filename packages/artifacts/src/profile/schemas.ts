@@ -28,6 +28,9 @@ export function assertCompleteOperation(config: OperationProfile): void {
     live_write: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     live_reset: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     live_control: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    live_invite: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    live_accept_invitation: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    live_revoke_invitation: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
     ensure: { limits: ['bindingNameMinUnits', 'bindingNameMaxUnits', 'idempotencyKeyMaxUnits'],
       defaults: ['parameters'] },
     // publish additionally accepts the optional release-budget keys

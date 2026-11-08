@@ -104,6 +104,28 @@ test('should select completed main application qualification rather than a parti
     { ...run, conclusion: 'failure' }]) assert.throws(() => qualifiedMain([changed]), /tuple/);
 });
 
+test('should select a tested-tree main run only through a green same-tree same-repository PR run', () => {
+  const tree = 'e'.repeat(40);
+  const repo = { full_name: 'rhanka/sentropic' };
+  const lanes = [...Array.from({ length: 3 }, (_, i) => `test-api-ai (ai-specs-${i})`),
+    ...Array.from({ length: 6 }, (_, i) => `test-e2e (${i + 1})`), 'e2e-vscode'].map(name => ({ name, conclusion: 'success' }));
+  const pr = { id: 7, event: 'pull_request', status: 'completed', conclusion: 'success', workflow_id: 5,
+    head_commit: { tree_id: tree }, head_repository: repo, repository: repo, jobs: lanes };
+  const main = { id: 8, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', head_sha: sourceSha,
+    workflow_id: 5, head_commit: { tree_id: tree }, repository: repo,
+    jobs: [...lanes.map(job => ({ ...job, conclusion: 'skipped' })),
+      ...['publish-api-image', 'publish-ui-image'].map(name => ({ name, conclusion: 'success' }))] };
+  assert.throws(() => qualifiedMain([main]), /tuple/, 'skipped lanes alone never qualify');
+  assert.deepEqual(qualifiedMain([{ ...main, qualifiedBy: pr }]),
+    { sourceSha, workflowSha: sourceSha, run: 8, attempt: undefined, qualifiedBy: 7 });
+  for (const changed of [{ ...pr, head_commit: { tree_id: 'f'.repeat(40) } }, { ...pr, head_repository: { full_name: 'fork/sentropic' } },
+    { ...pr, conclusion: 'failure' }, { ...pr, event: 'push' }, { ...pr, workflow_id: 6 }, { ...pr, jobs: lanes.slice(1) }]) {
+    assert.throws(() => qualifiedMain([{ ...main, qualifiedBy: changed }]), /tuple/, JSON.stringify(changed).slice(0, 80));
+  }
+  assert.throws(() => qualifiedMain([{ ...main, jobs: main.jobs.slice(0, -1), qualifiedBy: pr }]), /tuple/,
+    'the main run still publishes both images itself');
+});
+
 test('should match the current AI and e2e job shapes on main so the daily selector finds a run', () => {
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
   const block = (id) => {

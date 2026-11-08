@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.22
+
+- Generic live invitations through MCP (A-LIVE v2 §8.2, §9): four tools appended last and frozen at
+  birth, routed to `LiveService.execute`. `artifacts_live_invite` (owner only, invitee resolved from
+  a `userRef` and holding current code rights, 300..86400 s), `artifacts_live_accept_invitation` and
+  `artifacts_live_revoke_invitation` (the owner or the invitee; the session epoch rises and every open
+  invitation adopts it; `onRevoked` runs once after the commit) and `artifacts_live_invitations`
+  (owner sees all, an invitee only their own, as `userRef`/`displayName`). At most 16 open
+  invitations per session; an invitation ceases on a new live session or generation and expires at
+  its deadline. `LIVE_INVITATION_TOOL_CLASSES` maps each tool to a host read/write class.
+- `createLiveService` returns `liveInvitationState(identity)` (`{ epoch, expiresAt }`, the latest
+  active expiry in ms) and `liveViewer(identity, principalId)`. Optional `LiveServiceDeps.invitations`
+  host port (`qualified`, `resolvePrincipal`, `describePrincipal`, `onRevoked`); without a qualified
+  port every invitation tool refuses with `builder_unavailable` and live stays owner-only.
+- The postgres-live adapter persists invitations; host migration `0013_live_invitations.sql` adds
+  `artifacts.live_invitations` and `artifacts.live_invitation_epochs` and ends with a guard that
+  raises on any foreign column or index (a same-named table from another schema is refused).
+- The 35 previous tool definitions are byte-identical. `ARTIFACTS_PROVIDER_VERSION` follows the
+  package (0.2.22): the APP-P1 manifest digest changes through its version field only (the four-tool
+  APP-P1 selection is unchanged; the same manifest at version 0.2.21 still hashes to the 0.2.21 pin).
+  `@sentropic/artifacts/live-host` is unchanged.
+
 ## 0.2.21
 
 - Add the GB1 build validators on `@sentropic/artifacts/server/build-contract`: full dependency

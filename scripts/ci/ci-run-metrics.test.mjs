@@ -23,6 +23,7 @@ import {
   overlappingSeconds,
   queueSeconds,
   queueWaits,
+  qualificationReceipt,
   runnerMinutes,
   stepSpans,
   summarizeRun,
@@ -326,6 +327,7 @@ test('should emit identified job and step measurements through the delivered CLI
     assert.equal(cli.status, 0, cli.stderr);
     const [execution] = JSON.parse(cli.stdout).executions;
     assert.deepEqual(JSON.parse(cli.stdout).identity, { sourceSha: 'source', workflowSha: 'workflow' });
+    assert.equal(JSON.parse(cli.stdout).qualificationEvidence.status, 'in-run');
     assert.equal(execution.runId, 1);
     assert.equal(execution.attempt, 1);
     assert.equal(execution.jobId, 10);
@@ -550,4 +552,24 @@ test('capture records retain head ref context for supersession receipts', () => 
     started_at: '2026-10-18T10:00:00Z', completed_at: '2026-10-18T10:01:00Z' }] });
   assert.equal(record.headSha, 'abc123');
   assert.equal(record.headBranch, 'chore/x');
+});
+
+test('should accept a same-tree PR run as qualification evidence and report an invalid reference', () => {
+  const run = { id: 900 };
+  const tree = 'c'.repeat(40);
+  const mergeSha = 'a'.repeat(40);
+  assert.deepEqual(qualificationReceipt({ run }), { mode: 'in-run', status: 'in-run', mergeSha: null, runId: null,
+    attempt: null, url: null, tree: null, satisfiedJobs: 0, problems: [] });
+  const ref = { mode: 'tested-tree', mergeSha, runId: 800, attempt: 2, tree };
+  const tested = qualificationReceipt({ run, sourceSha: mergeSha, qualification: { ...ref,
+    url: 'https://github.com/rhanka/sentropic/actions/runs/800', satisfied: [{ job: 'test-e2e (1)' }] } });
+  assert.equal(tested.status, 'satisfied-by-run');
+  assert.equal(tested.runId, 800);
+  assert.equal(tested.attempt, 2);
+  assert.equal(tested.mergeSha, mergeSha);
+  assert.equal(tested.satisfiedJobs, 1);
+  for (const qualification of [{ ...ref, runId: 900 }, { ...ref, runId: undefined }, { ...ref, tree: undefined },
+    { ...ref, attempt: undefined }, { ...ref, mergeSha: undefined }, { ...ref, mergeSha: 'b'.repeat(40) }, { mode: 'replayed' }]) {
+    assert.equal(qualificationReceipt({ run, sourceSha: mergeSha, qualification }).status, 'invalid', JSON.stringify(qualification));
+  }
 });

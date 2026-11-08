@@ -17,8 +17,7 @@ export async function prepareLive(ports: LivePorts, key: LiveKey, runtime: LiveR
     state.runtime.sourceRevision = draft.revision; state.runtime.baseHeadSha = draft.baseHeadSha;
     state.runtime.liveTreeSha = draft.treeSha;
   });
-  const pod = await ports.pods.ensure(key, runtime);
-  await ports.heavy.hold(runtime.podName, { pod: true });
+  const pod = await ports.heavy.pod(runtime.podName, () => ports.pods.ensure(key, runtime));
   runtime = await transition(ports, key, runtime, state => { state.runtime.podUid = pod.uid; });
   const source = await ports.forge.snapshot(key, head);
   if (source.headSha !== head) throw new LiveError('git_head_moved');

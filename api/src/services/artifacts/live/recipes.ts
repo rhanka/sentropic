@@ -5,7 +5,7 @@ export const BUILDER_IMAGE = 'docker.io/library/node@sha256:add5c17c14752c54d2f3
 export const ARTIFACT_PUBLIC_ENV = Object.freeze({ VITE_ARTIFACT_MODE: '1', VITE_API_BASE_URL: '/__app' });
 /** Host-owned V8 heap cap for every worker Node process (4 live pods per d2-4 node). It never caps esbuild's native memory. */
 export const NODE_HEAP_OPTIONS = '--max-old-space-size=384';
-/** The clean build alone needs a 1 GiB heap (immo measured: heap OOM at 384 and 768); its pod limit is 1536Mi. */
+/** The clean build alone needs a 1 GiB heap (immo measured: heap OOM at 384 and 768); verified at 1536Mi: peak 1388.6 MiB. */
 export const NODE_BUILD_HEAP_OPTIONS = '--max-old-space-size=1024';
 /** Host-owned native memory caps for every phase (one live pod in its cgroup, 2026-11-07): glibc keeps 2 malloc
  * arenas (Vite node at rest about 20 MiB lower) and esbuild's Go runtime collects at 256 MiB, which brings the

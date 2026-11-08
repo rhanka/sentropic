@@ -2,6 +2,7 @@ import type { GitBinding } from './git-contracts.js';
 import type { GitPort, GitPortRepository, GitPortTarget } from './git-port.js';
 import type { LiveKeyPort } from './live-crypto.js';
 import type { LiveDraftRecord, LiveIdentity, LiveStore, LiveTransaction } from './live-store.js';
+import type { PrincipalDirectoryPort } from './ports.js';
 export interface LiveInvocation { actorId: string; storageScopeId: string; invocationId: string }
 export interface LiveAuthority {
   binding: GitBinding; ownerId: string; canReadCode: boolean; canWrite: boolean;
@@ -15,6 +16,19 @@ export interface LiveWorkerPort {
   /** Confirms quiescence, durable checkpoint and complete pod/volume decommissioning. */
   stop(input: LiveIdentity & { liveSessionId: string; leaseEpoch: number }): Promise<void>;
 }
+export interface LiveInvitationRevoked { storageScopeId: string; artifactId: string; liveSessionId: string;
+  bindingGeneration: number; invitationId: string; epoch: number }
+/** Host invitation port. Invited live readers stay opt-in: `qualified !== true` keeps live owner-only. */
+export interface LiveInvitationPort extends Pick<PrincipalDirectoryPort, 'resolvePrincipal' | 'describePrincipal'> {
+  qualified: boolean;
+  /** Called once after the revocation commit: close the proxied sockets, then push c1 revoke_invitation.
+   * Idempotent; the host retries the push until 204. */
+  onRevoked(e: LiveInvitationRevoked): Promise<void>;
+}
+/** The `invitation` object of the reconcile and grant bodies; `expiresAt` is the latest active expiry (ms). */
+export interface LiveInvitationState { epoch: number; expiresAt: number | null }
+export type LiveViewer = { role: 'binding_owner' } |
+  { role: 'invitee'; invitation: { id: string; epoch: number; expiresAt: number } } | null;
 export interface LiveServiceDeps {
   store: LiveStore; keys: LiveKeyPort; git: GitPort; worker?: LiveWorkerPort;
   authorize(invocation: LiveInvocation, artifactId: string): Promise<LiveAuthority>;
@@ -22,9 +36,15 @@ export interface LiveServiceDeps {
   /** Narrower qualified git_commit limits; never above 255 paths / 8 MiB. */
   commitPathsMax?: number; commitBytesMax?: number;
   gitMessageMaxUnits?: number; idempotencyKeyMaxUnits?: number;
+  invitations?: LiveInvitationPort;
 }
 export interface LiveService {
   execute(operation: string, args: Record<string, unknown>, invocation: LiveInvocation): Promise<Record<string, any>>;
+}
+/** Session state exports for the host reconcile, grant and live proxy paths. */
+export interface LiveSessionService extends LiveService {
+  liveInvitationState(identity: LiveIdentity): Promise<LiveInvitationState>;
+  liveViewer(identity: LiveIdentity, principalId: string): Promise<LiveViewer>;
 }
 export function liveResponse(record: LiveDraftRecord, currentHeadSha: string, now = Date.now()): Record<string, unknown> {
   return { artifactId: record.artifactId, bindingGeneration: record.bindingGeneration,
