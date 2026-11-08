@@ -1,0 +1,79 @@
+# Versioned one-off Job for a governed cm_identity account approval (role change).
+#
+# Runs `node dist/scripts/cm-account-approve.js` (compiled into the api image by
+# `api/package.json` build) AGAINST the tier database. The script calls the admin API's own
+# service (`changeCmAccountAsAdmin`, approve action), so the account audit event, the custody
+# profile approval fields and the subject revision are written exactly as by
+# `POST /api/v1/admin/identity/users/:id/approve`. The actor must be an active admin_app with a
+# custody profile; self-approval is refused. Procedure: docs/oauth-client-rotation.md.
+#
+# Apply ONE-OFF per approval (never added to kustomization resources), through the governed
+# wrapper only:
+#   make cm-account-approve-job SECRET_FILE=<0600 env file> \
+#     CM_ACCOUNT_APPROVE_JOB_NAMESPACE=<ns> KUBECONFIG=<0600 kubeconfig> ENV=<env>
+# The wrapper pins the image to the namespace's running `api` Deployment image (the script
+# then matches that tier's schema), annotates the Job with the operator reason, waits, prints
+# the receipt and the log, and deletes the Job and the temporary Secret on exit, even on failure.
+#
+# Network: the baseline is default-deny-ingress, so `allow-cm-account-approve-to-postgres`
+# (15-networkpolicy.yaml) admits this Job's pod to postgres:5432. Without it the approval
+# fails closed.
+#
+# Secrets reach the Job ONLY via `envFrom` — never as CLI literals:
+# - ConfigMap `api`: tier runtime configuration (WebAuthn RP, callback base URL).
+# - Secret `sentropic-api`: tier DB, session and token secrets (reused, operator-owned).
+# - Secret `cm-account-approval`: TEMPORARY per-run Secret created from the operator 0600 env
+#   file, holding ONLY the four CM_ACCOUNT_APPROVE_* variables (the wrapper refuses any other
+#   key, so the file cannot redirect DATABASE_URL).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cm-account-approve
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: cm-account-approve
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentropic
+        app.kubernetes.io/component: cm-account-approve
+    spec:
+      # enableServiceLinks:false — same pinned rationale as 30-api.yaml: k8s
+      # service env injection shadows app port envs.
+      enableServiceLinks: false
+      serviceAccountName: sentropic-app
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      # No runAsNonRoot: the api image has no USER stanza (runs as root), so a
+      # non-root constraint would break the Job. seccomp default still applies.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: approve
+          image: ghcr.io/rhanka/sentropic-api:main
+          imagePullPolicy: Always
+          workingDir: /workspace/api
+          command: ["node", "dist/scripts/cm-account-approve.js"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: api
+            - secretRef:
+                name: sentropic-api
+            - secretRef:
+                name: cm-account-approval
+          resources:
+            # Thin one-shot (mirrors 37-oauth-register-service-client sizing): connect+approve+exit.
+            requests:
+              cpu: 60m
+              memory: 192Mi
+            limits:
+              cpu: 300m
+              memory: 320Mi
