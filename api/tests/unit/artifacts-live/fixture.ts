@@ -8,6 +8,7 @@ import { createFairAdmission } from '../../../src/services/artifacts/live/admiss
 import { createHeavyPhaseQueue, createMemoryHeavyPhaseQueueStore, PROVISIONAL_HEAVY_PHASE_COSTS_MIB } from '@sentropic/cluster-mesh';
 import { createQueuedHeavyGate, liveHolds } from '../../../src/services/artifacts/live/heavy';
 import { builderPlacement } from '../../../src/services/artifacts/live/placement';
+import type { RemoteRows } from '../../../src/services/artifacts/live/remote-live';
 
 export const key = { storageScopeId: 'scope-a', artifactId: 'artifact-a' };
 export const owner = { principalId: 'owner' };
@@ -107,4 +108,16 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
   return { ports, controller: createLiveController(ports), binding, core, objects, events, published, owners,
     invitation, admission, queue, advance(ms: number) { now += ms; }, draft: (k: LiveKey = key) => draftOf(k),
     state: (k: LiveKey = key) => store.read(k) };
+}
+/** In-memory host KV rows of the remote live state (JSON round trip, like the Postgres rows). */
+export function memoryRows(): RemoteRows {
+  const rows = new Map<string, string>();
+  return {
+    read: async k => (rows.has(k) ? JSON.parse(rows.get(k)!) : undefined),
+    async update(k, change) {
+      const { next, result } = change(rows.has(k) ? JSON.parse(rows.get(k)!) : undefined);
+      if (next !== undefined) rows.set(k, JSON.stringify(next));
+      return result;
+    },
+  };
 }
