@@ -379,7 +379,7 @@ export function reconcileRun(manifest, capture, needs = null) {
   return verdict;
 }
 
-// Tested-tree shortcut (BR92-EX1): decide the classifier output tested_tree once,
+// Tested-tree shortcut (BR92-EX3): decide the classifier output tested_tree once,
 // from captured evidence, and evaluate the selection with that explicit value.
 // Rows the shortcut drops stay in the manifest, unselected, with their run.
 export function qualifiedSelection(workflow, context, evidence = null) {

@@ -133,7 +133,7 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   assert.deepEqual(YAML.parse(files.with.filters), { publishable_package_files: ['packages/*/**'] });
   const comparison = (w) => Object.fromEntries(Object.entries(w).filter(([k]) => !['filters', 'list-files'].includes(k)));
   assert.deepEqual(comparison(files.with), comparison(filter.with), 'identical comparison inputs');
-  // BR92-EX1: actions read only, for the same-tree pull_request run lookup.
+  // BR92-EX3: actions read only, for the same-tree pull_request run lookup.
   assert.deepEqual(jobs.changes.permissions, { contents: 'read', 'pull-requests': 'read', actions: 'read' });
   const out = jobs.changes.outputs;
   assert.equal(out.package_files, '${{ steps.publishable_files.outputs.publishable_package_files_files }}');
@@ -521,7 +521,7 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
 });
 
 test('release train: validation barrier, strict chain, serialization, lock-sync and lock integrity (BRDP-EX10)', () => {
-  // BR92-EX1: a validation also counts as skipped on a tested tree, and only
+  // BR92-EX3: a validation also counts as skipped on a tested tree, and only
   // with the candidates of this run produced (they are what gets published).
   const validated = TRAIN_VALIDATES.map(([job, filter]) => `(needs.${job}.result == 'success' || (needs.${job}.result == 'skipped' && needs.changes.outputs.${filter} != 'true' && needs.changes.outputs.global != 'true') || (needs.${job}.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success'))`);
   for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
