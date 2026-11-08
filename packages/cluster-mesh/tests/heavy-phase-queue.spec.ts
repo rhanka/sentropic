@@ -10,8 +10,8 @@ const node = 'd2-4-a';
 function world(options: { store?: HeavyPhaseQueueStore; podBaseMiB?: number } = {}) {
   const clock = { now: 0 };
   const store = options.store ?? createMemoryHeavyPhaseQueueStore();
-  const queue = createHeavyPhaseQueue({ store, now: () => clock.now, budget: { budgetMiB: 1706,
-    podBaseMiB: options.podBaseMiB ?? 40, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 30_000 } });
+  const queue = createHeavyPhaseQueue({ store, now: () => clock.now, budget: { budgetMiB: 1641,
+    podBaseMiB: options.podBaseMiB ?? 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 30_000 } });
   return { clock, store, queue };
 }
 const pods = async (queue: ReturnType<typeof world>['queue'], subjects: string[]) => {
@@ -29,10 +29,10 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     await queue.finish(node, { subject: 'v1', kind: 'prebundle' });
     expect((await queue.status(node)).entries).toEqual([
       { subject: 'v2', kind: 'prebundle', costMiB: 980, state: 'admitted', position: 0 },
-      { subject: 'v3', kind: 'dev', costMiB: 418, state: 'admitted', position: 0 },
+      { subject: 'v3', kind: 'dev', costMiB: 390, state: 'admitted', position: 0 },
     ]);
   });
-  it('should turn a finished dev into a live reservation and sequence P1, D1, P2, P3, P4, D2, D3', async () => {
+  it('should turn a finished dev into a live reservation and sequence P1, D1, P2, P3, P4, D2, D3, D4', async () => {
     const { queue } = world(); await pods(queue, ['v1', 'v2', 'v3', 'v4']);
     const admitted = async (subject: string, kind: 'prebundle' | 'dev') =>
       (await queue.request(node, { subject, kind })).state === 'admitted';
@@ -50,11 +50,17 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     expect((await queue.status(node)).lives).toEqual(['v1']);
     expect(await admitted('v2', 'dev')).toBe(true); await queue.finish(node, { subject: 'v2', kind: 'dev', live: true });
     expect(await admitted('v3', 'dev')).toBe(true); await queue.finish(node, { subject: 'v3', kind: 'dev', live: true });
-    expect(await queue.status(node)).toMatchObject({ lives: ['v1', 'v2', 'v3'], usedMiB: 160 + 3 * 418, budgetMiB: 1706 });
-    // 4 pod bases + 4 lives exceed 1706 MiB at 40 MiB per base: the fourth dev waits for a live to stop.
-    expect(await queue.request(node, { subject: 'v4', kind: 'dev' })).toMatchObject({ state: 'queued', blockedBy: 'budget' });
+    expect(await queue.status(node)).toMatchObject({ lives: ['v1', 'v2', 'v3'], usedMiB: 76 + 3 * 390, budgetMiB: 1641 });
+    // 4 pod bases + 4 lives = 1636 MiB fit 1641 MiB at 19 MiB per base: the fourth dev is admitted.
+    expect(await admitted('v4', 'dev')).toBe(true); await queue.finish(node, { subject: 'v4', kind: 'dev', live: true });
+    expect(await queue.status(node)).toMatchObject({ lives: ['v1', 'v2', 'v3', 'v4'], usedMiB: 76 + 4 * 390 });
+    // A pre-bundle fits beside one live only: 76 + 3 * 390 + 980 and 76 + 2 * 390 + 980 exceed 1641, 76 + 390 + 980 fits.
     await queue.hold(node, { subject: 'v1', live: false });
-    expect(await admitted('v4', 'dev')).toBe(true);
+    expect(await queue.request(node, { subject: 'v1', kind: 'prebundle' })).toMatchObject({ state: 'queued', blockedBy: 'budget' });
+    await queue.hold(node, { subject: 'v2', live: false });
+    expect(await queue.request(node, { subject: 'v1', kind: 'prebundle' })).toMatchObject({ state: 'queued', blockedBy: 'budget' });
+    await queue.hold(node, { subject: 'v3', live: false });
+    expect(await admitted('v1', 'prebundle')).toBe(true);
   });
   it('should admit a build only when no live runs on the node, holding later phases behind it', async () => {
     const { queue } = world(); await pods(queue, ['v1', 'v2', 'v3']);
@@ -63,7 +69,7 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     expect(await queue.request(node, { subject: 'v3', kind: 'dev' })).toMatchObject({ state: 'queued', position: 2, blockedBy: 'fifo' });
     await queue.hold(node, { subject: 'v1', live: false });
     expect(await queue.request(node, { subject: 'v2', kind: 'build' })).toMatchObject({ state: 'admitted' });
-    expect(await queue.status(node)).toMatchObject({ usedMiB: 120 + 1344 });
+    expect(await queue.status(node)).toMatchObject({ usedMiB: 57 + 1344 });
     expect(await queue.request(node, { subject: 'v3', kind: 'dev' })).toMatchObject({ state: 'queued', position: 1, blockedBy: 'budget' });
   });
   it('should keep a retry at its position and drop every ticket of a cancelled subject', async () => {
@@ -86,13 +92,14 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     await before.queue.request(node, { subject: 'v1', kind: 'build' }); await before.queue.request(node, { subject: 'v2', kind: 'build' });
     const after = world({ store: before.store });
     await after.queue.seed(node, { pods: ['v1', 'v2', 'v3'], lives: [] });
-    expect(await after.queue.status(node)).toMatchObject({ pods: ['v1', 'v2', 'v3'], lives: [], usedMiB: 120 + 1344,
+    expect(await after.queue.status(node)).toMatchObject({ pods: ['v1', 'v2', 'v3'], lives: [], usedMiB: 57 + 1344,
       entries: [{ subject: 'v1', state: 'admitted' }, { subject: 'v2', state: 'queued', position: 1 }] });
   });
   it('should refuse a budget that cannot admit every phase on an empty node', () => {
-    expect(() => world({ podBaseMiB: 400 })).toThrow('heavy-phase budget');
+    expect(() => world({ podBaseMiB: 297 })).not.toThrow(); // 297 + a 1344 MiB build = 1641
+    expect(() => world({ podBaseMiB: 298 })).toThrow('heavy-phase budget');
     expect(() => createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => 0,
-      budget: { budgetMiB: 1706, podBaseMiB: 40, costs: { ...PROVISIONAL_HEAVY_PHASE_COSTS_MIB, dev: 0 }, entryTtlMs: 1 } }))
+      budget: { budgetMiB: 1641, podBaseMiB: 19, costs: { ...PROVISIONAL_HEAVY_PHASE_COSTS_MIB, dev: 0 }, entryTtlMs: 1 } }))
       .toThrow('heavy-phase budget');
   });
 });

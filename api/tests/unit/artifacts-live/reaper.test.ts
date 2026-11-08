@@ -39,7 +39,7 @@ describe('live idle reaper (A-LIVE Amendment 1: 900 s, ends on the clean build)'
     expect(f.ports.worker.build).toHaveBeenCalledOnce(); expect((await f.state())?.runtime.stateDetail).toBeUndefined();
   });
   it('should stop the live, then wait durably in BUILD_QUEUED while another binding is live, and build after it stops', async () => {
-    const f = fixture({ capacity: 2, budgetMiB: 1706 }); await f.controller.start(key); const b = await f.controller.start(other);
+    const f = fixture({ capacity: 2, budgetMiB: 1641 }); await f.controller.start(key); const b = await f.controller.start(other);
     f.advance(900_001); await f.controller.activity(other, b.sessionId, 'read', owner);
     await f.controller.reap(key); await f.controller.reconcile(key);
     expect((await f.state())?.runtime.phase).toBe('BUILD_QUEUED'); expect(f.ports.worker.build).not.toHaveBeenCalled();
@@ -51,7 +51,7 @@ describe('live idle reaper (A-LIVE Amendment 1: 900 s, ends on the clean build)'
     expect(await f.controller.heavyStatus(key)).toEqual([]);
   });
   it('should wake a BUILD_QUEUED binding back to LIVE and drop its build ticket', async () => {
-    const f = fixture({ capacity: 2, budgetMiB: 1706 }); await f.controller.start(key); const b = await f.controller.start(other);
+    const f = fixture({ capacity: 2, budgetMiB: 1641 }); await f.controller.start(key); const b = await f.controller.start(other);
     f.advance(900_001); await f.controller.activity(other, b.sessionId, 'read', owner); await f.controller.reap(key);
     await expect(f.controller.wake(key)).resolves.toMatchObject({ phase: 'LIVE', appliedRevision: 'r1' });
     expect(await f.controller.heavyStatus(key)).toEqual([]); expect(f.ports.worker.build).not.toHaveBeenCalled();

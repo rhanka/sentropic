@@ -20,7 +20,7 @@ const gb1Manifest = { name: 'fixture', version: '1.0.0', scripts: { 'build:artif
 const gb1 = { subPath: '', files: { 'sentropic.artifact.json': gb1Descriptor, 'package.json': JSON.stringify(gb1Manifest),
   'package-lock.json': JSON.stringify({ lockfileVersion: 3, packages: { '': gb1Manifest } }) } };
 const idOf = (k: LiveKey) => `${k.storageScopeId}/${k.artifactId}`;
-/** `budgetMiB` defaults to a node with room for every phase; pass 1706 for one d2-4 (s-archi 07/11 15:05). */
+/** `budgetMiB` defaults to a node with room for every phase; pass 1641 for one d2-4 (s-archi 07/11 15:05, measured pod base 19 MiB). */
 export function fixture(options: { capacity?: number; budgetMiB?: number; maxWaitMs?: number } = {}) {
   const states = new Map<string, LiveState>(); const drafts = new Map<string, DraftSnapshot>();
   const owners = new Map<string, string>();
@@ -69,7 +69,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     },
   };
   const queue = createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => now, budget: {
-    budgetMiB: options.budgetMiB ?? 100_000, podBaseMiB: 40, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 36_000_000 } });
+    budgetMiB: options.budgetMiB ?? 100_000, podBaseMiB: 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 36_000_000 } });
   const ports: LivePorts = {
     store, now: () => now, id: () => `id-${++sequence}`,
     binding: vi.fn(async k => ({ ...binding, ownerId: owners.get(idOf(k)) ?? binding.ownerId })),
