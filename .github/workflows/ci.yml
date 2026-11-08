@@ -897,6 +897,9 @@ jobs:
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
       - name: Qualify public GHCR delivery and the actual Make login recipe
         run: make test-ghcr-images ENV=test-ci-manifests
+      # BRREPIN-EX2: every change, no path filter (owner rule: never delete artifact data).
+      - name: Refuse any change that deletes artifact tables, the artifact object store, its volume or a bucket
+        run: make test-artifact-data-guard ENV=test-ci-manifests
       - name: Test candidate identity and qualification DAG
         run: make test-ci-package-candidate test-ci-package-qualification-dag ENV=test-ci-manifests
       - name: Check publishable manifests
@@ -3770,7 +3773,23 @@ jobs:
       - uses: azure/setup-kubectl@v4
         with:
           version: 'v1.35.0'
-      - name: Verify the actual rendered recovery digests are anonymously pullable
+      # BRREPIN-EX2: pin the images of the deployed commit, never the last committed repin.
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        if: needs.publish-api-image.result == 'success'
+        with:
+          name: ghcr-api-e2e-publication
+          path: tmp/preprod-publications
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        if: needs.publish-ui-image.result == 'success'
+        with:
+          name: ghcr-ui-publication
+          path: tmp/preprod-publications
+      - name: Repin overlays/preprod to this run's publications and this commit's content tags
+        run: >-
+          make preprod-repin
+          PREPROD_PUBLISHED_KINDS="${{ needs.publish-api-image.result == 'success' && 'api' || '' }},${{ needs.publish-ui-image.result == 'success' && 'ui' || '' }}"
+          ENV=test-ci-deploy
+      - name: Verify the rendered preprod digests are anonymously pullable
         run: make check-preprod-images ENV=test-ci-deploy
       - name: Deploy to the sentropic-preprod namespace (immutable image pin)
         env:
