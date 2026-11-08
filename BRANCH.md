@@ -1,56 +1,67 @@
-# Feature: Preprod repin to the forge-lease-reader build
+# Feature: Keep the Origin on the GitHub App enrollment forms
 
 ## Objective
-- [x] Bring the preprod tier to the latest published main build: repin the api digest to the 4c5f7be5c build (forge-lease-reader #955) on top of the GB4 configuration of #952. The builder repositories value (`ARTIFACT_BUILDER_REPOSITORIES_JSON`) is NOT set in this PR: the SG0-app enrollment ref was not available at the lane deadline.
+- [x] Fix the preprod enroll defect (08/11 06:09, owner signed in as admin_app): `POST /api/v1/github-app/enroll?target=radar-immobilier` answered `{"error":"access_denied"}` because every SG0-app page was served with `referrer-policy: no-referrer`, under which a browser sends `Origin: null` on a non-CORS form POST (Fetch "append a request Origin header"), so the router's own forms always failed the strict `csrf()` Origin equality. Serve `referrer-policy: same-origin` instead; the strict Origin equality stays (no "null" accepted, CSRF kept).
+- [x] Fix the next enroll step (i-cond, 08/11): github.com rejected the App manifest (« Default events unsupported: installation and installation_repositories »); the manifest carries no `default_events` (GitHub delivers both events to every App webhook without a subscription); `hook_attributes` and the webhook handler unchanged (commit 3b6b434c9, fix-manifest-events lane, report `.tmp/rv/fix-manifest-events.md`).
+- [x] Fix the lost installation redirect (i-cond, 08/11 06:45): the convert response carrying the install-phase state was lost (ERR_NETWORK_CHANGED), so the setup redirect came back without `state` and `install()` answered `access_denied` with no way to re-mint it; `prompt` (GET /github-app/:ref, owner-checked) now also serves `install` records with an App: it overwrites the state with a fresh one-time digest (10 min) and links to `https://github.com/apps/<slug>/installations/new?state=<state>`; owner binding, one-time state, expiry, permissions and single-repo checks unchanged.
 
 ## Scope / Guardrails
-- [x] Branch deploy/preprod-final-live from main 28acf6393 (merge of #952 deploy/preprod-gb4-live, exact 28acf639397b2d94fde32efe45d94f3cd8df86d4); worktree tmp/worktrees/preprod-final-live; ENV=test-final-iac.
-- [x] PREPROD ONLY: prod overlays and base untouched; no Secret value in Git.
-- [x] Digest provenance: main CI run 42467148857 (head 4c5f7be5c) publish-api-image SUCCESS + release-receipts SUCCESS (receipt `Published tested api: ghcr.io/rhanka/sentropic-api@sha256:ea36654306736125b08cb6902722a9ea765f887d22d48095b93be73ec1139ef6 (config sha256:58ed9427e61f22a51ff541b649787527bb6765d1ce6417237d074aa89eb69c4a)`), verified in GHCR by anonymous manifest fetch (config digest identical). publish-ui-image SKIPS on this head (no ui path changed since the last publishing build), so the ui digest stays the one published by the 7990bc182 build (run 42463322455, publish-ui-image SUCCESS): sha256:ec201329c2d6fed7fb725c412b46994fe7f36d8bf1bf560d53e1d7200d04ee54.
-- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
+- [x] Branch fix/github-app-form-origin from origin/main 0aa3b4043; worktree tmp/worktrees/fix-github-app-form-origin; ENV=test-ghapp-origin; ports API_PORT=9387 UI_PORT=5587 MAILDEV_UI_PORT=1487.
+- [x] Make only; no Python, no attribution trailers, no CI skips or reruns; never ENV=dev.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `deploy/k8s/overlays/preprod/kustomization.yaml`
-  - `deploy/ci/preprod-a4/bundle.selftest.mjs`
+  - `packages/cluster-mesh/src/forge/hono.ts`
+  - `packages/cluster-mesh/src/forge/enrollment.ts`
+  - `packages/cluster-mesh/tests/forge/github-app-http.spec.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `package-lock.json`
+  - `api/package-lock.json`
+  - `api/src/services/cluster-mesh/github-app-host.ts`
+  - `api/src/app.ts`
+  - `api/tests/unit/services/cluster-mesh/github-app-host.test.ts`
+  - `api/tests/api/github-app-product-mount.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `api/**`
-  - `apps/**`
-  - `packages/**`
-  - `deploy/k8s/base/**`
-  - `deploy/k8s/overlays/prod/**`
-  - `deploy/k8s/overlays/preprod-a4/**`
-  - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
-  - `deploy/ci/artifact-content/bundle-checks.mjs`
-  - `deploy/ci/artifact-content/bundle.selftest.mjs`
+  - `deploy/**`
+  - `ui/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `blocked`: `ARTIFACT_BUILDER_REPOSITORIES_JSON` is deliberately NOT set: the SG0-app enrollment ref (i-cond lane, `.tmp/rv/enrollment-ref.txt`) was still missing at the 40-min wait deadline (the i-cond session waits for a human response in its own session — s-conductor, `.tmp/rv/delivery-0500.md` 04:55). Fail-closed: until the value lands (follow-up PR), every forge read and every binding refuses `forge_unconfigured` (forge-binding.ts `forgeConfig`), the builder otherwise composes normally (GB4 #952). No substitution was attempted: the ref must be the enrollment ref `enroll_<36 hex/dash>`, never a numeric GitHub installation id.
-- [x] `attention`: this pin merges ONLY onto a main that carries #952 (GB4) and #955 (forge lease reader): the api digest pinned here is the first build carrying both. A ConfigMap/overlay apply restarts nothing: the operator's apply step (CD re-applies ../preprod-a4 with these pins) rolls the api out.
+- [x] `attention`: CI run 42476781460 on c53ff8434: `ci-capacity-receipts` fails after 4 attempts (GitHub jobs API 502 / release-asset CDN outage 08/11 ~06:30-07:30); every functional job green; fresh run on this head (s-conductor, 08/11 07:45).
+- [x] `attention`: cluster-mesh 0.26.0-dev.18 is required by enforce-package-bump (src change); root/api lock workspace entries and the selected packaging fixture follow the version string only (the cluster-mesh fixture entry is a `file:` archive without integrity pin).
+- [x] `attention`: the manifest form still posts cross-origin to github.com with no referrer and Origin "null" under same-origin, exactly as under no-referrer (unchanged for GitHub).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
-- Rationale: one deploy PR, one CI.
+- Rationale: one fix PR, one CI.
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Repin to the latest published build**
-  - [x] `deploy/k8s/overlays/preprod/kustomization.yaml`: api digest swapped to sha256:ea36654306736125b08cb6902722a9ea765f887d22d48095b93be73ec1139ef6 (run 42467148857 publish receipts, GHCR manifest verified, config digest identical); ui digest unchanged sha256:ec201329c2d6fed7fb725c412b46994fe7f36d8bf1bf560d53e1d7200d04ee54; provenance comment rewritten (publish-ui-image skips on 4c5f7be5c).
-  - [x] `deploy/ci/preprod-a4/bundle.selftest.mjs`: api tag expectation swapped to the new digest; ui expectation and the four prod asserts unchanged.
-- [x] **Lot 2 — Final validation**
-  - [x] `make check-preprod-images ENV=test-final-iac` PASS (both rendered pins verified by anonymous digest pull, 2026-11-08).
-  - [x] `docker-slot.sh make test-artifact-content-manifests API_PORT=8843 UI_PORT=5243 MAILDEV_UI_PORT=1143 ENV=test-final-iac` PASS (artifact-content bundle selftest, A4 unit 32/32, A4 bundle selftest: api/auth-idp/artifact-content on sha256:ea366543…f6, ui on sha256:ec201329…54, prod unchanged).
-  - [x] `make scope-check` PASS (C2).
-  - [ ] PR « deploy(preprod): repin to the forge-reader build and register the builder repository », CI green on the exact head, GLM review `.h2a/reviews/pr-<n>-glm.md`, merge by s-conductor.
+- [x] **Lot 1 — Referrer policy and tests**
+  - [x] `packages/cluster-mesh/src/forge/hono.ts`: `referrer-policy: same-origin` on every router response.
+  - [x] `api/src/services/cluster-mesh/github-app-host.ts`: host header set `referrer-policy: same-origin`; `api/src/app.ts` comment aligned.
+  - [x] `packages/cluster-mesh/tests/forge/github-app-http.spec.ts`: header value; enroll POST passes only with the exact public origin ("null", foreign, http, other port refused); browser regression: landing and rotation forms submitted with the Origin the served policy yields pass csrf(), the manifest form to github.com yields Origin "null".
+  - [x] `api/tests/unit/services/cluster-mesh/github-app-host.test.ts`: header expectations; landing form action keeps `/api/v1` and `?target=radar-immobilier`; the browser-derived Origin passes (303 to the public prompt), Origin "null" stays access_denied.
+  - [x] `api/tests/api/github-app-product-mount.test.ts`: header expectation.
+  - [x] `packages/cluster-mesh/src/forge/enrollment.ts`: manifest without `default_events`; `github-app-http.spec.ts` asserts the manifest POSTed to github.com excludes `installation` and `installation_repositories` and keeps `hook_attributes` (3b6b434c9).
+  - [x] cluster-mesh 0.26.0-dev.18: package.json, CHANGELOG, root/api lock entries, selected packaging fixture.
+- [ ] **Lot 2 — Validation**
+  - [x] `docker-slot.sh make test-cluster-mesh SCOPE=tests/forge/github-app-http.spec.ts ENV=test-ghapp-origin` PASS 5/5.
+  - [x] `docker-slot.sh make test-cluster-mesh SCOPE=tests/forge ENV=test-fix-manifest-events` PASS 58/58 (fix-manifest-events lane, head 3b6b434c9).
+  - [x] `make lint-cluster-mesh`, `make typecheck-cluster-mesh`, `make typecheck-api`, `make lint-api` (0 errors) ENV=test-ghapp-origin PASS.
+  - [ ] `docker-slot.sh make test-api-unit SCOPE=tests/unit/services/cluster-mesh/github-app-host.test.ts API_PORT=9387 UI_PORT=5587 MAILDEV_UI_PORT=1487 ENV=test-ghapp-origin`.
+  - [ ] PR « fix(github-app): keep the Origin on the enrollment forms », CI green on the exact head, GLM review `.h2a/reviews/pr-<n>-glm.md`.

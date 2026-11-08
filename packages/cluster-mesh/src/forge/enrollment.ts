@@ -11,6 +11,8 @@ const consume = (record: EnrollmentRecord, state: string, phase: string, now: nu
   }
   record.callbackState = '';
 };
+const installationUrl = (slug: string, state: string) =>
+  `https://github.com/apps/${encodeURIComponent(slug)}/installations/new?state=${state}`;
 
 export const createGitHubAppEnrollment = (input: Omit<GitAppLifecycleInput, 'now'> & {
   publicBaseUrl: string; now?: () => number;
@@ -40,19 +42,29 @@ export const createGitHubAppEnrollment = (input: Omit<GitAppLifecycleInput, 'now
     },
     prompt: (target: GitAppOwnerRepository, ref: string) => input.custody.withRecord(ref, async (record) => {
       assertOwner(record, target);
-      if (record.state !== 'manifest') throw new GitAppError('capability_unavailable');
+      if (record.state !== 'manifest' && !(record.state === 'install' && record.app)) {
+        throw new GitAppError('capability_unavailable');
+      }
+      // A fresh one-time state replaces any outstanding one, so a lost
+      // installation redirect is resumed by re-prompting, never by replay.
       const state = randomUUID();
       record.callbackState = digest(state);
       record.callbackExpiresAt = now() + 600000;
-      return { state, locator: record.target.locator,
+      if (record.state === 'install') {
+        return { phase: 'install' as const, state, locator: record.target.locator,
+          installationUrl: installationUrl(record.app!.slug, state) };
+      }
+      return { phase: 'manifest' as const, state, locator: record.target.locator,
         manifestUrl: `https://github.com/settings/apps/new?state=${state}`,
         manifest: {
           name: `Cluster Mesh ${ref.slice(-12)}`, url: base, public: false,
           redirect_url: `${base}/github-app/${ref}/manifest`,
           setup_url: `${base}/github-app/${ref}/installation`,
           hook_attributes: { url: `${base}/github-app/${ref}/events`, active: true },
+          // No default_events: GitHub delivers installation and
+          // installation_repositories to every App webhook without a
+          // subscription and rejects a manifest that lists them.
           default_permissions: GIT_APP_PERMISSIONS,
-          default_events: ['installation', 'installation_repositories'],
         } };
     }),
     convert: (target: GitAppOwnerRepository, ref: string, callback: { state: string; code: string }) =>
@@ -67,7 +79,7 @@ export const createGitHubAppEnrollment = (input: Omit<GitAppLifecycleInput, 'now
         const state = randomUUID();
         record.callbackState = digest(state);
         record.callbackExpiresAt = now() + 600000;
-        return { installationUrl: `https://github.com/apps/${encodeURIComponent(app.slug)}/installations/new?state=${state}` };
+        return { installationUrl: installationUrl(app.slug, state) };
       }),
     install: (target: GitAppOwnerRepository, ref: string, callback: { state: string; installationId: string }) =>
       input.custody.withRecord(ref, async (record) => {

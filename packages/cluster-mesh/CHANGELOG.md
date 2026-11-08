@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.26.0-dev.18
+
+- GitHub App router (`createGitHubAppRouter`): responses carry `referrer-policy: same-origin`
+  (was `no-referrer`). Under `no-referrer` a browser sends `Origin: null` on a non-CORS form POST,
+  so the router's own enroll and rotation forms always failed the strict `csrf()` Origin check
+  (`access_denied`). `csrf()` is unchanged: only the exact public origin passes, never `"null"`.
+  Cross-origin requests (the manifest form to github.com) still carry no referrer.
+- GitHub App manifest (`createGitHubAppEnrollment().prompt`): no `default_events` key. GitHub
+  rejected the manifest listing `installation` and `installation_repositories` (it delivers both
+  to every App webhook without a subscription); `hook_attributes` and the webhook handler are
+  unchanged.
+- GitHub App enrollment (`prompt`, `GET /github-app/:ref`): an `install` record with an App is
+  re-prompted with a fresh one-time state (the previous one is overwritten, 10 minute expiry) and a
+  link to `https://github.com/apps/<slug>/installations/new?state=<state>`, so a lost installation
+  redirect is resumable. `prompt` now returns a `phase` discriminant (`manifest` | `install`).
+
 ## 0.26.0-dev.17
 
 - Heavy-phase queue pod slots: `createHeavyPhaseQueue` requires `maxPods`; a `pod` ticket

@@ -25,9 +25,14 @@ export const createGitHubAppRouter = (input: {
   const csrf = (request: Request) => {
     if (request.headers.get('origin') !== new URL(input.publicBaseUrl).origin) throw new GitAppError('access_denied');
   };
+  // same-origin, never no-referrer: a browser serializes the Origin of a
+  // non-CORS form POST as "null" under no-referrer (Fetch "append a request
+  // Origin header"), so this router's own forms would always fail csrf().
+  // same-origin keeps the real Origin on same-origin POSTs and still strips
+  // the referrer (and Origin) from every cross-origin request (github.com).
   app.use('*', async (c, next) => {
     c.header('cache-control', 'no-store');
-    c.header('referrer-policy', 'no-referrer');
+    c.header('referrer-policy', 'same-origin');
     c.header('x-content-type-options', 'nosniff');
     c.header('content-security-policy', "default-src 'none'; form-action https://github.com 'self'; base-uri 'none'; frame-ancestors 'none'");
     await next();
@@ -48,6 +53,10 @@ export const createGitHubAppRouter = (input: {
   });
   app.get('/github-app/:ref', async (c) => {
     const prompt = await input.service.prompt(await owner(c.req.raw), c.req.param('ref'));
+    if (prompt.phase === 'install') {
+      // The App exists: resume its installation with the freshly minted state.
+      return c.html(`<html><body><a href="${escapeHtml(prompt.installationUrl)}">Install the GitHub App on ${escapeHtml(prompt.locator)}</a></body></html>`);
+    }
     return c.html(`<html><body><form method="post" action="${escapeHtml(prompt.manifestUrl)}"><input type="hidden" name="manifest" value="${escapeHtml(JSON.stringify(prompt.manifest))}"><button>Enroll ${escapeHtml(prompt.locator)}</button></form></body></html>`);
   });
   app.get('/github-app/:ref/manifest', async (c) => {
