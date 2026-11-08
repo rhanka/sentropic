@@ -4,6 +4,17 @@
 // run/attempt/job row. Missing timestamps stay null ("to measure"), never zero,
 // and no sub-spans are invented. Runs only behind root Make targets.
 import fs from 'node:fs';
+import { qualificationProblems } from './tested-tree.mjs';
+
+// BR92-EX1: a run is qualified in-run or by another identified same-tree run.
+// The receipt carries the reference; an invalid one is reported, never hidden.
+export function qualificationReceipt(captured) {
+  const qualification = captured?.qualification ?? { mode: 'in-run' };
+  const problems = qualificationProblems(qualification, { runId: captured?.run?.id ?? null });
+  const status = problems.length ? 'invalid' : qualification.mode === 'tested-tree' ? 'satisfied-by-run' : 'in-run';
+  return { mode: qualification.mode ?? 'in-run', status, runId: qualification.runId ?? null, url: qualification.url ?? null,
+    tree: qualification.tree ?? null, satisfiedJobs: qualification.satisfied?.length ?? 0, problems };
+}
 
 // Parse an ISO-8601 string or epoch millis into millis since epoch, else null.
 export function toMs(value) {
@@ -594,6 +605,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     seconds: record.conclusion === 'skipped' ? null : executionSeconds(record),
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
   }));
-  console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache,
+  const qualificationEvidence = qualificationReceipt(captured);
+  console.log(JSON.stringify({ file, identity, qualificationEvidence, summary, readiness, queue, runnerMinutes: minutes, delivery, cache,
     admission, budgets, scheduling, cancellation, continuity, contention, executions }, null, 2));
 }

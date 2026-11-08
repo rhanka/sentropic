@@ -10,8 +10,9 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { captureRecords, executionSeconds, durationSeconds } from './ci-run-metrics.mjs';
+import { assessTestedTree, qualificationProblems } from './tested-tree.mjs';
 
-const policyDigest = workflow => createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
+export const policyDigest = workflow => createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
 // Executed peak, a lower bound and not the account quota: PR run 42393158936 (2026-11-07) ran 28 jobs
 // at once (half-open spans, concurrencyPeak semantics; previous reference peak 17).
 export const OBSERVED_SLOTS_LOWER_BOUND = 28;
@@ -65,6 +66,7 @@ export function capacityCapture(workflow, run, jobs, manifest) {
     return row ? executionSeconds(captureRecords({ run, jobs: [row] })[0]) : null;
   };
   return { run, jobs, sourceSha: run.head_sha, workflowSha: null, policyDigest: manifest.policyDigest ?? null,
+    qualification: manifest.qualification ?? { mode: 'in-run' },
     dependencies: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
       [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []])),
     endpoints: { qualification: ['ci-gate'], images: selected.filter(name => /^publish-.*-image$/.test(name)),
@@ -203,7 +205,8 @@ export function evaluateSelection(expression, lookup) {
 export function expandExpected(expected = []) {
   const out = [];
   for (const item of expected ?? []) {
-    const flags = { required: item?.required !== false, selected: item?.selected !== false };
+    const flags = { required: item?.required !== false, selected: item?.selected !== false,
+      ...(item?.satisfiedBy !== undefined ? { satisfiedBy: item.satisfiedBy } : {}) };
     if (Array.isArray(item?.members) && item.members.length > 0) {
       for (const member of item.members) out.push({ job: String(member), ...flags });
     } else if (Array.isArray(item?.matrix) && item.matrix.length > 0) {
@@ -271,10 +274,22 @@ export function evaluateExpected({ expected = [], executed = [] } = {}) {
   const failures = [];
   const passed = [];
   const unselected = [];
+  const satisfied = [];
   for (const item of expandExpected(expected)) {
     const name = String(item?.job ?? '');
     const required = item?.required !== false;
     const selected = item?.selected !== false;
+    // Tested-tree members are qualified by another run: they must not have
+    // executed here with anything but a success.
+    if (item.satisfiedBy !== undefined && !selected) {
+      const conclusion = normalizeConclusion(executedByJob.get(name)?.conclusion);
+      if (executedByJob.has(name) && !['skipped', 'success'].includes(conclusion)) {
+        failures.push({ job: name, reason: 'satisfied-member-executed', conclusion });
+      } else {
+        satisfied.push({ job: name, satisfiedBy: item.satisfiedBy });
+      }
+      continue;
+    }
     if (!required || !selected) {
       unselected.push(name);
       continue;
@@ -297,7 +312,7 @@ export function evaluateExpected({ expected = [], executed = [] } = {}) {
       failures.push({ job: name, reason: `rejected-conclusion:${conclusion}`, conclusion });
     }
   }
-  return { ok: failures.length === 0, failures, passed, unselected };
+  return { ok: failures.length === 0, failures, passed, unselected, satisfied };
 }
 
 // Matrix members come from the attempt's Jobs API capture. The final gate's
@@ -314,6 +329,18 @@ export function reconcileRun(manifest, capture, needs = null) {
   const verdict = evaluateExpected({ expected: manifest.expected, executed: [...executed.values()] });
   if (!Array.isArray(manifest.expected) || manifest.expected.length === 0) {
     verdict.failures.push({ job: 'manifest', reason: 'missing-expected-set' });
+  }
+  // A satisfied member is accepted only under a valid tested-tree reference
+  // to another run, and only for that exact run.
+  const qualification = manifest.qualification ?? { mode: 'in-run' };
+  verdict.qualification = qualification;
+  for (const problem of qualificationProblems(qualification, { runId: manifest.identity?.runId ?? null })) {
+    verdict.failures.push({ job: 'manifest', reason: `qualification: ${problem}` });
+  }
+  for (const row of verdict.satisfied) {
+    if (qualification.mode !== 'tested-tree' || String(row.satisfiedBy) !== String(qualification.runId)) {
+      verdict.failures.push({ job: row.job, reason: 'unqualified-satisfied-member' });
+    }
   }
   if (manifest.identity) {
     const actual = capture.identity ?? { runId: capture.run?.id,
@@ -351,6 +378,25 @@ export function reconcileRun(manifest, capture, needs = null) {
   return verdict;
 }
 
+// Tested-tree shortcut (BR92-EX1): decide the classifier output tested_tree once,
+// from captured evidence, and evaluate the selection with that explicit value.
+// Rows the shortcut drops stay in the manifest, unselected, with their run.
+export function qualifiedSelection(workflow, context, evidence = null) {
+  const pinned = value => ({ ...context, changes: { ...context.changes, tested_tree: value } });
+  const fullExpected = workflowExpected(workflow, pinned('false'));
+  let qualification;
+  try {
+    qualification = assessTestedTree({ evidence, context, policyDigest: policyDigest(workflow), fullExpected,
+      shortExpected: evidence ? workflowExpected(workflow, pinned('true')) : null });
+  } catch (error) {
+    qualification = { mode: 'in-run', reason: `assessment-error: ${error.message}` };
+  }
+  if (qualification.mode !== 'tested-tree') return { expected: fullExpected, qualification };
+  const satisfied = new Set(qualification.satisfied.map(row => row.job));
+  return { qualification, expected: workflowExpected(workflow, pinned('true')).map(row =>
+    satisfied.has(row.job) ? { ...row, satisfiedBy: qualification.runId } : row) };
+}
+
 const usage = `usage: ci-expected-results.mjs --expected-file <json> --executed-file <json>
 Expected shape: { "expected": [{ "job": <name>, "required": true, "selected": true }] }.
 Matrix members: { "job": <base>, "matrix": [<suffix>, ...] } expands to "<base> (<suffix>)";
@@ -370,7 +416,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
       process.exit(0);
     }
     if (args.includes('--capacity-policy')) {
-      const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
+      // Full demand: the tested-tree shortcut only ever removes slots.
+      const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key =>
+        [key, ['engram_e2', 'tested_tree'].includes(key) ? 'false' : 'true']));
       const scenarios = Object.fromEntries(['pull_request', 'push'].map(event => {
         const context = { changes, event, ref: event === 'push' ? 'refs/heads/main' : 'refs/pull/77/merge' };
         const expected = workflowExpected(workflow, context);
@@ -395,14 +443,27 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
       process.exit(shapeValid && (!args.includes('--require-proof') || proof.accepted) ? 0 : 1);
     }
     const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);
-    const expected = workflowExpected(workflow, context);
+    const manifestFile = args[args.indexOf('--manifest-file') + 1];
+    // Evidence is a plain file name beside the manifest; unreadable evidence
+    // is recorded and keeps the complete run.
+    let evidence = null;
+    if (context.testedTree) {
+      try {
+        if (!/^[\w.-]+\.json$/.test(context.testedTree)) throw new Error('invalid evidence name');
+        evidence = JSON.parse(fs.readFileSync(path.join(path.dirname(manifestFile), context.testedTree), 'utf8'));
+      } catch (error) {
+        evidence = { error: `unreadable evidence: ${error.message}` };
+      }
+    }
+    const { expected, qualification } = qualifiedSelection(workflow, context, evidence);
     const gateExpected = workflow.jobs['ci-gate'].needs.map((job) => ({ job,
       selected: job === 'ci-capacity-receipts' || expected.some((row) => row.selected
         && (row.job === job || row.job.startsWith(`${job} (`))) }));
     const dependencies = Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
       [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []]));
-    const manifest = { identity: context.identity, policyDigest: policyDigest(workflow), expected, gateExpected, dependencies };
-    fs.writeFileSync(args[args.indexOf('--manifest-file') + 1], JSON.stringify(manifest, null, 2));
+    const manifest = { identity: context.identity, policyDigest: policyDigest(workflow), qualification,
+      expected, gateExpected, dependencies };
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
     process.exit(0);
   }
   if (args.includes('--help') || !args.includes('--expected-file') || !args.includes('--executed-file')) {
