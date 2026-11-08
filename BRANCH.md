@@ -50,7 +50,7 @@
 - [x] Lot 6 (r2, GLM section 9) (d): no newest-wins; every same-tree candidate and every attempt green, else the complete run.
 - [x] Lot 6 (a): explicit attempts (the concluded attempt is reused) and a 24 h age bound `TESTED_TREE_MAX_AGE_HOURS` on the reused attempt.
 - [x] Lot 6 (e): the release receipt records the merge sha and the reused PR run id, attempt, head sha and tree.
-- [ ] Lot 6: the daily live selector refuses a tuple with any non-green same-tree PR run.
+- [x] Lot 6: the daily live selector refuses a tuple with any non-green same-tree PR run.
 - [x] Lot 6: residual recorded: a dropped member is proven by its job conclusion only (a success job with every step skipped is not detectable).
-- [ ] Lot 6: scoped checks green; wagon branch pushed.
+- [x] Lot 6: scoped checks green (tested-tree 11/11, expected-results 28/28, ci-dag 10/10, ci-static 3/3, run-metrics 37/37, release-receipts 43/43, package DAG 9/9, wiring + expected-results 70/70, live-provider 45/45, security-daily 333/333); wagon branch pushed.
 - [ ] Lot N: train CI green on the exact head; BRANCH.md removed at merge.
