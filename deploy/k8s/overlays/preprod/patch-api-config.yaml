@@ -101,3 +101,10 @@ data:
   # runs the same image against the same database and shares the JWKS rows and OAUTH_SIGNING_KEK
   # (deploy/k8s/base/35-auth-idp.yaml), so those are the keys that signed the token.
   MCP_AUTHORIZATION_SERVER_URL: "https://preprod.auth.sent-tech.ca"
+  # GB4 (PREPROD ONLY): the api opens its artifact host surface
+  # (patch-api-artifact-host.yaml). Instance initialization throws at module load
+  # when the host is enabled without a positive per-tenant artifact quota
+  # (api/src/services/artifacts/instance.ts), so the tier that opens the host must
+  # declare one. 1 GiB per tenant for preprod; prod stays default-off (and
+  # quota-less) until its own cutover.
+  APP_ARTIFACT_QUOTA_BYTES: "1073741824"
