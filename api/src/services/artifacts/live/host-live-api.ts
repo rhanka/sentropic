@@ -6,10 +6,12 @@ import { createLiveWorkerBridge, type BridgeAck, type BridgeIdentity } from './b
 import type { LiveStore } from './ports';
 import type { RemoteLive } from './remote-live';
 import type { RemoteDrafts } from './remote-drafts';
+import { bindingOf, type ForgeBinding } from './forge-binding';
 import { actorOf, closed, CONTROL_BYTES, filesOf, id, int, invalid, json, limited, objectId, PAGE_BYTES, paths, refusal,
   SEAL_BYTES, sessionInvitationOf, token } from './host-live-body';
 
-const RECONCILE = ['artifactId', 'bindingGeneration', 'ownerId', 'liveSessionId', 'leaseEpoch', 'routeEpoch', 'invitation'];
+const RECONCILE = ['artifactId', 'bindingGeneration', 'ownerId', 'liveSessionId', 'leaseEpoch', 'routeEpoch', 'invitation',
+  'binding'];
 const STOP = ['artifactId', 'bindingGeneration', 'liveSessionId', 'leaseEpoch'];
 const GRANT = ['artifactId', 'access', 'actor', 'invitation'];
 const PAGE = ['artifactId', 'bindingGeneration', 'revision', 'page', 'files'];
@@ -23,6 +25,8 @@ const SEAL = ['artifactId', 'bindingGeneration', 'revision', 'pages', 'baseHeadS
 export function createHostLiveApi(options: {
   authenticate(c: Context): HostIdentity | null; controller: ReturnType<typeof createLiveController>; store: LiveStore;
   remote: RemoteLive; drafts: RemoteDrafts; waitMs: number;
+  /** Validates the host git binding (contract §1) and records it, immutable per binding generation. */
+  bind(key: LiveKey, generation: number, binding: ForgeBinding): Promise<void>;
 }) {
   const { remote, drafts } = options;
   const bridge = createLiveWorkerBridge({ controller: options.controller, ports: { store: options.store, drafts: drafts.drafts },
@@ -55,10 +59,12 @@ export function createHostLiveApi(options: {
   const keyOf = (c: Context<HostBuildEnv>, artifactId: string): LiveKey => ({ storageScopeId: c.get('identity').storageScopeId, artifactId });
   app.post('/v1/live/reconcile', limited(CONTROL_BYTES), async c => {
     const b = await json(c); const invitation = closed(b, RECONCILE) ? sessionInvitationOf(b.invitation) : null;
-    if (!invitation || !closed(b, RECONCILE) || !id(b.artifactId) || !int(b.bindingGeneration, 1) || !token(b.ownerId)
+    const binding = closed(b, RECONCILE) ? bindingOf(b.binding) : null;
+    if (!invitation || !binding || !closed(b, RECONCILE) || !id(b.artifactId) || !int(b.bindingGeneration, 1) || !token(b.ownerId)
       || !id(b.liveSessionId) || !int(b.leaseEpoch) || !int(b.routeEpoch)) return invalid(c);
     const identity = { ...keyOf(c, b.artifactId), bindingGeneration: b.bindingGeneration };
     try {
+      await options.bind(identity, b.bindingGeneration, binding);
       await remote.reconciled(identity, { generation: b.bindingGeneration, ownerId: b.ownerId, liveSessionId: b.liveSessionId,
         leaseEpoch: b.leaseEpoch, routeEpoch: b.routeEpoch });
       await remote.invitation(identity, b.bindingGeneration, invitation);

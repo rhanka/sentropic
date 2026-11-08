@@ -2,6 +2,8 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { LiveError, type LiveKey } from './records';
 import type { BuildJobRecord, BuildJobs } from './build-jobs';
+import { bindingOf, type ForgeBinding } from './forge-binding';
+import { refusal } from './host-live-body';
 
 /** Host build API served by Sentropic as `sentropic-app` (the only controller identity, A-LIVE §9.1).
  * The scope comes from the authenticated host service identity, never from the body; a job is named by id, never by
@@ -27,6 +29,8 @@ export function createHostBuildApi(options: {
   jobs: BuildJobs;
   /** Runs one explicit clean build to publication (controller.buildOnly). */
   build(key: LiveKey, jobId: string): Promise<void>;
+  /** Validates the host git binding (contract §1) and records it for the generation the host reconciled last. */
+  bind(key: LiveKey, binding: ForgeBinding): Promise<void>;
   /** Background executor owned by the composition; nothing starts on import. */
   schedule(work: () => Promise<void>): void;
 }) {
@@ -46,11 +50,13 @@ export function createHostBuildApi(options: {
     // An over-limit body fails this read inside bodyLimit (413); only the JSON parse is caught.
     const raw = await c.req.text(); let body: Record<string, unknown> | null = null;
     try { body = JSON.parse(raw) as Record<string, unknown>; } catch { /* invalid_request below */ }
-    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).sort().join() !== 'artifactId,jobId'
-      || typeof body.artifactId !== 'string' || !ID.test(body.artifactId) || typeof body.jobId !== 'string' || !ID.test(body.jobId)) {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).sort().join() !== 'artifactId,binding,jobId'
+      || !bindingOf(body.binding) || typeof body.artifactId !== 'string' || !ID.test(body.artifactId)
+      || typeof body.jobId !== 'string' || !ID.test(body.jobId)) {
       return c.json({ error: 'invalid_request' }, 400);
     }
     const k = key(c, body.artifactId); const jobId = body.jobId;
+    try { await options.bind(k, bindingOf(body.binding)!); } catch (error) { return refusal(c, error); }
     const { record, run: start } = await options.jobs.admit(k, jobId);
     if (start) options.schedule(() => run(k, jobId, record.token));
     return c.json(view(record), record.state === 'published' ? 200 : 202);

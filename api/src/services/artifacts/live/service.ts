@@ -25,6 +25,7 @@ import { createHostBuildApi, type HostBuildEnv, type HostIdentity } from './host
 import { createHostLiveApi } from './host-live-api';
 import { createRemoteLive } from './remote-live';
 import { createRemoteDrafts } from './remote-drafts';
+import type { ForgeBindings } from './forge-binding';
 
 /** Live pods admitted on one d2-4 node (owner decision 07/11); memory admission is the heavy-phase queue's. */
 export const LIVE_NODE_CAPACITY = 4;
@@ -84,6 +85,8 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
   authenticate(c: Context): HostIdentity | null; schedule(work: () => Promise<void>): void;
   /** Longest wait of one host reconcile before it answers `ready: false` (the revive keeps running). */
   liveWaitMs: number;
+  /** Host git bindings (forge-lease-reader contract §1), validated and recorded before anything is scheduled. */
+  forgeBindings: Pick<ForgeBindings, 'admit'>;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
     runStaleMs(options.heavy.maxWaitMs));
@@ -94,10 +97,13 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
   const remote = createRemoteLive(rows); const drafts = createRemoteDrafts(rows);
   const controller = createArtifactLiveService({ ...options, publication, drafts: drafts.drafts, invitations: remote.invitations,
     sources: { ...options.sources, draft: drafts.draft, candidate: input => candidates.candidate(input) } });
+  // A build carries no generation: its binding is recorded for the generation the host reconciled last, which the
+  // build-only run then requires of the job (HostJob.generation).
   const builds = createHostBuildApi({ authenticate: options.authenticate, jobs, schedule: options.schedule,
+    bind: async (key, binding) => options.forgeBindings.admit(key, (await remote.session(key)).generation, binding),
     build: async (key, jobId) => { await controller.buildOnly(key, jobId); } });
   const live = createHostLiveApi({ authenticate: options.authenticate, controller, store: createPostgresLiveStore(options.pool),
-    remote, drafts, waitMs: options.liveWaitMs });
+    remote, drafts, waitMs: options.liveWaitMs, bind: options.forgeBindings.admit });
   const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live);
   return { controller, api, jobs, remote, drafts };
 }
