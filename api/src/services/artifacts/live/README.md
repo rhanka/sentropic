@@ -39,6 +39,12 @@ The host supplies these mandatory integrations:
 Workers have no egress in any phase (W2 static deny), so the supervisor pushes
 every byte over the only worker ingress, TCP :5173, relayed by `artifact-content`
 through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
+`createRelaySupervisorChannel` is that channel: one frame per
+`POST <ARTIFACT_SUPERVISOR_RELAY_URL>/_live-supervisor/v1/<podName>` (octet-stream, internal
+Service Host, http only, `*.svc.cluster.local`; absent or invalid refuses to compose), over
+node:http so no undici 300 s headers timeout cuts a command; each command is bounded at
+320 s, the relay hop at 330 s. Preprod:
+`http://artifact-content.sentropic-preprod.svc.cluster.local:8791`.
 
 - Frame: 64-byte Ed25519 signature, then the exact UTF-8 JSON body
   `{ v: 1, id, op, fence, issuedAt, expiresAt, args }`; at most 2 MiB; delivery
@@ -278,8 +284,10 @@ transport signs every frame with it, and the pod bootstrap is
 `createBootstrapSource(supervisorPublicKey(key))`, so the pod spec carries the
 public key only and refuses a frame sealed with any other key.
 
-Rotation: a single active key. Replace the value only after every live pod has
-stopped, then restart the API; the new key applies at the next revive, because
+Rotation: a single active signing key. First add the new public half to
+`APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS` of artifact-content (two entries) and roll it out.
+Replace the API value only after every live pod has stopped, then restart the API, and
+remove the old public half from artifact-content; the new key applies at the next revive, because
 each pod keeps the public key of the bootstrap it started with. Rotate on the
 owner's cycle, and at once on a suspected exposure.
 
