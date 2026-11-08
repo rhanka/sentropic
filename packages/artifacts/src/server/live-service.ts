@@ -111,7 +111,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
     let result!: Record<string, any>;
     for (let attempt = 0; !result; attempt++) {
       if (attempt === LIVE_PREFETCH_ATTEMPTS) liveBusy('transition_busy');
-      // Forge I/O runs here, before the per-artifact advisory lock; the locked transaction never awaits the forge.
+      // Base tree and ancestry forge calls run here, before the per-artifact advisory lock.
       const prefetch = stop ? undefined : await prefetchLiveBase(deps, authority.target, identity, operation, head, fullTree);
       const outcome = await deps.store.transaction(identity, async tx => {
       const current = await deps.authorize(invocation, args.artifactId);

@@ -6,11 +6,15 @@
   resolve the head (`git/ref/heads/{branch}`) and read the base tree SHA from one commit lookup, then
   return `liveRevision`, `currentHeadSha`, `bindingGeneration` and the draft state. Only reads that list
   base entries (`live_read`, `live_write`, `live_status` with `includeDiff`/`cursor`) take the snapshot.
-- No forge call runs inside the per-artifact advisory-locked draft transaction any more: the draft fence
-  is read in a short transaction, the snapshot/commit and fast-forward checks run outside the lock, and the
-  locked transaction re-checks the fence (bounded retry, then `git_live_conflict`/`transition_busy`).
-  A slow forge call no longer holds the draft row `FOR UPDATE` (immo preprod 08/11: 502 on live_status,
-  `idle in transaction`, lock timeouts). `live_read` still reads its page of files under the lock.
+- The tree walk, the base commit lookup and the fast-forward checks no longer run inside the per-artifact
+  advisory-locked draft transaction: the draft fence is read in a short transaction, those forge calls run
+  outside the lock, and the locked transaction re-checks the fence (bounded retry, then
+  `git_live_conflict`/`transition_busy`). Status, start and reset therefore make no forge call under the lock
+  (immo preprod 08/11: 502 on live_status, `idle in transaction`, lock timeouts). Still under the lock:
+  the base file reads of a `live_read` page and of `live_write` edits, and the host `authorize` callback.
+- Status, start and reset no longer validate the whole tree (walk limits, entry names); those checks stay
+  with the reads that list base entries. A host GitPort without `snapshot` now gets `capability_unselected`
+  before the transaction.
 
 ## 0.2.23
 
