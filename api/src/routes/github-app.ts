@@ -9,11 +9,14 @@ import { authenticateCmHttpRequest } from '../services/identity/cm-http-principa
 import {
   GIT_APP_BROKER_SCOPE,
   createGitHubAppHostRouter,
+  createGitHubAppHostService,
   createGitInvalidationBus,
+  registerGitInvalidationSubscriber,
   resolveGitHubAppHostConfig,
   type GitHubAppPrincipal,
 } from '../services/cluster-mesh/github-app-host';
 import { createPostgresGitHubAppEnvelopeStore } from '../services/cluster-mesh/github-app-envelope-store';
+import type { ForgeLeaseHost } from '../services/artifacts/live/forge-binding';
 import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthServiceResource } from './auth/oauth';
 
 /**
@@ -56,14 +59,33 @@ const resolveCmOwnerPrincipal = async (request: Request): Promise<GitHubAppPrinc
   return { ownerId: result.principal.session.userId, role: result.principal.role };
 };
 
+const settleProductGitHubApp = () => resolveGitHubAppHostConfig({
+  GITHUB_APP_PUBLIC_BASE_URL: env.GITHUB_APP_PUBLIC_BASE_URL,
+  GITHUB_APP_TARGETS_JSON: env.GITHUB_APP_TARGETS_JSON,
+  GITHUB_APP_BROKER_BINDINGS_JSON: env.GITHUB_APP_BROKER_BINDINGS_JSON,
+  SECRET_ENCRYPTION_KEY: env.SECRET_ENCRYPTION_KEY,
+});
+
+/**
+ * In-process lease of the same lifecycle service as `POST /github-app/broker/lease` (same custody store, key, GitHub
+ * API and invalidation bus) for the builder forge reader; null when the composition is disabled or broken.
+ */
+export const createProductGitHubAppLease = (): ForgeLeaseHost | null => {
+  try {
+    const settled = settleProductGitHubApp();
+    if (!settled.enabled) return null;
+    const service = createGitHubAppHostService({ config: settled.config, store: createPostgresGitHubAppEnvelopeStore({ pool }),
+      github: createGitHubAppApi(), onCredentialsChanged: createGitInvalidationBus() });
+    return { targets: settled.config.targets, acquire: (input) => service.acquire(input),
+      subscribe: registerGitInvalidationSubscriber };
+  } catch {
+    return null;
+  }
+};
+
 export const createProductGitHubAppRouter = (): Hono | null => {
   try {
-    const settled = resolveGitHubAppHostConfig({
-      GITHUB_APP_PUBLIC_BASE_URL: env.GITHUB_APP_PUBLIC_BASE_URL,
-      GITHUB_APP_TARGETS_JSON: env.GITHUB_APP_TARGETS_JSON,
-      GITHUB_APP_BROKER_BINDINGS_JSON: env.GITHUB_APP_BROKER_BINDINGS_JSON,
-      SECRET_ENCRYPTION_KEY: env.SECRET_ENCRYPTION_KEY,
-    });
+    const settled = settleProductGitHubApp();
     if (!settled.enabled) {
       logger.warn({ code: settled.disabledReason }, 'github_app_composition_disabled');
       return null;
