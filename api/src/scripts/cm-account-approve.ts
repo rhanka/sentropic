@@ -110,8 +110,10 @@ if (invokedDirectly) {
   try {
     await main();
   } catch (error) {
-    // Error class and message only: never the env, never a stack carrying request values.
-    console.error(`cm-account-approve refused: ${error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error'}`);
+    // Error class and FIRST message line only (as oauth-register-service-client): never the env, never a
+    // stack, never a wrapped driver DETAIL line carrying bound values.
+    const message = error instanceof Error ? `${error.name}: ${error.message.split('\n')[0]}` : 'unknown error';
+    console.error(`cm-account-approve refused: ${message}`);
     process.exitCode = 1;
   } finally {
     const { pool } = await import('../db/client');
