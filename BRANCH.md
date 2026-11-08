@@ -22,11 +22,12 @@
   - `api/**`
   - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
+  - `.github/workflows/**` (BRA4L-EX1: `ci.yml` api filter only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- [x] `attention` BRA4L-EX1: `consumer-contracts` classifies `deploy/k8s/**/*.mjs` as runtime-security and requires the API/UI/e2e consumers, which no path filter selected for `a4-runtime/**`. Add that path to the `ci.yml` `api` filter. Impact: launcher edits run the API consumers. Rollback: remove the filter line.
 - [x] `attention`: without this fix the authorized A4 wire would leave API/IdP in CrashLoopBackOff (container exits 0) and the custodian Pod Completed.
 
 ## Orchestration Mode (AI-selected)
@@ -38,5 +39,6 @@
   - [x] `isMain(url, argv1)` compares `import.meta.url` with the real path of `argv[1]`.
   - [x] `deploy/ci/preprod-a4/launch-symlink.test.mjs`: run the launcher through a two-level symlink; it must reach its main block (refuses without HMAC custody, exit 1).
   - [x] Lot gate (32/32): `make test-preprod-a4 ENV=test-a4-launcher`
+  - [x] `ci.yml` `api` filter selects the required consumers for `deploy/k8s/overlays/preprod/a4-runtime/**` (BRA4L-EX1).
 - [ ] **Lot 2 — PR**
   - [ ] PR « fix(a4): run the A4 runtime launcher through its ConfigMap symlink », CI green on the exact head, GLM review.

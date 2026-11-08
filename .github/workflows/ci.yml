@@ -417,6 +417,8 @@ jobs:
             # push and that deploy-preprod pins. A path that feeds the sha but is missing here
             # bumps the pinned tag without ever building it -> ImagePullBackOff on preprod.
             api:
+              # The A4 runtime launcher is classified runtime-security (deploy/*.mjs) and wraps the API process.
+              - 'deploy/k8s/overlays/preprod/a4-runtime/**'
               - 'scripts/ci/locked-tools.mjs'
               - 'scripts/ci/tool-locks.json'
               - 'api/**'
