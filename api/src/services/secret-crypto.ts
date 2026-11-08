@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto';
 
-import { env } from '../config/env';
+import { DEVELOPMENT_SECRET_SEED, resolveDeploymentSecret } from '../config/deployment-secrets';
 import { logger } from '../logger';
 
 const ENVELOPE_NAMESPACE = 'enc:';
@@ -10,41 +10,25 @@ const GCM_AUTH_TAG_LENGTH = 16;
 const CURRENT_KEY_VERSION = 'v1';
 
 /**
- * At-rest key derivation for version `v1`.
+ * At-rest key derivation for version `v1`: sha256 of `SECRET_ENCRYPTION_KEY`.
  *
- * Reads `SECRET_ENCRYPTION_KEY` and the legacy literal ONLY — deliberately NOT `JWT_SECRET`, which is
- * what decouples encryption-at-rest from token signing, and NOT `OAUTH_SIGNING_KEK`, which rotates on a
- * 90-day schedule (deriving from a rotating key would make every stored secret unreadable at the first
- * rotation — the very failure this remediation exists to remove).
+ * A deployed runtime without a provisioned key REFUSES (config/deployment-secrets.ts): there is no
+ * literal fallback. Envelopes an earlier deployed image sealed under the development seed are moved to
+ * the provisioned key with `--secret-reencrypt` BEFORE the key is set (docs/secrets.md). Dev and test
+ * keep the development seed, so their stored envelopes stay readable.
  *
- * DO NOT re-introduce a `|| env.JWT_SECRET` middle term. It looks safer and is the opposite. Deployed
- * environments do not carry `JWT_SECRET` (absent from the secret bundle, so containers never receive
- * it), which means the live seed is the literal below. A later step PROVISIONS a fresh `JWT_SECRET`;
- * with `... || JWT || literal` that provisioning would flip the seed and make every stored envelope
- * undecryptable at once — silently, since GCM fails only on read.
- *
- * `||` (not `??`) is load-bearing: the secret bundle emits present-but-EMPTY keys, and an empty string
- * must fall through rather than become the seed.
+ * Reads `SECRET_ENCRYPTION_KEY` ONLY — deliberately NOT `JWT_SECRET`, which is what decouples
+ * encryption-at-rest from token signing, and NOT `OAUTH_SIGNING_KEK`, which rotates on a 90-day
+ * schedule (deriving from a rotating key would make every stored secret unreadable at the first
+ * rotation). DO NOT add a `|| env.JWT_SECRET` term: provisioning or rotating `JWT_SECRET` would then
+ * flip the at-rest key and make every stored envelope undecryptable at once — silently, since GCM
+ * fails only on read.
  *
  * Do not "simplify" by trimming, normalising, or base64-decoding the seed: each changes the sha256 and
  * bricks every stored secret.
  */
-const LEGACY_V1_SEED = 'dev-secret-key-change-in-production-please';
-
-const resolveV1Key = (): Buffer => {
-  const seed = env.SECRET_ENCRYPTION_KEY || LEGACY_V1_SEED;
-  return createHash('sha256').update(seed).digest();
-};
-
-/**
- * True only for a provisioned at-rest key: non-blank and not the committed development seed.
- * Fail-closed custody surfaces (SG0-app enrollment) gate on this; the shared `v1` fallback above
- * stays unchanged for every existing consumer.
- */
-export const isProvisionedSecretEncryptionKey = (value: string | undefined): boolean => {
-  const trimmed = value?.trim() ?? '';
-  return trimmed.length > 0 && trimmed !== LEGACY_V1_SEED;
-};
+const resolveV1Key = (): Buffer =>
+  createHash('sha256').update(resolveDeploymentSecret('SECRET_ENCRYPTION_KEY', DEVELOPMENT_SECRET_SEED)).digest();
 
 /**
  * The keyring. A version present here is READABLE; a version absent is REJECTED, never guessed.
