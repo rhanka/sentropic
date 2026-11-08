@@ -31,12 +31,14 @@
   - `packages/cluster-mesh/src/runtime/heavy-phase-queue.ts`, `packages/cluster-mesh/src/index.ts`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/CHANGELOG.md` under BR90-EX18.
   - `package-lock.json`, `api/package-lock.json` under BR90-EX19.
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`, `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` under BR90-EX20.
+  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` under BR90-EX21.
 
 ## Feedback Loop
 - [x] BR90-EX17: `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.22); APP-P1 digest repinned (version field only, four-tool selection unchanged). Rollback: revert with the bump.
 - [x] BR90-EX18: heavy-phase queue pod slots (`maxPods`, blocker `pods`) and build cost 1261 MiB (1280Mi limit minus the 19 MiB pod base); `@sentropic/cluster-mesh` 0.26.0-dev.16 to 0.26.0-dev.17 with changelog. Rollback: revert the queue, the tests and the bump together.
 - [x] BR90-EX19: root and api lock workspace entries follow artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 (version strings only). Rollback: revert with the bumps.
 - [x] BR90-EX20: the selected packaging fixture names the artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 archives with the regenerated artifacts integrity pin (guarded sibling sha256 57a0e4908f0fdc8debece64e8bb0ed2cfd24412032ab3d49f473d4908b1b4a62, from pack-candidate-siblings then refresh-lazy-package-lock). Rollback: revert with the bumps.
+- [x] BR90-EX21: the exact tool-name pins of the packed consumer probe (`packages/artifacts/probe/packed-consumer.mjs`) and of the cluster-mesh artifacts surface spec append the four frozen invitation tools (exact equality kept; the wagon had not run them). Rollback: revert with the wagon.
 - [ ] `attention`: build-1280 verdict NO: no measured build heap passes under 1280Mi with one CPU (1024 and 896 OOM-killed, 768 and 640 V8 heap OOM; 1536Mi passes at peak 1388.6 MiB). `NODE_BUILD_HEAP_OPTIONS` stays 1024 and is unverified; the in-pod clean build does not fit the quota-fit pod. Owner s-archi.
 - [ ] `attention`: preprod and prod builder namespaces share the d2-4 pool while each environment's W8 queue assumes the full 1641 MiB; prod-activation blocker (prod live is OFF). Owner s-archi/k8s.
 
