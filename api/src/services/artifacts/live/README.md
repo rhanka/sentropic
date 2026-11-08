@@ -330,19 +330,35 @@ owner's cycle, and at once on a suspected exposure.
 `createProductBuilder(process.env, deps)` (`product-builder.ts`) composes
 `createBuilderService` only when `ARTIFACT_BUILDER_ENABLED=1` (cm/api, off by
 default: the mount answers 503 `builder_unavailable` to a bound host). With the
-flag on, the API refuses to boot when any of these is absent or invalid, naming
-the variable and never its value: `ARTIFACT_BUILDER_NAMESPACE`,
+flag on, an absent or invalid value refuses to compose GRACEFULLY (F2, s-archi
+review of #951): the process stays up serving the rest of the API, the mount
+keeps answering 503 `builder_unavailable`, no scheduler starts, and one
+`artifact_builder_refused` log names the variable and never its value:
+`ARTIFACT_BUILDER_NAMESPACE`,
 `ARTIFACT_BUILDER_SERVICE_DOMAIN`, `ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON`,
 `ARTIFACT_SUPERVISOR_RELAY_URL`, `ARTIFACT_BUILDER_HANDOFF_SIGNING_KEY_JSON`,
 `ARTIFACT_BUILDER_HOST_RECEIPT_KEYS_JSON`, `ARTIFACT_BUILDER_REMOTE_HOST_URL`,
 `ARTIFACT_LIVE_CONTROLLER_KEY`, `ARTIFACT_LIVE_EDGE_INTERNAL_URL`,
 `ARTIFACT_DEPENDENCY_CACHE_SIGNING_KEY` (32 random bytes, base64url, owner
 sentropic), `ARTIFACT_BUILDER_NODE`, `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` (at
-least one binding) and `APP_ARTIFACT_HOST_ENABLED=1` (cache objects live in the
-private artifact storage). The heavy-phase queue admits 4 pods on one node under
+least one binding) and the own cache storage settings below.
+`APP_ARTIFACT_HOST_ENABLED` (the sentropic artifacts MCP host) is NOT part of
+the builder configuration: the dependency cache runs on its own private
+storage (F1, option (a)), never on the artifact host storage. The heavy-phase
+queue admits 4 pods on one node under
 1641 MiB (pod base 19 MiB; install 980, prebundle 980, dev 390, build 1370) and
 the admission 4 lives. `start()` runs one live scheduler per process (lease
 frames and reconciles every 30 s); the API stops it on exit.
+
+- Dependency-cache storage (F1): the cache objects live in a dedicated private
+  S3 bucket of the builder, configured by `ARTIFACT_BUILDER_CACHE_S3_BUCKET`,
+  `ARTIFACT_BUILDER_CACHE_S3_REGION`, `ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID`
+  and `ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY` (owner sentropic,
+  environment secret; optional `ARTIFACT_BUILDER_CACHE_S3_ENDPOINT` for
+  S3-compatible storage, which then uses path-style addressing). A missing
+  value follows the graceful refusal above: the API boots, the log names the
+  first missing variable in that order, and the builder mount stays 503
+  `builder_unavailable`.
 
 - Binding (D0): generation and owner of the host's last reconcile; publication
   stays explicit (`autoPublish` false, R4).
