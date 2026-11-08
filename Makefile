@@ -89,11 +89,11 @@ ifndef API_TOOL_VERSION
 API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json e2e/tests/fixtures | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 endif
 export API_TOOL_VERSION
-# CI10-S4: dependency-only toolbox identity. True inputs only: lockfile, workspace manifests,
-# tool locks and installers, audit gate, .dockerignore and the Dockerfile (which pins the
-# Node/Go base digests and every dependency/tool stage). No workspace source bytes.
+# CI10-S4: dependency-only toolbox identity over exactly the build-context files the ci-tool-deps
+# stages copy (lock, workspace manifests, tool locks, audit gate, .dockerignore, Dockerfile).
+# Release-only workspace fields are normalized: scripts/ci/api-tool-deps-key.mjs.
 ifndef API_TOOL_DEPS_VERSION
-API_TOOL_DEPS_VERSION := tooldeps-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api/Dockerfile api/package.json 'packages/*/package.json' 'apps/*/package.json' package.json package-lock.json .dockerignore scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+API_TOOL_DEPS_VERSION := $(shell node scripts/ci/api-tool-deps-key.mjs)
 endif
 export API_TOOL_DEPS_VERSION
 API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
@@ -744,7 +744,7 @@ push-api-tool-deps-registry: ## Publish the verified dependency toolbox and its 
 ci-build-api-tool-deps: ## Build the dependency-only toolbox (main publication path)
 	@$(CI_IMAGE_BUILD) --target ci-tool-deps -f api/Dockerfile -t $(API_TOOL_DEPS_IMAGE) .
 test-ci-api-tool-cache: ci-test-env
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs scripts/ci/api-tool-build.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/api-tool-cache.test.mjs scripts/ci/api-tool-registry.test.mjs scripts/ci/api-tool-build.test.mjs scripts/ci/api-tool-deps-key.test.mjs scripts/ci/api-tool-deps-key-inputs.test.mjs
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
