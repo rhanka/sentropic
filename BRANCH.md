@@ -56,11 +56,11 @@
   - [x] Read verdict, inventory §3.1.3, `.tmp/rv/cm-account-approve-job.md`, night plan 04:00 entry.
   - [x] Worktree on origin/main `c22163106`, ENV and ports above.
 - [ ] **Lot 1 — Launcher script mode (tests first)**
-  - [ ] `deploy/ci/preprod-a4/launch-script.test.mjs`: `--script cm-account-approve` maps to the dist script; traversal, empty, uppercase and suffixed names are refused; the main block refuses an invalid target with `launch_target_invalid` before composing secrets; api and `--idp` targets unchanged.
-  - [ ] `launch.mjs`: `--script` mode and distinct target refusal.
+  - [x] `deploy/ci/preprod-a4/launch-script.test.mjs`: `--script cm-account-approve` maps to the dist script; traversal, empty, uppercase and suffixed names are refused; the main block refuses an invalid target with `launch_target_invalid` before composing secrets; api and `--idp` targets unchanged.
+  - [x] `launch.mjs`: `--script` mode and distinct target refusal.
 - [ ] **Lot 2 — Job composition (tests first)**
-  - [ ] `scripts/ci/cm-account-approve-job.test.mjs`: command through the launcher; HMAC env only by `secretKeyRef` and identical to the preprod-a4 api wiring; read-only `cm-runtime` ConfigMap volume; no custody PVC; envFrom unchanged.
-  - [ ] `38-cm-account-approve-job.yaml` and `docs/oauth-client-rotation.md`.
+  - [x] `scripts/ci/cm-account-approve-job.test.mjs`: command through the launcher; HMAC env only by `secretKeyRef` and identical to the preprod-a4 api wiring; read-only `cm-runtime` ConfigMap volume; no custody PVC; envFrom unchanged.
+  - [x] `38-cm-account-approve-job.yaml` and `docs/oauth-client-rotation.md`.
 - [ ] **Lot 3 — Final validation**
   - [ ] `make test-preprod-a4 ENV=test-t1b-launch`.
   - [ ] `make test-publishable-manifests SCOPE="scripts/ci/cm-account-approve-job.test.mjs scripts/ci/oauth-service-client-job.test.mjs" ENV=test-t1b-launch`.

@@ -5,8 +5,16 @@ import { pathToFileURL } from 'node:url';
 
 export const activeRef = 'email-code-hmac:v1:preprod:15c2f8b66073655a';
 export const approvalRef = 'qk-secret-custody-r2:Q-K=A:2026-11-02';
-export const entrypoint = args => args[0] === '--idp'
-  ? ['/workspace/apps/auth-idp/dist/index.js', ...args.slice(1)] : ['/workspace/api/dist/index.js', ...args];
+const scriptName = /^[a-z][a-z0-9-]*$/;
+export const entrypoint = args => {
+  if (args[0] === '--idp') return ['/workspace/apps/auth-idp/dist/index.js', ...args.slice(1)];
+  if (args[0] === '--script') {
+    // One compiled api script (governed one-off Job), by plain name, under the api pod composition.
+    if (args.length !== 2 || !scriptName.test(args[1])) throw new Error('launch_target_invalid');
+    return [`/workspace/api/dist/scripts/${args[1]}.js`];
+  }
+  return ['/workspace/api/dist/index.js', ...args];
+};
 export function compose(source) {
   const env = { ...source };
   if (env.CM_IDENTITY_EMAIL_CODE_POLICY !== 'hmac-sha256'
@@ -37,19 +45,24 @@ export const isMain = (url, argv1) => {
   try { return url === pathToFileURL(realpathSync(argv1 ?? '')).href; } catch { return false; }
 };
 if (isMain(import.meta.url, process.argv[1])) {
-  try {
-    if (process.argv[2] === '--custodian') {
-      setInterval(() => {}, 60_000);
-    } else {
-      const child = spawn(process.execPath, entrypoint(process.argv.slice(2)),
-        { env: compose(process.env), stdio: 'inherit' });
+  const args = process.argv.slice(2);
+  let target;
+  // The target is resolved before any secret is read, so a bad target never composes custody.
+  try { target = args[0] === '--custodian' ? null : entrypoint(args); } catch {
+    process.stderr.write('launch_target_invalid\n');
+    process.exitCode = 1;
+  }
+  if (target === null) setInterval(() => {}, 60_000);
+  else if (target) {
+    try {
+      const child = spawn(process.execPath, target, { env: compose(process.env), stdio: 'inherit' });
       for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => child.kill(signal));
       child.once('error', () => { process.exitCode = 1; });
       child.once('exit', (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0); });
+    } catch {
+      // Do not serialize source env or parser errors.
+      process.stderr.write('hmac_composition_failed\n');
+      process.exitCode = 1;
     }
-  } catch {
-    // Do not serialize source env or parser errors.
-    process.stderr.write('hmac_composition_failed\n');
-    process.exitCode = 1;
   }
 }
