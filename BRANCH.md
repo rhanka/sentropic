@@ -67,7 +67,7 @@
   - `api/src/app.ts`, `api/src/config/env.ts` under BR90-EX2.
   - `ui/nginx/default.conf` under BR90-EX3.
   - `Makefile` under BR90-EX4 and BR90-EX11.
-  - `deploy/k8s/**` under BR90-EX5.
+  - `deploy/k8s/**` under BR90-EX5 and BR90-EX13.
   - `packages/artifacts/src/server/**`, `packages/artifacts/package.json`, `packages/artifacts/CHANGELOG.md` under BR90-EX6.
   - `packages/cluster-mesh/src/**`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/CHANGELOG.md` under BR90-EX7.
   - `packages/auth-hono/src/oauth/redirect-utils.ts`, `packages/auth-hono/package.json` under BR90-EX8.
@@ -90,8 +90,11 @@
 - [x] BR90-EX12 (PR #945 static-package red, CI run 42428941859): `ARTIFACTS_PROVIDER_VERSION` follows the package version 0.2.21 (the packed-consumer probe requires equality); APP-P1 manifest digest repinned `6faa661d…` to `5150544ae621a22e19b9190b2a4d62c516b75f01afc738ebdea74ea7f97c9e8c` in `cluster-registry.ts` and its API tests (0.2.20 history line kept). The same manifest with version 0.2.20 still gives `6faa661d…`: only the version changed. Impact: APP-P1 compatibility receipts move to the 0.2.21 digest. Rollback: revert with the bump.
 - [x] `acknowledge`: workspaces_list host tool (s-archi) is gated by the L1 read-only client allowlist (`isToolPermitted`): the `sentropic-mcp` client neither lists nor calls it until the allowlist policy admits host tools (decision s-archi).
 - [x] `acknowledge`: L1 connector admission requires `tid`; `mcp-resource-server.test.ts` route tokens now carry `tid` (test fixture only, the check is unchanged).
-- [ ] `attention`: W4 PORTS 6 (pod `/_supervisor/v1/frame` relay) has no `SupervisorChannel.send` implementation in the train yet (W7 open item: product composition of `createBuilderService`); owner W7.
+- [x] `clarification`: W4 PORTS 6 relay: `createRelaySupervisorChannel` (API) and the artifact-content relay route (supervisor relay wagon); the product mount of `createBuilderService` stays a W7 item.
 - [x] `attention`: `ARTIFACTS_PROVIDER_VERSION` is 0.2.21 under BR90-EX12: holding it at 0.2.20 failed the packed-consumer probe; tool definitions stay byte-stable and the APP-P1 digest is repinned to `5150544a…`.
+- [x] BR90-EX13 (supervisor relay wagon, feat/alive-supervisor-relay): base NetworkPolicy `allow-api-to-artifact-content` (artifact-content TCP 8791 from the same-namespace `api` pods only) and its README note. Rollback: delete the object and the note.
+- [x] `acknowledge`: the supervisor relay route is mounted by the listener ahead of content serving (every tier forces `APP_ARTIFACT_CONTENT_ENABLED=0`); internal Host = `*.svc.cluster.local` with a matching Host header.
+- [ ] `attention`: relay ConfigMap values (contract E) are not applied by the wagon; names and values per env in `.tmp/rv/alive-supervisor-relay.md`.
 - [x] `acknowledge`: W7 (BRW7-EX1, BRW7-EX4) merged W3, W4, W5 and W8; its merge resolutions are carried as two train commits (8.4 evidence at BUILD_QUEUED; W3/W4/W8 tests on string revisions, the streaming cache and the builder placement).
 - [x] `attention`: W4 `api/tests/unit/artifacts-live/bootstrap-server.test.ts:31,34` implicit any fixed (`socket: Socket`); strict live src+tests tsc clean.
 - [ ] `attention`: not run locally (no local image build): the full API endpoint, smoke and queue suites (`tests/smoke/api-health.test.ts` needs a running API server), artifact-content `process`/`runtime` tests; the PR CI covers them.
@@ -120,4 +123,5 @@
 - [x] Lot 10: MCP workspaces_list (5b13de0a6) cherry-picked after L1; transport.ts union (access_denied discovery + read-only filter); registry-dispatch read-only gate; L1 `tid` test fixture; full API `tsc` clean, `lint` 0 errors, API unit 2104 passed (2 pre-existing skips), wagon API files 145/145 with Postgres, 36/37 touched API files (smoke needs a server), ui nginx 3/3, artifacts-live 258/258.
 - [x] Lot 11: CI10 toolbox deps key (713372f54) cherry-picked last with the version-only guard; `make test-ci-api-tool-cache` 25/25 (mutation with the former field list fails 2), `test-ci-dag` 10/10, `test-ci-unit-graph` 7/7, `test-ci-expected-results` 28/28, `test-ci-static` 3/3, `test-ci-performance-report` 8/8, `test-ci-run-metrics` 36/36.
 - [x] Lot 12: PR #945 static-package fix (BR90-EX12) and M2 typing; static-package step (`typecheck/build/lint/pack-artifacts probe-artifacts-packed-consumer`) PACKED_CONSUMER_OK version=0.2.21, `make test-artifacts` 967/967, `make test-cluster-mesh SCOPE=tests/packaging` 85 pass, `test-lazy-package` with sibling receipts 136/136, API app-mcp-registry 25/25, mcp-workspaces-list-dispatch 14/14, bootstrap-server 5/5, app-mcp-installed physical-install case 1/1 (bundle case needs the API image esbuild: PR CI).
+- [x] Lot 13: supervisor relay wagon (relay contract A-D): API channel and `timeoutMs` 320 000, artifact-content relay and listener mount, `allow-api-to-artifact-content`; relay vitest 18/18 with a real W4 bootstrap end to end, neighbour live suites 124/124, content manifests 156 PASS.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.

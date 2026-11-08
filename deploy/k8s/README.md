@@ -53,6 +53,11 @@ rollback and credential rotation are documented in
   `component: api`), from the same environment only: `radar-immobilier` to
   `sentropic`, and `radar-immobilier-preprod` to `sentropic-preprod`. The
   matching egress in the immo namespaces is owned by k8s and immo.
+- Supervisor relay ingress (A-LIVE §8.1). The base adds `allow-api-to-artifact-content`:
+  `artifact-content` TCP 8791 admits the `api` pods of the same namespace only. It carries
+  the supervisor frames and the controller fence push. Any API Egress policy must keep
+  this hop. The builders namespace admits `artifact-content` of the same environment on
+  TCP 5173 only (owned by k8s).
 - `07-sealed-sentropic-pgbackup.yaml` — SealedSecret `sentropic-pgbackup`
   (`S3_ACCESS_KEY`/`S3_SECRET_KEY` reused from DOC_STORAGE, `S3_BUCKET`,
   `S3_REGION`, `S3_ENDPOINT`) for the Postgres backup CronJob.
