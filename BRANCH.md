@@ -43,10 +43,10 @@
 - Rationale: one overlay PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — Preprod overlay and selftests**
-  - [ ] cm/api: `ARTIFACT_BUILDER_ENABLED=1`, placement, `d2-4-preprod`, relay and live-edge internal URLs, remote host URL, host bindings, GitHub App broker values (live values, unchanged).
-  - [ ] cm/artifact-content: `APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED=1`, `APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS` (public SPKI, kid sentropic-preprod-supervisor-1), `APP_ARTIFACT_LIVE_ENABLED=1`.
-  - [ ] Selftests: per-tier relay/builder/live expectations (prod declares none), runtime-parser checks of the preprod values, deny cases.
-  - [ ] Lot gate: `make test-artifact-content-manifests API_PORT=8841 UI_PORT=5241 MAILDEV_UI_PORT=1141 ENV=test-gb4-iac`.
+- [x] **Lot 1 — Preprod overlay and selftests**
+  - [x] cm/api: `ARTIFACT_BUILDER_ENABLED=1`, placement, `d2-4-preprod`, relay and live-edge internal URLs, remote host URL, host bindings, GitHub App broker values (live values, unchanged).
+  - [x] cm/artifact-content: `APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED=1`, `APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS` (public SPKI, kid sentropic-preprod-supervisor-1), `APP_ARTIFACT_LIVE_ENABLED=1`.
+  - [x] Selftests: per-tier relay/builder/live expectations (prod declares none), runtime-parser checks of the preprod values, deny cases.
+  - [x] Lot gate: `make test-artifact-content-manifests API_PORT=8841 UI_PORT=5241 MAILDEV_UI_PORT=1141 ENV=test-gb4-iac` (165 PASS, 0 failures; A4 32/32; A4 bundle selftest PASS).
 - [ ] **Lot 2 — PR**
   - [ ] PR « deploy(preprod): GB4 live and builder configuration », CI green on the exact head, GLM review; merge by s-conductor after builder-composition is deployed.
