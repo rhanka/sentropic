@@ -1,13 +1,13 @@
 # Feature: Preprod artifact-content provisioning (content serving + api builder host)
 
 ## Objective
-- [ ] Open `APP_ARTIFACT_CONTENT_ENABLED` for preprod in the repo IaC (content serving, live edge composed), and open the api's `APP_ARTIFACT_HOST_ENABLED` required by the builder composition, with every non-secret wiring only: overlay patches, required Secret-name references, object-store egress NetworkPolicy, selftest per-tier expectations.
+- [x] Open `APP_ARTIFACT_CONTENT_ENABLED` for preprod in the repo IaC (content serving, live edge composed), and open the api's `APP_ARTIFACT_HOST_ENABLED` required by the builder composition, with every non-secret wiring only: overlay patches, required Secret-name references, object-store egress NetworkPolicy, selftest per-tier expectations.
 
 ## Scope / Guardrails
-- [ ] Branch deploy/preprod-artifact-content from main 4b4c8632d; worktree tmp/worktrees/preprod-artifact-content; ENV=test-artifact-prep.
-- [ ] PREPROD ONLY: prod overlays and base stay untouched; no Secret value in Git (names only).
-- [ ] Make only; no Python, no attribution trailers, no CI skips or reruns.
-- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [x] Branch deploy/preprod-artifact-content from main 4b4c8632d; worktree tmp/worktrees/preprod-artifact-content; ENV=test-artifact-prep.
+- [x] PREPROD ONLY: prod overlays and base stay untouched; no Secret value in Git (names only).
+- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -44,22 +44,22 @@
 - [ ] `attention`: rolling restart after apply: CD restarts nothing on ConfigMap changes; the required-Secret flips make a premature apply freeze the rollout instead of crash-looping the supervisor relay.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
+- [x] **Mono-branch + cherry-pick**
 - Rationale: one overlay PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Plan this branch** (this file; first commit)
-- [ ] **Lot 1 — Preprod overlay wiring**
-  - [ ] cm artifact-content `APP_ARTIFACT_CONTENT_ENABLED: "1"` (inspection value).
-  - [ ] Deployment artifact-content patch: explicit env `APP_ARTIFACT_CONTENT_ENABLED=1`, envFrom secretRef `artifact-content-runtime` required (`optional: false`), signing volume `artifact-content-signing` required (`optional: false`, defaultMode 0440 kept).
-  - [ ] Deployment api patch: explicit env `APP_ARTIFACT_HOST_ENABLED=1` (api CONTENT/READER stay 0).
-  - [ ] cm api `APP_ARTIFACT_QUOTA_BYTES: "1073741824"` (instance.ts module-load check with host enabled).
-  - [ ] New additive NetworkPolicy `allow-artifact-content-to-object-store` (Egress, same-namespace object store labels, TCP 9000; no ipBlock).
-  - [ ] kustomization wiring (resources + patches).
-- [ ] **Lot 2 — Selftests per tier**
-  - [ ] bundle-checks: per-tier flag expectations (preprod content=1 on artifact-content only, api host=1; digest gate covers both), per-tier envFrom/volumes requiredness, quota expectations, object-store rule expectations.
-  - [ ] bundle.selftest: new deny cases (wrong-deployment content flag, content host flag in preprod, prod opens nothing, dropped/widened object-store rule, requiredness regressions).
-  - [ ] network.selftest: per-tier object-egress property (preprod reaches only the same-namespace store on 9000; both tiers keep external 443 denied).
-  - [ ] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep` (render/test containers only; no compose stack started).
-- [ ] **Lot 3 — Draft PR**
-  - [ ] Push branch; `gh pr create --draft` with the BRANCH.md-derived body starting with « DRAFT — merge only after the Secrets listed below exist »; CI may run; no merge request.
+- [x] **Lot 0 — Plan this branch** (this file; first commit)
+- [x] **Lot 1 — Preprod overlay wiring**
+  - [x] cm artifact-content `APP_ARTIFACT_CONTENT_ENABLED: "1"` (inspection value).
+  - [x] Deployment artifact-content patch: explicit env `APP_ARTIFACT_CONTENT_ENABLED=1`, envFrom secretRef `artifact-content-runtime` required (`optional: false`), signing volume `artifact-content-signing` required (`optional: false`, defaultMode 0440 kept).
+  - [x] Deployment api patch: explicit env `APP_ARTIFACT_HOST_ENABLED=1` (api CONTENT/READER stay 0).
+  - [x] cm api `APP_ARTIFACT_QUOTA_BYTES: "1073741824"` (instance.ts module-load check with host enabled).
+  - [x] New additive NetworkPolicy `allow-artifact-content-to-object-store` (Egress, same-namespace object store labels, TCP 9000; no ipBlock).
+  - [x] kustomization wiring (resources + patches).
+- [x] **Lot 2 — Selftests per tier**
+  - [x] bundle-checks: per-tier flag expectations (preprod content=1 on artifact-content only, api host=1; digest gate covers both), per-tier envFrom/volumes requiredness, quota expectations, object-store rule expectations.
+  - [x] bundle.selftest: new deny cases (wrong-deployment content flag, content host flag in preprod, prod opens nothing, dropped/widened object-store rule, requiredness regressions).
+  - [x] network.selftest: per-tier object-egress property (preprod reaches only the same-namespace store on 9000; both tiers keep external 443 denied).
+  - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep` (render/test containers only; no compose stack started).
+- [x] **Lot 3 — Draft PR**
+  - [x] Push branch; `gh pr create --draft` with the BRANCH.md-derived body starting with « DRAFT — merge only after the Secrets listed below exist »; CI may run; no merge request.
