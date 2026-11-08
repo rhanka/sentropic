@@ -12,8 +12,9 @@ import { LIVE_CONTROL_PATH, LIVE_FENCE_PATH, type LiveProxyPorts, type LiveRoute
  */
 /**
  * Revocation state pushed by the host/controller, plus the session-bound live authorization record (A-LIVE §8.2):
- * a session keeps one generation and one owner principal; an invitation binds one principal and one session, and
- * its highest admitted epoch is its floor. Watchers close live sockets immediately.
+ * a session keeps one generation and one owner principal; an invitation binds one principal and one generation, and
+ * its highest admitted epoch is its floor. A crash_restore mints a new controller session at the same generation: the
+ * same principal moves its invitation there and the old session is retired for it. Watchers close live sockets immediately.
  */
 export function createLiveFences(options: { now?: () => number } = {}) {
   const now = options.now ?? Date.now;
@@ -21,12 +22,15 @@ export function createLiveFences(options: { now?: () => number } = {}) {
   const invitationFloors = new Map<string, number>(); // `${artifactId}/${invitationId}` -> minimum live epoch
   const revoked = new Map<string, number>(); // `${artifactId}/${sessionId}` -> forget-after (ms)
   const sessions = new Map<string, { generation: number; ownerId?: string; until: number }>();
-  const invitations = new Map<string, { sessionId: string; principalId: string; until: number }>();
+  const invitations = new Map<string,
+    { sessionId: string; principalId: string; generation: number; until: number; retired: Set<string> }>();
   const watchers = new Map<string, Set<{ route: LiveRoute; close(): void }>>();
   const stale = (route: LiveRoute) => {
     const floor = floors.get(route.artifactId);
-    const invitationFloor = route.invitationId ? invitationFloors.get(`${route.artifactId}/${route.invitationId}`) : undefined;
-    return revoked.has(`${route.artifactId}/${route.sessionId}`)
+    const inviteKey = `${route.artifactId}/${route.invitationId}`;
+    const invitationFloor = route.invitationId ? invitationFloors.get(inviteKey) : undefined;
+    const retired = !!route.invitationId && !!invitations.get(inviteKey)?.retired.has(route.sessionId);
+    return revoked.has(`${route.artifactId}/${route.sessionId}`) || retired
       || (invitationFloor !== undefined && (route.invitationEpoch ?? 0) < invitationFloor) || (!!floor
       && (route.generation < floor.generation || (route.generation === floor.generation && route.routeEpoch < floor.routeEpoch)));
   };
@@ -52,10 +56,13 @@ export function createLiveFences(options: { now?: () => number } = {}) {
         session.ownerId = route.principalId;
       } else {
         const inviteKey = `${route.artifactId}/${route.invitationId}`; const bound = invitations.get(inviteKey);
-        if (!route.invitationId || (bound && (bound.sessionId !== route.sessionId || bound.principalId !== route.principalId))) return false;
-        invitations.set(inviteKey, { sessionId: route.sessionId, principalId: route.principalId,
-          until: Math.max(bound?.until ?? 0, route.expiresAt) });
+        if (!route.invitationId || (bound && (bound.principalId !== route.principalId || bound.generation !== route.generation))) return false;
+        const rebound = !!bound && bound.sessionId !== route.sessionId; const retired = bound?.retired ?? new Set<string>();
+        if (rebound) retired.add(bound.sessionId); // never re-bound back; the sweep closes its sockets for this invitation
+        invitations.set(inviteKey, { sessionId: route.sessionId, principalId: route.principalId, generation: route.generation,
+          until: Math.max(bound?.until ?? 0, route.expiresAt), retired });
         raiseInvitation(route.artifactId, route.invitationId, route.invitationEpoch ?? 0);
+        if (rebound) sweep(route.artifactId);
       }
       session.until = Math.max(session.until, route.expiresAt); sessions.set(id, session);
       return true;
