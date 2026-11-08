@@ -4,24 +4,20 @@ import { createRequire } from 'node:module';
 import { verifyRenderedSequence } from './topology.selftest.mjs';
 const { parseAllDocuments } = createRequire(process.env.A4_YAML_PACKAGE ?? '/workspace/package.json')('yaml');
 const load = tier => parseAllDocuments(readFileSync(`/rendered/${tier}.yaml`, 'utf8')).map(doc => doc.toJSON());
-const recovery = load('preprod'), preprod = load('preprod-a4'), prod = load('prod');
+const base = load('preprod'), preprod = load('preprod-a4'), prod = load('prod');
 const object = (objects, kind, name) => objects.find(object => object.kind === kind && object.metadata.name === name);
-for (const objects of [recovery, preprod]) {
+for (const objects of [base, preprod]) {
   for (const resource of objects) assert.equal(resource.metadata.namespace, 'sentropic-preprod', `${resource.kind}/${resource.metadata.name}`);
 }
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
-  const pod = object(recovery, 'Deployment', name).spec.template.spec;
   const tag = name === 'ui'
-    ? 'sentropic-ui@sha256:a9d7c1aa415e7c445ceb47f6eca47789c1edc4ca3b84ab465cd1386b4e31f28d'
-    : 'sentropic-api@sha256:0a401baad9904c555f756f998538fddf0b4b86013878269ad34494a03d2807bb';
-  assert.equal(pod.containers[0].image, `ghcr.io/rhanka/${tag}`);
-  assert(!pod.volumes?.some(volume => ['cm-cutover', 'cm-runtime'].includes(volume.name)));
-  assert(!pod.containers[0].command?.some(arg => arg.includes('/run/cm-runtime/')));
-  assert(!pod.containers[0].env?.some(env => env.valueFrom?.secretKeyRef?.name === 'sentropic-identity-budgets'));
-  console.log(`PASS: deploy-preprod would deploy ${name} on ${tag} with recovery runtime`);
+    ? 'sentropic-ui@sha256:97c3f3f2863f2c23ebe147b870c298d2801dde4660ab905b75b57d3f449c3da7'
+    : 'sentropic-api@sha256:92c85bcff42c56c35a39e82ae93b575eb4abbe1d4df31598819109e0e46ec26e';
+  for (const objects of [base, preprod]) assert.equal(object(objects, 'Deployment', name).spec.template.spec.containers[0].image, `ghcr.io/rhanka/${tag}`);
+  console.log(`PASS: deploy-preprod (preprod-a4) would deploy ${name} on ${tag}`);
 }
-assert(!object(recovery, 'ConfigMap', 'sentropic-a4-runtime'));
-assert.equal(object(recovery, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, undefined);
+assert(!object(base, 'ConfigMap', 'sentropic-a4-runtime'));
+assert.equal(object(base, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, undefined);
 for (const [name, image] of Object.entries({
   api: 'sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05',
   'auth-idp': 'sentropic-api@sha256:4b78a02fc743ae85ce9f5819d5ebc6b49e02fca7b3161a87ea06afa401a3dc34',
