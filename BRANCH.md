@@ -75,9 +75,9 @@
   - [x] `replica-sync.spec.ts`: a source rpId converges onto a live replica credential (counter kept, revision bumped, `updated`); a locally revoked credential keeps its rpId.
   - [x] `replica-sync.ts`: rpId leaves the conflict material set; apply converges it.
 - [ ] **Lot 3 — Preprod IdP enrolment guard (tests first)**
-  - [ ] `api/tests/api/auth/passkey-registration-guard.test.ts`: disabled refuses register options/verify with 403 `passkey_registration_disabled` before any author fence write; login options unaffected; enabled keeps registration reachable.
-  - [ ] `bundle.selftest.mjs`: preprod-a4 auth-idp ConfigMap carries `WEBAUTHN_REGISTRATION=disabled`; preprod api and prod auth-idp do not.
-  - [ ] `env.ts` enum, `auth.ts` guard, `patch-auth-idp-config.yaml` key.
+  - [x] `api/tests/api/auth/passkey-registration-guard.test.ts`: disabled refuses register options/verify with 403 `passkey_registration_disabled` before any author fence write; login options unaffected; enabled keeps registration reachable.
+  - [x] `bundle.selftest.mjs`: preprod-a4 auth-idp ConfigMap carries `WEBAUTHN_REGISTRATION=disabled`; preprod api and prod auth-idp do not.
+  - [x] `env.ts` enum, `auth.ts` guard, `patch-auth-idp-config.yaml` key.
 - [ ] **Lot 4 — Final validation**
   - [ ] `make typecheck-api` + `make lint-api` (ENV=test-t1b-rp).
   - [ ] Scoped API tests: `make test-api-unit SCOPE="tests/unit/auth/cm-import-source-rp.test.ts tests/unit/auth/cm-import-mapping.test.ts tests/unit/auth/cm-cutover-migration.test.ts"`, `make test-api-endpoints SCOPE="tests/api/auth/passkey-registration-guard.test.ts tests/api/cluster-mesh-auth-roots.test.ts tests/api/auth/registration.test.ts"`.
