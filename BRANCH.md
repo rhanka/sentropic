@@ -44,7 +44,7 @@
 - [x] Lot 0: verify merge tree equals PR head tree (25/25 recent main merges) and profile main runs 42421623485, 42408187255, 42395186428, 42391205757.
 - [x] Lot 1: pure assessment `scripts/ci/tested-tree.mjs` and `make test-ci-tested-tree`.
 - [x] Lot 2: manifest selection, gate verdict and capacity receipt accept the PR reference.
-- [ ] Lot 3: release receipt and daily live selector accept the PR reference.
+- [x] Lot 3: release receipt and daily live selector accept the PR reference.
 - [ ] Lot 4: workflow publishers, test-member guards, `changes` capture and decision.
 - [ ] Lot 5: scoped checks green; push the wagon branch.
 - [ ] Lot N: train CI green on the exact head; BRANCH.md removed at merge.

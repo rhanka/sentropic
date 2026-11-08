@@ -3,7 +3,7 @@
 // missing publication, tag collision, mismatched registry integrity/provenance,
 // and stale receipt reuse.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -499,9 +499,54 @@ test('CLI assess-chain builds evidence from a needs file', () => {
     '--sha', sha, '--run-id', '4242', '--attempt', '1',
     '--api', 'true', '--ui', 'false', '--global', 'false',
     '--mesh-publish', 'false', '--gateway-publish', 'false', '--cluster-publish', 'false',
-    '--out', outFile], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    '--qualification-mode', 'in-run', '--out', outFile], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   assert.match(output, /release-receipt: PASS/);
   const receipt = JSON.parse(fs.readFileSync(outFile, 'utf8'));
   assert.equal(receipt.ok, true);
   assert.equal(receipt.evidence.source.sha, sha);
+  assert.deepEqual(receipt.evidence.qualification, { mode: 'in-run' });
+});
+
+// BR92-EX1: a tested-tree release names the same-tree run that qualified it.
+const tree = 'd'.repeat(40);
+const testedTree = (overrides = {}) => ({ mode: 'tested-tree', runId: '4100', tree, ...overrides });
+
+test('chain accepts a release qualified by a same-tree PR run and records the reference', () => {
+  const verdict = assessChain({ needs: chainNeeds({ 'publish-api-image': 'success' }),
+    selections: chainSelections({ api: true }), source: { ...chainSource(), tree }, qualification: testedTree() });
+  assert.equal(verdict.ok, true, JSON.stringify(verdict.problems));
+  assert.deepEqual(verdict.evidence.qualification, testedTree());
+});
+
+test('chain rejects a tested-tree reference to another tree, its own run, no run or no source tree', () => {
+  for (const [qualification, source, pattern] of [
+    [testedTree({ tree: 'e'.repeat(40) }), { ...chainSource(), tree }, /another tree/],
+    [testedTree({ runId: '4242' }), { ...chainSource(), tree }, /its own run/],
+    [testedTree({ runId: '' }), { ...chainSource(), tree }, /without a run id/],
+    [testedTree(), chainSource(), /without a source tree/],
+    [{ mode: 'cached' }, { ...chainSource(), tree }, /unknown qualification mode/],
+  ]) {
+    const verdict = assessChain({ needs: chainNeeds({ 'publish-api-image': 'success' }),
+      selections: chainSelections({ api: true }), source, qualification });
+    assert.equal(verdict.ok, false, JSON.stringify(qualification));
+    assert.match(verdict.problems.join('\n'), pattern);
+  }
+});
+
+test('CLI assess-chain requires a declared qualification and checks a tested-tree reference', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'release-tested-'));
+  const needsFile = path.join(dir, 'needs.json');
+  fs.writeFileSync(needsFile, JSON.stringify(chainNeeds({ 'publish-api-image': 'success' })));
+  const args = ['assess-chain', '--needs', needsFile, '--sha', sha, '--run-id', '4242', '--attempt', '1',
+    '--api', 'true', '--out', path.join(dir, 'receipt.json')];
+  const run = (extra) => spawnSync(process.execPath, [cli, ...args, ...extra], { encoding: 'utf8' });
+  assert.equal(run([]).status, 2, 'undeclared qualification');
+  assert.equal(run(['--qualification-mode', 'tested-tree', '--qualification-run', '4100',
+    '--qualification-tree', tree, '--source-tree', tree]).status, 0);
+  const receipt = JSON.parse(fs.readFileSync(path.join(dir, 'receipt.json'), 'utf8'));
+  assert.deepEqual(receipt.evidence.qualification, testedTree());
+  const stale = run(['--qualification-mode', 'tested-tree', '--qualification-run', '4100',
+    '--qualification-tree', tree, '--source-tree', 'e'.repeat(40)]);
+  assert.equal(stale.status, 1);
+  assert.match(stale.stderr, /another tree/);
 });
