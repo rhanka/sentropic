@@ -153,6 +153,27 @@ const enrollPostHeaders = (owner?: string): Record<string, string> =>
 
 type TargetKey = 'radar-immobilier' | 'sentropic';
 
+/**
+ * Fetch "append a request Origin header" for a non-CORS POST (an HTML form
+ * submission): the Origin a browser sends from a page served under `policy`.
+ */
+const browserFormOrigin = (policy: string | null, pageUrl: string, actionUrl: string): string => {
+  const page = new URL(pageUrl);
+  const action = new URL(actionUrl, page);
+  switch (policy?.split(',').map((token) => token.trim()).filter(Boolean).at(-1) ?? '') {
+    case 'no-referrer':
+      return 'null';
+    case 'same-origin':
+      return action.origin === page.origin ? page.origin : 'null';
+    case 'origin':
+    case 'origin-when-cross-origin':
+    case 'unsafe-url':
+      return page.origin;
+    default: // no-referrer-when-downgrade, strict-origin, strict-origin-when-cross-origin (the default)
+      return page.protocol === 'https:' && action.protocol !== 'https:' ? 'null' : page.origin;
+  }
+};
+
 const refOf = (begin: Response): string =>
   new URL(begin.headers.get('location')!, BASE).pathname.replace(/^\/api\/v1\/github-app\//, '');
 
@@ -281,7 +302,7 @@ describe('SG0-app host routes: owner gesture', () => {
     const landing = await harness.request(ROOT, { headers: sessionHeaders() });
     expect(landing.status).toBe(200);
     expect(landing.headers.get('content-security-policy')).toContain(GITHUB_FORM_ACTION);
-    expect(landing.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(landing.headers.get('referrer-policy')).toBe('same-origin');
     expect(landing.headers.get('cache-control')).toBe('no-store');
     const html = await landing.text();
     expect(html).toContain(`action="${ROOT}/enroll?target=radar-immobilier"`);
@@ -291,6 +312,29 @@ describe('SG0-app host routes: owner gesture', () => {
     const narrowed = await (await harness.request(`${ROOT}?target=sentropic`, { headers: sessionHeaders() })).text();
     expect(narrowed).toContain('Enroll rhanka/sentropic');
     expect(narrowed).not.toContain('radar-immobilier');
+  });
+
+  it('should accept the landing enroll form as a browser submits it under the served referrer policy', async () => {
+    const harness = createHarness();
+    const pageUrl = `${BASE}${ROOT}?target=radar-immobilier`;
+    const landing = await harness.request(`${ROOT}?target=radar-immobilier`, { headers: sessionHeaders() });
+    expect(landing.status).toBe(200);
+    const policy = landing.headers.get('referrer-policy');
+    expect(policy).toBe('same-origin');
+    const action = /<form method="post" action="([^"]+)"/.exec(await landing.text())![1]!.replaceAll('&amp;', '&');
+    // The served action keeps the public /api/v1 prefix and the explicit target.
+    expect(action).toBe(`${ROOT}/enroll?target=radar-immobilier`);
+    const origin = browserFormOrigin(policy, pageUrl, action);
+    expect(origin).toBe(new URL(BASE).origin);
+    const begin = await harness.request(action, { method: 'POST', headers: { ...sessionHeaders(), origin } });
+    expect(begin.status).toBe(303);
+    expect(begin.headers.get('location')).toMatch(new RegExp(`^${BASE}${ROOT}/enroll_[0-9a-f-]{36}$`));
+    expect(begin.headers.get('referrer-policy')).toBe('same-origin');
+    // The preprod defect: under no-referrer the browser sends Origin "null", which stays refused.
+    expect(browserFormOrigin('no-referrer', pageUrl, action)).toBe('null');
+    const refused = await harness.request(action, { method: 'POST', headers: { ...sessionHeaders(), origin: 'null' } });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ error: 'access_denied' });
   });
 
   it('should refuse an enroll POST whose target is absent or unknown instead of defaulting', async () => {
@@ -325,7 +369,7 @@ describe('SG0-app host routes: owner gesture', () => {
     const prompt = await harness.request(`${ROOT}/${ref}`, { headers: sessionHeaders() });
     expect(prompt.status).toBe(200);
     expect(prompt.headers.get('content-security-policy')).toContain(GITHUB_FORM_ACTION);
-    expect(prompt.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(prompt.headers.get('referrer-policy')).toBe('same-origin');
     const html = await prompt.text();
     expect(html).toContain('action="https://github.com/settings/apps/new?state=');
     for (const callback of ['manifest', 'installation', 'events']) {
