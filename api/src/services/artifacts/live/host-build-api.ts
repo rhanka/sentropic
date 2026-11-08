@@ -29,8 +29,8 @@ export function createHostBuildApi(options: {
   jobs: BuildJobs;
   /** Runs one explicit clean build to publication (controller.buildOnly). */
   build(key: LiveKey, jobId: string): Promise<void>;
-  /** Validates the host git binding (contract §1) and records it for the generation the host reconciled last. */
-  bind(key: LiveKey, binding: ForgeBinding): Promise<void>;
+  /** Validates the host git binding (contract §1) before anything is scheduled; the job ledger stores it (R1). */
+  validate(key: LiveKey, binding: ForgeBinding): void;
   /** Background executor owned by the composition; nothing starts on import. */
   schedule(work: () => Promise<void>): void;
 }) {
@@ -55,9 +55,11 @@ export function createHostBuildApi(options: {
       || typeof body.jobId !== 'string' || !ID.test(body.jobId)) {
       return c.json({ error: 'invalid_request' }, 400);
     }
-    const k = key(c, body.artifactId); const jobId = body.jobId;
-    try { await options.bind(k, bindingOf(body.binding)!); } catch (error) { return refusal(c, error); }
-    const { record, run: start } = await options.jobs.admit(k, jobId);
+    const k = key(c, body.artifactId); const jobId = body.jobId; const binding = bindingOf(body.binding)!;
+    let admitted;
+    try { options.validate(k, binding); admitted = await options.jobs.admit(k, jobId, binding); }
+    catch (error) { return refusal(c, error); }
+    const { record, run: start } = admitted;
     if (start) options.schedule(() => run(k, jobId, record.token));
     return c.json(view(record), record.state === 'published' ? 200 : 202);
   });

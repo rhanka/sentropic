@@ -43,6 +43,9 @@ export interface LivePorts {
   invitations: { current(key: LiveKey, generation: number): Promise<{ epoch: number; expiresAt: number | null }> };
   now(): number;
   id(): string;
+  /** Records the git binding stored with the admitted host job at its HostJob generation, before any forge read of the
+   * build-only run (forge-lease-reader R1); immutable per generation (409 `binding_conflict`). */
+  jobBinding(key: LiveKey, jobId: string, generation: number): Promise<void>;
   /** Rechecks binding policy, owner/code rights, generation and sandbox qualification. */
   binding(key: LiveKey): Promise<LiveBinding>;
   forge: {

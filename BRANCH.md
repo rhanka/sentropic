@@ -35,6 +35,7 @@
 - [x] `attention`: GLM 5.3 review r1 APPROVE (0 blocker, 0 major). Fixed: README forge and binding doc, malformed-archive test. Deferred: total (192 MiB) and compressed (256 MiB) cap fixtures, subPath-aware pod layout (configure `allowedSubPaths: ['']` meanwhile).
 - [x] `attention`: GLM 5.3 review r2 (delta 4f2ac3983) APPROVE.
 - [x] `attention`: CI run 42456383782 on 4f2ac3983 failed only `test-e2e (4)`: `tests/02-organizations.spec.ts:391` (Read-only viewer, détail: champs non éditables), `page.waitForURL: Timeout 10000ms exceeded`. The delta from a4409fe84 (all 6 e2e shards green in run 42455395884) touches no runtime file (README, BRANCH.md, one unit test), so the failure is not caused by this branch; a fresh pull_request run is triggered by this commit (no rerun).
+- [x] `attention`: s-archi R1 (REQUIRED) fixed: `POST /v1/builds` validates the binding and stores it with its job (immutable per job, 409 `binding_conflict`); the build-only run records it at the HostJob generation right after resolving the job, before any forge read; forge reads use the generation of the current non-DORMANT runtime, else `remote.session`. Not changed: build-only still reads the D0 binding view (`remote.session`) and the staged draft of that generation.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
