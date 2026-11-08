@@ -9,8 +9,7 @@ import { createDependencyCache } from './cache';
 import { createPostgresBuildJobStore, createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
 import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, liveHolds } from './heavy';
 import { createFairAdmission } from './admission';
-import { createBuilderPods } from './pods';
-import { createInClusterKubernetes } from './kubernetes';
+import { createBuilderPods, type KubernetesCore } from './pods';
 import { createLiveWorker } from './worker';
 import { createLiveController } from './controller';
 import { fetchLockedTarball } from './npm-relay';
@@ -43,6 +42,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   'binding' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
   | 'invitations'> & {
     pool: Pool; cacheBlobs: PrivateCacheBlobs; placement: BuilderPlacement;
+    /** Namespace-only client of the builder namespace (`createInClusterKubernetes(placement)` in the product). */
+    kubernetes: KubernetesCore;
     supervisorKey: SigningKey; relayUrl: string;
     /** Staged source, AL-D draft and candidate sink; the dependency stream is this service's cache. */
     sources: Omit<SupervisorSources, 'dependencies'>;
@@ -68,7 +69,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
     waiterTtlMs: options.admission.waiterTtlMs, now: options.now, holders: () => store.active() });
   return createLiveController({ ...options, cache, store, admission, heavy,
-    pods: createBuilderPods(createInClusterKubernetes(options.placement), bootstrap, options.placement),
+    pods: createBuilderPods(options.kubernetes, bootstrap, options.placement),
     worker: createLiveWorker(supervisor, options.placement) });
 }
 /** M3-B builder service: the live controller composed with the SG4b handoff publication, the Postgres job ledger,
