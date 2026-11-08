@@ -325,6 +325,46 @@ remove the old public half from artifact-content; the new key applies at the nex
 each pod keeps the public key of the bootstrap it started with. Rotate on the
 owner's cycle, and at once on a suspected exposure.
 
+## Product builder composition
+
+`createProductBuilder(process.env, deps)` (`product-builder.ts`) composes
+`createBuilderService` only when `ARTIFACT_BUILDER_ENABLED=1` (cm/api, off by
+default: the mount answers 503 `builder_unavailable` to a bound host). With the
+flag on, the API refuses to boot when any of these is absent or invalid, naming
+the variable and never its value: `ARTIFACT_BUILDER_NAMESPACE`,
+`ARTIFACT_BUILDER_SERVICE_DOMAIN`, `ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON`,
+`ARTIFACT_SUPERVISOR_RELAY_URL`, `ARTIFACT_BUILDER_HANDOFF_SIGNING_KEY_JSON`,
+`ARTIFACT_BUILDER_HOST_RECEIPT_KEYS_JSON`, `ARTIFACT_BUILDER_REMOTE_HOST_URL`,
+`ARTIFACT_LIVE_CONTROLLER_KEY`, `ARTIFACT_LIVE_EDGE_INTERNAL_URL`,
+`ARTIFACT_DEPENDENCY_CACHE_SIGNING_KEY` (32 random bytes, base64url, owner
+sentropic), `ARTIFACT_BUILDER_NODE`, `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` (at
+least one binding) and `APP_ARTIFACT_HOST_ENABLED=1` (cache objects live in the
+private artifact storage). The heavy-phase queue admits 4 pods on one node under
+1641 MiB (pod base 19 MiB; install 980, prebundle 980, dev 390, build 1370) and
+the admission 4 lives. `start()` runs one live scheduler per process (lease
+frames and reconciles every 30 s); the API stops it on exit.
+
+- Binding (D0): generation and owner of the host's last reconcile; publication
+  stays explicit (`autoPublish` false, R4).
+- Forge: `fastForward` is refused (`fast_forward_remote_host`), because
+  `git_commit` runs in the host LiveService. Reads go through the SG0-app lease
+  reader; until it is composed, `UNCONFIGURED_FORGE_READS` refuses every read
+  (`forge_unconfigured`), so builds and revives fail closed per operation.
+- Routes (f1): every revoke and ready signs `signLiveFence` (exp = iat + 60 s)
+  and POSTs it in `x-live-controller-fence` to
+  `<ARTIFACT_LIVE_EDGE_INTERNAL_URL>/_live-fence/v1` (http,
+  `*.svc.cluster.local` only, never a public Host). A non-204 answer is resent
+  freshly signed (4 retries), then refused as `builder_unavailable`.
+
+## Controller fence key
+
+`ARTIFACT_LIVE_CONTROLLER_KEY` = `<kid>=<unpadded base64url>` (at least 32
+bytes; owner sentropic, API environment secret): the same bytes as one entry of
+artifact-content's `APP_ARTIFACT_LIVE_CONTROLLER_KEYS`, whose kid is listed in
+`APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS`. Rotation: add the new entry and kid to
+artifact-content and roll it out, then replace the API value and restart the
+API, then remove the old entry once no fence signed with it is valid (60 s).
+
 Fake Kubernetes/forge tests live under `api/tests/unit/artifacts-live`; live
 proxy/upgrade tests live under `apps/artifact-content/tests/live*`. They cover
 controller behavior and native local HMR tunneling. They do not establish

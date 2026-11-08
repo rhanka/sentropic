@@ -15,6 +15,7 @@ import { createArtifactReaderActivation } from './reader-activation';
 import { createPostgresReaderConsentStore } from '@sentropic/artifacts/adapters/postgres-reader-consent';
 import { assertConsentScopeId, assertConsentScopeVersion } from '@sentropic/artifacts/server/consent';
 import { createReaderConsentService } from './reader-consent';
+import type { PrivateCacheBlobs } from './live/cache-storage';
 import type { ArtifactHttpPorts } from '../../routes/namespaces/artifacts';
 
 export const artifactHostEnabled = () => process.env.APP_ARTIFACT_HOST_ENABLED === '1';
@@ -46,6 +47,10 @@ const blobs: PublicationBlobStore = {
 };
 
 const currentIdentity = createCurrentArtifactIdentity(resource);
+/** The builder's dependency cache objects live in the same dedicated private artifact storage. */
+export const productPrivateCacheBlobs: PrivateCacheBlobs = {
+  put: (key, bytes) => blobs.putBlob(key, bytes), get: key => blobs.getBlob(key), delete: key => blobs.deleteBlob(key),
+};
 export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes, currentIdentity });
 /** Same credential reader as the host, so a listed workspace matches its bind() authority. */
 export const productWorkspaceDirectory = createWorkspaceDirectory({ pool, currentIdentity });
