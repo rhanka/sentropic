@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export const activeRef = 'email-code-hmac:v1:preprod:15c2f8b66073655a';
@@ -30,7 +31,12 @@ export function compose(source) {
   for (const name of Object.keys(env)) if (name.startsWith('EMAIL_CODE_HMAC_')) delete env[name];
   return env;
 }
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+// A ConfigMap volume serves this file through a ..data symlink and Node resolves the
+// main module to its real path, so compare real paths or the launcher would exit 0 idle.
+export const isMain = (url, argv1) => {
+  try { return url === pathToFileURL(realpathSync(argv1 ?? '')).href; } catch { return false; }
+};
+if (isMain(import.meta.url, process.argv[1])) {
   try {
     if (process.argv[2] === '--custodian') {
       setInterval(() => {}, 60_000);

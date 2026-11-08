@@ -4121,7 +4121,7 @@ k8s-deploy-preprod: ## BR-55c: deploy main->preprod (ns sentropic-preprod) with 
 	# `sentropic` ns is unreachable. The auth-idp shares the api image, so pinning the api
 	# image covers it. Idempotent: the images: block is appended once per checkout.
 	@grep -q '^images:' deploy/k8s/overlays/preprod/kustomization.yaml || printf '\nimages:\n  - name: %s/%s\n    newTag: "%s"\n  - name: %s/%s\n    newTag: "%s"\n' "$(REGISTRY)" "$(API_IMAGE_NAME)" "$(API_VERSION)" "$(REGISTRY)" "$(UI_IMAGE_NAME)" "$(UI_VERSION)" >> deploy/k8s/overlays/preprod/kustomization.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/preprod
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/preprod-a4
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/ui       --timeout=300s

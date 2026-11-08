@@ -1,53 +1,53 @@
-# Feature: A4 import keeps valid login sessions
+# Feature: Preprod A4 cutover release (sentropic-a4-20261108)
 
 ## Objective
-- [x] Owner 2026-11-07 22:15 (S, partial revert of decision B bf3064b60 for sessions ONLY): the A4 import carries every live, non-revoked `user_sessions` login into the cm_identity session stores with the same id, expiry and token binding, so existing cookies stay valid after the cutover.
-- [x] Email codes, email tickets, WebAuthn challenges and magic links stay invalidated; expired or remotely revoked logins are dropped and counted.
+- [x] Make continuous deployment keep the A4 runtime that the fenced cutover of 2026-11-08 installed on sentropic-preprod: pin the candidate API (main ad3be44e7) and UI (main fa4a1e4fb) digests, apply `overlays/preprod-a4`, and ship the launcher that runs through its ConfigMap symlink (PR #949, folded in here).
 
 ## Scope / Guardrails
-- [x] Branch fix/a4-preserve-sessions from origin/main c754d639d; worktree tmp/worktrees/a4-preserve-sessions; ENV=test-a4-sessions (API_PORT=9645 UI_PORT=5845 MAILDEV_UI_PORT=1745).
+- [x] Branch deploy/preprod-a4-cutover on fix/a4-runtime-launcher-symlink (e1bd0f9ff, from main ad3be44e7); worktree tmp/worktrees/a4-iac; ENV=test-a4-iac.
 - [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
-- [x] Fail closed: remote snapshot divergence and unknown source shapes still refuse the import.
+- [x] Prod untouched: `overlays/prod` and base unchanged.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/services/identity/cm-import-*.ts`
-  - `api/src/services/identity/cm-cutover-import.ts`
-  - `api/src/scripts/cm-preprod-state.ts`
-  - `api/tests/unit/auth/cm-*.test.ts`
-  - `api/tests/utils/cm-cutover-test-config.ts`
+  - `deploy/k8s/overlays/preprod/kustomization.yaml`
+  - `deploy/k8s/overlays/preprod-a4/kustomization.yaml`
+  - `deploy/k8s/overlays/preprod/a4-runtime/launch.mjs`
+  - `deploy/ci/preprod-a4/bundle.selftest.mjs`
+  - `deploy/ci/preprod-a4/launch-symlink.test.mjs`
+  - `docs/runbooks/preprod-a4-cutover.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `deploy/**`
+  - `api/**`
   - `packages/**`
+  - `deploy/k8s/overlays/prod/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (none planned)
-  - `.github/workflows/**`
+  - `.github/workflows/**` (BRA4L-EX1: `ci.yml` api filter only)
+  - `Makefile` (BRA4C-EX1: `k8s-deploy-preprod` apply path only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `acknowledge`: owner answer « S+L … tu te debrouilles dans tous les cas » (owner-authorization.md 22:15) scopes the revert to login sessions only.
+- [x] `attention` BRA4L-EX1: `consumer-contracts` classifies `deploy/k8s/**/*.mjs` as runtime-security and requires the API/UI/e2e consumers; add `deploy/k8s/overlays/preprod/a4-runtime/**` to the `ci.yml` `api` filter (no in-block comment: `check-ci-version-filters.sh` ends a block at a comment). Rollback: remove the filter line.
+- [x] `attention` BRA4C-EX1: `k8s-deploy-preprod` applies `overlays/preprod-a4` instead of `overlays/preprod`; the image pin step still targets `overlays/preprod/kustomization.yaml`, which preprod-a4 inherits. Rollback: restore the recovery pin and the previous apply path, then the B0/F1 whole-database restore of the runbook.
+- [x] `attention`: without the launcher fix the A4 API/IdP exit 0 under their ConfigMap symlink (CrashLoopBackOff); found in sentropic-restore-a4 and fixed before the live wire.
+- [x] `attention`: runbook `restrict` is unusable on this ingress path: an allow-listed operator /32 probe answered 403 (Traefik sees the load-balancer address). Ranges were not broadened; UI/IdP start through this deploy after the internal verification passed.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
-- Rationale: one small identity import change with its tests; one PR, one CI.
+- Rationale: one release PR on top of the launcher fix; one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read cm-import-source.ts, cm-cutover-import.ts, cm-import-continuations.ts, the decision B diff and the CM login_session importer.
-  - [x] Confirm the pre-A4 session JWT claims (userId, sessionId, role, login, tokenUse) verify under the CM token custodian.
-- [x] **Lot 1 — Carry live sessions**
-  - [x] `mapA4CarriedLogin` (hash-bound mapping): live and not remotely revoked, else dropped.
-  - [x] `mapA4IdentitySource` imports carried logins as `login_session` rows; `a4InvalidatedProofCounts` counts only dropped logins.
-  - [x] `cm-preprod-state` inspection applies the same carry decision.
-  - [x] Tests: live legacy session imported with exact binding and usable claims (rehearsal and cutover); expired and revoked dropped and counted; proofs stay invalidated.
-  - [x] Lot gate (31/31; 105/105 on all cm-cutover/import/preprod unit tests): `make test-api-unit SCOPE="tests/unit/auth/cm-cutover-migration.test.ts tests/unit/auth/cm-import-continuations.test.ts tests/unit/auth/cm-import-mapping.test.ts" ENV=test-a4-sessions`
-  - [x] Lot gate (0 errors): `make typecheck-api ENV=test-a4-sessions` and `make lint-api ENV=test-a4-sessions`
-- [ ] **Lot 2 — PR**
-  - [ ] PR « fix(identity): keep valid sessions across the A4 import », CI green on the exact head, GLM review.
+- [x] **Lot 1 — Launcher main-module guard**
+  - [x] `isMain(url, argv1)` compares `import.meta.url` with the real path of `argv[1]`; `launch-symlink.test.mjs` runs it through a two-level symlink.
+  - [x] `ci.yml` `api` filter selects the required consumers for `a4-runtime/**` (BRA4L-EX1).
+- [x] **Lot 2 — Release pins and A4 deployment**
+  - [x] `overlays/preprod`: API `sha256:92c85bcf…6e`, UI `sha256:97c3f3f2…a7` (anonymously pullable, `node scripts/ci/check-preprod-images.mjs`).
+  - [x] `k8s-deploy-preprod` applies `overlays/preprod-a4` (BRA4C-EX1); `bundle.selftest.mjs` asserts the pinned digests on both renders.
+  - [x] Lot gate: `make test-preprod-a4 ENV=test-a4-iac` (32/32) and `make test-artifact-content-manifests ENV=test-a4-iac` (156 PASS, 32/32, A4 bundle selftest PASS).
+- [ ] **Lot 3 — PR**
+  - [ ] PR « deploy(preprod): ship the A4 cutover release », CI green on the exact head, GLM review, merge by s-conductor; then resume `cronjob/pgbackup` (fence suspended it and the manifest has no `suspend` field).
