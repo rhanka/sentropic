@@ -41,12 +41,14 @@
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql`
-  - `.github/workflows/**`
+  - `.github/workflows/ci.yml` (BRSK-EX1)
+  - `docker-compose.ci.yml` (BRSK-EX1)
   - `api/package.json`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- [x] BRSK-EX1: CI production-image runtimes follow the boot gate. `docker-compose.ci.yml`: the CI `auth-idp` gets `ADMIN_EMAIL=e2e-admin@example.com` (the e2e production-image runtime, like `api-sut`; it keeps the seed shared with the CI seed scripts); `api-sut` reads `JWT_SECRET`/`SECRET_ENCRYPTION_KEY` from `CI_SUT_*` with the current values as default. `ci.yml` `test-api-sut`: the `limit` suite (rate limit on, hence a deployed runtime) passes disposable `never-production` keys. The restore job keeps the seed because it restores the prod backup, still sealed under it. Impact: CI only. Rollback: revert the 4 lines with the boot gate.
 - [ ] `attention`: merge precondition for the train (no code workaround): the preprod product api has no `JWT_SECRET` (night plan 08/11, preserve-sessions.md); once this image runs in preprod the api refuses to boot until T1-ops provisions a non-seed `JWT_SECRET` in Secret `sentropic-api` (owner-reserved Secret-Store Write; invalidates the product sessions). The IdP keeps its own `auth-idp-session-signing` value (explicit `env` overrides `envFrom`).
 - [ ] `attention`: prod order unchanged (A2): run `--secret-reencrypt --from-development-seed` against prod with the target key, set `SECRET_ENCRYPTION_KEY`, restart, re-run (idempotent), then deploy this image.
 

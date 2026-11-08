@@ -2033,6 +2033,9 @@ jobs:
       API_TEST_CI: '1'
       API_TEST_SUT: '1'
       DISABLE_RATE_LIMIT: ${{ matrix.suite == 'limit' && 'false' || 'true' }}
+      # BRSK-EX1: with the rate limit on the SUT is a deployed runtime, so its keys must not be public seeds.
+      CI_SUT_JWT_SECRET: ${{ matrix.suite == 'limit' && 'ci-disposable-jwt-secret-never-production' || '' }}
+      CI_SUT_SECRET_ENCRYPTION_KEY: ${{ matrix.suite == 'limit' && 'ci-disposable-at-rest-key-never-production' || '' }}
       API_PORT: '9491'
       UI_PORT: '5691'
       MAILDEV_UI_PORT: '1591'
