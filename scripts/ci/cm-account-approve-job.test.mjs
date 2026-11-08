@@ -14,11 +14,8 @@ const load = (file) => YAML.parseAllDocuments(read(file)).map((doc) => doc.toJSO
 const JOB_FILE = 'deploy/k8s/base/38-cm-account-approve-job.yaml';
 const JOB = 'cm-account-approve';
 const SECRET = 'cm-account-approval';
-const DIST = 'dist/scripts/cm-account-approve.js';
 // The A4 launcher composes the email-code HMAC custody exactly as for the api pod, then runs the script.
 const LAUNCH = ['node', '/run/cm-runtime/launch.mjs', '--script', 'cm-account-approve'];
-const HMAC = ['EMAIL_CODE_HMAC_KEY_ACTIVE', 'EMAIL_CODE_HMAC_KEY_ACTIVE_REF',
-  'EMAIL_CODE_HMAC_KEY_PREVIOUS', 'EMAIL_CODE_HMAC_KEY_PREVIOUS_REF'];
 const A4_API_PATCH = 'deploy/k8s/overlays/preprod-a4/patch-api-a4.yaml';
 
 // What the Make target applies: the versioned Job with the `approve` image pinned
@@ -66,15 +63,16 @@ test('the rendered Job runs the dist script once through the A4 launcher with th
 test('the Job receives the same HMAC custody wiring and runtime volume as the A4 api pod, nothing more', () => {
   const pod = render('ghcr.io/rhanka/sentropic-api:main').spec.template.spec;
   const [container] = pod.containers;
-  assert.deepEqual(container.env.map((entry) => entry.name), HMAC);
+  const [deployment] = load(A4_API_PATCH);
+  const api = deployment.spec.template.spec;
+  const apiContainer = api.containers.find((candidate) => candidate.name === 'api');
+  const hmac = apiContainer.env.filter((entry) => entry.name.startsWith('EMAIL_CODE_HMAC_'));
+  assert.equal(hmac.length, 4, 'active and previous key plus their refs');
   for (const entry of container.env) {
     assert.equal(entry.value, undefined, `${entry.name}: no literal value`);
     assert.equal(entry.valueFrom.secretKeyRef.name, 'email-code-hmac');
   }
-  const [deployment] = load(A4_API_PATCH);
-  const api = deployment.spec.template.spec;
-  const apiContainer = api.containers.find((candidate) => candidate.name === 'api');
-  assert.deepEqual(container.env, HMAC.map((name) => apiContainer.env.find((entry) => entry.name === name)));
+  assert.deepEqual(container.env, hmac);
   assert.deepEqual(container.volumeMounts, [{ name: 'cm-runtime', mountPath: '/run/cm-runtime', readOnly: true }]);
   assert.deepEqual(pod.volumes, [api.volumes.find((volume) => volume.name === 'cm-runtime')]);
   assert.equal(pod.volumes[0].configMap.name, 'sentropic-a4-runtime');
@@ -112,5 +110,11 @@ test('the Make wrapper guards the 0600 file, pins the image, records the reason 
   assert.ok(trap, 'cleanup trap on EXIT');
   assert.ok(trap[1].includes(`delete job/${JOB}`) && trap[1].includes(`delete secret/${SECRET}`));
   assert.ok(body.indexOf('trap ') < body.indexOf('create secret generic'), 'trap is armed before the Secret exists');
+  // An older namespace launcher would pass --script to dist/index.js and boot a second api (migrations,
+  // lock purge): the wrapper refuses before creating anything unless the namespace serves the script mode.
+  const preflight = body.indexOf("get configmap sentropic-a4-runtime -o jsonpath='{.data.launch\\.mjs}'");
+  assert.ok(preflight > 0, 'launcher preflight reads the namespace runtime ConfigMap');
+  assert.ok(body.includes(`grep -qF "args[0] === '--script'"`), 'preflight requires the --script mode');
+  assert.ok(preflight < body.indexOf('trap ') && preflight < body.indexOf('create secret generic'), 'preflight runs first');
   assert.ok(!/cat |echo "\$\$\(cat/.test(body), 'the env file is never printed');
 });
