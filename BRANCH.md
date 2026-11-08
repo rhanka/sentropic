@@ -1,7 +1,7 @@
 # Feature: Train 1d 2026-11-07 A-LIVE live invitations, pod quota fit and controller pod slots
 
 ## Objective
-- [ ] One train, one PR, one CI on main c754d639d (#946 merged): feat/artifacts-live-invitations (307cab2be) as @sentropic/artifacts 0.2.22, the pod quota fit (s-archi addendum A) and the controller pod slots (addendum B rules 1-3); wagon BRANCH.md edits dropped.
+- [ ] One train, one PR, one CI on main c754d639d (#946 merged): feat/artifacts-live-invitations (307cab2be + the s-archi R1 replay fix 50cf410a) as @sentropic/artifacts 0.2.22, the pod quota fit (s-archi addendum A) and the controller pod slots (addendum B rules 1-3); wagon BRANCH.md edits dropped.
 - [x] Frozen: `packages/artifacts/src/live-host` byte-identical to a5d8dee87.
 - [x] perf/ci-tested-tree r2 (da7a752f2) rides as the second push: 13 commits cherry-picked without conflict (2 BRANCH.md-only commits skipped), change lines identical to the wagon; binding checks (a)-(h) re-run below.
 
@@ -56,7 +56,7 @@
 - [ ] Exact-head pull_request CI result retained in the PR.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1: feat/artifacts-live-invitations (307cab2be) cherry-picked without conflict (10 commits, 2 BRANCH.md-only commits skipped).
+- [x] Lot 1: feat/artifacts-live-invitations (307cab2be) cherry-picked without conflict (10 commits, 2 BRANCH.md-only commits skipped). The s-archi R1 replay fix (wagon 50cf410a, its BRANCH.md hunk dropped) applied on top; make test-artifacts on test-train1d-fu green (96 files / 979 tests).
 - [x] Lot 2: provider version 0.2.22 and APP-P1 repin: manifest at version 0.2.21 still hashes 5150544a (the four new tools are outside the APP-P1 selection), 0.2.22 hashes 61c50b33.
 - [x] Lot 3: pod quota fit (addendum A): requests 250m/420Mi/0, limits 1/1280Mi/2560Mi, emptyDir source 256Mi, scratch 1280Mi, dependencies 1024Mi; the pod test asserts the tenant LimitRange and ResourceQuota fit for four pods.
 - [x] Lot 4: controller pod slots, quota backpressure and no surge (addendum B rules 1-3): `heavy.pod` takes a FIFO pod slot (`MAX_BUILDER_PODS` 4, `blockedBy: 'pods'`) before every create; a 403 exceeded quota gives the slot back, requeues and retries (past the wait bound `builder_unavailable`/`queued`); a fresh intent deletes an older or terminating pod and waits for its 404 before creating. pod-slots.test.ts 8/8; artifacts-live 43 files 296/296; API tsc clean, lint 0 errors.

@@ -44,7 +44,7 @@ it('should accept only by the invitee, before the expiry and within the same liv
   expect(await v.list('alice')).toMatchObject({ liveSessionId: next, epoch: 0, invitations: [], next: null });
 });
 
-it('should bump the session epoch on revocation, let the others adopt it and call onRevoked once after commit', async () => {
+it('should bump the session epoch on revocation, let the others adopt it and call onRevoked after commit', async () => {
   const v = invitationWorld(); const sid = await v.start();
   const bob = await v.invite(sid, 'bob'), carol = await v.invite(sid, 'carol');
   await v.accept('bob', bob.invitationId);
@@ -60,11 +60,27 @@ it('should bump the session epoch on revocation, let the others adopt it and cal
   expect(await v.w.service.liveViewer(v.identity, 'bob')).toEqual({ role: 'invitee',
     invitation: { id: bob.invitationId, epoch: 2, expiresAt: Date.parse(bob.expiresAt) } });
   expect(await v.revoke('alice', carol.invitationId)).toMatchObject({ epoch: 2, replayed: true });
+  expect(v.onRevoked.mock.calls[1]).toEqual(v.onRevoked.mock.calls[0]);
   expect(await v.revoke('alice', carol.invitationId, 'again')).toMatchObject({ status: 'revoked', epoch: 2, replayed: false });
   expect(await v.revoke('bob', bob.invitationId)).toMatchObject({ status: 'revoked', epoch: 3 });
-  expect(v.onRevoked).toHaveBeenCalledTimes(2);
+  expect(v.onRevoked).toHaveBeenCalledTimes(3);
   expect(await v.w.service.liveViewer(v.identity, 'bob')).toBeNull();
   expect(await v.w.service.liveInvitationState(v.identity)).toEqual({ epoch: 3, expiresAt: null });
+});
+
+it('should re-invoke onRevoked with the identical event when a revoke is replayed after a failed push', async () => {
+  const v = invitationWorld(); const sid = await v.start();
+  const bob = await v.invite(sid, 'bob');
+  await v.accept('bob', bob.invitationId);
+  v.onRevoked.mockRejectedValueOnce(new Error('edge push failed'));
+  await expect(v.revoke('alice', bob.invitationId, 'retry')).rejects.toThrow('edge push failed');
+  expect(await v.w.service.liveViewer(v.identity, 'bob')).toBeNull();
+  expect(await v.w.service.liveInvitationState(v.identity)).toEqual({ epoch: 2, expiresAt: null });
+  expect(await v.revoke('alice', bob.invitationId, 'retry')).toEqual({ invitationId: bob.invitationId, status: 'revoked',
+    epoch: 2, replayed: true });
+  const event = { storageScopeId: v.identity.storageScopeId, artifactId: v.identity.artifactId, liveSessionId: sid,
+    bindingGeneration: v.identity.bindingGeneration, invitationId: bob.invitationId, epoch: 2 };
+  expect(v.onRevoked.mock.calls).toEqual([[event], [event]]);
 });
 
 it('should project the owner list and the invitee list without principal ids', async () => {
