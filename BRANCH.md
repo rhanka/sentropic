@@ -35,8 +35,8 @@
 ## Feedback Loop
 - [x] BR90-EX17: `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.22); APP-P1 digest repinned (version field only, four-tool selection unchanged). Rollback: revert with the bump.
 - [x] BR90-EX18: heavy-phase queue pod slots (`maxPods`, blocker `pods`) and build cost 1261 MiB (1280Mi limit minus the 19 MiB pod base); `@sentropic/cluster-mesh` 0.26.0-dev.16 to 0.26.0-dev.17 with changelog. Rollback: revert the queue, the tests and the bump together.
-- [ ] BR90-EX19: root and api lock workspace entries follow artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 (version strings only). Rollback: revert with the bumps.
-- [ ] BR90-EX20: the selected packaging fixture names the artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 archives with the regenerated artifacts integrity pin. Rollback: revert with the bumps.
+- [x] BR90-EX19: root and api lock workspace entries follow artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 (version strings only). Rollback: revert with the bumps.
+- [x] BR90-EX20: the selected packaging fixture names the artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 archives with the regenerated artifacts integrity pin (guarded sibling sha256 57a0e4908f0fdc8debece64e8bb0ed2cfd24412032ab3d49f473d4908b1b4a62, from pack-candidate-siblings then refresh-lazy-package-lock). Rollback: revert with the bumps.
 - [ ] `attention`: build-1280 verdict NO: no measured build heap passes under 1280Mi with one CPU (1024 and 896 OOM-killed, 768 and 640 V8 heap OOM; 1536Mi passes at peak 1388.6 MiB). `NODE_BUILD_HEAP_OPTIONS` stays 1024 and is unverified; the in-pod clean build does not fit the quota-fit pod. Owner s-archi.
 - [ ] `attention`: preprod and prod builder namespaces share the d2-4 pool while each environment's W8 queue assumes the full 1641 MiB; prod-activation blocker (prod live is OFF). Owner s-archi/k8s.
 
@@ -56,6 +56,6 @@
 - [x] Lot 2: provider version 0.2.22 and APP-P1 repin: manifest at version 0.2.21 still hashes 5150544a (the four new tools are outside the APP-P1 selection), 0.2.22 hashes 61c50b33.
 - [x] Lot 3: pod quota fit (addendum A): requests 250m/420Mi/0, limits 1/1280Mi/2560Mi, emptyDir source 256Mi, scratch 1280Mi, dependencies 1024Mi; the pod test asserts the tenant LimitRange and ResourceQuota fit for four pods.
 - [x] Lot 4: controller pod slots, quota backpressure and no surge (addendum B rules 1-3): `heavy.pod` takes a FIFO pod slot (`MAX_BUILDER_PODS` 4, `blockedBy: 'pods'`) before every create; a 403 exceeded quota gives the slot back, requeues and retries (past the wait bound `builder_unavailable`/`queued`); a fresh intent deletes an older or terminating pod and waits for its 404 before creating. pod-slots.test.ts 8/8; artifacts-live 43 files 296/296; API tsc clean, lint 0 errors.
-- [ ] Lot 5: cluster-mesh bump, locks and selected fixture.
+- [x] Lot 5: cluster-mesh bump, locks and selected fixture; heavy-phase-queue spec 8/8; cluster-mesh packaging scope 85 pass / 60 skipped; lazy package: lock integrity matches the 0.2.22 sibling, 134/136 locally (optional-install spawn cases over the 5 s test timeout under host load: suite 72 s vs 28 s on train 1b; the PR CI decides).
 - [ ] Lot 6: scoped checks, push, open the PR, GLM review of the full diff.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
