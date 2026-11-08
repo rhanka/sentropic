@@ -37,6 +37,7 @@
 
 - [x] `acknowledge`: GLM 5.3 review of b60435eff = APPROVE (.h2a/reviews/pr-956-glm.md); non-blocking findings applied: first error line only on stderr, whitespace-only values refused by the wrapper, doc note on a `kubectl wait` timeout. Deferred: durable reason column (source-gap above), dedicated governance runbook.
 - [x] `attention`: CI run 42459620840 on b60435eff: `test-e2e (1)` failed on `tests/07-matrix.spec.ts:477` (Matrix lock/presence, User B can lock, 2 s predicate); this diff touches no UI, matrix or lock code; fresh run on the next head, no rerun.
+- [x] `attention`: CI run 42460546579 on 8a64e7b9a: `ci-capacity-receipts` fails on every attempt because the GitHub jobs API answers HTTP 502 for this run (137 jobs, 4 attempts); all functional jobs green; fresh run on this head (s-conductor, 08/11 03:20).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
