@@ -47,8 +47,8 @@
 - [x] Lot 3: release receipt and daily live selector accept the PR reference.
 - [x] Lot 4: workflow publishers, test-member guards, `changes` capture and decision.
 - [x] Lot 5: scoped checks green (tested-tree 7/7, expected-results 28/28, ci-dag 10/10, ci-static 3/3, run-metrics 37/37, release-receipts 43/43, unit-graph 7/7, performance-report 8/8, consumer-contracts 25/25, live-provider 13/13, wiring + package DAG 51/51, security-daily 333/333, ci-capacity-policy shapeValid); wagon branch pushed.
-- [ ] Lot 6 (r2, GLM section 9) (d): no newest-wins; every same-tree candidate and every attempt green, else the complete run.
-- [ ] Lot 6 (a): explicit attempts (the concluded attempt is reused) and a 24 h age bound `TESTED_TREE_MAX_AGE_HOURS` on the reused attempt.
+- [x] Lot 6 (r2, GLM section 9) (d): no newest-wins; every same-tree candidate and every attempt green, else the complete run.
+- [x] Lot 6 (a): explicit attempts (the concluded attempt is reused) and a 24 h age bound `TESTED_TREE_MAX_AGE_HOURS` on the reused attempt.
 - [ ] Lot 6 (e): the release receipt records the merge sha and the reused PR run id, attempt, head sha and tree.
 - [ ] Lot 6: the daily live selector refuses a tuple with any non-green same-tree PR run.
 - [x] Lot 6: residual recorded: a dropped member is proven by its job conclusion only (a success job with every step skipped is not detectable).
