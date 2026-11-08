@@ -34,12 +34,14 @@ patches:
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
 
-# Repin to the 7990bc182 main build (2026-11-08): API sha256:6e382dc1…19 and UI sha256:ec201329…54
-# from main CI run 42463322455 (publish-api-image / publish-ui-image, release receipts), verified in
-# GHCR by manifest inspect. Brings preprod to #951/#954/#956 (incl. cm-account-approve job assets).
+# Repin to the 4c5f7be5c main build (2026-11-08): API sha256:ea366543…f6 from main CI run 42467148857
+# (publish-api-image + release-receipts success, receipts and GHCR manifest verified; publish-ui-image
+# skips on this head — no ui path changed — so the UI stays on the digest published by the 7990bc182
+# build, run 42463322455). Brings preprod to the forge-lease-reader runtime (#955) over the GB4
+# configuration of #952/#953 (incl. cm-account-approve job assets).
 # Continuous deployment applies ../preprod-a4 (this overlay plus the A4 runtime wiring).
 images:
   - name: ghcr.io/rhanka/sentropic-api
-    digest: sha256:6e382dc1c1c185bee17bebd59d092466a76467401896ab7a54b4bf7d2c0a1719
+    digest: sha256:ea36654306736125b08cb6902722a9ea765f887d22d48095b93be73ec1139ef6
   - name: ghcr.io/rhanka/sentropic-ui
     digest: sha256:ec201329c2d6fed7fb725c412b46994fe7f36d8bf1bf560d53e1d7200d04ee54
