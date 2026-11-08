@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { GitForgeError } from '../server/git-port.js';
-import type { GitForge, GitTreeEntry } from '../server/git-port.js';
+import type { GitForge, GitForgeContext, GitTreeEntry } from '../server/git-port.js';
 import { githubApi } from './github-http.js';
 import type { GitHubFetch } from './github-http.js';
 import { githubReceivePack } from './github-receive-pack.js';
@@ -10,9 +10,32 @@ const sha = (value: unknown): string => {
   if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value)) throw new GitForgeError('unavailable');
   return value;
 };
+/** GitHub answers 422 « No commit found » (not 404) for an unknown ref: both mean absent, never a ref refusal. */
+async function absentAsMissing<T>(request: Promise<T>): Promise<T> {
+  try { return await request; }
+  catch (error) {
+    if (error instanceof GitForgeError && (error.code === 'missing' || error.code === 'conflict')) throw new GitForgeError('missing');
+    throw error;
+  }
+}
 /** Fixed public GitHub origins. The SG0-net host owns network admission and egress receipts. */
 export function createGitHubForge(fetcher: GitHubFetch = globalThis.fetch): GitForge {
   const api = githubApi(fetcher);
+  /** Each ref segment is encoded on its own so « artifact/p/x » keeps its path slashes. */
+  const segments = (ref: string) => ref.split('/').map(encodeURIComponent).join('/');
+  /** Exact branch lookup first; artifact branches never resolve as anything else. */
+  async function refHead(context: GitForgeContext, ref: string): Promise<string> {
+    try {
+      const result = await absentAsMissing(api(context, `/git/ref/heads/${segments(ref)}`));
+      if (result?.ref !== `refs/heads/${ref}` || result?.object?.type !== 'commit') throw new GitForgeError('unavailable');
+      return sha(result.object.sha);
+    } catch (error) {
+      if (ref.startsWith('artifact/') || !(error instanceof GitForgeError && error.code === 'missing')) throw error;
+    }
+    // Registered sources may also be read at a tag or an abbreviated commit SHA (docs/git-port.md).
+    const result = await absentAsMissing(api(context, `/commits/${segments(ref)}`));
+    return sha(result?.sha);
+  }
   return {
     async repositoryId(context) {
       const result = await api(context, '');
@@ -21,8 +44,9 @@ export function createGitHubForge(fetcher: GitHubFetch = globalThis.fetch): GitF
       return String(result.id);
     },
     async resolve(context, ref) {
-      const result = await api(context, `/commits/${encodeURIComponent(ref)}`);
-      if (!Array.isArray(result?.parents) || typeof result?.commit?.message !== 'string' ||
+      const commitSha = /^[0-9a-f]{40}$/.test(ref) ? ref : await refHead(context, ref);
+      const result = await absentAsMissing(api(context, `/commits/${commitSha}`));
+      if (result?.sha !== commitSha || !Array.isArray(result?.parents) || typeof result?.commit?.message !== 'string' ||
         [result.commit.author, result.commit.committer].some(person => typeof person?.name !== 'string' || typeof person?.email !== 'string')) {
         throw new GitForgeError('unavailable');
       }

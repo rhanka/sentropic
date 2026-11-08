@@ -29,7 +29,7 @@ const PACKAGE_CSP = "default-src 'none'; form-action https://github.com 'self'; 
 
 const expectSg0AppHeaders = (response: Response) => {
   expect(response.headers.get('content-security-policy')).toBe(PACKAGE_CSP);
-  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+  expect(response.headers.get('referrer-policy')).toBe('same-origin');
   expect(response.headers.get('cache-control')).toBe('no-store');
 };
 

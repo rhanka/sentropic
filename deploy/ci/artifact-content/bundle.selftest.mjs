@@ -220,6 +220,13 @@ for (const tier of ['prod', 'preprod']) {
   deny('builder binding to another storage scope', o => {
     apiData(o).ARTIFACT_BUILDER_HOST_BINDINGS_JSON = '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier"}]';
   });
+  const repository = patch => JSON.stringify([{ ...JSON.parse(preprodBuilder.ARTIFACT_BUILDER_REPOSITORIES_JSON)[0], ...patch }]);
+  deny('builder repository on a numeric installation id', o => { apiData(o).ARTIFACT_BUILDER_REPOSITORIES_JSON = repository({ installationRef: '12345678' }); });
+  deny('builder repository of another storage scope', o => {
+    apiData(o).ARTIFACT_BUILDER_REPOSITORIES_JSON = repository({ storageScopeId: 'radar-immobilier' });
+  });
+  deny('builder repository opening a subPath', o => { apiData(o).ARTIFACT_BUILDER_REPOSITORIES_JSON = repository({ allowedSubPaths: ['', 'ui'] }); });
+  if (tier === 'preprod') deny('builder repository dropped', o => { delete apiData(o).ARTIFACT_BUILDER_REPOSITORIES_JSON; });
   deny('live pages domain of the other tier', o => {
     const data = object(o, 'ConfigMap', 'artifact-content').data;
     data.APP_ARTIFACT_LIVE_PAGES_DOMAINS = tier === 'prod' ? 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1' : 'pages.immo.sent-tech.ca=immo-prod-live-1';
@@ -370,6 +377,15 @@ check('preprod: relay key and builder values pass the runtime parsers', () => {
   assert.deepEqual(Object.keys(binding).sort(), ['clientId', 'hostId', 'storageScopeId']);
   assert.equal(binding.clientId, broker.clientId); assert.equal(binding.storageScopeId, broker.storageScopeId);
   assert.deepEqual([target.storageScopeId, target.repoId], [broker.storageScopeId, broker.repoId]);
+  // forge-binding.ts forgeConfig: closed five keys, SG0-app enrollment ref (never a numeric installation id),
+  // the entry of the GitHub App target, root-only subPath until the pod bootstrap is subPath-aware.
+  const repositories = JSON.parse(preprodBuilder.ARTIFACT_BUILDER_REPOSITORIES_JSON);
+  assert.equal(repositories.length, 1);
+  const [repository] = repositories;
+  assert.deepEqual(Object.keys(repository).sort(), ['allowedSubPaths', 'installationRef', 'locator', 'repoId', 'storageScopeId']);
+  assert.match(repository.installationRef, /^enroll_[0-9a-fA-F-]{36}$/, 'installationRef is the SG0-app enrollment ref');
+  assert.deepEqual([repository.locator, repository.storageScopeId, repository.repoId], [target.locator, target.storageScopeId, target.repoId]);
+  assert.deepEqual(repository.allowedSubPaths, ['']);
 });
 check('both environments: no rendered policy widens the default-deny', () => checkNoOpenPolicy(combined));
 check('reject an allow-all rule beside the default-deny', () => {
