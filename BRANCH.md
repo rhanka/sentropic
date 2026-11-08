@@ -48,6 +48,11 @@
   - [x] cm/artifact-content: `APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED=1`, `APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS` (public SPKI, kid sentropic-preprod-supervisor-1), `APP_ARTIFACT_LIVE_BUILDER_NAMESPACE` (equal to the api namespace), `APP_ARTIFACT_LIVE_ENABLED=1`.
   - [x] Selftests: per-tier relay/builder/live expectations (prod declares none), runtime-parser checks of the preprod values, deny cases.
   - [x] Lot gate: `make test-artifact-content-manifests API_PORT=8841 UI_PORT=5241 MAILDEV_UI_PORT=1141 ENV=test-gb4-iac` (167 PASS, 0 failures; A4 32/32; A4 bundle selftest PASS).
+- [x] **Lot 1b — Builder cache storage (F1 names, s-archi 2026-11-08)**
+  - [x] cm/api: `ARTIFACT_BUILDER_CACHE_S3_BUCKET=artifact-builder-cache`, `ARTIFACT_BUILDER_CACHE_S3_REGION=us-east-1`, `ARTIFACT_BUILDER_CACHE_S3_ENDPOINT` = namespace-local object store Service (PR #953 `artifact-object-store`, signed GetPublicAccessBlock qualification 4 x true).
+  - [x] Secret `sentropic-api` holds `ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID` and `ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY` (bucket-scoped read/write; ops record `.tmp/rv/preprod-object-store.md`; names only).
+  - [x] Selftests: exact preprod values, endpoint parser check (namespace-local, TCP 9000), deny cases (store of another namespace, credential in the ConfigMap).
+  - [x] Lot gate: `make test-artifact-content-manifests API_PORT=8841 UI_PORT=5241 MAILDEV_UI_PORT=1141 ENV=test-gb4-iac`.
 - [ ] **Lot 2 — PR**
   - [ ] PR « deploy(preprod): GB4 live and builder configuration », CI green on the exact head, GLM review; merge by s-conductor after builder-composition is deployed.
   - [x] GLM review APPROVE (`.h2a/reviews/pr-952-glm.md`): nit 2 applied (relay/live worker namespace pinned, equality asserted, deny case); nit 3 not applied (exact per-tier values already pinned); minor 1 = the CONTENT deviation above, for s-conductor.

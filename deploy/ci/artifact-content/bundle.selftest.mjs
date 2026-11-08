@@ -164,6 +164,10 @@ for (const tier of ['prod', 'preprod']) {
     apiData(o).ARTIFACT_SUPERVISOR_RELAY_URL = `http://artifact-content.${tier === 'prod' ? 'sentropic-preprod' : 'sentropic'}.svc.cluster.local:8791`;
   });
   deny('api and content on different worker namespaces', o => { apiData(o).ARTIFACT_BUILDER_NAMESPACE = 'sentropic-artifact-builders-2'; });
+  deny('builder cache on an object store outside this namespace', o => {
+    apiData(o).ARTIFACT_BUILDER_CACHE_S3_ENDPOINT = 'http://artifact-object-store.sentropic.svc.cluster.local:9000';
+  });
+  deny('builder cache credential in the ConfigMap', o => { apiData(o).ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY = 'x'; });
   deny('builder binding to another storage scope', o => {
     apiData(o).ARTIFACT_BUILDER_HOST_BINDINGS_JSON = '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier"}]';
   });
@@ -257,6 +261,11 @@ check('preprod: relay key and builder values pass the runtime parsers', () => {
     assert.deepEqual([url.protocol, url.hostname, url.port, url.pathname, url.search, url.hash],
       ['http:', 'artifact-content.sentropic-preprod.svc.cluster.local', '8791', '/', '', ''], name);
   }
+  // cache-storage.ts readBuilderCacheStorage: the namespace-local object store Service, path-style, TCP 9000.
+  const cache = new URL(preprodBuilder.ARTIFACT_BUILDER_CACHE_S3_ENDPOINT);
+  assert.deepEqual([cache.protocol, cache.hostname, cache.port, cache.pathname],
+    ['http:', 'artifact-object-store.sentropic-preprod.svc.cluster.local', '9000', '/'], 'ARTIFACT_BUILDER_CACHE_S3_ENDPOINT');
+  assert.match(preprodBuilder.ARTIFACT_BUILDER_CACHE_S3_BUCKET, /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/);
   const [binding] = JSON.parse(preprodBuilder.ARTIFACT_BUILDER_HOST_BINDINGS_JSON);
   const [broker] = JSON.parse(preprodBuilder.GITHUB_APP_BROKER_BINDINGS_JSON);
   const [target] = JSON.parse(preprodBuilder.GITHUB_APP_TARGETS_JSON);
