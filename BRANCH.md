@@ -42,7 +42,7 @@
 
 ## Feedback Loop
 - [x] BRLW-EX1: root and api lock workspace entries follow artifacts 0.2.24 (version strings only), as BRGH-EX1 did. Rollback: revert with the bump.
-- [x] BRLW-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.24 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive, sha256 5b399f92… equals the manifest guard, deterministic over two packs), mirrored in `artifacts-tuple.spec.ts`, as BRGH-EX2 did. Impact: test fixtures only. Rollback: revert with the bump.
+- [x] BRLW-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.24 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive, sha256 e899aa65… after the CHANGELOG wording fix equals the manifest guard; pack deterministic over two runs), mirrored in `artifacts-tuple.spec.ts`, as BRGH-EX2 did. Impact: test fixtures only. Rollback: revert with the bump.
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
@@ -58,6 +58,7 @@
   - [x] `tests/live-status-no-walk.test.ts`: status then start with status' head and revision against a fake GitHub HTTP with a large tree (no `/git/trees` call, no forge call under the lock); moved head fast-forward outside the lock; status not blocked by a concurrent slow forge call (covers the stale-fence retry).
 - [x] **Lot 3 — Release 0.2.24**
   - [x] package, locks, `ARTIFACTS_PROVIDER_VERSION`, APP-P1 digest 428a7527 to 858aba03 (version field only), cluster-mesh selected fixture, CHANGELOG.
+  - [x] Opus review r1 (.h2a/reviews/pr-966-opus.md) APPROVE; minor-1: CHANGELOG and comment narrowed to the tree walk, commit lookup and ancestry checks (live_read page and live_write edit reads stay under the lock); archive repacked and fixture integrity repinned.
 - [ ] **Lot 4 — Final validation**
   - [x] `docker-slot.sh make test-artifacts ENV=test-art-0224` PASS (98 files, 990 tests); `make typecheck-artifacts` PASS.
-  - [ ] PR, CI green on the exact head, Opus review in `.h2a/reviews/`, merge by s-conductor.
+  - [ ] PR #966, CI green on the exact head (run 42509099686: only test-e2e (1) failed on the known 07-matrix:477 lock/presence flake, same signature as run 42459620840), merge by s-conductor.
