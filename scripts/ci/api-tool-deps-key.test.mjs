@@ -42,10 +42,12 @@ test('should keep the key when only workspace versions move inside every depende
   assert.equal(edit((tree, lock) => { lock['packages/a'].version = '1.0.1'; }), base);
 });
 
-test('should keep the key when only inert packaging metadata of a workspace manifest changes', () => {
-  assert.equal(edit(tree => Object.assign(tree['packages/a/package.json'], { description: 'A', files: ['dist'], types: 'dist/a.d.ts',
-    exports: { '.': './dist/index.js', './live': './dist/live.js' }, publishConfig: { access: 'public' } })), base);
+test('should keep the key on a manifest reformat and move it on any workspace field other than version', () => {
   assert.equal(edit(tree => { tree['packages/b/package.json'] = JSON.stringify(tree['packages/b/package.json']); }), base);
+  for (const field of [{ description: 'A' }, { files: ['dist'] }, { types: 'dist/a.d.ts' }, { main: 'dist/a.js' },
+    { exports: { '.': './dist/index.js', './live': './dist/live.js' } }, { publishConfig: { access: 'public' } }]) {
+    assert.notEqual(edit(tree => Object.assign(tree['packages/a/package.json'], field)), base, JSON.stringify(field));
+  }
 });
 
 test('should change the key when an external entry, a dependency edge or an install input changes', () => {
@@ -110,7 +112,7 @@ const repoFiles = () => {
   return new Map(paths.filter(path => existsSync(path)).map(path => [path, readFileSync(path)]));
 };
 
-test('should keep the real key across a workspace release and move it on an external lock change', () => {
+test('should keep the real key across a workspace version release and move it on an export or external lock change', () => {
   const files = repoFiles();
   const real = depsKey(files);
   const lock = JSON.parse(files.get('package-lock.json'));
@@ -120,8 +122,10 @@ test('should keep the real key across a workspace release and move it on an exte
   lock.packages['packages/artifacts'].version = next;
   const released = new Map(files)
     .set('package-lock.json', json(lock))
-    .set('packages/artifacts/package.json', json({ ...manifest, version: next, exports: { ...manifest.exports, './next': './dist/next.js' } }));
+    .set('packages/artifacts/package.json', json({ ...manifest, version: next }));
   assert.equal(depsKey(released), real);
+  assert.notEqual(depsKey(new Map(released).set('packages/artifacts/package.json',
+    json({ ...manifest, version: next, exports: { ...manifest.exports, './next': './dist/next.js' } }))), real);
   const external = Object.keys(lock.packages).find(name => name.startsWith('node_modules/') && lock.packages[name].integrity);
   lock.packages[external].integrity = `sha512-${'A'.repeat(86)}==`;
   assert.notEqual(depsKey(new Map(released).set('package-lock.json', json(lock))), real);

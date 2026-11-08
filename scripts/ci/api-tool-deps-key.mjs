@@ -14,16 +14,15 @@ import { pathToFileURL } from 'node:url';
 //   external entries and every other field are hashed as they are.
 // - A workspace version only acts through range edges onto that workspace (dep-valid
 //   semver.satisfies); the validity bit of each such edge is hashed in its place.
-// - INERT_FIELDS are read neither by npm ci (arborist, bin-links, run-script, package-json
-//   normalize) nor by the deps-manifests prune; the image copy of each workspace manifest is
-//   shadowed by the source layer (ci-tools COPY --from=base /workspace/packages and api).
+// - A workspace manifest loses only its own version (INERT_FIELDS); every other field stays
+//   hashed (train 1b guard: only the workspace version field leaves the key). The image copy
+//   of each workspace manifest is shadowed by the source layer (ci-tools COPY --from=base).
 // - A spec outside the evaluated subset, an override naming the workspace or a non-strict
 //   version keeps that workspace's version (at worst a cache miss, never a false hit).
 export const INPUTS = ['.dockerignore', '.security/audit-allowlist.json', '.security/audit-gate.mjs', 'api/Dockerfile',
   'api/package.json', ':(glob)packages/*/package.json', 'package-lock.json', 'package.json',
   'scripts/ci/api-tool-deps-key.mjs', 'scripts/ci/locked-tools.mjs', 'scripts/ci/tool-locks.json'];
-export const INERT_FIELDS = ['version', 'description', 'exports', 'files', 'homepage', 'imports', 'keywords', 'main',
-  'module', 'publishConfig', 'repository', 'sideEffects', 'types', 'typesVersions', 'typings'];
+export const INERT_FIELDS = ['version'];
 const MANIFEST = /^(api|packages\/[^/]+)\/package\.json$/;
 const EDGES = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies', 'acceptDependencies'];
 
