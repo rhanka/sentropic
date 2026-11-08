@@ -47,9 +47,9 @@
   - [x] Migration: 0013 guard fails on a foreign `artifacts.live_invitations`; postgres-live adapter round trip.
 - [x] **Lot 2 — Tools and routing**
   - [x] Four frozen definitions, capability names, profile routes, HTTP and MCP dispatch to `LiveService.execute`.
-- [ ] **Lot 3 — Service and storage**
+- [x] **Lot 3 — Service and storage**
   - [x] Invitation ledger in the live transaction (memory and postgres-live), invitation service, `liveInvitationState`, `liveViewer`.
-  - [ ] Migration 0013 with the mandatory column and index guard.
+  - [x] Migration 0013 with the mandatory column and index guard.
 - [ ] **Lot 4 — Release and gate**
   - [ ] Version 0.2.22 and changelog.
   - [ ] `make typecheck-artifacts`, `make lint-artifacts`, scoped `make test-artifacts`, scoped `make test-artifacts-integration`.
