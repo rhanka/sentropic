@@ -4,8 +4,10 @@ import { matchesSchema } from '../profile/validation.js';
 import { orderedDigest } from '../profile/json.js';
 import { ArtifactOperationError } from './failures.js';
 import { isGitSha, gitPath } from './git-port-policy.js';
+import type { GitPortTarget } from './git-port.js';
+import type { LiveDraftRecord, LiveIdentity } from './live-store.js';
 import { cleanLiveRecord, expireLiveDraft, readLiveOverlay } from './live-drafts.js';
-import { validateLiveMutation } from './live-tree.js';
+import { validateLiveMutation, type LiveBaseTree } from './live-tree.js';
 import { readLivePage } from './live-read.js';
 import { liveBusy, mutateLive } from './live-mutations.js';
 import { executeLiveCommit } from './live-commit.js';
@@ -101,8 +103,17 @@ export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
     if (args.expectedHeadSha && (!isGitSha(args.expectedHeadSha) || args.expectedHeadSha.length !== head.length)) throw new ArtifactOperationError('invalid_request');
     if (args.expectedHeadSha && args.expectedHeadSha !== head) throw new ArtifactOperationError('git_head_moved',
       { publicDetails: { expectedHeadSha: args.expectedHeadSha, actualHeadSha: head } });
+    if (!deps.git.snapshot && !stop) throw new ArtifactOperationError('capability_unselected');
+    // Only reads that list base entries walk the tree; status, start and reset need the base tree SHA only.
+    const fullTree = operation === 'live_write' || operation === 'live_read' ||
+      (operation === 'live_status' && Boolean(args.includeDiff || args.cursor));
     let action: 'project' | 'stop' | null = null;
-    const result = await deps.store.transaction(identity, async tx => {
+    let result!: Record<string, any>;
+    for (let attempt = 0; !result; attempt++) {
+      if (attempt === LIVE_PREFETCH_ATTEMPTS) liveBusy('transition_busy');
+      // Forge I/O runs here, before the per-artifact advisory lock; the locked transaction never awaits the forge.
+      const prefetch = stop ? undefined : await prefetchLiveBase(deps, authority.target, identity, operation, head, fullTree);
+      const outcome = await deps.store.transaction(identity, async tx => {
       const current = await deps.authorize(invocation, args.artifactId);
       if (!stop && current.binding.generation !== identity.bindingGeneration || current.ownerId !== invocation.actorId &&
         !(operation === 'live_read' && current.invited && current.canReadCode) ||
@@ -117,25 +128,23 @@ export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
           return { ...prior.result, replayed: true };
         }
       }
-      const baseSha = tx.record?.changedPaths ? tx.record.baseHeadSha : head;
-      if (!deps.git.snapshot && !stop) throw new ArtifactOperationError('capability_unselected');
-      const base = stop ? { treeSha: tx.record?.baseTreeSha ?? '', entries: [] } : await deps.git.snapshot!(authority.target,
-        operation === 'live_reset' ? head : baseSha);
+      if (prefetch && !prefetch.covers(tx.record)) return LIVE_PREFETCH_STALE;
+      const base = stop ? { treeSha: tx.record?.baseTreeSha ?? '', entries: [] } : prefetch!.base();
       if (!tx.record) tx.record = cleanLiveRecord(identity, head, base.treeSha, now());
       const record = tx.record;
       if (!stop && operation !== 'live_reset' && record.expiresAt && Date.parse(record.expiresAt) <= now()) throw new ArtifactOperationError('git_live_draft_expired');
       if (!stop && record.latestVerifiedHeadSha !== head) {
-        const fastForward = await deps.git.isAncestor(authority.target, record.latestVerifiedHeadSha, head);
+        const fastForward = prefetch!.ancestor(record.latestVerifiedHeadSha);
         if (!fastForward && writer) throw new ArtifactOperationError('git_diverged');
         if (fastForward) { record.latestVerifiedHeadSha = head; record.progressSeq++; record.lastProgressEventId = 'head:' + head; }
       }
       if (!stop && record.baseHeadSha !== head && !record.changedPaths) {
-        if (!await deps.git.isAncestor(authority.target, record.baseHeadSha, head)) throw new ArtifactOperationError('git_diverged');
+        if (!prefetch!.ancestor(record.baseHeadSha)) throw new ArtifactOperationError('git_diverged');
         Object.assign(record, { revision: randomUUID(), baseHeadSha: head, baseTreeSha: base.treeSha, liveTreeSha: base.treeSha,
         });
       }
       if (operation === 'live_reset' && record.baseHeadSha !== head &&
-        !await deps.git.isAncestor(authority.target, record.baseHeadSha, head)) throw new ArtifactOperationError('git_diverged');
+        !prefetch!.ancestor(record.baseHeadSha)) throw new ArtifactOperationError('git_diverged');
       const overlay = stop ? [] : operation === 'live_reset' && expired ? [] : await readLiveOverlay(tx, deps.keys);
       if (operation === 'live_read' || operation === 'live_status') return { ...liveResponse(record, head),
         dirty: record.changedPaths > 0, changedPaths: record.changedPaths, draftBytes: record.draftBytes,
@@ -149,6 +158,8 @@ export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
       await tx.complete(command!, { ...mutation.result, revision: tx.record!.revision });
       return mutation.result;
     });
+      if (outcome !== LIVE_PREFETCH_STALE) result = outcome;
+    }
     if (!result.replayed && action) {
       const settling = settleLiveWorker({ deps, identity, action, result, now: now() });
       if (action === 'stop') await settling;
@@ -156,4 +167,40 @@ export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
     }
     return narrowStop ? { liveSessionId: result.liveSessionId, state: result.state } : result;
   } };
+}
+
+const LIVE_PREFETCH_ATTEMPTS = 3;
+// A string (not a symbol): store adapters clone transaction results.
+const LIVE_PREFETCH_STALE = 'live-prefetch-stale' as const;
+type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
+const settle = <T>(pending: Promise<T>): Promise<Settled<T>> =>
+  pending.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+const take = <T>(settled: Settled<T>): T => { if (!settled.ok) throw settled.error; return settled.value; };
+
+/** Reads the draft fence in a short transaction, then performs every forge call outside the advisory lock.
+ * Failures are replayed at their original use site inside the locked transaction, so error precedence is unchanged. */
+async function prefetchLiveBase(deps: LiveServiceDeps, target: GitPortTarget, identity: LiveIdentity, operation: string,
+  head: string, fullTree: boolean) {
+  const fence = (record?: LiveDraftRecord) => record ? JSON.stringify([record.changedPaths > 0, record.baseHeadSha,
+    record.latestVerifiedHeadSha]) : null;
+  const peek = await deps.store.transaction(identity, async tx => tx.record ? structuredClone(tx.record) : undefined);
+  const baseSha = operation === 'live_reset' || !peek?.changedPaths ? head : peek.baseHeadSha;
+  const ancestors = [...new Set([peek?.latestVerifiedHeadSha,
+    peek && (!peek.changedPaths || operation === 'live_reset') ? peek.baseHeadSha : undefined])]
+    .filter((sha): sha is string => Boolean(sha) && sha !== head);
+  const [base, ...ancestry] = await Promise.all([
+    settle(fullTree ? deps.git.snapshot!(target, baseSha) :
+      deps.git.inspectCommit(target, baseSha).then(commit => ({ treeSha: commit.treeSha, entries: [] }))),
+    ...ancestors.map(sha => settle(deps.git.isAncestor(target, sha, head))),
+  ]);
+  const known = new Map(ancestors.map((sha, index) => [sha, ancestry[index]] as const));
+  return {
+    covers: (record?: LiveDraftRecord) => fence(record) === fence(peek),
+    base: (): LiveBaseTree => take(base),
+    ancestor(sha: string): boolean {
+      const settled = known.get(sha);
+      if (!settled) liveBusy('stale_fence');
+      return take(settled!);
+    },
+  };
 }
