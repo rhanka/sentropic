@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.23
+
+- `createGitHubForge` resolves a branch through `GET /repos/{owner}/{repo}/git/ref/heads/{branch}`
+  (each ref segment encoded on its own, so `artifact/p/<id>/<app>` keeps its slashes) and reads the
+  exact `refs/heads/<branch>` commit `object.sha`; only a full 40-hex commit SHA goes straight to
+  `/commits/<sha>`. A branch lookup no longer goes through `/commits/{ref}` (whole-ref percent-encoding).
+- An absent ref is `missing` on both lookups: GitHub answers 422 « No commit found » (not 404) for an
+  unknown ref, and that 422 no longer maps to `conflict`/`git_ref_not_allowed`. `resolveRef` on the
+  bound branch reports `git_branch_missing` and `artifacts_git_attach` now treats it as an absent
+  branch, so a new personal branch is created from `baseRef` instead of failing the attach.
+- `resolveRef` returns the full commit SHA for a slash branch, so `artifacts_live_control` start passes
+  its head check on an attached binding.
+- `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.23): the APP-P1 manifest digest changes through
+  its version field only (four-tool selection and tool definitions unchanged).
+
 ## 0.2.22
 
 - Generic live invitations through MCP (A-LIVE v2 §8.2, §9): four tools appended last and frozen at
