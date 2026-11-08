@@ -79,7 +79,7 @@ function priorProblems(prior, source) {
   return [];
 }
 
-// BR92-EX1: the tests behind a release ran in this run (in-run) or in another
+// BR92-EX3: the tests behind a release ran in this run (in-run) or in another
 // identified run of the exact source tree (tested-tree); anything else fails.
 function releaseQualificationProblems(qualification, source) {
   if (qualification?.mode === 'tested-tree' && !source.tree) return ['tested-tree qualification without a source tree'];

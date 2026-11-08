@@ -22,7 +22,7 @@ export const QUALIFIED_MAIN_SELECTOR = {
   singleJobs: ['e2e-vscode', 'publish-api-image', 'publish-ui-image'],
 };
 
-// BR92-EX1: a tested-tree main run publishes the tuple while its test lanes were
+// BR92-EX3: a tested-tree main run publishes the tuple while its test lanes were
 // executed by a green same-repository pull_request run of the identical tree.
 const sameTreePullRequest = (row, pr) => pr?.event === 'pull_request' && pr.status === 'completed'
   && pr.conclusion === 'success' && /^[a-f0-9]{40}$/.test(row.head_commit?.tree_id ?? '')

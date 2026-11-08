@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { qualificationProblems } from './tested-tree.mjs';
 
-// BR92-EX1: a run is qualified in-run or by another identified same-tree run.
+// BR92-EX3: a run is qualified in-run or by another identified same-tree run.
 // The receipt carries the reference; an invalid one is reported, never hidden.
 export function qualificationReceipt(captured) {
   const qualification = captured?.qualification ?? { mode: 'in-run' };
