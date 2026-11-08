@@ -18,6 +18,7 @@
   - `deploy/ci/preprod-a4/launch-script.test.mjs`
   - `scripts/ci/cm-account-approve-job.test.mjs`
   - `docs/oauth-client-rotation.md`
+  - `Makefile` (`cm-account-approve-job` target only, under BRCMAL-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -34,6 +35,7 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] `BRCMAL-EX1` (Makefile, `cm-account-approve-job` target only): Opus review M1, an operator checkout newer than the namespace launcher would boot `dist/index.js` (second api, migrations, `object_locks` purge). Reason: one read-only preflight line refusing before any Secret or Job unless ConfigMap `sentropic-a4-runtime` serves the `--script` mode. Impact: the target fails closed earlier; no other target touched. Rollback: delete the preflight line.
 - [ ] `attention`: the Job now requires the A4 runtime in its namespace (ConfigMap `sentropic-a4-runtime`, Secret `email-code-hmac`, ConfigMap `api` with the Q-K policy); prod gets it from `feat/prod-a4-operator`, whose launcher must keep the `--script` mode and the same ConfigMap name.
 
 ## AI Flaky tests

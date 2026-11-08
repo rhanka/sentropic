@@ -1687,6 +1687,8 @@ oauth-register-service-client-job: ## Provision one client_credentials service_c
 # Impact: one additive target; no existing target touched. Rollback: delete this target; the
 # versioned Job yaml stays valid for a direct kubectl apply. The SECRET_FILE (0600) holds exactly
 # the four CM_ACCOUNT_APPROVE_* lines; the image defaults to the namespace's api Deployment image.
+# BRCMAL-EX1 (fix/cm-account-approve-launcher): read-only preflight; the Job starts through the
+# namespace A4 launcher, and an older launcher would boot a second api instead of the script.
 # Usage: make cm-account-approve-job SECRET_FILE=<0600 env file> [CM_ACCOUNT_APPROVE_JOB_NAMESPACE=sentropic] [CM_ACCOUNT_APPROVE_JOB_IMAGE=<image>] [KUBECONFIG=<file>] ENV=<env>
 CM_ACCOUNT_APPROVE_JOB_NAMESPACE ?= sentropic
 CM_ACCOUNT_APPROVE_JOB_IMAGE ?=
@@ -1702,6 +1704,8 @@ cm-account-approve-job: ## Approve one cm_identity account role via the versione
 	test -n "$$IMG" || IMG="$$(kubectl -n "$$NS" get deployment/api -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].image}')"; \
 	test -n "$$IMG" || { echo "ERROR: cannot resolve the api image in $$NS; set CM_ACCOUNT_APPROVE_JOB_IMAGE"; exit 1; }; \
 	echo "Approving in namespace $$NS with image $$IMG"; \
+	kubectl -n "$$NS" get configmap sentropic-a4-runtime -o jsonpath='{.data.launch\.mjs}' 2>/dev/null | grep -qF "args[0] === '--script'" \
+		|| { echo "ERROR: $$NS serves no A4 launcher with the --script mode (ConfigMap sentropic-a4-runtime); deploy it first"; exit 1; }; \
 	trap 'kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true' EXIT; \
 	kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; \
 	kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true; \

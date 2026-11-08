@@ -75,7 +75,12 @@ cm-account-approve`), which composes the email-code HMAC custody exactly as for
 the api pod. It runs only in a namespace that carries the A4 runtime: ConfigMap
 `sentropic-a4-runtime`, Secret `email-code-hmac` and the Q-K policy keys in
 ConfigMap `api`. Elsewhere the pod does not start or the launcher exits with
-`hmac_composition_failed`, and nothing is written.
+`hmac_composition_failed` before the script runs. The launcher comes from the
+namespace ConfigMap, applied by continuous deployment, not from the operator
+checkout: a launcher older than the `--script` mode would start
+`dist/index.js` instead (a second api with migrations and a lock purge). The
+wrapper therefore refuses to create anything unless the namespace ConfigMap
+serves the `--script` mode (read-only preflight, BRCMAL-EX1).
 
 1. Prepare a 0600 env file with exactly these four lines (ids, no secret):
    `CM_ACCOUNT_APPROVE_ACTOR_ID` (an active admin_app account with a custody
