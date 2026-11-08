@@ -1,68 +1,65 @@
-# Feature: keep the API up when the builder config is invalid; own dependency-cache storage
+# Feature: Preprod artifact-content provisioning (content serving + api builder host)
 
 ## Objective
-- [x] With `ARTIFACT_BUILDER_ENABLED=1` and any missing/invalid builder value, the API boots, logs `artifact_builder_refused` naming the variable (never its value), keeps the builder mount at 503 `builder_unavailable`, starts no scheduler (s-archi review F2, PR #951, corrected by s-archi).
-- [x] The dependency cache reads its own `ARTIFACT_BUILDER_CACHE_S3_*` storage settings and no longer requires `APP_ARTIFACT_HOST_ENABLED=1`; a missing cache setting follows the F2 refusal behaviour (F1 option (a)).
+- [ ] Open `APP_ARTIFACT_CONTENT_ENABLED` for preprod in the repo IaC (content serving, live edge composed), and open the api's `APP_ARTIFACT_HOST_ENABLED` required by the builder composition, with every non-secret wiring only: overlay patches, required Secret-name references, object-store egress NetworkPolicy, selftest per-tier expectations.
 
 ## Scope / Guardrails
-- [x] Branch fix/alive-builder-f1f2 from origin/main 4b4c8632d; worktree tmp/alive-builder-f1f2; ENV=test-alive-f1f2, ports API 9891 / UI 5283 / Maildev 1093.
-- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
-- [x] The sentropic artifacts MCP host is NOT enabled by the builder: `APP_ARTIFACT_HOST_ENABLED` stays untouched in configuration and code outside the live tree.
-- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [ ] Branch deploy/preprod-artifact-content from main 4b4c8632d; worktree tmp/worktrees/preprod-artifact-content; ENV=test-artifact-prep.
+- [ ] PREPROD ONLY: prod overlays and base stay untouched; no Secret value in Git (names only).
+- [ ] Make only; no Python, no attribution trailers, no CI skips or reruns.
+- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/services/artifacts/live/**`
-  - `api/src/app.ts`
-  - `api/src/config/env.ts`
-  - `api/tests/**`
-  - `api/src/services/artifacts/live/README.md`
   - `BRANCH.md`
+  - `deploy/k8s/overlays/preprod/kustomization.yaml`
+  - `deploy/k8s/overlays/preprod/patch-artifact-content-config.yaml`
+  - `deploy/k8s/overlays/preprod/patch-artifact-content-deployment.yaml`
+  - `deploy/k8s/overlays/preprod/patch-api-artifact-host.yaml`
+  - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
+  - `deploy/k8s/overlays/preprod/artifact-content-object-store-networkpolicy.yaml`
+  - `deploy/ci/artifact-content/bundle-checks.mjs`
+  - `deploy/ci/artifact-content/bundle.selftest.mjs`
+  - `deploy/ci/artifact-content/network.selftest.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/src/services/artifacts/instance.ts` (left: its now-unused `productPrivateCacheBlobs` export stays; flagged for a follow-up)
-  - `deploy/**`
+  - `plan/NN-BRANCH_*.md`
+  - `api/**`
+  - `apps/**`
   - `packages/**`
+  - `deploy/k8s/base/**`
+  - `deploy/k8s/overlays/prod/**`
+  - `deploy/k8s/overlays/preprod-a4/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+  - `deploy/k8s/overlays/preprod/idp-identity-sync/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `attention`: GLM review of head 3ce1f0e23 (.h2a/reviews/pr-954-glm.md) raised two blocking findings: the dependency-cache blob store ran through the artifacts host adapter (which refuses every cache key at runtime) and the mandated prefix `artifact-builder-cache/v1/` was absent. Closed in Lot 3 with the dedicated store and its own key discipline; delta review by s-conductor.
-- [x] `attention`: `instance.ts` keeps the `productPrivateCacheBlobs` export after this branch (outside the allowed paths here); it no longer has any importer on this branch. Follow-up deletion belongs to a lane allowed in `api/src/services/artifacts/instance.ts`.
-- [x] `attention`: CI run 42454878120 (head 1b068f07d) failed one e2e test unrelated to this diff: `tests/02-organizations.spec.ts:391` « détail: champs non éditables » (test-e2e shard 4), signature `TimeoutError: page.waitForURL: Timeout 10000ms exceeded` after the first org card click. The exact base (4b4c8632d) passed the same test on main (run 42452171320), and every API check on this head is green (typecheck, lint, api unit shards, image guards). Recorded per the flake acceptance rule; a fresh CI run is re-triggered by the commit carrying this record.
-- [x] `attention`: CI run 42455890449 (head cf83a4476) failed one stack start unrelated to this diff: `test-api-unit-integration (endpoints, 6)` aborted at `up-api-test-ci` with `container test-ci-api-api-1 is unhealthy`, 54 s after the api container start and directly behind a cold `node:24-alpine3.24` image pull; the identical stack was healthy in every other matrix job of the same run (unit shards, endpoints 1-5 and 7-8, app-cluster-mesh, artifact-store) and in run 42454878120 for the same code. The e2e signature above did NOT recur in this run. Recorded as CI-infra timing, not a branch defect; a fresh CI run is re-triggered by the commit carrying this record.
-- [x] Local proof on the same head, same mechanism as the endpoints shards: the branch api test stack (`make up-api-test ENV=test-alive-f1f2`) booted the API healthy, and `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2` passed 310/310.
-
-## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts; explicit user sign-off before merge.
+- [ ] `attention`: DRAFT-held PR — merge only after the owner-provisioned Secrets exist (`artifact-content-signing`, new keys of `artifact-content-runtime` and `sentropic-api`), the DB role `artifact_content` is granted, and the object store passes a signed GetPublicAccessBlock qualification (Scaleway fr-par answers 405 NotImplemented — see the prep doc `.tmp/rv/artifact-content-preprod-prep.md`).
+- [ ] `attention`: PR #952 (deploy/preprod-gb4-live) touches `patch-artifact-content-config.yaml` and the same selftests; s-conductor sequences the merge (#952 first) and rebases this branch.
+- [ ] `attention`: rolling restart after apply: CD restarts nothing on ConfigMap changes; the required-Secret flips make a premature apply freeze the rollout instead of crash-looping the supervisor relay.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**
-- Rationale: one follow-up, one PR, one CI.
+- [ ] **Mono-branch + cherry-pick**
+- Rationale: one overlay PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — F2 graceful boot refusal**
-- [x] `product-builder.ts`: any missing/invalid value under the flag logs `artifact_builder_refused` (code `builder_unavailable`, reason = the variable name, never its value) and returns null instead of throwing.
-  - [x] app.ts unchanged wiring: null builder keeps the 503 `builder_unavailable` mount and starts no scheduler; the rest of the API keeps serving.
-  - [x] Tests: flag on + one missing value -> null builder + one log naming the variable; value never in the payload; app-level boot test (imports `app`) -> API root 200, builder route 503 `builder_unavailable` (S2S guard stubbed, bound host), log line present, `createLiveScheduler` never called.
-- [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
-- [x] **Lot 2 — F1 own dependency-cache storage**
-  - [x] `cache-storage.ts`: `ARTIFACT_BUILDER_CACHE_S3_BUCKET`, `ARTIFACT_BUILDER_CACHE_S3_REGION`, `ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID`, `ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY` (optional `ARTIFACT_BUILDER_CACHE_S3_ENDPOINT`), first missing name in fixed order; `builderCacheBlobs(settings)` lazily opens the same private-object storage contract as the artifact host.
-- [x] `product-builder.ts`: replace the `APP_ARTIFACT_HOST_ENABLED=1` requirement with the cache-settings validation; wiring `deps.cacheBlobs(settings)`; refuse naming the missing cache variable (F2 behaviour).
-  - [x] `app.ts`: pass `builderCacheBlobs`; drop the `productPrivateCacheBlobs` import.
-  - [x] Tests: composes without `APP_ARTIFACT_HOST_ENABLED`; settings carried to `cacheBlobs` from the `ARTIFACT_BUILDER_CACHE_S3_*` values; each missing cache name refuses gracefully.
-  - [x] README: F2 refusal behaviour + the new cache env names, `APP_ARTIFACT_HOST_ENABLED` requirement removed.
-- [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
-- [x] **Lot 3 — GLM review fix (blocking 1+2): dedicated builder-cache store under `artifact-builder-cache/v1/`**
-  - [x] `cache-storage.ts`: `createBuilderCacheBlobs` — the builder's own S3 blob store (never the artifacts host adapter nor `assertBlobKey`), put/get/delete only (no listing), each key refused before any S3 call unless it is exactly `artifact-builder-cache/v1/files/<sha256>` or `artifact-builder-cache/v1/<lockSha>/<keySha>/<uuid>`, fail-closed on a non-private bucket like `createPrivateArtifactStorage`; the Postgres pointer namespace stays `artifact-dependency-cache/v1` (s-conductor decision).
-  - [x] Tests (`cache-storage.test.ts`): prefix acceptance and refusal before any S3 call (in/out of prefix, put/get/delete), per-field privacy fail-close, one end-to-end run of the real key generation (putFile -> admit -> getFile -> read) against a command-level fake S3 plus the out-of-prefix refusal; `adapters.test.ts` pins the new file-object key.
-  - [x] README: the file and manifest object keys plus the store's own key discipline and fail-closed privacy.
-  - [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
-- [ ] **Lot 4 — PR**
-  - [ ] PR « fix(alive): keep the API up when the builder config is invalid; own cache storage », CI green on the exact head, GLM review, merge by s-conductor.
+- [ ] **Lot 0 — Plan this branch** (this file; first commit)
+- [ ] **Lot 1 — Preprod overlay wiring**
+  - [ ] cm artifact-content `APP_ARTIFACT_CONTENT_ENABLED: "1"` (inspection value).
+  - [ ] Deployment artifact-content patch: explicit env `APP_ARTIFACT_CONTENT_ENABLED=1`, envFrom secretRef `artifact-content-runtime` required (`optional: false`), signing volume `artifact-content-signing` required (`optional: false`, defaultMode 0440 kept).
+  - [ ] Deployment api patch: explicit env `APP_ARTIFACT_HOST_ENABLED=1` (api CONTENT/READER stay 0).
+  - [ ] cm api `APP_ARTIFACT_QUOTA_BYTES: "1073741824"` (instance.ts module-load check with host enabled).
+  - [ ] New additive NetworkPolicy `allow-artifact-content-to-object-store` (Egress, same-namespace object store labels, TCP 9000; no ipBlock).
+  - [ ] kustomization wiring (resources + patches).
+- [ ] **Lot 2 — Selftests per tier**
+  - [ ] bundle-checks: per-tier flag expectations (preprod content=1 on artifact-content only, api host=1; digest gate covers both), per-tier envFrom/volumes requiredness, quota expectations, object-store rule expectations.
+  - [ ] bundle.selftest: new deny cases (wrong-deployment content flag, content host flag in preprod, prod opens nothing, dropped/widened object-store rule, requiredness regressions).
+  - [ ] network.selftest: per-tier object-egress property (preprod reaches only the same-namespace store on 9000; both tiers keep external 443 denied).
+  - [ ] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep` (render/test containers only; no compose stack started).
+- [ ] **Lot 3 — Draft PR**
+  - [ ] Push branch; `gh pr create --draft` with the BRANCH.md-derived body starting with « DRAFT — merge only after the Secrets listed below exist »; CI may run; no merge request.
