@@ -1,7 +1,7 @@
 # Feature: Preprod artifact-content provisioning (content serving + api builder host)
 
 ## Objective
-- [x] Open `APP_ARTIFACT_CONTENT_ENABLED` for preprod in the repo IaC (content serving, live edge composed), and open the api's `APP_ARTIFACT_HOST_ENABLED` required by the builder composition, with every non-secret wiring only: overlay patches, required Secret-name references, object-store egress NetworkPolicy, selftest per-tier expectations.
+- [x] Open `APP_ARTIFACT_CONTENT_ENABLED` for preprod in the repo IaC (content serving, live edge composed), and KEEP the api's `APP_ARTIFACT_HOST_ENABLED` closed (s-conductor decision 2026-11-08, applied in Lot 5), with every non-secret wiring only: overlay patches, required Secret-name references, object-store egress NetworkPolicy, selftest per-tier expectations.
 
 ## Scope / Guardrails
 - [x] Branch deploy/preprod-artifact-content from main 4b4c8632d; worktree tmp/worktrees/preprod-artifact-content; ENV=test-artifact-prep.
@@ -43,7 +43,7 @@
 
 ## Feedback Loop
 - [ ] `attention`: DRAFT-held PR — s-conductor merges after #954 (F1/F2) and forge-lease-reader. Provisioned 2026-11-08 (ops record `.tmp/rv/preprod-object-store.md`, names only): Secrets `artifact-content-signing`, `artifact-object-store`, content keys of `artifact-content-runtime`, builder cache keys of `sentropic-api`; DB role `artifact_content`; store qualified by a signed GetPublicAccessBlock (4 x true) BEFORE wiring. MinIO answers 501 NotImplemented, so the store is RustFS 1.0.4 (same in-namespace pattern).
-- [ ] `attention`: s-conductor decision — with #954 the builder no longer reads `APP_ARTIFACT_HOST_ENABLED`; this branch still opens the api artifact host (`patch-api-artifact-host.yaml` + quota) without any `APP_ARTIFACT_S3_*` in `sentropic-api` (not minted, outside the owner list): drop both before merge, or authorize an api host read/write credential.
+- [x] `attention`: s-conductor decision TAKEN 2026-11-08 (first branch): with #954 the builder no longer reads `APP_ARTIFACT_HOST_ENABLED` and no `APP_ARTIFACT_S3_*` is minted in `sentropic-api`, so the api artifact host STAYS CLOSED in preprod — `patch-api-artifact-host.yaml` and the `APP_ARTIFACT_QUOTA_BYTES` entry are dropped from this branch (Lot 5; reopening later needs an owner-minted api storage credential plus its own IAM policy).
 - [x] `BRAOS-EX1`: `deploy/ci/preprod-a4/topology.selftest.mjs` — rationale: the rendered A4 sequence fenced only Deployments/CronJobs, while the runbook fence (step 2) also scales every non-Postgres StatefulSet to zero; the new `artifact-object-store` StatefulSet made the simulation diverge (`writer_not_fenced`). Impact: test simulation only, `verification-boundary.mjs` stays strict. Rollback: revert the commit.
 - [ ] `attention`: open architecture item — the reader activation consume needs INSERT on `artifact_host.activation_namespaces` and UPDATE privilege for its FOR SHARE / FOR UPDATE row locks; the role grants none of it (fail-closed); content serving is unaffected.
 - [ ] `attention`: PR #952 (deploy/preprod-gb4-live) touches `patch-artifact-content-config.yaml` and the same selftests; s-conductor sequences the merge (#952 first) and rebases this branch.
@@ -58,12 +58,12 @@
 - [x] **Lot 1 — Preprod overlay wiring**
   - [x] cm artifact-content `APP_ARTIFACT_CONTENT_ENABLED: "1"` (inspection value).
   - [x] Deployment artifact-content patch: explicit env `APP_ARTIFACT_CONTENT_ENABLED=1`, envFrom secretRef `artifact-content-runtime` required (`optional: false`), signing volume `artifact-content-signing` required (`optional: false`, defaultMode 0440 kept).
-  - [x] Deployment api patch: explicit env `APP_ARTIFACT_HOST_ENABLED=1` (api CONTENT/READER stay 0).
-  - [x] cm api `APP_ARTIFACT_QUOTA_BYTES: "1073741824"` (instance.ts module-load check with host enabled).
+  - [x] Deployment api patch: explicit env `APP_ARTIFACT_HOST_ENABLED=1` (api CONTENT/READER stay 0) — superseded by Lot 5.
+  - [x] cm api `APP_ARTIFACT_QUOTA_BYTES: "1073741824"` (instance.ts module-load check with host enabled) — superseded by Lot 5.
   - [x] New additive NetworkPolicy `allow-artifact-content-to-object-store` (Egress, same-namespace object store labels, TCP 9000; no ipBlock).
   - [x] kustomization wiring (resources + patches).
 - [x] **Lot 2 — Selftests per tier**
-  - [x] bundle-checks: per-tier flag expectations (preprod content=1 on artifact-content only, api host=1; digest gate covers both), per-tier envFrom/volumes requiredness, quota expectations, object-store rule expectations.
+  - [x] bundle-checks: per-tier flag expectations (preprod content=1 on artifact-content only, api host=1; digest gate covers both), per-tier envFrom/volumes requiredness, quota expectations, object-store rule expectations — api host/quota expectations re-pinned closed by Lot 5.
   - [x] bundle.selftest: new deny cases (wrong-deployment content flag, content host flag in preprod, prod opens nothing, dropped/widened object-store rule, requiredness regressions).
   - [x] network.selftest: per-tier object-egress property (preprod reaches only the same-namespace store on 9000; both tiers keep external 443 denied).
   - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep` (render/test containers only; no compose stack started).
@@ -74,4 +74,9 @@
   - [x] Bootstrap material in `deploy/ci/artifact-content/object-store/` (deployment-classified path): `iam/*.json` (content read on `artifacts`, builder cache read/write on `artifact-builder-cache`), `public-access-block.xml`, `artifact-content-db-role.sql`, `README.md` (bootstrap, rotation, rollback).
   - [x] Selftests: preprod store expectations (prod renders none) and deny cases (tag-only image, optional root credential, console, writable root, open ingress, cross-namespace, egress, missing store).
   - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep`.
-  - [x] GLM review (`.h2a/reviews/pr-953-glm.md`, head 3858a6f93): REQUEST_CHANGES driven only by finding 1 (api artifact host, s-conductor decision above, not changed here); minors 2-4 and nits 5-6 applied (PVC 4/4 cap and readiness note in the README, full activation grant list in the SQL header, store PVC/probes/resources/mounts/Service pinned with 4 deny cases, log_statement silenced before the password guard).
+  - [x] GLM review (`.h2a/reviews/pr-953-glm.md`, head 3858a6f93): REQUEST_CHANGES driven only by finding 1 (api artifact host, s-conductor decision above, applied by Lot 5); minors 2-4 and nits 5-6 applied (PVC 4/4 cap and readiness note in the README, full activation grant list in the SQL header, store PVC/probes/resources/mounts/Service pinned with 4 deny cases, log_statement silenced before the password guard).
+- [x] **Lot 5 — api artifact host closed (s-conductor decision 2026-11-08)**
+  - [x] Delete `deploy/k8s/overlays/preprod/patch-api-artifact-host.yaml` and its `kustomization.yaml` patches reference (the api HOST env reverts to the base explicit "0").
+  - [x] cm api: drop the `APP_ARTIFACT_QUOTA_BYTES` entry (instance.ts stays on its closed default).
+  - [x] Selftests re-pinned (preprod only): `openFlags` drops the preprod api entry, the quota check becomes the unconditional closed-tier assertion, new preprod denies reject a reopened api HOST flag and a declared quota.
+  - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep`.
