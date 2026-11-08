@@ -4,9 +4,13 @@ metadata:
   name: artifact-content
 data:
   APP_ARTIFACT_CONTENT_BASE_DOMAIN: "preprod.sentropic.sent-tech.ca"
-  # Live edge (README « Live edge »), GB4 preprod (owner GO 2026-11-07 « Oui, GB4 GO préprod »): armed here, yet still
-  # inert while APP_ARTIFACT_CONTENT_ENABLED stays "0" (index.ts composes the edge inside content serving only).
-  # Key material lives in the Secret.
+  # GB4 (PREPROD ONLY): content serving opens on this tier. The gate itself is the
+  # explicit Deployment env (patch-artifact-content-deployment.yaml) — envFrom values
+  # rank BELOW explicit env; this key is the matching inspection value so the rendered
+  # ConfigMap does not claim the tier is closed while its deployment serves content.
+  APP_ARTIFACT_CONTENT_ENABLED: "1"
+  # Live edge (README « Live edge »), GB4 preprod (owner GO 2026-11-07 « Oui, GB4 GO préprod »): armed here, active
+  # with content serving open on this tier (#953). Key material lives in the Secret.
   APP_ARTIFACT_LIVE_ENABLED: "1"
   APP_ARTIFACT_LIVE_PAGES_DOMAINS: "pages.preprod.immo.sent-tech.ca=immo-preprod-live-1"
   APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS: "sentropic-preprod-live-1"

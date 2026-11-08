@@ -7,6 +7,16 @@ export const object = (objects, kind, name) => {
   return found[0];
 };
 export const closed = ['APP_ARTIFACT_HOST_ENABLED', 'APP_ARTIFACT_CONTENT_ENABLED', 'APP_ARTIFACT_READER_ENABLED'];
+// GB4 tier gates. The base pins every activation flag to "0" (explicit Deployment env,
+// which outranks envFrom); a tier opens a flag ONLY through its own overlay's explicit
+// Deployment env. artifact-content serves content; no tier opens the api artifact host
+// (s-conductor decision 2026-11-08: the builder no longer reads APP_ARTIFACT_HOST_ENABLED
+// and no api S3 credential is minted, so the host surface stays closed). Any open flag
+// makes checkActivationImage require digest pinning.
+export const openFlags = {
+  prod: {},
+  preprod: { 'artifact-content': ['APP_ARTIFACT_CONTENT_ENABLED'] },
+};
 // GB4 preprod (owner GO 2026-11-07): supervisor relay and builder composition exist in preprod only; prod declares none.
 // The relay key is the public half of the api's ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON (kid sentropic-preprod-supervisor-1).
 const internal = 'http://artifact-content.sentropic-preprod.svc.cluster.local:8791';
@@ -61,25 +71,38 @@ export function checkWorkload(objects, tier, preservedImages) {
   assert.equal(cm.data.ARTIFACT_CONTENT_PORT, '8791');
   assert.equal(cm.data.APP_ARTIFACT_CONTENT_SIGNING_KEY_FILE, '/var/run/artifact-content/key');
   for (const name of closed) {
-    assert.equal(cm.data[name], '0');
-    for (const c of [content, object(objects, 'Deployment', 'api').spec.template.spec.containers[0]]) {
-      assert.deepEqual(c.env.find(e => e.name === name), { name, value: '0' }, `explicit ${name} overrides envFrom secrets`);
+    for (const [workload, container] of [['artifact-content', content], ['api', object(objects, 'Deployment', 'api').spec.template.spec.containers[0]]]) {
+      const expected = (openFlags[tier][workload] ?? []).includes(name) ? '1' : '0';
+      assert.deepEqual(container.env.find(e => e.name === name), { name, value: expected },
+        `explicit ${workload} ${name} is the tier gate and must stay explicit`);
     }
+    const inspection = (openFlags[tier]['artifact-content'] ?? []).includes(name) ? '1' : '0';
+    assert.equal(cm.data[name], inspection, `ConfigMap ${name} must match the tier's enabled set`);
   }
-  // Live edge (W9): prod stays inert with placeholders; preprod arms it (GB4), still inert while content serving is closed.
+  // GB4: no tier opens the api host (s-conductor decision 2026-11-08), so every
+  // tier stays on the instance.ts closed default: no per-tenant artifact quota.
+  const apiCm = object(objects, 'ConfigMap', 'api');
+  assert.equal(apiCm.data.APP_ARTIFACT_QUOTA_BYTES, undefined, 'closed tiers declare no api artifact quota');
+  // Live edge (W9): prod stays inert with placeholders; preprod arms it (GB4) and composes inside
+  // the content serving opened on this tier (#953).
   const live = tier === 'prod' ? ['0', 'pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
     : ['1', 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
   assert.deepEqual([cm.data.APP_ARTIFACT_LIVE_ENABLED, cm.data.APP_ARTIFACT_LIVE_PAGES_DOMAINS, cm.data.APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS],
     live, 'live edge flag, pages domain and kids per tier');
   assert.deepEqual(pick(cm.data, /^APP_ARTIFACT_(SUPERVISOR_|LIVE_BUILDER_NAMESPACE$)/), tier === 'prod' ? {} : preprodRelay,
     'supervisor relay per tier');
-  const apiData = object(objects, 'ConfigMap', 'api').data;
+  const apiData = apiCm.data;
   assert.deepEqual(pick(apiData, /^(ARTIFACT_|GITHUB_APP_)/), tier === 'prod' ? {} : preprodBuilder,
     'builder composition and GitHub App broker configuration per tier');
   // The api creates worker pods where the relay and the live edge forward: one namespace on both sides.
   assert.equal(cm.data.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE, apiData.ARTIFACT_BUILDER_NAMESPACE, 'one worker namespace for api and content');
-  assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional: true } }]);
-  assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional: true, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
+  // GB4: the tier that serves content REQUIRES its runtime Secrets (owner-created
+  // out-of-band): the pod must refuse to start without them rather than boot
+  // half-configured; closed tiers keep both refs optional.
+  const serving = (openFlags[tier]['artifact-content'] ?? []).includes('APP_ARTIFACT_CONTENT_ENABLED');
+  const optional = serving ? false : true;
+  assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional } }]);
+  assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
   assert.deepEqual(content.volumeMounts, [{ name: 'signing-key', mountPath: '/var/run/artifact-content', readOnly: true }]);
   const service = object(objects, 'Service', 'artifact-content').spec;
   assert.equal(service.type, 'ClusterIP');
