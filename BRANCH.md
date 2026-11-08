@@ -1,68 +1,57 @@
-# Feature: keep the API up when the builder config is invalid; own dependency-cache storage
+# Feature: Governed one-off Job to approve a cm_identity account role
 
 ## Objective
-- [x] With `ARTIFACT_BUILDER_ENABLED=1` and any missing/invalid builder value, the API boots, logs `artifact_builder_refused` naming the variable (never its value), keeps the builder mount at 503 `builder_unavailable`, starts no scheduler (s-archi review F2, PR #951, corrected by s-archi).
-- [x] The dependency cache reads its own `ARTIFACT_BUILDER_CACHE_S3_*` storage settings and no longer requires `APP_ARTIFACT_HOST_ENABLED=1`; a missing cache setting follows the F2 refusal behaviour (F1 option (a)).
+- [x] Give operators a governed, audited path to approve a cm_identity account or change its global role when no admin_app session exists, through the admin API's own service (`changeCmAccountAsAdmin`), mirroring the oauth-register(-service)-client Job pattern.
 
 ## Scope / Guardrails
-- [x] Branch fix/alive-builder-f1f2 from origin/main 4b4c8632d; worktree tmp/alive-builder-f1f2; ENV=test-alive-f1f2, ports API 9891 / UI 5283 / Maildev 1093.
-- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
-- [x] The sentropic artifacts MCP host is NOT enabled by the builder: `APP_ARTIFACT_HOST_ENABLED` stays untouched in configuration and code outside the live tree.
+- [x] Branch feat/cm-account-approve-job from origin/main 4b4c8632d; worktree tmp/worktrees/cm-account-approve-job; ENV=test-cm-approve (API 9471, UI 5671, Maildev 1571).
+- [x] Make only; no Python, no attribution trailers, no CI skips or reruns; never ENV=dev.
+- [x] The Job is never run by this lane: s-conductor runs it against the cluster.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/services/artifacts/live/**`
-  - `api/src/app.ts`
-  - `api/src/config/env.ts`
-  - `api/tests/**`
-  - `api/src/services/artifacts/live/README.md`
   - `BRANCH.md`
+  - `api/src/scripts/cm-account-approve.ts`
+  - `api/tests/unit/cm-account-approve.test.ts`
+  - `scripts/ci/cm-account-approve-job.test.mjs`
+  - `api/package.json`
+  - `docs/oauth-client-rotation.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/src/services/artifacts/instance.ts` (left: its now-unused `productPrivateCacheBlobs` export stays; flagged for a follow-up)
-  - `deploy/**`
   - `packages/**`
+  - `api/src/services/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile` (BRCMA-EX1)
+  - `deploy/k8s/base/38-cm-account-approve-job.yaml` (BRCMA-EX2)
+  - `deploy/k8s/base/15-networkpolicy.yaml` (BRCMA-EX2)
   - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `attention`: GLM review of head 3ce1f0e23 (.h2a/reviews/pr-954-glm.md) raised two blocking findings: the dependency-cache blob store ran through the artifacts host adapter (which refuses every cache key at runtime) and the mandated prefix `artifact-builder-cache/v1/` was absent. Closed in Lot 3 with the dedicated store and its own key discipline; delta review by s-conductor.
-- [x] `attention`: `instance.ts` keeps the `productPrivateCacheBlobs` export after this branch (outside the allowed paths here); it no longer has any importer on this branch. Follow-up deletion belongs to a lane allowed in `api/src/services/artifacts/instance.ts`.
-- [x] `attention`: CI run 42454878120 (head 1b068f07d) failed one e2e test unrelated to this diff: `tests/02-organizations.spec.ts:391` « détail: champs non éditables » (test-e2e shard 4), signature `TimeoutError: page.waitForURL: Timeout 10000ms exceeded` after the first org card click. The exact base (4b4c8632d) passed the same test on main (run 42452171320), and every API check on this head is green (typecheck, lint, api unit shards, image guards). Recorded per the flake acceptance rule; a fresh CI run is re-triggered by the commit carrying this record.
-- [x] `attention`: CI run 42455890449 (head cf83a4476) failed one stack start unrelated to this diff: `test-api-unit-integration (endpoints, 6)` aborted at `up-api-test-ci` with `container test-ci-api-api-1 is unhealthy`, 54 s after the api container start and directly behind a cold `node:24-alpine3.24` image pull; the identical stack was healthy in every other matrix job of the same run (unit shards, endpoints 1-5 and 7-8, app-cluster-mesh, artifact-store) and in run 42454878120 for the same code. The e2e signature above did NOT recur in this run. Recorded as CI-infra timing, not a branch defect; a fresh CI run is re-triggered by the commit carrying this record.
-- [x] Local proof on the same head, same mechanism as the endpoints shards: the branch api test stack (`make up-api-test ENV=test-alive-f1f2`) booted the API healthy, and `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2` passed 310/310.
+- [x] `BRCMA-EX1` Makefile: one additive target `cm-account-approve-job`, plus `scripts/ci/cm-account-approve-job.test.mjs` appended to the `test-publishable-manifests` default list as the 37 Job test is (reason: no operator path to change a role without an admin_app session; impact: no existing target behaviour changed; rollback: delete the target and the list entry, the Job yaml stays valid for a direct kubectl apply).
+- [x] `BRCMA-EX2` deploy/k8s/base: new one-off Job `38-cm-account-approve-job.yaml` (not in kustomization resources) and one additive NetworkPolicy `allow-cm-account-approve-to-postgres` (reason: default-deny-ingress baseline; impact: admits only pods labelled component cm-account-approve to postgres:5432; rollback: delete the yaml and the policy).
+- [x] `attention`: the cluster-mesh `account.approved` audit event has no reason field; the reason is recorded as the Job annotation `sentropic.io/approval-reason` and in the wrapper receipt line, persisted in the run report (source-gap for a durable cm_identity reason column).
 
-## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts; explicit user sign-off before merge.
+- [x] `acknowledge`: GLM 5.3 review of b60435eff = APPROVE (.h2a/reviews/pr-956-glm.md); non-blocking findings applied: first error line only on stderr, whitespace-only values refused by the wrapper, doc note on a `kubectl wait` timeout. Deferred: durable reason column (source-gap above), dedicated governance runbook.
+- [x] `attention`: CI run 42459620840 on b60435eff: `test-e2e (1)` failed on `tests/07-matrix.spec.ts:477` (Matrix lock/presence, User B can lock, 2 s predicate); this diff touches no UI, matrix or lock code; fresh run on the next head, no rerun.
+- [x] `attention`: CI run 42460546579 on 8a64e7b9a: `ci-capacity-receipts` fails on every attempt because the GitHub jobs API answers HTTP 502 for this run (137 jobs, 4 attempts); all functional jobs green; fresh run on this head (s-conductor, 08/11 03:20).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
-- Rationale: one follow-up, one PR, one CI.
+- Rationale: one small change, one PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — F2 graceful boot refusal**
-- [x] `product-builder.ts`: any missing/invalid value under the flag logs `artifact_builder_refused` (code `builder_unavailable`, reason = the variable name, never its value) and returns null instead of throwing.
-  - [x] app.ts unchanged wiring: null builder keeps the 503 `builder_unavailable` mount and starts no scheduler; the rest of the API keeps serving.
-  - [x] Tests: flag on + one missing value -> null builder + one log naming the variable; value never in the payload; app-level boot test (imports `app`) -> API root 200, builder route 503 `builder_unavailable` (S2S guard stubbed, bound host), log line present, `createLiveScheduler` never called.
-- [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
-- [x] **Lot 2 — F1 own dependency-cache storage**
-  - [x] `cache-storage.ts`: `ARTIFACT_BUILDER_CACHE_S3_BUCKET`, `ARTIFACT_BUILDER_CACHE_S3_REGION`, `ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID`, `ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY` (optional `ARTIFACT_BUILDER_CACHE_S3_ENDPOINT`), first missing name in fixed order; `builderCacheBlobs(settings)` lazily opens the same private-object storage contract as the artifact host.
-- [x] `product-builder.ts`: replace the `APP_ARTIFACT_HOST_ENABLED=1` requirement with the cache-settings validation; wiring `deps.cacheBlobs(settings)`; refuse naming the missing cache variable (F2 behaviour).
-  - [x] `app.ts`: pass `builderCacheBlobs`; drop the `productPrivateCacheBlobs` import.
-  - [x] Tests: composes without `APP_ARTIFACT_HOST_ENABLED`; settings carried to `cacheBlobs` from the `ARTIFACT_BUILDER_CACHE_S3_*` values; each missing cache name refuses gracefully.
-  - [x] README: F2 refusal behaviour + the new cache env names, `APP_ARTIFACT_HOST_ENABLED` requirement removed.
-- [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
-- [x] **Lot 3 — GLM review fix (blocking 1+2): dedicated builder-cache store under `artifact-builder-cache/v1/`**
-  - [x] `cache-storage.ts`: `createBuilderCacheBlobs` — the builder's own S3 blob store (never the artifacts host adapter nor `assertBlobKey`), put/get/delete only (no listing), each key refused before any S3 call unless it is exactly `artifact-builder-cache/v1/files/<sha256>` or `artifact-builder-cache/v1/<lockSha>/<keySha>/<uuid>`, fail-closed on a non-private bucket like `createPrivateArtifactStorage`; the Postgres pointer namespace stays `artifact-dependency-cache/v1` (s-conductor decision).
-  - [x] Tests (`cache-storage.test.ts`): prefix acceptance and refusal before any S3 call (in/out of prefix, put/get/delete), per-field privacy fail-close, one end-to-end run of the real key generation (putFile -> admit -> getFile -> read) against a command-level fake S3 plus the out-of-prefix refusal; `adapters.test.ts` pins the new file-object key.
-  - [x] README: the file and manifest object keys plus the store's own key discipline and fail-closed privacy.
-  - [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
-- [ ] **Lot 4 — PR**
-  - [ ] PR « fix(alive): keep the API up when the builder config is invalid; own cache storage », CI green on the exact head, GLM review, merge by s-conductor.
+- [x] **Lot 1 — Script and tests**
+  - [x] `cm-account-approve.ts`: four required env variables, GlobalRole enum, self-approval refused, reason bounded; calls `changeCmAccountAsAdmin` approve; prints `{userId, roleBefore, roleAfter, status}`; exit 1 on refusal.
+  - [x] `api/package.json` build compiles `dist/scripts/cm-account-approve.js` (same esbuild flags as the oauth scripts).
+  - [x] `tests/unit/cm-account-approve.test.ts`: missing env, self-approval, role enum, service arguments, output without actor, reason or email.
+- [x] **Lot 2 — Job, policy, wrapper, doc**
+  - [x] `38-cm-account-approve-job.yaml`, `allow-cm-account-approve-to-postgres`, `make cm-account-approve-job`, section in `docs/oauth-client-rotation.md`.
+  - [x] `scripts/ci/cm-account-approve-job.test.mjs`: rendered Job, dist build entry, kustomize exclusion, network policy, wrapper guards (`make test-publishable-manifests SCOPE=... ENV=test-cm-approve`: 8/8 with the 37 test).
+  - [x] Lot gate: `make typecheck-api` (0 errors), `make lint-api` (0 errors), `make up-api-test` + scoped `make test-api-unit SCOPE=tests/unit/cm-account-approve.test.ts ENV=test-cm-approve` (10/10), `make down-volumes ENV=test-cm-approve`.
+  - [x] Bundle smoke in the test api container: esbuild with the build flags, then self-approval and invalid role refused, and an unknown target refused through the real cm_identity read on the test DB.
+- [ ] **Lot 3 — PR**
+  - [ ] PR « feat(identity): governed one-off Job to approve an account role », CI green on the exact head, GLM review, merge by s-conductor.
