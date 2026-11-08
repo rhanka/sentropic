@@ -20,3 +20,10 @@ export {
   MAX_SOURCE_REVISION_LENGTH, MIN_KEY_BYTES, signLiveAssertion, signLiveControl, signLiveFence, verifyLiveAssertion,
   verifyLiveControl, verifyLiveFence, type LiveAssertionClaims, type LiveControlClaims, type LiveFenceClaims, type VerifyOptions,
 } from './live-format.js';
+export {
+  LIVE_DRAFT_LIMITS, LIVE_DRAFT_PATHS, liveStoreDrafts, planLiveDraft, stageLiveDraft, type LiveDraftPageBody, type LiveDraftPageFile,
+  type LiveDraftPlan, type LiveDraftSealBody, type LiveDraftSend, type LiveDraftSnapshot, type LiveDraftSource,
+} from './draft-stager.js';
+export {
+  createLiveWorkerClient, LIVE_WORKER_PATHS, liveStoreFences, type LiveBridgeAck, type LiveWorkerClientOptions, type LiveWorkerFences,
+} from './worker-client.js';
