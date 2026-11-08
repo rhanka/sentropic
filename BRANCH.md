@@ -34,7 +34,7 @@
 
 ## Feedback Loop
 - [x] BR90-EX17: `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.22); APP-P1 digest repinned (version field only, four-tool selection unchanged). Rollback: revert with the bump.
-- [ ] BR90-EX18: heavy-phase queue pod slots (`maxPods`, blocker `pods`) and build cost 1261 MiB (1280Mi limit minus the 19 MiB pod base); `@sentropic/cluster-mesh` 0.26.0-dev.16 to 0.26.0-dev.17 with changelog. Rollback: revert the queue, the tests and the bump together.
+- [x] BR90-EX18: heavy-phase queue pod slots (`maxPods`, blocker `pods`) and build cost 1261 MiB (1280Mi limit minus the 19 MiB pod base); `@sentropic/cluster-mesh` 0.26.0-dev.16 to 0.26.0-dev.17 with changelog. Rollback: revert the queue, the tests and the bump together.
 - [ ] BR90-EX19: root and api lock workspace entries follow artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 (version strings only). Rollback: revert with the bumps.
 - [ ] BR90-EX20: the selected packaging fixture names the artifacts 0.2.22 and cluster-mesh 0.26.0-dev.17 archives with the regenerated artifacts integrity pin. Rollback: revert with the bumps.
 - [ ] `attention`: build-1280 verdict NO: no measured build heap passes under 1280Mi with one CPU (1024 and 896 OOM-killed, 768 and 640 V8 heap OOM; 1536Mi passes at peak 1388.6 MiB). `NODE_BUILD_HEAP_OPTIONS` stays 1024 and is unverified; the in-pod clean build does not fit the quota-fit pod. Owner s-archi.

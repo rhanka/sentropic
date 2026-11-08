@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.26.0-dev.17
+
+- Heavy-phase queue pod slots: `createHeavyPhaseQueue` requires `maxPods`; a `pod` ticket
+  (`HeavyPhaseSlotKind`) is admitted while fewer than `maxPods` pods are present and then becomes
+  the subject's pod hold (its pod base) until `hold(pod: false)`. A waiting pod slot reports
+  `blockedBy: 'pods'` and holds back later pod slots only, never the phases of present pods; a
+  memory phase that does not fit still holds back a later pod slot (strict FIFO on the budget).
+- `PROVISIONAL_HEAVY_PHASE_COSTS_MIB.build` is 1261 MiB (was 1344): the 1280Mi builder pod limit
+  minus the 19 MiB pod base.
+
 ## 0.26.0-dev.16
 
 - Heavy-phase queue: the provisional live reservation (`PROVISIONAL_HEAVY_PHASE_COSTS_MIB.dev`) is
