@@ -1,82 +1,58 @@
-# Feature: Preprod artifact-content provisioning (content serving + api builder host)
+# Feature: A-LIVE forge lease reader (SG0-app lease, GB4-P forge reads)
 
 ## Objective
-- [x] Open `APP_ARTIFACT_CONTENT_ENABLED` for preprod in the repo IaC (content serving, live edge composed), and KEEP the api's `APP_ARTIFACT_HOST_ENABLED` closed (s-conductor decision 2026-11-08, applied in Lot 5), with every non-secret wiring only: overlay patches, required Secret-name references, object-store egress NetworkPolicy, selftest per-tier expectations.
+- [ ] Replace `UNCONFIGURED_FORGE_READS` with real forge reads through the in-process SG0-app lease: host binding mapping (immutable per generation), head/reachable/snapshot over GitHub REST, filtered and bounded staging, and `source()` re-verification (s-archi forge-lease-reader contract 08/11).
 
 ## Scope / Guardrails
-- [x] Branch deploy/preprod-artifact-content from main 4b4c8632d; worktree tmp/worktrees/preprod-artifact-content; ENV=test-artifact-prep.
-- [x] PREPROD ONLY: prod overlays and base stay untouched; no Secret value in Git (names only).
+- [x] Branch feat/alive-forge-lease-reader from origin/main 4b4c8632d; worktree tmp/worktrees/alive-forge-lease-reader; ENV=test-forge-lease.
 - [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
+- [x] No deploy change here: `ARTIFACT_BUILDER_REPOSITORIES_JSON` and the installation ref go through the preprod IaC overlay of the ops lane.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `deploy/k8s/overlays/preprod/kustomization.yaml`
-  - `deploy/k8s/overlays/preprod/patch-artifact-content-config.yaml`
-  - `deploy/k8s/overlays/preprod/patch-artifact-content-deployment.yaml`
-  - `deploy/k8s/overlays/preprod/patch-api-artifact-host.yaml`
-  - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
-  - `deploy/k8s/overlays/preprod/artifact-content-object-store-networkpolicy.yaml`
-  - `deploy/ci/artifact-content/bundle-checks.mjs`
-  - `deploy/ci/artifact-content/bundle.selftest.mjs`
-  - `deploy/ci/artifact-content/network.selftest.mjs`
-  - `deploy/k8s/overlays/preprod/artifact-object-store/**`
-  - `deploy/ci/artifact-content/object-store/**`
-  - `deploy/ci/preprod-a4/topology.selftest.mjs` (BRAOS-EX1)
+  - `api/src/config/env.ts`
+  - `api/src/services/artifacts/**`
+  - `api/tests/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
-  - `api/**`
-  - `apps/**`
+  - `deploy/**`
   - `packages/**`
-  - `deploy/k8s/base/**`
-  - `deploy/k8s/overlays/prod/**`
-  - `deploy/k8s/overlays/preprod-a4/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/src/app.ts` (BR-FLR-EX1)
+  - `api/src/routes/github-app.ts` (BR-FLR-EX1)
+  - `api/src/services/cluster-mesh/github-app-host.ts` (BR-FLR-EX1)
   - `.github/workflows/**`
   - `deploy/k8s/overlays/preprod/idp-identity-sync/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [ ] `attention`: DRAFT-held PR — s-conductor merges after #954 (F1/F2) and forge-lease-reader. Provisioned 2026-11-08 (ops record `.tmp/rv/preprod-object-store.md`, names only): Secrets `artifact-content-signing`, `artifact-object-store`, content keys of `artifact-content-runtime`, builder cache keys of `sentropic-api`; DB role `artifact_content`; store qualified by a signed GetPublicAccessBlock (4 x true) BEFORE wiring. MinIO answers 501 NotImplemented, so the store is RustFS 1.0.4 (same in-namespace pattern).
-- [x] `attention`: s-conductor decision TAKEN 2026-11-08 (first branch): with #954 the builder no longer reads `APP_ARTIFACT_HOST_ENABLED` and no `APP_ARTIFACT_S3_*` is minted in `sentropic-api`, so the api artifact host STAYS CLOSED in preprod — `patch-api-artifact-host.yaml` and the `APP_ARTIFACT_QUOTA_BYTES` entry are dropped from this branch (Lot 5; reopening later needs an owner-minted api storage credential plus its own IAM policy).
-- [x] `BRAOS-EX1`: `deploy/ci/preprod-a4/topology.selftest.mjs` — rationale: the rendered A4 sequence fenced only Deployments/CronJobs, while the runbook fence (step 2) also scales every non-Postgres StatefulSet to zero; the new `artifact-object-store` StatefulSet made the simulation diverge (`writer_not_fenced`). Impact: test simulation only, `verification-boundary.mjs` stays strict. Rollback: revert the commit.
-- [ ] `attention`: open architecture item — the reader activation consume needs INSERT on `artifact_host.activation_namespaces` and UPDATE privilege for its FOR SHARE / FOR UPDATE row locks; the role grants none of it (fail-closed); content serving is unaffected.
-- [ ] `attention`: PR #952 (deploy/preprod-gb4-live) touches `patch-artifact-content-config.yaml` and the same selftests; s-conductor sequences the merge (#952 first) and rebases this branch.
-- [ ] `attention`: rolling restart after apply: CD restarts nothing on ConfigMap changes; the required-Secret flips make a premature apply freeze the rollout instead of crash-looping the supervisor relay.
+- [x] `attention` BR-FLR-EX1: the contract (§3, §5) calls the same SG0-app lifecycle service as `POST /github-app/broker/lease` in process. Reason: the service is built inside `createGitHubAppHostRouter`; it is extracted as `createGitHubAppHostService` (same custody store, key, GitHub API and invalidation bus) and the product lease is composed in `routes/github-app.ts`, then passed by `app.ts` to the builder. Impact: no route or behaviour change for the SG0-app mount. Rollback: revert the three files.
+- [x] `attention`: no node/npm version helper exists for the cache identity; `BUILDER_TOOLCHAIN` records the measured node v26.13.0 of `BUILDER_IMAGE`, and the npm version is `0.0.0-unverified` (source-gap) until measured in the pinned image.
+- [x] `attention`: GLM 5.3 review r1 APPROVE (0 blocker, 0 major). Fixed: README forge and binding doc, malformed-archive test. Deferred: total (192 MiB) and compressed (256 MiB) cap fixtures, subPath-aware pod layout (configure `allowedSubPaths: ['']` meanwhile).
+- [x] `attention`: GLM 5.3 review r2 (delta 4f2ac3983) APPROVE.
+- [x] `attention`: CI run 42456383782 on 4f2ac3983 failed only `test-e2e (4)`: `tests/02-organizations.spec.ts:391` (Read-only viewer, détail: champs non éditables), `page.waitForURL: Timeout 10000ms exceeded`. The delta from a4409fe84 (all 6 e2e shards green in run 42455395884) touches no runtime file (README, BRANCH.md, one unit test), so the failure is not caused by this branch; a fresh pull_request run is triggered by this commit (no rerun).
+- [x] `attention`: s-archi R1 (REQUIRED) fixed: `POST /v1/builds` validates the binding and stores it with its job (immutable per job, 409 `binding_conflict`); the build-only run records it at the HostJob generation right after resolving the job, before any forge read; forge reads use the generation of the current non-DORMANT runtime, else `remote.session`. Not changed: build-only still reads the D0 binding view (`remote.session`) and the staged draft of that generation.
+- [x] `attention`: GLM 5.3 delta review of R1 (50d85894c..1b0bb8cd9, before the rebase on e675ea02d) APPROVE: 0 blocker, 0 major. Fixed: README fallback wording (DORMANT or absent). Deferred: build-only D0 binding view without any reconcile (F1, D0 follow-up), product-builder composition test of `runtimeGeneration` (F2).
+- [x] `attention`: CI run 42463660327 on a38efcbed failed only `test-e2e (3)`: `tests/00-access-control.spec.ts:284` (permissions commentaires: viewer/editor/admin), admin `Résoudre` button still disabled after 5000 ms. The same branch code passed all 6 e2e shards in run 42462935360 (fa950917b); the delta fa950917b..a38efcbed is #956 only (standalone `cm-account-approve` script, its build entry, Makefile, deploy, docs), no UI or API runtime change; a fresh pull_request run is triggered by this commit (no rerun).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
-- Rationale: one overlay PR, one CI.
+- Rationale: one wagon, one PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Plan this branch** (this file; first commit)
-- [x] **Lot 1 — Preprod overlay wiring**
-  - [x] cm artifact-content `APP_ARTIFACT_CONTENT_ENABLED: "1"` (inspection value).
-  - [x] Deployment artifact-content patch: explicit env `APP_ARTIFACT_CONTENT_ENABLED=1`, envFrom secretRef `artifact-content-runtime` required (`optional: false`), signing volume `artifact-content-signing` required (`optional: false`, defaultMode 0440 kept).
-  - [x] Deployment api patch: explicit env `APP_ARTIFACT_HOST_ENABLED=1` (api CONTENT/READER stay 0) — superseded by Lot 5.
-  - [x] cm api `APP_ARTIFACT_QUOTA_BYTES: "1073741824"` (instance.ts module-load check with host enabled) — superseded by Lot 5.
-  - [x] New additive NetworkPolicy `allow-artifact-content-to-object-store` (Egress, same-namespace object store labels, TCP 9000; no ipBlock).
-  - [x] kustomization wiring (resources + patches).
-- [x] **Lot 2 — Selftests per tier**
-  - [x] bundle-checks: per-tier flag expectations (preprod content=1 on artifact-content only, api host=1; digest gate covers both), per-tier envFrom/volumes requiredness, quota expectations, object-store rule expectations — api host/quota expectations re-pinned closed by Lot 5.
-  - [x] bundle.selftest: new deny cases (wrong-deployment content flag, content host flag in preprod, prod opens nothing, dropped/widened object-store rule, requiredness regressions).
-  - [x] network.selftest: per-tier object-egress property (preprod reaches only the same-namespace store on 9000; both tiers keep external 443 denied).
-  - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep` (render/test containers only; no compose stack started).
-- [x] **Lot 3 — Draft PR**
-  - [x] Push branch; `gh pr create --draft` with the BRANCH.md-derived body starting with « DRAFT — merge only after the Secrets listed below exist »; CI may run; no merge request.
-- [x] **Lot 4 — Namespace-local object store (s-conductor 2026-11-08; owner preprod secrets GO 01:58)**
-  - [x] `artifact-object-store/`: ServiceAccount, Service :9000, StatefulSet (RustFS 1.0.4 digest-pinned, restricted pod, required root Secret, console off, 5Gi PVC), NetworkPolicy (ingress content + api on 9000, no egress), wired in `kustomization.yaml`.
-  - [x] Bootstrap material in `deploy/ci/artifact-content/object-store/` (deployment-classified path): `iam/*.json` (content read on `artifacts`, builder cache read/write on `artifact-builder-cache`), `public-access-block.xml`, `artifact-content-db-role.sql`, `README.md` (bootstrap, rotation, rollback).
-  - [x] Selftests: preprod store expectations (prod renders none) and deny cases (tag-only image, optional root credential, console, writable root, open ingress, cross-namespace, egress, missing store).
-  - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep`.
-  - [x] GLM review (`.h2a/reviews/pr-953-glm.md`, head 3858a6f93): REQUEST_CHANGES driven only by finding 1 (api artifact host, s-conductor decision above, applied by Lot 5); minors 2-4 and nits 5-6 applied (PVC 4/4 cap and readiness note in the README, full activation grant list in the SQL header, store PVC/probes/resources/mounts/Service pinned with 4 deny cases, log_statement silenced before the password guard).
-- [x] **Lot 5 — api artifact host closed (s-conductor decision 2026-11-08)**
-  - [x] Delete `deploy/k8s/overlays/preprod/patch-api-artifact-host.yaml` and its `kustomization.yaml` patches reference (the api HOST env reverts to the base explicit "0").
-  - [x] cm api: drop the `APP_ARTIFACT_QUOTA_BYTES` entry (instance.ts stays on its closed default).
-  - [x] Selftests re-pinned (preprod only): `openFlags` drops the preprod api entry, the quota check becomes the unconditional closed-tier assertion, new preprod denies reject a reopened api HOST flag and a declared quota.
-  - [x] Lot gate: `docker-slot.sh make test-artifact-content-manifests API_PORT=8846 UI_PORT=5246 MAILDEV_UI_PORT=1146 ENV=test-artifact-prep`.
+- [x] **Lot 1 — Tests first (contract §6, seven groups)**
+  - [x] mapping, host bodies, head/reachable, snapshot filters and limits, `source()` re-verification, GET-only and token hygiene, fail-closed configuration.
+- [x] **Lot 2 — Binding mapping and configuration**
+  - [x] `forge-binding.ts`: `ARTIFACT_BUILDER_REPOSITORIES_JSON`, validation order, binding immutable per generation (409 `binding_conflict`).
+  - [x] Host build and live APIs parse and validate `binding` before scheduling anything.
+- [x] **Lot 3 — Lease reader**
+  - [x] `forge-lease.ts`: lease cache until expiry − 60 s, GitHub REST reads, tarball through one codeload redirect, filters, limits, manifest per `stagingRef`, `source()` re-download and digest re-check.
+  - [x] `createProductBuilder` composes `remoteHostForge(createLeaseForgeReads(...))`; `app.ts` passes the product lease.
+  - [x] Lot gate: `make typecheck-api`, `make lint-api`, scoped `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-forge-lease`.
+- [ ] **Lot 4 — PR**
+  - [ ] PR « feat(alive): read the forge through the SG0-app lease », CI green on the exact head, GLM review, merge by s-conductor.
