@@ -146,6 +146,10 @@ const envSchema = z.object({
   // Service-to-service (client_credentials) — stateless tokens (BR39d-D5)
   OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC: z.coerce.number().default(900),
   OAUTH_SERVICE_RESOURCE_URI: z.string().optional(),
+  // Expected `iss` of the S2S tokens the github-app broker and artifact builder guards accept. Where a
+  // standalone IdP mints them on its own host, that IdP is the issuer, not this api. Absent => this
+  // api's own resolved OAuth issuer (the co-located dev/test shape).
+  OAUTH_SERVICE_ISSUER_URL: z.string().optional(),
   // MCP resource server (BR-39l Lot 3) — activation-by-consumption of @sentropic/mcp-auth.
   // Default OFF: only the RFC 9728 PRM well-known + a sample guarded /api/v1/mcp/* surface
   // are mounted when explicitly enabled. MCP_RESOURCE_URI overrides the resource/audience

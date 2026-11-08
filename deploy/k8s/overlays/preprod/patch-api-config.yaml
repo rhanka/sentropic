@@ -101,6 +101,19 @@ data:
   # runs the same image against the same database and shares the JWKS rows and OAUTH_SIGNING_KEK
   # (deploy/k8s/base/35-auth-idp.yaml), so those are the keys that signed the token.
   MCP_AUTHORIZATION_SERVER_URL: "https://preprod.auth.sent-tech.ca"
+  # Issuer and audience of the S2S client_credentials tokens accepted by the github-app broker
+  # (/api/v1/github-app/broker/*) and the artifact builder (/api/v1/artifacts/builder) guards. Both
+  # are DECLARED because the request-derived origin is wrong on this hop: the ui nginx listens in
+  # plain HTTP and sets `X-Forwarded-Proto $scheme` (ui/nginx/default.conf), so the api derives
+  # `http://preprod.sentropic.sent-tech.ca`. Unset, the guards expected that value as `iss` AND
+  # `aud`, while the standalone IdP mints immo-preprod-host tokens with
+  # `iss=https://preprod.auth.sent-tech.ca` and `aud=https://preprod.sentropic.sent-tech.ca`: every
+  # broker call answered 403 access_denied (the host router discards the guard 401).
+  # Not OAUTH_ISSUER_URL, for the federation reason above. The resource value equals the
+  # AUTH_CALLBACK_BASE_URL default that the service-client register Job already uses, and the IdP
+  # reads its own auth-idp ConfigMap only. Read at api start: effective at the next api rollout.
+  OAUTH_SERVICE_ISSUER_URL: "https://preprod.auth.sent-tech.ca"
+  OAUTH_SERVICE_RESOURCE_URI: "https://preprod.sentropic.sent-tech.ca"
   # GB4 note (PREPROD ONLY): the api artifact host stays CLOSED on this tier
   # (s-conductor decision 2026-11-08 — with #954 the builder composition no longer
   # reads APP_ARTIFACT_HOST_ENABLED and no APP_ARTIFACT_S3_* credential is minted
