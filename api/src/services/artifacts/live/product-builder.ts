@@ -7,7 +7,10 @@ import { BUILDER_KEY_ENV, builderKeys, SUPERVISOR_KEY_ENV, supervisorKey } from 
 import { SUPERVISOR_RELAY_URL_ENV, supervisorRelayUrl } from './supervisor-relay';
 import { BUILDER_REMOTE_HOST_ENV, builderRemoteHost } from './remote-host';
 import { controllerFenceKey, createLiveFenceRoutes, LIVE_CONTROLLER_KEY_ENV, LIVE_EDGE_URL_ENV, liveEdgeUrl } from './live-fence';
-import { remoteHostForge, type ForgeReads } from './forge';
+import { remoteHostForge } from './forge';
+import { createForgeBindings, forgeConfig, type ForgeLeaseHost } from './forge-binding';
+import { createLeaseForgeReads } from './forge-lease';
+import { createPostgresRemoteLiveRows } from './postgres';
 import { parseBuilderHostBindings } from './builder-mount';
 import { createLiveScheduler } from './scheduler';
 import { readBuilderCacheStorage, type BuilderCacheStorage, type PrivateCacheBlobs } from './cache-storage';
@@ -56,7 +59,9 @@ export interface ProductBuilderDeps {
   pool: Pool; authenticate(c: Context): HostIdentity | null;
   /** In-cluster client of the builder namespace (`createInClusterKubernetes`); a fake in tests. */
   kubernetes(placement: BuilderPlacement): KubernetesCore;
-  forge: ForgeReads; log(event: string, error: unknown): void;
+  /** The enabled SG0-app host (`createProductGitHubAppLease`): targets, lease and invalidation bus; null when disabled,
+   * then every forge read refuses `forge_unconfigured`. */
+  gitHubApp: ForgeLeaseHost | null; log(event: string, error: unknown): void;
   now?: () => number; id?: () => string; fetch?: typeof fetch;
 }
 
@@ -100,17 +105,22 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   if (typeof cacheStorage === 'string') refuse(cacheStorage);
 
   let service: ReturnType<typeof createBuilderService>;
+  // Forge reads through the in-process SG0-app lease at the binding the host recorded for its reconciled generation.
+  const config = forgeConfig(env, deps.gitHubApp);
+  const forgeBindings = createForgeBindings(createPostgresRemoteLiveRows(deps.pool), config);
+  const reads = createLeaseForgeReads({ config, bindings: forgeBindings, fetch: deps.fetch, now, id,
+    generation: async key => (await service.remote.session(key)).generation });
   // D0 binding view: generation and owner of the host's last reconcile; publication stays explicit (R4, no autoPublish).
   const binding: LivePorts['binding'] = async key => {
     const { generation, ownerId } = await service.remote.session(key);
-    return { generation, ownerId, headSha: await deps.forge.head(key), healthy: true, autoPublish: false,
+    return { generation, ownerId, headSha: await reads.head(key), healthy: true, autoPublish: false,
       automaticAuthorized: false, releaseId: null, releaseCommit: null, initialUnpublishedBranchEligible: false };
   };
   const schedule = (work: () => Promise<void>) => { void work().catch(error => deps.log('artifact_builder_job_failed', error)); };
   service = createBuilderService({ pool: deps.pool, cacheBlobs: deps.cacheBlobs(cacheStorage), placement, supervisorKey: signer,
     relayUrl, kubernetes: deps.kubernetes(placement), host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
     authenticate: deps.authenticate, schedule, liveWaitMs: PRODUCT_LIVE_WAIT_MS, now, id, binding,
-    forge: remoteHostForge(deps.forge), sources: { source: deps.forge.source },
+    forge: remoteHostForge(reads), sources: { source: reads.source }, forgeBindings,
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });
   let running: { stop(): void } | null = null;
