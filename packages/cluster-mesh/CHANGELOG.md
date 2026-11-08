@@ -7,6 +7,10 @@
   so the router's own enroll and rotation forms always failed the strict `csrf()` Origin check
   (`access_denied`). `csrf()` is unchanged: only the exact public origin passes, never `"null"`.
   Cross-origin requests (the manifest form to github.com) still carry no referrer.
+- GitHub App manifest (`createGitHubAppEnrollment().prompt`): no `default_events` key. GitHub
+  rejected the manifest listing `installation` and `installation_repositories` (it delivers both
+  to every App webhook without a subscription); `hook_attributes` and the webhook handler are
+  unchanged.
 
 ## 0.26.0-dev.17
 
