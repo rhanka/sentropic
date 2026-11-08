@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.0-dev.18
+
+- GitHub App router (`createGitHubAppRouter`): responses carry `referrer-policy: same-origin`
+  (was `no-referrer`). Under `no-referrer` a browser sends `Origin: null` on a non-CORS form POST,
+  so the router's own enroll and rotation forms always failed the strict `csrf()` Origin check
+  (`access_denied`). `csrf()` is unchanged: only the exact public origin passes, never `"null"`.
+  Cross-origin requests (the manifest form to github.com) still carry no referrer.
+
 ## 0.26.0-dev.17
 
 - Heavy-phase queue pod slots: `createHeavyPhaseQueue` requires `maxPods`; a `pod` ticket
