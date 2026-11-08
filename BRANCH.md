@@ -46,5 +46,5 @@
 - [x] Lot 2: manifest selection, gate verdict and capacity receipt accept the PR reference.
 - [x] Lot 3: release receipt and daily live selector accept the PR reference.
 - [x] Lot 4: workflow publishers, test-member guards, `changes` capture and decision.
-- [ ] Lot 5: scoped checks green; push the wagon branch.
+- [x] Lot 5: scoped checks green (tested-tree 7/7, expected-results 28/28, ci-dag 10/10, ci-static 3/3, run-metrics 37/37, release-receipts 43/43, unit-graph 7/7, performance-report 8/8, consumer-contracts 25/25, live-provider 13/13, wiring + package DAG 51/51, security-daily 333/333, ci-capacity-policy shapeValid); wagon branch pushed.
 - [ ] Lot N: train CI green on the exact head; BRANCH.md removed at merge.
