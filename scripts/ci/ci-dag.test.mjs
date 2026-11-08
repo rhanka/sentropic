@@ -20,6 +20,17 @@ test('should keep CI candidate producers and consumers independent of the deploy
   }
 });
 
+// A download names its artifacts exactly: `name`, or a brace list of exact names merged into
+// one path. A wildcard could select a foreign artifact, so any other pattern fails here.
+const downloadedArtifacts = step => {
+  if (!step.uses?.startsWith('actions/download-artifact@')) return [];
+  if (step.with?.pattern === undefined) return [step.with?.name];
+  const names = step.with.pattern.match(/^\{([\w-]+(?:,[\w-]+)+)\}$/)?.[1].split(',');
+  assert.ok(names && step.with.name === undefined && step.with['merge-multiple'] === true,
+    `exact merged download expected: ${step.with.pattern}`);
+  return names;
+};
+
 test('should build each candidate once and transport its archive and identity receipt to every consumer', () => {
   const producers = { api: 'build-api-image', 'api-tool': 'build-api-tool-image', ui: 'build-ui', e2e: 'build-e2e' };
   const dependsOn = (name, producer, seen = new Set()) => {
@@ -46,8 +57,11 @@ test('should build each candidate once and transport its archive and identity re
       assert.equal(upload.with['include-hidden-files'], true);
     }
     const consumers = Object.entries(workflow.jobs).filter(([, job]) =>
-      job.steps?.some(step => step.uses?.startsWith('actions/download-artifact@') && step.with?.name === `${kind}-image`));
+      job.steps?.some(step => downloadedArtifacts(step).includes(`${kind}-image`)));
     assert.ok(consumers.length > 0, `${kind}: no consumers`);
+    if (kind !== 'api-tool') for (const browser of ['test-e2e', 'e2e-vscode']) {
+      assert.ok(consumers.some(([name]) => name === browser), `${browser}: must consume the ${kind} candidate`);
+    }
     for (const [name, job] of consumers) {
       assert.ok(dependsOn(name, producer), `${name}: missing producer barrier`);
       if (name === 'retain-daily-identities') {
@@ -55,8 +69,7 @@ test('should build each candidate once and transport its archive and identity re
           && step.with?.path === `daily-identities/${kind}-image.json`), `${kind}: retain identity only`);
         continue;
       }
-      const download = job.steps.findIndex(step =>
-        step.uses?.startsWith('actions/download-artifact@') && step.with?.name === `${kind}-image`);
+      const download = job.steps.findIndex(step => downloadedArtifacts(step).includes(`${kind}-image`));
       const load = job.steps.findIndex(step => new RegExp(`\\bload-${kind}\\b(?!-)`).test(step.run ?? ''));
       assert.ok(load > download, `${name}: verify and load ${kind} after download`);
     }

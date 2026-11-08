@@ -13,19 +13,19 @@ function overlap(f: ReturnType<typeof fixture>) {
 }
 const users = (f: ReturnType<typeof fixture>) => keys.forEach((k, i) => f.owners.set(`${k.storageScopeId}/${k.artifactId}`, `user-${i}`));
 
-describe('live heavy phases go through the cluster-mesh queue of one d2-4 node (1706 MiB)', () => {
+describe('live heavy phases go through the cluster-mesh queue of one d2-4 node (1641 MiB)', () => {
   it('should sequence the pre-bundles of three users and bring each live after its own', async () => {
-    const f = fixture({ capacity: 4, budgetMiB: 1706 }); users(f); const meter = overlap(f);
+    const f = fixture({ capacity: 4, budgetMiB: 1641 }); users(f); const meter = overlap(f);
     const lives = await Promise.all(keys.slice(0, 3).map(k => f.controller.start(k)));
     expect(meter.peak).toBe(1); expect(lives.map(l => l.phase)).toEqual(['LIVE', 'LIVE', 'LIVE']);
     expect(new Set(lives.map(l => l.ownerId)).size).toBe(3);
-    expect(await f.queue.status('d2-4-a')).toMatchObject({ usedMiB: 3 * 40 + 3 * 418, entries: [] });
+    expect(await f.queue.status('d2-4-a')).toMatchObject({ usedMiB: 3 * 19 + 3 * 390, entries: [] });
     expect((await f.queue.status('d2-4-a')).lives).toHaveLength(3);
   });
   it('should queue a pre-bundle that does not fit beside two lives, then refuse it past the bound and free its pod', async () => {
-    // Provisional costs: 3 pod bases + 2 lives + a 980 MiB pre-bundle = 1936 MiB > 1706, so users who arrive one after
+    // Provisional costs: 3 pod bases + 2 lives + a 980 MiB pre-bundle = 1817 MiB > 1641, so users who arrive one after
     // another reach two lives; a third pre-bundle waits for a live to stop.
-    const f = fixture({ capacity: 4, budgetMiB: 1706, maxWaitMs: 20 }); users(f);
+    const f = fixture({ capacity: 4, budgetMiB: 1641, maxWaitMs: 20 }); users(f);
     for (const k of keys.slice(0, 2)) await f.controller.start(k);
     const objects = f.objects.size;
     await expect(f.controller.start(keys[2])).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'queued' });
@@ -34,18 +34,18 @@ describe('live heavy phases go through the cluster-mesh queue of one d2-4 node (
     await expect(f.admission.acquire(keys[2], 'user-2')).resolves.toBeUndefined();
   });
   it('should hold an explicit clean build while another binding is live and refuse it past the bound', async () => {
-    const f = fixture({ capacity: 2, budgetMiB: 1706, maxWaitMs: 20 }); await f.controller.start(keys[0]);
+    const f = fixture({ capacity: 2, budgetMiB: 1641, maxWaitMs: 20 }); await f.controller.start(keys[0]);
     await expect(f.controller.buildOnly(keys[1], 'job-1')).rejects.toMatchObject({ reason: 'queued' });
     expect(f.ports.worker.build).not.toHaveBeenCalled(); expect((await f.state(keys[1]))?.runtime.phase).toBe('DORMANT');
   });
   it('should run an explicit clean build once no live runs on the node', async () => {
-    const f = fixture({ capacity: 2, budgetMiB: 1706 }); const meter = overlap(f);
+    const f = fixture({ capacity: 2, budgetMiB: 1641 }); const meter = overlap(f);
     await f.controller.buildOnly(keys[1], 'job-1');
     expect(meter.peak).toBe(1); expect((await f.state(keys[1]))?.runtime.phase).toBe('DORMANT');
     expect(await f.queue.status('d2-4-a')).toMatchObject({ pods: [], lives: [], entries: [] });
   });
   it('should project an HMR edit while another binding waits on its pre-bundle', async () => {
-    const f = fixture({ capacity: 2, budgetMiB: 1706 }); await f.controller.start(key);
+    const f = fixture({ capacity: 2, budgetMiB: 1641 }); await f.controller.start(key);
     const held = deferred(); f.ports.worker.prebundle = vi.fn(async () => { await held.promise; });
     const revive = f.controller.start(keys[1]);
     f.draft().revision = 'r2'; await expect(f.controller.project(key, 'r2')).resolves.toMatchObject({ phase: 'LIVE', appliedRevision: 'r2' });

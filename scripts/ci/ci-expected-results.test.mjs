@@ -283,7 +283,10 @@ test('should delete only current-run transport artifacts after success and retai
       assert.ok(ancestors.has(name), `${name} must finish before the success-only cleanup decision`);
     }
     for (const step of job.steps ?? []) {
-      if (!names.includes(step.with?.name)) continue;
+      // A parallel download lists exact names as {a,b,c}; ci-dag rejects any other pattern.
+      const transported = step.with?.pattern === undefined ? [step.with?.name]
+        : step.with.pattern.match(/^\{([\w-]+(?:,[\w-]+)+)\}$/)?.[1].split(',') ?? [step.with.pattern];
+      if (!transported.some(name => names.includes(name))) continue;
       if (step.uses?.startsWith('actions/upload-artifact@')) assert.equal(step.with['retention-days'], 1);
       if (step.uses?.startsWith('actions/download-artifact@')) {
         consumers.add(name);

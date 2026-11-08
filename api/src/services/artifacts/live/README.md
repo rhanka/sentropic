@@ -39,6 +39,12 @@ The host supplies these mandatory integrations:
 Workers have no egress in any phase (W2 static deny), so the supervisor pushes
 every byte over the only worker ingress, TCP :5173, relayed by `artifact-content`
 through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
+`createRelaySupervisorChannel` is that channel: one frame per
+`POST <ARTIFACT_SUPERVISOR_RELAY_URL>/_live-supervisor/v1/<podName>` (octet-stream, internal
+Service Host, http only, `*.svc.cluster.local`; absent or invalid refuses to compose), over
+node:http so no undici 300 s headers timeout cuts a command; each command is bounded at
+320 s, the relay hop at 330 s. Preprod:
+`http://artifact-content.sentropic-preprod.svc.cluster.local:8791`.
 
 - Frame: 64-byte Ed25519 signature, then the exact UTF-8 JSON body
   `{ v: 1, id, op, fence, issuedAt, expiresAt, args }`; at most 2 MiB; delivery
@@ -123,6 +129,23 @@ through `SupervisorChannel.send(target, frame, signal)` (raw reply bytes back).
   base from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (no secret); preprod is
   `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls
   `<base>/live-host/v1/job` and `<base>/live-host/v1/handoff`.
+- The same service composes the host live API (`createHostLiveApi`) behind the
+  same gate; the scope always comes from the host identity, never the body.
+  Bodies are closed and bounded (2 KiB control, 2 MiB page, 512 KiB seal).
+  `POST /v1/live/reconcile` records the package fences (`liveSessionId`,
+  `leaseEpoch`, `routeEpoch`, monotonic per generation) and the session
+  `invitation: {epoch, expiresAt}`, then reconciles toward the staged draft and
+  answers the BridgeAck (`ready` = LIVE and applied revision = draft revision).
+  `POST /v1/live/stop` checks the fences (409 `stale_session`), then 204.
+  `POST /v1/live/grant` records the session invitation, fences the route on a
+  higher epoch, then answers `{grant}` (`authorizeLive`), 409 `invalid_phase`
+  or `stale_session`, or 403. The remote `invitations.current` returns the last
+  state received per generation and a lower epoch is 409 `stale_invitation`;
+  `expiresAt` is the latest expiry among the active invitations, so the route
+  epoch moves on a revocation or once the last invitation expired (next tick).
+  `POST /v1/live/draft/page` and `/v1/live/draft/seal` stage the host draft
+  (A-LIVE §3.2 overlay: 255 paths, 1 MiB per file, 8 MiB; at most 32 pages of
+  1 MiB) under its opaque revision; this is the remote `drafts` adapter.
 - The API is mounted under `/api/v1/artifacts/builder` (`createBuilderMount`)
   behind `createRequireServiceAuth` with the `artifacts:builder` scope. The
   verified client maps to its host identity through
@@ -174,10 +197,11 @@ Heavy phases go through the cluster-mesh heavy-phase queue of the builder node
 `createPostgresHeavyQueueStore`): the in-pod install, the Vite pre-bundle (its
 own supervisor op), the dev server start and the clean build. The queue is a
 strict FIFO: a phase is admitted when the pod bases, the live reservations, the
-admitted phases and its own cost fit the node budget (1706 MiB on one d2-4;
-provisional costs install 980, pre-bundle 980, dev 418, build 1344 MiB; the pod
-base is measured per deployment). A finished dev start becomes its pod's live
-reservation until the live stops. A build is admitted only when no live runs on
+admitted phases and its own cost fit the node budget (1641 MiB on one d2-4: the
+1706 MiB node share minus 65 MiB of shared image files; provisional costs install
+980, pre-bundle 980, dev 390, build 1344 MiB; the pod base is measured per
+deployment, 19 MiB in the pod cgroup). A finished dev start becomes its pod's
+live reservation until the live stops. A build is admitted only when no live runs on
 the node. Cold revive, wake and crash restore queue each phase in turn; HMR
 projection never waits. An interactive waiter is refused with
 `builder_unavailable`/`queued` past the configured wait and leaves the queue;
@@ -189,7 +213,8 @@ Known limits of the heavy-phase queue:
   not share one node budget; each environment needs its own share of the node in
   configuration until the node is split or the queue store is shared.
 - With the provisional costs, a pre-bundle fits beside at most one live, and four
-  lives exceed 1706 MiB once the pod base is above 8 MiB.
+  lives with their pod bases take 1636 of the 1641 MiB (5 MiB margin, at rest only:
+  four simultaneous first renders peak above it, unverified on a real node).
 - Tickets renew at a third of the entry TTL. If the API crashes mid-phase, its
   admitted ticket stays counted until the TTL expires while the pod may still
   run that step; queued tickets expire the same way. After the restart the gate
@@ -278,8 +303,10 @@ transport signs every frame with it, and the pod bootstrap is
 `createBootstrapSource(supervisorPublicKey(key))`, so the pod spec carries the
 public key only and refuses a frame sealed with any other key.
 
-Rotation: a single active key. Replace the value only after every live pod has
-stopped, then restart the API; the new key applies at the next revive, because
+Rotation: a single active signing key. First add the new public half to
+`APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS` of artifact-content (two entries) and roll it out.
+Replace the API value only after every live pod has stopped, then restart the API, and
+remove the old public half from artifact-content; the new key applies at the next revive, because
 each pod keeps the public key of the bootstrap it started with. Rotate on the
 owner's cycle, and at once on a suspected exposure.
 
