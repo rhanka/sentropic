@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { env, requiresOAuthProductionSecrets } from '../config/env';
+import { DEVELOPMENT_SECRET_SEED } from '../config/deployment-secrets';
 import { decryptSecretOrNull } from './secret-crypto';
 import { settingsService } from './settings';
 
@@ -265,7 +266,7 @@ const stateSecret = (): string => {
       'OAUTH_SIGNING_KEK or JWT_SECRET is required to seal Google Drive OAuth state in production.',
     );
   }
-  return 'dev-secret-key-change-in-production-please';
+  return DEVELOPMENT_SECRET_SEED;
 };
 
 const encodeBase64Url = (value: string): string => Buffer.from(value, 'utf8').toString('base64url');
