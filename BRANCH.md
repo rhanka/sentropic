@@ -1,56 +1,63 @@
-# Feature: Preprod repin to the S2S service issuer build
+# Feature: Artifacts GitHub branch resolution (0.2.23)
 
 ## Objective
-- [x] Bring the preprod tier to the main build that carries the S2S service issuer fix of #963 (github-app broker and artifact builder guards verify standalone IdP S2S tokens against `OAUTH_SERVICE_ISSUER_URL` / `OAUTH_SERVICE_RESOURCE_URI` instead of the plain-HTTP request origin): repin the api digest to the 1a2e7f7f9 build; the ui digest stays on the build published by the 7106defa7 run (publish-ui-image skips on this head).
+- [x] Resolve a git-backed artifact branch through `GET /repos/{owner}/{repo}/git/ref/heads/{branch}` (per-segment encoding, slashes kept) returning `object.sha`; an absent branch (404 or 422) is `missing`, never `conflict`/`git_ref_not_allowed`, so attach reaches `createBranch` (immo preprod 08/11, i-cond).
+- [x] `resolveRef` returns the full 40-hex SHA for a slash branch, so `artifacts_live_control` start passes the head check (live-service.ts:100).
+- [x] Release `@sentropic/artifacts` 0.2.23 with `ARTIFACTS_PROVIDER_VERSION` and the APP-P1 digest repin.
 
 ## Scope / Guardrails
-- [x] Branch deploy/preprod-repin-963 from main 1a2e7f7f9 (merge of #963 fix/preprod-s2s-service-issuer, exact 1a2e7f7f916e759414f72ff6aeb9e81ca781fae9); worktree tmp/worktrees/preprod-repin-963; ENV=test-repin-963.
-- [x] PREPROD ONLY: prod overlays and base untouched; no Secret value in Git.
-- [x] Digest provenance: main CI run 42495208447 (head 1a2e7f7f9) publish-api-image SUCCESS (receipt `Published tested api: ghcr.io/rhanka/sentropic-api@sha256:f9e11434aa5fe23c87f3446b2c133bad438fc22105998f167f1267ca4cc610c2 (config sha256:248846bb6bd2dd112356e81351f2d5aaa137c84d074d2d325e0312a2beb2c122)`), verified in GHCR by anonymous manifest fetch (HTTP 200, manifest sha256 and config digest identical). publish-ui-image SKIPS on this head (no ui path changed), so the ui digest stays the one published by the 7106defa7 build (run 42485651003, publish-ui-image SUCCESS): sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0 (GHCR anonymous fetch HTTP 200, config sha256:b03dae0e57aba9fc8031165198a938b93aac30825e6723483d0f43b6eea0a525).
-- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
+- [x] Branch fix/artifacts-github-branch-resolve from main 4f4674b50; worktree tmp/worktrees/fix-github-forge-resolve; ENV=test-fix-gh-resolve.
+- [x] Make only; no Python; no attribution trailers; no CI skip or rerun; never ENV=dev.
+- [x] Immo DB untouched: the `git_live_draft_unavailable` requirements go to the lane report only.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `deploy/k8s/overlays/preprod/kustomization.yaml`
-  - `deploy/ci/preprod-a4/bundle.selftest.mjs`
+  - `packages/artifacts/src/adapters/github-forge.ts`
+  - `packages/artifacts/src/server/git-tools-attach.ts`
+  - `packages/artifacts/src/mcp-core.ts`
+  - `packages/artifacts/tests/github-branch-resolve.test.ts`
+  - `packages/artifacts/package.json`
+  - `packages/artifacts/CHANGELOG.md`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `api/**`
-  - `apps/**`
-  - `packages/**`
   - `ui/**`
-  - `deploy/k8s/base/**`
-  - `deploy/k8s/overlays/prod/**`
-  - `deploy/k8s/overlays/preprod-a4/**`
-  - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
-  - `deploy/ci/artifact-content/bundle-checks.mjs`
-  - `deploy/ci/artifact-content/bundle.selftest.mjs`
+  - `deploy/**`
+  - `packages/cluster-mesh/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
+  - `package-lock.json`
+  - `api/package-lock.json`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `attention`: this pin merges ONLY onto a main that carries #963: the api digest pinned here is the first build carrying it, and the `OAUTH_SERVICE_ISSUER_URL` / `OAUTH_SERVICE_RESOURCE_URI` ConfigMap keys of #963 are read at api start only. An overlay apply restarts nothing by itself: the operator's apply step (CD re-applies ../preprod-a4 with these pins) rolls the api out.
-- [x] `attention`: `make test-preprod-a4-manifests ENV=test-repin-963` cannot run locally (its `A4_TEST_IMAGE` ghcr.io/rhanka/sentropic-api-tools:tool-d4d252a5… is not published); the same A4 bundle selftest runs inside `make test-artifact-content-manifests` (as on #962).
-
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**
-- Rationale: one deploy PR, one CI.
+- [x] BRGH-EX1: root and api lock workspace entries follow artifacts 0.2.23 (version strings only). Rollback: revert with the bump.
+- [x] `attention`: the cluster-mesh selected packaging fixture keeps the published artifacts 0.2.22 pin (0.2.23 is not on the registry before main CI publishes it).
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
 
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick**
+- Rationale: one owner-urgent fix PR, one CI.
+
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Repin to the S2S service issuer build**
-  - [x] `deploy/k8s/overlays/preprod/kustomization.yaml`: api digest swapped sha256:16cbd3dc…3c → sha256:f9e11434aa5fe23c87f3446b2c133bad438fc22105998f167f1267ca4cc610c2; ui digest unchanged sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0; provenance comment rewritten (run 42495208447, publish-ui-image skips).
-  - [x] `deploy/ci/preprod-a4/bundle.selftest.mjs`: api tag expectation swapped to the new digest; ui expectation and the four prod asserts unchanged.
-- [x] **Lot 2 — Final validation**
-  - [x] `make check-preprod-images ENV=test-repin-963` PASS (both rendered pins verified by anonymous digest pull, 2026-11-08).
-  - [x] `docker-slot.sh make test-artifact-content-manifests API_PORT=8851 UI_PORT=5251 MAILDEV_UI_PORT=1151 ENV=test-repin-963` PASS (artifact-content bundle selftest 211 PASS 0 failures, A4 unit 32/32, A4 bundle selftest: api/auth-idp/artifact-content on sha256:f9e11434…c2, ui on sha256:bf1aa509…e0, prod unchanged).
-  - [ ] PR « deploy(preprod): repin to the S2S service issuer fix », CI green on the exact head, merge by s-conductor.
+- [x] **Lot 1 — Branch resolution fix**
+  - [x] `github-forge.ts`: branch refs resolve through `git/ref/heads/<segments>` (`object.type` commit, exact `ref`), commit SHAs through `/commits/<sha>`; 404/422 map to `missing` on both.
+  - [x] `git-tools-attach.ts`: attach treats the port's `git_branch_missing` like `not_found`, so a new personal branch is created from `baseRef`.
+- [x] **Lot 2 — Tests (fake GitHub HTTP)**
+  - [x] `tests/github-branch-resolve.test.ts`: slash branch to full SHA with per-segment URL; 404/422 to `missing`; 422 on `/commits` to `not_found`; attach creates a new branch; live_control start succeeds on the resolved head.
+- [x] **Lot 3 — Release 0.2.23**
+  - [x] package, locks, `ARTIFACTS_PROVIDER_VERSION`, APP-P1 digest 61c50b33 to 428a7527 (version field only), CHANGELOG.
+- [ ] **Lot 4 — Final validation**
+  - [x] `docker-slot.sh make test-artifacts SCOPE=tests/g ENV=test-fix-gh-resolve` unit files PASS (146 tests; the 3 integration files need postgres and run in CI).
+  - [x] `docker-slot.sh make typecheck-artifacts ENV=test-fix-gh-resolve` PASS.
+  - [ ] PR, CI green on the exact head, review in `.h2a/reviews/`, merge by s-conductor.

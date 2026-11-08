@@ -10,7 +10,9 @@ import { requireCodeRight, requireOwner } from './git-tools-publish.js';
 type Executor = GitBinding['executor'];
 const FIELDS = ['repoId', 'branch', 'baseRef', 'subPath', 'autoPublish', 'executor', 'pause'];
 const id8 = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 8);
-const notFound = (error: unknown) => error instanceof ArtifactOperationError && error.kind === 'not_found';
+/** The git port reports an absent bound branch as git_branch_missing and any other absent ref as not_found. */
+const notFound = (error: unknown) => error instanceof ArtifactOperationError &&
+  (error.kind === 'not_found' || error.kind === 'git_branch_missing');
 
 /** G0 v3 §1.2 Tool 3 / A-LIVE S03: attach, configure, pause, resume or detach one binding. */
 export async function attachGit(deps: GitToolsDeps, args: Record<string, any>, inv: GitToolInvocation) {
