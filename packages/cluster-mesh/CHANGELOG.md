@@ -11,6 +11,10 @@
   rejected the manifest listing `installation` and `installation_repositories` (it delivers both
   to every App webhook without a subscription); `hook_attributes` and the webhook handler are
   unchanged.
+- GitHub App enrollment (`prompt`, `GET /github-app/:ref`): an `install` record with an App is
+  re-prompted with a fresh one-time state (the previous one is overwritten, 10 minute expiry) and a
+  link to `https://github.com/apps/<slug>/installations/new?state=<state>`, so a lost installation
+  redirect is resumable. `prompt` now returns a `phase` discriminant (`manifest` | `install`).
 
 ## 0.26.0-dev.17
 

@@ -333,6 +333,8 @@ export const createGitHubAppHostRouter = (deps: GitHubAppHostRouterDeps): Hono =
   // GitHub calls back on the manifest URLs: publish them on the public mount.
   const prompt: typeof service.prompt = async (target, ref) => {
     const issued = await service.prompt(target, ref);
+    // The install phase only links to github.com: nothing to republish.
+    if (issued.phase === 'install') return issued;
     const { manifest } = issued;
     return {
       ...issued,
