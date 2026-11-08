@@ -5,6 +5,7 @@ import { ArtifactOperationError } from '@sentropic/artifacts/server/outcome-cont
 import { createRegistryDispatchRouter, type RegistryDispatchPorts } from '../../src/services/mcp/registry-dispatch';
 import { createArtifactTransport } from '../../src/services/artifacts/transport';
 import { APP_P1_MANIFEST_DIGEST } from '../../src/services/mcp/cluster-registry';
+import { SENTROPIC_MCP_CLIENT_ID } from '../../src/services/mcp/client-policy';
 
 // Host tool workspaces_list on the existing MCP URL: discovery, closed arguments,
 // scope and admission. The directory port itself is covered with a real database
@@ -117,6 +118,18 @@ describe('workspaces_list host tool dispatch', () => {
       expect(await (await rpc('j', 'tools/list')).json())
         .toEqual({ jsonrpc: '2.0', id: 'j', error: { code: -32603, message: 'Internal error' } });
     }
+  });
+
+  it('should neither list nor answer workspaces_list for the read-only sentropic-mcp client', async () => {
+    const readOnly = { ...identity, clientId: SENTROPIC_MCP_CLIENT_ID };
+    const { ports, rpc } = fixture({ authenticate: vi.fn(async (_context: unknown, scopes: string[]) =>
+      ({ identity: readOnly, workspaceId: 'workspace-a', scopes })) });
+    const listed = await (await rpc('r', 'tools/list')).json();
+    expect(listed.result.tools.map((tool: { name: string }) => tool.name)).not.toContain('workspaces_list');
+    const response = await rpc('r', 'tools/call', { name: 'workspaces_list' });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ jsonrpc: '2.0', id: 'r', error: { code: -32003, message: 'access_denied' } });
+    expect(ports.workspaces).not.toHaveBeenCalled();
   });
 
   it('should answer a denied current credential with access_denied rather than an empty list', async () => {
