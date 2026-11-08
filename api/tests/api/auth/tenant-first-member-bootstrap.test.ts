@@ -36,6 +36,13 @@ describe('first-member tenant bootstrap', () => {
     expect(await audit(admin.id)).toEqual([{ kind: 'membership.approved', actor_id: admin.id }]);
   });
 
+  it('should bootstrap the first member as a plain member even when the request carries the admin role', async () => {
+    const admin = await createTestUser({ role: 'admin_app', withWorkspace: false });
+    await setCmMembershipState(admin.id, tenantId, { status: 'requested', role: 'admin', decidedBy: 'first-member-test' });
+    await decideMembership(admin.id, 'admin_app', tenantId, admin.id, 'approve');
+    expect(await findCmMembership(admin.id, tenantId)).toMatchObject({ status: 'approved', role: 'member' });
+  });
+
   it('should refuse a second self-approval once the tenant has an approved member', async () => {
     const first = await createTestUser({ role: 'admin_app', withWorkspace: false });
     const second = await createTestUser({ role: 'admin_app', withWorkspace: false });
