@@ -103,7 +103,7 @@ data:
   MCP_AUTHORIZATION_SERVER_URL: "https://preprod.auth.sent-tech.ca"
   # GB4 builder composition (s-archi builder-composition contract, 2026-11-08; owner GO 2026-11-07 « Oui, GB4 GO
   # préprod »). PREPROD ONLY. ARTIFACT_BUILDER_ENABLED=1 is fail-closed: with the flag on, a missing or invalid value
-  # below refuses the api boot. Secrets (handoff, receipt, supervisor, live controller and dependency cache keys) stay in
+  # below refuses the builder gracefully (#954: `artifact_builder_refused`, builder routes 503, api process up). Secrets (handoff, receipt, supervisor, live controller and dependency cache keys) stay in
   # Secret sentropic-api. A ConfigMap change restarts nothing: it is read at the next api rollout.
   ARTIFACT_BUILDER_ENABLED: "1"
   # Worker placement (placement.ts): pods and their Services live in the per-environment builder namespace.
