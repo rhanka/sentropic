@@ -58,6 +58,11 @@ export function checkConnectivity(objects) {
       assert(!liveIngress(immoPod(ns, 'api'), 8791), 'cross-environment live edge denied');
     }
     assert(!reachable(content, pod(namespace, 'api'), 8787), 'content cannot call privileged API');
+    // Supervisor relay (A-LIVE §8.1): only the same-environment API pods reach content on its listener.
+    const apiIngress = (from, port, protocol = 'TCP') => directionAllows(objects, 'Ingress', content, from, port, protocol);
+    assert(!apiIngress(pod(namespace, 'api'), 8791, 'UDP'), 'supervisor relay is TCP only');
+    for (const port of [5173, 8787]) assert(!apiIngress(pod(namespace, 'api'), port), 'API reaches only the content port');
+    for (const name of ['ui', 'auth-idp', 'postgres']) assert(!apiIngress(pod(namespace, name), 8791), 'other app pods stay denied');
     const builder = { namespace: 'sentropic-artifact-builders', labels: { 'sentropic.dev/artifact-binding': 'qualified-binding' } };
     assert(reachable(content, builder, 5173), 'content must reach a labeled builder on its live port');
     assert(!reachable(content, { ...builder, labels: {} }, 5173), 'unlabeled builder pods remain denied');
@@ -83,6 +88,8 @@ export function checkConnectivity(objects) {
     // kube-proxy short-circuits the LB address to the Traefik pods' websecure port 8443, so both hops count.
     assert(apiEgress({ namespace: 'external', labels: {} }, 443), 'SG4b handoff must reach the immo ingress LB on 443');
     assert(reachable(api, traefik, 8443), 'SG4b handoff must reach the in-cluster immo ingress (Traefik websecure 8443)');
+    // Supervisor relay hop (A-LIVE §8.1): any API Egress policy must keep API -> content :8791 of its own namespace.
+    assert(reachable(api, content, 8791), 'same-environment API must reach the supervisor relay');
   }
 }
 // The operator-owned default-deny is not rendered here; no rendered policy may widen it to a whole
