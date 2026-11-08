@@ -15,6 +15,7 @@ resources:
   - artifact-content-ingress.yaml
   - artifact-content-live-edge-networkpolicy.yaml
   - artifact-content-object-store-networkpolicy.yaml
+  - artifact-object-store
   - idp-identity-sync
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:

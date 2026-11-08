@@ -1,0 +1,116 @@
+# GB4 (PREPROD ONLY): namespace-local S3-compatible object store for artifact-content
+# (private artifacts bucket) and the api builder dependency cache. Same pattern as the
+# sibling tenant (radar-immobilier/deploy/k8s/25-minio.yaml: Service :9000 + StatefulSet
+# + PVC), but the server is RustFS, not MinIO: MinIO answers GetPublicAccessBlock with
+# 501 NotImplemented, so it cannot pass the content startup privacy assertion
+# (api/src/services/artifacts/lifecycle.ts assertPrivate). RustFS 1.0.4 stores the
+# PublicAccessBlock configuration per bucket and refuses public bucket policies while
+# BlockPublicPolicy is set. Qualification receipt: see README.md in this directory.
+#
+# Root credentials come from the operator-created Secret `artifact-object-store`
+# (names only in Git). They are REQUIRED: without them RustFS falls back to a
+# built-in default credential, so the pod must not start.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: artifact-object-store
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: artifact-object-store
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: artifact-object-store
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: artifact-object-store
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: artifact-object-store
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: artifact-object-store
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: artifact-object-store
+spec:
+  serviceName: artifact-object-store
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: artifact-object-store
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentropic
+        app.kubernetes.io/component: artifact-object-store
+    spec:
+      serviceAccountName: artifact-object-store
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: store
+          image: docker.io/rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
+          imagePullPolicy: IfNotPresent
+          args: ["--address", ":9000"]
+          env:
+            - { name: RUSTFS_VOLUMES, value: /data }
+            - { name: RUSTFS_CONSOLE_ENABLE, value: "false" }
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: artifact-object-store, key: RUSTFS_ACCESS_KEY, optional: false } }
+            - name: RUSTFS_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: artifact-object-store, key: RUSTFS_SECRET_KEY, optional: false } }
+          ports:
+            - name: s3
+              containerPort: 9000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: s3 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: s3 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: logs, mountPath: /logs }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: logs, emptyDir: { sizeLimit: 256Mi } }
+        - { name: tmp, emptyDir: { sizeLimit: 64Mi } }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: block-standard
+        resources:
+          requests:
+            storage: 5Gi
