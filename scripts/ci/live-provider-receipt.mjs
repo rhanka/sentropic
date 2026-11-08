@@ -110,10 +110,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       run.jobs = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/jobs`, 'jobs');
       let selection;
       try { selection = qualifiedMain([run]); } catch {
-        // Tested-tree main run: its lanes ran in the newest same-tree PR run.
+        // Tested-tree main run: its lanes ran in a same-tree PR run (all of them green).
         pullRequests ??= api('repos/rhanka/sentropic/actions/workflows/ci.yml/runs?event=pull_request&status=completed&per_page=100').workflow_runs;
-        const pr = pullRequests.filter(row => row.head_commit?.tree_id === run.head_commit?.tree_id
-          && row.head_repository?.full_name === run.repository?.full_name).sort((a, b) => b.id - a.id)[0];
+        const sameTree = pullRequests.filter(row => row.head_commit?.tree_id === run.head_commit?.tree_id);
+        // No newest-wins: any non-green same-tree PR run disqualifies the tuple.
+        if (sameTree.some(row => row.conclusion !== 'success')) continue;
+        const pr = sameTree.filter(row => row.head_repository?.full_name === run.repository?.full_name)
+          .sort((a, b) => b.id - a.id)[0];
         if (!pr) continue;
         pr.jobs = pages(`repos/rhanka/sentropic/actions/runs/${pr.id}/jobs`, 'jobs');
         try { selection = qualifiedMain([{ ...run, qualifiedBy: pr }]); } catch { continue; }
