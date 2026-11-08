@@ -20,11 +20,12 @@ import { createCandidateStore } from './candidate-store';
 import { composeSupervisor } from './supervisor-composition';
 import type { SupervisorSources } from './supervisor';
 import { createRelaySupervisorChannel, SUPERVISOR_COMMAND_TIMEOUT_MS } from './supervisor-relay';
-import { createBuildJobs, runStaleMs } from './build-jobs';
+import { createBuildJobs, jobForgeBinding, runStaleMs } from './build-jobs';
 import { createHostBuildApi, type HostBuildEnv, type HostIdentity } from './host-build-api';
 import { createHostLiveApi } from './host-live-api';
 import { createRemoteLive } from './remote-live';
 import { createRemoteDrafts } from './remote-drafts';
+import type { ForgeBindings } from './forge-binding';
 
 /** Live pods admitted on one d2-4 node (owner decision 07/11); memory admission is the heavy-phase queue's. */
 export const LIVE_NODE_CAPACITY = 4;
@@ -39,7 +40,7 @@ export const MAX_BUILDER_PODS = 4;
  * `placement` comes from per-environment configuration (`builderPlacement(process.env)`), never a constant.
  */
 export function createArtifactLiveService(options: Pick<LivePorts,
-  'binding' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
+  'binding' | 'jobBinding' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
   | 'invitations'> & {
     pool: Pool; cacheBlobs: PrivateCacheBlobs; placement: BuilderPlacement;
     /** Namespace-only client of the builder namespace (`createInClusterKubernetes(placement)` in the product). */
@@ -77,13 +78,15 @@ export function createArtifactLiveService(options: Pick<LivePorts,
  * (builds and live). The sealed candidate holder is both the supervisor sink and the SG4b export.
  * Nothing listens or runs until the host composition mounts `api` and supplies `schedule`. */
 export function createBuilderService(options: Omit<Parameters<typeof createArtifactLiveService>[0],
-  'publication' | 'sources' | 'drafts' | 'invitations'> & {
+  'publication' | 'sources' | 'drafts' | 'invitations' | 'jobBinding'> & {
   sources: Pick<SupervisorSources, 'source'>;
   host: RemoteHost; signingKey(): SigningKey; hostKeys: KeyResolver;
   /** `hostAuthenticator(parseBuilderHostBindings(...))` over the S2S guard of the builder mount. */
   authenticate(c: Context): HostIdentity | null; schedule(work: () => Promise<void>): void;
   /** Longest wait of one host reconcile before it answers `ready: false` (the revive keeps running). */
   liveWaitMs: number;
+  /** Host git bindings (forge-lease-reader contract §1), validated and recorded before anything is scheduled. */
+  forgeBindings: Pick<ForgeBindings, 'admit' | 'validate'>;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
     runStaleMs(options.heavy.maxWaitMs));
@@ -92,12 +95,15 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });
   const rows = createPostgresRemoteLiveRows(options.pool);
   const remote = createRemoteLive(rows); const drafts = createRemoteDrafts(rows);
-  const controller = createArtifactLiveService({ ...options, publication, drafts: drafts.drafts, invitations: remote.invitations,
+  const controller = createArtifactLiveService({ ...options, publication, jobBinding: jobForgeBinding(jobs, options.forgeBindings), drafts: drafts.drafts, invitations: remote.invitations,
     sources: { ...options.sources, draft: drafts.draft, candidate: input => candidates.candidate(input) } });
+  // A build carries no generation (R1): its validated binding is stored with the job, and the build-only run records it
+  // at the HostJob generation right after resolving the job, never at the host's last reconcile.
   const builds = createHostBuildApi({ authenticate: options.authenticate, jobs, schedule: options.schedule,
+    validate: options.forgeBindings.validate,
     build: async (key, jobId) => { await controller.buildOnly(key, jobId); } });
   const live = createHostLiveApi({ authenticate: options.authenticate, controller, store: createPostgresLiveStore(options.pool),
-    remote, drafts, waitMs: options.liveWaitMs });
+    remote, drafts, waitMs: options.liveWaitMs, bind: options.forgeBindings.admit });
   const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live);
   return { controller, api, jobs, remote, drafts };
 }

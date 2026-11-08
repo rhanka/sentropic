@@ -372,8 +372,32 @@ frames and reconciles every 30 s); the API stops it on exit.
   stays explicit (`autoPublish` false, R4).
 - Forge: `fastForward` is refused (`fast_forward_remote_host`), because
   `git_commit` runs in the host LiveService. Reads go through the SG0-app lease
-  reader; until it is composed, `UNCONFIGURED_FORGE_READS` refuses every read
-  (`forge_unconfigured`), so builds and revives fail closed per operation.
+  reader (`forge-lease.ts`, `forge-github.ts`, `forge-tar.ts`): the in-process
+  `acquire` of the GitHub App lifecycle service (`createProductGitHubAppLease`),
+  cached until expiry − 60 s and dropped on invalidation events and 401/403;
+  GET-only GitHub REST reads (head, compare, commit, tarball through one
+  redirect to codeload only); a filtered, bounded tree (65536 files, 64 MiB per
+  file, 192 MiB total; no links, secrets, `.git`, `node_modules`, `ui/dist` or
+  descriptor `outputDir`) recorded as a manifest under an opaque `stagingRef`
+  (TTL 30 min, 8 entries) that `source()` re-downloads and re-verifies.
+- Git binding (forge-lease-reader contract §1): `POST /v1/builds` and
+  `POST /v1/live/reconcile` require `binding: {repoId, branch, subPath}`
+  (400 otherwise). It is validated against `GITHUB_APP_TARGETS_JSON` and
+  `ARTIFACT_BUILDER_REPOSITORIES_JSON` =
+  `[{storageScopeId, repoId, locator, installationRef, allowedSubPaths}]`
+  (`git_repo_not_registered`, `git_ref_not_allowed`), then recorded per binding
+  generation (another value is 409 `binding_conflict`). A build stores it with
+  its job (immutable per job) and the build-only run records it at the HostJob
+  generation right after resolving the job, before any forge read; no live
+  reconcile is involved. Every read uses the value recorded for the generation
+  of the controller's current runtime (job generation for a build, binding
+  generation for live), or of the last reconcile when the runtime is DORMANT
+  or absent.
+  Without the GitHub App host or a valid `ARTIFACT_BUILDER_REPOSITORIES_JSON`
+  (an `installationRef` is required), every binding and read refuses
+  `forge_unconfigured`. The staged tree is relative to `subPath` while the pod
+  layout expects the repository root: configure `allowedSubPaths: ['']` until
+  the pod bootstrap is subPath-aware.
 - Routes (f1): every revoke and ready signs `signLiveFence` (exp = iat + 60 s)
   and POSTs it in `x-live-controller-fence` to
   `<ARTIFACT_LIVE_EDGE_INTERNAL_URL>/_live-fence/v1` (http,
