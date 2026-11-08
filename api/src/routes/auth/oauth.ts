@@ -98,6 +98,16 @@ export const resolveOAuthServiceResource = (request?: Request): string =>
     ? trimTrailingSlash(env.OAUTH_SERVICE_RESOURCE_URI)
     : resolveOAuthIssuer(request);
 
+/**
+ * Expected `iss` of the S2S (client_credentials) tokens accepted by the tenant-facing service guards
+ * (github-app broker, artifact builder). OAUTH_ISSUER_URL cannot carry it: that key also sets this
+ * api's own authorization-server issuer and the federation callback `redirect_uri`.
+ */
+export const resolveOAuthServiceIssuer = (request?: Request): string =>
+  env.OAUTH_SERVICE_ISSUER_URL
+    ? trimTrailingSlash(env.OAUTH_SERVICE_ISSUER_URL)
+    : resolveOAuthIssuer(request);
+
 const rootDb = db;
 export const createSentropicOAuthHostPorts = (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts): AuthHonoPorts =>
   createSentropicOAuthPorts(bindCmAppDatabase(tx), boundPorts, tx);
