@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { checkActivationImage, checkWorkload, closed, component, object } from './bundle-checks.mjs';
+import { createPublicKey } from 'node:crypto';
+import { checkActivationImage, checkWorkload, closed, component, object, preprodBuilder, preprodRelay } from './bundle-checks.mjs';
 import { checkConnectivity, checkNoOpenPolicy } from './network.selftest.mjs';
 import { checkReservedHosts } from './routing.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/content-tools/package.json')('yaml');
@@ -153,7 +154,18 @@ for (const tier of ['prod', 'preprod']) {
     const copy = structuredClone(objects); mutation(copy); assert.throws(() => qualify(copy));
   });
   deny('reader enabled by main deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_READER_ENABLED').value = '1'; });
-  deny('live edge enabled by the ConfigMap', o => { object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_LIVE_ENABLED = '1'; });
+  deny('live edge flag of the other tier', o => { object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_LIVE_ENABLED = tier === 'prod' ? '1' : '0'; });
+  const apiData = o => object(o, 'ConfigMap', 'api').data;
+  deny('supervisor relay flag of the other tier', o => {
+    object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED = tier === 'prod' ? '1' : '0';
+  });
+  deny('builder flag of the other tier', o => { apiData(o).ARTIFACT_BUILDER_ENABLED = tier === 'prod' ? '1' : '0'; });
+  deny('builder relay through the other environment', o => {
+    apiData(o).ARTIFACT_SUPERVISOR_RELAY_URL = `http://artifact-content.${tier === 'prod' ? 'sentropic-preprod' : 'sentropic'}.svc.cluster.local:8791`;
+  });
+  deny('builder binding to another storage scope', o => {
+    apiData(o).ARTIFACT_BUILDER_HOST_BINDINGS_JSON = '[{"clientId":"immo-preprod-host","hostId":"immo-preprod","storageScopeId":"radar-immobilier"}]';
+  });
   deny('live pages domain of the other tier', o => {
     const data = object(o, 'ConfigMap', 'artifact-content').data;
     data.APP_ARTIFACT_LIVE_PAGES_DOMAINS = tier === 'prod' ? 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1' : 'pages.immo.sent-tech.ca=immo-prod-live-1';
@@ -227,6 +239,30 @@ for (const [ns, peer] of [['sentropic', 'sentropic-preprod'], ['sentropic-prepro
     assert.throws(() => checkConnectivity(copy), /cross-environment content ingress denied/);
   });
 }
+check('preprod: relay key and builder values pass the runtime parsers', () => {
+  // supervisor-relay.ts supervisorRelayFromEnv: one or two canonical base64 Ed25519 SPKI DER entries.
+  for (const entry of preprodRelay.APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS.split(/\s+/)) {
+    assert.match(entry, /^[A-Za-z0-9+/]+={0,2}$/);
+    const key = createPublicKey({ key: Buffer.from(entry, 'base64'), format: 'der', type: 'spki' });
+    assert.equal(key.asymmetricKeyType, 'ed25519');
+    assert.equal(key.export({ type: 'spki', format: 'der' }).toString('base64'), entry);
+  }
+  // placement.ts builderPlacement and supervisor-relay.ts relayBase: same namespace, internal Service host of preprod.
+  const label = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+  const { ARTIFACT_BUILDER_NAMESPACE: ns, ARTIFACT_BUILDER_SERVICE_DOMAIN: domain } = preprodBuilder;
+  assert(label.test(ns) && domain.startsWith(`${ns}.svc.`) && domain.split('.').every(part => label.test(part)));
+  for (const name of ['ARTIFACT_SUPERVISOR_RELAY_URL', 'ARTIFACT_LIVE_EDGE_INTERNAL_URL']) {
+    const url = new URL(preprodBuilder[name]);
+    assert.deepEqual([url.protocol, url.hostname, url.port, url.pathname, url.search, url.hash],
+      ['http:', 'artifact-content.sentropic-preprod.svc.cluster.local', '8791', '/', '', ''], name);
+  }
+  const [binding] = JSON.parse(preprodBuilder.ARTIFACT_BUILDER_HOST_BINDINGS_JSON);
+  const [broker] = JSON.parse(preprodBuilder.GITHUB_APP_BROKER_BINDINGS_JSON);
+  const [target] = JSON.parse(preprodBuilder.GITHUB_APP_TARGETS_JSON);
+  assert.deepEqual(Object.keys(binding).sort(), ['clientId', 'hostId', 'storageScopeId']);
+  assert.equal(binding.clientId, broker.clientId); assert.equal(binding.storageScopeId, broker.storageScopeId);
+  assert.deepEqual([target.storageScopeId, target.repoId], [broker.storageScopeId, broker.repoId]);
+});
 check('both environments: no rendered policy widens the default-deny', () => checkNoOpenPolicy(combined));
 check('reject an allow-all rule beside the default-deny', () => {
   const copy = structuredClone(combined);
