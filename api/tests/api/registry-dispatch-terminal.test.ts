@@ -24,6 +24,7 @@ const ports = (overrides: Partial<RegistryDispatchPorts> = {}): RegistryDispatch
   enabled: () => true,
   authenticate: async () => principal,
   authorize: async () => ({ allowed: true as const }),
+  workspaces: async () => ({ workspaces: [] }),
   ...overrides,
 });
 
@@ -53,7 +54,7 @@ describe('registry dispatch terminal JSON-RPC responses', () => {
     const app = mount(ports());
     const list = await rpcPost(app, { jsonrpc: '2.0', id: 'list-1', method: 'tools/list' });
     expect(await list.json()).toMatchObject({
-      jsonrpc: '2.0', id: 'list-1', result: { tools: [{ name: 'artifacts_ensure' }] },
+      jsonrpc: '2.0', id: 'list-1', result: { tools: [{ name: 'artifacts_ensure' }, { name: 'workspaces_list' }] },
     });
     const called = await rpcPost(app, call);
     expect(await called.json()).toMatchObject({ jsonrpc: '2.0', id: 'call-1', result: { isError: false } });

@@ -4,7 +4,7 @@ import { createMemoryLiveStore, type LiveStore } from '../../src/server/live-sto
 import { gitBinding } from './git-binding-conformance.js';
 import { liveTreeSha } from '../../src/server/live-tree.js';
 
-export function liveWitness(options: { store?: LiveStore; now?: () => number } = {}) {
+export function liveWitness(options: { store?: LiveStore; now?: () => number; invited?: (actorId: string) => boolean } = {}) {
   let head = 'a'.repeat(40);
   let canReadCode = true;
   const binding = { ...gitBinding(), channel: 'personal' as const, executor: 'sandbox' as const, personalPrincipalId: 'alice', headCommitSha: head };
@@ -29,6 +29,7 @@ export function liveWitness(options: { store?: LiveStore; now?: () => number } =
   const service = createLiveService({ store, git, worker, ...(options.now ? { now: options.now } : {}),
     keys: { current: async () => ({ version: 'k1', key: Buffer.alloc(32, 3) }), resolve: async () => Buffer.alloc(32, 3) },
     authorize: async invocation => ({ binding, ownerId: 'alice', canReadCode, canWrite: true, humanLinked: true,
+      invited: options.invited?.(invocation.actorId) ?? false,
       qualified: true, target: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, branch: binding.branch,
         subPath: '', principalId: invocation.actorId, outputDir: 'dist' },
       repository: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, locator: '', installationRef: '',

@@ -1,6 +1,8 @@
 import { Hono, type Context } from 'hono';
 import type { ArtifactHostIdentity } from '../artifacts/authorization';
 import type { ArtifactTransport } from '../artifacts/transport';
+import { WORKSPACES_LIST_TOOL, type WorkspaceDirectory } from '../artifacts/workspace-directory';
+import { isToolPermitted } from './client-policy';
 
 export interface RegistryDispatchPorts {
   transport(): Promise<ArtifactTransport>;
@@ -9,7 +11,12 @@ export interface RegistryDispatchPorts {
     identity: ArtifactHostIdentity; workspaceId: string; scopes: readonly string[];
   }>;
   authorize(): Promise<{ allowed: true } | { allowed: false; reason: string; status?: 403 | 409 | 503 }>;
+  /** Host tool workspaces_list; null when the current credential is denied. */
+  workspaces(identity: ArtifactHostIdentity): Promise<WorkspaceDirectory | null>;
 }
+
+const noArguments = (value: unknown) => value === undefined || (!!value && typeof value === 'object'
+  && !Array.isArray(value) && Object.keys(value).length === 0);
 
 /** Add the compiled plan at the existing MCP URL; legacy connector calls continue downstream. */
 export function createRegistryDispatchRouter(ports: RegistryDispatchPorts): Hono {
@@ -37,8 +44,12 @@ export function createRegistryDispatchRouter(ports: RegistryDispatchPorts): Hono
       if (rpc && body.jsonrpc !== '2.0') return refuse(-32600, { error: 'invalid_request' }, 400);
       const tool = rpc ? params?.name : params?.capabilityRef;
       if (call && typeof tool !== 'string') return refuse(-32600, { error: 'invalid_request' }, 400);
+      // Host tool: its closed, argument-free schema is checked before any authentication or read,
+      // and it binds no workspace, so a caller-supplied workspaceRef is ignored.
+      const hostTool = rpc && call && tool === WORKSPACES_LIST_TOOL.name;
+      if (hostTool && !noArguments(params?.arguments)) return refuse(-32600, { error: 'invalid_request' }, 400);
       const principal = await ports.authenticate(context, [discover ? 'mcp:discover' : 'mcp:tools:invoke'],
-        typeof params?.workspaceRef === 'string' ? params.workspaceRef : undefined);
+        !hostTool && typeof params?.workspaceRef === 'string' ? params.workspaceRef : undefined);
       if (principal instanceof Response) {
         // REST path: historical passthrough of the auth refusal. RPC path: the refusal
         // becomes a terminal JSON-RPC envelope carrying the request id — never a bare
@@ -59,9 +70,23 @@ export function createRegistryDispatchRouter(ports: RegistryDispatchPorts): Hono
       }
       const admission = await ports.authorize();
       if (!admission.allowed) return refuse(-32003, { error: 'invocation_refused' }, admission.status ?? 503);
+      if (hostTool) {
+        // The per-client read-only allowlist (DEC-116 parity) also gates the host tool.
+        if (!isToolPermitted(principal.identity.clientId, WORKSPACES_LIST_TOOL.name)) {
+          return refuse(-32003, { error: 'access_denied' }, 403);
+        }
+        const directory = await ports.workspaces(principal.identity);
+        if (!directory) return refuse(-32003, { error: 'access_denied' }, 403);
+        return context.json({ jsonrpc: '2.0', id, result: {
+          content: [{ type: 'text', text: JSON.stringify(directory) }], isError: false,
+        } });
+      }
       const transport = await ports.transport();
-      if (discover) return context.json({ jsonrpc: '2.0', id,
-        result: { tools: await transport.discover(principal.identity, principal.workspaceId, principal.scopes) } });
+      if (discover) return context.json({ jsonrpc: '2.0', id, result: { tools: [
+        ...await transport.discover(principal.identity, principal.workspaceId, principal.scopes),
+        ...(principal.scopes.includes('mcp:discover')
+          && isToolPermitted(principal.identity.clientId, WORKSPACES_LIST_TOOL.name) ? [WORKSPACES_LIST_TOOL] : []),
+      ] } });
       const result = await transport.invoke(principal.identity, principal.workspaceId, principal.scopes,
         tool as string, (rpc ? params?.arguments : params?.input) ?? {});
       if (!rpc) return context.newResponse(JSON.stringify(result.body), result.status as 200,

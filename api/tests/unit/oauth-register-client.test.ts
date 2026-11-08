@@ -168,3 +168,71 @@ describe('resolvePolicyUpdate (F5: never wipe policy on rotation)', () => {
     ).toEqual({ allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:bearer' });
   });
 });
+
+describe('sentropic-mcp preset (claude.ai connector)', () => {
+  const presetEnv: NodeJS.ProcessEnv = {
+    OAUTH_CLIENT_PRESET: 'sentropic-mcp',
+    OAUTH_CLIENT_RESOURCE_INDICATORS: 'https://sentropic.sent-tech.ca/api/v1/mcp',
+  };
+
+  it('registers a public PKCE client with refresh, both callbacks, the resource and offline_access', () => {
+    const values = buildOAuthClientRegistration(presetEnv);
+    expect(values.clientId).toBe('sentropic-mcp');
+    expect(values.tokenEndpointAuthMethod).toBe('none');
+    expect(values.clientSecretHash).toBeNull();
+    expect(values.requirePkce).toBe(true);
+    expect(values.grantTypes).toEqual(['authorization_code', 'refresh_token']);
+    expect(values.redirectUris).toEqual([
+      'https://claude.ai/api/mcp/auth_callback',
+      'https://claude.com/api/mcp/auth_callback',
+    ]);
+    expect(values.resourceIndicators).toEqual(['https://sentropic.sent-tech.ca/api/v1/mcp']);
+    expect(values.allowedScopes).toEqual(['mcp:discover', 'mcp:resources:read', 'mcp:tools:invoke', 'offline_access']);
+  });
+
+  it('refuses a preset without a resource indicator or with an unknown name', () => {
+    expect(() => buildOAuthClientRegistration({ OAUTH_CLIENT_PRESET: 'sentropic-mcp' })).toThrow(/RESOURCE_INDICATORS/);
+    expect(() => buildOAuthClientRegistration({ ...presetEnv, OAUTH_CLIENT_PRESET: 'nope' })).toThrow(/Unknown/);
+  });
+
+  it('lets explicit variables override the preset', () => {
+    const values = buildOAuthClientRegistration({ ...presetEnv, OAUTH_CLIENT_NAME: 'Override' });
+    expect(values.name).toBe('Override');
+  });
+});
+
+describe('h2a-cli preset (owner-delegated public CLI)', () => {
+  const cliEnv: NodeJS.ProcessEnv = {
+    OAUTH_CLIENT_PRESET: 'h2a-cli',
+    OAUTH_CLIENT_RESOURCE_INDICATORS: 'https://preprod.sentropic.sent-tech.ca/api/v1/mcp',
+    OAUTH_CLIENT_ALLOWED_USER_IDS: 'owner-sub',
+  };
+
+  it('registers a public PKCE loopback client with refresh, five scopes + offline_access, owner only', () => {
+    const values = buildOAuthClientRegistration(cliEnv);
+    expect(values).toMatchObject({
+      clientId: 'h2a-cli', clientSecretHash: null, requirePkce: true, requiredAcr: null,
+      tokenEndpointAuthMethod: 'none', grantTypes: ['authorization_code', 'refresh_token'],
+      redirectUris: ['http://127.0.0.1/callback'], allowedUserIds: ['owner-sub'],
+      resourceIndicators: ['https://preprod.sentropic.sent-tech.ca/api/v1/mcp'],
+    });
+    expect(values.allowedScopes).toEqual(['mcp:discover', 'mcp:resources:read', 'mcp:tools:invoke',
+      'immo:artifacts:read', 'immo:artifacts:write', 'offline_access']);
+  });
+
+  it('requires the owner subject and the resource (no service principal, no audience-less token)', () => {
+    for (const key of ['OAUTH_CLIENT_ALLOWED_USER_IDS', 'OAUTH_CLIENT_RESOURCE_INDICATORS']) {
+      expect(() => buildOAuthClientRegistration({ ...cliEnv, [key]: ' ' })).toThrow(new RegExp(key));
+    }
+  });
+
+  it('accepts only a port-less loopback IP redirect, and only for a public client', () => {
+    for (const uri of ['http://127.0.0.1:8080/callback', 'http://localhost/callback', 'http://127.0.0.1/cb#x']) {
+      expect(() => buildOAuthClientRegistration({ ...cliEnv, OAUTH_CLIENT_REDIRECT_URIS: uri })).toThrow(/insecure/);
+    }
+    expect(buildOAuthClientRegistration({ ...cliEnv, OAUTH_CLIENT_REDIRECT_URIS: 'http://[::1]/callback' })
+      .redirectUris).toEqual(['http://[::1]/callback']);
+    expect(() => buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_REDIRECT_URIS: 'http://127.0.0.1/callback' }))
+      .toThrow(/insecure/);
+  });
+});

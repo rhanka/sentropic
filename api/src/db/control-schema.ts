@@ -1132,3 +1132,37 @@ export type SessionContentPolicyPurgeInsert = typeof sessionContentPolicyPurges.
 
 export type LiveGitDeclarationRow = typeof liveGitDeclarations.$inferSelect;
 export type LiveGitDeclarationInsert = typeof liveGitDeclarations.$inferInsert;
+
+/**
+ * control.github_app_enrollments — durable SG0-app enrollment custody
+ * envelopes (A-LIVE W1 / plan lot M2-S, G0 v3 §2.7).
+ *
+ * One row per installation reference gives the unique, scope-bound
+ * enrollment reference the contract names. `envelope` carries only
+ * cluster-mesh ciphertext (AES-256-GCM through the host secret custodian);
+ * this table never stores a key, secret or installation id in clear text.
+ * The empty string is the row-exists-but-unenrolled sentinel the
+ * `GitAppEnvelopeStore` transaction contract uses to tell a first create
+ * from committed state. `target_key` is the frozen registry key recorded
+ * durably by the host when the owner gesture begins, so ref routes resolve
+ * without ever re-encoding scope/repo identity in a URL or query string.
+ *
+ * Guardrails:
+ * - NO cross-namespace FK (control-namespace rule).
+ * - `target_key` is updated in place and the sealed envelope is never
+ *   overwritten by that update: the ON CONFLICT clause in the host store
+ *   writes only `target_key = EXCLUDED.target_key`.
+ */
+export const githubAppEnrollments = controlSchema.table(
+  'github_app_enrollments',
+  {
+    installationRef: text('installation_ref').primaryKey(),
+    targetKey: text('target_key'),
+    envelope: text('envelope').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+);
+
+export type GitHubAppEnrollmentRow = typeof githubAppEnrollments.$inferSelect;
+export type GitHubAppEnrollmentInsert = typeof githubAppEnrollments.$inferInsert;

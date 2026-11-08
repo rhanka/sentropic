@@ -32,6 +32,27 @@ rollback and credential rotation are documented in
 - `15-networkpolicy.yaml` — workload-scoped ingress allowances for the
   tenant default-deny baseline: api -> postgres, ui -> api, pgbackup -> postgres,
   and the cluster Traefik namespace -> ui (public ingress).
+- Egress posture (A-LIVE W2). The tenant baseline is ingress-only, so only
+  `artifact-content` is egress-isolated: workers on TCP 5173 (labelled
+  `sentropic.dev/artifact-binding` in `sentropic-artifact-builders`), DNS, and its
+  own Postgres. The API is not egress-isolated, so it already reaches the npm relay
+  (:4873, gated by the relay ingress that k8s owns) and the Kubernetes API.
+  Any Egress policy on the API isolates it. Such a policy must keep the relay,
+  the Kubernetes API, DNS, Postgres, the IdP and HTTPS providers. The test
+  `make test-artifact-content-manifests` enforces this.
+- SG4b handoff egress (A-LIVE W7). The builder in the API calls the same-environment
+  immo host (`immo.sent-tech.ca` or `preprod.immo.sent-tech.ca`, `/api/v1/artifacts`)
+  on TCP 443 through the platform Traefik LoadBalancer. The API is not
+  egress-isolated, so no policy is added. In-cluster, kube-proxy sends the LB
+  address to the Traefik pods (namespace `traefik`) on websecure TCP 8443, so an
+  API Egress policy must allow both the LB on 443 and that 8443 hop.
+- Live edge ingress (A-LIVE W9). Each overlay adds
+  `allow-immo-content-host-to-artifact-content`: `artifact-content` TCP 8791 (its
+  only listener, HTTP and websocket upgrade) admits the immo content host, which is
+  the `radar-api` reader pods (`app.kubernetes.io/name: radar-immobilier`,
+  `component: api`), from the same environment only: `radar-immobilier` to
+  `sentropic`, and `radar-immobilier-preprod` to `sentropic-preprod`. The
+  matching egress in the immo namespaces is owned by k8s and immo.
 - `07-sealed-sentropic-pgbackup.yaml` — SealedSecret `sentropic-pgbackup`
   (`S3_ACCESS_KEY`/`S3_SECRET_KEY` reused from DOC_STORAGE, `S3_BUCKET`,
   `S3_REGION`, `S3_ENDPOINT`) for the Postgres backup CronJob.

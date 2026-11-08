@@ -43,6 +43,20 @@ export function checkConnectivity(objects) {
       assert(!reachable(pod(other, name), content, 8791), 'cross-environment content ingress denied');
       assert(!reachable(content, pod(other, name), 5432), 'cross-environment content egress denied');
     }
+    // Live edge (A-LIVE W9): immo's content host (radar-api reader pods) of the SAME environment
+    // reaches content on its live listener; k8s and immo own the egress side in radar-immobilier*.
+    const immoNs = namespace === 'sentropic' ? 'radar-immobilier' : 'radar-immobilier-preprod';
+    const immoPod = (ns, name) => ({ namespace: ns, labels: { 'app.kubernetes.io/name': 'radar-immobilier', 'app.kubernetes.io/component': name } });
+    const liveIngress = (from, port, protocol = 'TCP') => directionAllows(objects, 'Ingress', content, from, port, protocol);
+    assert(liveIngress(immoPod(immoNs, 'api'), 8791), 'same-environment immo content host must reach the live edge');
+    assert(!liveIngress(immoPod(immoNs, 'api'), 8791, 'UDP'), 'live edge is TCP only');
+    for (const port of [5173, 8787, 3000]) assert(!liveIngress(immoPod(immoNs, 'api'), port), 'live edge opens only the content port');
+    for (const name of ['ui', 'mcp', 'postgres', 'content-deny']) {
+      assert(!liveIngress(immoPod(immoNs, name), 8791), 'other immo pods stay denied');
+    }
+    for (const ns of [namespace === 'sentropic' ? 'radar-immobilier-preprod' : 'radar-immobilier', 'radar-immobilier-refresh-test', namespace, other]) {
+      assert(!liveIngress(immoPod(ns, 'api'), 8791), 'cross-environment live edge denied');
+    }
     assert(!reachable(content, pod(namespace, 'api'), 8787), 'content cannot call privileged API');
     const builder = { namespace: 'sentropic-artifact-builders', labels: { 'sentropic.dev/artifact-binding': 'qualified-binding' } };
     assert(reachable(content, builder, 5173), 'content must reach a labeled builder on its live port');
@@ -53,5 +67,33 @@ export function checkConnectivity(objects) {
     assert(!reachable(content, { namespace: 'external', labels: {} }, 443), 'object egress awaits tenant receipt');
     const dns = { namespace: 'kube-system', labels: { 'k8s-app': 'kube-dns' } };
     for (const protocol of ['TCP', 'UDP']) assert(reachable(content, dns, 53, protocol));
+    // Live controller (A-LIVE W2): Sentropic owns the API side of API -> npm relay :4873 and
+    // API -> Kubernetes API; k8s owns the relay ingress. The app namespaces carry an ingress-only
+    // default-deny, so any API Egress policy isolates the API and must keep every path below.
+    const api = pod(namespace, 'api');
+    const apiEgress = (to, port, protocol = 'TCP') => directionAllows(objects, 'Egress', api, to, port, protocol);
+    const relay = { namespace: 'npm-relay', labels: { 'app.kubernetes.io/name': 'npm-relay' } };
+    assert(apiEgress(relay, 4873), 'controller must reach the npm relay');
+    for (const port of [443, 6443]) assert(apiEgress({ namespace: 'external', labels: {} }, port), 'controller must reach the Kubernetes API and HTTPS providers');
+    for (const protocol of ['TCP', 'UDP']) assert(apiEgress(dns, 53, protocol), 'API must keep DNS');
+    assert(reachable(api, pod(namespace, 'postgres'), 5432), 'API must keep its PostgreSQL');
+    assert(reachable(api, pod(namespace, 'auth-idp'), 8787), 'API must keep the IdP revocation path');
+    // SG4b handoff: the builder calls the same-environment immo host (immo.sent-tech.ca or
+    // preprod.immo.sent-tech.ca) on TCP 443 through the platform Traefik LoadBalancer. In-cluster,
+    // kube-proxy short-circuits the LB address to the Traefik pods' websecure port 8443, so both hops count.
+    assert(apiEgress({ namespace: 'external', labels: {} }, 443), 'SG4b handoff must reach the immo ingress LB on 443');
+    assert(reachable(api, traefik, 8443), 'SG4b handoff must reach the in-cluster immo ingress (Traefik websecure 8443)');
+  }
+}
+// The operator-owned default-deny is not rendered here; no rendered policy may widen it to a whole
+// namespace or to unnamed peers.
+export function checkNoOpenPolicy(objects) {
+  for (const { metadata, spec } of objects.filter(o => o.kind === 'NetworkPolicy')) {
+    const selector = spec.podSelector ?? {};
+    assert(Object.keys(selector.matchLabels ?? {}).length + (selector.matchExpressions ?? []).length > 0,
+      `${metadata.name}: namespace-wide pod selector`);
+    for (const [direction, peers] of [['ingress', 'from'], ['egress', 'to']]) {
+      for (const rule of spec[direction] ?? []) assert((rule[peers] ?? []).length > 0, `${metadata.name}: ${direction} rule without peers`);
+    }
   }
 }

@@ -135,8 +135,67 @@ make exec-api CMD="npm run oauth:seed-clients" ENV=<env>
 
 This seeds `example-service-rp` and the self-S2S dogfood client
 (`sentropic-self-s2s`). The dev/test/e2e secrets are well-known and MUST NOT be
-used in production — provision production clients out-of-band and store the
-secret in the SealedSecret + GitHub Actions environment secrets.
+used in preprod or production.
+
+### Governed provisioning (preprod and production)
+
+Preprod and production service clients are provisioned only through the one-off
+Job `deploy/k8s/base/37-oauth-register-service-client-job.yaml`, run by
+`make oauth-register-service-client-job` (script
+`api/src/scripts/oauth-register-service-client.ts`). Never use a manual SQL edit.
+In one serializable write the Job upserts the `service_clients` row (sha256 secret
+hash, no exchange policy, so `client_credentials` is granted) and binds the client
+to its CM tenant. The Job image is the namespace's running `api` image. The wrapper
+deletes the Job and its temporary Secret on exit, even after a failure.
+
+1. Write a 0600 env file outside git that holds only `OAUTH_SERVICE_CLIENT_*` lines
+   (the wrapper refuses any other key and any other file mode). The secret is
+   generated straight into the file and is never printed:
+
+   ```bash
+   umask 077; f="$(mktemp)"
+   printf 'OAUTH_SERVICE_CLIENT_ID=%s\nOAUTH_SERVICE_CLIENT_SCOPES=%s\nOAUTH_SERVICE_CLIENT_RESOURCE_INDICATORS=%s\nOAUTH_SERVICE_CLIENT_SECRET=%s\n' \
+     "<client-id>" "<scope>,<scope>" "<https resource>" "$(openssl rand -hex 32)" > "$f"
+   ```
+
+   - Scopes must belong to `KNOWN_SERVICE_CLIENT_SCOPES`
+     (`api/src/services/auth/service-client-provisioning.ts`): `service:ping`,
+     `remote.evidence.issue`, `remote.sessions.revoke`, `github-app:broker`,
+     `artifacts:builder`.
+   - Without `OAUTH_SERVICE_CLIENT_RESOURCE_INDICATORS`, the resource defaults to
+     `OAUTH_SERVICE_RESOURCE_URI`, else `AUTH_CALLBACK_BASE_URL`, both read from
+     the `api` ConfigMap.
+   - Optional keys: `_NAME`, `_TENANT` (CM slug, default `sentropic`), `_DPOP`.
+2. Copy the secret value from that file into the consumer's own secret store, and
+   into the ignored 0600 central `.env` under a documented name. Never commit or
+   print it.
+3. Run the Job:
+   `make oauth-register-service-client-job SECRET_FILE="$f" OAUTH_SERVICE_CLIENT_JOB_NAMESPACE=<ns> KUBECONFIG=<0600 tier kubeconfig> ENV=<env>`.
+   The log reports `created`, `updated (...)` or `unchanged (replay no-op)`, the
+   scopes, resources and tenant, and `rotation due by`. It never contains the
+   secret or its hash.
+4. Verify reprise: mint a token with the consumer's credential (as shown below)
+   and check the HTTP status only, for example with `-o /dev/null -w '%{http_code}'`.
+   Then record the client id, the tier, the secret location by name, the creation
+   date and the due date in the tenant credential register, and delete `$f`.
+
+Replays are idempotent. These cases are refused and roll the whole write back:
+a revoked row (restoring access needs a separate owner authorization), a row with
+an exchange policy, the reserved `immo-mcp-workload` id (the named-Secret identity
+sync owns both, see `deploy/ci/idp-identity-sync/CRED_CYCLE.md`), an id that
+already names an `oauth_clients` row, and a tenant rebind. Granting more authority
+(an added scope or resource, or a dropped DPoP requirement) also needs
+`OAUTH_SERVICE_CLIENT_ALLOW_WIDEN=true`. Granting less (a removed scope or
+resource, or an added DPoP requirement) needs
+`OAUTH_SERVICE_CLIENT_ALLOW_DOWNGRADE=true`.
+
+**Rotation cycle: 90 days**, or at once on suspected exposure. The cycle runs from
+`secret_rotated_at`, else from `created_at`. Generate a new secret into the same
+file, add `OAUTH_SERVICE_CLIENT_ROTATE_SECRET=true`, and re-run the Job. This is a
+single-secret immediate cutover: the old secret stops minting at commit, and
+tokens it already issued expire at their TTL. Update the consumer and `.env`, then
+verify that the new secret mints and the old one is refused. Record the next due
+date that the Job printed.
 
 ### Minting and using a token
 
@@ -174,6 +233,8 @@ This generates a new secret, prints it once, replaces `client_secret_hash`, and
 stamps `secret_rotated_at`. Rotation is **single-secret immediate cutover**
 (BR39d-D2): coordinate the consumer redeploy with the new secret. A
 zero-downtime dual-secret grace window and an admin UI are deferred to BR-39g/39h.
+Clients created by the governed provisioning Job rotate through that Job instead
+(see the rotation cycle above), so that their secret is never printed.
 
 ### Stateless tokens — no revocation in 39d
 

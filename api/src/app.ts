@@ -5,6 +5,7 @@ import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
 import { logger } from './logger';
 import { createRemoteEvidenceRouter } from './routes/auth/remote-evidence';
+import { createProductArtifactBuilderRouter } from './routes/artifacts-builder';
 import { remoteRevocationError } from './services/auth/remote-revocation-error';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
@@ -89,6 +90,8 @@ import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
 import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
 import { clusterMeshLiveQualificationRouter } from './routes/cluster-mesh-live-qualification';
+import { createProductGitHubAppRouter } from './routes/github-app';
+import { isGitHubAppPath } from './services/cluster-mesh/github-app-host';
 import {
   ReceiverRefusal,
   createProductSessionContentReceiver,
@@ -348,36 +351,40 @@ const allowedOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
 // secureHeaders() returns a middleware — invoke the factory ONCE, register the result.
 // NOTE: CORP and COEP are NOT set here because they block legitimate cross-origin
 // API requests from the frontend (e.g. localhost:5173 → localhost:8787).
-app.use(
-  '*',
-  secureHeaders({
-    contentSecurityPolicy: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "https://*.sent-tech.ca"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-      upgradeInsecureRequests: [],
-    },
-    strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
-    crossOriginOpenerPolicy: 'same-origin',
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: false,
-    xContentTypeOptions: 'nosniff',
-    xFrameOptions: 'DENY',
-    xXssProtection: '1; mode=block',
-    referrerPolicy: 'strict-origin-when-cross-origin',
-  }),
-);
+const productSecureHeaders = secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"],
+    connectSrc: ["'self'", "https://*.sent-tech.ca"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:", "https:"],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+    upgradeInsecureRequests: [],
+  },
+  strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
+  crossOriginOpenerPolicy: 'same-origin',
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+  xContentTypeOptions: 'nosniff',
+  xFrameOptions: 'DENY',
+  xXssProtection: '1; mode=block',
+  referrerPolicy: 'strict-origin-when-cross-origin',
+});
+// SG0-app paths carry their own stricter header set (the manifest form posts
+// to github.com; no-referrer). secureHeaders writes AFTER next(), so it must
+// not run on those paths at all, or it overwrites them (A-LIVE W1).
+app.use('*', (c, next) => (isGitHubAppPath(c.req.path) ? next() : productSecureHeaders(c, next)));
 
 // Global HTTP logging (opt-in)
 app.use('*', async (c, next) => {
   if (!httpLogEnabled) return next();
+  // SG0-app host paths never enter http logs: refs, callback states, manifest
+  // codes and installation ids are credential-shaped (A-LIVE W1 / G0 v3 §2.7).
+  if (isGitHubAppPath(c.req.path)) return next();
   const startedAt = Date.now();
   const method = c.req.method;
   const path = c.req.path;
@@ -434,6 +441,11 @@ app.use('*', async (c, next) => {
 // api/src/middleware/auth-rate-limiters.ts. Order matters; the helper owns it.
 applyAuthRateLimiters(app);
 app.route('/api/v1/auth/session/remote-action-evidence', createRemoteEvidenceRouter({ role: 'product' }));
+// A-LIVE W7 (M3-B): builder host build API under /api/v1/artifacts/builder, behind
+// the artifacts:builder S2S guard and the default-deny host bindings. Code only
+// until the GB4-P go (A-LIVE §10): no builder service is composed here, so a bound
+// host gets 503 builder_unavailable and any other caller is refused.
+app.route('/', createProductArtifactBuilderRouter(null));
 
 app.route('/.well-known', createOAuthWellKnownProjection({
   compositionRoot: 'product',
@@ -444,6 +456,12 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
   ...ROOT_MOUNT_REMAPS,
 } as const;
 app.route('/api/v1/cluster-mesh/qualification', clusterMeshLiveQualificationRouter);
+// A-LIVE W1 (M2-S): mounted SG0-app enrollment host on the public origin
+// (`/api/v1/github-app/*`, reached through the ui nginx /api/v1/ proxy). Code
+// only until the GB4-P go (A-LIVE §10): without its env vars and a provisioned
+// custody key the composition is absent and the origin serves nothing here.
+const productGitHubAppRouter = createProductGitHubAppRouter();
+if (productGitHubAppRouter) app.route('/', productGitHubAppRouter);
 // RC2.receiver: frozen source routes + source/browser/relay middleware separation.
 // Source-gaps stay fail-closed in product (no public direct access to the inner mount).
 app.route('/', createProductSessionContentReceiver().app);

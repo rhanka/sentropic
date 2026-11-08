@@ -6,8 +6,9 @@ import { ArtifactOperationError, classifyArtifactFailure } from '../src/server/f
 // Exact descriptor bytes from rhanka/radar-immobilier#1012, blob fa1a073ce0d1ce79ccdbca6ec9638f604f441b9f.
 const immo = readFileSync(new URL('./fixtures/build-contract/immo.artifact.json', import.meta.url), 'utf8');
 const descriptor = JSON.parse(immo);
+const pinned = `sha512-${Buffer.alloc(64, 1).toString('base64')}`;
 const dependency = {
-  version: '1.2.3', integrity: 'sha512-pinned',
+  version: '1.2.3', integrity: pinned,
   resolved: 'https://registry.npmjs.org/example/-/example-1.2.3.tgz',
 };
 function fixture(options: { descriptor?: unknown; manifest?: object; packages?: object; subPath?: string } = {}) {
@@ -33,6 +34,8 @@ describe('GB1 frozen build contract', () => {
   it('should expose validation through the built public package subpath', async () => {
     const api = await import('@sentropic/artifacts/server/build-contract');
     expect(api.validateArtifactBuild(fixture()).install.args).toEqual(['ci', '--ignore-scripts']);
+    for (const name of ['lockfileSha256', 'hostIntegrityMapDigest', 'validateBuildOutput', 'candidateInventoryDigest',
+      'verifyBuilderReceipt', 'verifyServedCandidate'] as const) expect(typeof api[name]).toBe('function');
   });
   it('should accept the real Immo descriptor with an empty allowlist and scripts disabled', () => {
     const snapshot = fixture();
@@ -73,12 +76,21 @@ describe('GB1 frozen build contract', () => {
   it.each(['git:repo', 'git+https://github.com/x/y', 'file:../local', 'https://example.org/p.tgz', 'x/y'])('should reject dependency %s', spec => {
     refusal(fixture({ manifest: { dependencies: { example: spec } } }), 'dep_outside_lock');
   });
+  it('should exempt only dependencies bundled inside a locked tarball from the lock closure', () => {
+    const bundled = { ...dependency, dependencies: { inner: '^1.0.0', other: '^2.0.0' }, bundleDependencies: ['inner'] };
+    refusal(fixture({ packages: { 'node_modules/example': bundled } }), 'dep_outside_lock');
+    for (const bundleDependencies of [['inner', 'other'], true]) {
+      expect(validateArtifactBuild(fixture({ packages: { 'node_modules/example': { ...bundled, bundleDependencies } } })).postinstall).toEqual([]);
+    }
+    refusal(fixture({ packages: { 'node_modules/example': { ...bundled, bundleDependencies: 'inner' } } }), 'dep_outside_lock');
+    refusal(fixture({ packages: { 'node_modules/example': { ...bundled, dependencies: { inner: 'file:../x' }, bundleDependencies: true } } }), 'dep_outside_lock');
+  });
   it('should reject a registry escape in the transitive lock closure', () => {
     refusal(fixture({ packages: { 'node_modules/example': { ...dependency, resolved: 'https://registry.npmjs.org.evil/x' } } }), 'dep_outside_lock');
   });
   it('should require the exact host-owned postinstall triple', () => {
     const snapshot = fixture({ packages: { 'node_modules/example': { ...dependency, hasInstallScript: true } } });
-    const allowed = { package: 'example', version: '1.2.3', integrity: 'sha512-pinned' };
+    const allowed = { package: 'example', version: '1.2.3', integrity: pinned };
     refusal(snapshot, 'install_script_not_allowlisted');
     for (const key of ['package', 'version', 'integrity']) {
       refusal({ ...snapshot, postinstallAllowlist: [{ ...allowed, [key]: 'wrong' }] }, 'install_script_not_allowlisted');

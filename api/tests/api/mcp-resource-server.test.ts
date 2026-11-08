@@ -153,7 +153,8 @@ describe('MCP connector-host routes', () => {
       clock: { now: () => now, addSeconds: (date, seconds) => new Date(date.getTime() + seconds * 1000) },
       jwksPort: jwks,
     }).signJwt(
-      { client_id: 'mcp-route-test-client', scope: scopes.join(' ') },
+      // tid is required on every MCP path (A4 connector admission); membership comes from createTestUser.
+      { client_id: 'mcp-route-test-client', scope: scopes.join(' '), tid: 'tenant-mcp-route-test' },
       {
         audience: resource,
         expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
@@ -205,6 +206,12 @@ describe('MCP connector-host routes', () => {
     expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toHaveLength(1);
     expect((googleCall?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${gmailAccessToken}` });
     expect(JSON.stringify(body)).not.toContain(gmailAccessToken);
+  });
+
+  it('keeps REST /api/v1/workspaces closed to a valid MCP OAuth bearer (workspaces_list is MCP-only)', async () => {
+    const token = await issueToken(['mcp:discover', 'mcp:tools:invoke']);
+    const response = await app.request('/api/v1/workspaces', { headers: { authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(401);
   });
 
   it('rejects a token missing mcp:tools:invoke before the connector mount reaches Google', async () => {
