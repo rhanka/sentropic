@@ -10,7 +10,8 @@ export interface ForgeReads extends Pick<LivePorts['forge'], 'head' | 'reachable
 
 /**
  * The forge port of the builder in remote-host mode (D0): `git_commit` runs in the host LiveService, never in this
- * controller, so a fast-forward is refused as builder_unavailable and reads delegate to the lease reader.
+ * controller, so a fast-forward is refused as builder_unavailable and reads delegate to the lease reader
+ * (`createLeaseForgeReads`).
  */
 export function remoteHostForge(reads: ForgeReads): LivePorts['forge'] {
   return {
@@ -21,9 +22,3 @@ export function remoteHostForge(reads: ForgeReads): LivePorts['forge'] {
   };
 }
 
-const unread = (): never => { throw new LiveError('builder_unavailable', 'forge_unconfigured'); };
-/** Source-gap until the SG0-app lease reader is composed: every forge read refuses, so a build or revive fails closed
- * per operation while the host API stays up and answers. */
-export const UNCONFIGURED_FORGE_READS: ForgeReads = Object.freeze({
-  head: async () => unread(), reachable: async () => unread(), snapshot: async () => unread(), source: async () => unread(),
-});

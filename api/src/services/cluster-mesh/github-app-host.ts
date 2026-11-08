@@ -290,24 +290,34 @@ export interface GitHubAppHostRouterDeps {
 }
 
 /**
+ * The SG0-app lifecycle service (enrollment, lease, rotation, revocation) over the host custody store and key: the
+ * router below serves it, and the builder forge reader calls its `acquire` in process (no HTTP, no S2S).
+ */
+export const createGitHubAppHostService = (
+  deps: Pick<GitHubAppHostRouterDeps, 'config' | 'store' | 'github' | 'onCredentialsChanged' | 'now'>,
+) => {
+  // Defence in depth for direct callers: the mount gate already refused.
+  if (!isProvisionedSecretEncryptionKey(env.SECRET_ENCRYPTION_KEY)) throw new GitAppError('capability_unavailable');
+  const custody = withConnectorRevocationKey(GIT_APP_CUSTODY_KEY_REF, (key) =>
+    createEncryptedGitAppCustodian({ store: deps.store, key }));
+  return createGitHubAppEnrollment({
+    publicBaseUrl: deps.config.publicBaseUrl,
+    custody,
+    github: deps.github,
+    onCredentialsChanged: deps.onCredentialsChanged,
+    ...(deps.now ? { now: deps.now } : {}),
+  });
+};
+
+/**
  * Composes the cluster-mesh SG0-app router with this host's adapters and
  * returns a mountable Hono app serving the public `/api/v1/github-app/*`
  * routes. The frozen package router keeps its own `/github-app/*` root and is
  * only reached through the translating dispatcher below, never mounted.
  */
 export const createGitHubAppHostRouter = (deps: GitHubAppHostRouterDeps): Hono => {
-  // Defence in depth for direct callers: the mount gate already refused.
-  if (!isProvisionedSecretEncryptionKey(env.SECRET_ENCRYPTION_KEY)) throw new GitAppError('capability_unavailable');
   const base = deps.config.publicBaseUrl;
-  const custody = withConnectorRevocationKey(GIT_APP_CUSTODY_KEY_REF, (key) =>
-    createEncryptedGitAppCustodian({ store: deps.store, key }));
-  const service = createGitHubAppEnrollment({
-    publicBaseUrl: base,
-    custody,
-    github: deps.github,
-    onCredentialsChanged: deps.onCredentialsChanged,
-    ...(deps.now ? { now: deps.now } : {}),
-  });
+  const service = createGitHubAppHostService(deps);
 
   const begin = async (target: GitAppOwnerRepository) => {
     const started = await service.begin(target);
