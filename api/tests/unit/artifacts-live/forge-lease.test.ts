@@ -1,10 +1,12 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { runtimeGeneration } from '../../../src/services/artifacts/live/forge-lease';
+import type { LiveState } from '../../../src/services/artifacts/live/records';
 import { FORGE_LIMITS } from '../../../src/services/artifacts/live/forge-tar';
 import { GB1_QUALIFICATION_PATH } from '../../../src/services/artifacts/live/gb1-qualification';
 import { BUILDER_IMAGE } from '../../../src/services/artifacts/live/recipes';
 import { key } from './fixture';
-import { failure, HEAD, QUALIFICATION, REPO, setup, sha256, STAGED, tarball, TOP, TREE } from './forge-fixture';
+import { binding, failure, HEAD, QUALIFICATION, REPO, setup, sha256, STAGED, tarball, TOP, TREE } from './forge-fixture';
 
 describe('lease forge reads: head and reachable (contract §4)', () => {
   it('should read the branch head and map a missing branch to git_branch_missing', async () => {
@@ -23,6 +25,24 @@ describe('lease forge reads: head and reachable (contract §4)', () => {
     expect(await s.reads.reachable(key, 'HEAD')).toBe(false);
     expect(s.fetch.mock.calls.length).toBe(before);
     expect(s.calls.find(c => c.url.includes('/compare/'))?.url).toContain(`/compare/${'1'.repeat(40)}...${HEAD}`);
+  });
+});
+
+describe('lease forge reads: generation of the reads (R1)', () => {
+  it('should read at the runtime generation, without a live session, and fall back to the last reconcile when dormant', async () => {
+    let runtime: { generation: number; phase: string } | undefined;
+    const session = vi.fn(async (): Promise<{ generation: number }> => { throw new Error('stale_session'); });
+    const store = { read: async () => (runtime ? { runtime } as unknown as LiveState : undefined) };
+    const s = await setup({ record: false, generation: runtimeGeneration(store, session) });
+    const VARIANT = 'b'.repeat(40); s.state.branches['artifact/variant'] = VARIANT;
+    expect(await failure(s.reads.head(key))).toMatchObject({ message: 'stale_session' });
+    // A build-only run without any reconcile: its runtime and its job binding at the job generation.
+    runtime = { generation: 2, phase: 'BUILD_PROVISIONING' }; await s.bindings.admit(key, 2, { ...binding, branch: 'artifact/variant' });
+    session.mockClear(); await expect(s.reads.head(key)).resolves.toBe(VARIANT); expect(session).not.toHaveBeenCalled();
+    // A reconcile recorded generation 1 with another branch: the runtime at 2 keeps reading its own binding.
+    await s.bindings.admit(key, 1, binding); session.mockResolvedValue({ generation: 1 });
+    await expect(s.reads.head(key)).resolves.toBe(VARIANT);
+    runtime = { generation: 2, phase: 'DORMANT' }; await expect(s.reads.head(key)).resolves.toBe(HEAD);
   });
 });
 
