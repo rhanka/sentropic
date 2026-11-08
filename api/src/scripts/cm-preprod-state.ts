@@ -46,8 +46,8 @@ export async function inspectPreprod(client: PoolClient, request: PreprodRequest
       WHERE n.nspname IN ('public','control','cm_identity') ORDER BY n.nspname,c.relname,x.conname`);
     const source = await readA4IdentitySource(client, true);
     const importedAt = new Date().toISOString();
-    await mapA4IdentitySource(source, { ...verifier, importedAt });
-    reconcileA4RemoteSnapshot(source.rows.get('user_sessions') ?? [], remote, importedAt);
+    const reconciled = reconcileA4RemoteSnapshot(source.rows.get('user_sessions') ?? [], remote, importedAt);
+    await mapA4IdentitySource(source, { ...verifier, importedAt, remotelyRevokedSessionIds: reconciled.revokedSessionIds });
     const rows = Object.fromEntries([...source.rows].map(([table, values]) => [table,
       values.map(value => canonical(value)).sort()]));
     return {

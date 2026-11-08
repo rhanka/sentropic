@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { SignJWT } from 'jose';
 import { Client, Pool, type PoolClient } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createCmTokenCustodian } from '../../../src/services/identity/cm-token-custodian';
 import { encryptSecret } from '../../../src/services/secret-crypto';
 import { prepareCmFixtureCutover } from '../../utils/cm-fresh-database';
 
@@ -50,11 +52,12 @@ afterEach(async () => {
   }
 });
 
-async function migrate(failBeforeCommit = false, boundImport = true, purpose: 'rehearsal' | 'cutover' = 'rehearsal') {
+async function migrate(failBeforeCommit = false, boundImport = true, purpose: 'rehearsal' | 'cutover' = 'rehearsal',
+  remoteRecords: readonly unknown[] = []) {
   // Import through the same real runner used by control migrations, with no SQL
   // fabrication of the CM receipt, schema attestations or D11 checkpoint.
   const fixture = boundImport ? await (await import('../../utils/cm-cutover-test-config'))
-    .createCmCutoverTestConfiguration(database, undefined, purpose) : null;
+    .createCmCutoverTestConfiguration(database, undefined, purpose, remoteRecords) : null;
   await database.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
   try {
     if (fixture) await (await import('../../../src/services/identity/cm-cutover-import'))
@@ -80,10 +83,6 @@ describe('A4 single control identity migration', () => {
       VALUES ('unused-ticket', 'a4-owner@example.test', repeat('a', 64), 'foreign-seed-ticket', false, now() + interval '1 day')`],
     ['magic_link', `INSERT INTO magic_links (id, email, user_id, token_hash, expires_at)
       VALUES ('magic', 'a4-owner@example.test', 'a4-owner', repeat('b', 64), now() + interval '1 day')`],
-    ['login_session', `INSERT INTO user_sessions (id, user_id, session_token_hash, expires_at)
-      VALUES ('login', 'a4-owner', repeat('c', 64), now() + interval '1 day')`],
-    ['login_refresh_token', `INSERT INTO user_sessions (id, user_id, session_token_hash, refresh_token_hash, expires_at)
-      VALUES ('refresh', 'a4-owner', repeat('d', 64), repeat('e', 64), now() + interval '1 day')`],
   ].flatMap(([kind, insert]) => (['rehearsal', 'cutover'] as const).map(purpose => [kind, purpose, insert] as const)))(
     'should invalidate %s during %s and retain its count', async (kind, purpose, insert) => {
     await database.query(insert);
@@ -98,6 +97,52 @@ describe('A4 single control identity migration', () => {
     expect(rows[0].detail.purpose).toBe(purpose);
     expect(JSON.stringify(rows[0].detail)).not.toContain('foreign-seed-ticket');
     expect(rows[0].detail.importReceipt.identitiesPreserved).toBe(true);
+  });
+
+  it.each(['rehearsal', 'cutover'] as const)('should keep a live legacy session usable during %s', async purpose => {
+    const key = randomBytes(32), tokens = createCmTokenCustodian({ sessionKey: key, ticketKey: key, emailCodeKeys: new Map() });
+    const sha = (token: string) => createHash('sha256').update(token).digest('hex');
+    try {
+      const createdAt = new Date(Date.now() - 3_600_000), expiresAt = new Date(Date.now() + 86_400_000);
+      const login = { mfaVerified: true, authTime: Math.floor(createdAt.getTime() / 1000), sessionVersion: createdAt.getTime() };
+      // Same claims and signature as the pre-A4 session manager cookies.
+      const sign = (tokenUse: 'session' | 'refresh') => new SignJWT({ userId: 'a4-owner', sessionId: 'live', role: 'editor',
+        login, tokenUse }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime(expiresAt).sign(key);
+      const session = await sign('session'), refresh = await sign('refresh');
+      await database.query(`INSERT INTO user_sessions (id, user_id, session_token_hash, refresh_token_hash, mfa_verified,
+        expires_at, created_at) VALUES ('live', 'a4-owner', $1, $2, true, ($3::timestamptz AT TIME ZONE 'UTC'),
+        ($4::timestamptz AT TIME ZONE 'UTC'))`, [sha(session), sha(refresh), expiresAt.toISOString(), createdAt.toISOString()]);
+      await migrate(false, true, purpose, [{ sessionId: 'live', userId: 'a4-owner', sessionTokenHash: sha(session),
+        refreshTokenHash: sha(refresh), login, expiresAt: expiresAt.getTime(), revoked: false }]);
+      const now = new Date().toISOString();
+      const claims = await tokens.loginTokens.verify(Buffer.from(session), 'session', now);
+      const refreshed = await tokens.loginTokens.verify(Buffer.from(refresh), 'refresh', now);
+      const { rows } = await database.query(`SELECT s.user_id, s.status, s.revoked_at, s.expires_at, b.session_token_hash,
+        b.refresh_token_hash, b.mfa_verified, b.auth_time, b.session_version FROM cm_identity.identity_login_sessions s
+        JOIN cm_identity.identity_login_token_bindings b USING (session_id) WHERE session_id = $1`, [claims.sessionId]);
+      expect(rows).toHaveLength(1);
+      expect({ ...rows[0], expires_at: new Date(rows[0].expires_at).getTime(), auth_time: Number(rows[0].auth_time),
+        session_version: Number(rows[0].session_version) }).toEqual({ user_id: claims.userId, status: 'active', revoked_at: null,
+        expires_at: expiresAt.getTime(), session_token_hash: sha(session), refresh_token_hash: sha(refresh), mfa_verified: true,
+        auth_time: refreshed.login.authTime, session_version: refreshed.login.sessionVersion });
+      const { rows: [{ detail }] } = await database.query('SELECT detail FROM control.app_cm_identity_cutover');
+      expect(detail.invalidatedProofCounts).toMatchObject({ login_session: 0, login_refresh_token: 0 });
+      expect(JSON.stringify(detail)).not.toContain(sha(session));
+    } finally { key.fill(0); tokens.dispose(); }
+  });
+
+  it('should drop expired and remotely revoked sessions and count them as invalidated', async () => {
+    await database.query(`INSERT INTO user_sessions (id, user_id, session_token_hash, expires_at, created_at)
+      VALUES ('expired', 'a4-owner', repeat('c', 64), now() - interval '1 hour', now() - interval '2 days')`);
+    await database.query(`INSERT INTO user_sessions (id, user_id, session_token_hash, refresh_token_hash, expires_at)
+      VALUES ('revoked', 'a4-owner', repeat('d', 64), repeat('e', 64), now() + interval '1 day')`);
+    await migrate(false, true, 'cutover', [{ sessionId: 'revoked', revoked: true }]);
+    for (const table of ['identity_login_sessions', 'identity_login_token_bindings']) {
+      expect((await database.query(`SELECT count(*)::int AS count FROM cm_identity.${table}`)).rows).toEqual([{ count: 0 }]);
+    }
+    const { rows: [{ detail }] } = await database.query('SELECT detail FROM control.app_cm_identity_cutover');
+    expect(detail.invalidatedProofCounts).toMatchObject({ login_session: 2, login_refresh_token: 1 });
+    expect(detail.importReceipt.invalidatedProofCounts).toMatchObject({ login_session: 2, login_refresh_token: 1 });
   });
 
   it('should refuse an unknown source token column before dropping identity tables', async () => {
