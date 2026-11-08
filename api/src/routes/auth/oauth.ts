@@ -7,6 +7,7 @@ import {
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
+import { DEVELOPMENT_SECRET_SEED, resolveDeploymentSecret } from '../../config/deployment-secrets';
 import { db } from '../../db/client';
 import { bindCmAppDatabase, withAppDatabaseMethods, type CmIdentityTransaction } from '../../services/identity/cm-transaction';
 import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
@@ -23,19 +24,12 @@ import { cmAuthSessionService } from '../../services/identity/cm-session-facade'
 /**
  * HS256 key for the session and verification tokens this host signs and verifies.
  *
- * `||`, not `??`, and the distinction is not cosmetic here. Today production carries no `JWT_SECRET`
- * at all, so both operators yield the literal and this is byte-identical — the change is inert. It
- * stops being inert the moment the JWT rotation step delivers the variable: the secret bundle emits
- * every key it knows about as `--from-literal=VAR="$VAR"`, so an environment whose source env file
- * omits the value receives `JWT_SECRET=""` rather than no variable. `??` preserves that empty string
- * and this becomes a ZERO-LENGTH HMAC key for real authentication material; `||` falls through to the
- * documented fallback instead. Fixing it here, before any pipeline emits the key, is what keeps the
- * rotation step from arming a landmine it cannot see.
- *
- * Exported so the empty-string case is measurable rather than asserted.
+ * A deployed runtime refuses a missing, EMPTY or public-seed `JWT_SECRET` (the secret bundle emits
+ * `JWT_SECRET=""` when the source env file omits it, which must never become a zero-length HMAC key);
+ * dev and test keep the development seed. Exported so both cases are measurable rather than asserted.
  */
 export const resolveSessionTokenSecret = (): string =>
-  env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+  resolveDeploymentSecret('JWT_SECRET', DEVELOPMENT_SECRET_SEED);
 
 const unsupportedOAuthPort = async (): Promise<never> => {
   throw new Error('This AuthHono port is not used by the Sentropic OAuth host routes.');
@@ -236,7 +230,7 @@ const resolveOAuthStateSecret = (): string => {
   if (!secret && requiresOAuthProductionSecrets()) {
     throw new Error('JWT_SECRET or OAUTH_SIGNING_KEK is required for OAuth state sealing in production.');
   }
-  return secret || 'dev-secret-key-change-in-production-please';
+  return secret || DEVELOPMENT_SECRET_SEED;
 };
 
 const resolveRequestOrigin = (request: Request): string => {
