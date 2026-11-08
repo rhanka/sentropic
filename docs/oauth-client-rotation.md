@@ -70,6 +70,13 @@ no admin_app browser session is available to call
 the custody profile approval fields and the subject revision are written exactly
 as by the admin API. Run it only on a recorded owner authorization.
 
+The Job starts through the A4 launcher (`/run/cm-runtime/launch.mjs --script
+cm-account-approve`), which composes the email-code HMAC custody exactly as for
+the api pod. It runs only in a namespace that carries the A4 runtime: ConfigMap
+`sentropic-a4-runtime`, Secret `email-code-hmac` and the Q-K policy keys in
+ConfigMap `api`. Elsewhere the pod does not start or the launcher exits with
+`hmac_composition_failed`, and nothing is written.
+
 1. Prepare a 0600 env file with exactly these four lines (ids, no secret):
    `CM_ACCOUNT_APPROVE_ACTOR_ID` (an active admin_app account with a custody
    profile), `CM_ACCOUNT_APPROVE_USER_ID` (the target; must differ from the
