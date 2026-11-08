@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.2.24
+
+- `artifacts_live_status` and `artifacts_live_control` start no longer walk the repository tree: they
+  resolve the head (`git/ref/heads/{branch}`) and read the base tree SHA from one commit lookup, then
+  return `liveRevision`, `currentHeadSha`, `bindingGeneration` and the draft state. Only reads that list
+  base entries (`live_read`, `live_write`, `live_status` with `includeDiff`/`cursor`) take the snapshot.
+- The tree walk, the base commit lookup and the fast-forward checks no longer run inside the per-artifact
+  advisory-locked draft transaction: the draft fence is read in a short transaction, those forge calls run
+  outside the lock, and the locked transaction re-checks the fence (bounded retry, then
+  `git_live_conflict`/`transition_busy`). Status, start and reset therefore make no forge call under the lock
+  (immo preprod 08/11: 502 on live_status, `idle in transaction`, lock timeouts). Still under the lock:
+  the base file reads of a `live_read` page and of `live_write` edits, and the host `authorize` callback.
+- Status, start and reset no longer validate the whole tree (walk limits, entry names); those checks stay
+  with the reads that list base entries. A host GitPort without `snapshot` now gets `capability_unselected`
+  before the transaction.
+- `@sentropic/artifacts/live-host` ships the host live worker: `createLiveWorkerClient` is the HTTP
+  `LiveWorkerPort` over the builder host live API (`v1/live/reconcile`, `v1/live/stop`). Before every
+  reconcile it stages the current durable draft: `v1/live/draft/page` for each non-empty page (at most
+  1 MiB of file bytes, 32 pages; overlay at most 255 paths, 1 MiB per file, 8 MiB), then
+  `v1/live/draft/seal` (a clean draft is `pages: 0`, `deletes: []`, `treeSha` = the live tree). The
+  reconcile body carries `ownerId` from the live record runtime. A refused page or seal stops before the
+  reconcile (`provider_unavailable`); an overlay over the limits fails before any call (`limit_exceeded`).
+- Host ports of the worker: `fences` (owner and fences of the runtime), `bindings`, `sessionState` and
+  `drafts` (the current draft overlay). `liveStoreFences(store)` and `liveStoreDrafts(store, keys)` supply
+  them from the package `LiveStore`. `planLiveDraft`, `stageLiveDraft` and `LIVE_DRAFT_LIMITS` are exported.
+
 ## 0.2.23
 
 - `createGitHubForge` resolves a branch through `GET /repos/{owner}/{repo}/git/ref/heads/{branch}`
