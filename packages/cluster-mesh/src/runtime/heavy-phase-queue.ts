@@ -1,10 +1,10 @@
 /** Heavy phases of builder pods whose memory peaks stack on one node (A-LIVE r3.5, owner « Cluster mesh gère la file »). */
 export type HeavyPhaseKind = 'install' | 'prebundle' | 'dev' | 'build';
-/** Provisional peak costs above the pod base (MiB), measured on the immo variant; `build` is capped by the 1280Mi pod
- * limit minus the 19 MiB pod base. A finished `dev` keeps `dev` as the live reservation of its subject until the live
- * stops. */
+/** Provisional peak costs above the pod base (MiB), measured on the immo variant; `build` is the measured clean-build peak
+ * at the 1536Mi pod limit (1388.6 MiB) minus the 19 MiB pod base. A finished `dev` keeps `dev` as the live reservation of its
+ * subject until the live stops. */
 export const PROVISIONAL_HEAVY_PHASE_COSTS_MIB: Readonly<Record<HeavyPhaseKind, number>> =
-  Object.freeze({ install: 980, prebundle: 980, dev: 390, build: 1261 });
+  Object.freeze({ install: 980, prebundle: 980, dev: 390, build: 1370 });
 
 export interface HeavyPhaseBudget {
   /** Node memory left to builder pods (one d2-4: 1641 MiB, the 1706 MiB node share minus the 65 MiB of image files the
