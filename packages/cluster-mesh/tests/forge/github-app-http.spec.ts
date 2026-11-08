@@ -110,6 +110,61 @@ describe('GitHub App host routes', () => {
     // Under the former no-referrer policy the same same-origin form failed csrf().
     expect(browserFormOrigin('no-referrer', 'https://mesh.example/github-app', '/github-app/enroll')).toBe('null');
   });
+
+  it('should resume a lost installation redirect with a fresh one-time state only for the owner', async () => {
+    const f = fixture();
+    const entry = await f.service.begin(owner);
+    const ref = entry.installationRef;
+    const manifestPrompt = await f.service.prompt(owner, ref);
+    expect(manifestPrompt.phase).toBe('manifest');
+    const converted = await f.service.convert(owner, ref, { state: manifestPrompt.state, code: 'fake-code' });
+    const lost = new URL(converted.installationUrl).searchParams.get('state')!;
+    // The convert response never reached the browser and its state expired.
+    f.advance(600001);
+    const app = createGitHubAppRouter({ service: f.service, publicBaseUrl: 'https://mesh.example',
+      resolveOwner: async (request) => request.headers.get('x-test-owner') === 'yes' ? owner : null,
+      authenticateBroker: async () => null });
+    const headers = { 'x-test-owner': 'yes' };
+    expect((await app.request(`/github-app/${ref}`)).status).toBe(403);
+    await expect(f.service.prompt({ ...owner, ownerId: 'other' }, ref)).rejects.toThrow('access_denied');
+    const page = await app.request(`/github-app/${ref}`, { headers });
+    expect(page.status).toBe(200);
+    const href = /<a href="([^"]+)"/.exec(await page.text())?.[1]?.replace(/&amp;/g, '&') ?? '';
+    const resumed = new URL(href);
+    expect(`${resumed.origin}${resumed.pathname}`).toBe('https://github.com/apps/test-app/installations/new');
+    const fresh = resumed.searchParams.get('state')!;
+    expect(fresh).toMatch(/^[0-9a-f-]{36}$/);
+    expect(fresh).not.toBe(lost);
+    const install = (state: string) =>
+      app.request(`/github-app/${ref}/installation?installation_id=500&state=${state}`, { headers });
+    expect((await install('')).status).toBe(403);
+    expect((await install(lost)).status).toBe(403);
+    const accepted = await install(fresh);
+    expect(accepted.status).toBe(303);
+    expect(accepted.headers.get('location')).toBe(`/github-app/${ref}/status`);
+    expect((await install(fresh)).status).toBe(403);
+    expect((await f.service.status(owner, ref)).state).toBe('ready');
+    expect((await app.request(`/github-app/${ref}`, { headers })).status).toBe(503);
+  });
+
+  it('should refuse the previous resume state once a newer prompt overwrote it', async () => {
+    const f = fixture();
+    const entry = await f.service.begin(owner);
+    const ref = entry.installationRef;
+    const manifestPrompt = await f.service.prompt(owner, ref);
+    await f.service.convert(owner, ref, { state: manifestPrompt.state, code: 'fake-code' });
+    const first = await f.service.prompt(owner, ref);
+    const second = await f.service.prompt(owner, ref);
+    expect(first.phase).toBe('install');
+    expect(second.state).not.toBe(first.state);
+    await expect(f.service.install(owner, ref, { state: first.state, installationId: '500' })).rejects.toThrow('access_denied');
+    f.advance(600001);
+    await expect(f.service.install(owner, ref, { state: second.state, installationId: '500' })).rejects.toThrow('access_denied');
+    const third = await f.service.prompt(owner, ref);
+    await expect(f.service.install({ ...owner, storageScopeId: 'other' }, ref, { state: third.state, installationId: '500' }))
+      .rejects.toThrow('access_denied');
+    expect((await f.service.install(owner, ref, { state: third.state, installationId: '500' })).state).toBe('ready');
+  });
 });
 
 /**

@@ -53,6 +53,10 @@ export const createGitHubAppRouter = (input: {
   });
   app.get('/github-app/:ref', async (c) => {
     const prompt = await input.service.prompt(await owner(c.req.raw), c.req.param('ref'));
+    if (prompt.phase === 'install') {
+      // The App exists: resume its installation with the freshly minted state.
+      return c.html(`<html><body><a href="${escapeHtml(prompt.installationUrl)}">Install the GitHub App on ${escapeHtml(prompt.locator)}</a></body></html>`);
+    }
     return c.html(`<html><body><form method="post" action="${escapeHtml(prompt.manifestUrl)}"><input type="hidden" name="manifest" value="${escapeHtml(JSON.stringify(prompt.manifest))}"><button>Enroll ${escapeHtml(prompt.locator)}</button></form></body></html>`);
   });
   app.get('/github-app/:ref/manifest', async (c) => {
