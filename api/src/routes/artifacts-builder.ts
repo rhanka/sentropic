@@ -9,7 +9,7 @@ import {
   parseBuilderHostBindings,
 } from '../services/artifacts/live/builder-mount';
 import type { HostBuildEnv } from '../services/artifacts/live/host-build-api';
-import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthServiceResource } from './auth/oauth';
+import { getSentropicOAuthPorts, resolveOAuthServiceIssuer, resolveOAuthServiceResource } from './auth/oauth';
 
 /**
  * A-LIVE W7 (plan lot M3-B) — product mount of the builder host build API:
@@ -35,7 +35,7 @@ const buildServiceAuthPorts = (): ServiceAuthPorts => {
 
 const requireArtifactBuilder = (c: Context, next: () => Promise<void>) =>
   createRequireServiceAuth({
-    issuer: resolveOAuthIssuer(c.req.raw),
+    issuer: resolveOAuthServiceIssuer(c.req.raw),
     ports: buildServiceAuthPorts(),
     requiredScopes: [ARTIFACT_BUILDER_SCOPE],
     resource: resolveOAuthServiceResource(c.req.raw),

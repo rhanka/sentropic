@@ -17,7 +17,7 @@ import {
 } from '../services/cluster-mesh/github-app-host';
 import { createPostgresGitHubAppEnvelopeStore } from '../services/cluster-mesh/github-app-envelope-store';
 import type { ForgeLeaseHost } from '../services/artifacts/live/forge-binding';
-import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthServiceResource } from './auth/oauth';
+import { getSentropicOAuthPorts, resolveOAuthServiceIssuer, resolveOAuthServiceResource } from './auth/oauth';
 
 /**
  * A-LIVE W1 (plan lot M2-S) — product wiring for the SG0-app host composition.
@@ -46,7 +46,7 @@ const buildServiceAuthPorts = (): ServiceAuthPorts => {
 
 const requireGithubAppBroker = (c: Context, next: () => Promise<void>) =>
   createRequireServiceAuth({
-    issuer: resolveOAuthIssuer(c.req.raw),
+    issuer: resolveOAuthServiceIssuer(c.req.raw),
     ports: buildServiceAuthPorts(),
     requiredScopes: [GIT_APP_BROKER_SCOPE],
     resource: resolveOAuthServiceResource(c.req.raw),

@@ -44,6 +44,10 @@
 - [x] **Mono-branch**
 - Rationale: one workflow gating fix with its CI-expected tests; one CI.
 
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick**
+- Rationale: one owner-urgent fix PR, one CI.
+
 ## Plan / Todo (lot-based)
 - [x] **Lot 1 — Gate the retain job**
   - [x] `retain-daily-identities` adds `changes` to `needs` and requires the same disjunction as the build upload steps (`needs.changes.outputs.ui/api/global == 'true'`) on a push to main; deploy-only pushes now skip the job and ci-gate stays green.
