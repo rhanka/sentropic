@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: sentropic-preprod
 resources:
   - store.yaml
+  - networkpolicy.yaml

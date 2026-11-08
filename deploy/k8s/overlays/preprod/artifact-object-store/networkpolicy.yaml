@@ -1,0 +1,29 @@
+# The object store admits only its two same-namespace clients on TCP 9000:
+# artifact-content (read credential) and the api (builder cache credential).
+# It needs no egress at all (single local volume), so every egress is denied.
+# Bootstrap and rotation run through kubectl port-forward (README.md), never
+# through an extra ingress rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: artifact-object-store
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: artifact-object-store
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: artifact-content
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 9000
+  egress: []
