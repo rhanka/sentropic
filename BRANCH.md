@@ -1,47 +1,53 @@
-# Feature: A-LIVE builder composition and f1 fence signer (GB4-P BLOCKER 1 + 2)
+# Feature: Governed one-off Job to approve a cm_identity account role
 
 ## Objective
-- [x] Compose `createBuilderService` in the API behind `ARTIFACT_BUILDER_ENABLED` (default off: unchanged 503 mount), start the live scheduler, and sign/push the f1 controller fence to artifact-content (s-archi builder-composition contract 08/11).
+- [x] Give operators a governed, audited path to approve a cm_identity account or change its global role when no admin_app session exists, through the admin API's own service (`changeCmAccountAsAdmin`), mirroring the oauth-register(-service)-client Job pattern.
 
 ## Scope / Guardrails
-- [x] Branch feat/alive-builder-composition from origin/main 591f5eee1; worktree tmp/worktrees/alive-builder-composition; ENV=test-builder-comp.
-- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
-- [x] No deploy change here: the flag, ConfigMaps and Secrets go through the preprod IaC overlay of the ops lane.
+- [x] Branch feat/cm-account-approve-job from origin/main 4b4c8632d; worktree tmp/worktrees/cm-account-approve-job; ENV=test-cm-approve (API 9471, UI 5671, Maildev 1571).
+- [x] Make only; no Python, no attribution trailers, no CI skips or reruns; never ENV=dev.
+- [x] The Job is never run by this lane: s-conductor runs it against the cluster.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/app.ts`
-  - `api/src/config/env.ts`
-  - `api/src/services/artifacts/**`
-  - `api/tests/**`
+  - `api/src/scripts/cm-account-approve.ts`
+  - `api/tests/unit/cm-account-approve.test.ts`
+  - `scripts/ci/cm-account-approve-job.test.mjs`
+  - `api/package.json`
+  - `docs/oauth-client-rotation.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `deploy/**`
   - `packages/**`
+  - `api/src/services/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile` (BRCMA-EX1)
+  - `deploy/k8s/base/38-cm-account-approve-job.yaml` (BRCMA-EX2)
+  - `deploy/k8s/base/15-networkpolicy.yaml` (BRCMA-EX2)
   - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `attention`: no SG0-app lease forge reader exists on main (and no spec maps a live key to its repository and branch); `UNCONFIGURED_FORGE_READS` refuses every read as `builder_unavailable`/`forge_unconfigured`, so builds and revives fail closed per operation while the host API answers. A follow-up wagon must compose the lease reader.
-- [x] `attention`: `createArtifactLiveService` takes the Kubernetes client as an input (`kubernetes`), so the product passes `createInClusterKubernetes(placement)` and tests a fake.
+- [x] `BRCMA-EX1` Makefile: one additive target `cm-account-approve-job`, plus `scripts/ci/cm-account-approve-job.test.mjs` appended to the `test-publishable-manifests` default list as the 37 Job test is (reason: no operator path to change a role without an admin_app session; impact: no existing target behaviour changed; rollback: delete the target and the list entry, the Job yaml stays valid for a direct kubectl apply).
+- [x] `BRCMA-EX2` deploy/k8s/base: new one-off Job `38-cm-account-approve-job.yaml` (not in kustomization resources) and one additive NetworkPolicy `allow-cm-account-approve-to-postgres` (reason: default-deny-ingress baseline; impact: admits only pods labelled component cm-account-approve to postgres:5432; rollback: delete the yaml and the policy).
+- [x] `attention`: the cluster-mesh `account.approved` audit event has no reason field; the reason is recorded as the Job annotation `sentropic.io/approval-reason` and in the wrapper receipt line, persisted in the run report (source-gap for a durable cm_identity reason column).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
-- Rationale: one wagon, one PR, one CI.
+- Rationale: one small change, one PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — f1 controller fence signer**
-  - [x] `live-fence.ts`: `ARTIFACT_LIVE_CONTROLLER_KEY` (`<kid>=<base64url>`), `ARTIFACT_LIVE_EDGE_INTERNAL_URL` (internal Service Host only), `routes.revoke/ready` sign `signLiveFence` and POST `/_live-fence/v1`; non-204 resent freshly signed, then `builder_unavailable`.
-- [x] **Lot 2 — Builder composition behind the flag**
-  - [x] `forge.ts`: remote-host forge port, `fastForward` refused (`fast_forward_remote_host`).
-  - [x] `product-builder.ts`: `createProductBuilder(env, deps)` null unless `ARTIFACT_BUILDER_ENABLED=1`; boot refusal names the missing variable; binding view of the last host reconcile; heavy queue 1641 MiB / 4 pods; scheduler every 30 s, once per process.
-  - [x] `app.ts` mounts `createProductArtifactBuilderRouter(productBuilder)` and stops the scheduler on exit.
-  - [x] Lot gate: `make typecheck-api`, `make lint-api`, scoped `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-builder-comp`.
+- [x] **Lot 1 — Script and tests**
+  - [x] `cm-account-approve.ts`: four required env variables, GlobalRole enum, self-approval refused, reason bounded; calls `changeCmAccountAsAdmin` approve; prints `{userId, roleBefore, roleAfter, status}`; exit 1 on refusal.
+  - [x] `api/package.json` build compiles `dist/scripts/cm-account-approve.js` (same esbuild flags as the oauth scripts).
+  - [x] `tests/unit/cm-account-approve.test.ts`: missing env, self-approval, role enum, service arguments, output without actor, reason or email.
+- [x] **Lot 2 — Job, policy, wrapper, doc**
+  - [x] `38-cm-account-approve-job.yaml`, `allow-cm-account-approve-to-postgres`, `make cm-account-approve-job`, section in `docs/oauth-client-rotation.md`.
+  - [x] `scripts/ci/cm-account-approve-job.test.mjs`: rendered Job, dist build entry, kustomize exclusion, network policy, wrapper guards (`make test-publishable-manifests SCOPE=... ENV=test-cm-approve`: 8/8 with the 37 test).
+  - [x] Lot gate: `make typecheck-api` (0 errors), `make lint-api` (0 errors), `make up-api-test` + scoped `make test-api-unit SCOPE=tests/unit/cm-account-approve.test.ts ENV=test-cm-approve` (10/10), `make down-volumes ENV=test-cm-approve`.
+  - [x] Bundle smoke in the test api container: esbuild with the build flags, then self-approval and invalid role refused, and an unknown target refused through the real cm_identity read on the test DB.
 - [ ] **Lot 3 — PR**
-  - [ ] PR « feat(alive): compose the builder service and the f1 fence signer behind a flag », CI green on the exact head, GLM review, merge by s-conductor.
+  - [ ] PR « feat(identity): governed one-off Job to approve an account role », CI green on the exact head, GLM review, merge by s-conductor.
