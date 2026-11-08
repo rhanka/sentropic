@@ -34,14 +34,14 @@ patches:
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
 
-# Repin to the 1a2e7f7f9 main build (2026-11-08): API sha256:f9e11434…c2 from main CI run 42495208447
+# Repin to the e9f272c94 main build (2026-11-08): API sha256:a2958eaa…8e from main CI run 42512631809
 # (publish-api-image success, receipt and GHCR manifest verified; publish-ui-image skips on this head —
 # no ui path changed — so the UI stays on sha256:bf1aa509…e0 published by the 7106defa7 build, run
-# 42485651003). Brings preprod to the S2S service issuer fix (#963: broker and builder tokens verified
-# against the IdP issuer) over the GitHub App form-origin fix (#960) and the forge-lease-reader runtime (#955).
+# 42485651003). Brings preprod to the remote live rows persistence fix (#967: remote live writes
+# persisted on Postgres) over the S2S service issuer fix (#963) and the GitHub App form-origin fix (#960).
 # Continuous deployment applies ../preprod-a4 (this overlay plus the A4 runtime wiring).
 images:
   - name: ghcr.io/rhanka/sentropic-api
-    digest: sha256:f9e11434aa5fe23c87f3446b2c133bad438fc22105998f167f1267ca4cc610c2
+    digest: sha256:a2958eaacb737c918c3628a374d3873dd21e615e3408d4269c9aa6f0dfbfd88e
   - name: ghcr.io/rhanka/sentropic-ui
     digest: sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0
