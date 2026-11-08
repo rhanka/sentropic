@@ -1,3 +1,4 @@
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { FORGE_LIMITS } from '../../../src/services/artifacts/live/forge-tar';
 import { GB1_QUALIFICATION_PATH } from '../../../src/services/artifacts/live/gb1-qualification';
@@ -51,6 +52,16 @@ describe('lease forge reads: snapshot (contract §4)', () => {
     const s = await setup(); s.state.location = 'https://evil.example/archive.tar.gz';
     expect(await failure(s.reads.snapshot(key, HEAD))).toMatchObject({ code: 'builder_unavailable' });
     expect(s.calls.some(c => c.url.startsWith('https://evil.example'))).toBe(false);
+  });
+  it('should fail closed, never hang, on a malformed or truncated archive', async () => {
+    const valid = tarball(REPO);
+    const tar = gunzipSync(valid);
+    for (const [archive, code] of [[Buffer.from('not a gzip stream'), 'builder_unavailable'],
+      [valid.subarray(0, Math.floor(valid.length / 2)), 'builder_unavailable'],
+      [gzipSync(tar.subarray(0, tar.length - 1536)), 'unstable_tree']] as const) {
+      const s = await setup(); s.state.archive = archive;
+      expect(await failure(s.reads.snapshot(key, HEAD))).toMatchObject({ code });
+    }
   });
   it('should enforce the file count and per-file limits', async () => {
     const many = await setup();
