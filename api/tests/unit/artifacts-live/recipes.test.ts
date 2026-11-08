@@ -22,6 +22,13 @@ describe('offline pod recipes (W2 static deny)', () => {
     expect(buildEnvironment()).toEqual({ ...artifactEnvironment(), NODE_OPTIONS: '--max-old-space-size=1024' });
   });
 
+  it('should cap glibc arenas and the esbuild Go heap in every phase, the clean build included', () => {
+    for (const env of [artifactEnvironment(), buildEnvironment()]) {
+      expect(env.MALLOC_ARENA_MAX).toBe('2');
+      expect(env.GOMEMLIMIT).toBe('256MiB');
+    }
+  });
+
   it('should leave the basemap tile URL to the repository build wrapper and never name the relay in the pod env', () => {
     for (const env of [artifactEnvironment(), buildEnvironment()]) {
       expect(env).not.toHaveProperty('VITE_BASEMAP_TILE_URL');
