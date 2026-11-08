@@ -6,7 +6,7 @@ import {
   type AuthUiTransport,
 } from '@sentropic/auth-ui';
 
-import { apiFetch } from '$lib/api';
+import { apiFetchResponse } from '$lib/api';
 
 // BR-39m A0-bis — IdP-origin adapter for `@sentropic/auth-ui`.
 //
@@ -22,7 +22,8 @@ export const createIdpAuthTransport = (
 ): AuthUiTransport =>
   createDefaultFetchTransport({
     baseUrl: '/api/v1/auth',
-    fetch: (input, init) => apiFetch(input, init),
+    // Non-throwing: the transport maps a 4xx to its closed error code itself.
+    fetch: (input, init) => apiFetchResponse(input, init),
     onUnauthorized: options.onUnauthorized,
   });
 
