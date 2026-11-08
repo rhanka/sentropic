@@ -13,10 +13,10 @@ const labels = (key: LiveKey, runtime: LiveRuntime) => ({
   'sentropic.dev/artifact-generation': String(runtime.generation),
   'sentropic.dev/artifact-lease': String(runtime.leaseEpoch),
 });
-/** emptyDir sizes (s-archi 2026-11-07 21:15): source, scratch /tmp (npm cache, Vite cache, build output), installed tree;
- * the sum (2560Mi) is the ephemeral limit. Measured maxima (build-1280): source 105, scratch 1241 during the install,
- * dependencies 958 MiB. */
-export const VOLUME_LIMITS = Object.freeze({ source: '256Mi', scratch: '1280Mi', dependencies: '1024Mi' });
+/** emptyDir sizes (s-archi 2026-11-07 21:15; sizes per the owner quota push 2026-11-08): source, scratch /tmp (npm cache, Vite
+ * cache, build output), installed tree; each a disk role cap (never medium: Memory), with their total bounded by the 2560Mi
+ * container ephemeral limit. Measured maxima (build-1280): source 105, scratch 1241 during the install, dependencies 958 MiB. */
+export const VOLUME_LIMITS = Object.freeze({ source: '384Mi', scratch: '1536Mi', dependencies: '1152Mi' });
 /** Bootstrap is trusted host code, not repository content or a caller-supplied command. */
 export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string, placement: BuilderPlacement) {
   if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable');
@@ -36,11 +36,12 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
         { name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } }],
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
-      // Tenant quota fit (s-archi 2026-11-07 21:15): LimitRange tenant-defaults cpu <= 1 per container; ResourceQuota
-      // tenant-quota requests.cpu 1, limits.memory 5Gi, limits.ephemeral-storage 10Gi, pods 5; four requests fit the
-      // d2-4 node (4 x 420 = 1680 <= 1706 MiB). Only the limits overcommit; the ephemeral limit is the emptyDir sum.
+      // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f): LimitRange tenant-defaults cpu <= 1 per container;
+      // ResourceQuota tenant-quota requests.cpu 1, limits.memory 6Gi, limits.ephemeral-storage 10Gi, pods 5; four requests
+      // fit the d2-4 node (4 x 420 = 1680 <= 1706 MiB) and four limits fit the quota (4 CPU, 4 x 1536Mi = 6Gi, 4 x 2560Mi = 10Gi).
+      // Only the limits overcommit.
       resources: { requests: { cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' },
-        limits: { cpu: '1', memory: '1280Mi', 'ephemeral-storage': '2560Mi' } },
+        limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': '2560Mi' } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
         { name: 'dependencies', mountPath: '/dependencies' }],
