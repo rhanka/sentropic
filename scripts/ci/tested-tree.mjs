@@ -29,6 +29,7 @@ export function assessTestedTree({ evidence = null, context = {}, policyDigest =
   if (evidence.error) return keep(`capture-error: ${evidence.error}`);
   if (!TREE.test(String(evidence.tree ?? ''))) return keep('invalid-tree');
   if (!evidence.sha || evidence.sha !== context.identity?.headSha) return keep('source-mismatch');
+  if (context.identity?.tree !== evidence.tree) return keep('source-tree-mismatch');
   if (!evidence.repository || !evidence.workflowId) return keep('missing-identity');
   const chosen = selectTestedRun(evidence);
   if (!chosen) {
@@ -55,6 +56,8 @@ export function assessTestedTree({ evidence = null, context = {}, policyDigest =
   if (String(manifest.identity?.runId) !== String(run.id) || manifest.identity?.headSha !== run.head_sha) {
     return keep('expected-set-identity-mismatch');
   }
+  // The run's own checkout (the PR merge ref) must be this tree, whatever its base.
+  if (manifest.identity?.tree !== evidence.tree) return keep('tested-tree-mismatch');
   if (!policyDigest || manifest.policyDigest !== policyDigest) return keep('policy-digest-mismatch');
   const failed = manifest.expected.find(row => row.required !== false && row.selected !== false
     && byName.get(row.job)?.conclusion !== 'success');
