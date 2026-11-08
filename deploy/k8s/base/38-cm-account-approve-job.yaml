@@ -1,7 +1,11 @@
 # Versioned one-off Job for a governed cm_identity account approval (role change).
 #
-# Runs `node dist/scripts/cm-account-approve.js` (compiled into the api image by
-# `api/package.json` build) AGAINST the tier database. The script calls the admin API's own
+# Runs `dist/scripts/cm-account-approve.js` (compiled into the api image by `api/package.json`
+# build) AGAINST the tier database, started through the A4 launcher
+# (`/run/cm-runtime/launch.mjs --script cm-account-approve`): the launcher composes the
+# email-code HMAC custody exactly as for the api pod, without which the CM identity host refuses
+# to start. The Job therefore needs the A4 runtime of its namespace: ConfigMap
+# `sentropic-a4-runtime`, Secret `email-code-hmac` and the Q-K policy keys in ConfigMap `api`. The script calls the admin API's own
 # service (`changeCmAccountAsAdmin`, approve action), so the account audit event, the custody
 # profile approval fields and the subject revision are written exactly as by
 # `POST /api/v1/admin/identity/users/:id/approve`. The actor must be an active admin_app with a
@@ -19,12 +23,14 @@
 # (15-networkpolicy.yaml) admits this Job's pod to postgres:5432. Without it the approval
 # fails closed.
 #
-# Secrets reach the Job ONLY via `envFrom` — never as CLI literals:
+# Secrets reach the Job ONLY via `envFrom` and `secretKeyRef` env entries — never as CLI literals:
 # - ConfigMap `api`: tier runtime configuration (WebAuthn RP, callback base URL).
 # - Secret `sentropic-api`: tier DB, session and token secrets (reused, operator-owned).
 # - Secret `cm-account-approval`: TEMPORARY per-run Secret created from the operator 0600 env
 #   file, holding ONLY the four CM_ACCOUNT_APPROVE_* variables (the wrapper refuses any other
 #   key, so the file cannot redirect DATABASE_URL).
+# - Secret `email-code-hmac`: the A4 email-code HMAC keys, composed by the launcher (same entries
+#   as the A4 api pod).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -57,7 +63,7 @@ spec:
           image: ghcr.io/rhanka/sentropic-api:main
           imagePullPolicy: Always
           workingDir: /workspace/api
-          command: ["node", "dist/scripts/cm-account-approve.js"]
+          command: ["node", "/run/cm-runtime/launch.mjs", "--script", "cm-account-approve"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -69,6 +75,23 @@ spec:
                 name: sentropic-api
             - secretRef:
                 name: cm-account-approval
+          # Same HMAC custody wiring as the A4 api pod (overlays/preprod-a4/patch-api-a4.yaml);
+          # the launcher turns it into CM_IDENTITY_EMAIL_CODE_* and drops the raw keys.
+          env:
+            - name: EMAIL_CODE_HMAC_KEY_ACTIVE
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_ACTIVE }
+            - name: EMAIL_CODE_HMAC_KEY_ACTIVE_REF
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_ACTIVE_REF }
+            - name: EMAIL_CODE_HMAC_KEY_PREVIOUS
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_PREVIOUS, optional: true }
+            - name: EMAIL_CODE_HMAC_KEY_PREVIOUS_REF
+              valueFrom:
+                secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_PREVIOUS_REF, optional: true }
+          volumeMounts:
+            - { name: cm-runtime, mountPath: /run/cm-runtime, readOnly: true }
           resources:
             # Thin one-shot (mirrors 37-oauth-register-service-client sizing): connect+approve+exit.
             requests:
@@ -77,3 +100,6 @@ spec:
             limits:
               cpu: 300m
               memory: 320Mi
+      volumes:
+        - name: cm-runtime
+          configMap: { name: sentropic-a4-runtime, defaultMode: 0444 }
