@@ -52,7 +52,7 @@
 
 ## Feedback Loop
 - [x] BRLW-EX1: root and api lock workspace entries follow artifacts 0.2.24 (version strings only), as BRGH-EX1 did. Rollback: revert with the bump.
-- [x] BRLW-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.24 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive, sha256 e899aa65… after the CHANGELOG wording fix equals the manifest guard; pack deterministic over two runs), mirrored in `artifacts-tuple.spec.ts`, as BRGH-EX2 did. Impact: test fixtures only. Rollback: revert with the bump.
+- [x] BRLW-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.24 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive, sha256 e899aa65… after the CHANGELOG wording fix equals the manifest guard; pack deterministic over two runs), mirrored in `artifacts-tuple.spec.ts`, as BRGH-EX2 did. Impact: test fixtures only. Rollback: revert with the bump. Stager lane: repacked at f12786e0c (sha256 a178af46…, identical over two packs), integrity sha512-3LjItdWd… pinned in both files.
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
@@ -74,6 +74,7 @@
   - [x] `live-host/worker-client.ts`: `createLiveWorkerClient` (binding of the exact generation, runtime fences and `ownerId`, stage, then reconcile; stop 204), `liveStoreFences(store)`.
   - [x] `tests/live-host-worker-client.test.ts` against a fake builder host with the host live API rules (8 tests); `api/tests/unit/artifacts-live/host-live-worker-client.test.ts` against the real `createHostLiveApi`.
   - [x] Opus review (.h2a/reviews/pr-966-opus-stager.md) REQUEST_CHANGES, no blocker. M1 fixed: one stage+reconcile or stop at a time per artifact in the client (a late seal never overwrites a newer revision; each queued run reads the draft when it starts). M2 fixed: reconcile timeout 30 s (builder live wait 25 s), page/seal/stop 10 s. m2 fixed: epoch floor keyed by storage scope. M3: pin refreshed below (BRLW-EX2). `tests/live-host-worker-client-serial.test.ts` covers M1, M2 and m2.
+  - [x] Local: `docker-slot.sh make test-artifacts SCOPE=tests/live-host-worker-client ENV=test-art-stager` PASS (2 files, 12 tests, includes the tsc build); `make lint-artifacts` 0 errors (3 warnings in untouched files-parity-lot2.test.ts); `make pack-artifacts` PASS. The api test was not run locally (no Docker slot for the api stack); it runs in the CI.
   - [ ] Not covered: cross-replica ordering of seals (needs a monotonic sequence in the SEAL body, a contract change); builder refusal codes are not surfaced (m1).
 - [ ] **Lot 4 — Final validation**
   - [x] `docker-slot.sh make test-artifacts ENV=test-art-0224` PASS (98 files, 990 tests); `make typecheck-artifacts` PASS.
