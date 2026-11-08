@@ -45,7 +45,7 @@ describe('workspaces_list host tool dispatch', () => {
       .toEqual(['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish', 'workspaces_list']);
     expect([...(await transport.ready).tools.keys()])
       .toEqual(['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish']);
-    expect(APP_P1_MANIFEST_DIGEST).toBe('428a752784e3c4e94f8c7f900f08e052315a0744a975400fa0c8a222ec688e58');
+    expect(APP_P1_MANIFEST_DIGEST).toBe('858aba03cdca4e4374bcc931b829d86f328aba8001fb66fd207db35165d62ba1');
     expect(ports.workspaces).not.toHaveBeenCalled();
   });
 
