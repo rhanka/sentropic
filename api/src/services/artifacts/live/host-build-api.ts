@@ -1,4 +1,4 @@
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { LiveError, type LiveKey } from './records';
 import type { BuildJobRecord, BuildJobs } from './build-jobs';
@@ -10,6 +10,13 @@ export interface HostIdentity { hostId: string; storageScopeId: string }
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 /** Context of the host build API: the identity resolved by `authenticate`. */
 export type HostBuildEnv = { Variables: { identity: HostIdentity } };
+/** S2S host gate of the builder mount: the bound host identity, or 403 host_not_bound before the body is read. */
+export const hostGate = (authenticate: (c: Context) => HostIdentity | null): MiddlewareHandler<HostBuildEnv> => async (c, next) => {
+  let identity: HostIdentity | null = null;
+  try { identity = authenticate(c); } catch { /* host_not_bound below */ }
+  if (!identity || !ID.test(identity.storageScopeId)) return c.json({ error: 'host_not_bound' }, 403);
+  c.set('identity', identity); await next();
+};
 const view = (record: BuildJobRecord) => ({ jobId: record.jobId, state: record.state,
   ...(record.code ? { code: record.code } : {}), ...(record.reason ? { reason: record.reason } : {}),
   ...(record.receipt ? { releaseId: record.receipt.releaseId } : {}) });
@@ -24,12 +31,7 @@ export function createHostBuildApi(options: {
   schedule(work: () => Promise<void>): void;
 }) {
   const app = new Hono<HostBuildEnv>();
-  app.use('*', async (c, next) => {
-    let identity: HostIdentity | null = null;
-    try { identity = options.authenticate(c); } catch { /* host_not_bound below */ }
-    if (!identity || !ID.test(identity.storageScopeId)) return c.json({ error: 'host_not_bound' }, 403);
-    c.set('identity', identity); await next();
-  });
+  app.use('*', hostGate(options.authenticate));
   const key = (c: Context<HostBuildEnv>, artifactId: string): LiveKey => ({ storageScopeId: c.get('identity').storageScopeId, artifactId });
   async function run(k: LiveKey, jobId: string, token: string) {
     try {
