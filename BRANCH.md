@@ -29,6 +29,7 @@
   - `packages/cluster-mesh/tests/identity/replica-sync.spec.ts`
   - `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml`
   - `deploy/ci/preprod-a4/bundle.selftest.mjs`
+  - `spec/SPEC_AMENDMENT_D11R_LOGIN_A.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -78,6 +79,7 @@
   - [x] `api/tests/api/auth/passkey-registration-guard.test.ts`: disabled refuses register options/verify with 403 `passkey_registration_disabled` before any author fence write; login options unaffected; enabled keeps registration reachable.
   - [x] `bundle.selftest.mjs`: preprod-a4 auth-idp ConfigMap carries `WEBAUTHN_REGISTRATION=disabled`; preprod api and prod auth-idp do not.
   - [x] `env.ts` enum, `auth.ts` guard, `patch-auth-idp-config.yaml` key.
+  - [x] `spec/SPEC_AMENDMENT_D11R_LOGIN_A.md` anti-replay item 5 (no preprod IdP enrolment).
 - [ ] **Lot 4 — Final validation**
   - [ ] `make typecheck-api` + `make lint-api` (ENV=test-t1b-rp).
   - [ ] Scoped API tests: `make test-api-unit SCOPE="tests/unit/auth/cm-import-source-rp.test.ts tests/unit/auth/cm-import-mapping.test.ts tests/unit/auth/cm-cutover-migration.test.ts"`, `make test-api-endpoints SCOPE="tests/api/auth/passkey-registration-guard.test.ts tests/api/cluster-mesh-auth-roots.test.ts tests/api/auth/registration.test.ts"`.
