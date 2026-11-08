@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.26.0-dev.16
+
+- Heavy-phase queue: the provisional live reservation (`PROVISIONAL_HEAVY_PHASE_COSTS_MIB.dev`) is
+  390 MiB (was 418), measured in one live pod cgroup with `MALLOC_ARENA_MAX=2` and
+  `GOMEMLIMIT=256MiB`. The documented d2-4 budget is 1641 MiB with a 19 MiB pod base, so four
+  lives fit one node and a pre-bundle still fits beside one live only. Admission rules unchanged.
+
 ## 0.26.0-dev.15
 
 - Add a durable strict-FIFO heavy-phase queue per node (`runtime/heavy-phase-queue`, root export)
