@@ -143,7 +143,8 @@ export function assertArtifactsTransportProfile(value: unknown): asserts value i
     'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2',
     'artifacts_revoke_reader_consent', 'artifacts_git_commit', 'artifacts_live_write',
     'artifacts_live_read', 'artifacts_live_reset', 'artifacts_live_status', 'artifacts_live_control',
-    'artifacts_fetch_app_source', 'artifacts_git_attach', 'artifacts_git_publish'];
+    'artifacts_fetch_app_source', 'artifacts_git_attach', 'artifacts_git_publish', 'artifacts_live_invite',
+    'artifacts_live_accept_invitation', 'artifacts_live_revoke_invitation', 'artifacts_live_invitations'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
@@ -645,7 +646,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           phase = 'dispatch';
           const result = await deps.live.execute(operation, normalized, invocation);
           return { ok: true, invocationId: invocation.invocationId,
-            commitState: ['live_read', 'live_status'].includes(operation) ? 'not_committed' : 'committed',
+            commitState: ['live_read', 'live_status', 'live_invitations'].includes(operation) ? 'not_committed' : 'committed',
             replayed: result.replayed === true, result: { status: 200, body: result } };
         }
         const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
