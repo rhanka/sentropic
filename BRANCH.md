@@ -1,25 +1,29 @@
-# Feature: A-LIVE builder composition and f1 fence signer (GB4-P BLOCKER 1 + 2)
+# Feature: keep the API up when the builder config is invalid; own dependency-cache storage
 
 ## Objective
-- [x] Compose `createBuilderService` in the API behind `ARTIFACT_BUILDER_ENABLED` (default off: unchanged 503 mount), start the live scheduler, and sign/push the f1 controller fence to artifact-content (s-archi builder-composition contract 08/11).
+- [x] With `ARTIFACT_BUILDER_ENABLED=1` and any missing/invalid builder value, the API boots, logs `artifact_builder_refused` naming the variable (never its value), keeps the builder mount at 503 `builder_unavailable`, starts no scheduler (s-archi review F2, PR #951, corrected by s-archi).
+- [x] The dependency cache reads its own `ARTIFACT_BUILDER_CACHE_S3_*` storage settings and no longer requires `APP_ARTIFACT_HOST_ENABLED=1`; a missing cache setting follows the F2 refusal behaviour (F1 option (a)).
 
 ## Scope / Guardrails
-- [x] Branch feat/alive-builder-composition from origin/main 591f5eee1; worktree tmp/worktrees/alive-builder-composition; ENV=test-builder-comp.
+- [x] Branch fix/alive-builder-f1f2 from origin/main 4b4c8632d; worktree tmp/alive-builder-f1f2; ENV=test-alive-f1f2, ports API 9891 / UI 5283 / Maildev 1093.
 - [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
-- [x] No deploy change here: the flag, ConfigMaps and Secrets go through the preprod IaC overlay of the ops lane.
+- [x] The sentropic artifacts MCP host is NOT enabled by the builder: `APP_ARTIFACT_HOST_ENABLED` stays untouched in configuration and code outside the live tree.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
+  - `api/src/services/artifacts/live/**`
   - `api/src/app.ts`
   - `api/src/config/env.ts`
-  - `api/src/services/artifacts/**`
   - `api/tests/**`
+  - `api/src/services/artifacts/live/README.md`
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `api/src/services/artifacts/instance.ts` (left: its now-unused `productPrivateCacheBlobs` export stays; flagged for a follow-up)
   - `deploy/**`
   - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
@@ -28,20 +32,37 @@
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] `attention`: no SG0-app lease forge reader exists on main (and no spec maps a live key to its repository and branch); `UNCONFIGURED_FORGE_READS` refuses every read as `builder_unavailable`/`forge_unconfigured`, so builds and revives fail closed per operation while the host API answers. A follow-up wagon must compose the lease reader.
-- [x] `attention`: `createArtifactLiveService` takes the Kubernetes client as an input (`kubernetes`), so the product passes `createInClusterKubernetes(placement)` and tests a fake.
+- [x] `attention`: GLM review of head 3ce1f0e23 (.h2a/reviews/pr-954-glm.md) raised two blocking findings: the dependency-cache blob store ran through the artifacts host adapter (which refuses every cache key at runtime) and the mandated prefix `artifact-builder-cache/v1/` was absent. Closed in Lot 3 with the dedicated store and its own key discipline; delta review by s-conductor.
+- [x] `attention`: `instance.ts` keeps the `productPrivateCacheBlobs` export after this branch (outside the allowed paths here); it no longer has any importer on this branch. Follow-up deletion belongs to a lane allowed in `api/src/services/artifacts/instance.ts`.
+- [x] `attention`: CI run 42454878120 (head 1b068f07d) failed one e2e test unrelated to this diff: `tests/02-organizations.spec.ts:391` « détail: champs non éditables » (test-e2e shard 4), signature `TimeoutError: page.waitForURL: Timeout 10000ms exceeded` after the first org card click. The exact base (4b4c8632d) passed the same test on main (run 42452171320), and every API check on this head is green (typecheck, lint, api unit shards, image guards). Recorded per the flake acceptance rule; a fresh CI run is re-triggered by the commit carrying this record.
+- [x] `attention`: CI run 42455890449 (head cf83a4476) failed one stack start unrelated to this diff: `test-api-unit-integration (endpoints, 6)` aborted at `up-api-test-ci` with `container test-ci-api-api-1 is unhealthy`, 54 s after the api container start and directly behind a cold `node:24-alpine3.24` image pull; the identical stack was healthy in every other matrix job of the same run (unit shards, endpoints 1-5 and 7-8, app-cluster-mesh, artifact-store) and in run 42454878120 for the same code. The e2e signature above did NOT recur in this run. Recorded as CI-infra timing, not a branch defect; a fresh CI run is re-triggered by the commit carrying this record.
+- [x] Local proof on the same head, same mechanism as the endpoints shards: the branch api test stack (`make up-api-test ENV=test-alive-f1f2`) booted the API healthy, and `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2` passed 310/310.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts; explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
-- Rationale: one wagon, one PR, one CI.
+- Rationale: one follow-up, one PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — f1 controller fence signer**
-  - [x] `live-fence.ts`: `ARTIFACT_LIVE_CONTROLLER_KEY` (`<kid>=<base64url>`), `ARTIFACT_LIVE_EDGE_INTERNAL_URL` (internal Service Host only), `routes.revoke/ready` sign `signLiveFence` and POST `/_live-fence/v1`; non-204 resent freshly signed, then `builder_unavailable`.
-- [x] **Lot 2 — Builder composition behind the flag**
-  - [x] `forge.ts`: remote-host forge port, `fastForward` refused (`fast_forward_remote_host`).
-  - [x] `product-builder.ts`: `createProductBuilder(env, deps)` null unless `ARTIFACT_BUILDER_ENABLED=1`; boot refusal names the missing variable; binding view of the last host reconcile; heavy queue 1641 MiB / 4 pods; scheduler every 30 s, once per process.
-  - [x] `app.ts` mounts `createProductArtifactBuilderRouter(productBuilder)` and stops the scheduler on exit.
-  - [x] Lot gate: `make typecheck-api`, `make lint-api`, scoped `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-builder-comp`.
-- [ ] **Lot 3 — PR**
-  - [ ] PR « feat(alive): compose the builder service and the f1 fence signer behind a flag », CI green on the exact head, GLM review, merge by s-conductor.
+- [x] **Lot 1 — F2 graceful boot refusal**
+- [x] `product-builder.ts`: any missing/invalid value under the flag logs `artifact_builder_refused` (code `builder_unavailable`, reason = the variable name, never its value) and returns null instead of throwing.
+  - [x] app.ts unchanged wiring: null builder keeps the 503 `builder_unavailable` mount and starts no scheduler; the rest of the API keeps serving.
+  - [x] Tests: flag on + one missing value -> null builder + one log naming the variable; value never in the payload; app-level boot test (imports `app`) -> API root 200, builder route 503 `builder_unavailable` (S2S guard stubbed, bound host), log line present, `createLiveScheduler` never called.
+- [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
+- [x] **Lot 2 — F1 own dependency-cache storage**
+  - [x] `cache-storage.ts`: `ARTIFACT_BUILDER_CACHE_S3_BUCKET`, `ARTIFACT_BUILDER_CACHE_S3_REGION`, `ARTIFACT_BUILDER_CACHE_S3_ACCESS_KEY_ID`, `ARTIFACT_BUILDER_CACHE_S3_SECRET_ACCESS_KEY` (optional `ARTIFACT_BUILDER_CACHE_S3_ENDPOINT`), first missing name in fixed order; `builderCacheBlobs(settings)` lazily opens the same private-object storage contract as the artifact host.
+- [x] `product-builder.ts`: replace the `APP_ARTIFACT_HOST_ENABLED=1` requirement with the cache-settings validation; wiring `deps.cacheBlobs(settings)`; refuse naming the missing cache variable (F2 behaviour).
+  - [x] `app.ts`: pass `builderCacheBlobs`; drop the `productPrivateCacheBlobs` import.
+  - [x] Tests: composes without `APP_ARTIFACT_HOST_ENABLED`; settings carried to `cacheBlobs` from the `ARTIFACT_BUILDER_CACHE_S3_*` values; each missing cache name refuses gracefully.
+  - [x] README: F2 refusal behaviour + the new cache env names, `APP_ARTIFACT_HOST_ENABLED` requirement removed.
+- [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
+- [x] **Lot 3 — GLM review fix (blocking 1+2): dedicated builder-cache store under `artifact-builder-cache/v1/`**
+  - [x] `cache-storage.ts`: `createBuilderCacheBlobs` — the builder's own S3 blob store (never the artifacts host adapter nor `assertBlobKey`), put/get/delete only (no listing), each key refused before any S3 call unless it is exactly `artifact-builder-cache/v1/files/<sha256>` or `artifact-builder-cache/v1/<lockSha>/<keySha>/<uuid>`, fail-closed on a non-private bucket like `createPrivateArtifactStorage`; the Postgres pointer namespace stays `artifact-dependency-cache/v1` (s-conductor decision).
+  - [x] Tests (`cache-storage.test.ts`): prefix acceptance and refusal before any S3 call (in/out of prefix, put/get/delete), per-field privacy fail-close, one end-to-end run of the real key generation (putFile -> admit -> getFile -> read) against a command-level fake S3 plus the out-of-prefix refusal; `adapters.test.ts` pins the new file-object key.
+  - [x] README: the file and manifest object keys plus the store's own key discipline and fail-closed privacy.
+  - [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api-unit SCOPE=tests/unit/artifacts-live ENV=test-alive-f1f2`.
+- [ ] **Lot 4 — PR**
+  - [ ] PR « fix(alive): keep the API up when the builder config is invalid; own cache storage », CI green on the exact head, GLM review, merge by s-conductor.
