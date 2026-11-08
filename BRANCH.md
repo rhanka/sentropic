@@ -39,7 +39,7 @@
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
-- Rationale: one deploy PR, one CI.
+- Rationale: one fix PR, one CI.
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
