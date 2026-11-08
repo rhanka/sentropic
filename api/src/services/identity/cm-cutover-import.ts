@@ -24,9 +24,12 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
   if (state.rows[0]?.transaction_isolation !== 'serializable') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   await client.query("SELECT set_config('statement_timeout', '30000', true)");
   const source = await readA4IdentitySource(client);
-  const invalidatedProofCounts = a4InvalidatedProofCounts(source.rows);
   const importedAt = new Date().toISOString();
   const remote = reconcileA4RemoteSnapshot(source.rows.get('user_sessions') ?? invalidA4Import(), config.remoteSnapshot, importedAt);
+  const sourceRows = await mapA4IdentitySource(source, { ...config.verifier, importedAt,
+    remotelyRevokedSessionIds: remote.revokedSessionIds });
+  const invalidatedProofCounts = a4InvalidatedProofCounts(source.rows, new Set(sourceRows
+    .flatMap(row => row.entity === 'login_session' ? [row.record.sessionId] : [])));
   await client.query(`CREATE TABLE IF NOT EXISTS control.app_cm_identity_cutover (
     cutover_id text PRIMARY KEY, phase text NOT NULL, detail jsonb NOT NULL, recorded_at timestamptz NOT NULL DEFAULT now())`);
   await client.query(`INSERT INTO control.app_cm_identity_cutover (cutover_id, phase, detail)
@@ -58,8 +61,7 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
   const oldInvitations = await readA4MetadataInvitations(tx);
   const pendingRemote = await importLegacyRemoteIntents(tx, importedAt, async sessionId =>
     remote.ownersBySessionId.get(sessionId) ?? (await tx.stores.sessions.findSession(sessionId))?.userId ?? null);
-  const rows = [...await mapA4IdentitySource(source, { ...config.verifier, importedAt }),
-  ...oldInvitations, ...pendingRemote.rows, ...connectors.rows];
+  const rows = [...sourceRows, ...oldInvitations, ...pendingRemote.rows, ...connectors.rows];
   const manifestDigest = createHash('sha256').update(JSON.stringify({ mappingSha256: config.mappingSha256,
     sourceInventory: source.inventory, remoteInventory: remote.inventory, connectorInventory: connectors.counts, invalidatedProofCounts,
     // Protected aggregate comparison only; no per-row fingerprint is published.

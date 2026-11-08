@@ -10,16 +10,18 @@ export const mapA4Invitation = (row: A4SourceRow): DigestInvitationV1 => ({
   consumedByUserId: nullable(row.consumed_by_user_id), revision: 0,
 });
 
-/** Counts only, never source tokens or fingerprints. The protected checkpoint
- * retains history; users request a fresh code and log in after every cutover. */
-export function a4InvalidatedProofCounts(rows: ReadonlyMap<string, readonly A4SourceRow[]>) {
+/** Counts only, never source tokens or fingerprints. The protected checkpoint retains
+ * history; proofs never cross cutover, and only expired or revoked logins are dropped. */
+export function a4InvalidatedProofCounts(rows: ReadonlyMap<string, readonly A4SourceRow[]>,
+  carriedSessionIds: ReadonlySet<string>) {
   const each = (table: string) => rows.get(table) ?? invalidA4Import();
+  const dropped = each('user_sessions').filter(row => !carriedSessionIds.has(text(row.id)));
   return { webauthn_challenge: each('webauthn_challenges').length,
     email_code: each('email_verification_codes').length,
     email_ticket: each('email_verification_codes').filter(row => nullable(row.verification_token) !== null).length,
     magic_link: each('magic_links').length,
-    login_session: each('user_sessions').length,
-    login_refresh_token: each('user_sessions').filter(row => nullable(row.refresh_token_hash) !== null).length };
+    login_session: dropped.length,
+    login_refresh_token: dropped.filter(row => nullable(row.refresh_token_hash) !== null).length };
 }
 
 export function mapA4Social(row: A4SourceRow): SocialIdentityV1 {
