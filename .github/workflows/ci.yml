@@ -265,8 +265,15 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      # BR92-EX1: read-only lookup of the same-tree pull_request run.
+      actions: read
     outputs:
       expected_attempt: ${{ steps.ci_expected.outputs.attempt }}
+      # BR92-EX1: 'true' only when the expected manifest accepted same-tree PR
+      # evidence; empty or 'false' runs every test member (fail-safe).
+      tested_tree: ${{ steps.tested_tree.outputs.tested_tree }}
+      tested_run: ${{ steps.tested_tree.outputs.run }}
+      tested_tree_id: ${{ steps.tested_tree.outputs.tree }}
       global: ${{ steps.filter.outputs.global }}
       idp_sync: ${{ steps.filter.outputs.idp_sync }}
       api: ${{ steps.filter.outputs.api }}
@@ -725,18 +732,85 @@ jobs:
         env:
           SELECTED: ${{ (github.base_ref == 'feat/engram-e2-integration' || (github.base_ref == 'main' && github.head_ref == 'feat/engram-e2-integration')) && steps.filter.outputs.engram_e2 == 'true' }}
         run: echo "selected=$SELECTED" >> "$GITHUB_OUTPUT"
+      # BR92-EX1: capture only (read-only token). The Make manifest below accepts
+      # or rejects the newest same-repository pull_request run of this workflow
+      # whose head commit carries HEAD's tree; an API error keeps the full run.
+      - name: Capture same-tree pull_request evidence (main push only)
+        id: tested_tree_capture
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { execFileSync } = require('node:child_process');
+            fs.mkdirSync('tmp/ci-capacity', { recursive: true });
+            const evidence = { tree: execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim(),
+              sha: context.sha, repository: `${context.repo.owner}/${context.repo.repo}` };
+            const keep = run => ({ id: run.id, run_attempt: run.run_attempt, event: run.event, status: run.status,
+              conclusion: run.conclusion, workflow_id: run.workflow_id, path: run.path, head_sha: run.head_sha,
+              head_branch: run.head_branch, html_url: run.html_url, tree_id: run.head_commit?.tree_id ?? null,
+              head_repository: run.head_repository?.full_name ?? null, repository: run.repository?.full_name ?? null });
+            try {
+              const { data: current } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
+              evidence.workflowId = current.workflow_id;
+              const { data: list } = await github.rest.actions.listWorkflowRuns({ ...context.repo,
+                workflow_id: current.workflow_id, event: 'pull_request', status: 'completed', per_page: 100 });
+              evidence.candidates = list.workflow_runs.filter(run => run.head_commit?.tree_id === evidence.tree).map(keep);
+              const chosen = evidence.candidates.filter(run => run.head_repository === evidence.repository
+                && run.repository === evidence.repository).sort((a, b) => b.id - a.id)[0];
+              if (chosen) {
+                const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: chosen.id });
+                evidence.run = keep(run);
+                evidence.jobs = (await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, { ...context.repo,
+                  run_id: run.id, attempt_number: run.run_attempt, per_page: 100 })).map(job => ({ id: job.id, name: job.name,
+                  status: job.status, conclusion: job.conclusion, run_id: job.run_id, run_attempt: job.run_attempt, html_url: job.html_url }));
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
+                  { ...context.repo, run_id: run.id, per_page: 100 });
+                const manifest = artifacts.filter(item => !item.expired && item.name.startsWith(`ci-expected-${run.id}-`))
+                  .sort((a, b) => b.id - a.id)[0];
+                if (manifest) {
+                  const { data } = await github.rest.actions.downloadArtifact({ ...context.repo,
+                    artifact_id: manifest.id, archive_format: 'zip' });
+                  fs.writeFileSync('tmp/ci-capacity/tested-tree-expected.zip', Buffer.from(data));
+                  evidence.expected = JSON.parse(execFileSync('unzip', ['-p', 'tmp/ci-capacity/tested-tree-expected.zip',
+                    'expected.json'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+                }
+              }
+            } catch (error) {
+              evidence.error = String(error?.message ?? error);
+            }
+            fs.writeFileSync('tmp/ci-capacity/tested-tree.json', JSON.stringify(evidence, null, 2));
       - name: Retain expected execution set before dispatch (BR76-EX1)
         id: ci_expected
         env:
           ENGRAM_E2_SELECTED: ${{ steps.engram_e2_scope.outputs.selected }}
           CI_SELECTION_CONTEXT: >-
             {"changes": ${{ toJSON(steps.filter.outputs) }}, "event": "${{ github.event_name }}",
+            "testedTree": "${{ steps.tested_tree_capture.outcome == 'success' && 'tested-tree.json' || '' }}",
             "ref": "${{ github.ref }}", "inputs": {"bootstrap_publish_target": "${{ inputs.bootstrap_publish_target || 'none' }}", "capacity_publish_dry_run": ${{ inputs.capacity_publish_dry_run || false }}},
             "identity": {"runId": "${{ github.run_id }}", "attempt": "${{ github.run_attempt }}",
             "headSha": "${{ github.event.pull_request.head.sha || github.sha }}"}}
         run: |
           export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; if (context.inputs.capacity_publish_dry_run) for (const key of Object.keys(context.changes)) if (key.endsWith("_publish")) context.changes[key] = "true"; process.stdout.write(JSON.stringify(context));')"
           make ci-expected-manifest ENV=test-ci-62
+      # BR92-EX1: the manifest is the single decision; skipped members record
+      # the PR run and job that satisfied them.
+      - name: Publish the tested-tree decision and its evidence (BR92-EX1)
+        id: tested_tree
+        run: |
+          set -eu
+          manifest=tmp/ci-capacity/expected.json
+          mode="$(jq -r '.qualification.mode // "in-run"' "$manifest")"
+          if [ "$mode" = tested-tree ]; then
+            jq -r '"tested_tree=true", "run=\(.qualification.runId)", "tree=\(.qualification.tree)"' "$manifest" >> "$GITHUB_OUTPUT"
+            jq -r '.qualification as $q | "### Tested tree: satisfied by run [\($q.runId)](\($q.url)) (tree \($q.tree))",
+              "| job | evidence |", "|---|---|",
+              ($q.satisfied[] | "| \(.job) | satisfied by run [\($q.runId)](\(.url)) |")' "$manifest" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'tested_tree=false\nrun=\ntree=\n' >> "$GITHUB_OUTPUT"
+            jq -r '"### Complete run: \(.qualification.reason // "in-run")"' "$manifest" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ci-expected-${{ github.run_id }}-${{ github.run_attempt }}
@@ -2567,6 +2641,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, security-container-api, security-container-api-tool, security-container-ui, security-container-e2e]
     if: >-
+      needs.changes.outputs.tested_tree != 'true' &&
       !cancelled() &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     permissions:
@@ -2642,7 +2717,6 @@ jobs:
     # only on a tested tree (same-tree PR run recorded by changes), a failed never.
     needs: [changes, build-ui, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
     if: >-
-      needs.changes.outputs.tested_tree != 'true' &&
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') &&
@@ -3501,6 +3575,10 @@ jobs:
             --gateway-publish "${{ needs.changes.outputs.llm_gateway_publish }}" \
             --cluster-publish "${{ needs.changes.outputs.cluster_mesh_publish }}" \
             --api-tag "${{ steps.tags.outputs.api_tag }}" --ui-tag "${{ steps.tags.outputs.ui_tag }}" \
+            --qualification-mode "${{ needs.changes.outputs.tested_tree == 'true' && 'tested-tree' || 'in-run' }}" \
+            --qualification-run "${{ needs.changes.outputs.tested_run }}" \
+            --qualification-tree "${{ needs.changes.outputs.tested_tree_id }}" \
+            --source-tree "$(git rev-parse 'HEAD^{tree}')" \
             --out release-receipt.json
       - name: Upload the release receipt
         if: always()
@@ -3866,7 +3944,7 @@ jobs:
               preproduction: ['deploy-preprod'], packages: (selected.length ? selected : packages).map(row => row.job) };
             const capacity = { availableSlots: 17, reserveSlots: context.eventName === 'pull_request' ? 2 : 0 };
             fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs, endpoints, capacity,
-              dependencies: manifest.dependencies,
+              dependencies: manifest.dependencies, qualification: manifest.qualification ?? { mode: 'in-run' },
               sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Emit measured job and step spans through Make
         run: make --no-print-directory ci-run-metrics RUN_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62 > tmp/ci-capacity/metrics.json
@@ -3895,7 +3973,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report test-ci-static ENV=test-ci-capacity
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report test-ci-static test-ci-tested-tree test-ci-release-receipts ENV=test-ci-capacity
       - name: Qualify the portable measured performance dossier
         run: make test-ci-dossier CI_DOSSIER_PULL=missing ENV=test-ci-performance-dossier
       - name: Remove dossier tooling volume
