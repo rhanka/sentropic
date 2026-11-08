@@ -16,11 +16,11 @@
   - `api/src/services/artifacts/**`
   - `api/tests/**`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `deploy/**`
   - `packages/**`
-  - `api/src/services/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/src/app.ts` (BR-FLR-EX1)
   - `api/src/routes/github-app.ts` (BR-FLR-EX1)
