@@ -41,12 +41,12 @@
 - [x] **Multi-branch** (wagon merged by the train 1c integration lane)
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — Tests first**
-  - [ ] Service: owner-only invite, invitee rights, accept rules, revoke epoch, projections, state exports, limit, qualification, replays, onRevoked after commit.
-  - [ ] Definitions: 35 → 39 with the 35 previous definitions byte-identical.
-  - [ ] Migration: 0013 guard fails on a foreign `artifacts.live_invitations`; postgres-live adapter round trip.
-- [ ] **Lot 2 — Tools and routing**
-  - [ ] Four frozen definitions, capability names, profile routes, HTTP and MCP dispatch to `LiveService.execute`.
+- [x] **Lot 1 — Tests first**
+  - [x] Service: owner-only invite, invitee rights, accept rules, revoke epoch, projections, state exports, limit, qualification, replays, onRevoked after commit.
+  - [x] Definitions: 35 → 39 with the 35 previous definitions byte-identical.
+  - [x] Migration: 0013 guard fails on a foreign `artifacts.live_invitations`; postgres-live adapter round trip.
+- [x] **Lot 2 — Tools and routing**
+  - [x] Four frozen definitions, capability names, profile routes, HTTP and MCP dispatch to `LiveService.execute`.
 - [ ] **Lot 3 — Service and storage**
   - [ ] Invitation ledger in the live transaction (memory and postgres-live), invitation service, `liveInvitationState`, `liveViewer`.
   - [ ] Migration 0013 with the mandatory column and index guard.
