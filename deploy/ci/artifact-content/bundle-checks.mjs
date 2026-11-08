@@ -11,7 +11,8 @@ export const closed = ['APP_ARTIFACT_HOST_ENABLED', 'APP_ARTIFACT_CONTENT_ENABLE
 // The relay key is the public half of the api's ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON (kid sentropic-preprod-supervisor-1).
 const internal = 'http://artifact-content.sentropic-preprod.svc.cluster.local:8791';
 export const preprodRelay = { APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED: '1',
-  APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS: 'MCowBQYDK2VwAyEA9PIIB+0LkY47bMnczyWol6Swl8UeFepUjNjg+lxZFbY=' };
+  APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS: 'MCowBQYDK2VwAyEA9PIIB+0LkY47bMnczyWol6Swl8UeFepUjNjg+lxZFbY=',
+  APP_ARTIFACT_LIVE_BUILDER_NAMESPACE: 'sentropic-artifact-builders' };
 export const preprodBuilder = {
   ARTIFACT_BUILDER_ENABLED: '1', ARTIFACT_BUILDER_NAMESPACE: 'sentropic-artifact-builders',
   ARTIFACT_BUILDER_SERVICE_DOMAIN: 'sentropic-artifact-builders.svc.cluster.local', ARTIFACT_BUILDER_NODE: 'd2-4-preprod',
@@ -68,9 +69,13 @@ export function checkWorkload(objects, tier, preservedImages) {
     : ['1', 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
   assert.deepEqual([cm.data.APP_ARTIFACT_LIVE_ENABLED, cm.data.APP_ARTIFACT_LIVE_PAGES_DOMAINS, cm.data.APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS],
     live, 'live edge flag, pages domain and kids per tier');
-  assert.deepEqual(pick(cm.data, /^APP_ARTIFACT_SUPERVISOR_/), tier === 'prod' ? {} : preprodRelay, 'supervisor relay per tier');
-  assert.deepEqual(pick(object(objects, 'ConfigMap', 'api').data, /^(ARTIFACT_|GITHUB_APP_)/), tier === 'prod' ? {} : preprodBuilder,
+  assert.deepEqual(pick(cm.data, /^APP_ARTIFACT_(SUPERVISOR_|LIVE_BUILDER_NAMESPACE$)/), tier === 'prod' ? {} : preprodRelay,
+    'supervisor relay per tier');
+  const apiData = object(objects, 'ConfigMap', 'api').data;
+  assert.deepEqual(pick(apiData, /^(ARTIFACT_|GITHUB_APP_)/), tier === 'prod' ? {} : preprodBuilder,
     'builder composition and GitHub App broker configuration per tier');
+  // The api creates worker pods where the relay and the live edge forward: one namespace on both sides.
+  assert.equal(cm.data.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE, apiData.ARTIFACT_BUILDER_NAMESPACE, 'one worker namespace for api and content');
   assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional: true } }]);
   assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional: true, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
   assert.deepEqual(content.volumeMounts, [{ name: 'signing-key', mountPath: '/var/run/artifact-content', readOnly: true }]);
