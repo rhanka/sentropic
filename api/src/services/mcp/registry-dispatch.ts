@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { ArtifactHostIdentity } from '../artifacts/authorization';
 import type { ArtifactTransport } from '../artifacts/transport';
 import { WORKSPACES_LIST_TOOL, type WorkspaceDirectory } from '../artifacts/workspace-directory';
+import { isToolPermitted } from './client-policy';
 
 export interface RegistryDispatchPorts {
   transport(): Promise<ArtifactTransport>;
@@ -70,6 +71,10 @@ export function createRegistryDispatchRouter(ports: RegistryDispatchPorts): Hono
       const admission = await ports.authorize();
       if (!admission.allowed) return refuse(-32003, { error: 'invocation_refused' }, admission.status ?? 503);
       if (hostTool) {
+        // The per-client read-only allowlist (DEC-116 parity) also gates the host tool.
+        if (!isToolPermitted(principal.identity.clientId, WORKSPACES_LIST_TOOL.name)) {
+          return refuse(-32003, { error: 'access_denied' }, 403);
+        }
         const directory = await ports.workspaces(principal.identity);
         if (!directory) return refuse(-32003, { error: 'access_denied' }, 403);
         return context.json({ jsonrpc: '2.0', id, result: {
@@ -79,7 +84,8 @@ export function createRegistryDispatchRouter(ports: RegistryDispatchPorts): Hono
       const transport = await ports.transport();
       if (discover) return context.json({ jsonrpc: '2.0', id, result: { tools: [
         ...await transport.discover(principal.identity, principal.workspaceId, principal.scopes),
-        ...(principal.scopes.includes('mcp:discover') ? [WORKSPACES_LIST_TOOL] : []),
+        ...(principal.scopes.includes('mcp:discover')
+          && isToolPermitted(principal.identity.clientId, WORKSPACES_LIST_TOOL.name) ? [WORKSPACES_LIST_TOOL] : []),
       ] } });
       const result = await transport.invoke(principal.identity, principal.workspaceId, principal.scopes,
         tool as string, (rpc ? params?.arguments : params?.input) ?? {});
