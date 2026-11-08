@@ -16,7 +16,7 @@ async function readRow<T>(pool: Pool, space: string, key: string) {
 }
 /** One serialized read-modify-write of a host KV row: advisory lock, row lock, upsert, all in one transaction. */
 async function lockedRow<V, T>(pool: Pool, space: string, key: string,
-  work: (value: V | undefined, client: PoolClient) => Promise<{ value?: V; result: T }>) {
+  work: (value: V | undefined, client: PoolClient) => Promise<{ value: V | undefined; result: T }>) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -69,6 +69,9 @@ export function createPostgresBuildJobStore(pool: Pool): RecordStore {
 export function createPostgresRemoteLiveRows(pool: Pool): RemoteRows {
   return {
     read: key => readRow(pool, remoteNamespace, key),
-    update: (key, change) => lockedRow(pool, remoteNamespace, key, async current => change(current as never)),
+    update: (key, change) => lockedRow(pool, remoteNamespace, key, async current => {
+      const { next, result } = change(current as never);
+      return { value: next, result };
+    }),
   };
 }
