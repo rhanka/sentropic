@@ -1081,7 +1081,7 @@ publishable-manifests-inventory: ## Internal step of check-publishable-manifests
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN_IMAGE),$(MANIFEST_GUARD_IMAGE)) \
-		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir" CI_EXPECTED_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/cluster-mesh-publish-decision.test.mjs scripts/ci/eradicated-packages.test.mjs scripts/ci/oauth-service-client-job.test.mjs)'
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir" CI_EXPECTED_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/cluster-mesh-publish-decision.test.mjs scripts/ci/eradicated-packages.test.mjs scripts/ci/oauth-service-client-job.test.mjs scripts/ci/cm-account-approve-job.test.mjs)'
 
 .PHONY: check-eradicated-packages
 check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
@@ -1681,6 +1681,38 @@ oauth-register-service-client-job: ## Provision one client_credentials service_c
 		kubectl -n "$$NS" logs job/oauth-register-service-client || true; echo "ERROR: service client provisioning failed"; exit 1; \
 	fi; \
 	kubectl -n "$$NS" logs job/oauth-register-service-client
+
+# BRCMA-EX1 (feat/cm-account-approve-job): governed one-off cm_identity account approval Job.
+# Reason: an environment without an admin_app session has no operator path to change a role.
+# Impact: one additive target; no existing target touched. Rollback: delete this target; the
+# versioned Job yaml stays valid for a direct kubectl apply. The SECRET_FILE (0600) holds exactly
+# the four CM_ACCOUNT_APPROVE_* lines; the image defaults to the namespace's api Deployment image.
+# Usage: make cm-account-approve-job SECRET_FILE=<0600 env file> [CM_ACCOUNT_APPROVE_JOB_NAMESPACE=sentropic] [CM_ACCOUNT_APPROVE_JOB_IMAGE=<image>] [KUBECONFIG=<file>] ENV=<env>
+CM_ACCOUNT_APPROVE_JOB_NAMESPACE ?= sentropic
+CM_ACCOUNT_APPROVE_JOB_IMAGE ?=
+.PHONY: cm-account-approve-job
+cm-account-approve-job: ## Approve one cm_identity account role via the versioned Job (SECRET_FILE required)
+	@set -eu; NS="$(CM_ACCOUNT_APPROVE_JOB_NAMESPACE)"; FILE="$(SECRET_FILE)"; export KUBECONFIG="$(KUBECONFIG)"; \
+	test -s "$$FILE" || { echo "ERROR: SECRET_FILE is missing or empty (0600 file with CM_ACCOUNT_APPROVE_* vars)"; exit 1; }; \
+	case "$$(stat -c %a "$$FILE")" in 600|400) ;; *) echo "ERROR: SECRET_FILE must be mode 0600 or 0400"; exit 1 ;; esac; \
+	if grep -Evq '^(#.*|[[:space:]]*|CM_ACCOUNT_APPROVE_(ACTOR_ID|USER_ID|ROLE|REASON)=.*)$$' "$$FILE"; then echo "ERROR: SECRET_FILE may only hold the four CM_ACCOUNT_APPROVE_* assignments"; exit 1; fi; \
+	for k in ACTOR_ID USER_ID ROLE REASON; do test "$$(grep -c "^CM_ACCOUNT_APPROVE_$$k=." "$$FILE")" = 1 || { echo "ERROR: SECRET_FILE needs exactly one non-empty CM_ACCOUNT_APPROVE_$$k"; exit 1; }; done; \
+	REASON="$$(sed -n 's/^CM_ACCOUNT_APPROVE_REASON=//p' "$$FILE")"; \
+	IMG="$(CM_ACCOUNT_APPROVE_JOB_IMAGE)"; \
+	test -n "$$IMG" || IMG="$$(kubectl -n "$$NS" get deployment/api -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].image}')"; \
+	test -n "$$IMG" || { echo "ERROR: cannot resolve the api image in $$NS; set CM_ACCOUNT_APPROVE_JOB_IMAGE"; exit 1; }; \
+	echo "Approving in namespace $$NS with image $$IMG"; \
+	trap 'kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true' EXIT; \
+	kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; \
+	kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true; \
+	kubectl -n "$$NS" create secret generic cm-account-approval --from-env-file="$$FILE" >/dev/null; \
+	kubectl set image --local -f deploy/k8s/base/38-cm-account-approve-job.yaml approve="$$IMG" -o yaml \
+		| kubectl annotate --local -f - sentropic.io/approval-reason="$$REASON" -o yaml | kubectl -n "$$NS" apply -f -; \
+	echo "Receipt: job/cm-account-approve image=$$IMG reason=$$(kubectl -n "$$NS" get job/cm-account-approve -o jsonpath='{.metadata.annotations.sentropic\.io/approval-reason}')"; \
+	if ! kubectl -n "$$NS" wait --for=condition=complete job/cm-account-approve --timeout=120s; then \
+		kubectl -n "$$NS" logs job/cm-account-approve || true; echo "ERROR: account approval failed"; exit 1; \
+	fi; \
+	kubectl -n "$$NS" logs job/cm-account-approve
 
 .PHONY: publish-llm-mesh
 publish-llm-mesh: check-llm-model-equivalences verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
