@@ -258,15 +258,15 @@ for (const tier of ['prod', 'preprod']) {
       object(o, 'Deployment', workload).spec.template.spec.containers[0].env.find(e => e.name === flag).value = '0';
     });
   }
-  if (openFlags[tier].api?.includes('APP_ARTIFACT_HOST_ENABLED')) {
-    deny('api host opened without its artifact quota', o => { delete object(o, 'ConfigMap', 'api').data.APP_ARTIFACT_QUOTA_BYTES; });
-    deny('api host quota is not a positive number', o => { object(o, 'ConfigMap', 'api').data.APP_ARTIFACT_QUOTA_BYTES = '0'; });
-  }
   if (tier === 'preprod') {
     deny('runtime Secret re-optionalized', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.optional = true; });
     deny('signing Secret re-optionalized', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.optional = true; });
     deny('content flag on the api deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_CONTENT_ENABLED').value = '1'; });
     deny('host flag on the content deployment', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_HOST_ENABLED').value = '1'; });
+    // s-conductor decision 2026-11-08: the api host surface stays closed in preprod
+    // (no storage credential is minted), so reopening it or its quota must fail.
+    deny('host flag reopened on the api deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_HOST_ENABLED').value = '1'; });
+    deny('artifact quota declared on the closed api host', o => { object(o, 'ConfigMap', 'api').data.APP_ARTIFACT_QUOTA_BYTES = '1073741824'; });
     deny('missing object-store egress', o => { o.splice(o.findIndex(v => v.metadata.name === 'allow-artifact-content-to-object-store'), 1); });
     deny('object-store egress without the component label', o => { delete object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].podSelector; });
     deny('object-store egress to every pod of the namespace', o => { object(o, 'NetworkPolicy', 'allow-artifact-content-to-object-store').spec.egress[0].to[0].podSelector = {}; });

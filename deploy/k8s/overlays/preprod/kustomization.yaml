@@ -30,7 +30,6 @@ resources:
 patches:
   - path: patch-artifact-content-config.yaml
   - path: patch-artifact-content-deployment.yaml
-  - path: patch-api-artifact-host.yaml
   - path: patch-api-config.yaml
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
