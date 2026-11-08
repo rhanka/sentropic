@@ -1,6 +1,49 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { ArtifactOperationError } from '../server/failures.js';
-import { liveIdentityKey, type LiveStore, type LiveTransaction } from '../server/live-store.js';
+import { liveIdentityKey, type LiveIdentity, type LiveInvitationLedger, type LiveStore,
+  type LiveTransaction } from '../server/live-store.js';
+
+const INVITATION_COLUMNS = `storage_scope_id,artifact_id,binding_generation,live_session_id,invitation_id,principal_id,
+  created_by,status,epoch,expires_at,accepted_at,revoked_at,created_at,row_version`;
+const iso = (value: Date | string | null) => value === null ? null : new Date(value).toISOString();
+/** Live invitations (migration 0013) under the transaction's advisory lock on the artifact. */
+function postgresInvitations(client: PoolClient, identity: LiveIdentity): LiveInvitationLedger {
+  const own = [identity.storageScopeId, identity.artifactId];
+  return {
+    async list() {
+      const result = await client.query(`SELECT ${INVITATION_COLUMNS} FROM artifacts.live_invitations
+        WHERE storage_scope_id=$1 AND artifact_id=$2`, own);
+      return result.rows.map(row => ({ storageScopeId: row.storage_scope_id, artifactId: row.artifact_id,
+        bindingGeneration: Number(row.binding_generation), liveSessionId: row.live_session_id, invitationId: row.invitation_id,
+        principalId: row.principal_id, createdBy: row.created_by, status: row.status, epoch: Number(row.epoch),
+        expiresAt: iso(row.expires_at)!, acceptedAt: iso(row.accepted_at), revokedAt: iso(row.revoked_at),
+        createdAt: iso(row.created_at)!, rowVersion: Number(row.row_version) }));
+    },
+    async save(row) {
+      if (row.storageScopeId !== identity.storageScopeId || row.artifactId !== identity.artifactId) throw new ArtifactOperationError('access_denied');
+      const result = row.rowVersion === 1 ? await client.query(`INSERT INTO artifacts.live_invitations (${INVITATION_COLUMNS})
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT DO NOTHING`, [...own, row.bindingGeneration,
+        row.liveSessionId, row.invitationId, row.principalId, row.createdBy, row.status, row.epoch, row.expiresAt,
+        row.acceptedAt, row.revokedAt, row.createdAt, row.rowVersion])
+        : await client.query(`UPDATE artifacts.live_invitations SET status=$4, epoch=$5, accepted_at=$6, revoked_at=$7,
+          row_version=$8 WHERE storage_scope_id=$1 AND artifact_id=$2 AND invitation_id=$3 AND row_version=$9`,
+        [...own, row.invitationId, row.status, row.epoch, row.acceptedAt, row.revokedAt, row.rowVersion, row.rowVersion - 1]);
+      if (!result.rowCount) throw new ArtifactOperationError('git_live_conflict',
+        { publicDetails: { reason: row.rowVersion === 1 ? 'active_session' : 'stale_fence' } });
+    },
+    async epoch(generation, session) {
+      const result = await client.query(`SELECT epoch FROM artifacts.live_invitation_epochs WHERE storage_scope_id=$1
+        AND artifact_id=$2 AND binding_generation=$3 AND live_session_id=$4`, [...own, generation, session]);
+      return result.rows[0] ? Number(result.rows[0].epoch) : 0;
+    },
+    async setEpoch(generation, session, epoch) {
+      await client.query(`INSERT INTO artifacts.live_invitation_epochs
+        (storage_scope_id,artifact_id,binding_generation,live_session_id,epoch) VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (storage_scope_id,artifact_id,binding_generation,live_session_id) DO UPDATE SET epoch=EXCLUDED.epoch`,
+      [...own, generation, session, epoch]);
+    },
+  };
+}
 
 /** No import-time I/O. PostgreSQL owns lease serialization, private objects and replay durability. */
 export function createPostgresLiveStore(pool: Pool): LiveStore {
@@ -21,6 +64,7 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
         WHERE storage_scope_id=$1 AND artifact_id=$2 AND binding_generation=$3 FOR UPDATE`, values);
       const tx: LiveTransaction = {
         record: before.rows[0]?.record,
+        invitations: postgresInvitations(client, identity),
         async getObject(ref) {
           const result = await client.query(`SELECT envelope FROM artifacts.live_draft_objects
             WHERE storage_scope_id=$1 AND artifact_id=$2 AND binding_generation=$3 AND object_ref=$4`, [...values, ref]);
