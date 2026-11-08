@@ -1,23 +1,22 @@
-# Feature: Artifacts GitHub branch resolution (0.2.23)
+# Feature: Artifacts live status/start without tree walk under the lock (0.2.24)
 
 ## Objective
-- [x] Resolve a git-backed artifact branch through `GET /repos/{owner}/{repo}/git/ref/heads/{branch}` (per-segment encoding, slashes kept) returning `object.sha`; an absent branch (404 or 422) is `missing`, never `conflict`/`git_ref_not_allowed`, so attach reaches `createBranch` (immo preprod 08/11, i-cond).
-- [x] `resolveRef` returns the exact `refs/heads/<branch>` SHA for a slash branch (the 40-hex check at live-service.ts:100 already held on 0.2.22; the preprod `invalid_request` on live_control start maps to live-service.ts:49-51 or :101, caller arguments, reported to immo).
-- [x] Release `@sentropic/artifacts` 0.2.23 with `ARTIFACTS_PROVIDER_VERSION` and the APP-P1 digest repin.
+- [x] `artifacts_live_status` returns `liveRevision`, head, `bindingGeneration` and draft state without a tree walk; no forge call inside the per-artifact advisory-locked draft transaction (immo preprod 08/11 13:00: 502, `idle in transaction` on `live_drafts`, advisory lock timeouts).
+- [x] `artifacts_live_control` start resolves the head and base tree SHA outside the locked transaction, with no snapshot walk.
+- [ ] `live_read` narrow path set without a full tree walk: not covered in 0.2.24 (the walk now runs outside the lock; per-file reads stay under it).
+- [x] Release `@sentropic/artifacts` 0.2.24 with `ARTIFACTS_PROVIDER_VERSION`, the APP-P1 digest repin and the cluster-mesh selected fixture.
 
 ## Scope / Guardrails
-- [x] Branch fix/artifacts-github-branch-resolve from main 4f4674b50; worktree tmp/worktrees/fix-github-forge-resolve; ENV=test-fix-gh-resolve.
+- [x] Branch fix/artifacts-live-status-no-walk from origin/main c22163106; worktree tmp/worktrees/artifacts-0224; ENV=test-art-0224.
 - [x] Make only; no Python; no attribution trailers; no CI skip or rerun; never ENV=dev.
-- [x] Immo DB untouched: the `git_live_draft_unavailable` requirements go to the lane report only.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/adapters/github-forge.ts`
-  - `packages/artifacts/src/server/git-tools-attach.ts`
+  - `packages/artifacts/src/server/live-service.ts`
+  - `packages/artifacts/tests/live-status-no-walk.test.ts`
   - `packages/artifacts/src/mcp-core.ts`
-  - `packages/artifacts/tests/github-branch-resolve.test.ts`
   - `packages/artifacts/package.json`
   - `packages/artifacts/CHANGELOG.md`
   - `api/src/services/mcp/cluster-registry.ts`
@@ -42,8 +41,8 @@
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] BRGH-EX1: root and api lock workspace entries follow artifacts 0.2.23 (version strings only). Rollback: revert with the bump.
-- [x] BRGH-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.23 (`prepare-artifacts.spec.ts` requires the fixture to equal the candidate tuple; CI run 42499490549 lazy/source failed on 0.2.22): fixture `package.json`/`package-lock.json` version strings plus the integrity pin of the locally packed `make pack-artifacts` archive (sha256 fa03b147… equals the manifest guard), mirrored in `artifacts-tuple.spec.ts`, as BR90-EX20 did for 0.2.22. Impact: test fixtures only, no cluster-mesh source or version change. Rollback: revert with the bump.
+- [x] BRLW-EX1: root and api lock workspace entries follow artifacts 0.2.24 (version strings only), as BRGH-EX1 did. Rollback: revert with the bump.
+- [x] BRLW-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.24 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive, sha256 5b399f92… equals the manifest guard, deterministic over two packs), mirrored in `artifacts-tuple.spec.ts`, as BRGH-EX2 did. Impact: test fixtures only. Rollback: revert with the bump.
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
@@ -53,15 +52,12 @@
 - Rationale: one owner-urgent fix PR, one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Branch resolution fix**
-  - [x] `github-forge.ts`: branch refs resolve through `git/ref/heads/<segments>` (`object.type` commit, exact `ref`), commit SHAs through `/commits/<sha>`, other non-`artifact/` refs (tags, abbreviated SHAs) through `/commits/<segments>` after a heads miss; 404/422 map to `missing`.
-  - [x] Review r1 (.h2a/reviews/pr-965-opus.md) majors: tag/abbreviated-SHA resolution restored; live start claim narrowed to bug 1.
-  - [x] `git-tools-attach.ts`: attach treats the port's `git_branch_missing` like `not_found`, so a new personal branch is created from `baseRef`.
-- [x] **Lot 2 — Tests (fake GitHub HTTP)**
-  - [x] `tests/github-branch-resolve.test.ts`: slash branch to full SHA with per-segment URL; 404/422 to `missing`; tag through `/commits` and no fallback for an `artifact/` branch; full SHA without ref lookup; `createBranch` 422 stays `conflict`; 422 on `/commits` to `not_found`; attach creates a new branch; live_control start succeeds on the resolved head.
-- [x] **Lot 3 — Release 0.2.23**
-  - [x] package, locks, `ARTIFACTS_PROVIDER_VERSION`, APP-P1 digest 61c50b33 to 428a7527 (version field only), CHANGELOG.
+- [x] **Lot 1 — Forge I/O outside the draft lock**
+  - [x] `live-service.ts`: short fence read, then base tree SHA (`inspectCommit`) or snapshot (entry-listing reads only) and fast-forward checks outside the lock; the locked transaction re-checks the fence (3 attempts, then `transition_busy`); forge failures surface at their original use site.
+- [x] **Lot 2 — Tests**
+  - [x] `tests/live-status-no-walk.test.ts`: status then start with status' head and revision against a fake GitHub HTTP with a large tree (no `/git/trees` call, no forge call under the lock); moved head fast-forward outside the lock; status not blocked by a concurrent slow forge call (covers the stale-fence retry).
+- [x] **Lot 3 — Release 0.2.24**
+  - [x] package, locks, `ARTIFACTS_PROVIDER_VERSION`, APP-P1 digest 428a7527 to 858aba03 (version field only), cluster-mesh selected fixture, CHANGELOG.
 - [ ] **Lot 4 — Final validation**
-  - [x] `docker-slot.sh make test-artifacts SCOPE=tests/g ENV=test-fix-gh-resolve` unit files PASS (146 tests; the 3 integration files need postgres and run in CI).
-  - [x] `docker-slot.sh make typecheck-artifacts ENV=test-fix-gh-resolve` PASS.
-  - [ ] PR, CI green on the exact head, review in `.h2a/reviews/`, merge by s-conductor.
+  - [x] `docker-slot.sh make test-artifacts ENV=test-art-0224` PASS (98 files, 990 tests); `make typecheck-artifacts` PASS.
+  - [ ] PR, CI green on the exact head, Opus review in `.h2a/reviews/`, merge by s-conductor.
