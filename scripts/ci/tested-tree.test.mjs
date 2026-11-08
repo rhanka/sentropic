@@ -135,3 +135,75 @@ test('should validate a recorded qualification reference for every receipt consu
   assert.equal(qualificationProblems({ mode: 'replayed' }).length, 1);
   assert.equal(assessTestedTree({}).mode, 'in-run');
 });
+
+test('should skip only test members of the real workflow and keep build, publication and preproduction', () => {
+  const changes = Object.fromEntries(Object.keys(ci.jobs.changes.outputs).map(key =>
+    [key, ['engram_e2', 'tested_tree'].includes(key) ? 'false' : 'true']));
+  const context = main(changes);
+  const full = workflowExpected(ci, context);
+  const executedNames = full.filter(row => row.selected).map(row => row.job);
+  const realJobs = prJobs([...executedNames, 'ci-gate']);
+  const expected = { identity: { runId: '800', attempt: '1', headSha: prSha }, policyDigest: policyDigest(ci),
+    expected: full.filter(row => !['publish-', 'deploy-', 'release-', 'retain-', 'api-tool-registry']
+      .some(prefix => row.job.startsWith(prefix))) };
+  const result = qualifiedSelection(ci, context, evidence({ jobs: realJobs, expected }));
+  assert.equal(result.qualification.mode, 'tested-tree', result.qualification.reason);
+  const selected = new Set(result.expected.filter(row => row.selected).map(row => row.job.replace(/ \(.*$/, '')));
+  for (const name of ['changes', 'build-api-image', 'build-api-tool-image', 'build-ui', 'build-ui-static', 'build-e2e',
+    'build-desktop', 'package-candidates', 'api-image-guards', 'publish-api-image', 'publish-ui-image',
+    'publish-llm-mesh', 'publish-cluster-mesh', 'publish-chat-core', 'publish-mcp-auth', 'release-receipts',
+    'deploy-preprod', 'retain-daily-identities', 'api-tool-registry-publish', 'validate-publishable-manifests',
+    'validate-ci-capacity-metrics', 'verify-train-lock-integrity']) {
+    assert.ok(selected.has(name), `${name} must still run on a tested tree`);
+  }
+  for (const name of ['test-e2e', 'test-api-unit-integration', 'test-api-sut', 'test-api-ai', 'e2e-vscode', 'test-ui',
+    'smoke-idp-screens', 'test-smoke-restore', 'typecheck-lint-ui', 'typecheck-lint-api', 'api-static',
+    'security-container', 'security-sast-sca', 'security-iac', 'validate-llm-mesh', 'validate-cluster-mesh',
+    'validate-chat-core', 'artifacts-qualification', 'consumer-contracts', 'memory-l5-qualification']) {
+    assert.ok(!selected.has(name), `${name} is satisfied by the PR run`);
+  }
+  const satisfied = result.expected.filter(row => row.satisfiedBy === 800).map(row => row.job);
+  assert.deepEqual(satisfied, result.qualification.satisfied.map(row => row.job));
+  assert.ok(satisfied.includes('test-e2e (1)') && satisfied.some(job => job.startsWith('test-api-unit-integration (')));
+  // Removing one PR member (or one PR job) keeps the complete real run.
+  const gap = realJobs.filter(job => job.name !== 'test-e2e (3)');
+  const kept = qualifiedSelection(ci, context, evidence({ jobs: gap, expected: { ...expected,
+    expected: expected.expected.filter(row => row.job !== 'test-e2e (3)') } }));
+  assert.equal(kept.qualification.reason, 'coverage-gap: test-e2e (3)');
+  assert.deepEqual(kept.expected, full);
+});
+
+// Publishers: a skipped test barrier counts only on a tested tree; builds,
+// image guards and candidates gate in every mode; a failed member never passes.
+test('should publish a tested tree only from successful builds and never past a failed barrier', () => {
+  const builds = new Set(['changes', 'build-api-image', 'build-e2e', 'build-ui', 'build-ui-static', 'api-image-guards',
+    'package-candidates', 'publish-llm-mesh', 'publish-llm-gateway', 'publish-oauth-verify', 'publish-mcp-platform',
+    'publish-events', 'publish-contracts', 'publish-artifacts']);
+  const dispatch = (name, testedTree, overrides = {}) => evaluateSelection(ci.jobs[name].if, key => {
+    if (key === 'github.ref') return 'refs/heads/main';
+    if (key === 'needs.changes.outputs.tested_tree') return testedTree;
+    if (key.startsWith('needs.changes.outputs.')) return 'true';
+    if (key.startsWith('inputs.')) return 'none';
+    const parent = key.match(/^needs\.([\w-]+)\.result$/)?.[1];
+    if (parent) return overrides[parent] ?? (builds.has(parent) ? 'success' : 'skipped');
+    throw Error(`Unknown publisher context: ${key}`);
+  });
+  for (const name of ['publish-api-image', 'publish-ui-image', 'publish-llm-mesh', 'publish-cluster-mesh',
+    'publish-chat-core', 'publish-mcp-auth', 'publish-artifacts']) {
+    assert.equal(dispatch(name, 'true'), true, `${name}: tested tree publishes`);
+    assert.equal(dispatch(name, 'false'), false, `${name}: skipped tests without evidence never publish`);
+    assert.equal(dispatch(name, ''), false, `${name}: a missing decision never publishes`);
+    for (const parent of ci.jobs[name].needs.filter(parent => !['changes', 'publish-oauth-verify'].includes(parent))) {
+      for (const result of ['failure', 'cancelled']) {
+        assert.equal(dispatch(name, 'true', { [parent]: result }), false, `${name}: ${parent}=${result}`);
+      }
+    }
+  }
+  for (const name of ['publish-api-image', 'publish-ui-image']) {
+    for (const parent of ['build-api-image', 'build-e2e', 'build-ui', 'api-image-guards']
+      .filter(parent => ci.jobs[name].needs.includes(parent))) {
+      assert.equal(dispatch(name, 'true', { [parent]: 'skipped' }), false, `${name}: ${parent} skipped`);
+    }
+  }
+  assert.equal(dispatch('publish-llm-mesh', 'true', { 'package-candidates': 'skipped' }), false);
+});
