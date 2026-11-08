@@ -31,7 +31,8 @@ export interface LiveDraftSealBody {
 }
 export interface LiveDraftPlan { readonly pages: readonly LiveDraftPageBody[]; readonly seal: LiveDraftSealBody }
 
-const MODES: Readonly<Record<string, number>> = Object.freeze({ '100644': 0o644, '100755': 0o755 });
+/** Regular git file modes only; a symlink or submodule entry cannot be staged. */
+const modeOf = (mode: string): number => (mode === '100644' ? 0o644 : mode === '100755' ? 0o755 : unavailable());
 const limit = (): never => { throw new ArtifactOperationError('limit_exceeded'); };
 const unavailable = (): never => { throw new ArtifactOperationError('provider_unavailable'); };
 
@@ -49,7 +50,7 @@ export function planLiveDraft(draft: LiveDraftSnapshot, identity: LiveIdentity):
     seen.add(entry.path);
     if (seen.size > LIVE_DRAFT_LIMITS.paths) limit();
     if (entry.text === null) { deletes.push(entry.path); continue; }
-    const mode = MODES[entry.mode] ?? unavailable();
+    const mode = modeOf(entry.mode);
     const bytes = Buffer.from(entry.text, 'utf8');
     if (bytes.byteLength > LIVE_DRAFT_LIMITS.fileBytes) limit();
     total += bytes.byteLength;
