@@ -1,13 +1,13 @@
 # Feature: Train 1b 2026-11-07 A-LIVE api/apps
 
 ## Objective
-- [ ] One train, one PR, one CI: the A-LIVE api/apps wagons (W1, W3, W4, W5, pod-4live, netpol, MCP takeover L1, h2a CLI OAuth client, service client provisioner, W8, W7, W9) cherry-picked onto main in that order; wagon BRANCH.md edits dropped.
+- [ ] One train, one PR, one CI: the A-LIVE api/apps wagons (W1, W3, W4, W5, pod-4live, netpol, MCP takeover L1, h2a CLI OAuth client, service client provisioner, W8, W7, W9, MCP workspaces_list, CI10 toolbox deps key) cherry-picked onto main in that order; wagon BRANCH.md edits dropped.
 - [x] Integration contract: recipes.ts = W4 + W7 placement; pods.ts = pod-4live resources/volumes/env + W7 namespace/placement, no activeDeadlineSeconds; worker.ts = W8 structure + W3 signatures + W4 environments.
 - [x] Frozen: `packages/artifacts/src/live-host` HostLedger and AcceptOptions types unchanged.
 
 ## Scope / Guardrails
 - [x] Branch train/2026-11-07-alive-1b from origin/main a5d8dee87; worktree tmp/worktrees/train1b; ENV=test-train1b.
-- [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling; no local image build (host disk above 90%).
+- [x] Make only; no Python, attribution trailers, CI skips, reruns or CI polling; no local image build (API checks run in the existing node image).
 - [x] Scoped local checks only; full suites run in the PR CI.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
@@ -17,6 +17,10 @@
   - `api/src/services/artifacts/live/**`
   - `api/tests/unit/artifacts-live/**`
   - `api/src/services/artifacts/transport.ts`
+  - `api/src/services/artifacts/authorization.ts`
+  - `api/src/services/artifacts/instance.ts`
+  - `api/src/services/artifacts/workspace-directory.ts`
+  - `api/src/services/mcp/registry-dispatch.ts`
   - `api/src/services/mcp/client-policy.ts`
   - `api/src/routes/namespaces/mcp.ts`
   - `api/src/routes/github-app.ts`
@@ -30,6 +34,11 @@
   - `api/package.json`
   - `api/tests/api/github-app-*.ts`
   - `api/tests/api/mcp-client-allowlist.test.ts`
+  - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
+  - `api/tests/api/mcp-workspaces-list-directory.test.ts`
+  - `api/tests/api/mcp-resource-server.test.ts`
+  - `api/tests/api/registry-dispatch-terminal.test.ts`
+  - `api/tests/api/app-artifacts-transport.test.ts`
   - `api/tests/unit/mcp-client-policy.test.ts`
   - `api/tests/unit/oauth-register-client.test.ts`
   - `api/tests/unit/oauth-register-service-client.test.ts`
@@ -39,6 +48,9 @@
   - `deploy/ci/idp-identity-sync/CRED_CYCLE.md`
   - `docs/secrets.md`
   - `scripts/ci/oauth-service-client-job.test.mjs`
+  - `scripts/ci/api-tool-deps-key.mjs`
+  - `scripts/ci/api-tool-deps-key.test.mjs`
+  - `scripts/ci/api-tool-deps-key-inputs.test.mjs`
   - `ui/tests/nginx-protected-resource.test.ts`
   - `packages/artifacts/tests/**`
   - `packages/auth-hono/tests/oauth/**`
@@ -54,7 +66,7 @@
   - `api/drizzle/control/0021_github_app_enrollments.sql`, `api/drizzle/control/meta/_journal.json` under BR90-EX1.
   - `api/src/app.ts`, `api/src/config/env.ts` under BR90-EX2.
   - `ui/nginx/default.conf` under BR90-EX3.
-  - `Makefile` under BR90-EX4.
+  - `Makefile` under BR90-EX4 and BR90-EX11.
   - `deploy/k8s/**` under BR90-EX5.
   - `packages/artifacts/src/server/**`, `packages/artifacts/package.json`, `packages/artifacts/CHANGELOG.md` under BR90-EX6.
   - `packages/cluster-mesh/src/**`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/CHANGELOG.md` under BR90-EX7.
@@ -73,10 +85,14 @@
 - [x] BR90-EX8 (h2a CLI OAuth client): `@sentropic/auth-hono` RFC 8252 §7.3 port-less loopback redirect matching for public clients; patch bump 0.18.0 to 0.18.1 keeps every `^0.18.0` consumer range (the package has no changelog). Rollback: revert the commit and the bump together.
 - [x] BR90-EX9: root and api lock workspace entries follow the three version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1; registry latest 0.2.20, 0.25.0, 0.18.0). Rollback: revert with the bumps.
 - [x] BR90-EX10: the cluster-mesh selected packaging fixture follows the candidate tuple: cluster-mesh archive dev.15, same-PR BLOCK siblings artifacts 0.2.21 (guarded sha256 `a8919b4780fa34414ebc664e9ecae57f4efcef25793125bf305b441abad6895b`) and auth-hono 0.18.1 (sha256 `f469a751e6d31b4f2d9b73ed80f1654e3d72198838bfe9783fa5eca0b65b2923`) through `make pack-candidate-siblings` (CI-equivalent pull_request context) and `refresh-lazy-package-lock`; tuple-spec integrity pin updated. Rollback: revert with the bump.
+- [x] BR90-EX11 (CI10 toolbox deps key, was BR91-EX1): Makefile `API_TOOL_DEPS_VERSION` computed by `node scripts/ci/api-tool-deps-key.mjs` and `test-ci-api-tool-cache` runs the two deps-key test files. Train guard: only the workspace `version` field leaves the key (`INERT_FIELDS = ['version']`); lock externals, resolved, integrity and every dependency edge stay hashed. Impact: same `tooldeps-<sha256>` tag shape; the first main run after merge rebuilds the deps base. Rollback: restore the former Makefile line and drop the three scripts.
+- [x] `acknowledge`: workspaces_list host tool (s-archi) is gated by the L1 read-only client allowlist (`isToolPermitted`): the `sentropic-mcp` client neither lists nor calls it until the allowlist policy admits host tools (decision s-archi).
+- [x] `acknowledge`: L1 connector admission requires `tid`; `mcp-resource-server.test.ts` route tokens now carry `tid` (test fixture only, the check is unchanged).
+- [ ] `attention`: W4 PORTS 6 (pod `/_supervisor/v1/frame` relay) has no `SupervisorChannel.send` implementation in the train yet (W7 open item: product composition of `createBuilderService`); owner W7.
 - [x] `attention`: `ARTIFACTS_PROVIDER_VERSION` stays 0.2.20: tool definitions are byte-stable, so the APP-P1 manifest digest pin `6faa661d…` and existing approvals stay valid (no APP-P1 repin in this train).
 - [x] `acknowledge`: W7 (BRW7-EX1, BRW7-EX4) merged W3, W4, W5 and W8; its merge resolutions are carried as two train commits (8.4 evidence at BUILD_QUEUED; W3/W4/W8 tests on string revisions, the streaming cache and the builder placement).
 - [ ] `attention`: W4 `api/tests/unit/artifacts-live/bootstrap-server.test.ts:31,34` implicit any under strict test typing (`make typecheck-api` covers `src` only); owner W4.
-- [ ] `attention`: not run locally (no API or UI image at 92% disk): API unit and endpoint suites (W1 github-app, L1 MCP client policy and allowlist, OAuth register client, service client provisioning, builder mount), `make typecheck-api`, `make lint-api`, the ui nginx test and artifact-content `process`/`runtime` tests; the PR CI covers them.
+- [ ] `attention`: not run locally (no local image build): the full API endpoint, smoke and queue suites (`tests/smoke/api-health.test.ts` needs a running API server), artifact-content `process`/`runtime` tests; the PR CI covers them.
 
 ## AI Flaky tests
 - [x] No flaky allowance, timeout increase or new skip.
@@ -98,5 +114,7 @@
 - [x] Lot 6: W7 (FIX5) cherry-picked with its W3/W4/W5/W8 merge resolutions carried; recipes.ts placement, pods.ts namespace/placement; artifacts-live 258/258 and live src tsc clean.
 - [x] Lot 7: W9 cherry-picked on the live-host subpath; artifact-content live vitest 157/157, tsc clean, `make test-artifact-content-manifests` 145 PASS.
 - [x] Lot 8: version bumps (artifacts 0.2.21, cluster-mesh 0.26.0-dev.15, auth-hono 0.18.1), lock workspace entries, selected fixture repin; `make test-artifacts` 967/967, `make typecheck-artifacts`, `make typecheck-cluster-mesh`, `make test-cluster-mesh SCOPE=tests/packaging` 85 pass, `test-lazy-package` with sibling receipts 136/136, `make test-publishable-manifests` 133/133.
-- [ ] Lot 9: push, open PR, GLM review of the full diff.
+- [x] Lot 9: push, open PR #945, GLM review of the full diff (APPROVE on a00797885).
+- [x] Lot 10: MCP workspaces_list (5b13de0a6) cherry-picked after L1; transport.ts union (access_denied discovery + read-only filter); registry-dispatch read-only gate; L1 `tid` test fixture; full API `tsc` clean, `lint` 0 errors, API unit 2104 passed (2 pre-existing skips), wagon API files 145/145 with Postgres, 36/37 touched API files (smoke needs a server), ui nginx 3/3, artifacts-live 258/258.
+- [x] Lot 11: CI10 toolbox deps key (713372f54) cherry-picked last with the version-only guard; `make test-ci-api-tool-cache` 25/25 (mutation with the former field list fails 2), `test-ci-dag` 10/10, `test-ci-unit-graph` 7/7, `test-ci-expected-results` 28/28, `test-ci-static` 3/3, `test-ci-performance-report` 8/8, `test-ci-run-metrics` 36/36.
 - [ ] Lot N: Final validation: exact-head CI green; remove BRANCH.md at merge.
