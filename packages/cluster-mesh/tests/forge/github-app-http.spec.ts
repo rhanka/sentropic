@@ -47,6 +47,71 @@ describe('GitHub App host routes', () => {
     expect(response.status).toBe(303);
     expect(await response.text()).not.toContain('fake-code');
     expect(response.headers.get('location')).not.toContain('fake-code');
-    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(response.headers.get('referrer-policy')).toBe('same-origin');
+  });
+
+  it('should accept an enroll POST only from the exact public origin, never from "null" or a foreign origin', async () => {
+    const f = fixture();
+    const app = createGitHubAppRouter({ service: f.service, publicBaseUrl: 'https://mesh.example/',
+      resolveOwner: async () => owner, authenticateBroker: async () => null });
+    const post = (origin: string) => app.request('/github-app/enroll', { method: 'POST', headers: { origin } });
+    const accepted = await post('https://mesh.example');
+    expect(accepted.status).toBe(303);
+    expect(accepted.headers.get('referrer-policy')).toBe('same-origin');
+    for (const origin of ['null', 'https://evil.example', 'http://mesh.example', 'https://mesh.example:8443']) {
+      const refused = await post(origin);
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toEqual({ error: 'access_denied' });
+    }
+  });
+
+  it('should let a browser submit the router forms with the Origin the served referrer policy yields', async () => {
+    const f = fixture();
+    const entry = await f.ready();
+    const app = createGitHubAppRouter({ service: f.service, publicBaseUrl: 'https://mesh.example',
+      resolveOwner: async () => owner, authenticateBroker: async () => null });
+    const submit = async (pagePath: string, pick: (actions: string[]) => string) => {
+      const page = await app.request(`https://mesh.example${pagePath}`);
+      expect(page.status).toBe(200);
+      const action = pick([...(await page.text()).matchAll(/<form method="post" action="([^"]+)"/g)].map((m) => m[1]!));
+      const origin = browserFormOrigin(page.headers.get('referrer-policy'), `https://mesh.example${pagePath}`, action);
+      return { action, origin, response: () => app.request(new URL(action, 'https://mesh.example').href,
+        { method: 'POST', headers: { origin } }) };
+    };
+    const enroll = await submit('/github-app', (actions) => actions[0]!);
+    expect(enroll.origin).toBe('https://mesh.example');
+    expect((await enroll.response()).status).toBe(303);
+    const stage = await submit(`/github-app/${entry.installationRef}/rotation`,
+      (actions) => actions.find((action) => action.endsWith('/webhook-stage'))!);
+    expect(stage.origin).toBe('https://mesh.example');
+    expect((await stage.response()).status).toBe(200);
+    // The manifest form posts cross-origin to github.com: no Origin, no referrer.
+    const pending = await f.service.begin(owner);
+    const manifest = await submit(`/github-app/${pending.installationRef}`, (actions) => actions[0]!);
+    expect(new URL(manifest.action).origin).toBe('https://github.com');
+    expect(manifest.origin).toBe('null');
+    // Under the former no-referrer policy the same same-origin form failed csrf().
+    expect(browserFormOrigin('no-referrer', 'https://mesh.example/github-app', '/github-app/enroll')).toBe('null');
   });
 });
+
+/**
+ * Fetch "append a request Origin header" for a non-CORS POST (an HTML form
+ * submission): the Origin a browser sends from a page served under `policy`.
+ */
+const browserFormOrigin = (policy: string | null, pageUrl: string, actionUrl: string): string => {
+  const page = new URL(pageUrl);
+  const action = new URL(actionUrl, page);
+  switch (policy?.split(',').map((token) => token.trim()).filter(Boolean).at(-1) ?? '') {
+    case 'no-referrer':
+      return 'null';
+    case 'same-origin':
+      return action.origin === page.origin ? page.origin : 'null';
+    case 'origin':
+    case 'origin-when-cross-origin':
+    case 'unsafe-url':
+      return page.origin;
+    default: // no-referrer-when-downgrade, strict-origin, strict-origin-when-cross-origin (the default)
+      return page.protocol === 'https:' && action.protocol !== 'https:' ? 'null' : page.origin;
+  }
+};

@@ -97,11 +97,13 @@ export const GITHUB_APP_PUBLIC_ROOT = `${PUBLIC_PREFIX}${PACKAGE_ROOT}`;
 
 /**
  * Header set of every SG0-app response. Mirrors the package router: the
- * manifest form posts to github.com, and no referrer leaks a ref or state.
+ * manifest form posts to github.com, and no referrer leaks a ref or state to
+ * another origin. same-origin (never no-referrer) keeps the real Origin on the
+ * same-origin enroll and rotation form POSTs that the router CSRF check reads.
  */
 export const GITHUB_APP_SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'cache-control': 'no-store',
-  'referrer-policy': 'no-referrer',
+  'referrer-policy': 'same-origin',
   'x-content-type-options': 'nosniff',
   'content-security-policy': "default-src 'none'; form-action https://github.com 'self'; base-uri 'none'; frame-ancestors 'none'",
   'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
