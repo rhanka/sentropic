@@ -51,6 +51,6 @@
   - [x] Invitation ledger in the live transaction (memory and postgres-live), invitation service, `liveInvitationState`, `liveViewer`.
   - [x] Migration 0013 with the mandatory column and index guard.
 - [ ] **Lot 4 — Release and gate**
-  - [ ] Version 0.2.22 and changelog.
-  - [ ] `make typecheck-artifacts`, `make lint-artifacts`, scoped `make test-artifacts`, scoped `make test-artifacts-integration`.
+  - [x] Version 0.2.22 and changelog.
+  - [x] `make typecheck-artifacts`, `make lint-artifacts`, scoped `make test-artifacts`, scoped `make test-artifacts-integration`.
   - [ ] Push the wagon; report .tmp/rv/live-invitations.md.
