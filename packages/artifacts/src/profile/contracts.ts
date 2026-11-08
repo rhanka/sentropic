@@ -19,6 +19,9 @@ export const ARTIFACT_CAPABILITY_NAMES = [
   'artifacts_git_attach', 'artifacts_git_commit', 'artifacts_git_publish', 'artifacts_git_live',
   'artifacts_live_write', 'artifacts_live_read', 'artifacts_live_reset',
   'artifacts_live_status', 'artifacts_live_control',
+  // Live invitations (A-LIVE v2 §9) — appended last; frozen at birth.
+  'artifacts_live_invite', 'artifacts_live_accept_invitation', 'artifacts_live_revoke_invitation',
+  'artifacts_live_invitations',
 ] as const;
 export type ArtifactCapabilityName = (typeof ARTIFACT_CAPABILITY_NAMES)[number];
 export type ArtifactSchema = Readonly<Record<string, unknown>>;

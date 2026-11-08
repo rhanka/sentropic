@@ -412,7 +412,7 @@ describe('files parity LOT 1 acceptance', () => {
     expect(Object.keys(preexisting)).toHaveLength(17);
     // The union tools are appended in merge order and frozen at birth: the
     // four train tools, then the three LOT 2 tools.
-    expect(ARTIFACTS_TOOL_NAMES).toHaveLength(35);
+    expect(ARTIFACTS_TOOL_NAMES).toHaveLength(39);
     expect(ARTIFACTS_TOOL_NAMES.slice(17, 24)).toEqual(['artifacts_lookup_people', 'artifacts_list_access',
       'artifacts_publish_bundle', 'artifacts_revoke_reader_consent',
       'artifacts_create_upload_page', 'artifacts_list_assets', 'artifacts_publish_bundle_v2']);

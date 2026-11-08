@@ -36,6 +36,23 @@ export interface LiveEnvelope { nonce: string; ciphertext: string; tag: string }
 export interface LiveCommand { actorId: string; key: string; hash: string; operation: string }
 export type LiveResult = Record<string, unknown> & { revision: string };
 export interface LiveReceipt { hash: string; result: LiveResult }
+export type LiveInvitationStatus = 'pending' | 'active' | 'revoked' | 'expired' | 'ceased';
+/** Dedicated session-bound live authorization record (A-LIVE v2 §8.2, §9); never a release grant. */
+export interface LiveInvitationRecord extends LiveIdentity {
+  liveSessionId: string; invitationId: string; principalId: string; createdBy: string;
+  status: LiveInvitationStatus; epoch: number; expiresAt: string; acceptedAt: string | null;
+  revokedAt: string | null; createdAt: string; rowVersion: number;
+}
+/** Invitations of the transaction's artifact, serialized by the same lock as its live record. */
+export interface LiveInvitationLedger {
+  /** Every invitation of the artifact in this storage scope, across generations and sessions. */
+  list(): Promise<LiveInvitationRecord[]>;
+  /** Insert at rowVersion 1, otherwise compare-and-swap on rowVersion - 1. */
+  save(record: LiveInvitationRecord): Promise<void>;
+  /** The session invitation epoch; 0 before the first invitation. */
+  epoch(bindingGeneration: number, liveSessionId: string): Promise<number>;
+  setEpoch(bindingGeneration: number, liveSessionId: string, epoch: number): Promise<void>;
+}
 export interface LiveTransaction {
   record: LiveDraftRecord | undefined;
   getObject(ref: string): Promise<LiveEnvelope | undefined>;
@@ -47,6 +64,8 @@ export interface LiveTransaction {
   /** Adapter-owned SG1 update in the same transaction as draft cleanup. */
   advanceBinding?(input: { expectedHeadSha: string; commitSha: string; invocationId: string;
     actorId: string; now: string }): Promise<void>;
+  /** Live invitations (A-LIVE v2 §9); absent when the adapter does not qualify them. */
+  invitations?: LiveInvitationLedger;
 }
 export interface LiveStore {
   transaction<T>(identity: LiveIdentity, action: (tx: LiveTransaction) => Promise<T>): Promise<T>;
@@ -55,12 +74,38 @@ export interface LiveStore {
 export const liveIdentityKey = (identity: LiveIdentity): string => JSON.stringify([
   identity.storageScopeId, identity.artifactId, identity.bindingGeneration]);
 
+const openInvitation = (row: LiveInvitationRecord) => row.status === 'pending' || row.status === 'active';
+function memoryInvitations(identity: LiveIdentity, rows: Map<string, LiveInvitationRecord>, epochs: Map<string, number>) {
+  const pending = new Map<string, LiveInvitationRecord>(); const pendingEpochs = new Map<string, number>();
+  const epochKey = (generation: number, session: string) => JSON.stringify([identity.storageScopeId, identity.artifactId, generation, session]);
+  const own = () => [...new Map([...rows, ...pending]).values()].filter(row =>
+    row.storageScopeId === identity.storageScopeId && row.artifactId === identity.artifactId);
+  const ledger: LiveInvitationLedger = {
+    list: async () => structuredClone(own()),
+    async save(row) {
+      const prior = pending.get(row.invitationId) ?? rows.get(row.invitationId);
+      if (row.storageScopeId !== identity.storageScopeId || row.artifactId !== identity.artifactId || (prior &&
+        (prior.storageScopeId !== row.storageScopeId || prior.artifactId !== row.artifactId))) throw new ArtifactOperationError('access_denied');
+      if ((prior?.rowVersion ?? 0) + 1 !== row.rowVersion) throw new ArtifactOperationError('git_live_conflict', { publicDetails: { reason: 'stale_fence' } });
+      if (openInvitation(row) && own().some(other => other.invitationId !== row.invitationId && openInvitation(other) &&
+        other.bindingGeneration === row.bindingGeneration && other.liveSessionId === row.liveSessionId &&
+        other.principalId === row.principalId)) throw new ArtifactOperationError('git_live_conflict', { publicDetails: { reason: 'active_session' } });
+      pending.set(row.invitationId, structuredClone(row));
+    },
+    epoch: async (generation, session) => pendingEpochs.get(epochKey(generation, session)) ?? epochs.get(epochKey(generation, session)) ?? 0,
+    async setEpoch(generation, session, epoch) { pendingEpochs.set(epochKey(generation, session), epoch); },
+  };
+  const commit = () => { for (const [k, v] of pending) rows.set(k, v); for (const [k, v] of pendingEpochs) epochs.set(k, v); };
+  return { ledger, commit };
+}
+
 /** Atomic fake; the persisted representation contains encrypted objects and metadata only. */
 export function createMemoryLiveStore(): LiveStore {
   const records = new Map<string, LiveDraftRecord>();
   const objects = new Map<string, LiveEnvelope>();
   const receipts = new Map<string, LiveReceipt>();
   const quota: { scope: string; artifact: string; actor: string; invocation: string; at: number }[] = [];
+  const invitations = new Map<string, LiveInvitationRecord>(); const epochs = new Map<string, number>();
   const mutex = createKeyMutex();
   return {
     async sessionIdentity(scope, artifactId, sessionId) {
@@ -73,9 +118,11 @@ export function createMemoryLiveStore(): LiveStore {
     const pendingObjects = new Map<string, LiveEnvelope | undefined>();
     const pendingReceipts = new Map<string, LiveReceipt>();
     const pendingQuota: typeof quota = [];
+    const invitationTx = memoryInvitations(identity, invitations, epochs);
     const receiptKey = (actor: string, key: string) => JSON.stringify([identity.storageScopeId, actor, key]);
     const tx: LiveTransaction = {
       record: structuredClone(records.get(id)),
+      invitations: invitationTx.ledger,
       getObject: async ref => structuredClone(pendingObjects.get(id + ref) ?? objects.get(id + ref)),
       async putObject(ref, value) {
         if (objects.has(id + ref) || pendingObjects.has(id + ref)) throw new ArtifactOperationError('command_conflict');
@@ -115,6 +162,7 @@ export function createMemoryLiveStore(): LiveStore {
     for (const [key, object] of pendingObjects) { if (object) objects.set(key, object); else objects.delete(key); }
     for (const [key, receipt] of pendingReceipts) receipts.set(key, receipt);
     quota.push(...pendingQuota);
+    invitationTx.commit();
     return structuredClone(result);
   }) };
 }

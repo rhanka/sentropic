@@ -13,8 +13,10 @@ const labels = (key: LiveKey, runtime: LiveRuntime) => ({
   'sentropic.dev/artifact-generation': String(runtime.generation),
   'sentropic.dev/artifact-lease': String(runtime.leaseEpoch),
 });
-/** emptyDir sizes (s-archi 2026-11-07 (a)): source, scratch /tmp (npm cache, Vite cache, build output), installed tree. */
-export const VOLUME_LIMITS = Object.freeze({ source: '512Mi', scratch: '2Gi', dependencies: '1536Mi' });
+/** emptyDir sizes (s-archi 2026-11-07 21:15; sizes per the owner quota push 2026-11-08): source, scratch /tmp (npm cache, Vite
+ * cache, build output), installed tree; each a disk role cap (never medium: Memory), with their total bounded by the 2560Mi
+ * container ephemeral limit. Measured maxima (build-1280): source 105, scratch 1241 during the install, dependencies 958 MiB. */
+export const VOLUME_LIMITS = Object.freeze({ source: '384Mi', scratch: '1536Mi', dependencies: '1152Mi' });
 /** Bootstrap is trusted host code, not repository content or a caller-supplied command. */
 export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string, placement: BuilderPlacement) {
   if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable');
@@ -34,10 +36,12 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
         { name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } }],
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
-      // L0 measured cap adjustment (A-LIVE §12): 4 live pods per d2-4 node; only the limits overcommit.
-      // The memory limit holds the in-pod clean build (heap 1024); the ephemeral limit is the emptyDir sum.
-      resources: { requests: { cpu: '350m', memory: '450Mi', 'ephemeral-storage': '0' },
-        limits: { cpu: '2', memory: '1536Mi', 'ephemeral-storage': '4Gi' } },
+      // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f): LimitRange tenant-defaults cpu <= 1 per container;
+      // ResourceQuota tenant-quota requests.cpu 1, limits.memory 6Gi, limits.ephemeral-storage 10Gi, pods 5; four requests
+      // fit the d2-4 node (4 x 420 = 1680 <= 1706 MiB) and four limits fit the quota (4 CPU, 4 x 1536Mi = 6Gi, 4 x 2560Mi = 10Gi).
+      // Only the limits overcommit.
+      resources: { requests: { cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' },
+        limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': '2560Mi' } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
         { name: 'dependencies', mountPath: '/dependencies' }],
@@ -45,6 +49,11 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
     volumes: Object.entries(VOLUME_LIMITS).map(([name, sizeLimit]) => ({ name, emptyDir: { sizeLimit } })),
   } };
 }
+/** A ResourceQuota refusal of a pod creation (Kubernetes 403 « exceeded quota »): backpressure, never a failure. */
+export const QUOTA_EXCEEDED = 'quota_exceeded';
+export const quotaExceeded = (error: unknown) => error instanceof LiveError && error.reason === QUOTA_EXCEEDED;
+export const quotaRefusal = (statusCode: number, body: string) => statusCode === 403 && /\bexceeded quota\b/.test(body);
+const leaseOf = (pod: Pod) => Number(pod.metadata.labels['sentropic.dev/artifact-lease']);
 interface Pod {
   metadata: { uid: string; labels: Record<string, string>; deletionTimestamp?: string };
   status?: { phase?: string };
@@ -61,6 +70,14 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
     async ensure(key: LiveKey, runtime: LiveRuntime) {
       const expected = labels(key, runtime);
       let pod = await core.get<Pod>('pods', runtime.podName);
+      // No surge: a pod of an older lease of this binding (or a terminating one) still counts against the tenant quota.
+      // A fresh intent deletes it and waits for its 404 (bounded by waitDeleted) before creating the replacement.
+      if (pod && runtime.podUid === null && (leaseOf(pod) < runtime.leaseEpoch
+        || (pod.metadata.deletionTimestamp && leaseOf(pod) <= runtime.leaseEpoch))) {
+        if (!pod.metadata.deletionTimestamp) await core.delete('pods', runtime.podName, pod.metadata.uid);
+        await core.waitDeleted('pods', runtime.podName, pod.metadata.uid);
+        pod = undefined;
+      }
       if (!pod) {
         if (runtime.podUid !== null) throw new LiveError('builder_unavailable');
         try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement)); }
