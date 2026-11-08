@@ -13,7 +13,7 @@ const person = { name: 'Human', email: 'human@noreply.test' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 /** Fake GitHub REST: exact git/ref lookups, 422 « No commit found » for unknown commits, ref creation. */
-function fakeGitHub(heads: Record<string, string>) {
+function fakeGitHub(heads: Record<string, string>, tags: Record<string, string> = {}) {
   const refs = new Map(Object.entries(heads));
   const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     const path = url.slice(API.length);
@@ -27,8 +27,9 @@ function fakeGitHub(heads: Record<string, string>) {
     }
     const commit = /^\/commits\/(.+)$/.exec(path);
     if (commit) {
-      if (![...refs.values()].includes(commit[1])) return json({ message: `No commit found for SHA: ${commit[1]}` }, 422);
-      return json({ sha: commit[1], parents: [], commit: { message: 'm', tree: { sha: TREE }, author: person, committer: person } });
+      const id = tags[decodeURIComponent(commit[1])] ?? commit[1];
+      if (![...refs.values(), ...Object.values(tags)].includes(id)) return json({ message: `No commit found for SHA: ${commit[1]}` }, 422);
+      return json({ sha: id, parents: [], commit: { message: 'm', tree: { sha: TREE }, author: person, committer: person } });
     }
     if (path === '/git/refs' && init?.method === 'POST') {
       const body = JSON.parse(String(init.body)); const branch = body.ref.slice('refs/heads/'.length);
@@ -60,6 +61,20 @@ describe('GitHub branch resolution (fake HTTP only)', () => {
   it.each([404, 422])('should report an absent branch as missing when git/ref answers %i', async status => {
     const forge = createGitHubForge(vi.fn(async () => json({ message: 'No commit found' }, status)) as unknown as GitHubFetch);
     await expect(forge.resolve(context, SLASH_BRANCH)).rejects.toMatchObject({ code: 'missing' });
+  });
+  it('should resolve a registered tag through /commits but never fall back for an artifact branch', async () => {
+    const gh = fakeGitHub({ main: MAIN }, { 'v1.2.0': HEAD }); const forge = createGitHubForge(gh.fetcher as unknown as GitHubFetch);
+    expect((await forge.resolve(context, 'v1.2.0')).sha).toBe(HEAD);
+    expect(gh.urls()).toEqual([`${API}/git/ref/heads/v1.2.0`, `${API}/commits/v1.2.0`, `${API}/commits/${HEAD}`]);
+    gh.fetcher.mockClear();
+    await expect(forge.resolve(context, SLASH_BRANCH)).rejects.toMatchObject({ code: 'missing' });
+    expect(gh.urls()).toEqual([`${API}/git/ref/heads/${SLASH_BRANCH}`]);
+  });
+  it('should resolve a full commit SHA without a ref lookup and keep an existing branch a conflict', async () => {
+    const gh = fakeGitHub({ [SLASH_BRANCH]: HEAD }); const forge = createGitHubForge(gh.fetcher as unknown as GitHubFetch);
+    expect((await forge.resolve(context, HEAD)).sha).toBe(HEAD);
+    expect(gh.urls()).toEqual([`${API}/commits/${HEAD}`]);
+    await expect(forge.createBranch(context, SLASH_BRANCH, MAIN)).rejects.toMatchObject({ code: 'conflict' });
   });
   it('should map a 422 on /commits to missing instead of git_ref_not_allowed', async () => {
     const port = githubPort(fakeGitHub({ main: MAIN }), 'scope-a');

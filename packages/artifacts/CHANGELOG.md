@@ -4,14 +4,14 @@
 
 - `createGitHubForge` resolves a branch through `GET /repos/{owner}/{repo}/git/ref/heads/{branch}`
   (each ref segment encoded on its own, so `artifact/p/<id>/<app>` keeps its slashes) and reads the
-  exact `refs/heads/<branch>` commit `object.sha`; only a full 40-hex commit SHA goes straight to
-  `/commits/<sha>`. A branch lookup no longer goes through `/commits/{ref}` (whole-ref percent-encoding).
-- An absent ref is `missing` on both lookups: GitHub answers 422 « No commit found » (not 404) for an
+  exact `refs/heads/<branch>` commit `object.sha`; a full 40-hex commit SHA goes straight to
+  `/commits/<sha>`. Another registered ref (a tag, an abbreviated SHA) that is not a branch still
+  resolves through `/commits/{ref}` (per-segment encoding); an `artifact/` branch never does.
+- An absent ref is `missing` on every lookup: GitHub answers 422 « No commit found » (not 404) for an
   unknown ref, and that 422 no longer maps to `conflict`/`git_ref_not_allowed`. `resolveRef` on the
   bound branch reports `git_branch_missing` and `artifacts_git_attach` now treats it as an absent
   branch, so a new personal branch is created from `baseRef` instead of failing the attach.
-- `resolveRef` returns the full commit SHA for a slash branch, so `artifacts_live_control` start passes
-  its head check on an attached binding.
+  `createBranch` on an existing branch stays `conflict`.
 - `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.23): the APP-P1 manifest digest changes through
   its version field only (four-tool selection and tool definitions unchanged).
 
