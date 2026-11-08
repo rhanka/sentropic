@@ -21,7 +21,7 @@ const gb1 = { subPath: '', files: { 'sentropic.artifact.json': gb1Descriptor, 'p
   'package-lock.json': JSON.stringify({ lockfileVersion: 3, packages: { '': gb1Manifest } }) } };
 const idOf = (k: LiveKey) => `${k.storageScopeId}/${k.artifactId}`;
 /** `budgetMiB` defaults to a node with room for every phase; pass 1641 for one d2-4 (s-archi 07/11 15:05, measured pod base 19 MiB). */
-export function fixture(options: { capacity?: number; budgetMiB?: number; maxWaitMs?: number } = {}) {
+export function fixture(options: { capacity?: number; budgetMiB?: number; maxWaitMs?: number; maxPods?: number } = {}) {
   const states = new Map<string, LiveState>(); const drafts = new Map<string, DraftSnapshot>();
   const owners = new Map<string, string>();
   let tail = Promise.resolve(); let sequence = 0; let now = 0;
@@ -68,7 +68,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
       finally { unlock(); }
     },
   };
-  const queue = createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => now, budget: {
+  const queue = createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => now, maxPods: options.maxPods ?? 4, budget: {
     budgetMiB: options.budgetMiB ?? 100_000, podBaseMiB: 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 36_000_000 } });
   const ports: LivePorts = {
     store, now: () => now, id: () => `id-${++sequence}`,

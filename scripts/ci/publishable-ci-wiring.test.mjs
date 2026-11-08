@@ -133,7 +133,8 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   assert.deepEqual(YAML.parse(files.with.filters), { publishable_package_files: ['packages/*/**'] });
   const comparison = (w) => Object.fromEntries(Object.entries(w).filter(([k]) => !['filters', 'list-files'].includes(k)));
   assert.deepEqual(comparison(files.with), comparison(filter.with), 'identical comparison inputs');
-  assert.deepEqual(jobs.changes.permissions, { contents: 'read', 'pull-requests': 'read' });
+  // BR92-EX3: actions read only, for the same-tree pull_request run lookup.
+  assert.deepEqual(jobs.changes.permissions, { contents: 'read', 'pull-requests': 'read', actions: 'read' });
   const out = jobs.changes.outputs;
   assert.equal(out.package_files, '${{ steps.publishable_files.outputs.publishable_package_files_files }}');
   assert.equal(out.matched_filters, '${{ steps.filter.outputs.changes }}');
@@ -520,14 +521,16 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
 });
 
 test('release train: validation barrier, strict chain, serialization, lock-sync and lock integrity (BRDP-EX10)', () => {
-  const validated = TRAIN_VALIDATES.map(([job, filter]) => `(needs.${job}.result == 'success' || (needs.${job}.result == 'skipped' && needs.changes.outputs.${filter} != 'true' && needs.changes.outputs.global != 'true'))`);
+  // BR92-EX3: a validation also counts as skipped on a tested tree, and only
+  // with the candidates of this run produced (they are what gets published).
+  const validated = TRAIN_VALIDATES.map(([job, filter]) => `(needs.${job}.result == 'success' || (needs.${job}.result == 'skipped' && needs.changes.outputs.${filter} != 'true' && needs.changes.outputs.global != 'true') || (needs.${job}.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success'))`);
   for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
     const cond = jobs[job].if.replaceAll("(github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true)", "github.ref == 'refs/heads/main'");
     const slug = job.slice('publish-'.length);
     // `!cancelled()` instead of design section 5's `always()`: a manual cancel stops the train.
     assert.ok(cond.startsWith(`!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && needs.changes.outputs.${publishFilter(slug)} == 'true' && `), `${job}: barrier prefix`);
     assert.equal(cond, [cond.slice(0, cond.indexOf(' && (')), ...validated, ...upstreams.map(([s, f]) => strictWait(s, f))].join(' && '), `${job}: exact condition`);
-    assert.deepEqual(needsOf(job), ['changes', ...TRAIN_VALIDATES.map(([v]) => v), ...upstreams.map(([s]) => s)], `${job}: needs`);
+    assert.deepEqual(needsOf(job), ['changes', 'package-candidates', ...TRAIN_VALIDATES.map(([v]) => v), ...upstreams.map(([s]) => s)], `${job}: needs`);
     assert.deepEqual(jobs[job].concurrency, { group: 'npm-publish-train', 'cancel-in-progress': false }, `${job}: concurrency`);
   }
   for (const name of Object.keys(jobs)) {

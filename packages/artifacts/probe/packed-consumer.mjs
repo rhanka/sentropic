@@ -90,6 +90,9 @@ const EXPECTED_TOOLS = [
   "artifacts_git_attach", "artifacts_git_commit", "artifacts_git_publish",
   "artifacts_git_live", "artifacts_live_write", "artifacts_live_read",
   "artifacts_live_reset", "artifacts_live_status", "artifacts_live_control",
+  // Live invitations (A-LIVE v2 §9), appended last and frozen at birth.
+  "artifacts_live_invite", "artifacts_live_accept_invitation", "artifacts_live_revoke_invitation",
+  "artifacts_live_invitations",
 ];
 if (JSON.stringify([...mcp.ARTIFACTS_TOOL_NAMES]) !== JSON.stringify(EXPECTED_TOOLS)) {
   throw new Error("tool name mismatch");

@@ -265,8 +265,17 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      # BR92-EX3: read-only lookup of the same-tree pull_request run.
+      actions: read
     outputs:
       expected_attempt: ${{ steps.ci_expected.outputs.attempt }}
+      # BR92-EX3: 'true' only when the expected manifest accepted same-tree PR
+      # evidence; empty or 'false' runs every test member (fail-safe).
+      tested_tree: ${{ steps.tested_tree.outputs.tested_tree }}
+      tested_run: ${{ steps.tested_tree.outputs.run }}
+      tested_tree_id: ${{ steps.tested_tree.outputs.tree }}
+      tested_attempt: ${{ steps.tested_tree.outputs.attempt }}
+      tested_head: ${{ steps.tested_tree.outputs.head }}
       global: ${{ steps.filter.outputs.global }}
       idp_sync: ${{ steps.filter.outputs.idp_sync }}
       api: ${{ steps.filter.outputs.api }}
@@ -725,18 +734,115 @@ jobs:
         env:
           SELECTED: ${{ (github.base_ref == 'feat/engram-e2-integration' || (github.base_ref == 'main' && github.head_ref == 'feat/engram-e2-integration')) && steps.filter.outputs.engram_e2 == 'true' }}
         run: echo "selected=$SELECTED" >> "$GITHUB_OUTPUT"
+      # BR92-EX3: capture only (read-only token). The Make manifest below accepts
+      # same-tree pull_request evidence only when every same-tree candidate of
+      # this workflow is green on every attempt (no newest-wins) and the reused
+      # attempt started within the age bound; an API error keeps the full run.
+      - name: Capture same-tree pull_request evidence (main push only)
+        id: tested_tree_capture
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          TESTED_TREE_MAX_AGE_HOURS: '24'
+          TESTED_TREE_LOOKBACK_HOURS: '168'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { execFileSync } = require('node:child_process');
+            fs.mkdirSync('tmp/ci-capacity', { recursive: true });
+            const capturedAt = new Date().toISOString();
+            const maxAgeHours = Number(process.env.TESTED_TREE_MAX_AGE_HOURS);
+            const lookbackHours = Number(process.env.TESTED_TREE_LOOKBACK_HOURS);
+            const evidence = { tree: execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim(),
+              sha: context.sha, repository: `${context.repo.owner}/${context.repo.repo}`, capturedAt, maxAgeHours, lookbackHours };
+            const keep = run => ({ id: run.id, run_attempt: run.run_attempt, event: run.event, status: run.status,
+              conclusion: run.conclusion, workflow_id: run.workflow_id, path: run.path, head_sha: run.head_sha,
+              head_branch: run.head_branch, html_url: run.html_url, tree_id: run.head_commit?.tree_id ?? null,
+              run_started_at: run.run_started_at ?? null,
+              head_repository: run.head_repository?.full_name ?? null, repository: run.repository?.full_name ?? null });
+            try {
+              if (!(maxAgeHours > 0 && lookbackHours >= maxAgeHours)) throw new Error('invalid age bound or lookback');
+              const { data: current } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
+              evidence.workflowId = current.workflow_id;
+              // Every pull_request run of this workflow in the lookback, whatever its status.
+              const since = new Date(Date.parse(capturedAt) - lookbackHours * 3_600_000).toISOString();
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, { ...context.repo,
+                workflow_id: current.workflow_id, event: 'pull_request', created: `>=${since}`, per_page: 100 });
+              if (runs.length >= 1000) throw new Error(`candidate scan truncated at ${runs.length} runs`);
+              const sameTree = [...new Map(runs.filter(run => run.head_commit?.tree_id === evidence.tree)
+                .map(run => [run.id, run])).values()];
+              // Each attempt is its own conclusion; the last one concluded the run.
+              const concluded = new Map();
+              evidence.candidates = [];
+              for (const run of sameTree) {
+                const attempts = [];
+                for (let number = 1; number <= run.run_attempt; number += 1) {
+                  const { data } = await github.rest.actions.getWorkflowRunAttempt({ ...context.repo,
+                    run_id: run.id, attempt_number: number });
+                  attempts.push({ attempt: data.run_attempt, status: data.status, conclusion: data.conclusion,
+                    run_started_at: data.run_started_at ?? null });
+                  concluded.set(run.id, data);
+                }
+                evidence.candidates.push({ ...keep(run), attempts });
+              }
+              const chosen = evidence.candidates.filter(run => run.head_repository === evidence.repository
+                && run.repository === evidence.repository).sort((a, b) => b.id - a.id)[0];
+              if (chosen && concluded.has(chosen.id)) {
+                const run = concluded.get(chosen.id);
+                evidence.run = keep(run);
+                evidence.jobs = (await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, { ...context.repo,
+                  run_id: run.id, attempt_number: run.run_attempt, per_page: 100 })).map(job => ({ id: job.id, name: job.name,
+                  status: job.status, conclusion: job.conclusion, run_id: job.run_id, run_attempt: job.run_attempt, html_url: job.html_url }));
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
+                  { ...context.repo, run_id: run.id, per_page: 100 });
+                // The manifest of exactly the concluded attempt.
+                const manifests = artifacts.filter(item => !item.expired && item.name === `ci-expected-${run.id}-${run.run_attempt}`);
+                if (manifests.length > 1) throw new Error(`ambiguous expected manifest for run ${run.id}`);
+                if (manifests.length === 1) {
+                  const { data } = await github.rest.actions.downloadArtifact({ ...context.repo,
+                    artifact_id: manifests[0].id, archive_format: 'zip' });
+                  fs.writeFileSync('tmp/ci-capacity/tested-tree-expected.zip', Buffer.from(data));
+                  evidence.expected = JSON.parse(execFileSync('unzip', ['-p', 'tmp/ci-capacity/tested-tree-expected.zip',
+                    'expected.json'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+                }
+              }
+            } catch (error) {
+              evidence.error = String(error?.message ?? error);
+            }
+            fs.writeFileSync('tmp/ci-capacity/tested-tree.json', JSON.stringify(evidence, null, 2));
       - name: Retain expected execution set before dispatch (BR76-EX1)
         id: ci_expected
         env:
           ENGRAM_E2_SELECTED: ${{ steps.engram_e2_scope.outputs.selected }}
           CI_SELECTION_CONTEXT: >-
             {"changes": ${{ toJSON(steps.filter.outputs) }}, "event": "${{ github.event_name }}",
+            "testedTree": "${{ steps.tested_tree_capture.outcome == 'success' && 'tested-tree.json' || '' }}",
             "ref": "${{ github.ref }}", "inputs": {"bootstrap_publish_target": "${{ inputs.bootstrap_publish_target || 'none' }}", "capacity_publish_dry_run": ${{ inputs.capacity_publish_dry_run || false }}},
             "identity": {"runId": "${{ github.run_id }}", "attempt": "${{ github.run_attempt }}",
             "headSha": "${{ github.event.pull_request.head.sha || github.sha }}"}}
         run: |
-          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; if (context.inputs.capacity_publish_dry_run) for (const key of Object.keys(context.changes)) if (key.endsWith("_publish")) context.changes[key] = "true"; process.stdout.write(JSON.stringify(context));')"
+          # BR92-EX3: identify the tree this run actually checks out (the PR merge ref on pull_request).
+          export CHECKOUT_TREE="$(git rev-parse 'HEAD^{tree}')"
+          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.identity.tree = process.env.CHECKOUT_TREE; context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; if (context.inputs.capacity_publish_dry_run) for (const key of Object.keys(context.changes)) if (key.endsWith("_publish")) context.changes[key] = "true"; process.stdout.write(JSON.stringify(context));')"
           make ci-expected-manifest ENV=test-ci-62
+      # BR92-EX3: the manifest is the single decision; skipped members record
+      # the PR run and job that satisfied them.
+      - name: Publish the tested-tree decision and its evidence (BR92-EX3)
+        id: tested_tree
+        run: |
+          set -eu
+          manifest=tmp/ci-capacity/expected.json
+          mode="$(jq -r '.qualification.mode // "in-run"' "$manifest")"
+          if [ "$mode" = tested-tree ]; then
+            jq -r '"tested_tree=true", "run=\(.qualification.runId)", "attempt=\(.qualification.attempt)", "head=\(.qualification.headSha)", "tree=\(.qualification.tree)"' "$manifest" >> "$GITHUB_OUTPUT"
+            jq -r '.qualification as $q | "### Tested tree: satisfied by run [\($q.runId)](\($q.url)) attempt \($q.attempt) (tree \($q.tree), \($q.candidates) green same-tree candidate(s), started \($q.ageHours) h before, bound \($q.maxAgeHours) h)",
+              "| job | evidence |", "|---|---|",
+              ($q.satisfied[] | "| \(.job) | satisfied by run [\($q.runId)](\(.url)) |")' "$manifest" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'tested_tree=false\nrun=\nattempt=\nhead=\ntree=\n' >> "$GITHUB_OUTPUT"
+            jq -r '"### Complete run: \(.qualification.reason // "in-run")"' "$manifest" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ci-expected-${{ github.run_id }}-${{ github.run_attempt }}
@@ -831,6 +937,7 @@ jobs:
   typecheck-lint-ui:
     runs-on: ubuntu-latest
     needs: [changes]
+    if: needs.changes.outputs.tested_tree != 'true'
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
@@ -844,7 +951,7 @@ jobs:
   api-static:
     runs-on: ubuntu-latest
     needs: [changes, build-api-tool-image]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -872,7 +979,7 @@ jobs:
   idp-web-static:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Typecheck IdP screens front
@@ -883,7 +990,7 @@ jobs:
   typecheck-lint-api:
     runs-on: ubuntu-latest
     needs: [changes, api-static, idp-web-static]
-    if: always() && !cancelled()
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true'
     steps:
       - uses: actions/checkout@v6
       - name: Require every selected API static program
@@ -893,7 +1000,7 @@ jobs:
   validate-idp-sync:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.idp_sync == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.idp_sync == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Gate rendered bundles and run controls
@@ -935,7 +1042,7 @@ jobs:
   consumer-contracts:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && inputs.decision_fixtures_only != true
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && inputs.decision_fixtures_only != true
     permissions:
       contents: read
     env:
@@ -965,7 +1072,7 @@ jobs:
   validate-llm-mesh:
     runs-on: ubuntu-latest
     needs: [changes, package-candidates]
-    if: always() && !cancelled() && (needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     env:
@@ -996,7 +1103,7 @@ jobs:
   validate-cluster-mesh:
     runs-on: ubuntu-latest
     needs: [changes, package-candidates]
-    if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     # BR89-EX1: nine lanes in seven legs, longest first (sizes from run 42408187255, each leg <= ~5 min);
@@ -1068,7 +1175,7 @@ jobs:
   validate-llm-gateway:
     runs-on: ubuntu-latest
     needs: [changes, package-candidates]
-    if: always() && !cancelled() && (needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     env:
@@ -1106,7 +1213,7 @@ jobs:
   validate-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.chat_ui == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.chat_ui == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1144,7 +1251,7 @@ jobs:
   validate-cited-source-viewer:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.cited_source_viewer == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.cited_source_viewer == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1167,7 +1274,7 @@ jobs:
   validate-cowork-bridge:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1188,7 +1295,7 @@ jobs:
   validate-oauth-verify:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1209,7 +1316,7 @@ jobs:
   validate-mcp-auth:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1251,7 +1358,7 @@ jobs:
   validate-mcp-platform:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1274,7 +1381,7 @@ jobs:
   validate-connector-host:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.connector_host == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.connector_host == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1289,7 +1396,7 @@ jobs:
   memory-l5-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.memory_l5 == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.memory_l5 == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1302,7 +1409,7 @@ jobs:
   validate-auth-hono:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.auth_hono == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.auth_hono == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1323,7 +1430,7 @@ jobs:
   validate-auth-client:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.auth_client == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.auth_client == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1344,7 +1451,7 @@ jobs:
   validate-auth-ui:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.auth_ui == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.auth_ui == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1365,7 +1472,7 @@ jobs:
   validate-cowork-desktop:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.cowork_desktop == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.cowork_desktop == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1386,7 +1493,7 @@ jobs:
   validate-contracts:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.contracts == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.contracts == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1405,7 +1512,7 @@ jobs:
   validate-events:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1424,7 +1531,7 @@ jobs:
   validate-chat-core:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1453,7 +1560,7 @@ jobs:
   validate-chat-server:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.chat_server == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.chat_server == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1474,7 +1581,7 @@ jobs:
   validate-comments:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.comments == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.comments == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1495,7 +1602,7 @@ jobs:
   validate-skills:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1510,7 +1617,7 @@ jobs:
   validate-flow:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1529,7 +1636,7 @@ jobs:
   artifacts-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -1588,7 +1695,7 @@ jobs:
   validate-artifacts:
     runs-on: ubuntu-latest
     needs: [changes, artifacts-qualification]
-    if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Require every artifact qualification shard
@@ -1597,7 +1704,7 @@ jobs:
   validate-harness:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1618,7 +1725,7 @@ jobs:
   validate-live-speech:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.live_speech == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.live_speech == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1692,7 +1799,7 @@ jobs:
   api-tool-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1826,7 +1933,7 @@ jobs:
   test-api-unit-integration:
     runs-on: ubuntu-latest
     needs: [changes, build-api-tool-image]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     env:
       API_TEST_CI: '1'
       API_TEST_SUT: '0'
@@ -1920,7 +2027,7 @@ jobs:
   test-api-sut:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image, build-api-tool-image]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     env:
       API_TEST_CI: '1'
       API_TEST_SUT: '1'
@@ -1967,7 +2074,7 @@ jobs:
   test-api-ai:
     runs-on: ubuntu-latest
     needs: [changes, build-api-tool-image]
-    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && (needs.changes.outputs.ai == 'true' || needs.changes.outputs.global == 'true')
+    if: needs.changes.outputs.tested_tree != 'true' && ((needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && (needs.changes.outputs.ai == 'true' || needs.changes.outputs.global == 'true'))
     env:
       API_TEST_CI: '1'
       API_TEST_SUT: '0'
@@ -2038,7 +2145,7 @@ jobs:
   test-ui:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     steps:
@@ -2148,7 +2255,7 @@ jobs:
     permissions:
       contents: read
     needs: [changes, build-api-image, build-ui, build-e2e]
-    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     strategy:
       max-parallel: 6
       fail-fast: false
@@ -2230,7 +2337,7 @@ jobs:
     permissions:
       contents: read
     needs: [changes, build-api-image, build-ui, build-e2e]
-    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     env:
       E2E_SPEC: tests/vscode/01-vscode-chat-streaming.spec.ts
       OPENVSCODE_PORT: 3115
@@ -2286,7 +2393,7 @@ jobs:
     permissions:
       contents: read
     needs: [changes, build-api-image, build-api-tool-image, build-e2e]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     env:
       DISABLE_RATE_LIMIT: 'true'
       API_PORT: '9491'
@@ -2331,7 +2438,7 @@ jobs:
   security-code-api:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     strategy:
@@ -2357,7 +2464,7 @@ jobs:
   security-code-ui:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     strategy:
@@ -2384,6 +2491,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, security-code-api, security-code-ui]
     if: >-
+      needs.changes.outputs.tested_tree != 'true' &&
       !cancelled() &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     permissions:
@@ -2403,6 +2511,7 @@ jobs:
     permissions:
       contents: read
     needs: [changes]
+    if: inputs.decision_fixtures_only != true && needs.changes.outputs.tested_tree != 'true'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Run SCA gate
@@ -2425,7 +2534,7 @@ jobs:
     permissions:
       contents: read
     needs: [changes]
-    if: needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
@@ -2448,7 +2557,7 @@ jobs:
   security-container-api:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     steps:
@@ -2474,7 +2583,7 @@ jobs:
   security-container-api-tool:
     runs-on: ubuntu-latest
     needs: [changes, build-api-tool-image]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     steps:
@@ -2500,7 +2609,7 @@ jobs:
   security-container-ui:
     runs-on: ubuntu-latest
     needs: [changes, build-ui]
-    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     steps:
@@ -2526,7 +2635,7 @@ jobs:
   security-container-e2e:
     runs-on: ubuntu-latest
     needs: [changes, build-e2e]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     permissions:
       contents: read
     steps:
@@ -2554,6 +2663,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, security-container-api, security-container-api-tool, security-container-ui, security-container-e2e]
     if: >-
+      needs.changes.outputs.tested_tree != 'true' &&
       !cancelled() &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     permissions:
@@ -2571,7 +2681,7 @@ jobs:
     permissions:
       contents: read
     needs: [changes, build-api-image, build-api-tool-image]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.tested_tree != 'true' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
     env:
       API_TEST_CI: '1'
       API_TEST_SUT: '1'
@@ -2625,21 +2735,24 @@ jobs:
     permissions:
       contents: read
       packages: write
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
+    # BR92-EX3: the transported builds always gate; a skipped test barrier counts
+    # only on a tested tree (same-tree PR run recorded by changes), a failed never.
+    needs: [changes, build-ui, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') &&
       needs.changes.result == 'success' &&
-      needs.typecheck-lint-api.result == 'success' &&
-      needs.typecheck-lint-ui.result == 'success' &&
-      needs.security-sast-sca.result == 'success' &&
-      needs.test-ui.result == 'success' &&
+      needs.build-ui.result == 'success' &&
       needs.build-ui-static.result == 'success' &&
-      needs.test-e2e.result == 'success' &&
-      needs.e2e-vscode.result == 'success' &&
-      needs.security-container.result == 'success' &&
-      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
+      (needs.typecheck-lint-api.result == 'success' || (needs.typecheck-lint-api.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.typecheck-lint-ui.result == 'success' || (needs.typecheck-lint-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-sast-sca.result == 'success' || (needs.security-sast-sca.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-e2e.result == 'success' || (needs.test-e2e.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.e2e-vscode.result == 'success' || (needs.e2e-vscode.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-container.result == 'success' || (needs.security-container.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true') || (needs.security-iac.result == 'skipped' && needs.changes.outputs.tested_tree == 'true'))
     env:
       DOCKER_USERNAME: ${{ github.actor }}
       DOCKER_PASSWORD: ${{ github.token }}
@@ -2667,28 +2780,32 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, api-image-guards, api-tool-qualification, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    # BR92-EX3: the transported builds and the image guards always gate; a skipped
+    # test barrier counts only on a tested tree (recorded by changes), a failed never.
+    needs: [changes, build-api-image, build-e2e, api-image-guards, api-tool-qualification, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-api-sut, test-api-ai, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
     if: >-
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') &&
       needs.changes.result == 'success' &&
+      needs.build-api-image.result == 'success' &&
+      needs.build-e2e.result == 'success' &&
       needs.api-image-guards.result == 'success' &&
-      needs.api-tool-qualification.result == 'success' &&
-      needs.typecheck-lint-api.result == 'success' &&
-      needs.typecheck-lint-ui.result == 'success' &&
-      needs.security-sast-sca.result == 'success' &&
-      (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.build-ui-static.result == 'success' || (needs.build-ui-static.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
-      needs.test-api-unit-integration.result == 'success' &&
-      needs.test-api-sut.result == 'success' &&
-      (needs.test-api-ai.result == 'success' || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.ai != 'true' && needs.changes.outputs.global != 'true')) &&
-      needs.test-e2e.result == 'success' &&
-      needs.e2e-vscode.result == 'success' &&
-      needs.smoke-idp-screens.result == 'success' &&
-      needs.test-smoke-restore.result == 'success' &&
-      needs.security-container.result == 'success' &&
-      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
+      (needs.api-tool-qualification.result == 'success' || (needs.api-tool-qualification.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.typecheck-lint-api.result == 'success' || (needs.typecheck-lint-api.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.typecheck-lint-ui.result == 'success' || (needs.typecheck-lint-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-sast-sca.result == 'success' || (needs.security-sast-sca.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true') || (needs.test-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-api-unit-integration.result == 'success' || (needs.test-api-unit-integration.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-api-sut.result == 'success' || (needs.test-api-sut.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-api-ai.result == 'success' || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.ai != 'true' && needs.changes.outputs.global != 'true') || (needs.test-api-ai.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-e2e.result == 'success' || (needs.test-e2e.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.e2e-vscode.result == 'success' || (needs.e2e-vscode.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.smoke-idp-screens.result == 'success' || (needs.smoke-idp-screens.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.test-smoke-restore.result == 'success' || (needs.test-smoke-restore.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-container.result == 'success' || (needs.security-container.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
+      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true') || (needs.security-iac.result == 'skipped' && needs.changes.outputs.tested_tree == 'true'))
     env:
       DOCKER_USERNAME: ${{ github.actor }}
       DOCKER_PASSWORD: ${{ github.token }}
@@ -2721,7 +2838,7 @@ jobs:
   # own trigger filter and `global` are false), serialized across runs by one concurrency group.
   publish-llm-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
+    needs: [changes, package-candidates, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
     outputs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
@@ -2734,9 +2851,9 @@ jobs:
       needs.changes.result == 'success' &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_mesh_publish == 'true' &&
-      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true'))
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success'))
     concurrency:
       group: npm-publish-train
       cancel-in-progress: false
@@ -2783,7 +2900,7 @@ jobs:
 
   publish-llm-gateway:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
+    needs: [changes, package-candidates, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
     outputs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
@@ -2796,9 +2913,9 @@ jobs:
       needs.changes.result == 'success' &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_gateway_publish == 'true' &&
-      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
       (needs.publish-llm-mesh.result == 'success' || (needs.publish-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh_publish != 'true'))
     concurrency:
       group: npm-publish-train
@@ -2839,7 +2956,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-chat-ui.result == 'success' || (needs.validate-chat-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2862,7 +2979,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-cited-source-viewer]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-cited-source-viewer.result == 'success' || (needs.validate-cited-source-viewer.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.cited_source_viewer_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2885,7 +3002,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-cowork-bridge]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-cowork-bridge.result == 'success' || (needs.validate-cowork-bridge.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.cowork_bridge_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2908,7 +3025,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-oauth-verify]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-oauth-verify.result == 'success' || (needs.validate-oauth-verify.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.oauth_verify_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2935,7 +3052,7 @@ jobs:
     if: >-
       always() && !cancelled() && needs.changes.result == 'success' &&
       needs.changes.outputs.mcp_auth_publish == 'true' &&
-      needs.validate-mcp-auth.result == 'success' &&
+      (needs.validate-mcp-auth.result == 'success' || (needs.validate-mcp-auth.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
       (needs.publish-oauth-verify.result == 'success' || needs.publish-oauth-verify.result == 'skipped') &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true)
     permissions:
@@ -2996,7 +3113,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-mcp-platform]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-mcp-platform.result == 'success' || (needs.validate-mcp-platform.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.mcp_platform_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3019,7 +3136,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-artifacts, publish-mcp-platform]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' &&
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-artifacts.result == 'success' || (needs.validate-artifacts.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) &&
       (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
       (needs.changes.outputs.artifacts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
@@ -3044,7 +3161,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-hono]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-auth-hono.result == 'success' || (needs.validate-auth-hono.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.auth_hono_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3067,7 +3184,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-client]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-auth-client.result == 'success' || (needs.validate-auth-client.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.auth_client_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3090,7 +3207,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-auth-ui.result == 'success' || (needs.validate-auth-ui.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.auth_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3113,7 +3230,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-cowork-desktop]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-cowork-desktop.result == 'success' || (needs.validate-cowork-desktop.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.cowork_desktop_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3136,7 +3253,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-contracts]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-contracts.result == 'success' || (needs.validate-contracts.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.contracts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3159,7 +3276,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-events]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-events.result == 'success' || (needs.validate-events.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.events_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3182,7 +3299,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-core]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-chat-core.result == 'success' || (needs.validate-chat-core.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.chat_core_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3205,7 +3322,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-server]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-chat-server.result == 'success' || (needs.validate-chat-server.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.chat_server_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3228,7 +3345,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-comments]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-comments.result == 'success' || (needs.validate-comments.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.comments_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3251,7 +3368,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-flow]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-flow.result == 'success' || (needs.validate-flow.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.flow_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3274,7 +3391,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-harness]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && (needs.validate-harness.result == 'success' || (needs.validate-harness.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.harness_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -3298,7 +3415,7 @@ jobs:
   # publisher counts as skipped only when its own `*_publish` filter is false.
   publish-cluster-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform, publish-artifacts]
+    needs: [changes, package-candidates, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts, publish-mcp-platform, publish-artifacts]
     outputs:
       publication_status: ${{ steps.record.outputs.status }}
       publication_sha256: ${{ steps.record.outputs.sha256 }}
@@ -3311,9 +3428,9 @@ jobs:
       needs.changes.result == 'success' &&
       (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.cluster_mesh_publish == 'true' &&
-      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
-      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true') || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.tested_tree == 'true' && needs.package-candidates.result == 'success')) &&
       (needs.publish-llm-mesh.result == 'success' || (needs.publish-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh_publish != 'true')) &&
       (needs.publish-llm-gateway.result == 'success' || (needs.publish-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway_publish != 'true')) &&
       (needs.publish-events.result == 'success' || (needs.publish-events.result == 'skipped' && needs.changes.outputs.events_publish != 'true')) &&
@@ -3480,6 +3597,12 @@ jobs:
             --gateway-publish "${{ needs.changes.outputs.llm_gateway_publish }}" \
             --cluster-publish "${{ needs.changes.outputs.cluster_mesh_publish }}" \
             --api-tag "${{ steps.tags.outputs.api_tag }}" --ui-tag "${{ steps.tags.outputs.ui_tag }}" \
+            --qualification-mode "${{ needs.changes.outputs.tested_tree == 'true' && 'tested-tree' || 'in-run' }}" \
+            --qualification-run "${{ needs.changes.outputs.tested_run }}" \
+            --qualification-attempt "${{ needs.changes.outputs.tested_attempt }}" \
+            --qualification-head-sha "${{ needs.changes.outputs.tested_head }}" \
+            --qualification-tree "${{ needs.changes.outputs.tested_tree_id }}" \
+            --source-tree "$(git rev-parse 'HEAD^{tree}')" \
             --out release-receipt.json
       - name: Upload the release receipt
         if: always()
@@ -3845,7 +3968,7 @@ jobs:
               preproduction: ['deploy-preprod'], packages: (selected.length ? selected : packages).map(row => row.job) };
             const capacity = { availableSlots: 17, reserveSlots: context.eventName === 'pull_request' ? 2 : 0 };
             fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs, endpoints, capacity,
-              dependencies: manifest.dependencies,
+              dependencies: manifest.dependencies, qualification: manifest.qualification ?? { mode: 'in-run' },
               sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Emit measured job and step spans through Make
         run: make --no-print-directory ci-run-metrics RUN_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62 > tmp/ci-capacity/metrics.json
@@ -3874,7 +3997,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report test-ci-static ENV=test-ci-capacity
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results test-ci-performance-report test-ci-static test-ci-tested-tree test-ci-release-receipts ENV=test-ci-capacity
       - name: Qualify the portable measured performance dossier
         run: make test-ci-dossier CI_DOSSIER_PULL=missing ENV=test-ci-performance-dossier
       - name: Remove dossier tooling volume

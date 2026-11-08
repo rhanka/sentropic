@@ -5,8 +5,8 @@ import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile
 export const liveNames = ['artifacts_live_write', 'artifacts_live_read', 'artifacts_live_reset',
   'artifacts_live_status', 'artifacts_live_control'] as const;
 it('should deliberately append the frozen G0 and A-LIVE tools after the original 24', () => {
-  expect(ARTIFACTS_TOOL_NAMES).toHaveLength(35);
-  expect(ARTIFACTS_TOOL_NAMES.slice(24)).toEqual(['artifacts_list_app_sources', 'artifacts_fetch_app_source',
+  expect(ARTIFACTS_TOOL_NAMES).toHaveLength(39);
+  expect(ARTIFACTS_TOOL_NAMES.slice(24, 35)).toEqual(['artifacts_list_app_sources', 'artifacts_fetch_app_source',
     'artifacts_git_attach', 'artifacts_git_commit', 'artifacts_git_publish', 'artifacts_git_live', ...liveNames]);
 });
 it('should select live operations without changing definitions or granting legacy Tool 6', () => {
