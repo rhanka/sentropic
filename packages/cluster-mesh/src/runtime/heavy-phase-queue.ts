@@ -3,12 +3,13 @@ export type HeavyPhaseKind = 'install' | 'prebundle' | 'dev' | 'build';
 /** Provisional peak costs above the pod base (MiB), measured on the immo variant. A finished `dev` keeps `dev` as the
  * live reservation of its subject until the live stops. */
 export const PROVISIONAL_HEAVY_PHASE_COSTS_MIB: Readonly<Record<HeavyPhaseKind, number>> =
-  Object.freeze({ install: 980, prebundle: 980, dev: 418, build: 1344 });
+  Object.freeze({ install: 980, prebundle: 980, dev: 390, build: 1344 });
 
 export interface HeavyPhaseBudget {
-  /** Node memory left to builder pods (one d2-4: 1706 MiB). */
+  /** Node memory left to builder pods (one d2-4: 1641 MiB, the 1706 MiB node share minus the 65 MiB of image files the
+   * pods map from the shared page cache). */
   readonly budgetMiB: number;
-  /** Bootstrap resident memory of every pod present on the node (to measure per deployment). */
+  /** Bootstrap memory charged to every pod present on the node (one d2-4: 19 MiB, measured in the pod cgroup). */
   readonly podBaseMiB: number;
   readonly costs: Readonly<Record<HeavyPhaseKind, number>>;
   /** A queued waiter or an admitted runner that stops renewing its ticket for longer leaves the queue. */

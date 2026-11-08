@@ -197,10 +197,11 @@ Heavy phases go through the cluster-mesh heavy-phase queue of the builder node
 `createPostgresHeavyQueueStore`): the in-pod install, the Vite pre-bundle (its
 own supervisor op), the dev server start and the clean build. The queue is a
 strict FIFO: a phase is admitted when the pod bases, the live reservations, the
-admitted phases and its own cost fit the node budget (1706 MiB on one d2-4;
-provisional costs install 980, pre-bundle 980, dev 418, build 1344 MiB; the pod
-base is measured per deployment). A finished dev start becomes its pod's live
-reservation until the live stops. A build is admitted only when no live runs on
+admitted phases and its own cost fit the node budget (1641 MiB on one d2-4: the
+1706 MiB node share minus 65 MiB of shared image files; provisional costs install
+980, pre-bundle 980, dev 390, build 1344 MiB; the pod base is measured per
+deployment, 19 MiB in the pod cgroup). A finished dev start becomes its pod's
+live reservation until the live stops. A build is admitted only when no live runs on
 the node. Cold revive, wake and crash restore queue each phase in turn; HMR
 projection never waits. An interactive waiter is refused with
 `builder_unavailable`/`queued` past the configured wait and leaves the queue;
@@ -212,7 +213,8 @@ Known limits of the heavy-phase queue:
   not share one node budget; each environment needs its own share of the node in
   configuration until the node is split or the queue store is shared.
 - With the provisional costs, a pre-bundle fits beside at most one live, and four
-  lives exceed 1706 MiB once the pod base is above 8 MiB.
+  lives with their pod bases take 1636 of the 1641 MiB (5 MiB margin, at rest only:
+  four simultaneous first renders peak above it, unverified on a real node).
 - Tickets renew at a third of the entry TTL. If the API crashes mid-phase, its
   admitted ticket stays counted until the TTL expires while the pod may still
   run that step; queued tickets expire the same way. After the restart the gate

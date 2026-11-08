@@ -43,8 +43,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     supervisorKey: SigningKey; relayUrl: string;
     /** Staged source, AL-D draft and candidate sink; the dependency stream is this service's cache. */
     sources: Omit<SupervisorSources, 'dependencies'>;
-    /** Builder node (one d2-4), its memory budget for the cluster-mesh heavy-phase queue (1706 MiB, provisional phase
-     * costs, measured pod base) and the longest interactive wait; tickets renew at a third of the entry TTL. */
+    /** Builder node (one d2-4), its memory budget for the cluster-mesh heavy-phase queue (1641 MiB, provisional phase
+     * costs, 19 MiB measured pod base) and the longest interactive wait; tickets renew at a third of the entry TTL. */
     heavy: { node: string; maxWaitMs: number; pollMs: number; budget: HeavyPhaseBudget };
     /** Live pod slots of this environment from per-environment configuration; the owner decision is 4 on one d2-4. */
     admission: { capacity?: number; waiterTtlMs: number };
