@@ -199,7 +199,8 @@ own supervisor op), the dev server start and the clean build. The queue is a
 strict FIFO: a phase is admitted when the pod bases, the live reservations, the
 admitted phases and its own cost fit the node budget (1641 MiB on one d2-4: the
 1706 MiB node share minus 65 MiB of shared image files; provisional costs install
-980, pre-bundle 980, dev 390, build 1261 MiB = the 1280Mi pod limit minus the pod base; the pod base is measured per
+980, pre-bundle 980, dev 390, build 1370 MiB = the measured clean-build peak at
+the 1536Mi pod limit minus the pod base; the pod base is measured per
 deployment, 19 MiB in the pod cgroup). A finished dev start becomes its pod's
 live reservation until the live stops. A build is admitted only when no live runs on
 the node. Cold revive, wake and crash restore queue each phase in turn; HMR
@@ -217,8 +218,9 @@ creation retries; past the wait bound the refusal is `builder_unavailable`/
 `queued`, never a bare `builder_unavailable`. No surge: a fresh intent that
 finds an older or terminating pod of its binding deletes it and waits for the
 404 (bounded) before creating the replacement. The pod requests 250m CPU and
-420Mi, limits 1 CPU, 1280Mi and 2560Mi ephemeral (emptyDirs 256Mi, 1280Mi,
-1024Mi), which fits the tenant LimitRange and ResourceQuota for four pods.
+420Mi, limits 1 CPU, 1536Mi and 2560Mi ephemeral (emptyDirs 384Mi, 1536Mi,
+1152Mi on disk, capped by role), which fits the tenant LimitRange and
+ResourceQuota (limits.memory 6Gi) for four pods.
 
 Known limits of the heavy-phase queue:
 

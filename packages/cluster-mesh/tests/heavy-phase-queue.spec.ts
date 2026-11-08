@@ -69,8 +69,14 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     expect(await queue.request(node, { subject: 'v3', kind: 'dev' })).toMatchObject({ state: 'queued', position: 2, blockedBy: 'fifo' });
     await queue.hold(node, { subject: 'v1', live: false });
     expect(await queue.request(node, { subject: 'v2', kind: 'build' })).toMatchObject({ state: 'admitted' });
-    expect(await queue.status(node)).toMatchObject({ usedMiB: 57 + 1261 });
+    expect(await queue.status(node)).toMatchObject({ usedMiB: 57 + 1370 });
     expect(await queue.request(node, { subject: 'v3', kind: 'dev' })).toMatchObject({ state: 'queued', position: 1, blockedBy: 'budget' });
+  });
+  it('should keep a longest phase blocked beside an admitted build and four pod bases: 4x19 + 1370 + 980 > 1641', async () => {
+    const { queue } = world(); await pods(queue, ['v1', 'v2', 'v3', 'v4']);
+    expect(await queue.request(node, { subject: 'v1', kind: 'build' })).toMatchObject({ state: 'admitted' });
+    expect(await queue.request(node, { subject: 'v2', kind: 'prebundle' }))
+      .toMatchObject({ state: 'queued', position: 1, blockedBy: 'budget' });
   });
   it('should admit at most maxPods pods: a pod slot waits on the pod count without holding back present pods', async () => {
     const { queue } = world(); await pods(queue, ['v1', 'v2', 'v3']);
@@ -117,12 +123,12 @@ describe('cluster mesh heavy-phase queue (durable FIFO under a node memory budge
     await before.queue.request(node, { subject: 'v1', kind: 'build' }); await before.queue.request(node, { subject: 'v2', kind: 'build' });
     const after = world({ store: before.store });
     await after.queue.seed(node, { pods: ['v1', 'v2', 'v3'], lives: [] });
-    expect(await after.queue.status(node)).toMatchObject({ pods: ['v1', 'v2', 'v3'], lives: [], usedMiB: 57 + 1261,
+    expect(await after.queue.status(node)).toMatchObject({ pods: ['v1', 'v2', 'v3'], lives: [], usedMiB: 57 + 1370,
       entries: [{ subject: 'v1', state: 'admitted' }, { subject: 'v2', state: 'queued', position: 1 }] });
   });
   it('should refuse a budget that cannot admit every phase on an empty node', () => {
-    expect(() => world({ podBaseMiB: 380 })).not.toThrow(); // 380 + a 1261 MiB build = 1641
-    expect(() => world({ podBaseMiB: 381 })).toThrow('heavy-phase budget');
+    expect(() => world({ podBaseMiB: 271 })).not.toThrow(); // 271 + a 1370 MiB build = 1641
+    expect(() => world({ podBaseMiB: 272 })).toThrow('heavy-phase budget');
     expect(() => world({ maxPods: 0 })).toThrow('maxPods');
     expect(() => createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => 0, maxPods: 4,
       budget: { budgetMiB: 1641, podBaseMiB: 19, costs: { ...PROVISIONAL_HEAVY_PHASE_COSTS_MIB, dev: 0 }, entryTtlMs: 1 } }))

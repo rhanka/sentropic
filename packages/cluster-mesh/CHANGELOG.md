@@ -7,8 +7,8 @@
   the subject's pod hold (its pod base) until `hold(pod: false)`. A waiting pod slot reports
   `blockedBy: 'pods'` and holds back later pod slots only, never the phases of present pods; a
   memory phase that does not fit still holds back a later pod slot (strict FIFO on the budget).
-- `PROVISIONAL_HEAVY_PHASE_COSTS_MIB.build` is 1261 MiB (was 1344): the 1280Mi builder pod limit
-  minus the 19 MiB pod base.
+- `PROVISIONAL_HEAVY_PHASE_COSTS_MIB.build` is 1370 MiB (was 1261): the measured clean-build peak at the
+  1536Mi builder pod limit (1388.6 MiB) minus the 19 MiB pod base.
 
 ## 0.26.0-dev.16
 
