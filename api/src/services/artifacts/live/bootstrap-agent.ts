@@ -144,7 +144,7 @@ export function createAgent(options) {
     return child;
   };
   /** Runs a recipe to exit, returning its bounded scrubbed output tail with the exit code and signal. The tail is
-   * read at `exit`: output flushed after it is not covered, which is fine for a diagnostic tail. */
+   * read at the exit event: output flushed after it is not covered, which is fine for a diagnostic tail. */
   ctx.runToExit = (recipe, cwd, env) => new Promise((resolve) => {
     const done = (exitCode, signal, output) => resolve({ exitCode, signal, output });
     let child;
