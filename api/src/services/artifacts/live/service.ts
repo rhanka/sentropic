@@ -9,7 +9,7 @@ import { createDependencyCache } from './cache';
 import { createPostgresBuildJobStore, createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
 import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, liveHolds } from './heavy';
 import { createFairAdmission } from './admission';
-import { createBuilderPods, type KubernetesCore } from './pods';
+import { createBuilderPods, type KubernetesCore, type WorkerSizing } from './pods';
 import { createLiveWorker } from './worker';
 import { createLiveController } from './controller';
 import { fetchLockedTarball } from './npm-relay';
@@ -32,7 +32,7 @@ import type { ForgeBindings } from './forge-binding';
 export const LIVE_NODE_CAPACITY = 4;
 /** Builder pods present at once per environment (tenant ResourceQuota pods 5, s-archi 07/11 21:15): every creation
  * takes one of these pod slots in the heavy-phase queue first. */
-export const MAX_BUILDER_PODS = 4;
+export const MAX_BUILDER_PODS = 3;
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
  * AL-T supplies authenticated owner operations; AL-D supplies the encrypted draft port;
  * SG4 supplies transactional publication. Every supervisor frame rides the artifact-content relay (A-LIVE §8.1):
@@ -58,6 +58,9 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     cache: Pick<CachePorts, 'signingKey'>;
     /** Progress-based bound of the dependency install phase (stall watchdog plus absolute ceiling). */
     installBudget?: InstallBudget;
+    /** Worker disk caps (env sizing, safe defaults) and the npm install heap environment. */
+    sizing?: WorkerSizing;
+    installEnv?: Record<string, string>;
   }) {
   const channel = createRelaySupervisorChannel({ baseUrl: options.relayUrl });
   const store = createPostgresLiveStore(options.pool);
@@ -66,7 +69,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     queue: createHeavyPhaseQueue({ store: createPostgresHeavyQueueStore(options.pool), budget, now: options.now,
       maxPods: options.heavy.maxPods ?? MAX_BUILDER_PODS }) });
   const { bootstrap, supervisor } = composeSupervisor({ key: options.supervisorKey, channel, now: options.now,
-    id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS,
+    id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS, installEnv: options.installEnv,
     sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
     fetch: (pin, relay, signal) => fetchLockedTarball(pin, relay, undefined, signal),
@@ -75,7 +78,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
     waiterTtlMs: options.admission.waiterTtlMs, now: options.now, holders: () => store.active() });
   return createLiveController({ ...options, cache, store, admission, heavy,
-    pods: createBuilderPods(options.kubernetes, bootstrap, options.placement),
+    pods: createBuilderPods(options.kubernetes, bootstrap, options.placement, options.sizing),
     worker: createLiveWorker(supervisor, options.placement) });
 }
 /** M3-B builder service: the live controller composed with the SG4b handoff publication, the Postgres job ledger,
