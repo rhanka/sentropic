@@ -281,9 +281,9 @@ export const oauthTokens = pgTable('oauth_tokens', {
 // skips the consent screen when the stored scopes are a superset of the requested scopes. No row ⇒
 // re-consent (always-consent legacy behavior). Migration 0035.
 // ARCH-11 G1a (§1.5, Codex-found cross-tenant consent bypass): the grant is TENANTIZED — a grant in
-// org-A must NOT be reused when the same client authorizes in org-B. `tenant_id` is DEFAULT-safe
-// ('sentropic') so old-pod inserts during the roll still satisfy NOT NULL; the unique key carries
-// the tenant leg. G1a is DATA-only: the getGrant/saveGrant tenant threading is G1c.
+// org-A must NOT be reused when the same client authorizes in org-B. The unique key carries the
+// tenant leg. A1 (control 0022): `tenant_id` is nullable with no default; NULL = tenant-less consent
+// of a `require_tenant = false` client, and the unique index is NULLS NOT DISTINCT (declared in SQL).
 export const oauthConsents = pgTable('oauth_consents', {
   offlineGrantId: text('offline_grant_id'),
   offlineIssuer: text('offline_issuer'),
