@@ -125,6 +125,13 @@ const envSchema = z.object({
   SCW_TEM_SECRET_KEY: z.string(),
   SCW_TEM_FROM_EMAIL: z.string().default('no-reply@sent-tech.ca'),
   SCW_TEM_FROM_NAME: z.string().default('Sentropic'),
+  // Ops job-failure alerts (notify L1): platform declaration of product
+  // target -> owning account ids, as JSON. Unset/empty means every target
+  // falls back to the platform admins. Never emails: ids are validated live
+  // against the identity store and emails are read from account records.
+  OPS_JOB_FAILURE_TARGETS_JSON: z.string().optional(),
+  // Autostart of the ops notification sweep; 'false' disables it (tests).
+  OPS_NOTIFY_SWEEP_AUTOSTART: z.string().optional(),
   // WebAuthn Configuration
   WEBAUTHN_RP_ID: z.string().optional(),
   WEBAUTHN_RP_NAME: z.string().optional(),
