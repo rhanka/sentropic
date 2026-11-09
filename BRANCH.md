@@ -72,8 +72,8 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
 
 - [ ] **Lot 1 — Observability: phase start/end/duration + failing phase name**
   - [x] Add phase runner helper logging `artifact_live_phase` with fields `key` hash, `phase`, `ms`, `outcome`, `reason`, no secret.
-  - [ ] Wire it on build-only phases (`install`, `prepare`, `build`, `verify`) and live paths (`prepare-live`, `project`, `idle`).
-  - [ ] Failing phase persists in job reason (e.g. `phase_timeout:install`) via existing `jobs.fail` / `stateDetail`.
+  - [x] Wire it on build-only phases (`install`, `prepare`, `build`, `verify`) and live paths (`prepare-live`, `project`, `idle`).
+  - [x] Failing phase persists in job reason (e.g. `phase_timeout:install`) via existing `jobs.fail` / `stateDetail`.
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api`
     - [ ] **API tests**
@@ -87,10 +87,10 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
       - [ ] None (api-only change, no user flow change)
 
 - [ ] **Lot 2 — Progress watchdog for the install phase**
-  - [ ] Replace flat 300 s wall clock for install with stall watchdog (no progress for N s, e.g. 60 s) + absolute ceiling sized for ~1500 packages / ~1 GB cold cache at measured relay rate (justify, e.g. 20 min), env-configurable with safe default.
+  - [x] Replace flat 300 s wall clock for install with stall watchdog (no progress for N s, e.g. 60 s) + absolute ceiling sized for ~1500 packages / ~1 GB cold cache at measured relay rate (justify, e.g. 20 min), env-configurable with safe default.
   - [x] Thread install progress (tarball streamed / bytes) from fetch + cleanInstall + sink into the watchdog.
-  - [ ] Keep other phase bounds unchanged (state reasoning).
-  - [ ] Update `runStaleMs` for the longer install bound.
+  - [x] Keep other phase bounds unchanged (install alone streams ~1 GB over the relay with no api-visible progress signal; prebundle/dev/build/verify are pod-local and keep their 300 s recipe + phase bounds).
+  - [x] Update `runStaleMs` for the longer install bound.
   - [ ] Verify cache written after successful cold install and cut install poisons nothing.
   - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
   - [ ] Lot gate: same API checklist as Lot 1 plus `cache.test.ts` watchdog cases (progress alive, stall, ceiling, reason carries phase, no poison).
