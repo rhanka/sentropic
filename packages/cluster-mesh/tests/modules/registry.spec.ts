@@ -134,6 +134,7 @@ describe('module registry', () => {
   });
 
   it.each([
+    ['0.35.0', '0.35.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
