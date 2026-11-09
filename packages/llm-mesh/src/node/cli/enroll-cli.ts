@@ -6,6 +6,7 @@
 // generate through MuseAdapter/MuseRuntimeClient. stdout is a machine
 // contract (one JSON object per line); secrets never printed.
 
+import { argv, exit, stderr } from 'node:process';
 import { EncryptedFileKeyring } from '../keyring/encrypted-file-keyring.js';
 import {
   defaultWriters,
@@ -104,13 +105,13 @@ export const run = async (argv: string[], deps: EnrollCliDeps = {}): Promise<num
 };
 
 // Executable entry point (package.json bin); import { run } to embed.
-const invokedDirectly = process.argv[1]?.endsWith('enroll-cli.js') ?? false;
+const invokedDirectly = argv[1]?.endsWith('enroll-cli.js') ?? false;
 if (invokedDirectly) {
-  run(process.argv.slice(2)).then(
-    (code) => process.exit(code),
+  run(argv.slice(2)).then(
+    (code) => exit(code),
     (error) => {
-      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-      process.exit(EXIT_CODES.probeFailed);
+      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      exit(EXIT_CODES.probeFailed);
     },
   );
 }

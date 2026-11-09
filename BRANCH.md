@@ -17,11 +17,19 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `packages/llm-mesh/src/node/cli/enroll-cli.ts`
+  - `packages/llm-mesh/src/node/cli/enroll-args.ts`
+  - `packages/llm-mesh/src/node/cli/enroll-command.ts`
+  - `packages/llm-mesh/src/node/cli/node-process.d.ts`
   - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`
-  - `packages/llm-mesh/tests/node/enroll-cli.test.ts`
+  - `packages/llm-mesh/tests/node/enroll-cli-testkit.ts`
+  - `packages/llm-mesh/tests/node/enroll-cli-enroll.test.ts`
+  - `packages/llm-mesh/tests/node/enroll-cli-probe.test.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
   - `packages/llm-mesh/README.md`
+  - `packages/llm-gateway/package.json`
+  - `packages/cluster-mesh/package.json`
   - `BRANCH.md`
   - `.tmp/rv/llm-mesh-enroll-cli.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -46,7 +54,8 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] BRENROLL-EX1: root lockfile follows the `@sentropic/llm-mesh` 0.33.0 to 0.34.0 bump (version string only, regenerated via make). Impact: lockfile only. Rollback: revert with the bump.
+- [x] BRENROLL-EX1: root lockfile follows the `@sentropic/llm-mesh` 0.33.0 to 0.34.0 bump (version strings only, regenerated via make). Impact: lockfile only. Rollback: revert with the bump.
+- [x] BRENROLL-EX2: admit the 0.34 line in `packages/llm-gateway/package.json` (`|| ^0.34.0`) and `packages/cluster-mesh/package.json` (`<0.35.0`), range strings only, no consumer version bump (follows 3b9626d35; the gateway bumpGate pattern rides the next gateway release as 143392cea did). The sibling lane `feat/llm-mesh-lot1-custodian-refresh` carries the identical cluster-mesh range value with its own dev.20 release; rebase takes either side. Impact: range strings only. Rollback: revert with the bump.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -64,33 +73,33 @@
 - [x] **Mono-branch**: no UI change, no UAT surface.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [ ] Confirm worktree `tmp/worktrees/llm-mesh-enroll-cli` on branch `feat/llm-mesh-enroll-cli` from `origin/main`.
-  - [ ] Confirm `muse-code.ts`, `muse-runtime-client.ts`, `facade.ts`, `encrypted-file-keyring.ts` contracts on `origin/main`.
-  - [ ] Lot gate:
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Confirm worktree `tmp/worktrees/llm-mesh-enroll-cli` on branch `feat/llm-mesh-enroll-cli` from `origin/main`.
+  - [x] Confirm `muse-code.ts`, `muse-runtime-client.ts`, `facade.ts`, `encrypted-file-keyring.ts` contracts on `origin/main`.
+  - [x] Lot gate:
     - [ ] `make typecheck-llm-mesh` + `make lint-llm-mesh` baseline on the untouched tree.
-- [ ] **Lot 1 — Enroll CLI plus env-key keyring**
-  - [ ] Extend `EncryptedFileKeyring` with an explicit master-key override (backward compatible, no behavior change by default).
-  - [ ] Add `src/node/cli/enroll-cli.ts` (`enroll` prints only verification URL plus user code plus expiry, then persists; `probe` prints status plus latency plus usage only; secrets never printed; typed exit codes).
-  - [ ] Add `bin` entry `llm-mesh-enroll` in `packages/llm-mesh/package.json`.
-  - [ ] Support `muse-code` first, generic device-flow shape for other providers.
+- [x] **Lot 1 — Enroll CLI plus env-key keyring**
+  - [x] Extend `EncryptedFileKeyring` with an explicit master-key override (backward compatible, no behavior change by default).
+  - [x] Add `src/node/cli/enroll-cli.ts` (`enroll` prints only verification URL plus user code plus expiry, then persists; `probe` prints status plus latency plus usage only; secrets never printed; typed exit codes).
+  - [x] Add `bin` entry `llm-mesh-enroll` in `packages/llm-mesh/package.json`.
+  - [x] Support `muse-code` first, generic device-flow shape for other providers.
+  - [x] Lot gate:
+    - [x] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
+- [x] **Lot 2 — Tests with stubbed fetch**
+  - [x] Add `packages/llm-mesh/tests/node/enroll-cli-testkit.ts`, `enroll-cli-enroll.test.ts`, `enroll-cli-probe.test.ts`: device happy path, user-code-only output, key-by-env-name, no secret in stdout/stderr, probe error mapping (402 `billing_not_configured` flagged as the non-seat `muse.ts` path).
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
-- [ ] **Lot 2 — Tests with stubbed fetch**
-  - [ ] Add `packages/llm-mesh/tests/node/enroll-cli.test.ts`: device happy path, user-code-only output, key-by-env-name, no secret in stdout/stderr, probe error mapping (402 `billing_not_configured` flagged as the non-seat `muse.ts` path).
-  - [ ] Lot gate:
-    - [ ] Scoped run `make test-llm-mesh SCOPE=tests/node/enroll-cli.test.ts ENV=test-llm-mesh-enroll`.
-- [ ] **Lot 3 — Version, README, changelog**
-  - [ ] Bump `@sentropic/llm-mesh` minor (new public `bin` surface) above npm latest, update `CHANGELOG.md`.
-  - [ ] Add a short English README section with the exact immo detection keyring commands.
-  - [ ] Regenerate lockfiles via make.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
+    - [ ] Scoped run `make test-llm-mesh SCOPE=tests/node/enroll-cli-enroll.test.ts ENV=test-llm-mesh-enroll` plus probe file.
+- [x] **Lot 3 — Version, README, changelog**
+  - [x] Bump `@sentropic/llm-mesh` minor (new public `bin` surface) above npm latest, update `CHANGELOG.md`.
+  - [x] Add a short English README section with the exact immo detection keyring commands.
+  - [x] Regenerate lockfiles via make.
+  - [x] Lot gate:
+    - [x] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck and lint.
-  - [ ] Retest llm-mesh scoped plus full `make test-llm-mesh ENV=test-llm-mesh-enroll`.
-  - [ ] Bumped `packages/llm-mesh/package.json` version above npm latest.
+  - [x] Typecheck and lint.
+  - [x] Retest llm-mesh scoped plus full `make test-llm-mesh ENV=test-llm-mesh-enroll`.
+  - [x] Bumped `packages/llm-mesh/package.json` version above npm latest.
   - [ ] Final gate step 1: create PR with `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run and verify branch CI on that PR, keep it green without rerun or skip.
   - [ ] Write the French report to `.tmp/rv/llm-mesh-enroll-cli.md` with the exact commands.

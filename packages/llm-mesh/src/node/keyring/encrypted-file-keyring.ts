@@ -60,7 +60,8 @@ export const deriveKeyringMasterKey = (value: string): Buffer => {
       // Fall through to passphrase hashing below.
     }
   }
-  return createHash('sha256').update(trimmed, 'utf8').digest();
+  // The local stub hashes to hex text; decode it back to the 32 raw bytes.
+  return Buffer.from(createHash('sha256').update(trimmed).digest('hex'), 'hex');
 };
 
 export const resolveKeyringMasterKey = (envVarName: string): Buffer => {
@@ -86,8 +87,9 @@ export class EncryptedFileKeyring implements KeyringAdapter {
     masterKeyOrOptions?: Buffer | EncryptedFileKeyringOptions,
   ) {
     this.directory = directory;
-    const explicit = Buffer.isBuffer(masterKeyOrOptions)
-      ? masterKeyOrOptions
+    // The local Buffer stub has no isBuffer; narrow on the Uint8Array root.
+    const explicit = masterKeyOrOptions instanceof Uint8Array
+      ? Buffer.from(masterKeyOrOptions)
       : masterKeyOrOptions?.masterKey;
     if (explicit !== undefined && explicit.length !== 32) {
       throw new Error('Encrypted keyring master key must be 32 bytes');
