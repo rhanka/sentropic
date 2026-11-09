@@ -1,6 +1,6 @@
-import { canonical, digest, namespace } from './guards.mjs';
+import { canonical, digest } from './guards.mjs';
 
-export function assertTrafficRestriction(request, grant, k) {
+export function assertTrafficRestriction(request, grant, k, namespace) {
   if (grant.authorizationRef !== request.authorizationRef || grant.operationId !== request.operationId
     || grant.candidateImage !== request.candidateImage || grant.candidateCommit !== request.candidateCommit
     || !/^ghcr\.io\/rhanka\/sentropic-ui@sha256:[a-f0-9]{64}$/.test(grant.uiImage)
@@ -22,8 +22,8 @@ export function assertTrafficRestriction(request, grant, k) {
   }
 }
 
-export function assertVerificationBoundary(request, grant, k) {
-  assertTrafficRestriction(request, grant, k);
+export function assertVerificationBoundary(request, grant, k, namespace) {
+  assertTrafficRestriction(request, grant, k, namespace);
   const objects = JSON.parse(k(['get', 'deployments,statefulsets,daemonsets,cronjobs,jobs', '-o', 'json'])).items;
   for (const object of objects) {
     if (object.kind === 'StatefulSet' && object.metadata.name === 'postgres') continue;

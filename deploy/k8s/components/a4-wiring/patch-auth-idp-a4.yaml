@@ -9,6 +9,9 @@ spec:
         - name: auth-idp
           command: ["node", "/run/cm-runtime/launch.mjs", "--idp"]
           env:
+            - name: CM_A4_NAMESPACE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.namespace }
             - name: EMAIL_CODE_HMAC_KEY_ACTIVE
               valueFrom:
                 secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_ACTIVE }

@@ -89,6 +89,7 @@ export interface OAuthClientRegistrationValues {
   name: string;
   redirectUris: string[];
   requirePkce: boolean;
+  requireTenant: boolean | null;
   requiredAcr: string | null;
   resourceIndicators: string[];
   responseTypes: string[];
@@ -209,6 +210,7 @@ export const buildOAuthClientRegistration = (
 
   const requiredAcr = parseRequiredAcr(source.OAUTH_CLIENT_REQUIRED_ACR);
   const allowedUserIds = parseList(source.OAUTH_CLIENT_ALLOWED_USER_IDS ?? '');
+  const requireTenant = parseOptionalBoolean(source.OAUTH_CLIENT_REQUIRE_TENANT, 'OAUTH_CLIENT_REQUIRE_TENANT');
 
   return {
     allowedScopes: scopes,
@@ -222,12 +224,28 @@ export const buildOAuthClientRegistration = (
     name,
     redirectUris,
     requirePkce: true,
+    requireTenant,
     requiredAcr,
     resourceIndicators,
     responseTypes: ['code'],
     tokenEndpointAuthMethod,
     updatedAt: now,
   };
+};
+
+/**
+ * Tenant-optionality (0022): an omitted `OAUTH_CLIENT_REQUIRE_TENANT` (null) preserves the stored
+ * value on rotation, like the F5 policy fields; an explicit 'true'/'false' replaces it. New
+ * clients (no stored row) default to tenant-bound (true), matching the column default.
+ */
+const parseOptionalBoolean = (value: string | undefined, name: string): boolean | null => {
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  throw new Error(
+    `Unsupported ${name} '${value}'. Use 'true', 'false', or leave empty (keep stored policy).`,
+  );
 };
 
 const parseRequiredAcr = (value: string | undefined): string | null => {
@@ -283,6 +301,7 @@ const main = async (): Promise<void> => {
       grantTypes: oauthClients.grantTypes,
       allowedUserIds: oauthClients.allowedUserIds,
       requiredAcr: oauthClients.requiredAcr,
+      requireTenant: oauthClients.requireTenant,
     })
     .from(oauthClients)
     .where(eq(oauthClients.clientId, values.clientId))
@@ -294,10 +313,12 @@ const main = async (): Promise<void> => {
     { allowedUserIds: values.allowedUserIds, requiredAcr: values.requiredAcr,
       ...(process.env.OAUTH_CLIENT_GRANT_TYPES !== undefined || process.env.OAUTH_CLIENT_PRESET !== undefined ? { grantTypes: values.grantTypes } : {}) }
   );
+  // Omission preserves the stored tenant-optionality; new clients default to tenant-bound.
+  const requireTenant = values.requireTenant ?? stored?.requireTenant ?? true;
 
   await db
     .insert(oauthClients)
-    .values({ ...values, allowedUserIds: policy.allowedUserIds, requiredAcr: policy.requiredAcr })
+    .values({ ...values, requireTenant, allowedUserIds: policy.allowedUserIds, requiredAcr: policy.requiredAcr })
     .onConflictDoUpdate({
       set: {
         allowedScopes: values.allowedScopes,
@@ -308,6 +329,7 @@ const main = async (): Promise<void> => {
         name: values.name,
         redirectUris: values.redirectUris,
         requirePkce: values.requirePkce,
+        requireTenant,
         requiredAcr: policy.requiredAcr,
         resourceIndicators: values.resourceIndicators,
         responseTypes: values.responseTypes,

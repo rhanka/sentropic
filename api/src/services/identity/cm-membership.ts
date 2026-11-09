@@ -36,14 +36,32 @@ export const requestMembership = (userId: string, tenantId: string): Promise<{ s
     return opaque;
   });
 
+/**
+ * First-member bootstrap (A4 makes membership explicit): an active admin_app may approve its own
+ * `requested` row only while the tenant has no approved member, and only as a plain `member`.
+ * Two concurrent bootstraps cannot both commit: each SERIALIZABLE write reads the tenant's
+ * memberships, so the loser fails serialization (40001) and commits nothing; any later attempt
+ * sees the approved member and is refused.
+ */
+const isFirstMemberBootstrap = async (tx: CmIdentityTransaction, callerId: string, tenantId: string,
+  decision: MembershipDecision): Promise<boolean> => {
+  if (decision !== 'approve') return false;
+  if ((await tx.stores.accounts.findAccount(callerId))?.globalRole !== 'admin_app') return false;
+  const rows = await tx.stores.memberships.listMembershipsForTenant(tenantId);
+  return !rows.some(row => row.status === 'approved')
+    && rows.some(row => row.userId === callerId && row.status === 'requested');
+};
+
 export const decideMembership = (callerId: string, _callerRole: string | undefined, tenantId: string,
   targetUserId: string, decision: MembershipDecision): Promise<{ status: MembershipStatus }> => runCmIdentityWrite(async tx => {
   for (const id of sorted([callerId, targetUserId])) await tx.lockSubject(id);
   await assertAllowed(callerId, tenantId, tx);
-  if (callerId === targetUserId && decision !== 'suspend') throw new SelfActionForbiddenError('approve');
   const workspaces = await tx.stores.workspaces.listWorkspacesForTenant(tenantId);
   for (const id of sorted(workspaces.map(workspace => workspace.workspaceId))) await tx.lockWorkspace(id);
-  const row = await domain(tx).decideMembership({ userId: targetUserId, tenantId, actorId: callerId, decision });
+  const bootstrap = callerId === targetUserId && decision !== 'suspend';
+  if (bootstrap && !await isFirstMemberBootstrap(tx, callerId, tenantId, decision)) throw new SelfActionForbiddenError('approve');
+  const row = await domain(tx).decideMembership({ userId: targetUserId, tenantId, actorId: callerId, decision,
+    ...(bootstrap ? { role: 'member' as const } : {}) });
   await tx.advanceSubjectRevision(targetUserId, row.updatedAt, false);
   return { status: row.status };
 });

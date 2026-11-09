@@ -65,6 +65,13 @@ const extractErrorMessage = (payload: unknown, fallback: string): string => {
     if (typeof record.error === 'string' && record.error) {
       return record.error;
     }
+    // The `{ error: { code, message } }` DTO: keep the closed code visible next to the message.
+    if (record.error && typeof record.error === 'object') {
+      const { code, message } = record.error as Record<string, unknown>;
+      const closedCode = typeof code === 'string' && code ? code : '';
+      if (typeof message === 'string' && message) return closedCode ? `${message} (${closedCode})` : message;
+      if (closedCode) return closedCode;
+    }
   }
   return fallback;
 };

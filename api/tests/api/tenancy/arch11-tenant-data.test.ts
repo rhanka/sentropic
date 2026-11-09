@@ -94,14 +94,17 @@ describe('ARCH-11 tenant data after the CM identity cutover', () => {
     expect((await listCmWorkspacesForTenant(ORG_A)).some(row => row.workspaceId === id)).toBe(false);
   });
 
-  it('DEFAULT-safe: an old-semantic consent insert (no tenant_id) persists with tenant_id=sentropic', async () => {
-    const user = await createTestUser({ displayName: 'Consent Default', withWorkspace: false });
+  it('A1: a consent insert without tenant_id is tenant-less (no default tenant) and stays unique per (user, client)', async () => {
+    const user = await createTestUser({ displayName: 'Consent Tenantless', withWorkspace: false });
     await db.insert(oauthConsents).values({ userId: user.id, clientId: CLIENT_ID, scopes: ['openid'] });
     const [row] = await db
       .select({ tenantId: oauthConsents.tenantId })
       .from(oauthConsents)
       .where(and(eq(oauthConsents.userId, user.id), eq(oauthConsents.clientId, CLIENT_ID)));
-    expect(row?.tenantId).toBe('sentropic');
+    expect(row?.tenantId).toBeNull();
+    // NULLS NOT DISTINCT: a second tenant-less row for the same (user, client) is a key conflict.
+    await expect(db.insert(oauthConsents).values({ userId: user.id, clientId: CLIENT_ID, scopes: ['email'] }))
+      .rejects.toMatchObject({ cause: { code: '23505' } });
   });
 
   it('removes the service protocol tenant column and requires an explicit CM binding', async () => {
