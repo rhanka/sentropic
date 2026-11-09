@@ -71,7 +71,7 @@
   - [ ] `secret-crypto.ts` and `cm-connector-envelope.ts` explicit-key primitives; `api/src/scripts/secret-reencrypt.ts`; `--secret-reencrypt` dispatch in `api/src/index.ts`.
   - [ ] `docs/secrets.md`: fail-closed rule, re-encryption procedure (prod order and preprod A2 audit).
 - [ ] **Lot N — Final validation**
-  - [x] `make typecheck-api` + `make lint-api` + `make typecheck-idp` (08/11 resume: typecheck-api PASS, lint-api 0 errors, typecheck-idp PASS).
-  - [x] Scoped API unit runs: `make test-api-unit SCOPE="tests/unit/deployment-secrets.test.ts tests/unit/secret-crypto.test.ts tests/unit/secret-reencrypt.test.ts tests/unit/oauth-state-secret.test.ts tests/unit/google-drive-oauth.test.ts tests/unit/gmail-oauth.test.ts" ENV=test-t1-secret-keys` (08/11 resume: 44/44 PASS, incl. auth/cm-connector-envelope.test.ts).
+  - [x] `make typecheck-api` + `make lint-api` + `make typecheck-idp` (08/11 resume: typecheck-api PASS, lint-api 0 errors, typecheck-idp PASS; re-rerun post-rebase 6b2fc2295: typecheck-api PASS, lint-api 0 errors, typecheck-idp PASS).
+  - [x] Scoped API unit runs: `make test-api-unit SCOPE="tests/unit/deployment-secrets.test.ts tests/unit/secret-crypto.test.ts tests/unit/secret-reencrypt.test.ts tests/unit/oauth-state-secret.test.ts tests/unit/google-drive-oauth.test.ts tests/unit/gmail-oauth.test.ts" ENV=test-t1-secret-keys` (08/11 resume: 44/44 PASS, incl. auth/cm-connector-envelope.test.ts; post-rebase 6b2fc2295: 62/62 PASS — 25 core + 37 consumers incl. llm-account-transports).
   - [ ] Review `.h2a/reviews/t1-secret-keys-fail-closed-opus.md` (VERDICT line).
   - [ ] Push the branch; the T1 train lane assembles the PR and the CI.
