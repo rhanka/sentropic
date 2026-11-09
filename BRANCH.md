@@ -49,6 +49,7 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
 - `attention`: D3 Gemini-only fallback (gemini-3.8-flash) is Lot 5 scope, not this branch; this branch only keeps the static-key class and budget admission points untouched.
 - `acknowledge`: D4 reauth alert to conductor (h2a) + owner browser re-auth is implemented here as a pluggable sink.
 - `attention`: bump follow-through per repo convention (3b9626d35, d4c503eb0): hardcoded version in `decision-public-surface.test.ts`, `CHANGELOG.md` entry, and `selected` fixture lock regen via `refresh-lazy-package-lock`; ranges already cover 0.33.1 (gateway `^0.33.0`, cluster-mesh `<0.34.0`), no range edit.
+- `attention`: CI run 42635384823 e2e shard 1 single failure `tests/07-matrix.spec.ts:477` (Matrix lock/presence, User A leaves lock release, 9.9s, `toBe` Object.is). Out of branch scope (no UI/API change; llm-mesh additions are inert without `startCustodianLoop` wiring, Lot 2). Main push run 42625546540 is green on the same spec. Treated as non-systematic UI flake pending the fresh-head rerun.
 - `attention`: Gemini API key provided by owner as named secret; secret name proposed in the lane report, never printed or committed.
 
 ## AI Flaky tests
