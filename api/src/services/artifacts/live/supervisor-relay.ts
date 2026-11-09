@@ -41,23 +41,24 @@ export function createRelaySupervisorChannel(options: { baseUrl: string; lookup?
   return {
     send(target, frame, signal) {
       return new Promise<Uint8Array>((resolve, reject) => {
-        const fail = () => reject(new LiveError('builder_unavailable'));
-        if (!POD.test(target.podName) || frame.byteLength > MAX_FRAME_BYTES || signal.aborted) return fail();
+        const fail = (reason: string) => reject(new LiveError('builder_unavailable', reason));
+        if (!POD.test(target.podName) || frame.byteLength > MAX_FRAME_BYTES || signal.aborted) return fail('supervisor_relay_invalid');
         const outgoing = httpRequest({ hostname: base.hostname, port: base.port || 80, method: 'POST', agent: false,
           path: SUPERVISOR_RELAY_PATH + target.podName, lookup: options.lookup, signal,
           headers: { 'content-type': 'application/octet-stream', 'content-length': String(frame.byteLength) } }, response => {
           const declared = Number(response.headers['content-length'] ?? 0);
-          if (response.statusCode !== 200 || declared > MAX_REPLY_BYTES) { outgoing.destroy(); return fail(); }
+          if (response.statusCode !== 200) { outgoing.destroy(); return fail(`supervisor_relay_${response.statusCode ?? 'unknown'}`); }
+          if (declared > MAX_REPLY_BYTES) { outgoing.destroy(); return fail('supervisor_relay_too_large'); }
           const chunks: Buffer[] = []; let size = 0;
           response.on('data', (chunk: Buffer) => {
             size += chunk.length;
-            if (size > MAX_REPLY_BYTES) { outgoing.destroy(); fail(); } else chunks.push(chunk);
+            if (size > MAX_REPLY_BYTES) { outgoing.destroy(); fail('supervisor_relay_too_large'); } else chunks.push(chunk);
           });
           response.once('end', () => { if (size <= MAX_REPLY_BYTES) resolve(Buffer.concat(chunks)); });
-          response.once('error', fail);
-          response.once('close', () => { if (!response.complete) fail(); });
+          response.once('error', () => fail('supervisor_relay_unreachable'));
+          response.once('close', () => { if (!response.complete) fail('supervisor_relay_unreachable'); });
         });
-        outgoing.once('error', fail);
+        outgoing.once('error', () => fail('supervisor_relay_unreachable'));
         outgoing.end(Buffer.from(frame.buffer, frame.byteOffset, frame.byteLength));
       });
     },

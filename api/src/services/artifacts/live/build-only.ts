@@ -44,7 +44,8 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
     if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
   } catch (error) {
     await transition(ports, key, runtime, state => {
-      state.runtime.phase = 'DORMANT'; state.runtime.stateDetail = error instanceof LiveError ? error.code : 'builder_unavailable';
+      state.runtime.phase = 'DORMANT'; state.runtime.stateDetail = error instanceof LiveError
+        ? (error.reason ? `${error.code}:${error.reason}` : error.code) : 'builder_unavailable';
     });
     throw error;
   }
