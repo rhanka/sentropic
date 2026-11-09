@@ -84,14 +84,16 @@ export async function ingestOpsJobFailureEventTx(event: OpsJobFailureV1): Promis
     return ingestOpsJobFailureEvent({
       store: new DrizzleOpsNotificationStore(tx),
       outbox: {
-        append: (input) => outboxWriter.append(tx, {
-          aggregateType: input.aggregateType,
-          aggregateId: input.aggregateId,
-          envelope: input.envelope,
-          tenantId: input.tenantId ?? null,
-          workspaceId: null,
-          channel: input.channel,
-        }),
+        append: async (input) => {
+          await outboxWriter.append(tx, {
+            aggregateType: input.aggregateType,
+            aggregateId: input.aggregateId,
+            envelope: input.envelope,
+            tenantId: input.tenantId ?? null,
+            workspaceId: null,
+            channel: input.channel,
+          });
+        },
       },
       clock: () => new Date().toISOString(),
     }, event);

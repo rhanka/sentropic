@@ -97,7 +97,7 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
       lastHeartbeatAt: state.lastHeartbeatAt ? new Date(state.lastHeartbeatAt) : null,
       updatedAt: new Date(),
     };
-    const { id: _id, createdAt: _created, ...updatable } = values;
+    const { id: _id, ...updatable } = values;
     await this.handle.insert(opsIncidents).values(values).onConflictDoUpdate({
       target: opsIncidents.id,
       set: updatable,
