@@ -1,99 +1,69 @@
-# Feature: Fix live provider select ENOBUFS
+# Feature: llm-mesh Lot 5 Gemini API-key fallback
 
 ## Objective
-- [ ] Fix `select` ENOBUFS by bounding every `gh api` call with `--jq` projection, `per_page` and explicit `maxBuffer`, with explicit route+size errors.
+- [ ] Ship Lot 5 plan slice Gemini-only per owner D3: metered static-key Gemini fallback routed last behind subscription accounts with monthly cap and first-use overflow alert
 
 ## Scope / Guardrails
-- [ ] Worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
-- [ ] ENV `test-live-provider-enobufs` last in every `make` command; ports API_PORT=8895 UI_PORT=5295 MAILDEV_UI_PORT=1195.
-- [ ] Docker only via `.tmp/packets/docker-slot.sh make ...`; never ENV=dev; never `make clean-all`; no Python.
-- [ ] Commits via `make commit MSG="..."` only; no attribution trailer; max 150 lines per commit.
-- [ ] Generic fix only; no dual path; no weakening of `schedule-health` or any gate.
+- [ ] Scope limited to packages/llm-mesh transport plus routing plus tests and api metering settlement plus tests
+- [ ] Zero migration file in api/drizzle (cap and pricing rows are ops-seeded, exact SQL in report)
+- [ ] Make-only workflow, Docker only via .tmp/packets/docker-slot.sh in foreground, one slot per command, never nested
+- [ ] ENV=test-llm-mesh-lot5 always last, ports API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215
+- [ ] Never ENV=dev, never make clean-all, no Python, English for code commits docs
+- [ ] No OpenAI fallback key (owner D3 cost rejection), Gemini gemini-3.8-flash only
 - [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `scripts/ci/live-provider-receipt.mjs`
-  - `scripts/ci/live-provider-receipt.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
-  - `api/drizzle/*.sql`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- [ ] Allowed Paths: packages/llm-mesh/src/transport/gemini-apikey-runtime-client.ts, packages/llm-mesh/src/transport/*, packages/llm-mesh/src/execution-features.ts, packages/llm-mesh/src/route-selection.ts, packages/llm-mesh/src/index.ts, packages/llm-mesh/tests/gemini-apikey-runtime-client.test.ts, packages/llm-mesh/tests/route-selection.test.ts, packages/llm-mesh/tests/execution-features.test.ts, api/src/services/llm-metering/route-settlement.ts, api/tests/api/llm-budget-ledger.test.ts, api/tests/unit/llm-fallback-first-use.test.ts
+- [ ] Forbidden Paths: Makefile, docker-compose*.yml, .cursor/rules/**, plan/NN-BRANCH_*.md
+- [ ] Conditional Paths: api/drizzle/*.sql (max 1 file, none planned), .github/workflows/** (untouched), packages/llm-mesh/package.json (bump only if src changes per workflow Package Publication)
+- [ ] Exception process: declare BRxx-EXn in ## Feedback Loop before touching any conditional or forbidden path
 
 ## Feedback Loop
-- [x] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
-- [x] BR01-EX1: touch `.github/workflows/ci.yml` (`global` paths-filter only): add `scripts/ci/live-provider-receipt.mjs` and `scripts/ci/live-provider-receipt.test.mjs`. Rationale: any `scripts/**` change classifies as `root-lock-toolchain`, whose `consumer-contracts-verify` gate requires the six integration lanes, but those lanes only run when `api`, `ui` or `global` matches; without this, a `scripts/ci`-only PR can never go green (run 42548638007: `consumer-contracts` + `ci-gate` failure). Impact: strictly more CI for these two paths (full integration), same family as `image-receipt`/`compatibility-classifier` already listed; no gate, threshold or assertion loosened. Rollback: remove the two lines; dispatch returns to `manifest_guard`-only.
-- [x] ARGON-1: PR #970 Argon review REQUEST_CHANGES (BLOCKER `pages()` double `[key]` fails `select` 100%; MAJOR missing `select`/`health` CLI e2e against stubbed `gh`; MINOR hardcoded `100` vs `GH_PER_PAGE` + checkbox coherence). Addressed in Lot 3.
-- [x] BR01-EX1b: run 42552089131 `validate-publishable-manifests` pins the exact `global` scripts list (`publishable-ci-wiring.test.mjs:144`); the two deliberate BR01-EX1 additions are added to the pin. The pin stays an exact match (any other unlisted addition still fails): evolution of the intended contract, not a loosening.
+- [ ] attention: root-owned vitest cache blocks local api gates: packages/llm-mesh/node_modules/.vite created root by make test-llm-mesh container without -u at 13:19 UTC, npm ci in install-internal-packages fails rmdir EACCES, sudo needs interactive auth so no self-repair, needs owner sudo cleanup of that single cache dir, follow-up propose -u flag on test-llm-mesh docker run
+- [ ] attention: api PG test api/tests/api/llm-fallback-first-use.test.ts authored but not run locally (same blocker), verification delegated to branch CI, package suites all green locally
+- [ ] No exception declared (no conditional path touched, package bump is allowed path per workflow)
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [ ] Acceptance rule: non-systematic provider nondeterminism only, one success same commit same command, never additive timeouts, record command plus file plus signature, user sign-off before merge
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams need independent CI or long-running validation)
-- Rationale: single small CI fix, one branch, one CI.
+- [ ] Mono-branch + cherry-pick (default for orthogonal tasks; single final test cycle)
+- [ ] Rationale: single-package slice plus one api file, one lane, one CI run
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI change in this branch: no UAT surface.
+- [ ] Mono-branch: no UI change, no UAT surface, verification is automated tests only
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Create worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
-  - [x] Verify branch with `git -C tmp/worktrees/fix-live-provider-enobufs branch --show-current`.
-  - [x] Write `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`.
-  - [x] Confirm root cause from job log 128713986254 plus `live-provider-receipt.mjs:103` default 1 MiB `maxBuffer`.
-  - [x] Confirm `make` targets: `test-ci-live-provider-receipt`, `ci-live-provider-select`, `ci-live-provider-health`.
-  - [x] Define environment mapping (`test-live-provider-enobufs`) and ports (API 8895, UI 5295, Maildev 1195).
-  - [x] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-live-provider-enobufs` with `ENV` last.
-  - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-- [ ] **Lot 1 — Bound every gh call plus regression test**
-  - [x] Replace bare `execFileSync('gh', ['api', route])` with bounded helper (`--jq` projection, `per_page`, explicit `maxBuffer`, explicit route+size error on overflow).
-  - [x] Apply helper to `select` runs, jobs, artifacts, pull-request runs, `health` and `finish` schedule routes.
-  - [x] Keep `scheduleHealth`, `qualifiedMain`, `liveReceipt`, `readPages` gates byte-identical in behavior.
-  - [x] Add unit test in `scripts/ci/live-provider-receipt.test.mjs`: large response handled/reported (overflow becomes explicit route+size error; projections bound size).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>` if impacted (Node script only: at least `node --check` equivalent via test target).
-    - [ ] **API tests**
-      - [ ] No API change: none.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] No UI change: none.
-    - [ ] **E2E tests**
-      - [ ] No E2E change: none.
-    - [ ] Scoped gate: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
-- [ ] **Lot 2 — Dispatch fix plus final validation**
-  - [x] Add `live-provider-receipt` files to the `global` paths-filter under BR01-EX1 (conditional path with rationale, impact, rollback).
-  - [x] Retest scoped: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs` (14/14).
-  - [x] Retest scoped: `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25, classifier and gate untouched in behavior).
-  - [x] Local verify simulation: `consumer-contracts --verify` ok:true with `global=true`, reproduces the CI failure with `manifest_guard`-only.
-  - [x] Push 2044ede94, update PR body with `BRANCH.md` (PR #970, no merge).
-  - [x] Iterate new-head CI to green (no rerun, no skip): run 42554897053 success on head a57246c82; PR MERGEABLE/CLEAN.
-  - [ ] Do NOT merge.
-  - [x] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
-- [ ] **Lot 3 — Argon review fixes (BLOCKER + MAJOR + MINORs)**
-  - [x] Fix `pages()` double `[key]` indexation (BLOCKER) and use `GH_PER_PAGE` in `readPages` (MINOR).
-  - [x] Add CLI `select` + `health` end-to-end test against stubbed `gh` (MAJOR): `--jq`, pagination runs/jobs/artifacts to `selection.json`, explicit overflow error.
-  - [x] Fix `BRANCH.md` checkbox coherence (MINOR).
-  - [x] Retest scoped: `test-ci-live-provider-receipt` (15/15) via `node --test`.
-  - [x] Retest scoped via `make`: `test-ci-live-provider-receipt` (15/15), `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25), `test-publishable-manifests` (137/137), `scope-check` PASS C2.
-  - [x] Commit via `make commit`, push, CI green (no rerun, no skip): 93e727c3d, run 42610893119 success; PR MERGEABLE/CLEAN.
-  - [x] Update `.tmp/rv/fix-live-provider-enobufs.md`.
-  - [ ] Do NOT merge.
+- [x] Lot 0 Baseline and constraints
+- [ ] Read rules/MASTER.md plus rules/workflow.md plus rules/testing.md plus .tmp/packets/COMMON-RULES.md plus plan llm-mesh-accounts-plan.md
+- [ ] Create worktree tmp/worktrees/llm-mesh-lot5 on branch feat/llm-mesh-lot5-gemini-apikey-fallback from origin/main and verify branch
+- [ ] Verify Lot 5 reuse files on origin/main: auth.ts direct-token, adapter-auth.ts, mistral-runtime-client.ts, decision/openai-adapter.ts, api gemini-provider.ts, enrollment seat-bundle static-key, llm-gateway ports budget.ts, budget-admission.ts, model-pricing-writer.ts, route-quote.ts, ci-lockfile-installs.test.mjs BRLOCK-EX1
+- [ ] Verify unverified items: transport dir has no generic openai or gemini key transport, gemini-provider is app-local GenerateContent, seat-bundle lives under enrollment/, BRLOCK-EX1 review_by=2026-11-30T00:00:00Z, gemini-3.8-flash is a catalog model id
+- [ ] Record ports API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 and ENV=test-llm-mesh-lot5
+- [x] Lot 1 Gemini API-key runtime client in llm-mesh
+- [ ] Add packages/llm-mesh/src/transport/gemini-apikey-runtime-client.ts implementing GeminiAdapterClient: generate plus stream over GenerateContent plus streamGenerateContent, direct-token from context auth fail-closed, mesh tools to functionDeclarations, system to systemInstruction, usageMetadata to TokenUsage, errors via normalizeProviderError gemini, never log key
+- [ ] Export client from packages/llm-mesh/src/index.ts beside mistral-runtime-client.ts
+- [ ] Add packages/llm-mesh/tests/gemini-apikey-runtime-client.test.ts with mocked fetch: generate success plus usage, stream SSE success, 429 retryable, 400 non-retryable, missing auth fail-closed, no key material in thrown messages
+- [ ] Lot gate: make typecheck plus lint for llm-mesh, scoped vitest run for new test file
+- [x] Lot 2 Fallback-last ordering plus execution features
+- [ ] Register gemini-apikey in TRANSPORT_EXECUTION_FEATURES with test-proven features only
+- [ ] Sort metered static-key fallback transports after subscription transports in selectRouteCandidates with named constant and comment
+- [ ] Extend packages/llm-mesh/tests/route-selection.test.ts: subscription eligible means fallback never first, only fallback eligible means fallback selected, explicit transport pin still honored
+- [ ] Extend packages/llm-mesh/tests/execution-features.test.ts for gemini-apikey declaration
+- [ ] Lot gate: scoped vitest runs for route-selection plus execution-features
+- [x] Lot 3 Metering: monthly cap enforcement proof plus first-use overflow alert
+- [ ] Prove over-budget 429 without provider call for gemini-3.8-flash quote via existing BudgetAdmissionPort in api tests on real Postgres of ENV=test-llm-mesh-lot5
+- [ ] Emit llm.fallback.first_use outbox event plus structured log on first settled gemini-apikey attempt per tenant per month with spend-to-date plus monthly cap as projected max, fenced in-settlement-transaction
+- [ ] Settle every fallback attempt with tenant attribution via existing route-settlement path, no new table, no migration
+- [ ] Add api/tests/unit/llm-fallback-first-use.test.ts or extend llm-budget-ledger.test.ts for first-use event plus spend plus cap contents
+- [ ] Lot gate: make test-api SCOPE for touched metering test file on ENV=test-llm-mesh-lot5
+- [ ] Lot 4 Final validation
+- [ ] Typecheck and lint full for impacted packages
+- [ ] Retest UI (no UI change, not applicable)
+- [ ] Retest API scoped files plus llm-mesh unit files
+- [ ] Retest e2e (no e2e change, CI covers)
+- [ ] Retest AI flaky (none added, non-blocking rule recorded)
+- [ ] Bump packages/llm-mesh/package.json version per Package Publication if src changed, strictly greater than npm published version
+- [ ] Final gate step 1: open PR with BRANCH.md as body, push, no rerun no skip
+- [ ] Final gate step 2: iterate CI to green, provider-dependent AI e2e failure recorded in BRANCH.md with fresh head
+- [ ] Final gate step 3: no merge (conductor merges), report in French to .tmp/rv/llm-mesh-lot5.md
