@@ -3,7 +3,7 @@ import { chmod, lstat, mkdir, readFile, readdir, readlink, symlink, writeFile } 
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDependencyCache, type CacheObject, type DependencyFile } from '../../../src/services/artifacts/live/cache';
-import { BUILDER_IMAGE, INSTALL_RECIPE, artifactEnvironment } from '../../../src/services/artifacts/live/recipes';
+import { BUILDER_IMAGE, INSTALL_RECIPE, installEnvironment } from '../../../src/services/artifacts/live/recipes';
 import { fakeSpawn, file, harness, type Spawned } from './bootstrap-harness';
 import { gb1Descriptor } from './fixture';
 
@@ -53,16 +53,29 @@ async function snapshot(pod: Pod, root: string) {
 }
 
 describe('pod bootstrap agent: offline install and dependency materialization', () => {
-  it('should store only SRI-verified tarballs content-addressed and run the frozen offline install with the host env', async () => {
+  it('should store only SRI-verified tarballs content-addressed and run the frozen offline install with the install env', async () => {
     const calls: Spawned[] = []; const pod = await harness({ spawn: fakeSpawn(calls, async () => 1) });
-    expect(await install(pod)).toEqual({ exitCode: 1 });
+    expect(await install(pod)).toEqual({ exitCode: 1, signal: null, output: '' });
     const hex = createHash('sha512').update(tgz.vite).digest('hex');
     expect(await readFile(pod.path('tmp/npm-cache/_cacache/content-v2/sha512', hex.slice(0, 2), hex.slice(2, 4), hex.slice(4)))).toEqual(tgz.vite);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ executable: INSTALL_RECIPE.executable, args: INSTALL_RECIPE.args,
-      options: { cwd: pod.path('tmp/install'), shell: false, detached: true, stdio: 'ignore', env: artifactEnvironment() } });
-    expect(calls[0].options.env.NODE_OPTIONS).toBe('--max-old-space-size=384');
+      options: { cwd: pod.path('tmp/install'), shell: false, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+        env: installEnvironment() } });
+    expect(calls[0].options.env.NODE_OPTIONS).toBe('--max-old-space-size=1024');
     await expect(install(pod)).rejects.toThrow('failed:already_installed');
+  });
+
+  it('should return the bounded scrubbed install tail with the exit code', async () => {
+    const pod = await harness({ spawn: fakeSpawn([], async () => ({ code: 1, stdout: `${'z'.repeat(9000)}\n`,
+      stderr: 'disk full //registry.npmjs.org/:_authToken=secret-tail\nnpm error code ENOSPC\n' })) });
+    const done = await install(pod);
+    expect(done.exitCode).toBe(1); expect(done.signal).toBe(null);
+    const output = Buffer.from(done.output, 'base64').toString('utf8');
+    expect(Buffer.byteLength(output)).toBeLessThanOrEqual(4096);
+    expect(output).toContain('npm error code ENOSPC');
+    expect(output).toContain('//registry.npmjs.org/:_authToken=[redacted]');
+    expect(output).not.toContain('secret-tail');
   });
 
   it('should refuse a mismatched or missing tarball and install configuration before npm runs', async () => {
@@ -86,7 +99,7 @@ describe('pod bootstrap agent: offline install and dependency materialization', 
         expect(await pod.send('clear', { paths: ['/tmp'] })).toEqual({ cleared: ['/tmp'] });
         const staged = [];
         for await (const t of pins) staged.push({ file: file(`${staged.length}.tgz`, Buffer.from(t.bytes), 0o444), integrity: t.pin.integrity });
-        expect(await install(pod, source, staged)).toEqual({ exitCode: 0 });
+        expect(await install(pod, source, staged)).toEqual({ exitCode: 0, signal: null, output: '' });
         const exported = await snapshot(pod, 'dependencies');
         await pod.send('clear', { paths: ['/tmp'] });
         for (const f of exported) await sink({ path: f.path, mode: f.mode & 0o111 ? 365 : 292, bytes: f.bytes });

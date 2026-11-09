@@ -70,7 +70,7 @@ describe('supervisor liveness renewal', () => {
     let aborted = false; let release = () => {};
     const pod = fakePod({ build: (_body, signal) => new Promise(resolve => {
       signal.addEventListener('abort', () => { aborted = true; });
-      release = () => resolve({ exitCode: 0 });
+      release = () => resolve({ exitCode: 0, signal: null, output: '' });
     }) });
     const pending = pod.supervisor.build(runtime, { id: 'a', headSha: 'h', treeSha: 't' } as never, BUILD_RECIPE, buildEnvironment());
     await pod.supervisor.renew(runtime);
@@ -124,6 +124,21 @@ describe('supervisor transport commands', () => {
     await expect(fakePod({ prebundle: () => ({}) }).supervisor.prebundle(runtime, PREBUNDLE_RECIPE, env)).rejects.toMatchObject(unavailable);
     await expect(fakePod({ prebundle: () => refuse('failed') }).supervisor.prebundle(runtime, PREBUNDLE_RECIPE, env))
       .rejects.toMatchObject(unavailable);
+  });
+  it('should classify failed recipes into the job reason with their tail as log-only detail', async () => {
+    const b64 = (value: string) => Buffer.from(value, 'utf8').toString('base64');
+    const env = artifactEnvironment();
+    const prebundle = fakePod({ prebundle: () => ({ prebundled: false, exitCode: 1, signal: null,
+      output: b64('npm error code ENOSPC') }) });
+    const prebundleFailure = await prebundle.supervisor.prebundle(runtime, PREBUNDLE_RECIPE, env)
+      .then(() => undefined, error => error);
+    expect(prebundleFailure).toMatchObject({ code: 'builder_unavailable', reason: 'prebundle_failed:enospc',
+      detail: 'npm error code ENOSPC' });
+    const build = fakePod({ build: () => ({ exitCode: 137, signal: null, output: '' }) });
+    const buildFailure = await build.supervisor.build(runtime, { id: 'a', headSha: 'h', treeSha: 't' } as never,
+      BUILD_RECIPE, buildEnvironment()).then(() => undefined, error => error);
+    expect(buildFailure).toMatchObject({ code: 'builder_unavailable', reason: 'build_failed:oom', detail: undefined });
+    expect(build.ops()).not.toContain('terminate');
   });
   it('should start Vite by recipe name only and fence the acknowledged route epoch and revision type', async () => {
     const env = artifactEnvironment();
