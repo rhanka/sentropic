@@ -29,7 +29,7 @@ describe('live heavy phases go through the cluster-mesh queue of one d2-4 node (
     for (const k of keys.slice(0, 2)) await f.controller.start(k);
     const objects = f.objects.size;
     await expect(f.controller.start(keys[2])).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'queued' });
-    expect((await f.state(keys[2]))?.runtime).toMatchObject({ phase: 'DORMANT', stateDetail: 'builder_unavailable' });
+    expect((await f.state(keys[2]))?.runtime).toMatchObject({ phase: 'DORMANT', stateDetail: 'builder_unavailable:queued' });
     expect(f.objects.size).toBe(objects); expect((await f.queue.status('d2-4-a')).pods).toHaveLength(2);
     await expect(f.admission.acquire(keys[2], 'user-2')).resolves.toBeUndefined();
   });

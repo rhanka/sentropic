@@ -50,6 +50,19 @@ describe('live scheduler (lease cadence and concurrent reconcile)', () => {
     handle.stop(); const count = vi.mocked(f.ports.worker.renew).mock.calls.length;
     await vi.advanceTimersByTimeAsync(120_000); expect(f.ports.worker.renew).toHaveBeenCalledTimes(count);
   });
+  it('should drive a RECOVERING runtime to DORMANT on the tick once the pod is gone', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    await f.ports.store.transaction(key, async unit => { unit.state!.runtime.phase = 'RECOVERING'; });
+    f.objects.delete('pods' + live.podName);
+    const errors: unknown[] = [];
+    await createLiveScheduler({ controller: f.controller, intervalMs: 30_000,
+      onError: (_key, error) => { errors.push(error); } }).tick();
+    for (let i = 0; i < 100 && (await f.state())?.runtime.phase !== 'DORMANT'; i++) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0); expect(errors).toEqual([]);
+  });
   it('should refuse an interval that cannot keep a frame within 60 s', () => {
     const f = fixture();
     for (const intervalMs of [0, 30_001, 60_000]) {

@@ -19,7 +19,7 @@ const labels = (key: LiveKey, runtime: LiveRuntime) => ({
 export const VOLUME_LIMITS = Object.freeze({ source: '384Mi', scratch: '1536Mi', dependencies: '1152Mi' });
 /** Bootstrap is trusted host code, not repository content or a caller-supplied command. */
 export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string, placement: BuilderPlacement) {
-  if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable');
+  if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable', 'pod_descriptor_invalid');
   return { apiVersion: 'v1', kind: 'Pod', metadata: {
     name: runtime.podName, namespace: placement.namespace, labels: labels(key, runtime),
   }, spec: {
@@ -65,6 +65,8 @@ export interface KubernetesCore {
   /** Must confirm 404, not merely accept a DELETE request or a terminating phase. */
   waitDeleted(resource: 'pods' | 'services', name: string, uid?: string): Promise<void>;
 }
+/** Pod liveness for teardown: a gone, terminal or terminating pod never needs a supervisor quiesce. */
+export type PodProbe = 'active' | 'absent' | 'terminating' | 'terminal';
 export function createBuilderPods(core: KubernetesCore, bootstrap: string, placement: BuilderPlacement) {
   return {
     async ensure(key: LiveKey, runtime: LiveRuntime) {
@@ -79,7 +81,7 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
         pod = undefined;
       }
       if (!pod) {
-        if (runtime.podUid !== null) throw new LiveError('builder_unavailable');
+        if (runtime.podUid !== null) throw new LiveError('builder_unavailable', 'pod_missing');
         try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement)); }
         catch (error) {
           // Creation may have committed before a timeout/response loss. Discover before retrying.
@@ -90,22 +92,53 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       if (!pod.metadata.uid || Object.entries(expected).some(([k, v]) => pod!.metadata.labels[k] !== v)
         || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
       if (pod.metadata.deletionTimestamp || ['Failed', 'Succeeded'].includes(pod.status?.phase ?? '')) {
-        throw new LiveError('builder_unavailable');
+        throw new LiveError('builder_unavailable', 'pod_unavailable');
       }
       const service = { apiVersion: 'v1', kind: 'Service', metadata: {
         name: runtime.podName, namespace: placement.namespace, labels: expected,
       }, spec: { type: 'ClusterIP', selector: expected, ports: [{ name: 'live', port: 5173, targetPort: 5173 }] } };
-      const existing = await core.get<{ spec: { selector: Record<string, string> } }>('services', runtime.podName);
-      if (existing && Object.entries(expected).some(([k, v]) => existing.spec.selector[k] !== v)) conflict('stale_fence');
-      if (!existing) await core.create('services', service);
+      const existing = await core.get<{ metadata: Pod['metadata']; spec: { selector: Record<string, string> } }>(
+        'services', runtime.podName);
+      if (existing && (Object.entries(expected).some(([k, v]) => existing.spec.selector[k] !== v)
+        || Object.entries(expected).some(([k, v]) => existing.metadata.labels[k] !== v))) {
+        // A stale ensure of an older lease must never delete the service of a newer lease (concurrent revive):
+        // replace only on a fresh creation when the existing service belongs to a strictly older lease of the
+        // same binding (the service name derives from the binding hash); any other divergence is a fence
+        // conflict with no delete.
+        const sameBinding = existing.metadata.labels['sentropic.dev/artifact-binding']
+            === expected['sentropic.dev/artifact-binding']
+          && existing.spec.selector['sentropic.dev/artifact-binding'] === expected['sentropic.dev/artifact-binding'];
+        const leaseLabel = Number(existing.metadata.labels['sentropic.dev/artifact-lease']);
+        const leaseSelector = Number(existing.spec.selector['sentropic.dev/artifact-lease']);
+        const olderLease = sameBinding && Number.isFinite(leaseLabel) && Number.isFinite(leaseSelector)
+          && leaseLabel < runtime.leaseEpoch && leaseSelector < runtime.leaseEpoch;
+        if (runtime.podUid !== null || !olderLease) conflict('stale_fence');
+        await core.delete('services', runtime.podName, existing.metadata.uid);
+        await core.waitDeleted('services', runtime.podName, existing.metadata.uid);
+        await core.create('services', service);
+      } else if (!existing) await core.create('services', service);
       return { uid: pod.metadata.uid };
+    },
+    async probe(key: LiveKey, runtime: LiveRuntime): Promise<PodProbe> {
+      const pod = await core.get<Pod>('pods', runtime.podName);
+      if (!pod) return 'absent';
+      if (Object.entries(labels(key, runtime)).some(([k, v]) => pod.metadata.labels[k] !== v)
+        || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
+      if (pod.status?.phase === 'Failed' || pod.status?.phase === 'Succeeded') return 'terminal';
+      if (pod.metadata.deletionTimestamp) return 'terminating';
+      return 'active';
     },
     async remove(key: LiveKey, runtime: LiveRuntime) {
       const pod = await core.get<Pod>('pods', runtime.podName);
       if (pod && (Object.entries(labels(key, runtime)).some(([k, v]) => pod.metadata.labels[k] !== v)
         || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid))) conflict('stale_fence');
-      await core.delete('pods', runtime.podName, pod?.metadata.uid ?? runtime.podUid ?? undefined);
-      await core.waitDeleted('pods', runtime.podName, pod?.metadata.uid ?? runtime.podUid ?? undefined);
+      // A pod the apiserver already reports as gone needs no DELETE; without a known uid a delete by bare
+      // name could race a concurrent session recreating this deterministic name.
+      const uid = pod?.metadata.uid ?? runtime.podUid ?? undefined;
+      if (uid !== undefined) {
+        await core.delete('pods', runtime.podName, uid);
+        await core.waitDeleted('pods', runtime.podName, uid);
+      }
       // Never remove a replacement service from a stale callback.
       const service = await core.get<{ metadata: Pod['metadata'] }>('services', runtime.podName);
       if (service && Object.entries(labels(key, runtime)).some(([k, v]) => service.metadata.labels[k] !== v)) conflict('stale_fence');

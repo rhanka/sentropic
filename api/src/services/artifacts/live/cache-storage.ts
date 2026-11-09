@@ -64,18 +64,27 @@ export function createBuilderCacheBlobs(options: { bucket: string; client: S3Cli
   async function assertPrivate() {
     if (Date.now() < privateUntil) return;
     checking ??= (async () => {
-      const { PublicAccessBlockConfiguration: config } = await client.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
+      // S3-compatible endpoints (e.g. Scaleway Object Storage) may not implement GetPublicAccessBlock: any check
+      // failure refuses the effect as an unavailable cache, never with endpoint detail.
+      let config: { BlockPublicAcls?: boolean; IgnorePublicAcls?: boolean; BlockPublicPolicy?: boolean;
+        RestrictPublicBuckets?: boolean } | undefined;
+      try {
+        ({ PublicAccessBlockConfiguration: config } = await client.send(new GetPublicAccessBlockCommand({ Bucket: bucket })));
+      } catch { throw new LiveError('builder_unavailable', 'cache_s3_unavailable'); }
       if (!config || !['BlockPublicAcls', 'IgnorePublicAcls', 'BlockPublicPolicy', 'RestrictPublicBuckets']
-        .every(field => config[field as keyof typeof config] === true)) throw new Error('Builder cache bucket must remain private');
+        .every(field => config[field as keyof typeof config] === true)) throw new LiveError('builder_unavailable', 'cache_s3_unavailable');
       privateUntil = Date.now() + 30000;
     })().finally(() => { checking = undefined; });
     await checking;
   }
+  /** An S3 effect failure is an unavailable cache, never endpoint detail; a missing key stays a miss. */
+  const unavailable = (): never => { throw new LiveError('builder_unavailable', 'cache_s3_unavailable'); };
   return {
     async put(key, bytes) {
       assertCacheKey(key);
       await assertPrivate();
-      await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes }));
+      try { await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes })); }
+      catch { unavailable(); }
     },
     async get(key) {
       assertCacheKey(key);
@@ -89,13 +98,14 @@ export function createBuilderCacheBlobs(options: { bucket: string; client: S3Cli
           const name = (error as { name?: unknown }).name;
           if (name === 'NoSuchKey' || name === 'NotFound') return undefined;
         }
-        throw error;
+        unavailable();
       }
     },
     async delete(key) {
       assertCacheKey(key);
       await assertPrivate();
-      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+      try { await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })); }
+      catch { unavailable(); }
     },
   };
 }
@@ -144,7 +154,11 @@ export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs)
       const bytes = await blobs.get(pointer.objectRef);
       if (!bytes || sha256(bytes) !== pointer.sha256) throw new Error();
       return JSON.parse(Buffer.from(bytes).toString('utf8')) as CacheObject;
-    } catch { throw new LiveError('dependency_cache_invalid'); }
+    } catch (error) {
+      // An S3 outage is reported as an unavailable cache, never as an invalid entry (no quarantine on outage).
+      if (error instanceof LiveError && error.code === 'builder_unavailable') throw error;
+      throw new LiveError('dependency_cache_invalid');
+    }
   }
   return {
     read,
