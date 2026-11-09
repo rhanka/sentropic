@@ -39,6 +39,51 @@ export interface ClaudeCodeCliRunner {
     signal: AbortSignal }): AsyncIterable<ClaudeCodeCliEvent>;
 }
 
+/**
+ * Typed quota signal from a Claude CLI host: the 5-hour session limit, a
+ * rate limit, or an overloaded backend. Fixed message and numeric fields
+ * only — never carries CLI output, so rethrowing it cannot leak seat
+ * material. `AnthropicAdapter.normalizeError` maps the 429 status to a
+ * retryable `rate_limit`, letting the consumer quota circuit fail over.
+ */
+export class ClaudeCliQuotaError extends Error {
+  readonly code = 'claude_cli_rate_limited';
+  readonly status = 429;
+  readonly retryable = true;
+  readonly retryReason = 'rate_limit' as const;
+  readonly retryAfterMs?: number;
+  constructor(retryAfterMs?: number) {
+    super('Claude CLI quota exhausted');
+    this.name = 'ClaudeCliQuotaError';
+    if (retryAfterMs !== undefined) this.retryAfterMs = retryAfterMs;
+  }
+}
+
+export const isClaudeCliQuotaError = (value: unknown): value is ClaudeCliQuotaError =>
+  value instanceof ClaudeCliQuotaError;
+
+/**
+ * Structural quota match for foreign runners that signal 429 with their own
+ * error shape. Matches status/code only; the caller must build a fresh typed
+ * error and never forward the original message, cause, or stack.
+ */
+export const readClaudeCliQuotaSignal = (value: unknown): { retryAfterMs?: number } | undefined => {
+  if (isClaudeCliQuotaError(value)) {
+    return value.retryAfterMs !== undefined ? { retryAfterMs: value.retryAfterMs } : {};
+  }
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const status = record.status ?? record.statusCode;
+  const code = record.code ?? record.type;
+  const quotaCode = typeof code === 'string'
+    && /rate.?limit|too.?many.?requests|quota|usage.?limit|overload/i.test(code);
+  if (status !== 429 && !quotaCode) return undefined;
+  const retryAfterMs = record.retryAfterMs;
+  return typeof retryAfterMs === 'number' && Number.isFinite(retryAfterMs) && retryAfterMs >= 0
+    ? { retryAfterMs }
+    : {};
+};
+
 /** Trusted host attestations, never inferred from the installed CLI version. */
 export interface ClaudeCodeCliCapabilities {
   readonly protocol: 'claude-code-stream-json-v1';
@@ -58,13 +103,23 @@ export interface ClaudeCodeRuntimeClientOptions {
 
 class ClaudeCodeFailure extends Error {
   readonly code: string;
-  constructor(code: 'unsupported' | 'auth' | 'runner' | 'aborted') {
-    super(`Claude CLI ${code === 'aborted' ? 'request aborted' : `${code} unavailable`}`);
+  readonly status?: number;
+  readonly retryable?: boolean;
+  readonly retryReason?: string;
+  readonly retryAfterMs?: number;
+  constructor(code: 'unsupported' | 'auth' | 'runner' | 'rate_limited' | 'aborted', quota?: { retryAfterMs?: number }) {
+    super(`Claude CLI ${code === 'aborted' ? 'request aborted'
+      : code === 'rate_limited' ? 'quota exhausted' : `${code} unavailable`}`);
     this.code = `claude_cli_${code}`;
     if (code === 'aborted') this.name = 'AbortError';
+    if (code === 'rate_limited') {
+      this.status = 429; this.retryable = true; this.retryReason = 'rate_limit';
+      if (quota?.retryAfterMs !== undefined) this.retryAfterMs = quota.retryAfterMs;
+    }
   }
 }
-const failure = (code: ConstructorParameters<typeof ClaudeCodeFailure>[0]) => new ClaudeCodeFailure(code);
+const failure = (code: ConstructorParameters<typeof ClaudeCodeFailure>[0],
+  quota?: { retryAfterMs?: number }) => new ClaudeCodeFailure(code, quota);
 const textValue = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && !value.includes('\0');
 const jsonCopy = (value: unknown, canonical = false): unknown => {
@@ -270,6 +325,12 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
     } catch (error) {
       if (controller.signal.aborted) throw failure('aborted');
       if (error instanceof ClaudeCodeFailure) throw error;
+      // A quota signal crosses the runner seam as a FRESH typed failure with
+      // numeric fields only; the original message, cause, and stack never
+      // cross, preserving the secret boundary while the consumer quota
+      // circuit still sees the retryable 429.
+      const quota = readClaudeCliQuotaSignal(error);
+      if (quota) throw failure('rate_limited', quota);
       throw failure('runner');
     }
     finally {
