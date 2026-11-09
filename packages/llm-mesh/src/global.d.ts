@@ -83,6 +83,36 @@ declare module 'node:path' {
   export const sep: string;
 }
 
+declare module 'node:child_process' {
+  export type ChildProcessStdio =
+    | 'ignore' | 'pipe' | 'inherit'
+    | readonly ['ignore' | 'pipe' | 'inherit', 'ignore' | 'pipe' | 'inherit', 'ignore' | 'pipe' | 'inherit'];
+  export interface ChildProcessReadable {
+    on(event: 'data', listener: (chunk: Buffer) => void): void;
+    [Symbol.asyncIterator](): AsyncIterator<Buffer>;
+  }
+  export interface ChildProcessWritable {
+    write(data: string, callback: (error?: Error) => void): void;
+    end(): void;
+    once(event: 'error' | 'close', listener: () => void): void;
+  }
+  export interface ChildProcess {
+    readonly stdin: ChildProcessWritable | null;
+    readonly stdout: ChildProcessReadable | null;
+    readonly stderr: ChildProcessReadable | null;
+    readonly exitCode: number | null;
+    readonly signalCode: string | null;
+    kill(signal: string): boolean;
+    once(event: 'exit', listener: (code: number | null) => void): void;
+    once(event: 'error', listener: (error: unknown) => void): void;
+  }
+  export function spawn(
+    command: string,
+    args: readonly string[],
+    options: { env?: Record<string, string | undefined>; stdio?: ChildProcessStdio },
+  ): ChildProcess;
+}
+
 declare module 'http' {
   export interface IncomingMessage {
     url?: string;
