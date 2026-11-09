@@ -49,23 +49,23 @@ export function createSupervisorTransport(options: SupervisorOptions) {
     try { return { files, digest: candidateDigest(files) }; } catch { return unavailable('output_invalid'); }
   }
   async function terminate(runtime: LiveRuntime) {
-    if ((await call(runtime, 'terminate', {})).treeGone !== true) unavailable();
+    if ((await call(runtime, 'terminate', {})).treeGone !== true) unavailable('terminate_unconfirmed');
   }
 
   const supervisor: QualifiedSupervisor = {
     /** W2 §1: workers have no egress in any phase, so the fence is static policy (Q1 receipts); the pod echoes its phase. */
     async phase(runtime, phase) {
-      if ((await call(runtime, 'phase', { phase })).phase !== phase) unavailable();
+      if ((await call(runtime, 'phase', { phase })).phase !== phase) unavailable('phase_unconfirmed');
     },
     terminate,
     /** Op `renew {}` → `renewed: true`: the pod renews its liveness lease on the fenced frame and does nothing else,
      * so a renewal never cancels or waits for an in-flight command. */
     async renew(runtime) {
-      if ((await call(runtime, 'renew', {})).renewed !== true) unavailable();
+      if ((await call(runtime, 'renew', {})).renewed !== true) unavailable('renew_unconfirmed');
     },
     async clear(runtime, paths) {
-      if (!paths.length || new Set(paths).size !== paths.length || !paths.every(path => WRITABLE_ROOTS.has(path))) unavailable();
-      if (!same((await call(runtime, 'clear', { paths: [...paths] })).cleared, paths)) unavailable();
+      if (!paths.length || new Set(paths).size !== paths.length || !paths.every(path => WRITABLE_ROOTS.has(path))) unavailable('clear_invalid');
+      if (!same((await call(runtime, 'clear', { paths: [...paths] })).cleared, paths)) unavailable('clear_unconfirmed');
     },
     async stage(runtime, source: SourceSnapshot) {
       const files = await options.sources.source(source.stagingRef);
@@ -73,10 +73,10 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if (!lock || !Buffer.from(lock.bytes).equals(Buffer.from(source.lockfile))) unavailable('staging_invalid');
       const sent = await transfer(runtime, 'workspace', files, TREE_LIMITS, stagingFailure);
       const data = await call(runtime, 'stage', { ...sent, headSha: source.headSha, treeSha: source.treeSha });
-      if (data.treeDigest !== sent.treeDigest) unavailable();
+      if (data.treeDigest !== sent.treeDigest) unavailable('stage_unconfirmed');
     },
     async dependencies(runtime, cache, mode) {
-      if (mode.readOnly !== true || mode.verifyHash !== true) unavailable();
+      if (mode.readOnly !== true || mode.verifyHash !== true) unavailable('dependencies_unconfirmed');
       async function* readOnly(files: AsyncIterable<DependencyFile>) {
         for await (const file of files) {
           if (file.mode !== 292 && file.mode !== 365) cacheFailure('invalid');
@@ -85,7 +85,7 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       }
       const sent = await stream(runtime, 'dependencies', readOnly(options.sources.dependencies(cache)), TREE_LIMITS, cacheFailure);
       const data = await call(runtime, 'dependencies', { ...sent, cacheKey: cache.key, cacheTree: cache.treeSha256, readOnly: true });
-      if (data.treeDigest !== sent.treeDigest || data.readOnly !== true) unavailable();
+      if (data.treeDigest !== sent.treeDigest || data.readOnly !== true) unavailable('dependencies_unconfirmed');
     },
     /** Atomic projection: the pod applies every create/replace/delete of this revision or none of them. */
     async overlay(runtime, draft) {
@@ -97,30 +97,30 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       const sent = await transfer(runtime, 'overlay', files, OVERLAY_LIMITS, stagingFailure);
       const data = await call(runtime, 'overlay', { ...sent, deletes: [...deletes], revision: draft.revision,
         generation: draft.generation, baseHeadSha: draft.baseHeadSha, treeSha: draft.treeSha });
-      if (data.revision !== draft.revision || data.treeDigest !== sent.treeDigest) unavailable();
+      if (data.revision !== draft.revision || data.treeDigest !== sent.treeDigest) unavailable('overlay_unconfirmed');
     },
     async hostFile(runtime, path, source) {
-      if (!HOST_FILES.has(path) || typeof source !== 'string' || Buffer.byteLength(source) > MAX_HOST_FILE_BYTES) unavailable();
-      if ((await call(runtime, 'hostFile', { path, source })).sha256 !== sha256(source)) unavailable();
+      if (!HOST_FILES.has(path) || typeof source !== 'string' || Buffer.byteLength(source) > MAX_HOST_FILE_BYTES) unavailable('host_file_invalid');
+      if ((await call(runtime, 'hostFile', { path, source })).sha256 !== sha256(source)) unavailable('host_file_unconfirmed');
     },
     /** Recipes cross the wire by name only; the bootstrap runs its frozen copy (and frozen script) with the host-owned
      * environment. W4 is the sole author of both environments: `artifactEnvironment()` for the pre-bundle and `dev`,
      * `buildEnvironment()` for the build. The pre-bundle runs to completion; the pod's `dev` refuses until it has. */
     async prebundle(runtime, command, env) {
-      if (!same(command, PREBUNDLE_RECIPE) || !same(env, artifactEnvironment())) unavailable();
-      if ((await call(runtime, 'prebundle', { recipe: 'prebundle' })).prebundled !== true) unavailable();
+      if (!same(command, PREBUNDLE_RECIPE) || !same(env, artifactEnvironment())) unavailable('prebundle_invalid');
+      if ((await call(runtime, 'prebundle', { recipe: 'prebundle' })).prebundled !== true) unavailable('prebundle_unconfirmed');
       return { prebundled: true };
     },
     async dev(runtime, command, env) {
-      if (!same(command, LIVE_RECIPE) || !same(env, artifactEnvironment())) unavailable();
+      if (!same(command, LIVE_RECIPE) || !same(env, artifactEnvironment())) unavailable('dev_invalid');
       const data = await call(runtime, 'dev', { recipe: 'live' });
-      if (data.routeEpoch !== runtime.routeEpoch) return Number.isSafeInteger(data.routeEpoch) ? conflict('stale_fence') : unavailable();
-      if (typeof data.revision !== typeof runtime.sourceRevision) unavailable();
+      if (data.routeEpoch !== runtime.routeEpoch) return Number.isSafeInteger(data.routeEpoch) ? conflict('stale_fence') : unavailable('dev_unconfirmed');
+      if (typeof data.revision !== typeof runtime.sourceRevision) unavailable('dev_unconfirmed');
       return { revision: data.revision as LiveRuntime['sourceRevision'], routeEpoch: runtime.routeEpoch };
     },
     /** A-LIVE §8.3: read the stable output only after the build tree is gone, and seal the digest computed here. */
     async build(runtime, attempt, command, env) {
-      if (!same(command, BUILD_RECIPE) || !same(env, buildEnvironment())) unavailable();
+      if (!same(command, BUILD_RECIPE) || !same(env, buildEnvironment())) unavailable('build_invalid');
       const data = await call(runtime, 'build', { recipe: 'build', attemptId: attempt.id, headSha: attempt.headSha, treeSha: attempt.treeSha });
       if (data.exitCode !== 0) unavailable('build_failed');
       await terminate(runtime);
@@ -129,7 +129,7 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       return { candidateDigest: digest };
     },
     async verify(runtime, attempt, limits) {
-      if (!same(limits, OUTPUT_LIMITS) || typeof attempt.candidateDigest !== 'string' || !DIGEST.test(attempt.candidateDigest)) unavailable();
+      if (!same(limits, OUTPUT_LIMITS) || typeof attempt.candidateDigest !== 'string' || !DIGEST.test(attempt.candidateDigest)) unavailable('verify_invalid');
       if ((await output(runtime)).digest !== attempt.candidateDigest) unavailable('output_changed');
     },
   };

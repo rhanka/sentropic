@@ -30,7 +30,7 @@ describe('live OOM safety: drafts are durable before ACK', () => {
   it('should stop automatic restores after two consecutive crashes and revive on the next package projection', async () => {
     const f = fixture(); await f.controller.start(key);
     for (let crash = 0; crash < 3; crash++) { oomKill(f); await f.controller.reconcile(key); }
-    expect((await f.state())!.runtime).toMatchObject({ phase: 'DORMANT', crashRestores: 2, stateDetail: 'builder_unavailable' });
+    expect((await f.state())!.runtime).toMatchObject({ phase: 'DORMANT', crashRestores: 2, stateDetail: 'builder_unavailable:pod_unavailable' });
     const session = { liveSessionId: 'package-session', leaseEpoch: 1, routeEpoch: 1 };
     const bridge = createLiveWorkerBridge({ controller: f.controller, ports: f.ports, packageRuntime: async () => session });
     await expect(bridge.reconcile({ ...key, bindingGeneration: 1 })).resolves.toMatchObject({ revision: 'r1', ready: true });

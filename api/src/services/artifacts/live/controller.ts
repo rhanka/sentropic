@@ -11,7 +11,21 @@ import { authorizeLive, liveRole, type LiveActor } from './authorize';
 import { currentBinding, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
-  return {
+  /** Finishes an interrupted teardown without clearing its recorded cause; the scheduler tick drives it until the
+   * pod is gone (DORMANT), so no manual DB edit is ever needed to leave RECOVERING. */
+  async function recover(key: LiveKey) {
+    const state = await ports.store.read(key);
+    if (!state || state.runtime.phase === 'DORMANT') return;
+    let runtime = state.runtime;
+    runtime = await ports.store.transaction(key, async unit => {
+      assertFence(unit.state, runtime);
+      unit.state.runtime.phase = 'RECOVERING'; unit.state.runtime.routeEpoch++;
+      unit.state.runtime.attempt = null;
+      return structuredClone(unit.state.runtime);
+    });
+    return teardown(ports, key, runtime);
+  }
+  const controller = {
     /** Host scheduler calls this for active bindings; source grants never keep revoked pods alive. A LIVE session idle
      * for more than 900 s is reaped here, ending on the clean build. */
     async reconcile(key: LiveKey) {
@@ -31,7 +45,8 @@ export function createLiveController(ports: LivePorts) {
         return idleBuild(ports, key);
       }
       if (runtime.phase === 'BUILD_QUEUED') return queuedBuild(ports, key);
-      // Recovery of an in-flight operation belongs to startup after its old API executor is fenced.
+      // An interrupted teardown keeps progressing on the scheduler tick until the pod is gone (DORMANT).
+      if (runtime.phase === 'RECOVERING') return recover(key);
     },
     start: (key: LiveKey) => revive(ports, key),
     buildOnly: (key: LiveKey, admittedJobId: string) => buildOnly(ports, key, admittedJobId),
@@ -91,24 +106,15 @@ export function createLiveController(ports: LivePorts) {
       return { liveSessionId: runtime.sessionId, state: 'stopped' as const };
     },
     /** Reaper: no inference of build/publication success from missing pods; interrupted candidates are fenced. */
-    async recover(key: LiveKey) {
-      const state = await ports.store.read(key);
-      if (!state || state.runtime.phase === 'DORMANT') return;
-      let runtime = state.runtime;
-      runtime = await ports.store.transaction(key, async unit => {
-        assertFence(unit.state, runtime);
-        unit.state.runtime.phase = 'RECOVERING'; unit.state.runtime.routeEpoch++;
-        unit.state.runtime.attempt = null;
-        return structuredClone(unit.state.runtime);
-      });
-      return teardown(ports, key, runtime, 'recovered');
-    },
+    recover,
     /** The idle reaper (Amendment 1): no absolute lifetime; strictly after 900 s idle it ends on the clean build. */
     reap: (key: LiveKey) => idleBuild(ports, key),
-    /** Liveness lease (Amendment 1 §3): one authenticated, fenced frame to a leased pod. It never renews idle time. */
+    /** Liveness lease (Amendment 1 §3): one authenticated, fenced frame to a leased pod. It never renews idle time,
+     * and never a runtime owned by an in-flight teardown (probing a dead pod would block on the TCP timeout). */
     async lease(key: LiveKey) {
       const runtime = (await ports.store.read(key))?.runtime;
-      if (!runtime || runtime.phase === 'DORMANT' || runtime.podUid === null) return false;
+      if (!runtime || runtime.podUid === null
+        || ['DORMANT', 'RECOVERING', 'DECOMMISSIONING', 'SAVING', 'QUIESCING'].includes(runtime.phase)) return false;
       await ports.worker.renew(runtime); return true;
     },
     /** The binding's admitted or queued heavy phases (kind, position) for the live status surface. */
@@ -116,5 +122,6 @@ export function createLiveController(ports: LivePorts) {
     /** Every runtime that is not DORMANT, for the scheduler. */
     active: () => ports.store.active(),
   };
+  return controller;
 }
 export type { LiveKey, LiveRuntime };
