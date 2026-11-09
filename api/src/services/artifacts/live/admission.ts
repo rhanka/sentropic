@@ -26,7 +26,7 @@ export function createFairAdmission(options: { capacity: number; waiterTtlMs: nu
   let seeded: Promise<void> | undefined;
   const seed = () => seeded ??= options.holders().then(running => {
     for (const { key, ownerId } of running) { holders.set(idOf(key), ownerId); lastGrant.set(ownerId, options.now()); }
-  }, () => { seeded = undefined; throw new LiveError('builder_unavailable'); });
+  }, () => { seeded = undefined; throw new LiveError('builder_unavailable', 'admission_unavailable'); });
   return {
     async acquire(key, ownerId) {
       await seed();

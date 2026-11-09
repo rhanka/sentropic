@@ -74,17 +74,45 @@ describe('builder cache blob store', () => {
     for (const field of Object.keys(PRIVATE)) {
       const f = fakeS3({ [field]: false });
       const blobs = createBuilderCacheBlobs({ bucket: 'public-cache', client: f.client });
-      await expect(blobs.put(fileKey, Buffer.from('x'))).rejects.toThrow(/must remain private/);
-      await expect(blobs.get(fileKey)).rejects.toThrow(/must remain private/);
-      await expect(blobs.delete(fileKey)).rejects.toThrow(/must remain private/);
+      await expect(blobs.put(fileKey, Buffer.from('x')))
+        .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
+      await expect(blobs.get(fileKey))
+        .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
+      await expect(blobs.delete(fileKey))
+        .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
       expect(f.send.mock.calls).toHaveLength(3); // a refusal is never cached
       expect(f.send.mock.calls.filter(([command]) => !(command instanceof GetPublicAccessBlockCommand))).toEqual([]);
     }
     // A check with no public-access-block answer, or one that fails, refuses the effect the same way.
     const opaque = createBuilderCacheBlobs({ bucket: 'opaque', client: { send: vi.fn(async () => ({})) } as unknown as S3Client });
-    await expect(opaque.put(fileKey, Buffer.from('x'))).rejects.toThrow(/must remain private/);
+    await expect(opaque.put(fileKey, Buffer.from('x')))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
     const broken = createBuilderCacheBlobs({ bucket: 'unknown', client: fakeS3(false).client });
-    await expect(broken.put(fileKey, Buffer.from('x'))).rejects.toThrow(/privacy check unavailable/);
+    await expect(broken.put(fileKey, Buffer.from('x')))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
+  });
+
+  it('should name an S3 outage cache_s3_unavailable and never quarantine on it', async () => {
+    const failing = { send: vi.fn(async (command: unknown) => {
+      if (command instanceof GetPublicAccessBlockCommand) return { PublicAccessBlockConfiguration: PRIVATE };
+      throw Object.assign(new Error('socket hang up'), { name: 'SocketTimeout' });
+    }) } as unknown as S3Client;
+    const blobs = createBuilderCacheBlobs({ bucket: 'builder-dependency-cache', client: failing });
+    await expect(blobs.put(fileKey, Buffer.from('x')))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
+    await expect(blobs.get(fileKey))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
+    await expect(blobs.delete(fileKey))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
+    // A store read over an S3 outage reports the outage instead of an invalid entry, without quarantining.
+    const { pointers, query } = fakePool();
+    pointers.set(`${digest64('b')}/${digest64('d')}`,
+      JSON.stringify({ objectRef: `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/${randomUUID()}`,
+        sha256: digest64('e') }));
+    const storage = createPostgresCacheStorage({ query } as never, blobs);
+    await expect(storage.read(`${digest64('b')}/${digest64('d')}`))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
+    expect(query.mock.calls.filter(([sql]) => sql.startsWith('DELETE'))).toEqual([]);
   });
 
   it('should round-trip the real generated keys end to end (putFile, admit, getFile, read) against S3', async () => {

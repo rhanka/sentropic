@@ -1,55 +1,91 @@
-# Feature: Preprod repin to the host build API job state contract build
+# Feature: Fix live teardown stuck (Background delete, RECOVERING progress, reasons)
 
 ## Objective
-- [x] Bring the preprod tier to the main build that carries #969 (the builder host build API answers POST /v1/builds and GET /v1/builds in the GitBuildJobState vocabulary build_pending|published|build_failed instead of the ledger states accepted|failed, so a host git_publish no longer fails with provider_unavailable before moving its binding to build_pending): repin the api digest to the b1a570474 build; the ui digest stays on the build published by the 7106defa7 run (publish-ui-image skips on this head).
+- Unstick live teardown after a dead worker pod: Background deletes, skip quiesce on gone/terminal/terminating pods, RECOVERING progresses on scheduler tick to DORMANT, every builder_unavailable carries a reason persisted as code:reason.
 
 ## Scope / Guardrails
-- [x] Branch deploy/preprod-repin-969 from main b1a570474 (merge of #969 fix/builder-job-state-contract); worktree tmp/worktrees/preprod-repin-969; ENV=test-repin-969.
-- [x] PREPROD ONLY: prod overlays and base untouched; no Secret value in Git.
-- [x] Digest provenance: main CI run 42549233598 (head b1a570474) publish-api-image SUCCESS (receipt `Published tested api: ghcr.io/rhanka/sentropic-api@sha256:69bd39eb0aee104b59e39271c9badc06ebf0410f54032b5a6d476c6832604444`), verified in GHCR by anonymous manifest fetch (HTTP 200). publish-ui-image SKIPS on this head (no ui path changed), so the ui digest stays sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0 (7106defa7 build, run 42485651003).
-- [x] Make only; no Python, no attribution trailers, no CI skips or reruns.
-- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Scope limited to api live teardown path and scoped api unit tests.
+- Make-only workflow, Docker only through .tmp/packets/docker-slot.sh.
+- Never ENV=dev, never make clean-all, no Python, commits via make commit MSG="..." only.
+- ENV=test-fix-live-teardown with API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181.
+- All new text in English.
+- Do NOT change the frozen host contract (RECONCILE/PAGE/SEAL/STOP key sets, DRAFT_LIMITS) and do not touch packages/artifacts.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `deploy/k8s/overlays/preprod/kustomization.yaml`
-  - `deploy/ci/preprod-a4/bundle.selftest.mjs`
+  - `BRANCH.md` (branch plan)
+  - `api/src/services/artifacts/live/**`
+  - `api/tests/unit/artifacts-live/**`
+  - `.tmp/rv/fix-live-teardown.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
-  - `api/**`
-  - `apps/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
   - `packages/**`
-  - `ui/**`
-  - `deploy/k8s/base/**`
-  - `deploy/k8s/overlays/prod/**`
-  - `deploy/k8s/overlays/preprod-a4/**`
-  - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
-  - `deploy/ci/artifact-content/bundle-checks.mjs`
-  - `deploy/ci/artifact-content/bundle.selftest.mjs`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] `attention`: this pin merges ONLY onto a main that carries #969: the api digest pinned here is the first build carrying it. An overlay apply restarts nothing by itself: the operator's apply step (CD re-applies ../preprod-a4 with these pins) rolls the api out.
-
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**
-- Rationale: one deploy PR, one CI.
+- [ ] lot0-env: owned ENV=test-fix-live-teardown and ports API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181 recorded
 
 ## AI Flaky tests
-- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single orthogonal api-only fix with scoped unit tests.
+
+## UAT Management (in orchestration context)
+- [ ] **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- UAT checkpoints are listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/fix-live-teardown`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/fix-live-teardown` after UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Repin to the host build API job state contract build**
-  - [x] `deploy/k8s/overlays/preprod/kustomization.yaml`: api digest swapped sha256:f9e11434…c2 → sha256:69bd39eb0aee104b59e39271c9badc06ebf0410f54032b5a6d476c6832604444; ui digest unchanged sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0; provenance comment rewritten (run 42512631809, publish-ui-image skips).
-  - [x] `deploy/ci/preprod-a4/bundle.selftest.mjs`: api tag expectation swapped to the new digest; ui expectation and the four prod asserts unchanged.
-- [x] **Lot 2 — Final validation**
-  - [x] `make check-preprod-images ENV=test-repin-969` PASS (both rendered pins verified by anonymous digest pull, 2026-11-08).
-  - [x] `docker-slot.sh make test-artifact-content-manifests API_PORT=8857 UI_PORT=5257 MAILDEV_UI_PORT=1157 ENV=test-repin-969` PASS (artifact-content bundle selftest 211 PASS 0 failures, A4 unit 32/32, A4 bundle selftest: api/auth-idp/artifact-content on sha256:69bd39eb…44, ui on sha256:bf1aa509…e0, prod unchanged).
-  - [ ] PR « deploy(preprod): repin to the remote live rows persistence fix », CI green on the exact head, merge by s-conductor.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, .tmp/packets/COMMON-RULES.md, .tmp/rv/diag-live-pod-delete.md sections 1-3.
+  - [x] Worktree tmp/worktrees/fix-live-teardown on branch fix/artifacts-live-teardown-stuck from origin/main (6b2fc2295, includes #966).
+  - [x] Verify branch with git -C <wt> branch --show-current before any action.
+  - [x] ENV=test-fix-live-teardown, API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181.
+  - [x] Confirm scope and guardrails (api only, no host contract change, no packages/artifacts).
+- [x] **Lot 1 — Generic live teardown fixes (api only)**
+  - [x] kubernetes.ts: delete pods and services with propagationPolicy Background, keep uid preconditions.
+  - [x] kubernetes.ts: waitDeleted keeps 404 invariant for live pods, reports k8s_wait_deleted_timeout on terminal/deleting pods past the bound.
+  - [x] pods.ts + ports.ts: probe pod state (active/absent/terminating/terminal).
+  - [x] transitions.ts: skip worker.quiesce when pod gone/terminal/terminating, preserve stateDetail when detail undefined, failed() persists code:reason.
+  - [x] controller.ts: reconcile RECOVERING via recover, recover preserves root cause, lease skips teardown-transient phases.
+  - [x] Observability: every new LiveError builder_unavailable on the live path gets a reason (npm_relay_status, supervisor_relay_502, k8s_wait_deleted_timeout, forge_status, cache_s3_unavailable).
+  - [x] pods.ts ensure: replace a leftover service with a stale selector under its uid precondition instead of stale_fence.
+  - [x] cache-storage.ts: name S3 effect failures cache_s3_unavailable, read rethrows builder_unavailable without quarantining.
+  - [x] Address Argon B1-B3: bound quiesce with non-fatal failure, skip when podUid null, uid-guarded pod delete; record teardown cause (NB1).
+- [x] **Lot 2 — Scoped api unit tests**
+  - [x] delete uses Background (deleteOptions unit test).
+  - [x] teardown completes on a terminal/terminating pod without worker.quiesce.
+  - [x] RECOVERING to DORMANT on tick once the pod is gone.
+  - [x] reasons are logged and persisted as code:reason.
+  - [x] Update oom and heavy-phases stateDetail expectations to code:reason (evolution).
+  - [x] Update cache-storage privacy-check expectations to code:reason (evolution); add S3 outage naming and service-replace tests.
+  - [x] Scoped runs: make test-api SCOPE=tests/unit/artifacts-live/... ENV=test-fix-live-teardown last.
+- [x] **Lot 3 — Gates, PR and CI**
+  - [x] make typecheck-api, make lint-api via docker-slot.sh.
+  - [x] Scoped make test-api via docker-slot.sh.
+  - [x] Open PR (title/body from BRANCH.md), push, iterate to green CI (no rerun, no skip, no timeout increase).
+  - [ ] Do NOT merge.
+- [x] **Lot 4 — Report**
+  - [x] Report in French to .tmp/rv/fix-live-teardown.md: PR number, head sha, CI state, tests, files changed.
