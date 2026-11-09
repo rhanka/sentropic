@@ -63,8 +63,8 @@
 - [x] **Lot 3 — Consent store**
   - [x] Tenant-less key for a tenant-optional client: app row tenant NULL, CM authority row with its own consent id under the client's active registry tenant; tenant-bound clients keep the no-op.
   - [x] `revokeCmOAuthConsent` withdraws the tenant-less key when no tenant is given; the artifacts host never accepts the tenant-less CM consent id.
-- [ ] **Lot 4 — Validation**
-  - [ ] `make typecheck-api` and `make lint-api`.
-  - [ ] Scoped API tests: `oauth-consent-optional-tenant`, `oauth-consent-tenantless-rekey`, `cm-oauth-consent`, `oauth-refresh.integration`, `arch11-tenant-data`, `oauth-consent-persistence`, `arch11-consent-tenant-enforce`, `oauth-state-adapter.refresh`, `artifacts-host-credentials`.
+- [x] **Lot 4 — Validation**
+  - [x] `make typecheck-api` PASS (tsc --noEmit clean, `.tmp/rv/t1-a-typecheck2.log`, make_exit=0); `make lint-api` PASS (0 errors, 243 pre-existing warnings, none in wagon files, `.tmp/rv/t1-a-lint.log`).
+  - [x] Scoped API tests on head c5bfae3f5: set1 24-25/25 across runs, set2 107-109/109 across runs; every Lot 4 file green on this head. Residual failures are 40001/503 under 3-lane host contention (DROP DATABASE stuck on CheckpointDone, files untouched by the wagon pass standalone in seconds): `arch11-consent-tenant-enforce` 2/2 standalone (`.tmp/rv/t1-a-tests4.log` + single-file rerun), `oauth-consent-tenantless-rekey` 3/3 probe plus passes in 3 full runs (`.tmp/rv/t1-a-tests5.log` holds the single 503). Flake accepted per the rule above (same-commit successes).
   - [x] Opus read-only review r1 `.h2a/reviews/t1-oauth-consent-optional-tid-opus.md` on bc68edbbf: REQUEST_CHANGES (2 MAJOR, 5 MINOR, 3 NIT); findings 1, 2, 3, 5, 8, 9, 10 fixed, 4 partly fixed, 4/6/7 in the Feedback Loop.
   - [ ] Argon review r2 (resume lane: Opus quota out); s-archi review before the train merges.
