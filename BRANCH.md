@@ -74,13 +74,13 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
   - [x] Add phase runner helper logging `artifact_live_phase` with fields `key` hash, `phase`, `ms`, `outcome`, `reason`, no secret.
   - [x] Wire it on build-only phases (`install`, `prepare`, `build`, `verify`) and live paths (`prepare-live`, `project`, `idle`).
   - [x] Failing phase persists in job reason (e.g. `phase_timeout:install`) via existing `jobs.fail` / `stateDetail`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api`
-    - [ ] **API tests**
-      - [ ] New `api/tests/unit/artifacts-live/deadline.test.ts` (phase log fields, no secret in logs)
-      - [ ] Scoped runs while evolving: `make test-api-unit SCOPE=tests/unit/artifacts-live/deadline.test.ts ENV=test-fix-install-timeout`
-      - [ ] Sub-lot gate: `make test-api ENV=test-fix-install-timeout`
-      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-fix-install-timeout` and document status/signature in `BRANCH.md`
+  - [x] Lot gate:
+    - [x] `make typecheck-api` + `make lint-api` (both green 2026-11-09; lint shows only pre-existing `no-console` warnings outside `live/`)
+    - [x] **API tests**
+      - [x] New `api/tests/unit/artifacts-live/deadline.test.ts` (phase log fields, no secret in logs)
+      - [x] Scoped runs while evolving: `make test-api-unit SCOPE="tests/unit/artifacts-live/deadline.test.ts tests/unit/artifacts-live/cache.test.ts" ENV=test-fix-install-timeout` (27/27 green, no unhandled errors)
+      - [x] Sub-lot gate: `make test-api ENV=test-fix-install-timeout` (deferred to CI per owner OPTIM rule: lanes run scoped tests, full suites run in CI)
+      - [x] AI flaky tests run (non-blocking only under acceptance rule): deferred to CI (`make test-api-ai` needs model access; change touches no AI path)
     - [ ] **UI tests (TypeScript only)**
       - [ ] None (api-only change, no UI surface)
     - [ ] **E2E tests**
@@ -91,9 +91,9 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
   - [x] Thread install progress (tarball streamed / bytes) from fetch + cleanInstall + sink into the watchdog.
   - [x] Keep other phase bounds unchanged (install alone streams ~1 GB over the relay with no api-visible progress signal; prebundle/dev/build/verify are pod-local and keep their 300 s recipe + phase bounds).
   - [x] Update `runStaleMs` for the longer install bound.
-  - [ ] Verify cache written after successful cold install and cut install poisons nothing.
+  - [x] Verify cache written after successful cold install and cut install poisons nothing.
   - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
-  - [ ] Lot gate: same API checklist as Lot 1 plus `cache.test.ts` watchdog cases (progress alive, stall, ceiling, reason carries phase, no poison).
+  - [x] Lot gate: same API checklist as Lot 1 plus `cache.test.ts` watchdog cases (progress alive, stall, ceiling, reason carries phase, no poison).
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint

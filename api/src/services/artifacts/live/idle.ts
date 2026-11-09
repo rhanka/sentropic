@@ -41,8 +41,10 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
         baselineSeq: state.progress.publicationBaselineSeq, initial: state.progress.initialUnpublishedBranchEligible };
     });
     await ports.worker.clean(runtime);
-    const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, runtime));
-    await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
+    // The phase closures capture the fenced post-transition runtime, not the pre-guard union.
+    const installing = runtime;
+    const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, installing));
+    await runPhase(key, 'prepare', () => ports.worker.prepare(installing, source, cache));
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
     await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING') conflict('stale_fence');
