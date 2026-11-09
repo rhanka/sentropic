@@ -47,10 +47,12 @@ export interface ReconcileStatusClient {
     Promise<ReconcileBuilderStatus | undefined>;
 }
 
-/** Closed per-item outcome of one reconciled job. */
+/** Closed per-item outcome of one reconciled job. `store-error` is a per-item host-store outage:
+ * the item is skipped and the sweep continues; only invalid options and the initial pending
+ * listing throw. */
 export const RECONCILE_OUTCOMES = ['job-build-failed', 'job-published', 'still-pending', 'already-terminal',
   'unknown-job', 'status-unavailable', 'status-invalid', 'no-release', 'receipt-conflict', 'job-not-found',
-  'job-conflict', 'binding-not-pending', 'binding-conflict'] as const;
+  'binding-not-pending', 'binding-conflict', 'store-error'] as const;
 export type ReconcileOutcome = typeof RECONCILE_OUTCOMES[number];
 
 export interface ReconcileItemResult {
@@ -60,7 +62,9 @@ export interface ReconcileItemResult {
   readonly outcome: ReconcileOutcome;
   /** Whether the job row moved to its terminal state. */
   readonly job: 'updated' | 'unchanged';
-  /** Whether the binding moved from `build_pending` to `build_failed`. Untouched on success. */
+  /** Whether the binding moved from `build_pending` to `build_failed`. Unchanged by reconcile on
+   * the published path: the host publish transaction owns that transition, and a still-pending
+   * binding is reported as `binding-not-pending`. */
   readonly binding: 'updated' | 'unchanged';
 }
 
@@ -108,7 +112,11 @@ const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const text = (value: unknown, max: number): value is string =>
   typeof value === 'string' && value.length >= 1 && value.length <= max;
 
-/** Closed builder status shape; anything else is `status-invalid` and writes nothing. */
+/** Bounded builder status shape (length-bounded strings over the exact contract state set); anything
+ * else is `status-invalid` and writes nothing. Extra keys are ignored: the builder is an
+ * authenticated peer, so unknown fields stay data, never a refusal. A `published` status may carry
+ * `code`/`reason` (ignored); a `build_failed` status without `code` gets the `builder_unavailable`
+ * default at the call site. */
 export function parseReconcileBuilderStatus(raw: unknown, jobId: string): ReconcileBuilderStatus | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const body = raw as Record<string, unknown>;
@@ -125,18 +133,24 @@ export function parseReconcileBuilderStatus(raw: unknown, jobId: string): Reconc
 }
 
 function optionsOf(options: ReconcileOptions): Required<Pick<ReconcileOptions, 'olderThanMs' | 'limit' | 'concurrency'>> &
-  Pick<ReconcileOptions, 'systemActorId'> {
-  const olderThanMs = options.olderThanMs ?? RECONCILE_DEFAULTS.olderThanMs;
-  const limit = options.limit ?? RECONCILE_DEFAULTS.limit;
-  const concurrency = options.concurrency ?? RECONCILE_DEFAULTS.concurrency;
-  if (!options || !options.jobs || !options.status || !options.bindings) throw new ReconcileError('reconcile_invalid_options', 'jobs, status and bindings are required');
+  { systemActorId: string } {
+  if (!options || typeof options !== 'object') throw new ReconcileError('reconcile_invalid_options', 'options are required');
+  const ports = options as ReconcileOptions;
+  if (!ports.jobs || !ports.status || !ports.bindings) {
+    throw new ReconcileError('reconcile_invalid_options', 'jobs, status and bindings are required');
+  }
+  const olderThanMs = ports.olderThanMs ?? RECONCILE_DEFAULTS.olderThanMs;
+  const limit = ports.limit ?? RECONCILE_DEFAULTS.limit;
+  const concurrency = ports.concurrency ?? RECONCILE_DEFAULTS.concurrency;
   if (!Number.isFinite(olderThanMs) || olderThanMs < 0) throw new ReconcileError('reconcile_invalid_options', 'olderThanMs');
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT) throw new ReconcileError('reconcile_invalid_options', 'limit');
   if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > MAX_CONCURRENCY) {
     throw new ReconcileError('reconcile_invalid_options', 'concurrency');
   }
-  const systemActorId = options.systemActorId ?? 'system:reconcile-pending-builds';
-  if (!systemActorId.trim()) throw new ReconcileError('reconcile_invalid_options', 'systemActorId');
+  const systemActorId = ports.systemActorId ?? 'system:reconcile-pending-builds';
+  if (typeof systemActorId !== 'string' || !systemActorId.trim()) {
+    throw new ReconcileError('reconcile_invalid_options', 'systemActorId');
+  }
   return { olderThanMs, limit, concurrency, systemActorId };
 }
 
@@ -145,16 +159,20 @@ const unchanged = (key: { scopeId: string; artifactId: string; jobId: string }, 
 
 /** Binding `build_pending` to `build_failed` under the version CAS (`server/git-bindings.ts:51`,
  * action `publish`). The deterministic idempotency key replays a crashed reconcile instead of
- * appending a second event. Any concurrent move answers `binding-conflict` without touching the job. */
-async function failBinding(options: Pick<ReconcileOptions, 'bindings' | 'systemActorId'> & { now: () => number },
+ * appending a second event. The `live` key is never written (`validateGitBindingWrite` admits only
+ * an absent `live`). A concurrent move answers `binding-conflict`; the caller still marks the job
+ * failed per builder truth on that branch. */
+async function failBinding(options: Pick<ReconcileOptions, 'bindings'> & { systemActorId: string },
   key: { scopeId: string; artifactId: string; jobId: string }, nowIso: string): Promise<ReconcileItemResult['binding'] | 'binding-conflict'> {
   const before: GitBinding | undefined = await options.bindings.get(key.scopeId, key.artifactId);
   if (!before || before.state !== 'build_pending' || before.pendingJobId !== key.jobId) return 'unchanged';
+  const { live: _dropped, ...rest } = before;
+  void _dropped;
   const idempotencyKey = `reconcile-build-failed:${key.scopeId}:${key.artifactId}:${key.jobId}`;
   try {
     await options.bindings.write({
-      binding: { ...before, state: 'build_failed', version: before.version + 1, updatedAt: nowIso },
-      expectedVersion: before.version, actorId: options.systemActorId ?? 'system:reconcile-pending-builds', idempotencyKey,
+      binding: { ...rest, state: 'build_failed', version: before.version + 1, updatedAt: nowIso },
+      expectedVersion: before.version, actorId: options.systemActorId, idempotencyKey,
       commandHash: orderedDigest({ operation: 'reconcile_build_failed', ...key }),
       event: { action: 'publish', beforeSha: before.releaseCommitSha ?? undefined, afterSha: before.pendingCommitSha ?? undefined,
         invocationId: `reconcile:${key.jobId}` },
@@ -162,7 +180,7 @@ async function failBinding(options: Pick<ReconcileOptions, 'bindings' | 'systemA
     return 'updated';
   } catch (error) {
     // A replayed receipt answers inside `write`; a concurrent move fails the version CAS and is
-    // reported without touching the job outcome. The next run converges on the fresh state.
+    // reported so the job outcome stays truthful. The next run converges on the fresh state.
     if (error instanceof ArtifactOperationError &&
       (error.kind === 'pointer_conflict' || error.kind === 'git_binding_conflict' || error.kind === 'command_conflict')) {
       return 'binding-conflict';
@@ -171,74 +189,94 @@ async function failBinding(options: Pick<ReconcileOptions, 'bindings' | 'systemA
   }
 }
 
-async function reconcileOne(options: ReconcileOptions & { now: () => number },
+async function reconcileOne(options: ReconcileOptions & { now: () => number; systemActorId: string },
   key: { scopeId: string; artifactId: string; jobId: string }): Promise<ReconcileItemResult> {
-  const stored = await options.jobs.read(key);
-  if (!stored) return unchanged(key, 'job-not-found');
-  if (stored.state !== 'build_pending' && stored.state !== 'building') return unchanged(key, 'already-terminal');
-  let answer: ReconcileBuilderStatus | undefined;
+  const nowMs = options.now();
+  if (!Number.isFinite(nowMs)) throw new ReconcileError('reconcile_invalid_options', 'now');
+  let binding: ReconcileItemResult['binding'] = 'unchanged';
   try {
-    answer = await options.status.status(key);
-  } catch { return unchanged(key, 'status-unavailable'); }
-  if (answer === undefined) return unchanged(key, 'unknown-job');
-  const parsed = parseReconcileBuilderStatus(answer, key.jobId);
-  if (!parsed) return unchanged(key, 'status-invalid');
-  if (parsed.state === 'build_pending') return unchanged(key, 'still-pending');
-  if (parsed.state === 'build_failed') {
-    // The binding leads: a crash between the two writes still converges, because a rerun finds the
-    // job pending and the binding already failed, then finishes the job move.
-    const binding = await failBinding({ bindings: options.bindings, systemActorId: options.systemActorId, now: options.now },
-      key, new Date(options.now()).toISOString());
-    if (binding === 'binding-conflict') {
+    const stored = await options.jobs.read(key);
+    if (!stored) return unchanged(key, 'job-not-found');
+    if (stored.state !== 'build_pending' && stored.state !== 'building') return unchanged(key, 'already-terminal');
+    let answer: ReconcileBuilderStatus | undefined;
+    try {
+      answer = await options.status.status(key);
+    } catch { return unchanged(key, 'status-unavailable'); }
+    if (answer === undefined) return unchanged(key, 'unknown-job');
+    const parsed = parseReconcileBuilderStatus(answer, key.jobId);
+    if (!parsed) return unchanged(key, 'status-invalid');
+    if (parsed.state === 'build_pending') return unchanged(key, 'still-pending');
+    if (parsed.state === 'build_failed') {
+      // The binding leads: a crash between the two writes still converges, because a rerun finds the
+      // job pending and the binding already failed, then finishes the job move.
+      const failed = await failBinding({ bindings: options.bindings, systemActorId: options.systemActorId },
+        key, new Date(nowMs).toISOString());
+      if (failed === 'binding-conflict') {
+        const moved = await options.jobs.markFailed({ ...key, code: parsed.code ?? DEFAULT_CODE,
+          ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}) });
+        return { ...key, outcome: 'binding-conflict', job: moved === 'updated' ? 'updated' : 'unchanged', binding: 'unchanged' };
+      }
+      binding = failed;
       const moved = await options.jobs.markFailed({ ...key, code: parsed.code ?? DEFAULT_CODE,
         ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}) });
-      return { ...key, outcome: 'binding-conflict', job: moved === 'updated' ? 'updated' : 'unchanged', binding: 'unchanged' };
+      if (moved === 'not-found') return { ...key, outcome: 'job-not-found', job: 'unchanged', binding };
+      if (moved === 'already-terminal') return { ...key, outcome: 'already-terminal', job: 'unchanged', binding };
+      return { ...key, outcome: 'job-build-failed', job: 'updated', binding };
     }
-    const moved = await options.jobs.markFailed({ ...key, code: parsed.code ?? DEFAULT_CODE,
-      ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}) });
-    if (moved === 'not-found') return { ...key, outcome: 'job-not-found', job: 'unchanged', binding };
-    if (moved === 'already-terminal') return { ...key, outcome: 'already-terminal', job: 'unchanged', binding };
-    return { ...key, outcome: 'job-build-failed', job: 'updated', binding };
+    // Builder `published`: the releaseId comes from the stored handoff receipt first, then from the
+    // builder status; without either the job stays pending and no release is invented.
+    let releaseId = parsed.releaseId;
+    if (options.receipts) {
+      const receipt: HandoffReceipt | undefined = await options.receipts.find(jobKey(key));
+      if (receipt) {
+        if (!text(receipt.releaseId, RELEASE_MAX)) return unchanged(key, 'receipt-conflict');
+        if (releaseId !== undefined && receipt.releaseId !== releaseId) return unchanged(key, 'receipt-conflict');
+        releaseId = receipt.releaseId;
+      }
+    }
+    if (releaseId === undefined) return unchanged(key, 'no-release');
+    const moved = await options.jobs.markPublished({ ...key, releaseId });
+    if (moved === 'not-found') return unchanged(key, 'job-not-found');
+    if (moved === 'already-terminal') return unchanged(key, 'already-terminal');
+    // The binding is read, never written, on this path: a still-pending binding for this job is
+    // reported so the host does not lose it now that the job row is terminal.
+    const current = await options.bindings.get(key.scopeId, key.artifactId);
+    if (current && current.state === 'build_pending' && current.pendingJobId === key.jobId) {
+      return { ...key, outcome: 'binding-not-pending', job: 'updated', binding: 'unchanged' };
+    }
+    return { ...key, outcome: 'job-published', job: 'updated', binding: 'unchanged' };
+  } catch {
+    return { ...key, outcome: 'store-error', job: 'unchanged', binding };
   }
-  // Builder `published`: the releaseId comes from the stored handoff receipt first, then from the
-  // builder status; without either the job stays pending and no release is invented.
-  let releaseId = parsed.releaseId;
-  if (options.receipts) {
-    const receipt: HandoffReceipt | undefined = await options.receipts.find(jobKey(key));
-    if (receipt && releaseId !== undefined && receipt.releaseId !== releaseId) return unchanged(key, 'receipt-conflict');
-    releaseId = receipt?.releaseId ?? releaseId;
-  }
-  if (releaseId === undefined) return unchanged(key, 'no-release');
-  const moved = await options.jobs.markPublished({ ...key, releaseId });
-  if (moved === 'not-found') return unchanged(key, 'job-not-found');
-  if (moved === 'already-terminal') return unchanged(key, 'already-terminal');
-  return { ...key, outcome: 'job-published', job: 'updated', binding: 'unchanged' };
 }
 
 /** On-demand reconcile of one pending job for the host read paths (`live_status`, `git_publish`,
  * `artifacts_get`). No age check; terminal rows and unknown builders write nothing. */
 export async function reconcilePendingBuild(options: ReconcileOptions, key: { scopeId: string; artifactId: string; jobId: string }):
   Promise<ReconcileItemResult> {
-  optionsOf(options);
+  const { systemActorId } = optionsOf(options);
   if (!key || !ID.test(key.scopeId) || !ID.test(key.artifactId) || !ID.test(key.jobId)) {
     throw new ReconcileError('reconcile_invalid_options', 'scopeId, artifactId and jobId are required');
   }
-  return reconcileOne({ ...options, now: options.now ?? Date.now }, key);
+  return reconcileOne({ ...options, now: options.now ?? Date.now, systemActorId }, key);
 }
 
-/** Sweep of the host pending jobs older than the threshold. One builder failure never aborts the
- * sweep; every item reports its closed outcome. Rows are only moved to terminal states, never deleted. */
+/** Sweep of the host pending jobs older than the threshold. One per-item failure never aborts the
+ * sweep: store and builder outages surface per item as `store-error`/`status-unavailable`. Only
+ * invalid options and the initial pending listing throw. Rows are only moved to terminal states,
+ * never deleted. */
 export async function reconcilePendingBuilds(options: ReconcileOptions): Promise<ReconcileReport> {
-  const { olderThanMs, limit, concurrency } = optionsOf(options);
+  const { olderThanMs, limit, concurrency, systemActorId } = optionsOf(options);
   const now = options.now ?? Date.now;
-  const pending = await options.jobs.listPending({ nowMs: now(), olderThanMs, limit });
+  const pending = (await options.jobs.listPending({ nowMs: now(), olderThanMs, limit })).slice(0, limit);
   const items: ReconcileItemResult[] = new Array(pending.length);
   let cursor = 0;
   const workers = Array.from({ length: Math.min(concurrency, Math.max(pending.length, 1)) }, async () => {
     for (;;) {
       const index = cursor++; if (index >= pending.length) return;
       const job = pending[index];
-      items[index] = await reconcileOne({ ...options, now }, { scopeId: job.scopeId, artifactId: job.artifactId, jobId: job.jobId });
+      items[index] = await reconcileOne({ ...options, now, systemActorId },
+        { scopeId: job.scopeId, artifactId: job.artifactId, jobId: job.jobId });
     }
   });
   await Promise.all(workers);
