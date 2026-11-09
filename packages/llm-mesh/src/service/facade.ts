@@ -27,6 +27,25 @@ import {
   InMemoryRoutePlanner, type InMemoryRoutePlannerOptions,
 } from '../route-planner.js';
 import type { RoutePlanner } from '../routing-contracts.js';
+import type {
+  CustodianRefreshPolicy,
+  CustodianRefreshReport,
+} from './custodian-refresh.js';
+import type { ReauthAlertSink } from './reauth-alert.js';
+import type { LocalAccountTransportServiceOptions } from './local-account-transport-service.js';
+
+export type {
+  CustodianAccountAction,
+  CustodianAccountReport,
+  CustodianRefreshPolicy,
+  CustodianRefreshReport,
+} from './custodian-refresh.js';
+export type {
+  ReauthAlertEvent,
+  ReauthAlertReason,
+  ReauthAlertSink,
+} from './reauth-alert.js';
+export type { LocalAccountTransportServiceOptions } from './local-account-transport-service.js';
 
 export interface ProviderRequest {
   modelId: string;
@@ -78,12 +97,23 @@ export interface ConfigResolver {
   resolveConfig(configRef: string): Promise<Record<string, unknown>>;
 }
 
+export interface CustodianOptions {
+  /** Injected clock (ms); defaults to Date.now. Tests pin it. */
+  now?: () => number;
+  /** Reauth alert sink (D4: conductor h2a + owner re-auth); never receives secrets. */
+  reauthAlert?: ReauthAlertSink;
+  /** Proactive refresh skew policy; defaults to 25 % TTL / 10 min floor. */
+  refreshPolicy?: CustodianRefreshPolicy;
+}
+
 export interface FacadeOptions {
   configResolver: ConfigResolver;
   keyring?: KeyringAdapter;
   mode: 'cli' | 'portal';
   /** Explicit owner used only to bind pre-ownerScope local keyring records. */
   legacyAccountOwnerScopeRef?: string;
+  /** Lot 1 custodian loop options (clock, reauth sink, skew policy). */
+  custodian?: CustodianOptions;
 }
 
 export interface AccountOwnerInput {
