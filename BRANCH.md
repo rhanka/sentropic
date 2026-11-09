@@ -38,7 +38,10 @@
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- [ ] `attention` (s-archi ratification): tenant-optional set = immo-mcp, radar-immobilier, radar-immobilier-preprod, design-system; tenant-bound = sentropic-mcp, h2a-cli and every other or future client (`require_tenant` default true). Opus r1 finding 2.
 - [ ] `attention` (s-archi ruling): the tenant-less CM authority row carries the client's registry tenant (`sentropic`); the artifacts host excludes the tenant-less consent id explicitly. Opus r1 finding 4.
+- [ ] `deferred` (follow-up wagon, `deploy/**` forbidden here): `idp-identity-sync/import-preprod.sql` compares `tenant_id` with `=` (NULL-unsafe); the client sync and `oauth-register-client.ts` do not carry `require_tenant`. Opus r1 finding 6.
+- [ ] `attention` (T3 runbook): auth-idp runs no migration and its client read lists `require_tenant`; control 0022 must be applied by the api before auth-idp serves. Opus r1 finding 7.
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable so far.
@@ -52,8 +55,9 @@
   - [x] `api/tests/api/auth/oauth-consent-optional-tenant.test.ts`: non-member + tenant-optional client gets a tenant-less offline consent, a refresh token and refreshes without `tid`; tenant-bound client refuses a non-member (no consent row, no CM authority); member tenant-keyed grant kept apart from a later tenant-less grant; consent withdrawal and client tightening revoke the tenant-less refresh family.
   - [x] `api/tests/api/tenancy/arch11-tenant-data.test.ts`: an insert without tenant is tenant-less (no default) and unique per (user, client).
 - [x] **Lot 2 — Schema and control migration**
-  - [x] `oauth_clients.require_tenant` (NOT NULL DEFAULT true; immo-mcp set false); `oauth_consents.tenant_id` nullable, no default, unique key NULLS NOT DISTINCT.
-  - [x] Refresh-family triggers: consent invalidation matches the tenant with IS NOT DISTINCT FROM; client tightening of `require_tenant` revokes the client's families.
+  - [x] `oauth_clients.require_tenant` (NOT NULL DEFAULT true; the tenant-optional set above set false); `oauth_consents.tenant_id` nullable, no default, unique key NULLS NOT DISTINCT.
+  - [x] A1-REKEY: a non-member tenant-keyed grant of a tenant-optional client with live CM authority moves to the tenant-less key (offline evidence, grant time and NULL-tenant families kept); the tenant-keyed CM authority is revoked.
+  - [x] Refresh-family triggers: consent invalidation matches the tenant with IS NOT DISTINCT FROM; making a client tenant-bound or re-homing it revokes the client's families.
 - [x] **Lot 3 — Consent store**
   - [x] Tenant-less key for a tenant-optional client: app row tenant NULL, CM authority row with its own consent id under the client's active registry tenant; tenant-bound clients keep the no-op.
   - [x] `revokeCmOAuthConsent` withdraws the tenant-less key when no tenant is given; the artifacts host never accepts the tenant-less CM consent id.
