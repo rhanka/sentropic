@@ -30,7 +30,10 @@ const AGENT_TAIL_BYTES = 4096;
 const agentScrub = (text) => String(text)
   .replace(/(\/\/)[^/\s@]+@/g, '$1[redacted]')
   .replace(/(_authToken|_auth)\s*=\s*[^\s]+/gi, '$1=[redacted]')
-  .replace(/(Authorization\s*:\s*)[^\r\n]+/gi, '$1[redacted]');
+  .replace(/(Authorization\s*:\s*)[^\r\n]+/gi, '$1[redacted]')
+  .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+\/=-]{8,}/gi, '$1 [redacted]')
+  .replace(/\b(npm_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b/g, '[redacted]')
+  .replace(/\b([A-Za-z0-9_]*(?:token|secret|password|passwd|api[_-]?key)[A-Za-z0-9_]*)(\s*[:=]\s*)[^\s'",;]+/gi, '$1$2[redacted]');
 
 export class AgentError extends Error {
   constructor(code, reason) { super(reason || code); this.code = code; this.reason = reason || code; }
@@ -143,25 +146,40 @@ export function createAgent(options) {
     }
     return child;
   };
-  /** Runs a recipe to exit, returning its bounded scrubbed output tail with the exit code and signal. The tail is
-   * read at the exit event: output flushed after it is not covered, which is fine for a diagnostic tail. */
+  /** Runs a recipe to exit, returning its bounded scrubbed output tail with the exit code and signal. After the exit
+   * event the tail waits for both pipes to end (bounded grace), since the last stderr chunk often names the cause.
+   * A recipe cut by its own timer reports the signal TIMEOUT, so a timeout is never classified as a memory kill. */
   ctx.runToExit = (recipe, cwd, env) => new Promise((resolve) => {
-    const done = (exitCode, signal, output) => resolve({ exitCode, signal, output });
+    let settled = false;
+    const done = (exitCode, signal, output) => { if (!settled) { settled = true; resolve({ exitCode, signal, output }); } };
     let child;
     try { child = ctx.spawnRecipe(recipe, cwd, env); } catch { done(null, null, ''); return; }
-    const timer = setTimeout(() => { ctx.terminateAll(); }, recipe.timeoutMs);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ctx.terminateAll(); }, recipe.timeoutMs);
     if (timer.unref) timer.unref();
     const tail = () => {
       try {
         const raw = child.recipeTail ? child.recipeTail().toString('utf8') : '';
-        return Buffer.from(agentScrub(raw), 'utf8').toString('base64');
+        return Buffer.from(agentScrub(raw), 'utf8').subarray(-AGENT_TAIL_BYTES).toString('base64');
       } catch { return ''; }
     };
     child.once('error', () => { clearTimeout(timer); done(null, null, tail()); });
     child.once('exit', (code, signal) => {
       clearTimeout(timer);
       if (ctx.state.child === child) ctx.state.child = null;
-      done(Number.isSafeInteger(code) ? code : null, typeof signal === 'string' ? signal : null, tail());
+      const finish = () => done(Number.isSafeInteger(code) ? code : null,
+        timedOut ? 'TIMEOUT' : (typeof signal === 'string' ? signal : null), tail());
+      const open = [child.stdout, child.stderr].filter((s) => s && typeof s.once === 'function'
+        && !s.readableEnded && !s.destroyed);
+      if (open.length === 0) { finish(); return; }
+      let left = open.length;
+      const grace = setTimeout(finish, 1000);
+      if (grace.unref) grace.unref();
+      for (const stream of open) {
+        let seen = false;
+        const ended = () => { if (seen) return; seen = true; left -= 1; if (left === 0) { clearTimeout(grace); finish(); } };
+        stream.once('end', ended); stream.once('close', ended);
+      }
     });
   });
   for (const section of AGENT_SECTIONS) section(ctx);

@@ -61,7 +61,7 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
     await pod.send('overlay', { ...await pod.transfer('overlay', []), deletes: [], revision: 'r1', generation: 1, baseHeadSha: SHA, treeSha: SHA });
     await expect(pod.send('dev', { recipe: 'live' })).rejects.toThrow('failed:prebundle_missing');
     expect(calls).toEqual([]);
-    expect(await pod.send('prebundle', { recipe: 'prebundle' })).toEqual({ prebundled: true });
+    expect(await pod.send('prebundle', { recipe: 'prebundle' })).toEqual({ prebundled: true, exitCode: 0, signal: null, output: '' });
     expect(await readFile(pod.path('tmp/artifact-vite-prebundle.mjs'), 'utf8')).toBe(LIVE_PREBUNDLE_SCRIPT);
     expect(await pod.send('dev', { recipe: 'live' }, fence(3))).toEqual({ revision: 'r1', routeEpoch: 3 });
     expect(pod.agent.isLive()).toBe(true);
