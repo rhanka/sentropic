@@ -3216,6 +3216,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
 prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+	@mkdir -p data/backup e2e/.auth e2e/test-results
 	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
@@ -3294,7 +3295,7 @@ latest-prod-backup: ## Print the latest production dump basename for the restore
 	@find data/backup -maxdepth 1 -name 'prod-*.dump' -printf '%T@ %f\n' | sort -nr | head -n 1 | cut -d' ' -f2-
 ci-test-env:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
-	@mkdir -p .tmp/live-provider && chmod 777 .tmp/live-provider
+	@mkdir -p .tmp/live-provider e2e/.auth e2e/test-results && chmod 777 .tmp/live-provider
 
 CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,data) ORDER BY id)::text,'[]')) FROM initiatives
 CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
