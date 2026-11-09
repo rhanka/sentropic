@@ -37,6 +37,7 @@
 - [ ] Rationale: owner order 08/11 — bind-mounted outputs are root-owned in 31 worktrees, needs sudo cleanup.
 - [ ] Impact: dev/test compose services run as `UID:GID`; postgres and named-volume-only services unchanged.
 - [ ] Rollback: revert the commit.
+- [x] `acknowledge` scoped smoke `tests/smoke/api-health.test.ts` on `up-api-test` stack: 10 failed / 1 passed (`identity_contract_unavailable` 500s on authenticated endpoints); A/B rerun as root (`UID=0 GID=0`) fails identically — not caused by host-user mapping; no CI job runs this suite (only `test-api-smoke-restore` with prod backup). No fix attempted, no assertion loosened.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -80,11 +81,11 @@
 - [x] Makefile: export `UID`/`GID` from `id -u`/`id -g`; replace any `sudo chown 1000:1000` with `chown $(id -u):$(id -g)`.
 - [ ] Lot gate:
 - [ ] `make scope-check` advisory before commit.
-- [ ] **Lot 2 — Validation**
-- [ ] `make typecheck` via docker-slot on `ENV=test-compose-host-user`.
-- [ ] Scoped `make test-api SCOPE=... ENV=test-compose-host-user` (single focused scope).
-- [ ] `make up-api-test ENV=test-compose-host-user` (project equivalent) then create file in bind mount and check `stat -c %U` equals host user.
-- [ ] `make down ENV=test-compose-host-user` after validation.
+- [x] **Lot 2 — Validation**
+- [x] `make typecheck` via docker-slot on `ENV=test-compose-host-user` (PASS exit 0, svelte-check 0 errors, 2026-11-08).
+- [x] Scoped `make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-compose-host-user` (22/22 PASS as UID 1000).
+- [x] `make up-api-test ENV=test-compose-host-user` healthy, api runs as `1000:1000`, fresh files under `api/` and `data/` owned by `antoinefa:antoinefa`.
+- [x] `make down ENV=test-compose-host-user` after validation (no leftover containers).
 - [ ] **Lot N-1 — Docs consolidation**
 - [ ] No spec file touched; nothing to consolidate.
 - [ ] **Lot N — Final validation**
