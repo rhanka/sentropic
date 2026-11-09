@@ -91,11 +91,11 @@ Add a minimal generic static-key Gemini client to @sentropic/llm-mesh so immo ca
   - [x] Regenerate lockfiles through make (root `package-lock.json` llm-mesh version entry; unrelated `ui/package-lock.json` churn reverted).
   - [x] Verify immo `refresh-mesh.ts` imports (`DEFAULT_ROUTE_POLICY`, `InMemoryRoutePolicyProfiles`, `OpenAIAdapter`, `CloudCodeRuntimeClient`, `CodexRuntimeClient`, `createLlmMeshFacade`, facade types) still resolve: drop-in (report states exact immo wiring).
   - [ ] Lot gate: `make scope-check ENV=test-llm-mesh-gemini-min`.
-- [ ] **Lot 3 — Final validation**
-  - [ ] Typecheck & Lint (cf Lot 1).
-  - [ ] Scoped package tests: `make test-llm-mesh SCOPE=tests/transport/gemini-api-key-runtime-client.test.ts ENV=test-llm-mesh-gemini-min`.
-  - [ ] No AI flaky tests introduced (stubbed fetch only).
-  - [ ] Bumped `packages/llm-mesh/package.json` (enforced by CI `enforce-package-bump`).
+- [x] **Lot 3 — Final validation**
+  - [x] Typecheck & Lint (cf Lot 1): both green on the final head via `docker-slot.sh`.
+  - [x] Scoped package tests: `make test-llm-mesh SCOPE=tests/transport/gemini-api-key-runtime-client.test.ts ENV=test-llm-mesh-gemini-min` 8/8 green; `SCOPE=tests/decision-public-surface.test.ts` 4/4 green.
+  - [x] No AI flaky tests introduced (stubbed fetch only).
+  - [x] Bumped `packages/llm-mesh/package.json` 0.33.0 -> 0.33.1 (enforced by CI `enforce-package-bump`).
   - [ ] Final gate step 1: create PR with `BRANCH.md` text as body.
   - [ ] Final gate step 2: run/verify branch CI on that PR, no rerun/skip; AI e2e flake goes to `BRANCH.md` note + fresh head.
   - [ ] Final gate step 3: DO NOT merge (conductor merges); no external review (conductor runs it).
