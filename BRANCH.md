@@ -1,41 +1,48 @@
-# Feature: Fix live provider select ENOBUFS
+# Feature: fix forge-tar unstable_tree on GitHub archives with symlinks
 
 ## Objective
-- [ ] Fix `select` ENOBUFS by bounding every `gh api` call with `--jq` projection, `per_page` and explicit `maxBuffer`, with explicit route+size errors.
+Unblock the preprod P1 build (job 31bc4ffc) failing in `readForgeTarball` with a reason-less `LiveError('unstable_tree')` on a legitimate GitHub tarball, and give every `unstable()` a named reason so the host GET surface exposes `build_failed` with `code`/`reason`.
 
 ## Scope / Guardrails
-- [ ] Worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
-- [ ] ENV `test-live-provider-enobufs` last in every `make` command; ports API_PORT=8895 UI_PORT=5295 MAILDEV_UI_PORT=1195.
-- [ ] Docker only via `.tmp/packets/docker-slot.sh make ...`; never ENV=dev; never `make clean-all`; no Python.
-- [ ] Commits via `make commit MSG="..."` only; no attribution trailer; max 150 lines per commit.
-- [ ] Generic fix only; no dual path; no weakening of `schedule-health` or any gate.
-- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Scope limited to the forge tarball parser, its lease caller, and their unit tests.
+- One migration max in `api/drizzle/*.sql` (none expected).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/fix-forge-tar` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test-fix-forge-tar`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=test-fix-forge-tar` must be passed as the last argument.
+- All new text in English.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `scripts/ci/live-provider-receipt.mjs`
-  - `scripts/ci/live-provider-receipt.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `api/src/services/artifacts/live/forge-tar.ts`
+  - `api/src/services/artifacts/live/forge-lease.ts`
+  - `api/tests/unit/artifacts-live/forge-lease.test.ts`
+  - `api/tests/unit/artifacts-live/forge-lease-source.test.ts`
+  - `api/tests/unit/artifacts-live/forge-fixture.ts`
+  - `api/tests/unit/artifacts-live/forge-tar-symlink.test.ts`
   - `BRANCH.md`
+  - `.h2a/reviews/fix-forge-tar-argon.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `api/drizzle/*.sql`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
-- [x] BR01-EX1: touch `.github/workflows/ci.yml` (`global` paths-filter only): add `scripts/ci/live-provider-receipt.mjs` and `scripts/ci/live-provider-receipt.test.mjs`. Rationale: any `scripts/**` change classifies as `root-lock-toolchain`, whose `consumer-contracts-verify` gate requires the six integration lanes, but those lanes only run when `api`, `ui` or `global` matches; without this, a `scripts/ci`-only PR can never go green (run 42548638007: `consumer-contracts` + `ci-gate` failure). Impact: strictly more CI for these two paths (full integration), same family as `image-receipt`/`compatibility-classifier` already listed; no gate, threshold or assertion loosened. Rollback: remove the two lines; dispatch returns to `manifest_guard`-only.
-- [x] ARGON-1: PR #970 Argon review REQUEST_CHANGES (BLOCKER `pages()` double `[key]` fails `select` 100%; MAJOR missing `select`/`health` CLI e2e against stubbed `gh`; MINOR hardcoded `100` vs `GH_PER_PAGE` + checkbox coherence). Addressed in Lot 3.
-- [x] BR01-EX1b: run 42552089131 `validate-publishable-manifests` pins the exact `global` scripts list (`publishable-ci-wiring.test.mjs:144`); the two deliberate BR01-EX1 additions are added to the pin. The pin stays an exact match (any other unlisted addition still fails): evolution of the intended contract, not a loosening.
+- [x] `attention`: preprod P1 job 31bc4ffc (artifact bbe43e9c, rhanka/radar-immobilier@93116b8) failed in api job ledger as `failed`/`unstable_tree` with no reason; runtime DORMANT with stateDetail unstable_tree; host job still `building` (owner-urgent, blocks preprod variant P1).
+- [x] `attention`: PR #975 `pull_request` open event created no CI run (same anomaly as #873). Fallback: `workflow_dispatch` run 42612023738 on head cfcfee831.
+- [x] `attention`: dispatch run 42612023738 `test-e2e (5)` failed on AI spec `tests/00-ai-generation.spec.ts:181` (`TimeoutError: page.waitForResponse POST /api/v1/initiatives/generate`, console `Impossible de créer un brouillon de dossier`, 37 passed / 1 failed / 1 skipped). Provider-dependent AI generation flake, unrelated to the forge parser (no shared code path). Recorded per AI-flaky rule; fresh head pushed for re-proof.
+- [x] `attention`: Argon review unavailable (429 quota, resets in ~108h), vibe fallback unavailable (402 budget exhausted). Review done by Muse Wonder max: APPROVE, no required fixes (`.h2a/reviews/fix-forge-tar-muse.md`).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -47,53 +54,61 @@
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams need independent CI or long-running validation)
-- Rationale: single small CI fix, one branch, one CI.
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single focused parser fix with scoped unit tests, one lane, one CI.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI change in this branch: no UAT surface.
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/fix-forge-tar`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/fix-forge-tar` after UAT.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Create worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
-  - [x] Verify branch with `git -C tmp/worktrees/fix-live-provider-enobufs branch --show-current`.
-  - [x] Write `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`.
-  - [x] Confirm root cause from job log 128713986254 plus `live-provider-receipt.mjs:103` default 1 MiB `maxBuffer`.
-  - [x] Confirm `make` targets: `test-ci-live-provider-receipt`, `ci-live-provider-select`, `ci-live-provider-health`.
-  - [x] Define environment mapping (`test-live-provider-enobufs`) and ports (API 8895, UI 5295, Maildev 1195).
-  - [x] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-live-provider-enobufs` with `ENV` last.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Create isolated worktree `tmp/worktrees/fix-forge-tar` on branch `fix/forge-tar-unstable` from `origin/main` (verified).
+  - [x] Define environment mapping: `ENV=test-fix-forge-tar`, `API_PORT=8905`, `UI_PORT=5305`, `MAILDEV_UI_PORT=1205`.
+  - [x] Confirm command style: `make ... ENV=test-fix-forge-tar` with `ENV` last.
   - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-- [ ] **Lot 1 — Bound every gh call plus regression test**
-  - [x] Replace bare `execFileSync('gh', ['api', route])` with bounded helper (`--jq` projection, `per_page`, explicit `maxBuffer`, explicit route+size error on overflow).
-  - [x] Apply helper to `select` runs, jobs, artifacts, pull-request runs, `health` and `finish` schedule routes.
-  - [x] Keep `scheduleHealth`, `qualifiedMain`, `liveReceipt`, `readPages` gates byte-identical in behavior.
-  - [x] Add unit test in `scripts/ci/live-provider-receipt.test.mjs`: large response handled/reported (overflow becomes explicit route+size error; projections bound size).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>` if impacted (Node script only: at least `node --check` equivalent via test target).
-    - [ ] **API tests**
-      - [ ] No API change: none.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] No UI change: none.
-    - [ ] **E2E tests**
-      - [ ] No E2E change: none.
-    - [ ] Scoped gate: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
-- [ ] **Lot 2 — Dispatch fix plus final validation**
-  - [x] Add `live-provider-receipt` files to the `global` paths-filter under BR01-EX1 (conditional path with rationale, impact, rollback).
-  - [x] Retest scoped: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs` (14/14).
-  - [x] Retest scoped: `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25, classifier and gate untouched in behavior).
-  - [x] Local verify simulation: `consumer-contracts --verify` ok:true with `global=true`, reproduces the CI failure with `manifest_guard`-only.
-  - [x] Push 2044ede94, update PR body with `BRANCH.md` (PR #970, no merge).
-  - [x] Iterate new-head CI to green (no rerun, no skip): run 42554897053 success on head a57246c82; PR MERGEABLE/CLEAN.
-  - [ ] Do NOT merge.
-  - [x] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
-- [ ] **Lot 3 — Argon review fixes (BLOCKER + MAJOR + MINORs)**
-  - [x] Fix `pages()` double `[key]` indexation (BLOCKER) and use `GH_PER_PAGE` in `readPages` (MINOR).
-  - [x] Add CLI `select` + `health` end-to-end test against stubbed `gh` (MAJOR): `--jq`, pagination runs/jobs/artifacts to `selection.json`, explicit overflow error.
-  - [x] Fix `BRANCH.md` checkbox coherence (MINOR).
-  - [x] Retest scoped: `test-ci-live-provider-receipt` (15/15) via `node --test`.
-  - [x] Retest scoped via `make`: `test-ci-live-provider-receipt` (15/15), `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25), `test-publishable-manifests` (137/137), `scope-check` PASS C2.
-  - [x] Commit via `make commit`, push, CI green (no rerun, no skip): 93e727c3d, run 42610893119 success; PR MERGEABLE/CLEAN.
-  - [x] Update `.tmp/rv/fix-live-provider-enobufs.md`.
-  - [ ] Do NOT merge.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare no `BRxx-EXn` needed.
+  - [x] Fetch real tarball to `/home/antoinefa/.cache-tmp/forge-tar-repro/93116b8.tar.gz` (untrusted data, headers only, never executed).
+  - [x] Scan headers: 4236 entries (3883 regular, 2 symlinks type `2`, 350 dirs, 1 pax `g`); 0 bad checksums; 0 base-256.
+
+- [x] **Lot 1 — Reproduce the unstable_tree branch**
+  - [x] Feed the real tarball shape to the forge-tar parser in a unit test (synthetic fixture only, no 106 MB blob in repo).
+  - [x] Identify which `unstable()` branch fires (`tar -tvzf`/`xxd` evidence: symlink type `2` at entry 1563, `deploy/k8s/40-immo-mcp-http-deploy.yaml`).
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=8905 UI_PORT=5305 MAILDEV_UI_PORT=1205 ENV=test-fix-forge-tar`
+    - [x] **API tests**
+      - [x] New `api/tests/unit/artifacts-live/forge-tar-symlink.test.ts` (symlink + named-reason cases)
+      - [x] Updated `api/tests/unit/artifacts-live/forge-lease.test.ts` (links are skipped, not refused)
+      - [x] Scoped runs while evolving: `make test-api SCOPE=tests/unit/artifacts-live/forge-tar-symlink.test.ts API_PORT=8905 UI_PORT=5305 MAILDEV_UI_PORT=1205 ENV=test-fix-forge-tar`
+      - [x] Sub-lot gate: forge scope green (forge-tar-symlink 4, forge-lease 8, forge-lease-source 5, host-build-api 12)
+    - [x] **UI tests (TypeScript only)**
+      - [x] None (no UI change).
+    - [x] **E2E tests**
+      - [x] None (parser unit scope; full suites run in CI).
+
+- [x] **Lot 2 — Generic fix with named reasons**
+  - [x] Skip link entries (types `1`/`2`) in `readForgeTarball` instead of failing the whole tree.
+  - [x] Give every `unstable()` in `forge-tar.ts` a named reason; name the `source()` mismatch in `forge-lease.ts`.
+  - [x] No silent limit widening (`FORGE_LIMITS`, `META_BYTES` unchanged); no legacy fallback.
+  - [x] Lot gate: copy exact checklist of Lot 1.
+
+- [x] **Lot 3 — Host failure visibility**
+  - [x] Verify builder records `fail()` with `code`/`reason` and GET `/v1/builds/:artifactId/:jobId` exposes `build_failed` with `code`/`reason` (#969 mapping).
+  - [x] State in the report whether immo must poll `status()` and where.
+  - [x] Lot gate: copy exact checklist of Lot 1.
+
+- [ ] **Lot N — Final validation**
+  - [x] Typecheck & Lint (`make typecheck-api` exit 0; lint covered by CI `api-static`)
+  - [x] Retest API (forge-tar-symlink 4, forge-lease 8, forge-lease-source 5, host-build-api 12 — all green)
+  - [x] Final gate step 1: PR #975 created with `BRANCH.md` text as PR body (source of truth).
+  - [x] Final gate step 2: branch CI green on fresh head 171694a56 (dispatch run 42613816671 `success`; prior run 42612023738 failed only on provider-dependent AI spec `00-ai-generation`, re-proven by `test-e2e (5)` success on the fresh head).
+  - [x] Record review to `.h2a/reviews/fix-forge-tar-muse.md` (Muse Wonder max APPROVE; Argon 429 / vibe 402 unavailable).
+  - [x] Write French report to `/home/antoinefa/src/sentropic/.tmp/rv/fix-forge-tar.md` (root cause with exact header, PR, head, CI, review).
+  - [x] Do NOT merge.

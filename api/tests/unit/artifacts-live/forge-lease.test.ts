@@ -61,12 +61,14 @@ describe('lease forge reads: snapshot (contract §4)', () => {
     const codeload = s.calls.filter(c => c.url.startsWith('https://codeload.github.com/'));
     expect(codeload.length).toBe(2); expect((codeload[0]!.init.headers as Record<string, string>).authorization).toBeUndefined();
   });
-  it('should refuse symlinks, hard links and special entries as unstable_tree', async () => {
-    for (const entry of [{ path: 'src/link', type: '2', link: '../../etc/passwd' }, { path: 'src/hard', type: '1', link: `${TOP}/package.json` },
-      { path: 'src/fifo', type: '6' }]) {
-      const s = await setup(); s.state.archive = tarball([...REPO, entry]);
-      expect(await failure(s.reads.snapshot(key, HEAD))).toMatchObject({ code: 'unstable_tree' });
-    }
+  it('should skip symlinks and hard links, and refuse special entries with a named reason', async () => {
+    const s = await setup();
+    s.state.archive = tarball([...REPO, { path: 'src/link', type: '2', link: '../../etc/passwd' },
+      { path: 'src/hard', type: '1', link: `${TOP}/package.json` }]);
+    const snap = await s.reads.snapshot(key, HEAD);
+    expect((await s.reads.source(snap.stagingRef)).map(f => f.path).sort()).toEqual(STAGED);
+    const t = await setup(); t.state.archive = tarball([...REPO, { path: 'src/fifo', type: '6' }]);
+    expect(await failure(t.reads.snapshot(key, HEAD))).toMatchObject({ code: 'unstable_tree', reason: 'special_entry' });
   });
   it('should follow one redirect to codeload only', async () => {
     const s = await setup(); s.state.location = 'https://evil.example/archive.tar.gz';
