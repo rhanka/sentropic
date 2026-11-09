@@ -58,7 +58,7 @@
   - [ ] `packages/auth-ui/src/transport-fetch.ts`: read the nested DTO message and code.
   - [ ] IdP web `api.ts` and UI `utils/api.ts`: non-throwing `apiFetchResponse` (credentials, locale, scoping kept), `apiFetch` built on it; both `auth-transport.ts` use it.
 - [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-api` + `make lint-api` + `make typecheck-idp-web` + `make typecheck-ui` + `make lint-ui`.
-  - [ ] Scoped runs: `make test-api-unit SCOPE=tests/unit/identity/cm-transaction-failure-log.test.ts ENV=test-t1-identity-errors`, `make test-auth-ui ENV=test-t1-identity-errors`, `make test-ui SCOPE=tests/utils/auth-transport.test.ts API_PORT=9462 UI_PORT=5662 MAILDEV_UI_PORT=1562 ENV=test-t1-identity-errors`.
+  - [x] `make typecheck-api` + `make lint-api` + `make typecheck-idp-web` + `make typecheck-ui` + `make lint-ui` (post-rebase 6b2fc2295: all PASS — lint-api 0 errors, typecheck-ui svelte-check 0 errors).
+  - [x] Scoped runs: `make test-api-unit SCOPE=tests/unit/identity/cm-transaction-failure-log.test.ts ENV=test-t1-identity-errors` (7/7), `make test-auth-ui ENV=test-t1-identity-errors` (57/57), `make test-ui SCOPE=tests/utils/auth-transport.test.ts API_PORT=9462 UI_PORT=5662 MAILDEV_UI_PORT=1562 ENV=test-t1-identity-errors` (2/2) — post-rebase 6b2fc2295, all PASS.
   - [ ] Review `.h2a/reviews/t1-identity-error-surfacing-opus.md` (VERDICT line).
   - [ ] Push the branch; the T1 train lane assembles the PR and the CI.
