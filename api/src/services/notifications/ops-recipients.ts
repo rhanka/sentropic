@@ -11,6 +11,7 @@
 
 import {
   createDeclaredOpsRecipientsPort,
+  normalizeOpsRecipientEmail,
   type OpsAccountLookupV1,
   type OpsAlertRecipientsPortV1,
 } from '@sentropic/cluster-mesh/notifications';
@@ -57,23 +58,30 @@ const identityAccountLookup = (): OpsAccountLookupV1 => ({
 });
 
 /** Platform admins: transverse fallback when a target has no usable admin. */
-const listPlatformAdmins = async (): Promise<readonly { accountId: string; email: string }[]> => {
+const listPlatformAdmins = async (): Promise<readonly { accountId: string; email: string; basis: string }[]> => {
   const accounts = await getCmIdentity().core.accounts.listAccounts();
-  const admins = accounts
-    .filter((account) => account.globalRole === 'admin_app' && account.accountStatus === 'active')
-    .map((account) => ({ accountId: account.userId, email: account.email.trim().toLowerCase() }));
   const seen = new Set<string>();
-  return admins.filter(({ email }) => {
-    if (email.length === 0 || seen.has(email)) return false;
+  const admins: { accountId: string; email: string; basis: string }[] = [];
+  for (const account of accounts) {
+    if (account.globalRole !== 'admin_app' || account.accountStatus !== 'active') continue;
+    // Same sendability gate as declared accounts: an invalid stored platform
+    // address fails this delivery instead of failing the whole send.
+    const email = normalizeOpsRecipientEmail(account.email);
+    if (email === null) {
+      logger.warn({ accountId: account.userId }, 'ops platform admin address not sendable, skipped');
+      continue;
+    }
+    if (seen.has(email)) continue;
     seen.add(email);
-    return true;
-  });
+    admins.push({ accountId: account.userId, email, basis: 'platform-admin-fallback' });
+  }
+  return admins;
 };
 
 export interface OpsRecipientsBindingDeps {
   readonly declaration?: Record<string, string[]>;
   readonly accounts?: OpsAccountLookupV1;
-  readonly platformAdmins?: () => Promise<readonly { accountId: string; email: string }[]>;
+  readonly platformAdmins?: () => Promise<readonly { accountId: string; email: string; basis: string }[]>;
 }
 
 /** v1 port: validated declaration first, platform-admin fallback otherwise. */
