@@ -1,41 +1,46 @@
-# Feature: Fix live provider select ENOBUFS
+# Feature: llm-mesh Gemini static-key fallback client
 
 ## Objective
-- [ ] Fix `select` ENOBUFS by bounding every `gh api` call with `--jq` projection, `per_page` and explicit `maxBuffer`, with explicit route+size errors.
+Add a minimal generic static-key Gemini client to @sentropic/llm-mesh so immo can select it as fallback when the Gemini seat answers quota/rate_limited.
 
 ## Scope / Guardrails
-- [ ] Worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
-- [ ] ENV `test-live-provider-enobufs` last in every `make` command; ports API_PORT=8895 UI_PORT=5295 MAILDEV_UI_PORT=1195.
-- [ ] Docker only via `.tmp/packets/docker-slot.sh make ...`; never ENV=dev; never `make clean-all`; no Python.
-- [ ] Commits via `make commit MSG="..."` only; no attribution trailer; max 150 lines per commit.
-- [ ] Generic fix only; no dual path; no weakening of `schedule-health` or any gate.
-- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Scope limited to a new Gemini GenerateContent runtime client, its package export, unit tests, patch bump, CHANGELOG, lockfiles.
+- No budget admission, no alerting, no gateway changes in this lane (Lot 5 lane s-muse-llm-mesh-lot5 builds on top).
+- One migration max in `api/drizzle/*.sql` (not applicable, none).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/llm-mesh-gemini-min`.
+- Automated test campaigns must run on dedicated environments (`ENV=test-llm-mesh-gemini-min`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=test-llm-mesh-gemini-min` must be passed as the last argument.
+- All new text in English.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `scripts/ci/live-provider-receipt.mjs`
-  - `scripts/ci/live-provider-receipt.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `packages/llm-mesh/src/transport/gemini-api-key-runtime-client.ts`
+  - `packages/llm-mesh/src/index.ts`
+  - `packages/llm-mesh/tests/transport/gemini-api-key-runtime-client.test.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts` (version pin only)
+  - `packages/llm-mesh/package.json` (patch bump only)
+  - `packages/llm-mesh/CHANGELOG.md`
+  - `package-lock.json` (regenerated llm-mesh version entry only)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `api/drizzle/*.sql`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
-- [x] BR01-EX1: touch `.github/workflows/ci.yml` (`global` paths-filter only): add `scripts/ci/live-provider-receipt.mjs` and `scripts/ci/live-provider-receipt.test.mjs`. Rationale: any `scripts/**` change classifies as `root-lock-toolchain`, whose `consumer-contracts-verify` gate requires the six integration lanes, but those lanes only run when `api`, `ui` or `global` matches; without this, a `scripts/ci`-only PR can never go green (run 42548638007: `consumer-contracts` + `ci-gate` failure). Impact: strictly more CI for these two paths (full integration), same family as `image-receipt`/`compatibility-classifier` already listed; no gate, threshold or assertion loosened. Rollback: remove the two lines; dispatch returns to `manifest_guard`-only.
-- [x] ARGON-1: PR #970 Argon review REQUEST_CHANGES (BLOCKER `pages()` double `[key]` fails `select` 100%; MAJOR missing `select`/`health` CLI e2e against stubbed `gh`; MINOR hardcoded `100` vs `GH_PER_PAGE` + checkbox coherence). Addressed in Lot 3.
-- [x] BR01-EX1b: run 42552089131 `validate-publishable-manifests` pins the exact `global` scripts list (`publishable-ci-wiring.test.mjs:144`); the two deliberate BR01-EX1 additions are added to the pin. The pin stays an exact match (any other unlisted addition still fails): evolution of the intended contract, not a loosening.
+- No open items.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -47,53 +52,46 @@
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams need independent CI or long-running validation)
-- Rationale: single small CI fix, one branch, one CI.
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single minimal change, one package, one CI run.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI change in this branch: no UAT surface.
+- No UI changes in this lane, no UAT required.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Create worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
-  - [x] Verify branch with `git -C tmp/worktrees/fix-live-provider-enobufs branch --show-current`.
-  - [x] Write `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`.
-  - [x] Confirm root cause from job log 128713986254 plus `live-provider-receipt.mjs:103` default 1 MiB `maxBuffer`.
-  - [x] Confirm `make` targets: `test-ci-live-provider-receipt`, `ci-live-provider-select`, `ci-live-provider-health`.
-  - [x] Define environment mapping (`test-live-provider-enobufs`) and ports (API 8895, UI 5295, Maildev 1195).
-  - [x] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-live-provider-enobufs` with `ENV` last.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`, plan Lot 5.
+  - [x] Create isolated worktree `tmp/worktrees/llm-mesh-gemini-min` on branch `feat/llm-mesh-gemini-apikey-client` from `origin/main` and verify with `git branch --show-current`.
+  - [x] Define environment mapping: `ENV=test-llm-mesh-gemini-min`, `API_PORT=8917`, `UI_PORT=5317`, `MAILDEV_UI_PORT=1217`.
+  - [x] Confirm command style: `make ... ENV=test-llm-mesh-gemini-min` with `ENV` last; Docker via `.tmp/packets/docker-slot.sh make ...` in the foreground.
   - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-- [ ] **Lot 1 — Bound every gh call plus regression test**
-  - [x] Replace bare `execFileSync('gh', ['api', route])` with bounded helper (`--jq` projection, `per_page`, explicit `maxBuffer`, explicit route+size error on overflow).
-  - [x] Apply helper to `select` runs, jobs, artifacts, pull-request runs, `health` and `finish` schedule routes.
-  - [x] Keep `scheduleHealth`, `qualifiedMain`, `liveReceipt`, `readPages` gates byte-identical in behavior.
-  - [x] Add unit test in `scripts/ci/live-provider-receipt.test.mjs`: large response handled/reported (overflow becomes explicit route+size error; projections bound size).
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`); no exceptions needed.
+- [ ] **Lot 1 — Static-key Gemini runtime client**
+  - [ ] Add `packages/llm-mesh/src/transport/gemini-api-key-runtime-client.ts` implementing `GeminiAdapterClient`: `POST {baseUrl}/v1beta/models/{model}:generateContent`, header `x-goog-api-key`, default model `gemini-3.8-flash`; caller-provided key only, never logged, never in errors; error mapping 429/RESOURCE_EXHAUSTED to `rate_limited`, 402/billing to distinct non-retryable `billing_unavailable`, 401/403 to `auth_failed`; copy the Mistral Bearer client pattern.
+  - [ ] Export the client and its factory from `packages/llm-mesh/src/index.ts` for use as `geminiClient` injection.
+  - [ ] Add `packages/llm-mesh/tests/transport/gemini-api-key-runtime-client.test.ts` with stubbed fetch: request shape, header present, error mapping (429, 402, 401), no key in error messages.
   - [ ] Lot gate:
-    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>` if impacted (Node script only: at least `node --check` equivalent via test target).
+    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-gemini-min`
+    - [ ] `make lint-llm-mesh ENV=test-llm-mesh-gemini-min`
     - [ ] **API tests**
-      - [ ] No API change: none.
+      - [ ] No API changes.
     - [ ] **UI tests (TypeScript only)**
-      - [ ] No UI change: none.
+      - [ ] No UI changes.
     - [ ] **E2E tests**
-      - [ ] No E2E change: none.
-    - [ ] Scoped gate: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
-- [ ] **Lot 2 — Dispatch fix plus final validation**
-  - [x] Add `live-provider-receipt` files to the `global` paths-filter under BR01-EX1 (conditional path with rationale, impact, rollback).
-  - [x] Retest scoped: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs` (14/14).
-  - [x] Retest scoped: `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25, classifier and gate untouched in behavior).
-  - [x] Local verify simulation: `consumer-contracts --verify` ok:true with `global=true`, reproduces the CI failure with `manifest_guard`-only.
-  - [x] Push 2044ede94, update PR body with `BRANCH.md` (PR #970, no merge).
-  - [x] Iterate new-head CI to green (no rerun, no skip): run 42554897053 success on head a57246c82; PR MERGEABLE/CLEAN.
-  - [ ] Do NOT merge.
-  - [x] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
-- [ ] **Lot 3 — Argon review fixes (BLOCKER + MAJOR + MINORs)**
-  - [x] Fix `pages()` double `[key]` indexation (BLOCKER) and use `GH_PER_PAGE` in `readPages` (MINOR).
-  - [x] Add CLI `select` + `health` end-to-end test against stubbed `gh` (MAJOR): `--jq`, pagination runs/jobs/artifacts to `selection.json`, explicit overflow error.
-  - [x] Fix `BRANCH.md` checkbox coherence (MINOR).
-  - [x] Retest scoped: `test-ci-live-provider-receipt` (15/15) via `node --test`.
-  - [x] Retest scoped via `make`: `test-ci-live-provider-receipt` (15/15), `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25), `test-publishable-manifests` (137/137), `scope-check` PASS C2.
-  - [x] Commit via `make commit`, push, CI green (no rerun, no skip): 93e727c3d, run 42610893119 success; PR MERGEABLE/CLEAN.
-  - [x] Update `.tmp/rv/fix-live-provider-enobufs.md`.
-  - [ ] Do NOT merge.
+      - [ ] No E2E changes (no user-visible surface).
+- [ ] **Lot 2 — Version, changelog, locks, immo compat**
+  - [ ] Patch bump `packages/llm-mesh/package.json` above npm latest (`0.33.0`).
+  - [ ] Update `packages/llm-mesh/tests/decision-public-surface.test.ts` version pin.
+  - [ ] Update `packages/llm-mesh/CHANGELOG.md` under Unreleased.
+  - [ ] Regenerate lockfiles through make (root `package-lock.json` llm-mesh version entry).
+  - [ ] Verify immo `refresh-mesh.ts` imports (`DEFAULT_ROUTE_POLICY`, `InMemoryRoutePolicyProfiles`, `OpenAIAdapter`, `CloudCodeRuntimeClient`, `CodexRuntimeClient`, `createLlmMeshFacade`, facade types) still resolve: state drop-in or exact wiring change in the report.
+  - [ ] Lot gate: `make scope-check ENV=test-llm-mesh-gemini-min`.
+- [ ] **Lot 3 — Final validation**
+  - [ ] Typecheck & Lint (cf Lot 1).
+  - [ ] Scoped package tests: `make test-llm-mesh SCOPE=tests/transport/gemini-api-key-runtime-client.test.ts ENV=test-llm-mesh-gemini-min`.
+  - [ ] No AI flaky tests introduced (stubbed fetch only).
+  - [ ] Bumped `packages/llm-mesh/package.json` (enforced by CI `enforce-package-bump`).
+  - [ ] Final gate step 1: create PR with `BRANCH.md` text as body.
+  - [ ] Final gate step 2: run/verify branch CI on that PR, no rerun/skip; AI e2e flake goes to `BRANCH.md` note + fresh head.
+  - [ ] Final gate step 3: DO NOT merge (conductor merges); no external review (conductor runs it).
