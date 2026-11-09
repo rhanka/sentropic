@@ -82,10 +82,10 @@
   - [x] Update oom and heavy-phases stateDetail expectations to code:reason (evolution).
   - [x] Update cache-storage privacy-check expectations to code:reason (evolution); add S3 outage naming and service-replace tests.
   - [x] Scoped runs: make test-api SCOPE=tests/unit/artifacts-live/... ENV=test-fix-live-teardown last.
-- [ ] **Lot 3 — Gates, PR and CI**
+- [x] **Lot 3 — Gates, PR and CI**
   - [x] make typecheck-api, make lint-api via docker-slot.sh.
   - [x] Scoped make test-api via docker-slot.sh.
-  - [ ] Open PR (title/body from BRANCH.md), push, iterate to green CI (no rerun, no skip, no timeout increase).
+  - [x] Open PR (title/body from BRANCH.md), push, iterate to green CI (no rerun, no skip, no timeout increase).
   - [ ] Do NOT merge.
-- [ ] **Lot 4 — Report**
-  - [ ] Report in French to .tmp/rv/fix-live-teardown.md: PR number, head sha, CI state, tests, files changed.
+- [x] **Lot 4 — Report**
+  - [x] Report in French to .tmp/rv/fix-live-teardown.md: PR number, head sha, CI state, tests, files changed.
