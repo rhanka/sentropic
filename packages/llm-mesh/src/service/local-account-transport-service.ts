@@ -211,8 +211,9 @@ export class LocalAccountTransportService {
   private routeAttemptSequence = 0;
   /** Account ids already alerted for their current reauth_required epoch. */
   private readonly alertedReauth = new Set<string>();
-  private custodianTimer: ReturnType<typeof setInterval> | null = null;
+  private custodianTimer: ReturnType<typeof setTimeout> | null = null;
   private custodianTickInFlight = false;
+  private custodianLoopGeneration = 0;
   private readonly serviceOptions: LocalAccountTransportServiceOptions;
 
   constructor(
@@ -1944,36 +1945,71 @@ export class LocalAccountTransportService {
   }
 
   /**
-   * Start the custodian loop: a refresh cycle every `intervalMs`. Ticks never
-   * overlap; the timer is unref'd so it cannot hold the process open.
+   * Start the custodian loop: an immediate cycle, then one every `intervalMs`
+   * with a small random stagger (two replicas started together must not fire
+   * in lockstep on single-use refresh grants). Ticks never overlap; the timer
+   * is unref'd so it cannot hold the process open.
+   *
+   * The host MUST run exactly one loop per owner scope: this library holds no
+   * distributed lock, so two live loops would race on rotating grants
+   * (multi-replica custody belongs to the Lot 2 host). Cycle and
+   * report-listener failures surface through `onError`; without it a dead
+   * keyring would tick silently.
+   *
    * Returns a stop function; `stopCustodianLoop()` stops it as well.
    */
   startCustodianLoop(
     intervalMs: number,
     onReport?: (report: CustodianRefreshReport) => void,
+    onError?: (error: unknown) => void,
   ): () => void {
     this.stopCustodianLoop();
+    const everyMs = Number.isFinite(intervalMs) && intervalMs > 0
+      ? Math.max(1_000, Math.floor(intervalMs))
+      : 60_000;
+    const generation = (this.custodianLoopGeneration += 1);
+    const live = (): boolean => generation === this.custodianLoopGeneration;
     const tick = async (): Promise<void> => {
       if (this.custodianTickInFlight) return;
       this.custodianTickInFlight = true;
       try {
         const report = await this.runCustodianRefreshCycle();
-        onReport?.(report);
-      } catch {
+        try {
+          onReport?.(report);
+        } catch (error) {
+          onError?.(error);
+        }
+      } catch (error) {
         // A failed cycle never kills the loop; the next tick retries.
+        onError?.(error);
       } finally {
         this.custodianTickInFlight = false;
       }
     };
-    const timer = setInterval(() => { void tick(); }, Math.max(1_000, intervalMs));
-    (timer as unknown as { unref?: () => void }).unref?.();
-    this.custodianTimer = timer;
+    const staggerMs = (): number =>
+      everyMs + Math.floor(Math.random() * Math.min(everyMs * 0.1, 30_000));
+    const schedule = (delayMs: number): void => {
+      const timer = setTimeout(() => {
+        if (!live()) return;
+        void tick().finally(() => {
+          if (live()) schedule(staggerMs());
+        });
+      }, delayMs);
+      timer.unref?.();
+      this.custodianTimer = timer;
+    };
+    // Immediate first cycle: readiness is reported at boot, not after one
+    // idle interval.
+    void tick().finally(() => {
+      if (live()) schedule(staggerMs());
+    });
     return () => this.stopCustodianLoop();
   }
 
   stopCustodianLoop(): void {
+    this.custodianLoopGeneration += 1;
     if (this.custodianTimer) {
-      clearInterval(this.custodianTimer);
+      clearTimeout(this.custodianTimer);
       this.custodianTimer = null;
     }
   }
