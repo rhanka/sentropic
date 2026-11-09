@@ -189,8 +189,10 @@ const fenceRetired = async (host: CustodyOpHost, userId: string): Promise<boolea
 
 type AnyTx = IdentityTransactionV1<unknown>;
 
+// rpId is not material: the same credential id and key bind one authenticator credential, and the
+// source is its sole author, so a replica import stamp converges to the source RP ID (apply step).
 const CREDENTIAL_MATERIAL_FIELDS = [
-  'userId', 'credentialId', 'publicKeyCose', 'rpId', 'uv', 'transports', 'deviceType', 'backedUp', 'createdAt',
+  'userId', 'credentialId', 'publicKeyCose', 'uv', 'transports', 'deviceType', 'backedUp', 'createdAt',
 ] as const;
 
 const detectRow = async (
@@ -308,7 +310,7 @@ const applyAccount = async (host: CustodyOpHost, tx: AnyTx, row: Extract<Identit
   return changed ? 'updated' : 'unchanged';
 };
 
-const applyCredential = async (tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1, { entity: 'credential' }>): Promise<Outcome> => {
+const applyCredential = async (host: CustodyOpHost, tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1, { entity: 'credential' }>): Promise<Outcome> => {
   const { record } = row;
   const existing = await tx.custody.credentials.findById(record.proofId);
   if (!existing) {
@@ -325,11 +327,18 @@ const applyCredential = async (tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1,
   }
   if (existing.revokedAt && !record.revokedAt) return 'revokedKept';
   if (existing.revokedAt && record.revokedAt) return 'unchanged';
+  let changed = false;
+  if (existing.rpId !== record.rpId) {
+    const sql = boundIdentitySql(host);
+    await sql.query(`UPDATE ${sql.table('identity_webauthn_credentials')} SET rp_id = ?, revision = revision + 1
+      WHERE proof_id = ? AND user_id = ? AND revoked_at IS NULL`, [record.rpId, record.proofId, record.userId]);
+    changed = true;
+  }
   if (record.deviceName !== null && existing.deviceName !== record.deviceName) {
     await tx.custody.credentials.rename(record.proofId, record.userId, record.deviceName);
-    return 'updated';
+    changed = true;
   }
-  return 'unchanged';
+  return changed ? 'updated' : 'unchanged';
 };
 
 const applyConsent = async (host: CustodyOpHost, tx: AnyTx, row: Extract<IdentityReplicaSyncRowV1, { entity: 'oauth_consent' }>): Promise<Outcome> => {
@@ -350,7 +359,7 @@ const applyConsent = async (host: CustodyOpHost, tx: AnyTx, row: Extract<Identit
 const applyRow = async (host: CustodyOpHost, tx: AnyTx, row: IdentityReplicaSyncRowV1): Promise<Outcome> => {
   switch (row.entity) {
     case 'account': return applyAccount(host, tx, row);
-    case 'credential': return applyCredential(tx, row);
+    case 'credential': return applyCredential(host, tx, row);
     case 'oauth_consent': return applyConsent(host, tx, row);
   }
 };
