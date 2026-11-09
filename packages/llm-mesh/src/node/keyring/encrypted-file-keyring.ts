@@ -43,15 +43,56 @@ export class KeyringInsecurePermissionsError extends Error {
   }
 }
 
+export interface EncryptedFileKeyringOptions {
+  masterKey?: Buffer;
+}
+
+export const deriveKeyringMasterKey = (value: string): Buffer => {
+  const trimmed = value.trim();
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return Buffer.from(trimmed, 'hex');
+  }
+  if (/^[A-Za-z0-9+/]{43}=$/.test(trimmed) || /^[A-Za-z0-9+/]{44}$/.test(trimmed)) {
+    try {
+      const decoded = Buffer.from(trimmed, 'base64');
+      if (decoded.length === 32) return decoded;
+    } catch {
+      // Fall through to passphrase hashing below.
+    }
+  }
+  return createHash('sha256').update(trimmed, 'utf8').digest();
+};
+
+export const resolveKeyringMasterKey = (envVarName: string): Buffer => {
+  const name = envVarName.trim();
+  if (!name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error(`keyring key env var name is invalid: '${name}'`);
+  }
+  const value = process.env[name];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`keyring key env var '${name}' is missing or empty`);
+  }
+  return deriveKeyringMasterKey(value);
+};
+
 export class EncryptedFileKeyring implements KeyringAdapter {
   private readonly directory: string;
+  private readonly explicitMasterKey?: Buffer;
 
   constructor(
     directory =
       process.env.SENTROPIC_LLM_MESH_KEYRING_DIR ??
       join(homedir(), '.sentropic', 'llm-mesh-keyring'),
+    masterKeyOrOptions?: Buffer | EncryptedFileKeyringOptions,
   ) {
     this.directory = directory;
+    const explicit = Buffer.isBuffer(masterKeyOrOptions)
+      ? masterKeyOrOptions
+      : masterKeyOrOptions?.masterKey;
+    if (explicit !== undefined && explicit.length !== 32) {
+      throw new Error('Encrypted keyring master key must be 32 bytes');
+    }
+    this.explicitMasterKey = explicit;
   }
 
   async getSecret(key: string): Promise<string | null> {
@@ -156,6 +197,11 @@ export class EncryptedFileKeyring implements KeyringAdapter {
   }
 
   private async readMasterKey(create: boolean): Promise<Buffer> {
+    if (this.explicitMasterKey) {
+      await mkdir(this.directory, { recursive: true, mode: 0o700 });
+      await this.setModeIfDifferent(this.directory, 0o700);
+      return this.explicitMasterKey;
+    }
     const path = join(this.directory, '.key');
     if (!create) {
       return this.readExistingMasterKey(path);
