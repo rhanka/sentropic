@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.25
+
+- `@sentropic/artifacts/live-host` ships a generic pending-build reconcile: `reconcilePendingBuilds`
+  sweeps the host jobs stuck in `build_pending`/`building` past a threshold with bounded concurrency
+  (the threshold is enforced by the sweep on top of the host filter), and `reconcilePendingBuild`
+  reconciles one job on demand for the `live_status`, `git_publish` and `artifacts_get` read paths.
+  Both read the builder `GET /v1/builds/:artifactId/:jobId` status
+  (`build_pending`/`published`/`build_failed`, `code`/`reason`, `releaseId`) through a host status
+  client and apply only allowed transitions: the job moves to `build_failed` (with the builder
+  `code`/`reason`, blank codes dropped to the `build_failed` default) or to `published` (with the
+  `releaseId` from the stored handoff receipt when the receipts port is wired, else from the builder
+  status; without either no release is invented), and the git binding moves from `build_pending` to
+  `build_failed` under the version CAS (`server/git-bindings.ts:51`, action `publish`), stamping the
+  failure code on the binding `stateDetail`. The binding leads so a crash between the two writes still
+  converges; terminal rows are never regressed, rows are never deleted, and disagreements fail closed
+  (`receipt-conflict`, `binding-conflict`, `binding-still-pending`, `no-release`): a wired ledger
+  without a receipt never publishes on the builder word alone, a `build_failed` status is re-read
+  before any write (the builder re-admits the same `jobId` and flips `failed` to `published`
+  asynchronously), a version race won by the success path leaves the job alone, and a still-pending
+  binding leaves the job pending for the next run. The failure idempotency key binds the binding
+  version and pending SHA, so a re-pended `jobId` writes anew instead of replaying the older failure.
+  `ReconcileJobStore.markFailed` takes `code`/`reason` as optional hints for hosts without those
+  columns. Per-item outages report a bounded `error` stage (`store-error` never claims `unchanged`
+  for a committed write). Host ports only (`ReconcileJobStore`, `ReconcileStatusClient`,
+  the package `GitBindingStore`, optional `HostLedger.find`); no immo code in the package.
+- `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.25): the APP-P1 manifest digest changes
+  through its version field only (four-tool selection and tool definitions unchanged).
+
 ## 0.2.24
 
 - `artifacts_live_status` and `artifacts_live_control` start no longer walk the repository tree: they
