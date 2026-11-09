@@ -95,6 +95,15 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
   - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
   - [x] Lot gate: same API checklist as Lot 1 plus `cache.test.ts` watchdog cases (progress alive, stall, ceiling, reason carries phase, no poison).
 
+- [ ] **Lot 3 — Independent review findings (Wonder dedup, REQUEST_CHANGES)**
+  - [x] B1: stall arms only on the first progress report (no cut of the 120-600 s pre-progress windows); progress per sent put frame and drained page.
+  - [x] M1: watchdog abort propagates to fetch, queue wait and supervisor frames; cut install stops and never admits.
+  - [x] M2: start log carries `reason: 'started'`; bare `phase_timeout` rewritten to `phase_timeout:<phase>`; idle `verify` wrapped in `runPhase`.
+  - [x] MINORs: env bounds clamped to 2^31-1; ceiling comment reconciled with recipe/stream inner bounds; post-settle reports ignored; timing margins widened.
+  - [x] Tests: slow-start cold install not cut early; stall/ceiling/abort cases; signal threading; per-frame progress; queue abort.
+  - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
+  - [x] Lot gate: `make typecheck-api` + `make lint-api` + scoped `test-api-unit` (deadline, cache, supervisor-install, heavy).
+
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest API (cf Lot1, copy checklist)
