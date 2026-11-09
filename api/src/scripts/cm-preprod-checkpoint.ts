@@ -4,7 +4,7 @@ import type { PoolClient } from 'pg';
 import { loadCmCutoverCheckpoint, parseCmCutoverCheckpoint } from '../services/identity/cm-cutover-checkpoint';
 import { loadCmEmailCodePolicy } from '../services/identity/cm-email-policy';
 import { loadCmDeletionOptions, loadCmWorkspaceDeletionOptions, loadReplicaRunOptions } from '../services/identity/cm-deletion-options';
-import { assertAbsent, canonical, custody, evidenceSchema, protectedBytes, protectedJson, rehearsalSchema,
+import { a4Tier, assertAbsent, canonical, custody, evidenceSchema, protectedBytes, protectedJson, rehearsalSchema,
   requestSchema, sha256, writeExclusive } from './cm-preprod-contract';
 import { downloadTenantBackup, validateBackup } from './cm-preprod-backup';
 import { inspectPreprod } from './cm-preprod-state';
@@ -21,10 +21,11 @@ export async function preparePreprod(client: PoolClient, command: PreprodCommand
   if (sha256(requestBytes) !== command.requestSha256) throw new Error('request_changed');
   const request = requestSchema.parse(JSON.parse(requestBytes.toString('utf8')));
   if (process.env.A4_CANDIDATE_COMMIT !== request.candidateCommit) throw new Error('candidate_mismatch');
+  const { tier } = a4Tier(request.namespace);
   const policy = loadCmEmailCodePolicy();
   try {
     if (policy.policy.issuance !== 'hmac-sha256'
-      || policy.policy.activeKeyRef !== 'email-code-hmac:v1:preprod:15c2f8b66073655a'
+      || policy.policy.activeKeyRef !== request.emailCodeActiveKeyRef
       || policy.policy.previousKeyRefs.length) throw new Error('policy_mismatch');
   } finally { policy.dispose(); }
   loadCmDeletionOptions(); loadCmWorkspaceDeletionOptions(); loadReplicaRunOptions();
@@ -37,7 +38,7 @@ export async function preparePreprod(client: PoolClient, command: PreprodCommand
     if (!command.backupKey) throw new Error('backup_missing');
     const backup = await downloadTenantBackup(command.backupKey, true);
     if (canonical(await inspectPreprod(client, request)) !== canonical(state)) throw new Error('source_changed');
-    const evidence = evidenceSchema.parse({ format: 'preprod-a4-snapshot/1',
+    const evidence = evidenceSchema.parse({ format: `${tier}-a4-snapshot/1`,
       operationId: request.operationId, candidateCommit: request.candidateCommit, candidateImage: request.candidateImage,
       writerFenceRef: request.writerFenceRef, requestSha256: command.requestSha256,
       ...state, ...backup, backupKey: command.backupKey });
@@ -47,7 +48,8 @@ export async function preparePreprod(client: PoolClient, command: PreprodCommand
   }
   const evidenceBytes = await protectedBytes(`${custody}/snapshot.json`);
   const evidence = evidenceSchema.parse(JSON.parse(evidenceBytes.toString('utf8')));
-  if (evidence.operationId !== request.operationId || evidence.candidateCommit !== request.candidateCommit
+  if (evidence.format !== `${tier}-a4-snapshot/1` || evidence.operationId !== request.operationId
+    || evidence.candidateCommit !== request.candidateCommit
     || evidence.candidateImage !== request.candidateImage || evidence.writerFenceRef !== request.writerFenceRef
     || evidence.requestSha256 !== command.requestSha256) throw new Error('snapshot_binding_mismatch');
   for (const [key, value] of Object.entries(state)) {
@@ -64,7 +66,8 @@ export async function preparePreprod(client: PoolClient, command: PreprodCommand
   const receipt = rehearsalSchema.parse(await protectedJson(`${custody}/rehearsal.json`));
   // D11 qualification can predate the final rollback backup. Compare the candidate,
   // verifier-bound mapping and logical census, not operation or physical dump bytes.
-  if (receipt.candidateCommit !== request.candidateCommit || receipt.candidateImage !== request.candidateImage
+  if (receipt.format !== `${tier}-a4-rehearsal/2` || receipt.candidateCommit !== request.candidateCommit
+    || receipt.candidateImage !== request.candidateImage
     || Object.entries(state).some(([key, value]) => receipt[key as keyof typeof receipt] !== value)) {
     throw new Error('rehearsal_mismatch');
   }
