@@ -101,6 +101,16 @@ describe('artifact live controller', () => {
     await f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 });
     expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', stateDetail: 'builder_unavailable:npm_relay_status' });
   });
+  it('should record the teardown failure when a stop without detail fails', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    vi.mocked(f.core.waitDeleted).mockImplementationOnce(async () => {
+      throw new LiveError('builder_unavailable', 'k8s_wait_deleted_timeout');
+    });
+    await expect(f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'k8s_wait_deleted_timeout' });
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'RECOVERING',
+      stateDetail: 'builder_unavailable:k8s_wait_deleted_timeout' });
+  });
   it('should persist code and reason when preparation fails after the pod exists', async () => {
     const f = fixture();
     f.ports.worker.clean = vi.fn(async () => { throw new LiveError('builder_unavailable', 'supervisor_relay_502'); });
