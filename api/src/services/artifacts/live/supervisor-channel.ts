@@ -13,6 +13,9 @@ export interface ChannelOptions {
   /** API-held Ed25519 private key; only its public half is placed in the pod spec. */
   signingKey(): KeyObject; now(): number; id(): string; timeoutMs?: number;
 }
+/** Per-call bounds of one supervisor tree operation: `signal` cuts a hung or superseded command, `onProgress`
+ * fires once per sent frame or drained page so a stall watchdog observes large transfers. */
+export interface SupervisorCallOptions { signal?: AbortSignal; onProgress?: () => void }
 function unavailable(): never { throw new LiveError('builder_unavailable', 'supervisor_channel_error'); }
 /** Maps a transfer refusal to a closed code: overflow is limit_exceeded, anything else the given code/reason. */
 export const failure = (code: string, reason?: string): TransferFailure => kind => {
@@ -43,10 +46,16 @@ export function createSupervisorChannel(options: ChannelOptions) {
     return fence;
   }
   /** terminate cancels every older in-flight command of the pod first; a timeout aborts the request. */
-  async function call(runtime: LiveRuntime, op: SupervisorOp, args: Record<string, unknown>) {
+  async function call(runtime: LiveRuntime, op: SupervisorOp, args: Record<string, unknown>,
+    callOptions: Pick<SupervisorCallOptions, 'signal'> = {}) {
     const fence = admit(runtime);
     if (op === 'terminate') for (const older of inflight.get(runtime.podName) ?? []) older.abort();
     const controller = new AbortController();
+    const onExternal = () => controller.abort();
+    if (callOptions.signal) {
+      if (callOptions.signal.aborted) controller.abort();
+      else callOptions.signal.addEventListener('abort', onExternal, { once: true });
+    }
     const set = inflight.get(runtime.podName) ?? new Set<AbortController>();
     set.add(controller); inflight.set(runtime.podName, set);
     const timer = setTimeout(() => controller.abort(), timeoutMs); timer.unref?.();
@@ -54,7 +63,9 @@ export function createSupervisorChannel(options: ChannelOptions) {
       const id = options.id(); const issuedAt = options.now();
       const frame = sealFrame(options.signingKey(), { v: 1, id, op, fence, issuedAt, expiresAt: issuedAt + FRAME_TTL_MS, args });
       const aborted = new Promise<never>((_resolve, reject) => {
-        controller.signal.addEventListener('abort', () => reject(new LiveError('builder_unavailable', 'supervisor_channel_aborted')), { once: true });
+        // An already-aborted signal never fires a later listener, so a pre-aborted call must reject at once.
+        if (controller.signal.aborted) reject(new LiveError('builder_unavailable', 'supervisor_channel_aborted'));
+        else controller.signal.addEventListener('abort', () => reject(new LiveError('builder_unavailable', 'supervisor_channel_aborted')), { once: true });
       });
       const sending = options.channel.send({ podName: fence.podName, podUid: fence.podUid }, frame, controller.signal);
       sending.catch(() => undefined);
@@ -62,36 +73,38 @@ export function createSupervisorChannel(options: ChannelOptions) {
     } catch (error) {
       if (error instanceof LiveError) throw error;
       return unavailable(); // transport detail is never surfaced
-    } finally { clearTimeout(timer); set.delete(controller); }
+    } finally { clearTimeout(timer); set.delete(controller); callOptions.signal?.removeEventListener('abort', onExternal); }
   }
   /** Streams a tree file by file into bounded put frames, holding one file and one frame. Per-file and running limits
    * refuse as soon as they overflow; the whole tree is checked before the digest that the commit frame carries, so a
    * refused or interrupted tree is never committed. */
   async function stream(runtime: LiveRuntime, target: TransferTarget, files: AsyncIterable<TransferFile> | Iterable<TransferFile>,
-    limits: TreeLimits, fail: TransferFailure) {
+    limits: TreeLimits, fail: TransferFailure, streamOptions: SupervisorCallOptions = {}) {
     const id = options.id(); const writer = putWriter(id, target);
     const entries: TransferEntry[] = []; let total = 0;
     for await (const file of files) {
+      streamOptions.signal?.throwIfAborted();
       const entry = entryOf(file, fail); total += entry.size;
       if (entries.length >= limits.files || entry.size > limits.fileBytes || total > limits.totalBytes) fail('limit');
       entries.push(entry);
-      for (const args of writer.add(file)) await call(runtime, 'put', args);
+      for (const args of writer.add(file)) { await call(runtime, 'put', args, streamOptions); streamOptions.onProgress?.(); }
     }
-    for (const args of writer.end()) await call(runtime, 'put', args);
+    for (const args of writer.end()) { await call(runtime, 'put', args, streamOptions); streamOptions.onProgress?.(); }
     return { transfer: id, treeDigest: manifestDigest(entries, limits, fail) };
   }
   /** An in-memory tree is refused as a whole before its first put frame. */
   async function transfer(runtime: LiveRuntime, target: TransferTarget, files: readonly TransferFile[], limits: TreeLimits,
-    fail: TransferFailure) {
+    fail: TransferFailure, transferOptions: SupervisorCallOptions = {}) {
     treeDigest(files, limits, fail);
-    return stream(runtime, target, files, limits, fail);
+    return stream(runtime, target, files, limits, fail, transferOptions);
   }
   const snapshot = (runtime: LiveRuntime, root: 'output' | 'dependencies', limits: TreeLimits, links: 'refuse' | 'skip',
     fail: TransferFailure) => readSnapshot(cursor => call(runtime, 'snapshot', { root, cursor }), limits, links, fail);
   /** Streaming read: each finished file goes to `sink` before the next page is requested. */
   const drain = (runtime: LiveRuntime, root: 'dependencies', limits: TreeLimits, links: 'skip', fail: TransferFailure,
-    sink: (file: TransferFile) => Promise<void>) =>
-    streamSnapshot(cursor => call(runtime, 'snapshot', { root, cursor }), limits, links, fail, sink);
+    sink: (file: TransferFile) => Promise<void>, drainOptions: SupervisorCallOptions = {}) =>
+    streamSnapshot(cursor => call(runtime, 'snapshot', { root, cursor }, drainOptions), limits, links, fail, sink,
+      drainOptions.onProgress);
   return { call, transfer, stream, snapshot, drain, id: options.id };
 }
 export type SupervisorCore = ReturnType<typeof createSupervisorChannel>;

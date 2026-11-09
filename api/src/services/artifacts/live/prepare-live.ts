@@ -1,7 +1,7 @@
 import type { LivePorts } from './ports';
 import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
 import { checkpoint, currentBinding, observeHead, transition } from './transitions';
-import { withinPhase } from './deadline';
+import { runPhase, withinPhase } from './deadline';
 
 /** Used by cold revive, crash restore and wake after the older build process tree has terminated. Each heavy phase
  * waits its own turn in the node queue, so a pre-bundle never overlaps another pre-bundle or a build. */
@@ -22,11 +22,13 @@ export async function prepareLive(ports: LivePorts, key: LiveKey, runtime: LiveR
   const source = await ports.forge.snapshot(key, head);
   if (source.headSha !== head) throw new LiveError('git_head_moved');
   await ports.worker.clean(runtime);
-  const cache = await withinPhase(ports.cache.acquire(source, runtime));
-  await ports.worker.prepare(runtime, source, cache);
+  const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, runtime));
+  await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
   await ports.worker.restore(runtime, draft);
-  await ports.heavy.run(runtime.podName, 'prebundle', () => withinPhase(ports.worker.prebundle(runtime)));
-  const ready = await ports.heavy.run(runtime.podName, 'dev', () => withinPhase(ports.worker.live(runtime)), { live: true });
+  await ports.heavy.run(runtime.podName, 'prebundle', () => runPhase(key, 'prebundle',
+    () => withinPhase(ports.worker.prebundle(runtime))));
+  const ready = await ports.heavy.run(runtime.podName, 'dev', () => runPhase(key, 'live',
+    () => withinPhase(ports.worker.live(runtime))), { live: true });
   await currentBinding(ports, key, runtime.generation);
   if (await ports.forge.head(key) !== head) throw new LiveError('git_head_moved');
   const live = await transition(ports, key, runtime, state => {
