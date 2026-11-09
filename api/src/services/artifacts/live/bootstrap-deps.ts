@@ -46,18 +46,34 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
     } finally { await set.dispose(); }
     return staged;
   }
-  async function requireCovered(staged) {
+  function validWorkspace(name) {
+    if (typeof name !== 'string' || !name || name.length > 256 || name.includes('\\') || name.includes('\0')
+      || name.startsWith('/') || name.endsWith('/')) return false;
+    return name.split('/').every((s) => s !== '' && s !== '.' && s !== '..' && /^[A-Za-z0-9._@+-]+$/.test(s));
+  }
+  async function requireCovered(staged, workspaces) {
     let lock = null;
     try { lock = JSON.parse(await agentFs.readFile(at(INSTALL_DIR + '/package-lock.json'), 'utf8')); } catch { agentFail('failed', 'lockfile_missing'); }
     if (!lock || !lock.packages || typeof lock.packages !== 'object' || Array.isArray(lock.packages)) agentFail('failed', 'invalid_lockfile');
+    if (workspaces.length > 0) {
+      const locked = new Set();
+      for (const entry of Object.values(lock.packages)) {
+        if (!entry || typeof entry !== 'object' || entry.link === true || typeof entry.resolved !== 'string'
+          || !/^https?:\/\//.test(entry.resolved) || typeof entry.integrity !== 'string') continue;
+        locked.add(entry.integrity);
+      }
+      for (const integrity of staged) if (!locked.has(integrity)) agentFail('integrity', 'integrity_missing');
+      return;
+    }
     for (const [path, entry] of Object.entries(lock.packages)) {
       if (!path || !entry || typeof entry !== 'object' || entry.link === true || typeof entry.resolved !== 'string'
         || !/^https?:\/\//.test(entry.resolved)) continue;
       if (typeof entry.integrity !== 'string' || !staged.has(entry.integrity)) agentFail('integrity', 'integrity_missing');
     }
   }
-  ctx.define('install', ['recipe', 'runId', 'source', 'cache', 'tarballs'], async ({ recipe, runId, source, cache, tarballs }) => {
+  ctx.define('install', ['recipe', 'runId', 'source', 'cache', 'tarballs', 'workspaces'], async ({ recipe, runId, source, cache, tarballs, workspaces }) => {
     if (recipe !== 'install' || typeof runId !== 'string' || !AGENT_ID.test(runId)) agentFail('failed', 'invalid_args');
+    if (!Array.isArray(workspaces) || workspaces.length > 16 || !workspaces.every(validWorkspace)) agentFail('failed', 'invalid_args');
     agentArgs(source, ['transfer', 'treeDigest']); agentArgs(cache, ['transfer', 'treeDigest']);
     if (state.installed) agentFail('failed', 'already_installed');
     if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
@@ -69,8 +85,10 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
       if (!paths.includes('package.json') || !paths.includes('package-lock.json')) agentFail('failed', 'lockfile_missing');
       for (const file of set.files) await ctx.place(file, INSTALL_DIR);
     } finally { await set.dispose(); }
-    await requireCovered(await stageTarballs(cache, tarballs));
-    const result = await ctx.runToExit(ctx.recipes.install, INSTALL_DIR, ctx.options.installEnv);
+    await requireCovered(await stageTarballs(cache, tarballs), workspaces);
+    const scoped = workspaces.length === 0 ? ctx.recipes.install
+      : { ...ctx.recipes.install, args: [...ctx.recipes.install.args, ...[...workspaces].sort().map((w) => '--workspace=' + w)] };
+    const result = await ctx.runToExit(scoped, INSTALL_DIR, ctx.options.installEnv);
     return { exitCode: result.exitCode, signal: result.signal, output: result.output };
   });
 });
