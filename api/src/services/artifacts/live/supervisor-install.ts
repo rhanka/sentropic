@@ -21,11 +21,11 @@ function unavailable(reason?: string): never { throw new LiveError('builder_unav
 export function createCleanInstall(core: SupervisorCore,
   source: (stagingRef: string) => Promise<readonly TransferFile[]>): CachePorts['cleanInstall'] {
   async function clear(runtime: LiveRuntime) {
-    if (JSON.stringify((await core.call(runtime, 'clear', { paths: ['/tmp'] })).cleared) !== '["/tmp"]') unavailable();
+    if (JSON.stringify((await core.call(runtime, 'clear', { paths: ['/tmp'] })).cleared) !== '["/tmp"]') unavailable('install_clean_unconfirmed');
   }
   return async input => {
     const runtime = input.runtime;
-    if (!runtime || JSON.stringify(input.recipe) !== JSON.stringify(INSTALL_RECIPE)) unavailable();
+    if (!runtime || JSON.stringify(input.recipe) !== JSON.stringify(INSTALL_RECIPE)) unavailable('install_recipe_invalid');
     const files = await source(input.stagingRef);
     const lock = files.find(file => file.path === LOCKFILE);
     if (!lock || !Buffer.from(lock.bytes).equals(Buffer.from(input.lockfile))) unavailable('staging_invalid');
