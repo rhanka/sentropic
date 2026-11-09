@@ -84,12 +84,12 @@ Add a minimal generic static-key Gemini client to @sentropic/llm-mesh so immo ca
       - [ ] No UI changes.
     - [ ] **E2E tests**
       - [ ] No E2E changes (no user-visible surface).
-- [ ] **Lot 2 — Version, changelog, locks, immo compat**
-  - [ ] Patch bump `packages/llm-mesh/package.json` above npm latest (`0.33.0`).
-  - [ ] Update `packages/llm-mesh/tests/decision-public-surface.test.ts` version pin.
-  - [ ] Update `packages/llm-mesh/CHANGELOG.md` under Unreleased.
-  - [ ] Regenerate lockfiles through make (root `package-lock.json` llm-mesh version entry).
-  - [ ] Verify immo `refresh-mesh.ts` imports (`DEFAULT_ROUTE_POLICY`, `InMemoryRoutePolicyProfiles`, `OpenAIAdapter`, `CloudCodeRuntimeClient`, `CodexRuntimeClient`, `createLlmMeshFacade`, facade types) still resolve: state drop-in or exact wiring change in the report.
+- [x] **Lot 2 — Version, changelog, locks, immo compat**
+  - [x] Patch bump `packages/llm-mesh/package.json` above npm latest (`0.33.0`).
+  - [x] Update `packages/llm-mesh/tests/decision-public-surface.test.ts` version pin.
+  - [x] Update `packages/llm-mesh/CHANGELOG.md` under Unreleased.
+  - [x] Regenerate lockfiles through make (root `package-lock.json` llm-mesh version entry; unrelated `ui/package-lock.json` churn reverted).
+  - [x] Verify immo `refresh-mesh.ts` imports (`DEFAULT_ROUTE_POLICY`, `InMemoryRoutePolicyProfiles`, `OpenAIAdapter`, `CloudCodeRuntimeClient`, `CodexRuntimeClient`, `createLlmMeshFacade`, facade types) still resolve: drop-in (report states exact immo wiring).
   - [ ] Lot gate: `make scope-check ENV=test-llm-mesh-gemini-min`.
 - [ ] **Lot 3 — Final validation**
   - [ ] Typecheck & Lint (cf Lot 1).
