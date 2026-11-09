@@ -28,7 +28,8 @@ const request = { format: 'preprod-a4-request/1', namespace: 'sentropic-preprod'
   candidateCommit: candidate, candidateImage: `ghcr.io/rhanka/sentropic-api@sha256:${hash}`,
   backupTemplateSha256: hash, authorizationRef: 'track:cutover-approval', writerFenceRef: 'track:writer-fence',
   rollbackCheckpointRef: 'track:rollback', rollbackLimitsRef: 'track:limits', sourceMetadataDispositionRef: 'track:metadata',
-  remoteSnapshotRef: 'custody:remote-export', remoteSnapshotDigest: sha256(remote), legacyWritersStopped: true, remoteFileWriterStopped: true };
+  remoteSnapshotRef: 'custody:remote-export', remoteSnapshotDigest: sha256(remote), legacyWritersStopped: true, remoteFileWriterStopped: true,
+  emailCodeActiveKeyRef: 'email-code-hmac:v1:preprod:15c2f8b66073655a' };
 const requestBytes = JSON.stringify(request), requestSha256 = sha256(requestBytes);
 const state = { sourceContentSha256: hash, schemaSha256: hash, journalSha256: hash, remoteSnapshotDigest: sha256(remote),
   mappingSha256: hash, identityAssetSha256: hash, connectorAssetSha256: hash };
@@ -101,6 +102,18 @@ describe('real cutover checkpoint preparation', () => {
       expect(await readdir(custody)).not.toContain('checkpoint.json');
     });
   }
+  it('should refuse a key ring other than the approved request ring', async () => {
+    const other = JSON.stringify({ ...request, emailCodeActiveKeyRef: 'email-code-hmac:v1:preprod:0000000000000000' });
+    await write('request.json', other);
+    await expect(preparePreprod(client, { phase: 'checkpoint', dryRun: true, requestSha256: sha256(other) })).rejects.toThrow('policy_mismatch');
+  });
+  it('should refuse snapshot evidence or a rehearsal receipt of the other tier', async () => {
+    await write('rehearsal.json', JSON.stringify({ ...receipt, format: 'prod-a4-rehearsal/2' }));
+    await expect(preparePreprod(client, { phase: 'checkpoint', dryRun: true, requestSha256 })).rejects.toThrow('rehearsal_mismatch');
+    await write('snapshot.json', JSON.stringify({ ...evidence, format: 'prod-a4-snapshot/1' }));
+    await expect(preparePreprod(client, { phase: 'checkpoint', dryRun: true, requestSha256 })).rejects.toThrow('snapshot_binding_mismatch');
+    expect(await readdir(custody)).not.toContain('checkpoint.json');
+  });
   it('should perform no object download or write in snapshot preflight', async () => {
     await rm(`${custody}/source.sql.gz`); await rm(`${custody}/snapshot.json`);
     const names = await readdir(custody);

@@ -45,6 +45,11 @@ never carried into the deployed overlay (the overlay still reflected the superse
 3. Server challenges stay single-use.
 4. DV5 keeps the crypto axis distinct, so a preprod assertion/session can never mint a prod-valid
    token even though the `rpIdHash` is now shared with prod.
+5. No passkey registration ceremony on the preprod IdP (`WEBAUTHN_REGISTRATION=disabled` in its
+   ConfigMap, T1 architect verdict A4, 2026-11-08): with the shared parent RP ID and the same user
+   handle, an enrolment there could replace the user's prod passkey on the authenticator. The
+   preprod IdP receives credentials only through the prod to preprod identity sync (G7); the sync
+   converges a replica credential's `rpId` to the source value.
 
 ## Execution prerequisites (cluster-side, NOT in this PR — owned by infra)
 
