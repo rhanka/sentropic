@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EnrollmentProvider } from '../../src/enrollment/contracts.js';
+import { ClaudeRefreshPreparationError } from '../../src/enrollment/claude-code.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
 import type { ReauthAlertEvent } from '../../src/service/reauth-alert.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
@@ -185,6 +186,68 @@ describe('runCustodianRefreshCycle', () => {
       .listEligible({ principalRef: 'owner', ownerScopeRef: 'owner' });
     expect(eligible).toHaveLength(1);
     expect(eligible[0].readiness).toBe('reauth-required');
+  });
+
+  it('should defer without flipping on a transient provider failure', async () => {
+    // M1: an explicit 503 means the grant was not consumed. The account
+    // must stay active with no owner alert; the next tick retries.
+    const refresh = vi.fn(async () => {
+      throw new Error('Cloud Code token refresh failed (503): Service Unavailable');
+    });
+    const provider = { refresh } as unknown as EnrollmentProvider;
+    const alerts: ReauthAlertEvent[] = [];
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+      { now: () => T0 + 55 * MINUTE, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    seed(service, { accountId: 'acct-transient', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-t', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-deferred-retry', readiness: 'ready' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(alerts).toEqual([]);
+    const eligible = await service.createRouteDirectory({} as never)
+      .listEligible({ principalRef: 'owner', ownerScopeRef: 'owner' });
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0].readiness).toBe('ready');
+  });
+
+  it('should flip on an explicit invalid_grant revocation', async () => {
+    // M1: a revoked grant is definitive — flip early and alert, no retry.
+    const refresh = vi.fn(async () => {
+      throw new Error('Codex token refresh failed (400): {"error":"invalid_grant","reason":"revoked"}');
+    });
+    const provider = { refresh } as unknown as EnrollmentProvider;
+    const alerts: ReauthAlertEvent[] = [];
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+      { now: () => T0 + 55 * MINUTE, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    seed(service, { accountId: 'acct-revoked', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-dead', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-failed-reauth', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'refresh-failed' });
+  });
+
+  it('should defer without flipping on a preparation failure', async () => {
+    // M1: no provider request went out, so the report must not claim a
+    // reauth that routing denies.
+    const refresh = vi.fn(async () => {
+      throw new ClaudeRefreshPreparationError();
+    });
+    const provider = { refresh } as unknown as EnrollmentProvider;
+    const alerts: ReauthAlertEvent[] = [];
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+      { now: () => T0 + 55 * MINUTE, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    seed(service, { accountId: 'acct-prep', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-p', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-deferred-retry', readiness: 'ready' });
+    expect(alerts).toEqual([]);
   });
 
   it('should read reauth-required for an expired external seat without flipping it', async () => {
