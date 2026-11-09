@@ -3127,7 +3127,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	    receipt="test-results/browser-$${E2E_SHARD:-scoped}"; \
 	    rm -f "$$receipt.expected.json" "$$receipt.actual.json"; \
 	    status=0; CI_BROWSER_EXPECTED_FILE="$$receipt.expected.json" PLAYWRIGHT_JSON_OUTPUT_FILE="$$receipt.actual.json" npx --no-install playwright test "$$@" \
-	      --project=chromium --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	      --project=chromium --output="test-results/out-$${E2E_SHARD:-scoped}" --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
 	    node /app/browser-shards.mjs reconcile "$$receipt.expected.json" "$$receipt.actual.json" || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping services..."
@@ -3153,7 +3153,7 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
 	    rm -f test-results/vscode.expected.json test-results/vscode.actual.json; \
 	    status=0; CI_BROWSER_EXPECTED_FILE=test-results/vscode.expected.json PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/vscode.actual.json npx --no-install playwright test "$$spec_path" \
-	      --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	      --output="test-results/out-vscode" --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
 	    node /app/browser-shards.mjs reconcile test-results/vscode.expected.json test-results/vscode.actual.json || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping VSCode E2E services..."
@@ -3161,7 +3161,7 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 
 .PHONY: test-smoke
 test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx --no-install playwright test --grep "devrait charger"
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx --no-install playwright test --output="test-results/out-smoke" --grep "devrait charger"
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
 
