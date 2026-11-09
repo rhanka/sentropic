@@ -2,13 +2,15 @@ import type { Handoff, HandoffReceipt } from '@sentropic/artifacts/live-host';
 import { LiveError, type LiveKey } from './records';
 import { unconfigured, type ForgeBinding, type ForgeBindings } from './forge-binding';
 import type { HandoffOutcomes } from './handoff-publication';
-import { PHASE_DEADLINE_MS } from './deadline';
+import { INSTALL_CEILING_MS_DEFAULT, PHASE_DEADLINE_MS } from './deadline';
 
-/** Bounded phases of one build-only run, each under PHASE_DEADLINE_MS (withinPhase or its recipe timeout). */
+/** Bounded phases of one build-only run: the install runs under the progress watchdog ceiling, the others under
+ * PHASE_DEADLINE_MS (withinPhase or its recipe timeout). */
 export const BUILD_ONLY_PHASES = ['install', 'prepare', 'build', 'verify'] as const;
-/** A run older than its heavy-gate wait plus its bounded phases (20 min) is presumed dead and can be re-admitted.
- * There is no pod lifetime to derive it from (A-LIVE Amendment 1). */
-export const runStaleMs = (heavyWaitMs: number) => heavyWaitMs + BUILD_ONLY_PHASES.length * PHASE_DEADLINE_MS;
+/** A run older than its heavy-gate wait plus the install ceiling and the other bounded phases is presumed dead and
+ * can be re-admitted. There is no pod lifetime to derive it from (A-LIVE Amendment 1). */
+export const runStaleMs = (heavyWaitMs: number, installCeilingMs: number = INSTALL_CEILING_MS_DEFAULT) =>
+  heavyWaitMs + installCeilingMs + (BUILD_ONLY_PHASES.length - 1) * PHASE_DEADLINE_MS;
 /** Builder-side job ledger of the host build API. One run token per admission; only the current run may fail it. */
 export interface BuildJobRecord {
   storageScopeId: string; artifactId: string; jobId: string; state: 'accepted' | 'published' | 'failed';
