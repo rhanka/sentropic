@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EnrollmentProvider } from '../../src/enrollment/contracts.js';
 import { ClaudeRefreshPreparationError } from '../../src/enrollment/claude-code.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
+import type { CustodianRefreshReport } from '../../src/service/custodian-refresh.js';
+import type { KeyringAdapter } from '../../src/service/facade.js';
 import type { ReauthAlertEvent } from '../../src/service/reauth-alert.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 import { markExternalSeatAuthority } from '../../src/service/external-seat-authority.js';
@@ -248,6 +250,75 @@ describe('runCustodianRefreshCycle', () => {
     expect(report.accounts[0]).toMatchObject(
       { action: 'refresh-deferred-retry', readiness: 'ready' });
     expect(alerts).toEqual([]);
+  });
+
+  it('should run an immediate cycle on loop start and stop cleanly', async () => {
+    // M3: readiness is reported at boot, not after one idle interval; stop
+    // prevents every later tick.
+    vi.useFakeTimers();
+    try {
+      const { service } = makeService('ok', T0, []);
+      seed(service, { accountId: 'acct-loop', ownerScopeRef: 'owner',
+        expiresAt: iso(T0 + 600 * MINUTE), refreshToken: 'grant-loop', enrollmentCompletedAt: iso(T0) });
+      const reports: CustodianRefreshReport[] = [];
+      const stop = service.startCustodianLoop(60_000, (report) => { reports.push(report); });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reports).toHaveLength(1);
+      expect(reports[0].accounts[0]).toMatchObject({ action: 'skipped-healthy', readiness: 'ready' });
+      stop();
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(reports).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should surface report-listener failures through onError without killing the loop', async () => {
+    // M3: a throwing sink or listener must not silence the loop.
+    vi.useFakeTimers();
+    try {
+      const { service } = makeService('ok', T0, []);
+      seed(service, { accountId: 'acct-loop', ownerScopeRef: 'owner',
+        expiresAt: iso(T0 + 600 * MINUTE), refreshToken: 'grant-loop', enrollmentCompletedAt: iso(T0) });
+      let attempts = 0;
+      const errors: unknown[] = [];
+      service.startCustodianLoop(60_000,
+        () => { attempts += 1; throw new Error('listener down'); },
+        (error) => { errors.push(error); });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(attempts).toBe(1);
+      expect(errors).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(100_000);
+      expect(attempts).toBe(2);
+      expect(errors).toHaveLength(2);
+      service.stopCustodianLoop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should surface cycle failures through onError', async () => {
+    // M3: a dead keyring ticks visibly instead of looping in silence.
+    vi.useFakeTimers();
+    try {
+      const failingKeyring: KeyringAdapter = {
+        getSecret: async (): Promise<string | null> => { throw new Error('keyring down'); },
+        setSecret: async (): Promise<void> => {},
+        deleteSecret: async (): Promise<void> => {},
+      };
+      const service = new LocalAccountTransportService(failingKeyring, new Map(),
+        { async resolveConfig() { return {}; } }, undefined, { now: () => T0 });
+      const errors: unknown[] = [];
+      const reports: CustodianRefreshReport[] = [];
+      const stop = service.startCustodianLoop(60_000,
+        (report) => { reports.push(report); }, (error) => { errors.push(error); });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(errors).toHaveLength(1);
+      expect(reports).toEqual([]);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should read reauth-required for an expired external seat without flipping it', async () => {

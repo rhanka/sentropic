@@ -189,11 +189,14 @@ export interface LlmMeshFacade {
   release(acquisition: AccountTransportAcquisition): Promise<void>;
 
   // Lot 1 custodian (D1 cluster custody, D4 reauth alert): proactive refresh
-  // cycle over mesh-managed accounts, secret-free report per account.
+  // cycle over mesh-managed accounts, secret-free report per account. The
+  // host runs exactly one loop per owner scope (no distributed lock here)
+  // and observes failures through onError.
   runCustodianRefreshCycle(): Promise<CustodianRefreshReport>;
   startCustodianLoop(
     intervalMs: number,
     onReport?: (report: CustodianRefreshReport) => void,
+    onError?: (error: unknown) => void,
   ): () => void;
   stopCustodianLoop(): void;
 
@@ -294,8 +297,8 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     async runCustodianRefreshCycle() {
       return service.runCustodianRefreshCycle();
     },
-    startCustodianLoop(intervalMs, onReport) {
-      return service.startCustodianLoop(intervalMs, onReport);
+    startCustodianLoop(intervalMs, onReport, onError) {
+      return service.startCustodianLoop(intervalMs, onReport, onError);
     },
     stopCustodianLoop() {
       service.stopCustodianLoop();
