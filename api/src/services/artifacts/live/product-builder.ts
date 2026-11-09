@@ -17,7 +17,8 @@ import { readBuilderCacheStorage, type BuilderCacheStorage, type PrivateCacheBlo
 import { readInstallBudget } from './deadline';
 import { LiveError } from './records';
 import type { HostIdentity } from './host-build-api';
-import type { KubernetesCore } from './pods';
+import { readWorkerSizing, type KubernetesCore } from './pods';
+import { installEnvironment, readInstallHeapMb } from './recipes';
 import type { LivePorts } from './ports';
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -121,7 +122,8 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   service = createBuilderService({ pool: deps.pool, cacheBlobs: deps.cacheBlobs(cacheStorage), placement, supervisorKey: signer,
     relayUrl, kubernetes: deps.kubernetes(placement), host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
     authenticate: deps.authenticate, schedule, liveWaitMs: PRODUCT_LIVE_WAIT_MS, now, id, binding,
-    installBudget: readInstallBudget(env),
+    installBudget: readInstallBudget(env), sizing: readWorkerSizing(env),
+    installEnv: installEnvironment(readInstallHeapMb(env)),
     forge: remoteHostForge(reads), sources: { source: reads.source }, forgeBindings,
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });

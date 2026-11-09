@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { logger } from '../../../logger';
 import { LiveError } from './records';
+import { scrubRecipeOutput, truncateRecipeTail } from './recipe-diagnostics';
 
 /** Bound of one heavy phase; the recipes carry the same 300 s timeout. */
 export const PHASE_DEADLINE_MS = 300_000;
@@ -96,9 +97,12 @@ export function phaseKeyHash(key: { storageScopeId: string; artifactId: string }
   return createHash('sha256').update(JSON.stringify([key.storageScopeId, key.artifactId])).digest('hex');
 }
 /** One phase log line: `artifact_live_phase` with the key hash, phase, duration, outcome and reason; no secret.
- * The start line carries `reason: 'started'` so an aggregation over `outcome` never mistakes a start for a success. */
+ * The start line carries `reason: 'started'` so an aggregation over `outcome` never mistakes a start for a success.
+ * The fail line carries `detail` only when the error brings log-only diagnostics (a scrubbed bounded recipe tail);
+ * the job ledger and `stateDetail` still see the closed `reason` alone. */
 export interface PhaseLogFields {
   msg: 'artifact_live_phase'; key: string; phase: string; ms: number; outcome: 'ok' | 'fail'; reason?: string;
+  detail?: string;
 }
 export type PhaseLogger = (fields: PhaseLogFields) => void;
 const defaultPhaseLogger: PhaseLogger = ({ msg, ...fields }) => logger.info(fields, msg);
@@ -119,7 +123,11 @@ export async function runPhase<T>(key: { storageScopeId: string; artifactId: str
       ? new LiveError(error.code, `phase_timeout:${phase}`) : error;
     const reason = failure instanceof LiveError ? (failure.reason ? `${failure.code}:${failure.reason}` : failure.code)
       : 'builder_unavailable';
-    log({ msg: 'artifact_live_phase', key: hashed, phase, ms: now() - started, outcome: 'fail', reason });
+    // Scrubbed at the source and again here, so a detail that bypassed the recipe reader still never logs a secret.
+    const detail = failure instanceof LiveError && failure.detail !== undefined
+      ? truncateRecipeTail(scrubRecipeOutput(failure.detail)) : undefined;
+    log({ msg: 'artifact_live_phase', key: hashed, phase, ms: now() - started, outcome: 'fail', reason,
+      ...(detail === undefined ? {} : { detail }) });
     throw failure;
   }
 }

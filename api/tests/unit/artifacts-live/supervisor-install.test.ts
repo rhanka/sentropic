@@ -82,9 +82,36 @@ describe('supervisor offline clean install', () => {
   it('should fail closed on a missing staged tarball or a failed install, never falling back to the network', async () => {
     const missing = fakePod({ ...exported, install: () => refuse('integrity') });
     await expect(missing.supervisor.cleanInstall(inputs())).rejects.toMatchObject({ code: 'dependency_integrity_missing' });
-    const failed = fakePod({ ...exported, install: () => ({ exitCode: 1 }) });
-    await expect(failed.supervisor.cleanInstall(inputs())).rejects.toMatchObject({ code: 'builder_unavailable' });
+    const failed = fakePod({ ...exported, install: () => ({ exitCode: 1, signal: null, output: '' }) });
+    await expect(failed.supervisor.cleanInstall(inputs())).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'install_failed:exit_1', detail: undefined });
     expect(failed.ops()).not.toContain('snapshot');
+  });
+
+  it('should classify a failed install into the job reason: disk, cache, memory, signal or plain exit', async () => {
+    const b64 = (value: string) => Buffer.from(value, 'utf8').toString('base64');
+    const classified = async (install: Record<string, unknown>) => {
+      const pod = fakePod({ ...exported, install: () => install });
+      const failure = await pod.supervisor.cleanInstall(inputs()).then(() => undefined, error => error) as {
+        code?: string; reason?: string; detail?: string };
+      expect(failure.code).toBe('builder_unavailable');
+      return failure;
+    };
+    expect((await classified({ exitCode: 1, signal: null, output: b64('npm error code ENOSPC') })).reason)
+      .toBe('install_failed:enospc');
+    expect((await classified({ exitCode: 1, signal: null, output: b64("cache mode is 'only-if-cached'") })).reason)
+      .toBe('install_failed:enotcached');
+    expect((await classified({ exitCode: 137, signal: null, output: '' })).reason).toBe('install_failed:oom');
+    expect((await classified({ exitCode: null, signal: 'SIGKILL', output: '' })).reason).toBe('install_failed:oom');
+    expect((await classified({ exitCode: null, signal: 'SIGTERM', output: '' })).reason).toBe('install_failed:signal_SIGTERM');
+    expect((await classified({ exitCode: 2, signal: null, output: b64('npm error boom') })).reason).toBe('install_failed:exit_2');
+  });
+
+  it('should refuse a malformed install reply without guessing a cause', async () => {
+    const pod = fakePod({ ...exported, install: () => ({ exitCode: 'boom' }) });
+    await expect(pod.supervisor.cleanInstall(inputs()))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'install_unconfirmed' });
+    expect(pod.ops()).not.toContain('snapshot');
   });
   it('should refuse an exported tree with special files as an invalid dependency cache', async () => {
     const special = fakePod({ snapshot: () => ({ next: null, entries: [{ path: 'node_modules/x', type: 'other', mode: 0, size: 0, offset: 0, data: '' }] }) });
