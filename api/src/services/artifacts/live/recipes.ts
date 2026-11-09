@@ -34,8 +34,10 @@ export function artifactEnvironment() {
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
     npm_config_update_notifier: 'false', ...ARTIFACT_PUBLIC_ENV };
 }
-/** Workspace-scoped install, equivalent to `npm ci --workspace=<ws>` from the root: the frozen base plus one
- * `--workspace=<dir>` flag per selected workspace (sorted, trusted server-side selection only). Empty means full. */
+/** Workspace-scoped install, exactly `npm ci --workspace=<ws>` from the root without `--include-workspace-root`:
+ * the frozen base plus one `--workspace=<dir>` flag per selected workspace (sorted, trusted server-side only).
+ * No root dependency is installed in scoped mode: a tool the workspace build needs must be declared in the workspace.
+ * Empty means full. */
 export function installRecipeFor(workspaces: readonly string[] = []): typeof INSTALL_RECIPE {
   const sorted = [...workspaces].sort();
   if (sorted.length === 0) return INSTALL_RECIPE;
