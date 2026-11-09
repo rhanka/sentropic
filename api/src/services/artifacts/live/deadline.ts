@@ -43,7 +43,7 @@ export async function withinPhase<T>(work: Promise<T>, milliseconds = PHASE_DEAD
   } finally { clearTimeout(timer); }
 }
 /** Install-phase failure: the failing phase rides in the reason, so the job ledger and `stateDetail` name it. */
-const installTimeout = (): never => { throw new LiveError('builder_unavailable', 'phase_timeout:install'); };
+const installTimeout = () => new LiveError('builder_unavailable', 'phase_timeout:install');
 /** Progress-based bound of the dependency install phase: `report` on every streamed tarball or drained file keeps
  * the stall timer quiet, the opaque `npm ci` sub-phase suspends it, and the absolute ceiling always applies. A
  * timeout does not attest termination: callers must quiesce and confirm teardown before replacement. */
@@ -66,7 +66,10 @@ export async function withinInstallBudget<T>(work: (progress: InstallProgress) =
   try {
     ceiling = setTimeout(() => rejectCeiling(installTimeout()), budget.ceilingMs); ceiling.unref();
     arm();
-    return await Promise.race([work(progress), stalled, expired]);
+    // A cut install keeps streaming in the background (a late success still admits a verified entry); its late
+    // rejection must never surface as an unhandled rejection after the race already settled.
+    const run = work(progress); run.catch(() => undefined);
+    return await Promise.race([run, stalled, expired]);
   } finally { clearTimeout(stall); clearTimeout(ceiling); }
 }
 /** Key hash for phase logs: the ledger identity is never logged raw. */
