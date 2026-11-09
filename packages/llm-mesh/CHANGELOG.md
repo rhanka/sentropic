@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Static-key Gemini fallback client: `GeminiApiKeyRuntimeClient` (with the
+  `createGeminiApiKeyClient` factory) implements `GeminiAdapterClient` over
+  the Generative Language API `generateContent` endpoint with the
+  `x-goog-api-key` header and a `gemini-3.8-flash` default model. The key is
+  caller-provided only, never logged and never embedded in errors; failures
+  map to typed codes (`rate_limited` on 429/RESOURCE_EXHAUSTED,
+  `billing_unavailable` on 402, `auth_failed` on 401/403).
+
 ## 0.33.0
 
 - Seat onboarding (design r3, lots L1–L5): the `SeatOnboardingV1` contract
