@@ -92,6 +92,8 @@ export interface CustodianAccountReport {
   action: CustodianAccountAction;
   readiness: 'ready' | 'reauth-required';
   expiredAt?: string;
+  /** Upcoming expiry (future): the plannable rotation window for grant-less credentials. */
+  expiresAt?: string;
 }
 
 export interface CustodianRefreshReport {

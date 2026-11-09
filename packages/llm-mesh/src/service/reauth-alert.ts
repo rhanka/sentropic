@@ -9,7 +9,7 @@
  * The event carries a diagnostic account reference, never the raw account
  * id and never any token material.
  */
-export type ReauthAlertReason = 'refresh-failed' | 'expired-no-grant';
+export type ReauthAlertReason = 'refresh-failed' | 'expired-no-grant' | 'expiring-no-grant';
 
 export interface ReauthAlertEvent {
   /** Canonical ISO instant the flip was observed. */
@@ -20,6 +20,8 @@ export interface ReauthAlertEvent {
   accountRef: string;
   /** Canonical ISO expiry when the credential expired in the past. */
   expiredAt?: string;
+  /** Canonical ISO expiry when a grant-less credential is about to expire. */
+  expiresAt?: string;
   reason: ReauthAlertReason;
 }
 
