@@ -119,10 +119,10 @@ Generic platform job-failure email alerting: frozen OpsJobFailureV1 contract, pu
       - [ ] n/a
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Record ingestion contract in .tmp/rv/notify-l1.md (k8s L2 + immo L4).
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest cluster-mesh notifications scope
-  - [ ] Retest api unit notifications scope
-  - [ ] make scope-check green
-  - [ ] Final gate step 1: push branch, open PR with BRANCH.md text as body (draft until green, no merge)
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers
+- [x] **Lot N — Final validation**
+  - [x] Typecheck & Lint (via CI `api-static` + `typecheck-lint-api` green on run 42711326219; local docker builds blocked by unrelated audit-gate expiry)
+  - [x] Retest cluster-mesh notifications scope (local 25/25 + CI `validate-cluster-mesh` green)
+  - [x] Retest api unit notifications scope (via CI, green)
+  - [x] make scope-check green (harness C2 PASS before every commit)
+  - [x] Final gate step 1: push branch, open PR with BRANCH.md text as body (draft until green, no merge) — PR #984
+  - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers (run 42711326219 success on head)
