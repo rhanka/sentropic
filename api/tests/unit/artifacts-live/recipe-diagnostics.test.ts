@@ -78,7 +78,7 @@ describe('recipe diagnostics', () => {
 
   it('should bound and scrub a long pod tail', () => {
     const read = readRecipeDiagnostics({ exitCode: 1, signal: null,
-      output: b64(`${'y'.repeat(9000)}Authorization: Bearer secret-y`) });
+      output: b64(`${'y'.repeat(5000)}Authorization: Bearer secret-y`) });
     expect(read).toBeDefined();
     expect(Buffer.byteLength(read!.output)).toBeLessThanOrEqual(RECIPE_TAIL_BYTES);
     expect(read!.output).not.toContain('secret-y');

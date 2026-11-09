@@ -128,17 +128,21 @@ export function createAgent(options) {
       { cwd: ctx.at(cwd), env: { ...env }, shell: false, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     if (Number.isSafeInteger(child.pid)) ctx.state.groups.add(child.pid);
     ctx.state.child = child;
-    const chunks = []; let size = 0;
+    const chunks = []; let size = 0; let cut = false;
     const take = (data) => {
       const buf = Buffer.isBuffer(data) ? data : Buffer.from(String(data));
       chunks.push(buf); size += buf.length;
       while (size > AGENT_TAIL_BYTES) {
         const head = chunks[0]; const drop = size - AGENT_TAIL_BYTES;
+        cut = true;
         if (drop >= head.length) { chunks.shift(); size -= head.length; }
         else { chunks[0] = head.subarray(drop); size = AGENT_TAIL_BYTES; }
       }
     };
     child.recipeTail = () => Buffer.concat(chunks);
+    // A tail whose head was dropped starts mid-line: that partial line is discarded, so a secret whose label was cut
+    // off can never survive the scrub.
+    child.recipeCut = () => cut;
     for (const stream of [child.stdout, child.stderr]) {
       if (stream && typeof stream.on === 'function') {
         stream.on('data', take); stream.on('error', () => undefined);
@@ -159,7 +163,8 @@ export function createAgent(options) {
     if (timer.unref) timer.unref();
     const tail = () => {
       try {
-        const raw = child.recipeTail ? child.recipeTail().toString('utf8') : '';
+        let raw = child.recipeTail ? child.recipeTail().toString('utf8') : '';
+        if (child.recipeCut && child.recipeCut()) { const nl = raw.indexOf('\n'); raw = nl >= 0 ? raw.slice(nl + 1) : ''; }
         return Buffer.from(agentScrub(raw), 'utf8').subarray(-AGENT_TAIL_BYTES).toString('base64');
       } catch { return ''; }
     };

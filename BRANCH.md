@@ -37,6 +37,7 @@ Return a bounded, scrubbed recipe tail with exit code and signal from the worker
 
 ## AI Flaky tests
 - Acceptance rule:
+- [ ] test-e2e (1) failed on d1b9a1392: tests/07-matrix.spec.ts:139 "devrait exporter la matrice depuis le menu d'actions" (30.1s); the diff only touches the artifact builder (api/src/services/artifacts/live/*). Tracked main UI e2e instability (track 01M70VY5TT8KPY7EB0828BASZZ). Fresh head; no rerun, no skip, no timeout change.
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
   - Non-systematic means at least one success on the same commit and same command.
   - Never amend tests with additive timeouts.

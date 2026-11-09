@@ -15,7 +15,7 @@ export const INSTALL_HEAP_MB_ENV = 'ARTIFACT_INSTALL_HEAP_MB';
 export const INSTALL_HEAP_MB_DEFAULT = 1024;
 export function readInstallHeapMb(env: Readonly<Record<string, string | undefined>>): number {
   const parsed = Number(env[INSTALL_HEAP_MB_ENV]?.trim());
-  return Number.isSafeInteger(parsed) && parsed >= 256 && parsed <= 2048 ? parsed : INSTALL_HEAP_MB_DEFAULT;
+  return Number.isSafeInteger(parsed) && parsed >= 256 && parsed <= 1280 ? parsed : INSTALL_HEAP_MB_DEFAULT;
 }
 /** The clean install alone runs with the install heap: npm ci reifies the whole tree in one Node process. */
 export const NODE_INSTALL_HEAP_OPTIONS = `--max-old-space-size=${INSTALL_HEAP_MB_DEFAULT}`;
@@ -40,7 +40,7 @@ export function buildEnvironment() {
 }
 /** Clean install only: the same host environment with the install heap. */
 export function installEnvironment(heapMb: number = INSTALL_HEAP_MB_DEFAULT) {
-  const heap = Number.isSafeInteger(heapMb) && heapMb >= 256 && heapMb <= 2048 ? heapMb : INSTALL_HEAP_MB_DEFAULT;
+  const heap = Number.isSafeInteger(heapMb) && heapMb >= 256 && heapMb <= 1280 ? heapMb : INSTALL_HEAP_MB_DEFAULT;
   return { ...artifactEnvironment(), NODE_OPTIONS: `--max-old-space-size=${heap}` };
 }
 /** W2 static deny: verified tarballs are staged in the npm cache; the relay is never contacted from a pod. */

@@ -62,7 +62,7 @@ export function createCleanInstall(core: SupervisorCore,
       // The pod returns its bounded scrubbed tail with the exit code and signal; the classified cause rides the
       // job reason while the tail stays a log-only detail, never ledger material.
       const diagnostics = readRecipeDiagnostics(data);
-      if (!diagnostics) unavailable('install_unconfirmed');
+      if (!diagnostics || (diagnostics.exitCode === 0 && diagnostics.signal !== null)) unavailable('install_unconfirmed');
       if (diagnostics.exitCode !== 0) {
         const detail = diagnostics.output === '' ? undefined : diagnostics.output;
         throw new LiveError('builder_unavailable', `install_failed:${classifyRecipeFailure(diagnostics)}`, detail);
