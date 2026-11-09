@@ -1721,11 +1721,51 @@ export class LocalAccountTransportService {
     }
   }
 
-  private async markReauthRequired(accountId: string): Promise<void> {
+  private async markReauthRequired(
+    accountId: string,
+    reason: ReauthAlertReason = 'refresh-failed',
+  ): Promise<void> {
     const account = this.accountsMap.get(accountId);
     if (account) {
       account.status = 'reauth_required';
       await this.persistAccountState(account);
+      await this.emitReauthAlert(account, reason);
+    }
+  }
+
+  /**
+   * Emit the D4 reauth alert once per reauth_required epoch. The event is
+   * secret-free (diagnostic account ref only); a throwing sink never breaks
+   * the custodian. A fresh `active` status clears the epoch.
+   */
+  private async emitReauthAlert(
+    account: AccountTransportAccount,
+    reason: ReauthAlertReason,
+  ): Promise<void> {
+    if (this.alertedReauth.has(account.accountId)) return;
+    this.alertedReauth.add(account.accountId);
+    const sink = this.serviceOptions.reauthAlert;
+    if (!sink) return;
+    const rawExpiry = account.expiresAt;
+    const parsedExpiry = typeof rawExpiry === 'string' && rawExpiry
+      ? Date.parse(rawExpiry)
+      : Number.NaN;
+    const event: ReauthAlertEvent = {
+      at: new Date(this.nowMs()).toISOString(),
+      ownerScopeRef: account.ownerScopeRef ?? '',
+      transportProviderId: String(account.transportProviderId),
+      accountRef: this.diagnosticAccountRef(account.accountId),
+      ...(Number.isFinite(parsedExpiry) && parsedExpiry <= this.nowMs()
+        ? { expiredAt: new Date(parsedExpiry).toISOString() }
+        : {}),
+      reason,
+    };
+    try {
+      await sink.notifyReauthRequired(event);
+    } catch {
+      // Alert delivery never breaks custody; the status persists and the
+      // next cycle retries the alert after clearing a stale epoch entry.
+      this.alertedReauth.delete(account.accountId);
     }
   }
 }
