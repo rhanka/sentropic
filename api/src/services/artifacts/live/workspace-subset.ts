@@ -28,12 +28,13 @@ const workspacesField = (manifest: Record<string, unknown>): string[] | null => 
 };
 
 const patternToRegExp = (pattern: string): RegExp | null => {
-  if (!pattern || pattern.includes('\\') || pattern.includes('\0')) return null;
+  if (!pattern || pattern.includes('\\') || pattern.includes('\0') || pattern.startsWith('!')) return null;
   const parts = pattern.split('/');
   if (parts.some(p => !p || p === '.' || p === '..')) return null;
-  const body = parts.map(p => p === '*' ? '[^/]+' : p.includes('*') ? null
-    : p.replace(/[.+^${}()|[\]\\]/g, '\\$&')).join('/');
-  return body.includes('null') ? null : new RegExp(`^${body}$`);
+  const mapped = parts.map(p => p === '*' ? '[^/]+' : p.includes('*') ? null
+    : p.replace(/[.+^${}()|[\]\\]/g, '\\$&'));
+  if (mapped.some(p => p === null)) return null;
+  return new RegExp(`^${(mapped as string[]).join('/')}$`);
 };
 
 /** Declared workspace directories: root `workspaces` globs matched against repo package.json dirs (root excluded). */
@@ -79,44 +80,68 @@ function resolveLocked(packages: LockPackages, fromDir: string, name: string): s
   }
 }
 
-/** Subset rule (`npm ci --workspace=<ws>` from the root): the selected workspaces, every workspace reachable
- * through their dependency links, and every remote package reachable from those plus the root devDependencies
- * (the build runs from the root). Remote traversal uses runtime sections only. Returns remote lock paths to keep. */
+/** Subset rule: exactly `npm ci --workspace=<ws>` from the root without `--include-workspace-root`.
+ * Keep the selected workspaces, every workspace reachable through their dependency links, and every remote
+ * package reachable from those workspaces (runtime sections only for remotes, all sections for workspaces).
+ * No root dependency is kept: a tool the workspace build needs must be declared in the workspace itself.
+ * Returns remote lock paths to keep. Throws fail-closed on an unreadable lock or an unknown selection. */
 export function subsetLockPaths(lockText: string, selection: readonly string[]): Set<string> {
   let packages: LockPackages;
   try {
     const lock = recordOf(JSON.parse(lockText))?.packages;
-    if (!recordOf(lock)?.['']) return new Set();
+    if (!recordOf(lock)?.['']) throw new LiveError('dependency_cache_invalid');
     packages = lock as LockPackages;
-  } catch { return new Set(); }
-  const keep = new Set<string>();
-  const visited = new Set<string>();
-  const queue: string[] = [];
-  for (const name of selection) {
-    if (Object.hasOwn(packages, name) && !visited.has(name)) { visited.add(name); queue.push(name); }
+  } catch (error) {
+    if (error instanceof LiveError) throw error;
+    throw new LiveError('dependency_cache_invalid');
   }
-  const baseOf = (path: string): string =>
-    path.includes('/node_modules/') ? path.slice(0, path.lastIndexOf('/node_modules/')) : '';
-  const step = (entry: Record<string, unknown>, sections: readonly string[], base: string): void => {
-    for (const dep of depsOf(entry, sections)) {
-      const found = resolveLocked(packages, base, dep);
-      const target = found && !keep.has(found) ? recordOf(packages[found]) : null;
-      if (!found || !target) continue;
-      if (target.link === true) {
-        const resolved = typeof target.resolved === 'string' ? target.resolved : '';
-        if (resolved && Object.hasOwn(packages, resolved) && !visited.has(resolved)) { visited.add(resolved); queue.push(resolved); }
-      } else { keep.add(found); step(target, REMOTE_SECTIONS, baseOf(found)); }
+  for (const name of selection) {
+    if (!Object.hasOwn(packages, name)) throw new LiveError('build_descriptor_invalid', 'unknown_workspace');
+  }
+  const keep = new Set<string>();
+  const visitedWorkspaces = new Set<string>(selection);
+  const queue: string[] = [...selection];
+  const expandedRemote = new Set<string>();
+  const remoteStack: string[] = [];
+  const enqueueRemote = (found: string): void => {
+    if (keep.has(found)) return;
+    keep.add(found);
+    if (!expandedRemote.has(found)) { expandedRemote.add(found); remoteStack.push(found); }
+  };
+  const follow = (dep: string, base: string): void => {
+    const found = resolveLocked(packages, base, dep);
+    if (!found) return;
+    const target = recordOf(packages[found]);
+    if (!target) return;
+    if (target.link === true) {
+      const resolved = typeof target.resolved === 'string' ? target.resolved : '';
+      if (resolved && Object.hasOwn(packages, resolved) && !visitedWorkspaces.has(resolved)) {
+        visitedWorkspaces.add(resolved);
+        queue.push(resolved);
+      }
+      return;
     }
+    enqueueRemote(found);
   };
   while (queue.length) {
     const dir = queue.shift()!;
     const entry = recordOf(packages[dir]);
-    if (entry) step(entry, SECTIONS, dir);
+    if (!entry) continue;
+    for (const dep of depsOf(entry, SECTIONS)) follow(dep, dir);
+    while (remoteStack.length) {
+      const remotePath = remoteStack.pop()!;
+      const remoteEntry = recordOf(packages[remotePath]);
+      if (!remoteEntry) continue;
+      for (const dep of depsOf(remoteEntry, REMOTE_SECTIONS)) follow(dep, remotePath);
+    }
   }
-  const root = recordOf(packages['']);
-  if (root) step(root, ['devDependencies'], '');
+  while (remoteStack.length) {
+    const remotePath = remoteStack.pop()!;
+    const remoteEntry = recordOf(packages[remotePath]);
+    if (!remoteEntry) continue;
+    for (const dep of depsOf(remoteEntry, REMOTE_SECTIONS)) follow(dep, remotePath);
+  }
   return keep;
-
 }
 
 const invalid = (): never => { throw new LiveError('build_descriptor_invalid', 'unknown_workspace'); };
