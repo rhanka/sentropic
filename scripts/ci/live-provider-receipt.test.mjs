@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveReceipt, scheduleHealth, qualifiedMain, QUALIFIED_MAIN_SELECTOR, receiptFromDirectory, readAllPages, readPages, fixtureReceipt } from './live-provider-receipt.mjs';
+import { liveReceipt, scheduleHealth, qualifiedMain, QUALIFIED_MAIN_SELECTOR, receiptFromDirectory, readAllPages, readPages, fixtureReceipt, GH_MAX_BUFFER, GH_PER_PAGE, GH_RUN_JQ, GH_JOB_JQ, GH_ARTIFACT_JQ, GH_SCHEDULE_JQ, ghApi, ghError } from './live-provider-receipt.mjs';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, realpathSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 
 const sourceSha = 'a'.repeat(40);
 const tuple = { sourceSha, api: { id: `sha256:${'b'.repeat(64)}` }, ui: { id: `sha256:${'c'.repeat(64)}` },
@@ -203,4 +203,52 @@ process.exit(args.includes('test-e2e') && args.includes('E2E_SHARD=' + process.e
       assert.equal(results.spans.filter(span => span.lane === 'browser' && span.status !== 0).length, failedShard ? 1 : 0);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('should bound every GitHub response with an explicit maxBuffer and report the route on overflow', () => {
+  assert.equal(GH_MAX_BUFFER, 512 * 1024);
+  assert.equal(GH_PER_PAGE, 100);
+  const route = 'repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1';
+  const seen = [];
+  const overflowingExec = (file, args, opts) => {
+    seen.push([file, args, opts]);
+    throw Object.assign(new Error('spawnSync gh ENOBUFS'), { code: 'ENOBUFS' });
+  };
+  assert.throws(() => ghApi(route, GH_RUN_JQ, { exec: overflowingExec }), /GitHub response for route .* exceeded 524288 bytes/);
+  try {
+    ghApi(route, GH_RUN_JQ, { exec: overflowingExec });
+    assert.fail('expected an explicit overflow error');
+  } catch (error) {
+    assert.match(error.message, /exceeded 524288 bytes/);
+    assert.ok(error.message.includes(route), 'the explicit error names the overflowing route');
+    assert.match(error.message, /tighten --jq\/per_page/);
+  }
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0][0], 'gh');
+  assert.ok(seen[0][1].includes('api') && seen[0][1].includes(route) && seen[0][1].includes('--jq'));
+  assert.equal(seen[0][2].maxBuffer, GH_MAX_BUFFER);
+  const passingExec = (file, args, opts) => {
+    assert.equal(opts.maxBuffer, GH_MAX_BUFFER);
+    return '{"workflow_runs":[]}';
+  };
+  assert.deepEqual(ghApi(route, GH_RUN_JQ, { exec: passingExec }), { workflow_runs: [] });
+  let overflowed = false;
+  try {
+    execFileSync(process.execPath, ['-e', "console.log('x'.repeat(2 * 1024 * 1024))"], { encoding: 'utf8', maxBuffer: 1024 });
+  } catch (error) {
+    overflowed = true;
+    const explicit = ghError(route, 1024, error);
+    assert.match(explicit.message, /exceeded 1024 bytes/);
+    assert.ok(explicit.message.includes(route));
+  }
+  assert.equal(overflowed, true, 'a payload larger than maxBuffer overflows instead of truncating');
+  for (const [jq, needed, heavy] of [[GH_RUN_JQ,
+    ['head_sha', 'head_commit', 'tree_id', 'repository', 'head_repository', 'workflow_id', 'run_attempt'],
+    ['actor', 'triggering_actor', 'head_repository.html_url', 'repository.description']],
+    [GH_JOB_JQ, ['name', 'conclusion'], ['steps', 'check_run_url']],
+    [GH_ARTIFACT_JQ, ['name', 'expired'], ['workflow_run', 'archive_download_url']],
+    [GH_SCHEDULE_JQ, ['display_title', 'created_at', 'conclusion'], ['actor', 'head_commit']]]) {
+    for (const field of needed) assert.ok(jq.includes(field), `${jq.slice(0, 24)} projects ${field}`);
+    for (const field of heavy) assert.ok(!jq.includes(field), `${jq.slice(0, 24)} drops heavy field ${field}`);
+  }
 });

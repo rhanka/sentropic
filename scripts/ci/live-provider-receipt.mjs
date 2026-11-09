@@ -44,6 +44,26 @@ export function qualifiedMain(runs) {
     ...(run.qualifiedBy ? { qualifiedBy: run.qualifiedBy.id } : {}) };
 }
 
+export const GH_MAX_BUFFER = 512 * 1024;
+export const GH_PER_PAGE = 100;
+export const GH_RUN_JQ = '{workflow_runs: (.workflow_runs | map({id, head_branch, event, status, conclusion, head_sha, workflow_id, run_attempt, head_commit: {tree_id: .head_commit.tree_id}, repository: {full_name: .repository.full_name}, head_repository: {full_name: .head_repository.full_name}}))}';
+export const GH_JOB_JQ = '{jobs: (.jobs | map({name, conclusion}))}';
+export const GH_ARTIFACT_JQ = '{artifacts: (.artifacts | map({name, expired}))}';
+export const GH_SCHEDULE_JQ = '{workflow_runs: (.workflow_runs | map({id, event, status, conclusion, display_title, created_at}))}';
+
+export function ghError(route, maxBuffer, cause) {
+  return new Error(`GitHub response for route ${route} exceeded ${maxBuffer} bytes (${cause?.code ?? 'UNKNOWN'}): tighten --jq/per_page (original: ${cause?.message ?? cause})`);
+}
+
+export function ghApi(route, jq, { maxBuffer = GH_MAX_BUFFER, exec = execFileSync } = {}) {
+  try {
+    return JSON.parse(exec('gh', ['api', route, '--jq', jq], { encoding: 'utf8', maxBuffer }));
+  } catch (error) {
+    if (error?.code === 'ENOBUFS' || /ENOBUFS/.test(String(error?.message))) throw ghError(route, maxBuffer, error);
+    throw error;
+  }
+}
+
 export function* readPages(readPage, key) {
   for (let page = 1; ; page++) {
     const next = readPage(page)[key];
@@ -100,28 +120,28 @@ export function receiptFromDirectory(dir, { schedule, event } = {}) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [command, dir = '.tmp/live-provider'] = process.argv.slice(2);
   mkdirSync(dir, { recursive: true });
-  const api = route => JSON.parse(execFileSync('gh', ['api', route], { encoding: 'utf8' }));
-  const pages = (route, key) => readAllPages(page => api(`${route}?per_page=100&page=${page}`), key);
+  const api = (route, jq) => ghApi(route, jq);
+  const pages = (route, key, jq) => readAllPages(page => api(`${route}?per_page=${GH_PER_PAGE}&page=${page}`, jq)[key], key);
   if (command === 'select') {
-    const runs = readPages(page => api(`repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=${page}`), 'workflow_runs');
+    const runs = readPages(page => api(`repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=${GH_PER_PAGE}&page=${page}`, GH_RUN_JQ), 'workflow_runs');
     let selected = false;
     let pullRequests = null;
     for (const run of runs) {
-      run.jobs = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/jobs`, 'jobs');
+      run.jobs = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/jobs`, 'jobs', GH_JOB_JQ);
       let selection;
       try { selection = qualifiedMain([run]); } catch {
         // Tested-tree main run: its lanes ran in a same-tree PR run (all of them green).
-        pullRequests ??= api('repos/rhanka/sentropic/actions/workflows/ci.yml/runs?event=pull_request&status=completed&per_page=100').workflow_runs;
+        pullRequests ??= api(`repos/rhanka/sentropic/actions/workflows/ci.yml/runs?event=pull_request&status=completed&per_page=${GH_PER_PAGE}`, GH_RUN_JQ).workflow_runs;
         const sameTree = pullRequests.filter(row => row.head_commit?.tree_id === run.head_commit?.tree_id);
         // No newest-wins: any non-green same-tree PR run disqualifies the tuple.
         if (sameTree.some(row => row.conclusion !== 'success')) continue;
         const pr = sameTree.filter(row => row.head_repository?.full_name === run.repository?.full_name)
           .sort((a, b) => b.id - a.id)[0];
         if (!pr) continue;
-        pr.jobs = pages(`repos/rhanka/sentropic/actions/runs/${pr.id}/jobs`, 'jobs');
+        pr.jobs = pages(`repos/rhanka/sentropic/actions/runs/${pr.id}/jobs`, 'jobs', GH_JOB_JQ);
         try { selection = qualifiedMain([{ ...run, qualifiedBy: pr }]); } catch { continue; }
       }
-      const artifacts = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/artifacts`, 'artifacts');
+      const artifacts = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/artifacts`, 'artifacts', GH_ARTIFACT_JQ);
       if (!['live-provider-api-identity', 'live-provider-ui-identity'].every(name => artifacts.some(row => row.name === name && !row.expired))) continue;
       writeFileSync(`${dir}/selection.json`, JSON.stringify(selection, null, 2));
       if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `sha=${selection.sourceSha}\nrun=${selection.run}\n`);
@@ -192,14 +212,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(JSON.stringify(receipt, null, 2));
     if (!receipt.qualified) process.exitCode = 1;
   } else if (command === 'health') {
-    const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=100').workflow_runs;
+    const runs = api(`repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=${GH_PER_PAGE}`, GH_SCHEDULE_JQ).workflow_runs;
     const health = scheduleHealth(runs);
     console.log(JSON.stringify(health, null, 2));
     if (!health.healthy) process.exitCode = 1;
   } else if (command === 'finish') {
     let schedule;
     try {
-      const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=100').workflow_runs;
+      const runs = api(`repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=${GH_PER_PAGE}`, GH_SCHEDULE_JQ).workflow_runs;
       schedule = scheduleHealth(runs, { currentRun: process.env.GITHUB_RUN_ID });
     } catch { schedule = { healthy: false, reason: 'schedule receipt API unavailable', lastRun: null }; }
     let receipt;
