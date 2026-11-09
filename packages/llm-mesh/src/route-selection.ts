@@ -29,6 +29,18 @@ export type RouteCandidateSelection =
   }
   | { readonly kind: 'no-eligible-account'; readonly requestedModel: string };
 
+/**
+ * Metered static-key fallback transports (owner D3, Lot 5): paid API-key
+ * accounts routed strictly behind every subscription account, regardless of
+ * enrollment recency. Explicit per-request pins (`explicit`, `ordered`
+ * strategy preferences) still win: this rank only breaks ties the host left
+ * unordered. Gemini only: the OpenAI fallback was rejected on cost.
+ */
+export const METERED_STATIC_KEY_FALLBACK_TRANSPORTS: readonly string[] = ['gemini-apikey'];
+
+const fallbackRank = (candidate: RankedRouteCandidate): number =>
+  METERED_STATIC_KEY_FALLBACK_TRANSPORTS.includes(candidate.account.transportProviderId) ? 1 : 0;
+
 export interface ResolvedRouteTarget {
   readonly providerId: string;
   readonly modelId: string;
@@ -299,6 +311,10 @@ export const selectRouteCandidates = (input: {
       if (leftRank !== rightRank) return (leftRank < 0 ? Number.MAX_SAFE_INTEGER : leftRank)
         - (rightRank < 0 ? Number.MAX_SAFE_INTEGER : rightRank);
     }
+    // Paid fallback behind every subscription account, even an equivalent
+    // one: the key is spent only when no subscription can serve the request.
+    // An explicit `ordered` host preference above still wins on purpose.
+    if (fallbackRank(left) !== fallbackRank(right)) return fallbackRank(left) - fallbackRank(right);
     const classRank = (candidate: RankedRouteCandidate) =>
       candidate.target.reason === 'equivalent' ? 1 : 0;
     if (classRank(left) !== classRank(right)) return classRank(left) - classRank(right);

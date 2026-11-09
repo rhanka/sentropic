@@ -644,9 +644,16 @@ describe('explicitly selected canonical mapping tables', () => {
     expect(resolveCandidates('gemini-3.7-flash')).toEqual([{
       providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
     }]);
-    expect(resolveCandidates('gemini-3.8-flash')).toEqual([{
-      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
-    }]);
+    expect(resolveCandidates('gemini-3.8-flash')).toEqual([
+      {
+        providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
+      },
+      // Lot 5 (owner D3, Gemini only): the paid static-key fallback target
+      // rides last on the exact chain, behind the subscription transport.
+      {
+        providerId: 'gemini', transportProviderId: 'gemini-apikey', model: 'gemini-3.8-flash',
+      },
+    ]);
   });
 
   it('describes routes without account or credential fields', () => {

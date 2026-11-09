@@ -729,3 +729,60 @@ describe('execution-feature eligibility (spec §16.3)', () => {
     expect(withNative).toEqual(canonical);
   });
 });
+
+describe('metered static-key fallback ordering (Lot 5, owner D3)', () => {
+  const subscription = {
+    accountRef: 'cloud-internal',
+    diagnosticAccountRef: 'cloud-redacted',
+    targetProviderId: 'gemini',
+    transportProviderId: 'cloud-code',
+    supportedModelIds: ['gemini-3.8-flash'],
+    enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+    readiness: 'ready' as const,
+    revision: 'r1',
+  };
+  const fallback = {
+    accountRef: 'fallback-internal',
+    diagnosticAccountRef: 'fallback-redacted',
+    targetProviderId: 'gemini',
+    transportProviderId: 'gemini-apikey',
+    supportedModelIds: ['gemini-3.8-flash'],
+    enrollmentCompletedAt: '2026-11-09T00:00:00Z',
+    readiness: 'ready' as const,
+    revision: 'r1',
+  };
+  const selectFallback = (
+    accountsForSignal: Parameters<typeof selectRouteCandidates>[0]['accounts'],
+    policy = DEFAULT_ROUTE_POLICY,
+  ) => {
+    const selection = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.8-flash' },
+      policy,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: accountsForSignal,
+    });
+    if (selection.kind !== 'candidates') throw new Error(`Expected candidates, got ${selection.kind}`);
+    return selection.candidates;
+  };
+
+  it('ranks the paid fallback behind the subscription account despite newer enrollment', () => {
+    expect(selectFallback([subscription, fallback]).map((candidate) => candidate.account.transportProviderId))
+      .toEqual(['cloud-code', 'gemini-apikey']);
+  });
+
+  it('selects the fallback when no subscription account is eligible', () => {
+    expect(selectFallback([fallback]).map((candidate) => candidate.account.transportProviderId))
+      .toEqual(['gemini-apikey']);
+  });
+
+  it('still honors an explicit host-ordered preference for the fallback', () => {
+    const candidates = selectFallback([subscription, fallback], {
+      ...DEFAULT_ROUTE_POLICY,
+      strategy: {
+        kind: 'ordered',
+        preferences: [{ transportProviderId: 'gemini-apikey' }],
+      },
+    });
+    expect(candidates[0]?.account.transportProviderId).toBe('gemini-apikey');
+  });
+});
