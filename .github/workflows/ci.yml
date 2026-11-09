@@ -397,6 +397,8 @@ jobs:
               - 'scripts/ci/image-config.mjs'
               - 'scripts/ci/compatibility-classifier.mjs'
               - 'scripts/ci/compatibility-classifier.test.mjs'
+              - 'scripts/ci/live-provider-receipt.mjs'
+              - 'scripts/ci/live-provider-receipt.test.mjs'
               - 'scripts/ci/consumer-contracts.mjs'
               - 'scripts/ci/consumer-contracts.test.mjs'
               - 'scripts/ci/consumer-boundaries.json'
