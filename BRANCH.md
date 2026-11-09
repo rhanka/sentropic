@@ -1,20 +1,29 @@
-# Fix: compose-backup-owner (root-owned data/backup + workspace writers)
+# Fix: e2e UI flaky non-AI (matrix lock, org viewer, matrix export)
 
 ## Objective
-- [ ] Fix the follow-up gap of merged PR #973 (fix/compose-host-user): no root-owned file is left on the host under data/backup and the workspace after backup/restore and docker writer targets run.
-- [ ] Keep make db-backup / db-restore working with backups visible on the host, and run every workspace-writing docker run as the host user through one Makefile variable.
+Fix three non-AI UI e2e flakes and one low-priority chat flake with deterministic waits and minimal app/test changes.
 
 ## Scope / Guardrails
-- [ ] Worktree tmp/worktrees/compose-backup-owner on branch fix/compose-backup-owner from origin/main e0fde09 (rebased 09/11, BRANCH.md sole conflict kept via -X theirs), verified with git branch --show-current before any work.
-- [ ] Test env ENV=test-compose-backup with API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215, ENV always last on make commands, never ENV=dev, never make clean-all, no Python.
-- [ ] Make-only workflow, Docker through .tmp/packets/docker-slot.sh, one slot per command, never nested, make down-volumes ENV=test-compose-backup at the end.
-- [ ] Atomic commits under 150 lines via make commit MSG="...", specific git add, no attribution trailer.
-- [ ] All new text in English.
-- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Scope limited to e2e specs and one UI popover z-index.
+- One migration max in `api/drizzle/*.sql` (none planned).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/worktrees/fix-e2e-ui-flaky`.
+- Automated test campaigns run on dedicated environments (`ENV=e2e-fix-flaky`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `e2e/tests/07-matrix.spec.ts`
+  - `e2e/tests/02-organizations.spec.ts`
+  - `e2e/tests/03-chat.spec.ts`
+  - `e2e/helpers/lock-ui.ts`
+  - `ui/src/lib/components/MenuPopover.svelte`
+- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose.dev.yml` (only if verification forces a compose change; untouched so far)
   - `.tmp/rv/compose-backup-owner.md` (French verification report, untracked)
@@ -35,45 +44,60 @@
 - [ ] Already-compliant equivalence note: 167 docker run sites already pass literal -u "$$(id -u):$$(id -g)" -e HOME=/tmp, behaviorally identical to the new variable, left untouched for diff minimality.
 
 ## AI Flaky tests
-- [ ] Acceptance rule: accept only non-systematic provider/network/model nondeterminism as flaky accepted, with same-commit same-command success evidence, never additive timeouts, user sign-off before merge.
-- [ ] validate-cluster-mesh (source) failed on 63f18f817: three 5000ms vitest timeouts (binding-compatibility.spec.ts C6 declaration 5564ms, packed artifacts install 12605ms, PostgreSQL kernel 9541ms). The same job passed on 953c04c69, 00a4ca0a3, ff31ec40b, 86084505e with the identical diff, and the failing cluster-mesh job alternates between heads: runner-speed timeouts (track item opened). Fresh head; no rerun, no skip, no timeout change.
-- [ ] validate-cluster-mesh (comments installed) failed on 86084505e: packages/cluster-mesh tests/comments-long-history.spec.ts "imports every record of a fragmented history above 512 KiB and one MiB with one publication" — Test timed out in 5000ms (5004ms). The same job passed on the three previous heads of this branch with the identical Makefile change (953c04c69, 00a4ca0a3, ff31ec40b): runner-speed timeout, not systematic. Fresh head; no rerun, no skip, no timeout change.
-- [ ] test-e2e (1) failed on ff31ec40b: tests/07-matrix.spec.ts:477 "User A leaves → lock released → User B can lock" (5.9s); Makefile-only diff; tracked main UI e2e instability (track 01M70VY5TT8KPY7EB0828BASZZ). Fresh head; no rerun, no skip, no timeout change.
-- [ ] test-e2e (5) failed on 00a4ca0a3: tests/00-ai-generation.spec.ts:181 "devrait générer des cas d'usage depuis l'accueil" (1.7m), signature: provider BadRequestError 400 "Unexpected Responses evaluator request" (AI allowlist, provider nondeterminism). Diff is Makefile-only. Fresh head; no rerun, no skip.
-- [ ] test-e2e (4) failed on 953c04c69: tests/02-organizations.spec.ts:391 Read-only (viewer) "détail: champs non éditables" (10.8s); the diff only touches the Makefile docker run user and data/backup ownership. Same test failed on unrelated PR #982 (3996c17cf) and passed on its next head; tracked as a main UI e2e instability (track 01M70VY5TT8KPY7EB0828BASZZ). Fresh head requested; no rerun, no skip, no timeout change.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- [ ] Rationale: single small fix train (data/backup + writer variable), one PR, one CI.
+- Rationale: Single fix branch for four e2e flakes, one PR, one CI.
 
 ## UAT Management (in orchestration context)
-- [ ] **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- [ ] No UI change in this branch, no UAT required.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/fix-e2e-ui-flaky`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/fix-e2e-ui-flaky` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Worktree tmp/worktrees/compose-backup-owner on fix/compose-backup-owner from origin/main aa21ecdfd verified.
-  - [x] Read rules/MASTER.md, rules/workflow.md, .tmp/packets/COMMON-RULES.md.
-  - [x] Env mapping: ENV=test-compose-backup, API_PORT=8915, UI_PORT=5315, MAILDEV_UI_PORT=1215.
-  - [x] Audit done: 370 docker run sites joined across continuations, 211 with -u, 134 pure rm, 9 writers fixed + db-backup chown (see Feedback Loop).
-  - [x] BRCBO-EX1 declared before touching Makefile.
-- [ ] **Lot 1 — data/backup ownership**
-  - [x] db-backup: normalize ownership after pg_dump via compose run postgres as 0:0 with HOST_UID/HOST_GID chown on the new dump (existing 355/368 pattern).
-  - [x] doc-backup/doc-backup-prod need no change (MINIO_EXEC already --user host-uid, Makefile 3761, tar runs on host).
-  - [x] db-restore/doc-restore/db-backup-prod need no change (no host writes: cp into container, host mkdir/tar/redirect).
-  - [x] minio user 0:0 kept (see Feedback Loop), no named-volume move.
-  - [x] Lot gate: make db-backup 09/11 16:45 ENV=test-compose-backup exit 0, dump app-2026-11-09T16-45-27.dump stat antoinefa:antoinefa, find data -user root empty.
-- [ ] **Lot 2 — DOCKER_RUN_USER variable**
-  - [x] Define DOCKER_RUN_USER = -u $(UID):$(GID) -e HOME=/tmp once next to UID/GID exports (UID/GID from #973).
-  - [x] Apply to Makefile 1259 (typecheck-llm-mesh), 1460 (--check), 1473 (audit versions), 1477 (typecheck-skills, ln -s writer), 1593 (typecheck-flow), 2881 (test-llm-mesh via ARTIFACTS_RUN), 2893 (bench-live-speech OUT= writer), 2989 (test-skills, ln -s + vitest writer), 3942 node-audit branch.
-  - [x] Lot gate: grep shows every writable-workspace docker run uses the variable or the equivalent literal, exceptions listed in Feedback Loop only.
-- [ ] **Lot 3 — Verification on ENV=test-compose-backup**
-  - [x] Run make typecheck-llm-mesh API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find packages/llm-mesh -user root empty (PASS 09/11, exit 0, find empty).
-  - [x] Run make typecheck-api API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find api -user root empty (PASS 09/11, exit 0, find count 0).
-  - [x] Run make db-backup + db-restore BACKUP_FILE=app-2026-11-09T16-45-27.dump SKIP_CONFIRM=true API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup (both exit 0, 09/11), stat -c %U host-owned, find data -user root empty, find packages/llm-mesh + api/node_modules/.vite-temp -user root empty.
-  - [x] End with make down-volumes ENV=test-compose-backup (09/11, test volumes removed).
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/testing.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Create isolated worktree `tmp/worktrees/fix-e2e-ui-flaky` on `fix/e2e-ui-flaky` from `origin/main` (HEAD 00d160d79).
+  - [x] Confirm branch with `git -C tmp/worktrees/fix-e2e-ui-flaky branch --show-current`.
+  - [x] Define environment `ENV=e2e-fix-flaky` with ports `API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229`.
+  - [x] Confirm command style `make ... ENV=e2e-fix-flaky` with `ENV` last, Docker via `.tmp/packets/docker-slot.sh` in foreground.
+  - [x] Capture CI evidence for runs 42679203883, 42707316864, 42709378130, 42715826902 plus 42680623520 (org second occurrence).
+  - [x] Validate scope boundaries and declare exceptions if needed (none planned).
+- [x] **Lot 1 — Fix matrix export cover (app) + org viewer selector (test)**
+  - [x] Fix `ui/src/lib/components/MenuPopover.svelte`: absolute menu `z-20` to `z-50` so Actions menu stays above lock badge tooltip.
+  - [x] Fix `e2e/tests/07-matrix.spec.ts` Export: scope Export button to open menu, hover `h1` to close badge tooltip before click, keep download wait.
+  - [x] Fix `e2e/tests/02-organizations.spec.ts:391`: select seeded `Org Readonly E2E` by name, wait for list GET 200 before click, wait for detail GET 200 after click.
+  - [x] Lot gate:
+    - [x] `make typecheck-ui ENV=e2e-fix-flaky` + `make lint-ui ENV=e2e-fix-flaky`
+    - [x] **E2E tests**
+      - [x] Prepare E2E build: `make build-api build-ui-image API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`
+      - [x] Scoped runs: `make test-e2e E2E_SPEC=tests/02-organizations.spec.ts API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`
+      - [x] Scoped runs: `make test-e2e E2E_SPEC=tests/07-matrix.spec.ts API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`
+- [x] **Lot 2 — Fix matrix lock leave (test) + chat queue poll (test)**
+  - [x] Fix `e2e/tests/07-matrix.spec.ts:477`: use isolated members, ensure workspace scope, wait for lock POST 201 for User A and User B, use `waitForNoLocker` helper instead of 2s poll.
+  - [x] Fix `e2e/tests/03-chat.spec.ts` `waitForQueueJobSettled`: catch network errors and return retryable string so poll retries on socket hang up.
+  - [x] Lot gate:
+    - [x] `make typecheck-ui ENV=e2e-fix-flaky` + `make lint-ui ENV=e2e-fix-flaky`
+    - [x] Scoped runs: `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`
+    - [x] Scoped runs: `make test-e2e E2E_SPEC=tests/07-matrix.spec.ts API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`
 - [ ] **Lot N — Final validation**
-  - [x] Typecheck & Lint for impacted surface (Makefile/compose only, no src change, no package bump needed).
-  - [x] Final gate step 1: PR #987 created from this BRANCH.md text, fix/compose-backup-owner pushed; CI pending conductor follow-up (no checks attached at creation, no rerun, no skip).
-  - [x] Final gate step 2: French report in .tmp/rv/compose-backup-owner.md, no external review (conductor runs it), Do NOT merge.
+  - [x] Typecheck & Lint
+  - [x] Retest UI (none changed except popover, covered by E2E)
+  - [x] Retest API (none)
+  - [x] Retest e2e scoped specs for 02-organizations, 07-matrix, 03-chat
+  - [ ] Retest AI flaky tests run (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
