@@ -1,7 +1,7 @@
 # Feature: APP train T1 — prod A4 code prerequisites (8 wagons, one PR)
 
 ## Objective
-- [x] Assemble the 8 T1 wagons into one train branch `train/2026-11-08-app-t1` from origin/main ec3c0bcc8, one PR, one CI (release train rule: one PR for several wagons).
+- [x] Assemble the 8 T1 wagons into one train branch `train/2026-11-08-app-t1` from origin/main a56b19c01 (rebased onto f69bc2a03; see Feedback Loop), one PR, one CI (release train rule: one PR for several wagons).
 - [x] Merge each wagon with `git merge --no-ff origin/<branch>` in order, never rebase, never force-push; BRANCH.md conflicts resolved to the train version.
 - [x] Fix the r3 cross-wagon integration findings in the train: BLOCKER-R3-1, BLOCKER-R3-2, MAJOR-R3-1; record MAJOR-R3-2 as a T1-ops prerequisite.
 - [ ] Validate on ENV=test-train-t1 (API 8903, UI 5303, MAILDEV 1203): typecheck, lint, wagon scoped tests, test-preprod-a4, test-artifact-content-manifests.
@@ -10,7 +10,7 @@
 
 ## Scope / Guardrails
 - [x] Worktree tmp/worktrees/train-t1 on branch train/2026-11-08-app-t1, verified before any action.
-- [x] Preprod overlay pins kept from main (API sha256:69bd39eb0aee104b59e39271c9badc06ebf0410f54032b5a6d476c6832604444, UI sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0); selftest expectations match.
+- [x] Preprod overlay pins kept from main (API sha256:8a0039e8198e98b1433003266ae389c6f0cf2360b05d1ac77c97f01144675c61 [ec3c0bcc8 build, run 42627071304], UI sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0); selftest expectations match.
 - [x] Atomic commits under 150 lines via `make commit MSG="..."`, specific git add, no attribution trailer.
 - [x] Make-only, Docker via `.tmp/packets/docker-slot.sh`, one slot per command, never nested; ENV=test-train-t1 always last; never ENV=dev; never `make clean-all`; no Python.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
@@ -56,8 +56,9 @@
 - [x] `acknowledge`: MAJOR-R3-2 recorded as T1-ops prerequisite, not train code: the preprod `--secret-reencrypt --apply` Job must run AFTER the T1 merge/deploy-preprod on the published main image (publish-api-image only pushes on main); only Secret provisioning precedes the merge.
 - [x] `acknowledge`: wagon open points carried, non-blocking: G7 reactivation stays gated post-T3; KEK boot-gate question QA-8r2 open to s-archi; artifact-data-guard hardenings deferred to a later wagon; approve-Job `--custodian` spawn test missing (LOW).
 - [x] `acknowledge`: smoke-restore SUT declares `CM_IDENTITY_CUTOVER_IDP_RP_ID=localhost` (single-RP rehearsal tier, mirrors BLOCKER-R3-1 prod declaration); the wagon-c RP guard failed closed on carried prod credentials with undeclared IdP RP on every train run; the secret was present in all runs (guard echo misread, no branch-policy issue, no rename needed).
-- [x] `acknowledge`: train rebased onto origin/main ec3c0bcc8 (#971 live-teardown; only BRANCH.md overlapped, kept train version; 8 merges + fixes replayed, rerere resolutions verified identical); the conflicting head received no pull_request run (12 prior runs all while mergeable; mergeable sister PR got one), so the rebase also unblocks CI.
+- [x] `acknowledge`: train rebased onto origin/main 153c6230d (#971 live-teardown; only BRANCH.md overlapped, kept train version; 8 merges + fixes replayed, rerere resolutions verified identical); the conflicting head received no pull_request run (12 prior runs all while mergeable; mergeable sister PR got one), so the rebase also unblocks CI.
 - [x] `acknowledge`: run 42626825813 FULL GREEN on head 1df6369eb (base a23d7e672): build-desktop, build-ui, security-container (+ui), test-smoke-restore (RP-guard fix proven on prod backup), all 6 e2e shards, ci-gate. Rebases #2 (a23d7e672, #970: ci.yml receipts + Makefile UID/e2e-output auto-merged) and #3 (ec3c0bcc8, #975: BRANCH.md only) replayed cleanly; every main merge re-conflicts the train BRANCH.md and suppresses new runs until rebased. S2 supplement review of the 2-line smoke fix pending: Argon 429 quota-exhausted (~106h) and Vibe 402 budget-exhausted; no merge until reviewed or owner decides.
+- [x] `acknowledge`: rebase #4 onto f69bc2a03 (#980 preprod repin): kustomization + selftest take the new API digest 8a0039e8 (train mechanics comment kept), BRANCH.md kept train version; pins rule (keep main's current digests) applied. S2 review still pending quotas; NO merge (packet).
 
 ## AI Flaky tests
 - [x] Acceptance rule: non-systematic provider/network/model nondeterminism only, with same-commit success; never amend timeouts; record command + file + signature here; user sign-off before merge.
@@ -75,22 +76,22 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and train setup**
   - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, COMMON-RULES.md, archi verdict A1-A5, transition plan r3, r3 Argon review, wagon reports t1-a/b/c/d.
-  - [x] git fetch origin; worktree tmp/worktrees/train-t1 on train/2026-11-08-app-t1 from origin/main ec3c0bcc8; verify branch.
+  - [x] git fetch origin; worktree tmp/worktrees/train-t1 on train/2026-11-08-app-t1 from origin/main a56b19c01 (rebased onto f69bc2a03); verify branch.
   - [x] ENV=test-train-t1, API_PORT=8903, UI_PORT=5303, MAILDEV_UI_PORT=1203.
 - [x] **Lot 1 — Wagon merges (--no-ff, in order)**
-  - [x] fix/oauth-consent-optional-tid head db81cf35b, merge 991545127, review .h2a/reviews/t1-oauth-consent-optional-tid-argon.md APPROVE (A1, s-archi ratification flagged, not waited).
-  - [x] fix/cm-first-member-bootstrap head a99003adb, merge ed9e376f8, review .h2a/reviews/t1-cm-first-member-bootstrap-argon.md APPROVE.
-  - [x] fix/a4-import-rp-provenance head f86f06933, merge 187be80ec, review .h2a/reviews/t1-a4-import-rp-provenance-argon.md APPROVE.
-  - [x] fix/cm-account-approve-launcher head efe7d6dd1, merge 4491bcce6, review .h2a/reviews/t1-cm-account-approve-launcher-argon.md APPROVE.
-  - [x] fix/secret-keys-fail-closed head b84f44679, merge 7b50f637a, review .h2a/reviews/secret-keys-fail-closed-argon.md APPROVE.
-  - [x] fix/identity-error-surfacing head 7b7ed930d, merge b5fb6a1c4, review .h2a/reviews/identity-error-surfacing-argon.md APPROVE.
-  - [x] feat/prod-a4-operator head ce9b2b9d0, merge 4ab371d7a, review .h2a/reviews/t1-feat-prod-a4-operator-argon.md APPROVE (selftest conflict reconciled: checkA4 refactor kept, WEBAUTHN guard kept with prodA4 symmetry, pins kept from main).
+  - [x] fix/oauth-consent-optional-tid head db81cf35b, merge fae6e10fa, review .h2a/reviews/t1-oauth-consent-optional-tid-argon.md APPROVE (A1, s-archi ratification flagged, not waited).
+  - [x] fix/cm-first-member-bootstrap head a99003adb, merge 1b0eb79ed, review .h2a/reviews/t1-cm-first-member-bootstrap-argon.md APPROVE.
+  - [x] fix/a4-import-rp-provenance head f86f06933, merge d3e2c49d6, review .h2a/reviews/t1-a4-import-rp-provenance-argon.md APPROVE.
+  - [x] fix/cm-account-approve-launcher head efe7d6dd1, merge e43ac9663, review .h2a/reviews/t1-cm-account-approve-launcher-argon.md APPROVE.
+  - [x] fix/secret-keys-fail-closed head b84f44679, merge 6992cbc39, review .h2a/reviews/secret-keys-fail-closed-argon.md APPROVE.
+  - [x] fix/identity-error-surfacing head 7b7ed930d, merge 422674c11, review .h2a/reviews/identity-error-surfacing-argon.md APPROVE.
+  - [x] feat/prod-a4-operator head ce9b2b9d0, merge 23906d6be, review .h2a/reviews/t1-feat-prod-a4-operator-argon.md APPROVE (selftest conflict reconciled: checkA4 refactor kept, WEBAUTHN guard kept with prodA4 symmetry, pins kept from main).
   - [x] fix/ci-preprod-auto-repin head 2f742fc8d, merge 40dddd79c, review .h2a/reviews/t1-fix-ci-preprod-auto-repin-argon.md APPROVE WITH COMMENTS (pin comment reconciled to main digests + repin mechanics).
 - [x] **Lot 2 — Cross-wagon integration fixes (atomic commits)**
-  - [x] BLOCKER-R3-1 b3c57d546: CM_IDENTITY_CUTOVER_IDP_RP_ID via configMapKeyRef auth-idp/WEBAUTHN_RP_ID on the A4 api pod + selftest assert.
-  - [x] BLOCKER-R3-2 620cbf427: CM_A4_NAMESPACE fieldRef on the approve Job + approve-job test retargeted to components/a4-wiring with namespace asserts.
-  - [x] MAJOR-R3-1 abbc1d094: require_tenant through export-prod, reader-role grant (15 columns), client-policy copy + transform, sync-clients upsert, NULL-safe purge, sql-test.sh 0022 load + header + count, fixtures (immo-mcp false, NULL-tenant consent).
-  - [x] MAJOR-R3-1 f7beb3441: OAUTH_CLIENT_REQUIRE_TENANT preserved through oauth-register-client (omission keeps stored) + unit tests.
+  - [x] BLOCKER-R3-1 a357d748b: CM_IDENTITY_CUTOVER_IDP_RP_ID via configMapKeyRef auth-idp/WEBAUTHN_RP_ID on the A4 api pod + selftest assert.
+  - [x] BLOCKER-R3-2 281ca07b1: CM_A4_NAMESPACE fieldRef on the approve Job + approve-job test retargeted to components/a4-wiring with namespace asserts.
+  - [x] MAJOR-R3-1 3aa879b8c: require_tenant through export-prod, reader-role grant (15 columns), client-policy copy + transform, sync-clients upsert, NULL-safe purge, sql-test.sh 0022 load + header + count, fixtures (immo-mcp false, NULL-tenant consent).
+  - [x] MAJOR-R3-1 bb1c835cc: OAUTH_CLIENT_REQUIRE_TENANT preserved through oauth-register-client (omission keeps stored) + unit tests.
   - [x] MAJOR-R3-2 recorded as T1-ops prerequisite (see Feedback Loop), no train code.
 - [x] **Lot 3 — Validation (ENV=test-train-t1, foreground via docker-slot.sh)**
   - [x] make typecheck-api PASS + make lint-api 0 errors (245 warnings, none in train-touched files) + make scope-check PASS C2.
@@ -102,7 +103,7 @@
   - [ ] Open train PR (title/body from this BRANCH.md), push, iterate to green CI (no rerun, no skip, no timeout increase; provider AI e2e failure recorded here + fresh head).
   - [x] Train release versions: @sentropic/auth-ui 0.9.0 to 0.9.1, @sentropic/cluster-mesh 0.26.0-dev.18 to 0.26.0-dev.19 with root/api lockfile sync, packaging fixture renames and CHANGELOG entry (BRDP-EX10 lock-sync gate).
   - [x] Fixture alignment (prepare-artifacts 20/20 local): selected fixture follows auth-ui 0.9.1 with the built-bytes integrity reproduced locally (tsc dist + pack) byte-identical to the CI seal hash.
-  - [x] 0022 A1-REKEY guard 545a4a21a: skip the rekey when CM authority tables are absent (artifact host-slot DBs); frontier + rekey suites 19/19 local.
+  - [x] 0022 A1-REKEY guard 84ff81111: skip the rekey when CM authority tables are absent (artifact host-slot DBs); frontier + rekey suites 19/19 local.
   - [x] Argon high review of the integration delta to .h2a/reviews/train-t1-argon.md: APPROVE WITH COMMENTS (2 LOWs); do NOT merge.
   - [ ] CI iteration (no rerun, no skip): 42555622186 cancelled; 42555695785 changes-gate red (lock-sync, fixed); 42556238258 red on consumer-contracts + manifests (changes cascade) and cluster-mesh lanes (fixture alignment, fixed); 42556740207 red on 2 integration shards (0022 rekey, fixed) + lazy lane (fixture hash, fixed); 42560895039 red on api-image-guards (promotion guard, fixed) + test-smoke-restore (KUBECONFIG_B64 secret missing on that runner only; sibling PRs 969/971/973 pass it contemporaneously).
   - [x] Runner-infra flakes recorded (non-systematic, same-code greens): run 42562967250 test-e2e (1) fails in 46s on `network e2e-ci_default not found` in ci-provider-receipt while the identical shard passed on run 42560895039 and shards 2-6 pass here; test-smoke-restore fails on the empty KUBECONFIG_B64 secret on runs 42560895039/42562967250 while PR 973 run 42563356785 passes it at the same hour. Fresh head pushed for a clean run; no job rerun, no skip, no timeout change.
@@ -110,7 +111,7 @@
   - [x] Run 42566321266 (head 1d3543ab2): everything owned by the train is green (mesh lanes, integration shards, e2e 1-6, guards, manifests, G7). Remain: build-desktop fails on `pkg` 504 downloading node24-win-x64 (runner network; zero desktop files in the train diff) which cascades via build-ui/security-container-ui into the security-container join; test-smoke-restore fails a 4th time on the empty secret. No job rerun, no skip, no timeout change; fresh head pushed.
   - [x] Run 42567740414 (head 984ee8651): same three out-of-scope failures (build-desktop `pkg` 504 + security-container cascade + smoke secret ×5, PR not a draft, ci.yml smoke section intact). Everything owned by the train green on consecutive runs. Fresh head pushed; anomaly details in the report.
   - [x] Run 42569215842 (head 50d7435ee): build-desktop and security-container pass (transients confirmed); ONLY test-smoke-restore red (empty secret ×6) plus the ci-gate aggregator. Every gate owned by the train is green on this run. Fresh head pushed; report finalized with the anomaly as the single open CI point.
-  - [x] Supplement Argon review appended to .h2a/reviews/train-t1-argon.md (late fixes f1b8d31fe..49deaf2a9 + head deltas to d02509171): APPROVE WITH COMMENTS (1 LOW doc, deferred).
+  - [x] Supplement Argon review appended to .h2a/reviews/train-t1-argon.md (late fixes b940045da..62d86d02a + head deltas to d02509171): APPROVE WITH COMMENTS (1 LOW doc, deferred).
   - [x] Run 42570087778 (head d02509171): same three transient-class failures (build-desktop 30s + security-container cascade + smoke secret ×7). All train-owned gates green. Cross-checked infra: Failed/Unknown runner images only on train runs; affected actions (pkg, aws-actions/configure-aws-credentials) pinned on main and postdate the wagons' base; ci.yml smoke section intact; PR not a draft. Anomaly escalated as THE blocking open point (owner action: KUBECONFIG_B64 delivery check).
 - [ ] **Lot 5 — Report**
   - [ ] French report to .tmp/rv/train-t1.md: PR, head, per-wagon merge sha, fixes, tests, CI, review verdict, open points.
