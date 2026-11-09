@@ -13,6 +13,9 @@ export A4_VERIFY_PHASE ?= internal
 export A4_EXECUTION_FILE
 export A4_EXECUTION_SHA256
 export A4_ACTION
+# The tier is bound by the target name, never by a variable (A4_TIER cannot be overridden).
+k8s-preprod-a4-action k8s-preprod-a4-verify k8s-preprod-a4-custody k8s-preprod-a4-prepare: export override A4_TIER := preprod
+k8s-prod-a4-action k8s-prod-a4-verify k8s-prod-a4-custody k8s-prod-a4-prepare: export override A4_TIER := prod
 .PHONY: k8s-preprod-a4-action
 k8s-preprod-a4-action: ## Execute one owner-approved immutable annex action; dry-run by default
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
@@ -41,12 +44,27 @@ test-preprod-a4-api: ## Run preparation tests in a cached API toolbox with conta
 	@docker run --rm -e NODE_ENV=test -e SCW_TEM_SECRET_KEY=a4-isolated-synthetic -v "$(CURDIR):/input:ro" -w /workspace/api $(A4_TEST_IMAGE) sh -ec 'cp -R /input/api/src/. /workspace/api/src/; cp /input/api/tests/unit/auth/cm-preprod-*.test.ts /workspace/api/tests/unit/auth/; /workspace/node_modules/.bin/vitest run tests/unit/auth/cm-preprod-*.test.ts tests/unit/auth/cm-cutover-checkpoint.test.ts --no-file-parallelism'
 
 .PHONY: test-preprod-a4-manifests check-preprod-a4-api
-test-preprod-a4-manifests: ## Render the real prod/preprod overlays and check custody without a cluster
+test-preprod-a4-manifests: ## Render the real prod/preprod/A4 overlays and check custody without a cluster
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
 	@set -eu; rendered="$$(mktemp -d)"; trap 'rm -rf "$$rendered"' EXIT; \
-	for tier in prod preprod preprod-a4; do kubectl kustomize deploy/k8s/overlays/$$tier > "$$rendered/$$tier.yaml"; done; \
+	for tier in prod preprod preprod-a4 prod-a4; do kubectl kustomize deploy/k8s/overlays/$$tier > "$$rendered/$$tier.yaml"; done; \
 	docker run --rm -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" -v "$$rendered:/rendered:ro" $(A4_TEST_IMAGE) node /tests/bundle.selftest.mjs
 
 check-preprod-a4-api: ## Typecheck, lint and build the candidate API, then check the bundle CLI without DB access
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
 	@docker run --rm -e NODE_ENV=test -e SCW_TEM_SECRET_KEY=a4-isolated-synthetic -v "$(CURDIR):/input:ro" -w /workspace/api $(A4_TEST_IMAGE) sh -ec 'cp -R /input/api/src/. /workspace/api/src/; npm run typecheck; /workspace/node_modules/.bin/eslint src/scripts/cm-preprod-*.ts src/services/identity/cm-cutover-checkpoint.ts src/services/identity/cm-import-source.ts; npm run build; node /input/deploy/ci/preprod-a4/check-bundle.mjs'
+
+# Prod twins (namespace sentropic, docs/runbooks/prod-a4-cutover.md): same scripts, prod-bound inputs.
+.PHONY: k8s-prod-a4-action k8s-prod-a4-verify k8s-prod-a4-custody k8s-prod-a4-prepare
+k8s-prod-a4-action: ## Prod: execute one owner-approved immutable annex action; dry-run by default
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/execution.mjs
+k8s-prod-a4-verify: ## Prod: read-only internal gates; A4_VERIFY_PHASE=http requires the restricted UI proxy
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/verify.mjs
+k8s-prod-a4-custody: ## Prod: prepare the tenant custodian or stage protected inputs; dry-run by default
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/ops.mjs
+k8s-prod-a4-prepare: ## Prod: prepare the owner-authorized A4 evidence; dry-run by default
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/run.mjs

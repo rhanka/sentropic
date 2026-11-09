@@ -9,10 +9,10 @@ vi.mock('../../../src/scripts/cm-preprod-contract', async original => ({
   ...await original<typeof import('../../../src/scripts/cm-preprod-contract')>(),
   custody: `/tmp/sentropic-a4-state-${process.pid}-${process.env.VITEST_WORKER_ID}`,
 }));
-vi.mock('../../../src/services/webauthn-config', () => ({ getWebAuthnConfig: () => ({
-  rpID: 'preprod.sentropic.sent-tech.ca', origin: 'https://preprod.sentropic.sent-tech.ca' }) }));
+const rp = vi.hoisted(() => ({ rpID: 'preprod.sentropic.sent-tech.ca', origin: 'https://preprod.sentropic.sent-tech.ca' }));
+vi.mock('../../../src/services/webauthn-config', () => ({ getWebAuthnConfig: () => rp }));
 const remote = '{"format":"remote-session-projection-snapshot/1","records":[]}';
-const request = { remoteSnapshotDigest: sha256(remote) } as PreprodRequest;
+const request = { namespace: 'sentropic-preprod', remoteSnapshotDigest: sha256(remote) } as PreprodRequest;
 const calls: string[] = [];
 let applied = false, missing = false;
 const client = { async query(sql: string, values?: string[]) {
@@ -56,6 +56,19 @@ describe('read-only preprod source census', () => {
   });
   it('should reject changed remote bytes before opening a database transaction', async () => {
     await expect(inspectPreprod(client, { ...request, remoteSnapshotDigest: 'f'.repeat(64) })).rejects.toThrow();
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('A4 product verifier per tier', () => {
+  afterEach(() => { Object.assign(rp, { rpID: 'preprod.sentropic.sent-tech.ca', origin: 'https://preprod.sentropic.sent-tech.ca' }); });
+  it('should inspect prod only with the prod product verifier', async () => {
+    Object.assign(rp, { rpID: 'sent-tech.ca', origin: 'https://sentropic.sent-tech.ca' });
+    await expect(inspectPreprod(client, { ...request, namespace: 'sentropic' })).resolves.toHaveProperty('mappingSha256');
+    await expect(inspectPreprod(client, request)).rejects.toThrow('wrong_verifier');
+  });
+  it('should refuse the preprod verifier on a prod request before opening a transaction', async () => {
+    await expect(inspectPreprod(client, { ...request, namespace: 'sentropic' })).rejects.toThrow('wrong_verifier');
     expect(calls).toEqual([]);
   });
 });
