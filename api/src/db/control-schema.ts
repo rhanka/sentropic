@@ -1166,3 +1166,139 @@ export const githubAppEnrollments = controlSchema.table(
 
 export type GitHubAppEnrollmentRow = typeof githubAppEnrollments.$inferSelect;
 export type GitHubAppEnrollmentInsert = typeof githubAppEnrollments.$inferInsert;
+
+/**
+ * control.ops_incidents — durable platform job-failure incident state (notify L1).
+ *
+ * One row per (target_key, job_namespace, job_name). `''` job_namespace is the
+ * absent-namespace sentinel so the unique triple stays total (Postgres NULLs
+ * never conflict with each other). The pure cluster-mesh machine owns every
+ * transition; the host only persists it. Soft refs only (control-namespace rule).
+ */
+export const opsIncidents = controlSchema.table(
+  'ops_incidents',
+  {
+    id: text('id').primaryKey(),
+    targetKey: text('target_key').notNull(),
+    jobNamespace: text('job_namespace').notNull().default(''),
+    jobName: text('job_name').notNull(),
+    jobKind: text('job_kind').notNull(),
+    status: text('status').notNull().default('firing'),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    occurrenceCount: integer('occurrence_count').notNull().default(0),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    lastReason: text('last_reason'),
+    lastSeverity: text('last_severity'),
+    lastRunId: text('last_run_id'),
+    lastEventId: text('last_event_id').notNull(),
+    lastLinks: jsonb('last_links'),
+    lastMailAt: timestamp('last_mail_at', { withTimezone: true }),
+    escalationLevel: integer('escalation_level').notNull().default(0),
+    lastEscalationAt: timestamp('last_escalation_at', { withTimezone: true }),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    lastHeartbeatAt: timestamp('last_heartbeat_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    targetJobUnique: uniqueIndex('ops_incidents_target_job_unique').on(
+      table.targetKey,
+      table.jobNamespace,
+      table.jobName,
+    ),
+    statusIdx: index('ops_incidents_status_idx').on(table.status),
+    statusHeartbeatIdx: index('ops_incidents_status_heartbeat_idx').on(table.status, table.lastHeartbeatAt),
+    statusCheck: check(
+      'ops_incidents_status_check',
+      sql`${table.status} IN ('firing', 'resolved')`,
+    ),
+    kindCheck: check(
+      'ops_incidents_kind_check',
+      sql`${table.jobKind} IN ('CronJob', 'Job', 'app-job')`,
+    ),
+    escalationCheck: check(
+      'ops_incidents_escalation_check',
+      sql`${table.escalationLevel} IN (0, 1)`,
+    ),
+    occurrenceCheck: check(
+      'ops_incidents_occurrence_check',
+      sql`${table.occurrenceCount} >= 0`,
+    ),
+    consecutiveCheck: check(
+      'ops_incidents_consecutive_check',
+      sql`${table.consecutiveFailures} >= 0`,
+    ),
+  }),
+);
+
+export type OpsIncidentRow = typeof opsIncidents.$inferSelect;
+export type OpsIncidentInsert = typeof opsIncidents.$inferInsert;
+
+/**
+ * control.ops_notification_deliveries — append-only mail audit trail (notify L1).
+ *
+ * One row per requested alert mail. Recipients are resolved at send time and
+ * recorded on the row, so the audit shows exactly who got what. Until
+ * `control.event_audit` (ARCH-14) exists, these rows are the opposable trace.
+ */
+export const opsNotificationDeliveries = controlSchema.table(
+  'ops_notification_deliveries',
+  {
+    id: text('id').primaryKey(),
+    // Soft ref to ops_incidents.id (control-namespace rule: no FK).
+    incidentId: text('incident_id').notNull(),
+    targetKey: text('target_key').notNull(),
+    kind: text('kind').notNull(),
+    status: text('status').notNull().default('pending'),
+    subject: text('subject').notNull(),
+    textBody: text('text_body').notNull(),
+    htmlBody: text('html_body').notNull(),
+    recipients: jsonb('recipients').notNull().default(sql`'[]'::jsonb`),
+    eventId: text('event_id'),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+    messageId: text('message_id'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    incidentIdx: index('ops_deliveries_incident_idx').on(table.incidentId),
+    statusIdx: index('ops_deliveries_status_idx').on(table.status, table.createdAt),
+    targetSentIdx: index('ops_deliveries_target_sent_idx').on(table.targetKey, table.status, table.sentAt),
+    kindCheck: check(
+      'ops_deliveries_kind_check',
+      sql`${table.kind} IN ('firing', 'digest', 'escalation', 'recovery')`,
+    ),
+    statusCheck: check(
+      'ops_deliveries_status_check',
+      sql`${table.status} IN ('pending', 'sending', 'sent', 'failed', 'suppressed')`,
+    ),
+    attemptsCheck: check(
+      'ops_deliveries_attempts_check',
+      sql`${table.attempts} >= 0`,
+    ),
+  }),
+);
+
+export type OpsNotificationDeliveryRow = typeof opsNotificationDeliveries.$inferSelect;
+export type OpsNotificationDeliveryInsert = typeof opsNotificationDeliveries.$inferInsert;
+
+/**
+ * control.ops_seen_events — ingestion idempotence log (notify L1).
+ *
+ * The primary key IS the dedup: a replayed `eventId` inserts nothing and
+ * creates no incident and no mail.
+ */
+export const opsSeenEvents = controlSchema.table(
+  'ops_seen_events',
+  {
+    eventId: text('event_id').primaryKey(),
+    incidentId: text('incident_id').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+);
+
+export type OpsSeenEventRow = typeof opsSeenEvents.$inferSelect;
+export type OpsSeenEventInsert = typeof opsSeenEvents.$inferInsert;
