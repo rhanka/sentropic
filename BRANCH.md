@@ -13,7 +13,7 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
 - UAT qualification branch/worktree is commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
 - In every `make` command, `ENV=<env>` is passed as the last argument.
 - All new text in English.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -29,6 +29,7 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
   - `package-lock.json`
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -71,19 +72,18 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - [x] Confirm command style: docker-slot.sh make ... ENV=<env> with ENV last.
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries, no BRxx-EXn needed.
-- [ ] **Lot 1 — Node ClaudeCodeCliRunner + quota mapping + factory**
-  - [ ] New src/node/claude-code-cli-runner.ts: spawn claude CLI headless (-p, stream-json, --effort, --system-prompt-file or stdin, model id), CLAUDE_CODE_OAUTH_TOKEN in child env only, normalize CLI output to ClaudeCodeCliEvent, quota/rate-limit to typed rate_limited failure, timeouts, abort.
-  - [ ] Runtime client: pass typed quota failures through with numeric fields only (secret boundary intact).
-  - [ ] Factory createClaudeSeatAnthropicClient for clients.anthropic; export runner + factory from ./node subpath.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`
-    - [ ] Scoped runs: `make test-llm-mesh SCOPE=tests/node/claude-code-cli-runner.test.ts ENV=test-llm-mesh-claude-seat`
-    - [ ] Scoped runs: `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat`
-- [ ] **Lot 2 — Catalog claude-opus-5-5 + seat import proof**
-  - [ ] Add claude-opus-5-5 via make llm-mesh-add-model MODEL=claude-opus-5-5 BASE=claude-opus-5 (verify scaffold, remove scaffold comments).
-  - [ ] Test: faithful claude-code target first for claude-opus-5-5; test: claude seat bundle import path (parseCliSeatProfile + importSeatBundle).
-  - [ ] Lot gate:
-    - [ ] Scoped runs: routing-targets + seat import tests ENV=test-llm-mesh-claude-seat
+- [x] **Lot 1 — Node ClaudeCodeCliRunner + quota mapping + factory**
+  - [x] New src/node/claude-code-cli-runner.ts + claude-code-cli-wire.ts: spawn claude CLI headless (-p, stream-json, --effort, --system-prompt-file or stdin, model id), CLAUDE_CODE_OAUTH_TOKEN in child env only, normalize CLI output to ClaudeCodeCliEvent, quota/rate-limit to typed rate_limited failure, timeouts, abort.
+  - [x] Runtime client: pass typed quota failures through with numeric fields only (secret boundary intact).
+  - [x] Factory createClaudeSeatAnthropicClient for clients.anthropic; export runner + factory from ./node subpath.
+  - [x] Lot gate:
+    - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat` green
+    - [x] Scoped runs: `make test-llm-mesh SCOPE=tests/node/claude-code-cli-runner.test.ts ENV=test-llm-mesh-claude-seat` 14/14
+    - [x] Scoped runs: `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat` 117/117
+    - [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat` green
+- [x] **Lot 2 — Seat import proof (no catalog change)**
+  - [x] Verify: claude already accepted by parseCliSeatProfile/importSeatBundle/EncryptedFileKeyring path (existing tests pin it: cli-seat-import.test.ts CLIS incl. claude, local-account-transport-service-claude.test.ts importSeatBundle claude pair anthropic/claude-code); no catalog addition (routing tests pin no-faithful-target for 5.5 families; runner validates modelId by regex).
+  - [x] Lot gate: existing coverage, no new test needed.
 - [ ] **Lot 3 — Version, changelog, lockfiles, full gates**
   - [ ] Bump packages/llm-mesh/package.json 0.33.0 -> 0.33.1 (npm latest is 0.33.0), CHANGELOG entry, lockfiles via make.
   - [ ] Full `make test-llm-mesh ENV=test-llm-mesh-claude-seat`, typecheck, lint.
