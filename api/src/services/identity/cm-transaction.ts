@@ -10,6 +10,44 @@ import { pool, type db } from '../../db/client';
 import { aliasCmHostScope, createCmScopedHostClient } from './cm-host-scope';
 import { logger } from '../../logger';
 
+/**
+ * An expected HTTP refusal (a 4xx/5xx error DTO) that rolls the attempt back on purpose. Logged as a
+ * refusal with its status and closed code, never as `identity_host_failure`.
+ */
+export class CmHttpRefusalError extends Error {
+  constructor(readonly status: number, readonly refusalCode: string) {
+    super('identity_http_refusal');
+    this.name = 'CmHttpRefusalError';
+  }
+}
+
+const CLOSED_CODE = /^[a-z][a-z0-9_]{0,63}$/;
+/** The closed code of an error DTO (`{ error: { code } }` or `{ error: 'code' }`); anything else is `unrecognized`. */
+export const closedRefusalCode = (body: string): string => {
+  try {
+    const error = (JSON.parse(body) as { error?: unknown })?.error;
+    const code = typeof error === 'string' ? error
+      : error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
+    return typeof code === 'string' && CLOSED_CODE.test(code) ? code : 'unrecognized';
+  } catch { return 'unrecognized'; }
+};
+
+const SQLSTATE = /^[A-Z0-9]{5}$/;
+const DRIVER_CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
+/** Closed log fields of a rolled-back CM transaction: never a message, SQL parameter or credential. */
+export const describeCmTransactionFailure = (error: unknown): Record<string, string | number> => {
+  const errorType = error instanceof Error ? error.name : 'unknown';
+  if (error instanceof IdentityCustodyErrorV1) return { code: error.code, errorType };
+  if (error instanceof CmHttpRefusalError) {
+    return { code: 'identity_http_refusal', status: error.status, refusalCode: error.refusalCode, errorType };
+  }
+  const codeOf = (value: unknown) => value && typeof value === 'object' && 'code' in value ? String(value.code) : '';
+  const code = codeOf(error);
+  const diagnosticCode = code || codeOf(error && typeof error === 'object' && 'cause' in error ? error.cause : undefined);
+  if (SQLSTATE.test(diagnosticCode)) return { code: diagnosticCode, errorType };
+  return { code: 'identity_host_failure', errorType, ...(DRIVER_CODE.test(diagnosticCode) ? { errorCode: diagnosticCode } : {}) };
+};
+
 /** Request host: the pooled connection plus the custody stores/journal the CM V2 flows require. */
 export type AppCustodyHost = PoolClient & CustodyOpHost;
 export type CmIdentityTransaction = IdentityTransactionV1<AppCustodyHost>;
@@ -84,13 +122,9 @@ const host: PostgresIdentityHostV1<AppCustodyHost> = {
       failure = error instanceof Error ? error : new Error('Identity transaction failed');
       try { await client.query('ROLLBACK'); } catch { /* Destroy the failed connection below. */ }
       const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
-      const cause = error && typeof error === 'object' && 'cause' in error ? error.cause : undefined;
-      const diagnosticCode = code || (cause && typeof cause === 'object' && 'code' in cause ? String(cause.code) : '');
-      logger.warn({ readOnly: options.readOnly, committing,
-        code: error instanceof IdentityCustodyErrorV1 ? error.code
-          : /^[A-Z0-9]{5}$/.test(diagnosticCode) ? diagnosticCode : 'identity_host_failure',
-        errorType: error instanceof Error ? error.name : 'unknown',
-      }, 'CM host transaction rolled back');
+      const fields = { readOnly: options.readOnly, committing, ...describeCmTransactionFailure(error) };
+      if (error instanceof CmHttpRefusalError && error.status < 500) logger.info(fields, 'CM host transaction refused');
+      else logger.warn(fields, 'CM host transaction rolled back');
       // A lost COMMIT acknowledgement cannot be retried as a confirmed rollback.
       if (committing && !/^(23|40)[A-Z0-9]{3}$/.test(code)) {
         throw new IdentityCustodyErrorV1('identity_transaction_indeterminate');

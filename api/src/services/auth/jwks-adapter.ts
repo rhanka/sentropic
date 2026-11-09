@@ -5,6 +5,7 @@ import { exportJWK } from 'jose';
 import { desc, eq, sql } from 'drizzle-orm';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
+import { DEVELOPMENT_SECRET_SEED } from '../../config/deployment-secrets';
 import { db } from '../../db/client';
 import { idTokenSigningKeys } from '../../db/schema';
 
@@ -154,7 +155,7 @@ const resolveOauthSigningKek = (options: CreateJwksAdapterOptions): string => {
   const kek =
     options.oauthSigningKek ??
     env.OAUTH_SIGNING_KEK ??
-    (isProduction ? undefined : env.JWT_SECRET ?? 'dev-secret-key-change-in-production-please');
+    (isProduction ? undefined : env.JWT_SECRET ?? DEVELOPMENT_SECRET_SEED);
 
   if (!kek) {
     throw new Error('OAUTH_SIGNING_KEK is required for OAuth signing key encryption in production.');

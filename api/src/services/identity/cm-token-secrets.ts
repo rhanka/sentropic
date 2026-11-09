@@ -1,5 +1,5 @@
-import { env } from '../../config/env';
+import { DEVELOPMENT_EMAIL_TICKET_SEED, resolveDeploymentSecret } from '../../config/deployment-secrets';
 
-/** Preserve the exact inherited email-ticket signing seed through the custody cutover. */
+/** Email-ticket signing key: `JWT_SECRET` in a deployed runtime (fail-closed), the inherited seed in dev/test. */
 export const resolveEmailVerificationTokenSecret = (): string =>
-  env.JWT_SECRET || 'default-secret-change-in-production';
+  resolveDeploymentSecret('JWT_SECRET', DEVELOPMENT_EMAIL_TICKET_SEED);

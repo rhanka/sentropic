@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { pool, db } from '../db/client';
-import { env } from '../config/env';
+import { DEVELOPMENT_SECRET_SEED, resolveDeploymentSecret } from '../config/deployment-secrets';
 import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { refreshClaudeCodeAccessToken } from './claude-code-provider-auth';
@@ -494,7 +494,7 @@ const computeStableSessionId = (input: {
   leaseId: string;
   prefix: string;
 }): string => {
-  const secret = env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+  const secret = resolveDeploymentSecret('JWT_SECRET', DEVELOPMENT_SECRET_SEED);
   const digest = createHmac('sha256', secret)
     .update([
       input.workspaceId ?? '',

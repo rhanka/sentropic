@@ -11,6 +11,7 @@ resources:
 # overlays/preprod (#474). Without it the prod overlay cannot converge at all.
 patches:
   - path: patch-artifact-content-config.yaml
+  - path: patch-api-config.yaml
   - path: patch-postgres-storageclass.yaml
   # Preserve each live production image (hono 4.13.17 / @hono/node-server 2.1.6 maintenance builds, 2026-11-07): remove at the A4 prod cutover.
   # API and IdP use different releases from the same repository.

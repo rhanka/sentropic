@@ -3,12 +3,14 @@ import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { env } from '../../src/config/env';
+import { MissingDeploymentSecretError } from '../../src/config/deployment-secrets';
 import {
   decryptSecret,
   encryptSecret,
   getLegacyPlaintextReadCount,
   resetLegacyPlaintextReadCount,
   SecretEnvelopeError,
+  withConnectorRevocationKey,
 } from '../../src/services/secret-crypto';
 
 const LEGACY_LITERAL = 'dev-secret-key-change-in-production-please';
@@ -37,11 +39,11 @@ describe('secret encryption — key separation and versioned keyring', () => {
     securityEnv.JWT_SECRET = originalJwtSecret;
   });
 
-  it('keeps the deployed key byte-identical: no variable set means the legacy literal', () => {
-    // Deployed containers receive NEITHER variable, so the live at-rest key is sha256 of the literal
-    // spelled out below. Nothing may change that until the key is deliberately rotated. The literal
-    // is written out rather than imported ON PURPOSE: editing it in the source must break this test,
-    // because that edit would silently make every stored envelope undecryptable.
+  it('keeps the dev/test key byte-identical: no variable set means the development seed', () => {
+    // Dev and test databases hold envelopes sealed under sha256 of the seed spelled out below. The
+    // literal is written out rather than imported ON PURPOSE: editing it in the source must break this
+    // test, because that edit would silently make every dev envelope (and every envelope the
+    // re-encryption tool must still move) undecryptable.
     const plaintext = randomBytes(24).toString('base64url');
     const sealed = sealWithSeed(plaintext, LEGACY_LITERAL);
 
@@ -168,5 +170,29 @@ describe('secret encryption — key separation and versioned keyring', () => {
     // trailing space, or a copy-paste that picks one up, must not resolve to the same key either.
     securityEnv.SECRET_ENCRYPTION_KEY = ` ${exactSeed}`;
     expect(() => decryptSecret(sealed)).toThrow();
+  });
+
+  it('refuses to seal, open or borrow in a deployed runtime without a provisioned key', () => {
+    const mutable = env as unknown as { NODE_ENV: string; DISABLE_RATE_LIMIT?: string; ADMIN_EMAIL?: string };
+    const saved = { nodeEnv: mutable.NODE_ENV, rateLimit: mutable.DISABLE_RATE_LIMIT, admin: mutable.ADMIN_EMAIL };
+    const sealed = sealWithSeed('stored-before-the-key', LEGACY_LITERAL);
+    try {
+      mutable.NODE_ENV = 'production';
+      mutable.DISABLE_RATE_LIMIT = 'false';
+      mutable.ADMIN_EMAIL = 'not-the-e2e-admin@example.com';
+      for (const value of [undefined, '', LEGACY_LITERAL]) {
+        securityEnv.SECRET_ENCRYPTION_KEY = value;
+        expect(() => encryptSecret('x')).toThrow(MissingDeploymentSecretError);
+        expect(() => decryptSecret(sealed)).toThrow(MissingDeploymentSecretError);
+        expect(() => withConnectorRevocationKey('secret-crypto:v1', () => 'borrowed')).toThrow(MissingDeploymentSecretError);
+      }
+      securityEnv.SECRET_ENCRYPTION_KEY = randomBytes(48).toString('base64url');
+      expect(decryptSecret(encryptSecret('after-the-key'))).toBe('after-the-key');
+      expect(() => decryptSecret(sealed), 'a development-seed envelope needs --secret-reencrypt').toThrow();
+    } finally {
+      mutable.NODE_ENV = saved.nodeEnv;
+      mutable.DISABLE_RATE_LIMIT = saved.rateLimit;
+      mutable.ADMIN_EMAIL = saved.admin;
+    }
   });
 });

@@ -7,6 +7,7 @@ import { getWebAuthnConfig } from '../webauthn-config';
 import { loadCmCutoverCheckpoint, type CmCutoverCheckpoint } from './cm-cutover-checkpoint';
 import { connectorCustodyAssetSha256 } from './cm-connector-custody-values';
 import { a4MappingAssetSha256 } from './cm-import-manifest';
+import { a4DeclaredIdpRpId } from './cm-import-source';
 import { loadA4RemoteSnapshot, type A4RemoteSnapshot } from './cm-import-remote-snapshot';
 import { createCmTokenCustodian } from './cm-token-custodian';
 
@@ -16,7 +17,8 @@ export const A4_IDENTITY_MIGRATION_ID = '0015_app_cm_identity_cutover';
 /** Verifier, assets and keys are independent of the checkpoint file. */
 async function loadAppCmCutoverBase() {
   const rp = getWebAuthnConfig();
-  const verifier = { rpId: rp.rpID, origins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin] };
+  const verifier = { rpId: rp.rpID, origins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin],
+    idpRpId: a4DeclaredIdpRpId() };
   const identityAsset = identityCustodySchemaAssetV1('postgres');
   const mappingSha256 = a4MappingAssetSha256(verifier);
   const sessionKey = new TextEncoder().encode(resolveSessionTokenSecret());

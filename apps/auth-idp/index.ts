@@ -13,8 +13,17 @@
 import { serve } from '@hono/node-server';
 
 import { env } from '../../api/src/config/env';
+import { assertDeploymentSecrets } from '../../api/src/config/deployment-secrets';
 import { logger } from '../../api/src/logger';
 import { createIdpApp } from './idp-app';
+
+// Fail closed before serving: a deployed IdP never signs or seals with a missing or public key.
+try {
+  assertDeploymentSecrets();
+} catch (error) {
+  logger.error({ err: error }, 'Deployment secret check failed at startup');
+  process.exit(1);
+}
 
 // Dedicated IdP port. Falls back to the product API port only for local
 // convenience; in deployment the IdP gets its own port/origin (auth.sent-tech.ca).

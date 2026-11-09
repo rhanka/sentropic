@@ -17,11 +17,6 @@ resources:
   - artifact-content-object-store-networkpolicy.yaml
   - artifact-object-store
   - idp-identity-sync
-# Images use the base default (:main) today, matching prod. The preprod CD pipeline
-# (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
-#   images:
-#     - name: ghcr.io/rhanka/sentropic-api
-#       newTag: vYYYY.MM.DD.N
 # Per-tier host + isolated WebAuthn RP ID overrides (D4 nested hosts, D11R isolated
 # identity). Strategic-merge patches override only the listed ConfigMap keys
 # (Deployment patches: only the listed env entries — envFrom/volumes are list-replaced
@@ -33,14 +28,13 @@ patches:
   - path: patch-api-config.yaml
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
-
-# Repin to the ec3c0bcc8 main build (2026-11-09): API sha256:8a0039e8…61 from main CI run 42627071304
-# (publish-api-image success, receipt and GHCR manifest verified; publish-ui-image skips on this head —
-# no ui path changed — so the UI stays on sha256:bf1aa509…e0 published by the 7106defa7 build, run
-# 42485651003). Brings preprod to the forge tarball link handling (#975) and the live teardown fix (#971), over the host build API job state contract (#969)
-# over the remote live rows persistence fix (#967), the S2S service issuer fix (#963) and the GitHub App
-# form-origin fix (#960).
-# Continuous deployment applies ../preprod-a4 (this overlay plus the A4 runtime wiring).
+# Image pins. deploy-preprod (`make preprod-repin`, scripts/ci/preprod-repin.mjs) rewrites this
+# block at deploy time to the deployed commit's images: the digests published by the same main run,
+# else the digest of the commit's immutable content tag. The committed digests (ec3c0bcc8 build,
+# 2026-11-09: API sha256:8a0039e8…61 from main CI run 42627071304; UI sha256:bf1aa509…e0 from the
+# 7106defa7 build, run 42485651003) are the render baseline. They are applied
+# unchanged only when a line `# preprod-image-hold: <reason>` is committed in this file (recovery
+# hold). Continuous deployment applies ../preprod-a4 (this overlay plus the A4 runtime wiring).
 images:
   - name: ghcr.io/rhanka/sentropic-api
     digest: sha256:8a0039e8198e98b1433003266ae389c6f0cf2360b05d1ac77c97f01144675c61
