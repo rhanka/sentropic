@@ -76,6 +76,12 @@ const TRANSPORT_EXECUTION_FEATURES: Readonly<
   muse: ['named-tool-choice', 'parallel-tool-control', 'explicit-output-ceiling',
     'strict-schema'],
   'mistral-vibe': ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema'],
+  // Lot 5 paid fallback (owner D3, Gemini only): the Gemini API-key client
+  // projects named choice (toolConfig ANY + allowedFunctionNames), structured
+  // output (responseMimeType + responseSchema) and an explicit output ceiling
+  // (maxOutputTokens). No reasoning slot is claimed: thinking controls have
+  // no proven expression on the GenerateContent wire from this client.
+  'gemini-apikey': ['named-tool-choice', 'structured-output', 'explicit-output-ceiling'],
 };
 
 /** Mesh-known support for a transport; empty when unknown (fail closed). */
