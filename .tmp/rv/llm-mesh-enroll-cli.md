@@ -5,11 +5,52 @@ PR #983 (OPEN, base `main`). Tête poussée : `8a9a54576`.
 
 ## État
 
-- Les 46 échecs CI du run 42662913703 ont une cause racine unique, corrigée.
-- Rebase sur `origin/main` (`67205fe00`) terminé : 12 commits rejoués, zéro conflit
+- Run 42662913703 : 46 échecs, cause racine corrigée (commit 8a9a54576).
+- Run 42710018359 (tête 7808a18c5) : 6 échecs restants, tous repris ci-dessous.
+- Tête poussée : `d58d6993e`. PR #983 MERGEABLE, non fusionnée.
+- Rebase sur `origin/main` (`67205fe00`) : 12 commits rejoués, zéro conflit
   hors `BRANCH.md` (version de branche conservée).
-- Nouveau run CI déclenché par le push ; suivi à la charge du conducteur
-  (règle quota : pas de boucle d'attente).
+
+## Suivi du run 42710018359 (6 échecs : 46 → 6)
+
+1. `test-api-unit-integration (unit, 1)` et `(unit, 4)` :
+   `api/tests/unit/gateway-package-version.test.ts` attendait `0.22.4`,
+   l'instance installée est `0.22.5`. Pin mis à jour (BRENROLL-EX4).
+2. `validate-cluster-mesh (source)`, specs `speech-projection` et
+   `speech-revision` : `LLM_MESH_SPEECH_RANGE` (`<0.34.0`) refusait le
+   llm-mesh 0.34.0 installé alors qu'il exporte `./speech`. Plage élargie
+   à `<0.35.0`, `speech-peer.spec.ts` ajusté (0.34.0 admis).
+3. `validate-cluster-mesh (source)`, `gateway-surface` (2) et `llm-surface`
+   (1) : versions figées `0.22.4`/`0.33.0` via `tests/fixtures/train.ts`.
+   Passées à 0.22.5/0.34.0.
+4. `validate-cluster-mesh (source)`, `skew-invariants` (2) : regex codée en
+   dur avec l'ancienne plage dans `skew-invariants.ts`. Alignée sur `<0.35.0`.
+5. `validate-cluster-mesh (lazy)` : fixture `selected` régénérée par la voie
+   officielle (`refresh-lazy-package-lock`), après reconstruction fraîche
+   des dist mcp-platform/artifacts/auth-ui (les dist du worktree étaient
+   périmées ou absentes ; les builds `make` correspondants sont bloqués par
+   un `node_modules` root-owned sous `packages/llm-mesh`, à nettoyer avec
+   sudo — voir plus bas). Deux corrections de données prouvées :
+   intégrité artifacts 0.2.25 `4NL6` → `jc0f` (métadonnée registre et build
+   local concordent), URLs registre pour les entrées mesh 0.34.0 / gateway
+   0.22.5 non publiées avec les hashes frères qSVv/vNA1 (ceux des logs CI).
+6. `test-e2e (2)` : un seul échec, `05-i18n.spec.ts` (libellé fallback
+   matrice, 27 passés). Surface UI non touchée par la branche (bin CLI plus
+   chaînes de version uniquement) ; laissé au verdict du nouveau run.
+7. `ci-gate` : conséquence des échecs ci-dessus.
+
+## Écarts procéduraux assumés
+
+- Compilations dist mcp-platform/artifacts/auth-ui rejouées en `docker run`
+  direct (recette make recopiée à l'identique, même image, même toolchain),
+  car `make build-*` exige `install-internal-packages`, bloqué par des
+  fichiers root-owned que la règle m'interdit de supprimer :
+  `tmp/worktrees/llm-mesh-enroll-cli/packages/llm-mesh/node_modules`
+  (et `.vite`). Nettoyage sudo à prévoir par l'owner.
+  Les livrables commis restent produits par les cibles officielles.
+- Test API ciblé non rejoué en local (nécessite la stack compose sur un hôte
+  saturé) ; la valeur reçue `0.22.5` est prouvée par le log CI, le pin est
+  une égalité stricte. CI tranche.
 
 ## Cause racine (preuves du run 42662913703)
 
