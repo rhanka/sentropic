@@ -20,6 +20,8 @@
 - [ ] `docker-compose.idp.yml`
 - [ ] `docker-compose.e2e-vscode.yml`
 - [ ] `docker-compose.test.yml`
+- [ ] `e2e/tests/01-app.spec.ts` (captures debug vers `test-results/`)
+- [ ] `e2e/tests/02-auth-routes.spec.ts` (captures debug vers `test-results/`)
 - [ ] `BRANCH.md`
 - [ ] **Forbidden Paths (must not change in this branch)**:
 - [ ] `Makefile`
@@ -39,6 +41,7 @@
 - [ ] Rollback: revert the commit.
 - [x] `acknowledge` scoped smoke `tests/smoke/api-health.test.ts` on `up-api-test` stack: 10 failed / 1 passed (`identity_contract_unavailable` 500s on authenticated endpoints); A/B rerun as root (`UID=0 GID=0`) fails identically — not caused by host-user mapping; no CI job runs this suite (only `test-api-smoke-restore` with prod backup). No fix attempted, no assertion loosened.
 - [x] `attention` CI run 42555500059: `test-e2e` (6 shards) + `e2e-vscode` fail with `EACCES: permission denied, rmdir '/app/test-results'` — root cause in two parts: (a) Docker creates missing gitignored bind dirs (`e2e/test-results`, `e2e/.auth`) as root — fixed by host-owned `mkdir -p` in `ci-test-env` and `prepare-node-workspace` (plus `data/backup`); (b) Playwright `rmdir`s its output dir, which needs write on parent `/app` (image-owned root) — fixed by `--output=test-results/out-<shard|vscode|smoke>` so the managed dir is a removable entry inside the host-owned bind. No `chmod 777` on new dirs.
+- [x] `attention` CI run 42559201108: `e2e-vscode` + shards 2/3/4 green (fixes above validated); shards 1/6 fail on `page.screenshot({ path: 'debug-*.png' })` to CWD `/app` (image-owned root) — fixed by writing to `test-results/debug-*.png` (host-owned bind). Shard 5: `00-ai-generation` fails with `Impossible de creer un brouillon de dossier` on the API side (provider path unchanged, `api` container still root on `up-e2e`) — to qualify on the next run (AI-flaky candidate, no success evidence on this head yet).
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
