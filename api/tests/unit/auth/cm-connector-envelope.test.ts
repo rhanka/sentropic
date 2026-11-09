@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const configuration = vi.hoisted(() => ({ SECRET_ENCRYPTION_KEY: undefined as string | undefined }));
-vi.mock('../../../src/config/env', () => ({ env: configuration }));
+// A dev/test runtime: the deployed-runtime refusal is covered by secret-crypto.test.ts.
+vi.mock('../../../src/config/env', () => ({ env: configuration, requiresOAuthProductionSecrets: () => false }));
 vi.mock('../../../src/logger', () => ({ logger: { warn: vi.fn() } }));
 import { decryptSecret, encryptSecret, withConnectorRevocationKey } from '../../../src/services/secret-crypto';
 import { readConnectorCapability, sealConnectorCapability } from '../../../src/services/identity/cm-connector-envelope';

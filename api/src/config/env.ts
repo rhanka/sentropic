@@ -132,6 +132,8 @@ const envSchema = z.object({
   WEBAUTHN_TIMEOUT_REGISTRATION: z.string().optional(),
   WEBAUTHN_TIMEOUT_AUTHENTICATION: z.string().optional(),
   WEBAUTHN_ATTESTATION: z.enum(['none', 'indirect', 'direct']).optional(),
+  // 'disabled' refuses passkey registration ceremonies (preprod IdP: parent RP ID shared with prod).
+  WEBAUTHN_REGISTRATION: z.enum(['enabled', 'disabled']).optional(),
   // JWT Configuration
   JWT_SECRET: z.string().optional(),
   SECRET_ENCRYPTION_KEY: z.string().optional(),

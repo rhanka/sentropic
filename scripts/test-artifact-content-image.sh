@@ -77,7 +77,9 @@ content_ci_identity() {
   ! grep -Eq 'make (build-api|build-api-image)' <<< "$publish_job" || fail 'publisher rebuilds the tested artifact'
   promotion=$(make --no-print-directory -n k8s-deploy-preprod API_VERSION=abc123 UI_VERSION=def456 \
     API_IMAGE_NAME=sentropic-api REGISTRY=registry.test.example ENV="${ENV:?}")
-  grep -Fq '"registry.test.example" "sentropic-api" "abc123"' <<< "$promotion" || fail 'promotion changes the canonical API tag'
+  grep -Fq 'kubectl apply -k deploy/k8s/overlays/preprod-a4' <<< "$promotion" || fail 'promotion bypasses the pinned preprod-a4 overlay'
+  grep -Eq 'docker (build|push|tag)' <<< "$promotion" && fail 'promotion tags images ad hoc instead of the repinned overlay'
+  grep -Fq 'node scripts/ci/preprod-repin.mjs' Makefile || fail 'promotion does not route canonical tags through preprod-repin'
   echo 'PASS: CI tests content on the transported image, publishes only after the guards, publishes the verified receipt without rebuilding and retains canonical promotion tags'
 }
 

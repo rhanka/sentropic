@@ -6,11 +6,13 @@ import { join } from 'node:path';
 import { ops } from './ops.mjs';
 import { digest, privateInput } from './guards.mjs';
 import { approvedRequest, commit, image, sha } from './fixtures.mjs';
-import { activeRef, approvalRef, compose, entrypoint } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
+import { approvalRef, compose, entrypoint } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
+
+const activeRef = approvedRequest.emailCodeActiveKeyRef;
 
 const request = { ...approvedRequest, namespace: 'sentropic-preprod', candidateCommit: commit, candidateImage: image,
   operationId: 'a4', backupTemplateSha256: sha, remoteSnapshotDigest: digest('{}') };
-const env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request', A4_DRY_RUN: '1' };
+const env = { A4_TIER: 'preprod', A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request', A4_DRY_RUN: '1' };
 test('should preserve the IdP entrypoint and wire both stopped consumers without scaling', () => {
   assert.deepEqual(entrypoint(['--idp']), ['/workspace/apps/auth-idp/dist/index.js']);
   assert.deepEqual(entrypoint(['--cm-preprod-verify']), ['/workspace/api/dist/index.js', '--cm-preprod-verify']);
@@ -31,7 +33,7 @@ test('should preserve the IdP entrypoint and wire both stopped consumers without
   }, read), /consumer_not_quiesced/);
 });
 test('should refuse malformed keys, unexpected previous slots and incorrect active fingerprints', () => {
-  const base = { CM_IDENTITY_EMAIL_CODE_POLICY: 'hmac-sha256', CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: approvalRef,
+  const base = { CM_A4_NAMESPACE: 'sentropic-preprod', CM_IDENTITY_EMAIL_CODE_POLICY: 'hmac-sha256', CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: approvalRef,
     CM_IDENTITY_EMAIL_CODE_ACTIVE_KEY_REF: activeRef, EMAIL_CODE_HMAC_KEY_ACTIVE_REF: activeRef };
   for (const change of [{ EMAIL_CODE_HMAC_KEY_ACTIVE: 'invalid' },
     { EMAIL_CODE_HMAC_KEY_ACTIVE: '11'.repeat(32) }, { EMAIL_CODE_HMAC_KEY_PREVIOUS: '' },

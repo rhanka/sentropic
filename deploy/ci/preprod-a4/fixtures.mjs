@@ -13,7 +13,8 @@ export const approvedRequest = { format: 'preprod-a4-request/1', namespace: 'sen
   candidateCommit: commit, candidateImage: image, backupTemplateSha256: digest(canonical(cron.spec.jobTemplate.spec)),
   authorizationRef: 'track:approval', writerFenceRef: 'track:fence', rollbackCheckpointRef: 'track:rollback',
   rollbackLimitsRef: 'track:limits', sourceMetadataDispositionRef: 'track:metadata', remoteSnapshotRef: 'custody:remote',
-  remoteSnapshotDigest: digest('{}'), legacyWritersStopped: true, remoteFileWriterStopped: true };
+  remoteSnapshotDigest: digest('{}'), legacyWritersStopped: true, remoteFileWriterStopped: true,
+  emailCodeActiveKeyRef: 'email-code-hmac:v1:preprod:15c2f8b66073655a' };
 export const pods = [{ metadata: { name: 'sentropic-a4-custodian' },
   spec: { automountServiceAccountToken: false, containers: [{ image,
     volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: false }] }],
