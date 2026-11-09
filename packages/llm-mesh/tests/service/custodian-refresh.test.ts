@@ -143,4 +143,62 @@ describe('runCustodianRefreshCycle', () => {
     expect(report.accounts.map((entry) => entry.action).sort()).toEqual(
       ['skipped-external', 'skipped-no-grant']);
   });
+
+  it('should alert again on the next outage after the owner re-enrolls', async () => {
+    // B2: the alert epoch must not survive a re-enrollment, or the second
+    // outage after an owner re-auth stays silent forever.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = makeService('fail', T0 + 55 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-reauth', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-1', enrollmentCompletedAt: iso(T0) });
+    const first = await service.runCustodianRefreshCycle();
+    expect(first.accounts[0]).toMatchObject(
+      { action: 'refresh-failed-reauth', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    // The owner re-authenticates: the enrollment re-registers the account.
+    seed(service, { accountId: 'acct-reauth', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-2', enrollmentCompletedAt: iso(T0) });
+    const second = await service.runCustodianRefreshCycle();
+    expect(second.accounts[0]).toMatchObject(
+      { action: 'refresh-failed-reauth', readiness: 'reauth-required' });
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(alerts).toHaveLength(2);
+  });
+
+  it('should flip and alert when an account without a refresh grant expires', async () => {
+    // B3: a grant-less credential cannot recover on its own; expiry must
+    // flip the status and alert for a planned re-enrollment.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = makeService('ok', T0 + 120 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-nogrant', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: null, enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'expired-no-grant', readiness: 'reauth-required' });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ ownerScopeRef: 'owner', reason: 'expired-no-grant' });
+    const encore = await service.runCustodianRefreshCycle();
+    expect(encore.accounts[0].action).toBe('already-reauth');
+    expect(alerts).toHaveLength(1);
+    const eligible = await service.createRouteDirectory({} as never)
+      .listEligible({ principalRef: 'owner', ownerScopeRef: 'owner' });
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0].readiness).toBe('reauth-required');
+  });
+
+  it('should read reauth-required for an expired external seat without flipping it', async () => {
+    // The custodian never owns external seats: no flip, no owner alert, but
+    // the report must agree with the route directory instead of `ready`.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = makeService('ok', T0 + 120 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-ext-expired', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-ext',
+      enrollmentCompletedAt: iso(T0), external: true });
+    const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'skipped-external', readiness: 'reauth-required' });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(alerts).toEqual([]);
+  });
 });

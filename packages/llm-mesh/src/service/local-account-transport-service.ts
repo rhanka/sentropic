@@ -1038,6 +1038,9 @@ export class LocalAccountTransportService {
     const executableAccount = this.coordinator.addAccount(account);
     this.accountsMap.set(account.accountId, executableAccount);
     this.credentialVersions.set(account.accountId, configVersion);
+    // A (re-)enrollment opens a fresh alert epoch: the owner has just
+    // re-authenticated, so the next outage must alert again.
+    this.alertedReauth.delete(account.accountId);
     const enrolledAtMs = account.enrollmentCompletedAt
       ? Date.parse(account.enrollmentCompletedAt)
       : Number.NaN;
@@ -1812,14 +1815,19 @@ export class LocalAccountTransportService {
         transportProviderId: String(account.transportProviderId),
         ownerScopeRef: account.ownerScopeRef ?? '',
       };
-      if (isExternalSeatAccount(account)) {
-        accounts.push({ ...base, action: 'skipped-external', readiness: 'ready' });
-        continue;
-      }
       const expiredAt = typeof account.expiresAt === 'string' && account.expiresAt
         ? Date.parse(account.expiresAt)
         : Number.NaN;
       const expired = Number.isFinite(expiredAt) && expiredAt <= now;
+      if (isExternalSeatAccount(account)) {
+        // Mirrors the route directory: an expired external projection reads
+        // reauth-required (it awaits the next import), without flipping a
+        // status the custodian never owns or alerting the owner.
+        accounts.push({ ...base, action: 'skipped-external',
+          readiness: expired ? 'reauth-required' : 'ready',
+          ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
+        continue;
+      }
       if (account.status === 'reauth_required') {
         const reason: ReauthAlertReason = !account.refreshToken && expired
           ? 'expired-no-grant'
@@ -1830,9 +1838,16 @@ export class LocalAccountTransportService {
         continue;
       }
       if (!account.refreshToken?.trim()) {
-        accounts.push({ ...base, action: 'skipped-no-grant',
-          readiness: expired ? 'reauth-required' : 'ready',
-          ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
+        // No renewable grant: an expired credential cannot recover on its
+        // own, so it flips to reauth_required and alerts (planned
+        // re-enrollment). An unexpired one stays ready without alerting.
+        if (expired) {
+          await this.markReauthRequired(account.accountId, 'expired-no-grant');
+          accounts.push({ ...base, action: 'expired-no-grant', readiness: 'reauth-required',
+            expiredAt: new Date(expiredAt).toISOString() });
+          continue;
+        }
+        accounts.push({ ...base, action: 'skipped-no-grant', readiness: 'ready' });
         continue;
       }
       if (!Number.isFinite(expiredAt)) {
