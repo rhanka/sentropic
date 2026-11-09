@@ -82,7 +82,7 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - [x] Factory createClaudeSeatAnthropicClient for clients.anthropic; export runner + factory from ./node subpath.
   - [x] Lot gate:
     - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat` green
-    - [x] Scoped runs: `make test-llm-mesh SCOPE=tests/node/claude-code-cli-runner.test.ts ENV=test-llm-mesh-claude-seat` 14/14
+    - [x] Scoped runs: `make test-llm-mesh SCOPE=tests/node/claude-code-cli-runner.test.ts ENV=test-llm-mesh-claude-seat` 28/28 (reprise review)
     - [x] Scoped runs: `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat` 117/117
     - [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat` green
 - [x] **Lot 2 — Seat import proof (no catalog change)**
@@ -105,6 +105,9 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - [x] MINOR : abort avant spawn, `ClaudeCliQuotaError` exporté de `./node`, quota structuré d'abord, CHANGELOG (patch assumé : ranges consumers `<0.34.0`).
   - [x] Seat import : aucun changement nécessaire (`SeatCli` inclut `claude`, paire `claude → claude-code`, tests existants).
   - [x] Vérifié empiriquement sur CLI réel 2.1.321 : erreur `--verbose` requise, init `tools:[]`/`mcp_servers:[]`, hooks ambiants sans sandbox, aucun hook avec sandbox, `apiKeySource:"none"`, échec auth typé.
+- [ ] **Lot 6 — CI fallout run 42711632214 (tête 9f0a28ecd)**
+  - [x] `validate-cluster-mesh (lazy)` : `lock integrity sha512-4/Lz… != sibling sha512-TN6…` — le tarball sibling packé en CI a changé car les 6 commits review modifient le contenu llm-mesh (attendu) ; fixture `selected/package-lock.json` resynchronisée (ligne integrity llm-mesh uniquement → hash sibling du log CI, pack CI déterministe pour cet arbre).
+  - [x] `test-e2e (2)` : `07_comment_assistant … AI-Assistant-badge toBeVisible` — test Playwright UI uniquement, aucun import du node runner côté UI/apps (vérifié : seuls des re-exports backend cluster-mesh référencent le chemin). Lane sans UI. Classé flake non lié (pratique main : shard 1 chat / shard 4 organizations déjà notés) ; tête fraîche pour re-run.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest llm-mesh suite (cf Lot1, copy checklist)
