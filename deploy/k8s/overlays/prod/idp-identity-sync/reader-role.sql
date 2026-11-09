@@ -39,7 +39,7 @@ END $$;
 GRANT SELECT (user_id, client_id, tenant_id, scopes, created_at, updated_at) ON oauth_consents TO idp_identity_reader;
 GRANT SELECT (client_id, name, redirect_uris, allowed_scopes, grant_types, response_types,
               token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce, resource_indicators,
-              tenant_id, owner_user_id, created_at, updated_at) ON oauth_clients TO idp_identity_reader;
+              tenant_id, require_tenant, owner_user_id, created_at, updated_at) ON oauth_clients TO idp_identity_reader;
 GRANT SELECT (client_id, has_secret) ON idp_oauth_client_secret_presence TO idp_identity_reader;
 -- CM replica export: read-only grants pinned to the four CM tables the exporter
 -- reads (a4-cm-gaps-r2 §9.2; names pinned from the custody schema asset).
