@@ -27,3 +27,9 @@ export {
 export {
   createLiveWorkerClient, LIVE_WORKER_PATHS, liveStoreFences, type LiveBridgeAck, type LiveWorkerClientOptions, type LiveWorkerFences,
 } from './worker-client.js';
+export {
+  parseReconcileBuilderStatus, reconcilePendingBuild, reconcilePendingBuilds, RECONCILE_DEFAULTS, RECONCILE_ERROR_CODES,
+  RECONCILE_ERROR_STAGES, RECONCILE_OUTCOMES, ReconcileError, type ReconcileBuilderStatus, type ReconcileErrorCode,
+  type ReconcileErrorStage, type ReconcileItemResult, type ReconcileJobStore, type ReconcileOptions, type ReconcileOutcome,
+  type ReconcilePendingJob, type ReconcileReport, type ReconcileStatusClient,
+} from './reconcile.js';
