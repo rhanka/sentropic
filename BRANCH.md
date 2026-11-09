@@ -31,7 +31,8 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
+- [x] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
+- [x] BR01-EX1: touch `.github/workflows/ci.yml` (`global` paths-filter only): add `scripts/ci/live-provider-receipt.mjs` and `scripts/ci/live-provider-receipt.test.mjs`. Rationale: any `scripts/**` change classifies as `root-lock-toolchain`, whose `consumer-contracts-verify` gate requires the six integration lanes, but those lanes only run when `api`, `ui` or `global` matches; without this, a `scripts/ci`-only PR can never go green (run 42548638007: `consumer-contracts` + `ci-gate` failure). Impact: strictly more CI for these two paths (full integration), same family as `image-receipt`/`compatibility-classifier` already listed; no gate, threshold or assertion loosened. Rollback: remove the two lines; dispatch returns to `manifest_guard`-only.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -75,8 +76,10 @@
     - [ ] **E2E tests**
       - [ ] No E2E change: none.
     - [ ] Scoped gate: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
-- [ ] **Lot 2 — Final validation**
+- [ ] **Lot 2 — Dispatch fix plus final validation**
+  - [ ] Add `live-provider-receipt` files to the `global` paths-filter under BR01-EX1 (conditional path with rationale, impact, rollback).
   - [ ] Retest scoped: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
-  - [ ] Open PR, push, iterate to green CI (no rerun, no skip).
+  - [ ] Retest scoped: `test-ci-compatibility`, `test-ci-consumer-contracts` (classifier and gate untouched in behavior).
+  - [ ] Push, update PR body with `BRANCH.md`, iterate to green CI (no rerun, no skip).
   - [ ] Do NOT merge.
   - [ ] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
