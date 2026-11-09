@@ -36,8 +36,8 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     if (!drafts.has(idOf(k))) drafts.set(idOf(k), { generation: 1, revision: 'r1', baseHeadSha: 'B', treeSha: 'tree-B-dirty', dirty: true });
     return drafts.get(idOf(k))!;
   };
-  const objects = new Map<string, { metadata: { name: string; uid: string; labels: Record<string, string> }; spec: unknown;
-    status?: { phase?: string } }>();
+  const objects = new Map<string, { metadata: { name: string; uid: string; labels: Record<string, string>;
+    deletionTimestamp?: string }; spec: unknown; status?: { phase?: string } }>();
   const core: KubernetesCore = {
     get: vi.fn(async (kind, name) => objects.get(kind + name) as never),
     create: vi.fn(async (kind, value) => {

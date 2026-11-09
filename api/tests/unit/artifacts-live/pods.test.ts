@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fixture, key, placement } from './fixture';
 import { builderPod, podName } from '../../../src/services/artifacts/live/pods';
+import { deleteOptions } from '../../../src/services/artifacts/live/kubernetes';
+import { LiveError } from '../../../src/services/artifacts/live/records';
 import { BUILDER_IMAGE } from '../../../src/services/artifacts/live/recipes';
 
 describe('builder pod admission and recovery', () => {
@@ -68,6 +70,52 @@ describe('builder pod admission and recovery', () => {
     const f = fixture(); await f.controller.start(key);
     await f.ports.store.transaction(key, async unit => { unit.state!.runtime.podUid = null; unit.state!.runtime.phase = 'REVIVING'; });
     await f.controller.recover(key); expect(f.objects.size).toBe(0); expect(f.core.create).toHaveBeenCalledTimes(2);
+  });
+  it('should delete ownerless pods and services with Background propagation and uid preconditions', async () => {
+    expect(deleteOptions('uid-1')).toEqual({ apiVersion: 'v1', kind: 'DeleteOptions',
+      propagationPolicy: 'Background', preconditions: { uid: 'uid-1' } });
+    expect(deleteOptions(undefined)).toEqual({ apiVersion: 'v1', kind: 'DeleteOptions', propagationPolicy: 'Background' });
+  });
+  it('should teardown a terminal pod without quiesce and release the pod, service and heavy slot', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    const pod = f.objects.get('pods' + live.podName)!;
+    pod.status = { phase: 'Succeeded' }; pod.metadata.deletionTimestamp = '2026-11-08T21:53:41Z';
+    f.ports.worker.quiesce = vi.fn(async () => { throw new LiveError('builder_unavailable', 'supervisor_relay_502'); });
+    await expect(f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 }))
+      .resolves.toEqual({ liveSessionId: live.sessionId, state: 'stopped' });
+    expect(f.ports.worker.quiesce).not.toHaveBeenCalled();
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0);
+  });
+  it('should teardown a terminating pod without quiesce', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    f.objects.get('pods' + live.podName)!.metadata.deletionTimestamp = '2026-11-08T21:53:41Z';
+    f.ports.worker.quiesce = vi.fn(async () => { throw new LiveError('builder_unavailable', 'supervisor_relay_502'); });
+    await f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 });
+    expect(f.ports.worker.quiesce).not.toHaveBeenCalled();
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0);
+  });
+  it('should replace a leftover service with a stale selector on the next ensure', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    const service = f.objects.get('services' + live.podName)!;
+    const staleUid = service.metadata.uid;
+    // The pod is gone (NotFound, like preprod) while its service still carries the previous session's selector.
+    f.objects.delete('pods' + live.podName);
+    service.metadata.labels['sentropic.dev/artifact-generation'] = '999';
+    (service.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-generation'] = '999';
+    await expect(f.ports.pods.ensure(key, { ...live, podUid: null })).resolves.toMatchObject({ uid: expect.any(String) });
+    expect(f.core.delete).toHaveBeenCalledWith('services', live.podName, staleUid);
+    const replaced = f.objects.get('services' + live.podName)!;
+    expect(replaced.metadata.uid).not.toBe(staleUid);
+    expect((replaced.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-generation']).toBe('1');
+    expect(f.objects.size).toBe(2);
+  });
+  it('should probe the pod fence before deciding to quiesce', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    expect(await f.ports.pods.probe(key, live)).toBe('active');
+    f.objects.delete('pods' + live.podName);
+    expect(await f.ports.pods.probe(key, live)).toBe('absent');
   });
   it('should build a selected reachable historical commit without starting live or staging a draft', async () => {
     const f = fixture(); await f.controller.buildOnly(key, 'job-A');
