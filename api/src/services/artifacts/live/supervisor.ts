@@ -7,6 +7,7 @@ import { conflict, LiveError, type LiveAttempt, type LiveRuntime } from './recor
 import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, PREBUNDLE_RECIPE } from './recipes';
 import type { QualifiedSupervisor } from './worker';
 import { createSupervisorChannel, failure, type ChannelOptions } from './supervisor-channel';
+import { classifyRecipeFailure, readRecipeDiagnostics } from './recipe-diagnostics';
 import { createCleanInstall } from './supervisor-install';
 import { OUTPUT_LIMITS, TREE_LIMITS, type TransferFile } from './supervisor-transfer';
 
@@ -108,7 +109,18 @@ export function createSupervisorTransport(options: SupervisorOptions) {
      * `buildEnvironment()` for the build. The pre-bundle runs to completion; the pod's `dev` refuses until it has. */
     async prebundle(runtime, command, env) {
       if (!same(command, PREBUNDLE_RECIPE) || !same(env, artifactEnvironment())) unavailable('prebundle_invalid');
-      if ((await call(runtime, 'prebundle', { recipe: 'prebundle' })).prebundled !== true) unavailable('prebundle_unconfirmed');
+      const data = await call(runtime, 'prebundle', { recipe: 'prebundle' });
+      const diagnostics = readRecipeDiagnostics(data);
+      if (!diagnostics || typeof (data as Record<string, unknown>).prebundled !== 'boolean') {
+        unavailable('prebundle_unconfirmed');
+      }
+      // A confirmed pre-bundle must also report a clean exit; an inconsistent reply is refused, never trusted.
+      if ((data as { prebundled: boolean }).prebundled === true
+        && (diagnostics.exitCode !== 0 || diagnostics.signal !== null)) unavailable('prebundle_unconfirmed');
+      if ((data as { prebundled: boolean }).prebundled !== true) {
+        const detail = diagnostics.output === '' ? undefined : diagnostics.output;
+        throw new LiveError('builder_unavailable', `prebundle_failed:${classifyRecipeFailure(diagnostics)}`, detail);
+      }
       return { prebundled: true };
     },
     async dev(runtime, command, env) {
@@ -122,7 +134,12 @@ export function createSupervisorTransport(options: SupervisorOptions) {
     async build(runtime, attempt, command, env) {
       if (!same(command, BUILD_RECIPE) || !same(env, buildEnvironment())) unavailable('build_invalid');
       const data = await call(runtime, 'build', { recipe: 'build', attemptId: attempt.id, headSha: attempt.headSha, treeSha: attempt.treeSha });
-      if (data.exitCode !== 0) unavailable('build_failed');
+      const diagnostics = readRecipeDiagnostics(data);
+      if (!diagnostics || (diagnostics.exitCode === 0 && diagnostics.signal !== null)) unavailable('build_unconfirmed');
+      if (diagnostics.exitCode !== 0) {
+        const detail = diagnostics.output === '' ? undefined : diagnostics.output;
+        throw new LiveError('builder_unavailable', `build_failed:${classifyRecipeFailure(diagnostics)}`, detail);
+      }
       await terminate(runtime);
       const { files, digest } = await output(runtime);
       await options.sources.candidate({ runtime, attempt, candidateDigest: digest, files });
