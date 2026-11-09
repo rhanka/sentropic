@@ -52,10 +52,48 @@ describe('workspace subset selection', () => {
 
   it('should keep the ui closure with transitive and linked workspaces while dropping api-only packages', () => {
     const keep = subsetLockPaths(MONO_LOCK, ['ui']);
-    for (const path of ['node_modules/lodash', 'node_modules/vite', 'node_modules/vitest', 'node_modules/zod',
+    for (const path of ['node_modules/lodash', 'node_modules/vite', 'node_modules/zod',
       'node_modules/node-fetch', 'node_modules/data-uri-to-buffer']) {
       expect(keep.has(path)).toBe(true);
     }
     expect(keep.has('node_modules/express')).toBe(false);
+    expect(keep.has('node_modules/vitest')).toBe(false);
+  });
+
+  it('should follow nested node_modules from the package itself, not its parent', () => {
+    const lock = JSON.stringify({ lockfileVersion: 3, packages: {
+      '': { name: 'root', workspaces: ['ui'] },
+      ui: { name: 'ui', version: '1.0.0', dependencies: { a: '^1.0.0' } },
+      'node_modules/a': { version: '1.0.0', dependencies: { b: '^1.0.0' } },
+      'node_modules/b': { version: '1.0.0' },
+      'node_modules/a/node_modules/b': { version: '1.0.1' },
+    } });
+    const keep = subsetLockPaths(lock, ['ui']);
+    expect(keep.has('node_modules/a')).toBe(true);
+    expect(keep.has('node_modules/a/node_modules/b')).toBe(true);
+    expect(keep.has('node_modules/b')).toBe(false);
+  });
+
+  it('should keep workspace-local nested packages and refuse bad locks or unknown selections', () => {
+    const lock = JSON.stringify({ lockfileVersion: 3, packages: {
+      '': { name: 'root', workspaces: ['ui'] },
+      ui: { name: 'ui', version: '1.0.0', dependencies: { x: '^1.0.0' } },
+      'ui/node_modules/x': { version: '1.0.0' },
+      'node_modules/x': { version: '9.9.9' },
+    } });
+    const keep = subsetLockPaths(lock, ['ui']);
+    expect(keep.has('ui/node_modules/x')).toBe(true);
+    expect(keep.has('node_modules/x')).toBe(false);
+    expect(() => subsetLockPaths('not json', ['ui'])).toThrowError(expect.objectContaining({ code: 'dependency_cache_invalid' }));
+    expect(() => subsetLockPaths(JSON.stringify({ lockfileVersion: 3, packages: {} }), ['ui']))
+      .toThrowError(expect.objectContaining({ code: 'dependency_cache_invalid' }));
+    expect(() => subsetLockPaths(MONO_LOCK, ['missing'])).toThrowError(expect.objectContaining({ code: 'build_descriptor_invalid' }));
+  });
+
+  it('should refuse unsupported workspace patterns fail-closed without rejecting a literal null segment', () => {
+    expect(declaredWorkspaceDirs(JSON.stringify({ workspaces: ['**'] }), ['a/package.json'])).toEqual(new Set());
+    expect(declaredWorkspaceDirs(JSON.stringify({ workspaces: ['pkg-*'] }), ['pkg-a/package.json'])).toEqual(new Set());
+    expect(declaredWorkspaceDirs(JSON.stringify({ workspaces: ['!ui'] }), ['ui/package.json'])).toEqual(new Set());
+    expect(declaredWorkspaceDirs(JSON.stringify({ workspaces: ['null'] }), ['null/package.json'])).toEqual(new Set(['null']));
   });
 });
