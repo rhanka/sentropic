@@ -13,7 +13,7 @@
 - [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] Allowed Paths: packages/llm-mesh/src/transport/gemini-apikey-runtime-client.ts, packages/llm-mesh/src/transport/*, packages/llm-mesh/src/execution-features.ts, packages/llm-mesh/src/route-selection.ts, packages/llm-mesh/src/index.ts, packages/llm-mesh/tests/gemini-apikey-runtime-client.test.ts, packages/llm-mesh/tests/route-selection.test.ts, packages/llm-mesh/tests/execution-features.test.ts, api/src/services/llm-metering/route-settlement.ts, api/tests/api/llm-budget-ledger.test.ts, api/tests/unit/llm-fallback-first-use.test.ts
+- [ ] Allowed Paths: packages/llm-mesh/src/transport/gemini-apikey-runtime-client.ts, packages/llm-mesh/src/transport/*, packages/llm-mesh/src/execution-features.ts, packages/llm-mesh/src/route-selection.ts, packages/llm-mesh/src/index.ts, packages/llm-mesh/tests/gemini-apikey-runtime-client.test.ts, packages/llm-mesh/tests/route-selection.test.ts, packages/llm-mesh/tests/execution-features.test.ts, api/src/services/llm-metering/route-settlement.ts, api/tests/api/llm-fallback-first-use.test.ts
 - [ ] Forbidden Paths: Makefile, docker-compose*.yml, .cursor/rules/**, plan/NN-BRANCH_*.md
 - [ ] Conditional Paths: api/drizzle/*.sql (max 1 file, none planned), .github/workflows/** (untouched), packages/llm-mesh/package.json (bump only if src changes per workflow Package Publication)
 - [ ] Exception process: declare BRxx-EXn in ## Feedback Loop before touching any conditional or forbidden path
