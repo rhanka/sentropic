@@ -1768,4 +1768,128 @@ export class LocalAccountTransportService {
       this.alertedReauth.delete(account.accountId);
     }
   }
+
+  /**
+   * Proactive custodian cycle (Lot 1): refresh every mesh-managed account
+   * inside its skew window before expiry, probe readiness, flip
+   * `reauth_required` early on refresh failure and alert (D4).
+   *
+   * Externally custodied seats never refresh here and are skipped. Static
+   * keys with no refresh grant (Vibe long-lived keys, Muse direct keys)
+   * are skipped: their rotation path is re-enrollment, not refresh.
+   */
+  async runCustodianRefreshCycle(): Promise<CustodianRefreshReport> {
+    await this.restorePersistedAccounts();
+    const now = this.nowMs();
+    const policy = this.serviceOptions.refreshPolicy ?? DEFAULT_CUSTODIAN_REFRESH_POLICY;
+    const accounts: CustodianAccountReport[] = [];
+    let refreshed = 0;
+    for (const account of [...this.accountsMap.values()]) {
+      const base = {
+        accountRef: this.diagnosticAccountRef(account.accountId),
+        transportProviderId: String(account.transportProviderId),
+        ownerScopeRef: account.ownerScopeRef ?? '',
+      };
+      if (isExternalSeatAccount(account)) {
+        accounts.push({ ...base, action: 'skipped-external', readiness: 'ready' });
+        continue;
+      }
+      const expiredAt = typeof account.expiresAt === 'string' && account.expiresAt
+        ? Date.parse(account.expiresAt)
+        : Number.NaN;
+      const expired = Number.isFinite(expiredAt) && expiredAt <= now;
+      if (account.status === 'reauth_required') {
+        const reason: ReauthAlertReason = !account.refreshToken && expired
+          ? 'expired-no-grant'
+          : 'refresh-failed';
+        await this.emitReauthAlert(account, reason);
+        accounts.push({ ...base, action: 'already-reauth', readiness: 'reauth-required',
+          ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
+        continue;
+      }
+      if (!account.refreshToken?.trim()) {
+        accounts.push({ ...base, action: 'skipped-no-grant',
+          readiness: expired ? 'reauth-required' : 'ready',
+          ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
+        continue;
+      }
+      if (!Number.isFinite(expiredAt)) {
+        accounts.push({ ...base, action: 'skipped-no-expiry', readiness: 'ready' });
+        continue;
+      }
+      const enrolledAt = account.enrollmentCompletedAt ? Date.parse(account.enrollmentCompletedAt) : Number.NaN;
+      if (!shouldRefreshProactively({ expiresAtMs: expiredAt,
+        ...(Number.isFinite(enrolledAt) ? { enrolledAtMs: enrolledAt } : {}), nowMs: now }, policy)) {
+        accounts.push({ ...base, action: 'skipped-healthy', readiness: 'ready' });
+        continue;
+      }
+      if (this.refreshInFlight.has(account.accountId)) {
+        accounts.push({ ...base, action: 'skipped-healthy', readiness: 'ready' });
+        continue;
+      }
+      try {
+        const version = this.credentialVersions.get(account.accountId) ?? 'v1.0.0';
+        await this.refreshToken({
+          accountId: account.accountId,
+          refreshToken: account.refreshToken ?? undefined,
+          credentialVersion: version,
+        });
+        this.alertedReauth.delete(account.accountId);
+        refreshed += 1;
+        accounts.push({ ...base, action: 'refreshed', readiness: 'ready' });
+      } catch {
+        // refreshToken() already flipped the status and alerted; ensure the
+        // alert epoch is recorded even when the persist raced. The widened
+        // read defeats the early-continue narrowing above, by design.
+        const statusAfterRefresh: string | undefined = account.status;
+        if (statusAfterRefresh === 'reauth_required' && !this.alertedReauth.has(account.accountId)) {
+          await this.emitReauthAlert(account, 'refresh-failed');
+        }
+        accounts.push({ ...base, action: 'refresh-failed-reauth', readiness: 'reauth-required',
+          ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
+      }
+    }
+    return {
+      at: new Date(now).toISOString(),
+      checked: accounts.length,
+      refreshed,
+      reauthRequired: accounts.filter((entry) => entry.readiness === 'reauth-required').length,
+      accounts,
+    };
+  }
+
+  /**
+   * Start the custodian loop: a refresh cycle every `intervalMs`. Ticks never
+   * overlap; the timer is unref'd so it cannot hold the process open.
+   * Returns a stop function; `stopCustodianLoop()` stops it as well.
+   */
+  startCustodianLoop(
+    intervalMs: number,
+    onReport?: (report: CustodianRefreshReport) => void,
+  ): () => void {
+    this.stopCustodianLoop();
+    const tick = async (): Promise<void> => {
+      if (this.custodianTickInFlight) return;
+      this.custodianTickInFlight = true;
+      try {
+        const report = await this.runCustodianRefreshCycle();
+        onReport?.(report);
+      } catch {
+        // A failed cycle never kills the loop; the next tick retries.
+      } finally {
+        this.custodianTickInFlight = false;
+      }
+    };
+    const timer = setInterval(() => { void tick(); }, Math.max(1_000, intervalMs));
+    (timer as unknown as { unref?: () => void }).unref?.();
+    this.custodianTimer = timer;
+    return () => this.stopCustodianLoop();
+  }
+
+  stopCustodianLoop(): void {
+    if (this.custodianTimer) {
+      clearInterval(this.custodianTimer);
+      this.custodianTimer = null;
+    }
+  }
 }

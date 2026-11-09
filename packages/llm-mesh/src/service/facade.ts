@@ -232,11 +232,17 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     ['mistral-vibe', new MistralVibeEnrollmentProvider()],
   ]);
 
+  const serviceOptions: LocalAccountTransportServiceOptions = {
+    ...(options.custodian?.now ? { now: options.custodian.now } : {}),
+    ...(options.custodian?.reauthAlert ? { reauthAlert: options.custodian.reauthAlert } : {}),
+    ...(options.custodian?.refreshPolicy ? { refreshPolicy: options.custodian.refreshPolicy } : {}),
+  };
   const service = new LocalAccountTransportService(
     keyring,
     providers,
     options.configResolver,
     options.legacyAccountOwnerScopeRef,
+    serviceOptions,
   );
 
   return {
@@ -284,6 +290,15 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async release(acquisition) {
       return service.release(acquisition);
+    },
+    async runCustodianRefreshCycle() {
+      return service.runCustodianRefreshCycle();
+    },
+    startCustodianLoop(intervalMs, onReport) {
+      return service.startCustodianLoop(intervalMs, onReport);
+    },
+    stopCustodianLoop() {
+      service.stopCustodianLoop();
     },
     getAdapter(providerId) {
       if (providerId === 'cloud-code') {
