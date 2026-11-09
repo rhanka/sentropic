@@ -17,7 +17,7 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/node/claude-code-cli-runner.ts`
+  - `packages/llm-mesh/src/node/claude-code-cli-*.ts`
   - `packages/llm-mesh/src/node/index.ts`
   - `packages/llm-mesh/src/transport/claude-code-runtime-client.ts`
   - `packages/llm-mesh/src/catalog.ts`
@@ -25,6 +25,7 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - `packages/llm-mesh/src/routing-targets.ts`
   - `packages/llm-mesh/tests/node/claude-code-cli-runner.test.ts`
   - `packages/llm-mesh/tests/transport/claude-code-runtime-client.test.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
   - `packages/llm-mesh/tests/routing-targets.test.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
@@ -84,9 +85,9 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
 - [x] **Lot 2 — Seat import proof (no catalog change)**
   - [x] Verify: claude already accepted by parseCliSeatProfile/importSeatBundle/EncryptedFileKeyring path (existing tests pin it: cli-seat-import.test.ts CLIS incl. claude, local-account-transport-service-claude.test.ts importSeatBundle claude pair anthropic/claude-code); no catalog addition (routing tests pin no-faithful-target for 5.5 families; runner validates modelId by regex).
   - [x] Lot gate: existing coverage, no new test needed.
-- [ ] **Lot 3 — Version, changelog, lockfiles, full gates**
-  - [ ] Bump packages/llm-mesh/package.json 0.33.0 -> 0.33.1 (npm latest is 0.33.0), CHANGELOG entry, lockfiles via make.
-  - [ ] Full `make test-llm-mesh ENV=test-llm-mesh-claude-seat`, typecheck, lint.
+- [x] **Lot 3 — Version, changelog, lockfiles, full gates**
+  - [x] Bump packages/llm-mesh/package.json 0.33.0 -> 0.33.1 (npm latest is 0.33.0), CHANGELOG entry, lockfiles via make lock-root (root lock workspace entry 0.33.1; gateway ^0.33.0 and cluster-mesh peer <0.34.0 ranges already cover it).
+  - [x] Full `make test-llm-mesh ENV=test-llm-mesh-claude-seat` 101 files / 1778 tests green, typecheck + lint green; pinned version test moved 0.33.0 -> 0.33.1.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest llm-mesh suite (cf Lot1, copy checklist)
