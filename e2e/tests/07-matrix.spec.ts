@@ -181,9 +181,14 @@ test.describe('Configuration de la matrice', () => {
       await expect(actionsButton).toBeVisible();
       await actionsButton.click();
 
-      const exportAction = page.locator('button').filter({ hasText: /Exporter|Export/i }).first();
+      const exportAction = page
+        .locator('div.absolute.z-50 button, div.fixed.z-50 button, div.relative div.absolute button')
+        .filter({ hasText: /Exporter|Export/i })
+        .first();
       await expect(exportAction).toBeVisible();
       await expect(exportAction).toBeEnabled({ timeout: 2_000 });
+      await page.locator('h1').hover();
+      await expect(page.locator('[role="tooltip"]')).toBeHidden({ timeout: 2_000 }).catch(() => {});
       await exportAction.click();
 
       const exportDialog = page.locator('h3').filter({ hasText: /Exporter la matrice|Export matrix/i });
@@ -475,101 +480,67 @@ test.describe('Configuration de la matrice', () => {
     });
 
     test('User A leaves → lock released → User B can lock', async ({ browser }) => {
-      const userAContext = await browser.newContext({
-        storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, workspaceAId, folderId),
-      });
+      // Fresh accounts: the server clears a user's locks when that user's last SSE connection closes,
+      // which parallel specs sharing the seeded accounts trigger. Use isolated members like the test above.
+      const [memberA, memberB] = await Promise.all(
+        ['matrix-leave-a', 'matrix-leave-b'].map((label) => createIsolatedMember({
+          apiBaseUrl: API_BASE_URL, ownerStatePath: USER_A_STATE, workspaceId: workspaceAId, label, folderId,
+        })),
+      );
+      const userAContext = await browser.newContext({ storageState: memberA.storageState });
       const pageA = await userAContext.newPage();
 
-      await pageA.goto(`/folders/${encodeURIComponent(folderId)}`);
-      await pageA.waitForLoadState('domcontentloaded');
-      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
-      await ensureCurrentFolderId(pageA);
-
-      // Set up promise to wait for lock acquisition BEFORE navigating,
-      // since the POST /locks fires immediately when the matrix page mounts.
-      let lockAcquiredPromise = pageA.waitForResponse(
-        (res) => res.url().includes('/locks') && !res.url().includes('/presence') && res.request().method() === 'POST',
-        { timeout: 5_000 },
-      ).catch(() => null);
-
-      await pageA.click('a[href="/matrix"]');
-      await expect(pageA).toHaveURL(/\/matrix/);
+      const lockAcquiredA = pageA.waitForResponse(
+        (res) =>
+          res.url().includes('/api/v1/locks') &&
+          res.request().method() === 'POST' &&
+          res.status() === 201,
+        { timeout: 15_000 },
+      );
+      await pageA.goto('/matrix');
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageA);
-      const noFolderMessageA = pageA.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
-      if (await noFolderMessageA.isVisible().catch(() => false)) {
-        // Reload re-triggers the lock acquisition; re-register the listener.
-        lockAcquiredPromise = pageA.waitForResponse(
-          (res) => res.url().includes('/locks') && !res.url().includes('/presence') && res.request().method() === 'POST',
-          { timeout: 5_000 },
-        ).catch(() => null);
-        await pageA.evaluate((id) => {
-          try { localStorage.setItem('currentFolderId', id); } catch { /* ignore */ }
-        }, folderId);
-        await pageA.reload({ waitUntil: 'domcontentloaded' });
-        await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
-      }
+      const lockResponseA = await lockAcquiredA;
+      const lockBodyA = await lockResponseA.json().catch(() => null);
+      expect(lockBodyA?.lock?.objectId).toBe(folderId);
+      expect(lockBodyA?.acquired).toBe(true);
 
-      // Wait for User A to actually acquire the lock before releasing;
-      // otherwise the lock may not yet exist and the DELETE becomes a no-op.
-      await lockAcquiredPromise;
-
-      // Release the lock explicitly via API before closing the context.
+      // Release explicitly via the isolated member session, then close the context.
       // onDestroy's fire-and-forget DELETE can be aborted during navigation,
-      // so we release directly to guarantee the lock row is removed.
-      const userAApi = await request.newContext({
+      // so release directly to guarantee the lock row is removed.
+      const memberAApi = await request.newContext({
         baseURL: API_BASE_URL,
-        storageState: USER_A_STATE,
+        storageState: memberA.storageState,
       });
-      await userAApi.delete(
+      await memberAApi.delete(
         `/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}&workspace_id=${encodeURIComponent(workspaceAId)}`,
       ).catch(() => {});
-      await userAApi.dispose();
+      await memberAApi.dispose();
 
       await userAContext.close();
 
-      // After User A leaves and lock is released, User B should be able to edit.
-      const userBContext = await browser.newContext({
-        storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
-      });
+      // After User A leaves and lock is released, User B should acquire it.
+      const userBContext = await browser.newContext({ storageState: memberB.storageState });
       const pageB = await userBContext.newPage();
-      await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
-      await pageB.waitForLoadState('domcontentloaded');
-      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
-      await ensureCurrentFolderId(pageB);
 
-      await pageB.click('a[href="/matrix"]');
-      await expect(pageB).toHaveURL(/\/matrix/);
+      const lockAcquiredB = pageB.waitForResponse(
+        (res) =>
+          res.url().includes('/api/v1/locks') &&
+          res.request().method() === 'POST' &&
+          res.status() === 201,
+        { timeout: 15_000 },
+      );
+      await pageB.goto('/matrix');
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageB);
-      const noFolderMessageB = pageB.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
-      if (await noFolderMessageB.isVisible().catch(() => false)) {
-        await pageB.evaluate((id) => {
-          try { localStorage.setItem('currentFolderId', id); } catch { /* ignore */ }
-        }, folderId);
-        await pageB.reload({ waitUntil: 'domcontentloaded' });
-        await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
-      }
-      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      const lockResponseB = await lockAcquiredB;
+      const lockBodyB = await lockResponseB.json().catch(() => null);
+      expect(lockBodyB?.lock?.objectId).toBe(folderId);
+      expect(lockBodyB?.acquired).toBe(true);
 
-      // Wait for lock to be released or acquired by User B.
-      // In both cases User B must be able to edit (no "request unlock" state).
-      const requestUnlockButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
-      const editableField = pageB.locator('input:not([type="file"]):not(.hidden), textarea').first();
-      await expect
-        .poll(async () => {
-          const needsUnlockRequest =
-            (await requestUnlockButton.count()) > 0 &&
-            (await requestUnlockButton.isVisible().catch(() => false));
-          const canEdit =
-            (await editableField.count()) > 0 &&
-            (await editableField.isVisible().catch(() => false)) &&
-            (await editableField.isEnabled().catch(() => false));
-          return canEdit && !needsUnlockRequest;
-        }, { timeout: 2_000 })
-        .toBe(true);
+      await waitForNoLocker(pageB);
 
       await userBContext.close();
 
