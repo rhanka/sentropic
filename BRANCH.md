@@ -15,13 +15,14 @@
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] Allowed Paths: packages/llm-mesh/src/transport/gemini-apikey-runtime-client.ts, packages/llm-mesh/src/transport/*, packages/llm-mesh/src/execution-features.ts, packages/llm-mesh/src/route-selection.ts, packages/llm-mesh/src/index.ts, packages/llm-mesh/tests/gemini-apikey-runtime-client.test.ts, packages/llm-mesh/tests/route-selection.test.ts, packages/llm-mesh/tests/execution-features.test.ts, api/src/services/llm-metering/route-settlement.ts, api/tests/api/llm-fallback-first-use.test.ts
 - [ ] Forbidden Paths: Makefile, docker-compose*.yml, .cursor/rules/**, plan/NN-BRANCH_*.md
-- [ ] Conditional Paths: api/drizzle/*.sql (max 1 file, none planned), .github/workflows/** (untouched), packages/llm-mesh/package.json (bump only if src changes per workflow Package Publication)
+- [ ] Conditional Paths: api/drizzle/*.sql (max 1 file, none planned), .github/workflows/** (untouched), packages/llm-mesh/package.json (bump only if src changes per workflow Package Publication), package-lock.json (BRL5-EX1 version string only)
 - [ ] Exception process: declare BRxx-EXn in ## Feedback Loop before touching any conditional or forbidden path
 
 ## Feedback Loop
 - [ ] attention: root-owned vitest cache blocks local api gates: packages/llm-mesh/node_modules/.vite created root by make test-llm-mesh container without -u at 13:19 UTC, npm ci in install-internal-packages fails rmdir EACCES, sudo needs interactive auth so no self-repair, needs owner sudo cleanup of that single cache dir, follow-up propose -u flag on test-llm-mesh docker run
 - [ ] attention: api PG test api/tests/api/llm-fallback-first-use.test.ts authored but not run locally (same blocker), verification delegated to branch CI, package suites all green locally
-- [ ] No exception declared (no conditional path touched, package bump is allowed path per workflow)
+- [ ] BRL5-EX1 lock-sync: package-lock.json packages/llm-mesh version 0.33.0 to 0.34.0 only, reason CI changes job BRDP-EX10 requires manifest equals lock entry, impact single version string no dep change, rollback revert the one line
+- [ ] No other exception declared
 
 ## AI Flaky tests
 - [ ] Acceptance rule: non-systematic provider nondeterminism only, one success same commit same command, never additive timeouts, record command plus file plus signature, user sign-off before merge
