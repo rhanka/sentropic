@@ -10,9 +10,9 @@ import {
   openIncident,
   type OpsIncidentStateV1,
   type OpsIncidentTransitionV1,
-  type OpsJobFailureV1,
   type OpsNotificationPolicyV1,
 } from './incident-state.js';
+import type { OpsJobFailureV1 } from './ops-job-failure-types.js';
 
 export type {
   OpsIncidentMailV1,
