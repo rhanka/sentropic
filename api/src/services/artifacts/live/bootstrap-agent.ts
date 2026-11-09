@@ -25,6 +25,12 @@ const AGENT_SHA = /^[a-f0-9]{40,64}$/;
 const AGENT_RESERVED = '.artifact-transfer';
 const AGENT_SECTIONS = [];
 let agentTemp = 0;
+/** Bytes of recipe output kept: the tail of stdout+stderr in arrival order, mirroring RECIPE_TAIL_BYTES on the API. */
+const AGENT_TAIL_BYTES = 4096;
+const agentScrub = (text) => String(text)
+  .replace(/(\/\/)[^/\s@]+@/g, '$1[redacted]')
+  .replace(/(_authToken|_auth)\s*=\s*[^\s]+/gi, '$1=[redacted]')
+  .replace(/(Authorization\s*:\s*)[^\r\n]+/gi, '$1[redacted]');
 
 export class AgentError extends Error {
   constructor(code, reason) { super(reason || code); this.code = code; this.reason = reason || code; }
@@ -89,7 +95,7 @@ async function agentUnlock(path) {
 
 export function createAgent(options) {
   const root = options.root || '/';
-  if (!options.env || !options.buildEnv) throw new AgentError('failed', 'environment_missing');
+  if (!options.env || !options.buildEnv || !options.installEnv) throw new AgentError('failed', 'environment_missing');
   const ctx = { options, recipes: options.recipes, env: options.env, ops: {}, resets: [],
     at: (path) => agentPath.join(root, path),
     state: { fence: null, phase: 'stopped', live: false, child: null, revision: null, groups: new Set() },
@@ -111,24 +117,51 @@ export function createAgent(options) {
     }
     return false;
   };
-  /** Frozen recipes only: own process group, no shell, the host environment built from zero, no inherited stdio. */
+  /** Frozen recipes only: own process group, no shell, the host environment built from zero. Recipe stdio is
+   * piped and drained into a bounded tail (arrival order across stdout+stderr), so a verbose recipe can neither
+   * block on a full pipe nor grow pod memory; the tail is scrubbed before it ever leaves the pod. */
   ctx.spawnRecipe = (recipe, cwd, env = ctx.env) => {
     const child = options.spawn(recipe.executable, [...recipe.args],
-      { cwd: ctx.at(cwd), env: { ...env }, shell: false, detached: true, stdio: 'ignore' });
+      { cwd: ctx.at(cwd), env: { ...env }, shell: false, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     if (Number.isSafeInteger(child.pid)) ctx.state.groups.add(child.pid);
     ctx.state.child = child;
+    const chunks = []; let size = 0;
+    const take = (data) => {
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(String(data));
+      chunks.push(buf); size += buf.length;
+      while (size > AGENT_TAIL_BYTES) {
+        const head = chunks[0]; const drop = size - AGENT_TAIL_BYTES;
+        if (drop >= head.length) { chunks.shift(); size -= head.length; }
+        else { chunks[0] = head.subarray(drop); size = AGENT_TAIL_BYTES; }
+      }
+    };
+    child.recipeTail = () => Buffer.concat(chunks);
+    for (const stream of [child.stdout, child.stderr]) {
+      if (stream && typeof stream.on === 'function') {
+        stream.on('data', take); stream.on('error', () => undefined);
+      }
+    }
     return child;
   };
+  /** Runs a recipe to exit, returning its bounded scrubbed output tail with the exit code and signal. The tail is
+   * read at `exit`: output flushed after it is not covered, which is fine for a diagnostic tail. */
   ctx.runToExit = (recipe, cwd, env) => new Promise((resolve) => {
+    const done = (exitCode, signal, output) => resolve({ exitCode, signal, output });
     let child;
-    try { child = ctx.spawnRecipe(recipe, cwd, env); } catch { resolve(-1); return; }
+    try { child = ctx.spawnRecipe(recipe, cwd, env); } catch { done(null, null, ''); return; }
     const timer = setTimeout(() => { ctx.terminateAll(); }, recipe.timeoutMs);
     if (timer.unref) timer.unref();
-    child.once('error', () => { clearTimeout(timer); resolve(-1); });
-    child.once('exit', (code) => {
+    const tail = () => {
+      try {
+        const raw = child.recipeTail ? child.recipeTail().toString('utf8') : '';
+        return Buffer.from(agentScrub(raw), 'utf8').toString('base64');
+      } catch { return ''; }
+    };
+    child.once('error', () => { clearTimeout(timer); done(null, null, tail()); });
+    child.once('exit', (code, signal) => {
       clearTimeout(timer);
       if (ctx.state.child === child) ctx.state.child = null;
-      resolve(Number.isSafeInteger(code) ? code : -1);
+      done(Number.isSafeInteger(code) ? code : null, typeof signal === 'string' ? signal : null, tail());
     });
   });
   for (const section of AGENT_SECTIONS) section(ctx);

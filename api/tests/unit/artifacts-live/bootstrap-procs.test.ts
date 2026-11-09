@@ -69,7 +69,8 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
     expect(calls.map(c => [c.executable, c.args])).toEqual([[PREBUNDLE_RECIPE.executable, PREBUNDLE_RECIPE.args],
       [LIVE_RECIPE.executable, LIVE_RECIPE.args]]);
     for (const call of calls) {
-      expect(call.options).toEqual({ cwd: pod.path('workspace'), env: artifactEnvironment(), shell: false, detached: true, stdio: 'ignore' });
+      expect(call.options).toEqual({ cwd: pod.path('workspace'), env: artifactEnvironment(), shell: false, detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'] });
     }
     await pod.send('terminate', {}, fence(4));
     expect(pod.agent.isLive()).toBe(false);
@@ -80,7 +81,8 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
     await expect(pod.send('dev', { recipe: 'live' }, fence(5))).rejects.toThrow('failed:prebundle_missing');
     const hang = (code: number) => (call: Spawned) => (call.args[0] === PREBUNDLE_RECIPE.args[0] ? Promise.resolve(code) : new Promise<number>(() => undefined));
     const failed = await harness({ spawn: fakeSpawn([], hang(1)) }); await ready(failed);
-    await expect(failed.send('prebundle', { recipe: 'prebundle' })).rejects.toThrow('failed:prebundle_failed');
+    expect(await failed.send('prebundle', { recipe: 'prebundle' }))
+      .toEqual({ prebundled: false, exitCode: 1, signal: null, output: '' });
     await expect(failed.send('dev', { recipe: 'live' })).rejects.toThrow('failed:prebundle_missing');
     const down = await harness({ spawn: fakeSpawn([], hang(0)), waitPort: async () => { throw new Error('closed'); } }); await ready(down);
     await down.send('prebundle', { recipe: 'prebundle' });
@@ -92,7 +94,7 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
     const calls: Spawned[] = []; const big = Buffer.alloc(900 * 1024, 7);
     const pod = await harness({ spawn: fakeSpawn(calls, outputs({ 'index.html': '<html>', 'assets/a.js': 'a', 'assets/big.bin': big })) });
     await ready(pod);
-    expect(await pod.send('build', BUILD)).toEqual({ exitCode: 0 });
+    expect(await pod.send('build', BUILD)).toEqual({ exitCode: 0, signal: null, output: '' });
     expect(calls.map(c => [c.executable, c.args])).toEqual([[BUILD_RECIPE.executable, BUILD_RECIPE.args]]);
     expect(calls[0].options.env).toEqual(buildEnvironment());
     expect(calls[0].options.env.NODE_OPTIONS).toBe('--max-old-space-size=1024');
@@ -115,12 +117,25 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
       const pod = await harness({ spawn: fakeSpawn([], outputs(files)) }); await ready(pod);
       return { pod, built: await pod.send('build', BUILD) };
     };
-    expect((await run({ 'index.html': 'x', fail: '1' })).built).toEqual({ exitCode: 2 });
+    expect((await run({ 'index.html': 'x', fail: '1' })).built).toMatchObject({ exitCode: 2, signal: null });
     await expect(pages((await run({ 'a.js': 'x' })).pod, 'output')).rejects.toThrow('failed:output_missing');
     await expect(pages((await run({ 'index.html': 'x', 'leak.txt': '->/etc/passwd' })).pod, 'output')).rejects.toThrow('failed:special_file');
     const many = Object.fromEntries(Array.from({ length: 256 }, (_, i) => [`f${i}.js`, 'x'])); many['index.html'] = 'x';
     await expect(pages((await run(many)).pod, 'output')).rejects.toThrow('limit:limit_exceeded');
     expect((await stat((await run({ 'index.html': 'x' })).pod.path('workspace/ui/dist/index.html'))).size).toBe(1);
+  });
+
+  it('should return the bounded scrubbed build tail with the exit code', async () => {
+    const pod = await harness({ spawn: fakeSpawn([], async () => ({ code: 137, stdout: `${'q'.repeat(6000)}\n`,
+      stderr: 'Authorization: Bearer secret-build\nnpm error: JavaScript heap out of memory\n' })) });
+    await ready(pod);
+    const built = await pod.send('build', BUILD);
+    expect(built.exitCode).toBe(137); expect(built.signal).toBe(null);
+    const output = Buffer.from(built.output, 'base64').toString('utf8');
+    expect(Buffer.byteLength(output)).toBeLessThanOrEqual(4096);
+    expect(output).toContain('JavaScript heap out of memory');
+    expect(output).toContain('Authorization: [redacted]');
+    expect(output).not.toContain('secret-build');
   });
 
   it('should answer the side-effect-free renew op at once, even behind a running heavy phase', async () => {
@@ -134,6 +149,6 @@ describe('pod bootstrap agent: repository processes and output snapshot', () => 
     expect(await pod.send('renew')).toEqual({ renewed: true });
     await expect(pod.send('renew', { now: 1 })).rejects.toThrow('failed:unknown_field');
     await pod.send('terminate');
-    expect(String(await running)).toContain('prebundle_failed');
+    expect(await running).toMatchObject({ prebundled: false, signal: 'SIGKILL' });
   });
 });
