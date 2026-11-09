@@ -75,3 +75,15 @@ describe('execution features (spec §16.3)', () => {
     expect(transportSupportsExecutionFeatures('codex', ['named-tool-choice'], [])).toBe(false);
   });
 });
+
+describe('gemini-apikey fallback execution features (Lot 5, owner D3)', () => {
+  it('declares the client-proven tools, structured output and ceiling slots', () => {
+    expect(transportSupportsExecutionFeatures('gemini-apikey', ['named-tool-choice'])).toBe(true);
+    expect(transportSupportsExecutionFeatures('gemini-apikey', ['structured-output'])).toBe(true);
+    expect(transportSupportsExecutionFeatures('gemini-apikey', ['explicit-output-ceiling'])).toBe(true);
+  });
+
+  it('fails closed on the unproven reasoning slot', () => {
+    expect(transportSupportsExecutionFeatures('gemini-apikey', ['reasoning-controls'])).toBe(false);
+  });
+});
