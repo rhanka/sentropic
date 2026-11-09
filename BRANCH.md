@@ -38,6 +38,7 @@
 - [ ] Impact: dev/test compose services run as `UID:GID`; postgres and named-volume-only services unchanged.
 - [ ] Rollback: revert the commit.
 - [x] `acknowledge` scoped smoke `tests/smoke/api-health.test.ts` on `up-api-test` stack: 10 failed / 1 passed (`identity_contract_unavailable` 500s on authenticated endpoints); A/B rerun as root (`UID=0 GID=0`) fails identically — not caused by host-user mapping; no CI job runs this suite (only `test-api-smoke-restore` with prod backup). No fix attempted, no assertion loosened.
+- [x] `attention` CI run 42555500059: `test-e2e` (6 shards) + `e2e-vscode` fail with `EACCES: permission denied, rmdir '/app/test-results'` — Docker creates missing gitignored bind dirs (`e2e/test-results`, `e2e/.auth`) as root, unreadable for UID-mapped `e2e` service. Fix: `mkdir -p` host-owned dirs in `ci-test-env` and `prepare-node-workspace` (plus `data/backup` for dev stacks). No `chmod 777` on new dirs.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
