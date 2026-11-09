@@ -133,6 +133,27 @@ describe('buildOAuthClientRegistration', () => {
   });
 });
 
+describe('requireTenant (0022: omission preserves stored policy)', () => {
+  it('returns null when OAUTH_CLIENT_REQUIRE_TENANT is omitted', () => {
+    expect(buildOAuthClientRegistration({ ...baseEnv }).requireTenant).toBeNull();
+  });
+
+  it('parses explicit true/false tenant-optionality', () => {
+    expect(buildOAuthClientRegistration({
+      ...baseEnv, OAUTH_CLIENT_REQUIRE_TENANT: 'false',
+    }).requireTenant).toBe(false);
+    expect(buildOAuthClientRegistration({
+      ...baseEnv, OAUTH_CLIENT_REQUIRE_TENANT: 'true',
+    }).requireTenant).toBe(true);
+  });
+
+  it('rejects a non-boolean tenant-optionality value', () => {
+    expect(() => buildOAuthClientRegistration({
+      ...baseEnv, OAUTH_CLIENT_REQUIRE_TENANT: 'yes',
+    })).toThrow(/OAUTH_CLIENT_REQUIRE_TENANT/);
+  });
+});
+
 describe('resolvePolicyUpdate (F5: never wipe policy on rotation)', () => {
   const stored = { allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:passkey-fresh' };
 

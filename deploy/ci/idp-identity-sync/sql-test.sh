@@ -39,13 +39,24 @@ stage=migrations
 createdb identity_schema
 for migration in /workspace/api/drizzle/*.sql; do sql -d identity_schema -f "$migration"; done
 sql -d identity_schema -f /workspace/api/drizzle/control/0013_oauth_refresh_tokens.sql
+# 0022 (A1) needs the CM consent-authority tables its rekey reads, plus the user
+# accounts its replaced invalidation functions read at runtime; the phase-1
+# stand-ins below carry no rows, so the rekey is a proven no-op here.
+sql -d identity_schema -c 'CREATE SCHEMA IF NOT EXISTS cm_identity'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_user_accounts (user_id text PRIMARY KEY, email text, account_status text, global_role text, created_at text, updated_at text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_account_profiles (user_id text PRIMARY KEY, email_verified text, display_name text, approval_due_at text, approved_at text, approved_by_user_id text, disabled_at text, disabled_reason text, legacy_account_status text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_webauthn_credentials (proof_id text PRIMARY KEY, user_id text, credential_id text, public_key_cose text, counter text, revision text, rp_id text, device_name text, transports_json text, uv text, device_type text, backed_up text, created_at text, last_used_at text, revoked_at text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenants (slug text PRIMARY KEY, status text, tenant_id text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenant_memberships (user_id text, tenant_id text, status text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_oauth_consents (consent_id text PRIMARY KEY, tenant_id text, user_id text, client_id text, granted_at text, revoked_at text)'
+sql -d identity_schema -f /workspace/api/drizzle/control/0022_oauth_consent_optional_tenant.sql
 createdb -T identity_schema app
 createdb -T identity_schema preprod
 # Phase-1 schema stand-in: the CM sync runner converges cm_identity before the
 # protocol phase runs. The test double carries the replica owner ids only; the
 # real table is owned by the custody schema asset, never by this suite.
 sql -d preprod -c 'CREATE SCHEMA IF NOT EXISTS cm_identity'
-sql -d preprod -c 'CREATE TABLE cm_identity.identity_user_accounts (user_id text PRIMARY KEY)'
+sql -d preprod -c 'CREATE TABLE IF NOT EXISTS cm_identity.identity_user_accounts (user_id text PRIMARY KEY)'
 sql -d preprod -c "INSERT INTO cm_identity.identity_user_accounts VALUES ('prod-user-8')"
 stage=fixtures
 sql -d app -f "$fixtures/prod.sql"
@@ -65,7 +76,7 @@ sql -d app -c "DO \$\$ BEGIN
   IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'users') <> 0 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'webauthn_credentials') <> 0 THEN RAISE EXCEPTION 'legacy identity grants must be revoked'; END IF;
 END \$\$;"
 sql -d app -c "DO \$\$ BEGIN
-  IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'oauth_clients') <> 14 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'idp_oauth_client_secret_presence') <> 2 THEN RAISE EXCEPTION 'reader client grants'; END IF;
+  IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'oauth_clients') <> 15 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'idp_oauth_client_secret_presence') <> 2 THEN RAISE EXCEPTION 'reader client grants'; END IF;
 END \$\$;"
 reject 'reader cannot read unexported client IDs' 'permission denied' -d app -U idp_identity_reader -c 'SELECT * FROM oauth_clients'
 reject 'reader cannot read client secret hashes' 'permission denied' -d app -U idp_identity_reader -c 'SELECT client_secret_hash FROM oauth_clients'
@@ -80,7 +91,7 @@ export_bundle() { PGDATABASE=app PGUSER=idp_identity_reader sh "$prod/export-pro
 export_bundle
 [ "$(head -n 1 consents.csv)" = 'user_id,client_id,tenant_id,scopes,created_at,updated_at' ]
 [ "$(wc -l < consents.csv)" -eq 2 ]
-[ "$(head -n 1 clients.csv)" = 'client_id,has_secret,name,redirect_uris,allowed_scopes,grant_types,response_types,token_endpoint_auth_method,dpop_bound_access_tokens,require_pkce,resource_indicators,tenant_id,owner_user_id,created_at,updated_at' ]
+[ "$(head -n 1 clients.csv)" = 'client_id,has_secret,name,redirect_uris,allowed_scopes,grant_types,response_types,token_endpoint_auth_method,dpop_bound_access_tokens,require_pkce,resource_indicators,tenant_id,require_tenant,owner_user_id,created_at,updated_at' ]
 [ ! -e users.csv ] && [ ! -e webauthn.csv ] && [ ! -e snapshot.csv ]
 ! grep -Fq -e 'synthetic-prod-hash' -e 'synthetic-new-prod-hash' -e 'prod-immo' -e 'prod-confidential' -e 'synthetic-prod-workload-hash' /tmp/relay/*
 echo 'PASS: protocol-only export consents=1 clients=4, no secrets, no runner files'
@@ -302,7 +313,7 @@ grep -Fq '"consents_upserted":1' /dev/termination-log
 grep -Fq '"consents_removed":0' /dev/termination-log
 unchanged
 sync -v dry_run=0
-assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid'] AND updated_at = '2026-10-03' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod scope change applied')"
+assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid'] AND updated_at = '2026-10-03' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id IS NULL), 'prod scope change applied')"
 assert_sql 'UPDATE test_before SET state = test_state()'
 sync -v dry_run=0
 grep -Fxq 'consents_upserted|0' /tmp/sql.log
@@ -314,12 +325,12 @@ sql -d app -c "INSERT INTO oauth_consents (user_id, client_id, tenant_id, scopes
 refresh_relay
 sync -v dry_run=0
 assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid', 'email'] FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'other-tenant'), 'consent tenant preserved')"
-sql -d app -c "DELETE FROM oauth_consents WHERE tenant_id = 'sentropic'"
+sql -d app -c "DELETE FROM oauth_consents WHERE client_id = 'radar-immobilier' AND tenant_id IS NULL"
 refresh_relay
 sync -v dry_run=0
 grep -Fxq 'consents_upserted|0' /tmp/sql.log
 grep -Fxq 'consents_removed|1' /tmp/sql.log
-assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod revocation applied'); SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE tenant_id = 'other-tenant') = 1, 'other tenant grant retained')"
+assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id IS NULL), 'prod revocation applied'); SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE tenant_id = 'other-tenant') = 1, 'other tenant grant retained')"
 assert_sql "SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), 'protected clients, keys and grants unchanged')"
 echo 'PASS: tenant grants remain separate; prod revocation removes only its mapped grant'
 . /workspace/deploy/ci/idp-identity-sync/clients-test.sh

@@ -45,7 +45,7 @@ export async function prepareCmFixtureCutover(pool: Pool, excludePriorTags: read
     }
     const rp = getWebAuthnConfig();
     fixture = await createCmCutoverTestConfiguration(client, {
-      rpId: rp.rpID, origins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin],
+      rpId: rp.rpID, origins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin], idpRpId: rp.rpID,
     });
   } finally { client.release(); await rm(temporary, { recursive: true, force: true }); }
   if (!fixture) throw new Error('Cutover fixture was not prepared');

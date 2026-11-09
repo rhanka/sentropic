@@ -5,7 +5,7 @@
 \endif
 CREATE TEMP TABLE src_clients (LIKE oauth_clients INCLUDING DEFAULTS) ON COMMIT DROP;
 ALTER TABLE src_clients DROP COLUMN id, DROP COLUMN client_secret_hash, ADD COLUMN has_secret boolean NOT NULL;
-\copy src_clients (client_id, has_secret, name, redirect_uris, allowed_scopes, grant_types, response_types, token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce, resource_indicators, tenant_id, owner_user_id, created_at, updated_at) FROM 'clients.csv' WITH (FORMAT csv, HEADER MATCH)
+\copy src_clients (client_id, has_secret, name, redirect_uris, allowed_scopes, grant_types, response_types, token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce, resource_indicators, tenant_id, require_tenant, owner_user_id, created_at, updated_at) FROM 'clients.csv' WITH (FORMAT csv, HEADER MATCH)
 SELECT set_config('sync.expected_clients', :'expected_clients', true),
        set_config('sync.allowed_clients', :'allowed_clients', true) \gset sync_
 CREATE TEMP TABLE allowed_clients ON COMMIT DROP AS
@@ -87,7 +87,8 @@ SELECT s.target_client_id AS client_id, s.has_secret, s.name,
        s.allowed_scopes, s.grant_types, s.response_types, s.token_endpoint_auth_method,
        s.dpop_bound_access_tokens, s.require_pkce,
        ARRAY(SELECT pg_temp.rewrite_client_uri(uri) FROM unnest(s.resource_indicators) uri) AS resource_indicators,
-       coalesce(s.tenant_id, 'sentropic') AS tenant_id, a.user_id AS owner_user_id, s.created_at, s.updated_at
+       coalesce(s.tenant_id, 'sentropic') AS tenant_id, s.require_tenant,
+       a.user_id AS owner_user_id, s.created_at, s.updated_at
 -- Owner ids resolve against the CM identity accounts converged in phase 1
 -- (the legacy users table is gone); unknown owners converge to NULL as before.
 FROM selected_clients s LEFT JOIN cm_identity.identity_user_accounts a ON a.user_id = s.owner_user_id;

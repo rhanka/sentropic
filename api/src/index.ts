@@ -1,4 +1,5 @@
 import { env } from './config/env';
+import { assertDeploymentSecrets } from './config/deployment-secrets';
 import { logger } from './logger';
 import { runMigrations } from './db/run-migrations';
 import { ensureIndexes } from './db/ensure-indexes';
@@ -91,6 +92,21 @@ if (process.argv.includes('--cm-restore-checkpoint')) {
   const { runCmRestoreCheckpoint } = await import('./scripts/cm-restore-checkpoint');
   await runCmRestoreCheckpoint();
   process.exit(process.exitCode ?? 0);
+}
+// At-rest re-encryption (docs/secrets.md): runs before the boot gate, since it is how a deployed
+// environment reaches a provisioned key. Needs only SECRET_ENCRYPTION_KEY and the source.
+if (process.argv.includes('--secret-reencrypt')) {
+  const { runSecretReencryptCli } = await import('./scripts/secret-reencrypt');
+  await runSecretReencryptCli();
+  process.exit(process.exitCode ?? 0);
+}
+
+// Fail closed before serving: a deployed runtime never signs or seals with a missing or public key.
+try {
+  assertDeploymentSecrets();
+} catch (error) {
+  logger.error({ err: error }, 'Deployment secret check failed at startup');
+  process.exit(1);
 }
 
 // Run database migrations at boot (idempotent)

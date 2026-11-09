@@ -14,7 +14,7 @@ import { createCmTokenCustodian } from '../../src/services/identity/cm-token-cus
 
 /** Synthetic isolated-database evidence, never a deployment/rehearsal receipt. */
 export async function createCmCutoverTestConfiguration(client: PoolClient,
-  verifier = { rpId: 'localhost', origins: ['http://localhost:5840'] },
+  verifier: { rpId: string; origins: string[]; idpRpId: string | null } = { rpId: 'localhost', origins: ['http://localhost:5840'], idpRpId: 'localhost' },
   purpose: 'rehearsal' | 'cutover' = 'rehearsal', remoteRecords: readonly unknown[] = []) {
   if (process.env.NODE_ENV !== 'test') throw new Error('Isolated test environment required');
   const directory = await mkdtemp(join(tmpdir(), 'a4-import-fixture-'));

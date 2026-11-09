@@ -7,6 +7,7 @@ import * as remote from './cm-import-remote';
 import * as remoteSnapshot from './cm-import-remote-snapshot';
 import * as invitations from './cm-import-invitations';
 import * as connectors from './cm-import-connectors';
+import * as sources from './cm-import-source';
 
 /** Exhaustive columns of the source tables removed by this single cutover. */
 export const a4SourceFieldManifest: Readonly<Record<string, readonly string[]>> = {
@@ -43,15 +44,18 @@ export function assertA4SourceInventory(inventory: Readonly<Record<string, { rea
   }
 }
 
+/** Shipped mapping implementation, including the source module that reads and applies it (GLM #948). */
+export const a4MappingAssetFunctions = (): [string, string][] => Object.entries({ ...core, ...continuations,
+  ...tenancy, ...values, ...remote, ...remoteSnapshot, ...invitations, ...connectors, ...sources })
+  .filter(([, implementation]) => typeof implementation === 'function')
+  .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+  .map(([name, implementation]) => [name, Function.prototype.toString.call(implementation)]);
+
 /** Hash the shipped mapping implementation and pinned verifier policy; never key bytes or row material. */
 export const a4MappingAssetSha256 = (verifier: { readonly rpId: string; readonly origins: readonly string[] }): string => {
-  const functions = Object.entries({ ...core, ...continuations, ...tenancy, ...values,
-    ...remote, ...remoteSnapshot, ...invitations, ...connectors })
-    .filter(([, implementation]) => typeof implementation === 'function')
-    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-    .map(([name, implementation]) => [name, Function.prototype.toString.call(implementation)]);
+  const functions = a4MappingAssetFunctions();
   return createHash('sha256').update(JSON.stringify({ contractVersion: '1.1.0', sourceTimeZone: 'UTC',
-    fields: a4SourceFieldManifest, historicalFields: a4CheckpointHistoricalFields,
+    fields: a4SourceFieldManifest, historicalFields: a4CheckpointHistoricalFields, sourceTables: sources.a4IdentitySourceTables,
     verifier: { rpId: verifier.rpId, origins: [...verifier.origins].sort(), registrationUv: 'preferred', authenticationUv: 'required' },
     functions })).digest('hex');
 };

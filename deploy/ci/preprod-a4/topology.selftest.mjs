@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
 import { approvedRequest, image, sha } from './fixtures.mjs';
-import { canonical, digest } from './guards.mjs';
+import { canonical, digest, tiers } from './guards.mjs';
 import { execute } from './execution.mjs';
 import { verify } from './verify.mjs';
 
-export async function verifyRenderedSequence(rendered) {
+export async function verifyRenderedSequence(rendered, tierName) {
+  const { namespace } = tiers[tierName];
+  const request = { ...approvedRequest, format: `${tierName}-a4-request/1`, namespace,
+    emailCodeActiveKeyRef: `email-code-hmac:v1:${tierName}:0123456789abcdef` };
   const objects = structuredClone(rendered);
   const object = (kind, name) => objects.find(item => item.kind === kind && item.metadata.name === name);
   const deployments = objects.filter(item => item.kind === 'Deployment');
   const restriction = { ipAllowList: { sourceRange: ['192.0.2.10/32'] } };
-  const grant = { ...approvedRequest, format: 'preprod-a4-execution/1', uiImage: image.replace('sentropic-api', 'sentropic-ui'),
+  const grant = { ...request, format: `${tierName}-a4-execution/1`, uiImage: image.replace('sentropic-api', 'sentropic-ui'),
     middlewareSpecSha256: digest(canonical(restriction)), trafficRestrictionReceiptRef: 'tenant:synthetic-denial-proof', actions: {
       'start-ui': [['scale', 'deployment/ui', '--replicas=1']],
       'start-idp': [['scale', 'deployment/auth-idp', '--replicas=1']],
@@ -29,9 +32,9 @@ export async function verifyRenderedSequence(rendered) {
   for (const set of sets) { set.spec.replicas = 0; set.status = { replicas: 0 }; }
   const backend = name => object('Ingress', name).spec.rules[0].http.paths[0].backend.service.name;
   assert.equal(backend('sentropic'), 'ui'); assert.equal(backend('auth-idp'), 'auth-idp');
-  const calls = [], env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request',
+  const calls = [], env = { A4_TIER: tierName, A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request',
     A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(JSON.stringify(grant)) };
-  const read = path => path === env.A4_REQUEST_FILE ? JSON.stringify(approvedRequest)
+  const read = path => path === env.A4_REQUEST_FILE ? JSON.stringify(request)
     : path === env.A4_EXECUTION_FILE ? JSON.stringify(grant) : 'private';
   const call = (_config, args) => {
     calls.push(args);
@@ -58,7 +61,7 @@ export async function verifyRenderedSequence(rendered) {
   await assert.rejects(verify(http, call, read, probe), /ingress_boundary_invalid/);
   await assert.rejects(Promise.resolve().then(() => execute({ ...env, A4_ACTION: 'start-ui', A4_DRY_RUN: '0' }, call, read)), /ingress_boundary_invalid/);
   for (const name of ['sentropic', 'auth-idp']) object('Ingress', name).metadata.annotations[
-    'traefik.ingress.kubernetes.io/router.middlewares'] = 'sentropic-preprod-a4-verification@kubernetescrd';
+    'traefik.ingress.kubernetes.io/router.middlewares'] = `${namespace}-a4-verification@kubernetescrd`;
   await assert.rejects(verify(http, call, read, probe)); assert.equal(probes, 0);
   execute({ ...env, A4_ACTION: 'start-ui', A4_DRY_RUN: '0' }, call, read);
   await verify(http, call, read, probe); assert.equal(probes, 1);
@@ -67,5 +70,5 @@ export async function verifyRenderedSequence(rendered) {
   await verify(http, call, read, probe);
   assert(deployments.filter(item => !['api', 'ui', 'auth-idp'].includes(item.metadata.name)).every(item => item.spec.replicas === 0));
   assert(sets.every(item => item.spec.replicas === 0));
-  console.log('PASS: rendered ingress sequence: internal -> restricted UI -> HTTP -> limited IdP; other writers stopped');
+  console.log(`PASS: ${tierName} rendered ingress sequence: internal -> restricted UI -> HTTP -> limited IdP; other writers stopped`);
 }
