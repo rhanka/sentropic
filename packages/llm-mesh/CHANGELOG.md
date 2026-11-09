@@ -30,6 +30,19 @@
   expiry for a planned re-enrollment. A CLI-imported Muse credential carries
   no refresh grant yet refreshes through the cycle (CLI store re-read),
   unlike direct-billed Muse keys (`auth_type: 'api_key'`).
+- New `llm-mesh-enroll` bin (`./dist/node/cli/enroll-cli.js`): generic
+  device-flow enrollment CLI (muse-code first) with `enroll` (prints only
+  the verification URL plus user code plus expiry, polls, then persists
+  into `EncryptedFileKeyring`) and `probe` (one minimal generate through
+  `MuseAdapter`/`MuseRuntimeClient`, prints status plus latency plus usage
+  only). The keyring passphrase is read from the env var named by
+  `--keyring-key-env`, never from argv; no token or key reaches stdout,
+  stderr, or error messages. A probe 402 maps to `billing_not_configured`
+  on the non-seat `muse.ts` direct-key path.
+- `EncryptedFileKeyring` accepts an explicit 32-byte master key (second
+  constructor argument or `deriveKeyringMasterKey`/`resolveKeyringMasterKey`
+  helpers), so CLI keyrings stay unlockable by env-held passphrase without
+  changing the default `.key`-file behavior.
 
 ## 0.33.0
 
