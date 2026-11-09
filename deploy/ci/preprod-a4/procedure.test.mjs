@@ -18,7 +18,7 @@ test('should follow numbered checkpoint steps with one waited custodian deletion
       ['scale', 'deployment/api', '--replicas=1'], ['rollout', 'status', 'deployment/api', '--timeout=180s']],
   } };
   const bytes = JSON.stringify(grant), calls = [];
-  const env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request',
+  const env = { A4_TIER: 'preprod', A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request',
     A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(bytes), A4_DRY_RUN: '0' };
   const read = path => path === env.A4_REQUEST_FILE ? JSON.stringify(approvedRequest)
     : path === env.A4_EXECUTION_FILE ? bytes : 'private';
@@ -39,4 +39,15 @@ test('should follow numbered checkpoint steps with one waited custodian deletion
   }, read);
   assert(ready); assert.equal(calls.filter(args => args[0] === 'delete').length, 1);
   assert.deepEqual(calls, [...grant.actions['delete-custodian'], ...grant.actions['start-api']]);
+});
+test('should document the prod bindings with prod targets that exist and the tier-bound formats', () => {
+  const doc = readFileSync(new URL('../../../docs/runbooks/prod-a4-cutover.md', import.meta.url), 'utf8');
+  const targets = readFileSync(new URL('./targets.mk', import.meta.url), 'utf8');
+  const named = [...doc.matchAll(/`make (k8s-prod-a4-[a-z]+) /g)].map(match => match[1]);
+  assert.deepEqual([...new Set(named)].sort(), ['k8s-prod-a4-action', 'k8s-prod-a4-custody', 'k8s-prod-a4-prepare', 'k8s-prod-a4-verify']);
+  for (const target of named) assert.match(targets, new RegExp(`^${target}:`, 'm'));
+  assert.match(targets, /^k8s-prod-a4-action k8s-prod-a4-verify k8s-prod-a4-custody k8s-prod-a4-prepare: export override A4_TIER := prod$/m);
+  for (const text of ['prod-a4-authorization/1', 'prod-a4-request/1', 'prod-a4-rehearsal/2', 'emailCodeActiveKeyRef',
+    'sentropic-a4-verification@kubernetescrd', 'https://sentropic.sent-tech.ca/api/v1/health']) assert(doc.includes(text), text);
+  assert(named.every(target => doc.match(new RegExp(`\`make ${target} [^\`]*ENV=test-[a-z0-9-]+\``))));
 });
