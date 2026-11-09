@@ -3676,7 +3676,7 @@ db-backup: backup-dir up ## Backup local database to file
 			export PGPASSWORD=\"app\"; \
 			pg_dump -h localhost -U app -d app -F c -f /backups/app-$${TIMESTAMP}.dump; \
 		fi" && \
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) postgres sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /backups/app-$${TIMESTAMP}.dump' && \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) -e DUMP_FILE=app-$${TIMESTAMP}.dump postgres sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /backups/$$DUMP_FILE' && \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-backup-prod
