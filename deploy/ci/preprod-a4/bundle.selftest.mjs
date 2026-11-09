@@ -69,6 +69,8 @@ function checkA4(objects, tier) {
   assert(!objects.some(object => object.kind === 'Secret' && ['email-code-hmac', 'sentropic-identity-budgets'].includes(object.metadata.name)));
   assert.deepEqual(container.env.find(env => env.name === 'CM_A4_NAMESPACE').valueFrom, { fieldRef: { fieldPath: 'metadata.namespace' } });
   assert.deepEqual(idp.env.find(env => env.name === 'CM_A4_NAMESPACE'), container.env.find(env => env.name === 'CM_A4_NAMESPACE'));
+  assert.deepEqual(container.env.find(env => env.name === 'CM_IDENTITY_CUTOVER_IDP_RP_ID').valueFrom,
+    { configMapKeyRef: { name: 'auth-idp', key: 'WEBAUTHN_RP_ID' } });
   console.log(`PASS: rendered ${tier} custody, real policy reference, private HMAC composition and budget wiring`);
 }
 checkA4(preprod, 'preprod-a4'); checkA4(prodA4, 'prod-a4');
