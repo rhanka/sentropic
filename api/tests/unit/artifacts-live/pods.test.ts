@@ -100,16 +100,53 @@ describe('builder pod admission and recovery', () => {
     const f = fixture(); const live = await f.controller.start(key);
     const service = f.objects.get('services' + live.podName)!;
     const staleUid = service.metadata.uid;
-    // The pod is gone (NotFound, like preprod) while its service still carries the previous session's selector.
+    // The pod is gone (NotFound, like preprod) while its service still carries the previous lease's selector.
     f.objects.delete('pods' + live.podName);
     service.metadata.labels['sentropic.dev/artifact-generation'] = '999';
     (service.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-generation'] = '999';
-    await expect(f.ports.pods.ensure(key, { ...live, podUid: null })).resolves.toMatchObject({ uid: expect.any(String) });
+    const revived = { ...live, podUid: null, leaseEpoch: live.leaseEpoch + 1 };
+    await expect(f.ports.pods.ensure(key, revived)).resolves.toMatchObject({ uid: expect.any(String) });
     expect(f.core.delete).toHaveBeenCalledWith('services', live.podName, staleUid);
     const replaced = f.objects.get('services' + live.podName)!;
     expect(replaced.metadata.uid).not.toBe(staleUid);
     expect((replaced.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-generation']).toBe('1');
+    expect((replaced.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-lease'])
+      .toBe(String(live.leaseEpoch + 1));
     expect(f.objects.size).toBe(2);
+  });
+  it('should refuse a service of an equal or newer lease with stale_fence and never delete it', async () => {
+    // Same lease, another generation: the recorded pod uid is set, so any selector divergence fences.
+    {
+      const f = fixture(); const live = await f.controller.start(key);
+      const service = f.objects.get('services' + live.podName)!;
+      service.metadata.labels['sentropic.dev/artifact-generation'] = '999';
+      (service.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-generation'] = '999';
+      await expect(f.ports.pods.ensure(key, live)).rejects.toMatchObject({ reason: 'stale_fence' });
+      expect(f.core.delete).not.toHaveBeenCalled();
+      expect(f.objects.get('services' + live.podName)!.metadata.uid).toBe(service.metadata.uid);
+    }
+    // Newer lease: a stale ensure of the older lease must not delete the revived lease's service.
+    {
+      const f = fixture(); const live = await f.controller.start(key);
+      const service = f.objects.get('services' + live.podName)!;
+      const currentUid = service.metadata.uid;
+      service.metadata.labels['sentropic.dev/artifact-lease'] = String(live.leaseEpoch + 1);
+      (service.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-lease'] = String(live.leaseEpoch + 1);
+      await expect(f.ports.pods.ensure(key, { ...live, podUid: null })).rejects.toMatchObject({ reason: 'stale_fence' });
+      expect(f.core.delete).not.toHaveBeenCalled();
+      expect(f.objects.get('services' + live.podName)!.metadata.uid).toBe(currentUid);
+    }
+    // Same lease, another session: selector divergence without an older lease fences too.
+    {
+      const f = fixture(); const live = await f.controller.start(key);
+      const service = f.objects.get('services' + live.podName)!;
+      const currentUid = service.metadata.uid;
+      service.metadata.labels['sentropic.dev/artifact-session'] = 'other-session';
+      (service.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-session'] = 'other-session';
+      await expect(f.ports.pods.ensure(key, live)).rejects.toMatchObject({ reason: 'stale_fence' });
+      expect(f.core.delete).not.toHaveBeenCalled();
+      expect(f.objects.get('services' + live.podName)!.metadata.uid).toBe(currentUid);
+    }
   });
   it('should skip quiesce when the pod uid was never recorded', async () => {
     const f = fixture(); const live = await f.controller.start(key);
@@ -132,12 +169,16 @@ describe('builder pod admission and recovery', () => {
   });
   it('should bound a hanging quiesce instead of blocking the stop', async () => {
     const f = fixture(); const live = await f.controller.start(key);
-    f.ports.worker.quiesce = vi.fn(() => new Promise<never>(() => {}));
-    await expect(f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 }))
-      .resolves.toEqual({ liveSessionId: live.sessionId, state: 'stopped' });
+    vi.useFakeTimers();
+    try {
+      f.ports.worker.quiesce = vi.fn(() => new Promise<never>(() => {}));
+      const stopped = f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 });
+      const assertion = expect(stopped).resolves.toEqual({ liveSessionId: live.sessionId, state: 'stopped' });
+      await vi.advanceTimersByTimeAsync(10_000); await assertion;
+    } finally { vi.useRealTimers(); }
     expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
     expect(f.objects.size).toBe(0);
-  }, 20_000);
+  });
   it('should skip the pod delete without a known uid when the pod is already gone', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     f.objects.delete('pods' + live.podName);

@@ -99,9 +99,20 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       }, spec: { type: 'ClusterIP', selector: expected, ports: [{ name: 'live', port: 5173, targetPort: 5173 }] } };
       const existing = await core.get<{ metadata: Pod['metadata']; spec: { selector: Record<string, string> } }>(
         'services', runtime.podName);
-      if (existing && Object.entries(expected).some(([k, v]) => existing.spec.selector[k] !== v)) {
-        // A same-named service with another session's selector is a leftover of this binding (the service name
-        // derives from the binding hash): replace it under its uid precondition instead of fencing the next ensure.
+      if (existing && (Object.entries(expected).some(([k, v]) => existing.spec.selector[k] !== v)
+        || Object.entries(expected).some(([k, v]) => existing.metadata.labels[k] !== v))) {
+        // A stale ensure of an older lease must never delete the service of a newer lease (concurrent revive):
+        // replace only on a fresh creation when the existing service belongs to a strictly older lease of the
+        // same binding (the service name derives from the binding hash); any other divergence is a fence
+        // conflict with no delete.
+        const sameBinding = existing.metadata.labels['sentropic.dev/artifact-binding']
+            === expected['sentropic.dev/artifact-binding']
+          && existing.spec.selector['sentropic.dev/artifact-binding'] === expected['sentropic.dev/artifact-binding'];
+        const leaseLabel = Number(existing.metadata.labels['sentropic.dev/artifact-lease']);
+        const leaseSelector = Number(existing.spec.selector['sentropic.dev/artifact-lease']);
+        const olderLease = sameBinding && Number.isFinite(leaseLabel) && Number.isFinite(leaseSelector)
+          && leaseLabel < runtime.leaseEpoch && leaseSelector < runtime.leaseEpoch;
+        if (runtime.podUid !== null || !olderLease) conflict('stale_fence');
         await core.delete('services', runtime.podName, existing.metadata.uid);
         await core.waitDeleted('services', runtime.podName, existing.metadata.uid);
         await core.create('services', service);
