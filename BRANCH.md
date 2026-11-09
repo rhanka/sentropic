@@ -40,6 +40,7 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
 ## AI Flaky tests
 - Acceptance rule:
 - [ ] test-e2e (1) failed on bc6c4ef65: tests/03-chat.spec.ts:416 "devrait envoyer le bon contexte primaire au backend selon la route" (3.7s); the diff only touches the artifact builder install path (api/src/services/artifacts/live/*). Not accepted as flaky until a fresh run passes; no rerun, no skip, no timeout change.
+- [ ] test-e2e (4) failed on 3996c17cf: tests/02-organizations.spec.ts:391 Read-only (viewer) "détail: champs non éditables" (11.2s); on the same code the shard-1 chat test of bc6c4ef65 PASSED and this test PASSED on bc6c4ef65 — non-systematic UI e2e failures unrelated to the artifact builder diff. Fresh run requested; no rerun, no skip, no timeout change.
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
   - Non-systematic means at least one success on the same commit and same command.
   - Never amend tests with additive timeouts.
