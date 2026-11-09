@@ -48,6 +48,7 @@
 - [ ] Acceptance rule:
 - [ ] Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
 - [ ] Non-systematic means at least one success on the same commit and same command.
+- [ ] test-e2e (1) failed on 7ff33b1ed (merge of main only): tests/07-matrix.spec.ts:477 Matrix lock/presence "User A leaves -> lock released -> User B can lock" (5.3s); the same test passed on 58e9a714b and failed transiently on PR #966 c5357329d before passing on a fresh head. Not accepted as flaky until a fresh run passes; no rerun, no skip, no timeout change.
 - [ ] Never amend tests with additive timeouts.
 - [ ] If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
 - [ ] Capture explicit user sign-off before merge.
