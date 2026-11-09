@@ -13,7 +13,7 @@ export interface ChannelOptions {
   /** API-held Ed25519 private key; only its public half is placed in the pod spec. */
   signingKey(): KeyObject; now(): number; id(): string; timeoutMs?: number;
 }
-function unavailable(): never { throw new LiveError('builder_unavailable'); }
+function unavailable(): never { throw new LiveError('builder_unavailable', 'supervisor_channel_error'); }
 /** Maps a transfer refusal to a closed code: overflow is limit_exceeded, anything else the given code/reason. */
 export const failure = (code: string, reason?: string): TransferFailure => kind => {
   if (kind === 'limit') throw new LiveError('limit_exceeded');
@@ -54,7 +54,7 @@ export function createSupervisorChannel(options: ChannelOptions) {
       const id = options.id(); const issuedAt = options.now();
       const frame = sealFrame(options.signingKey(), { v: 1, id, op, fence, issuedAt, expiresAt: issuedAt + FRAME_TTL_MS, args });
       const aborted = new Promise<never>((_resolve, reject) => {
-        controller.signal.addEventListener('abort', () => reject(new LiveError('builder_unavailable')), { once: true });
+        controller.signal.addEventListener('abort', () => reject(new LiveError('builder_unavailable', 'supervisor_channel_aborted')), { once: true });
       });
       const sending = options.channel.send({ podName: fence.podName, podUid: fence.podUid }, frame, controller.signal);
       sending.catch(() => undefined);

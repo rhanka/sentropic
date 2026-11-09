@@ -18,7 +18,7 @@ const ED25519_SPKI = /^MCowBQYDK2VwAyEA[A-Za-z0-9+/]{43}=$/;
 export const MAX_BOOTSTRAP_BYTES = 120 * 1024;
 
 export function bootstrapConfig(publicKey: string) {
-  if (!ED25519_SPKI.test(publicKey)) throw new LiveError('builder_unavailable');
+  if (!ED25519_SPKI.test(publicKey)) throw new LiveError('builder_unavailable', 'supervisor_key_invalid');
   return { PUBLIC_KEY: publicKey, CONTROL_PORT: 5173, UPSTREAM_PORT: LIVE_UPSTREAM_PORT,
     ENV: artifactEnvironment(), BUILD_ENV: buildEnvironment(),
     RECIPES: { install: INSTALL_RECIPE, prebundle: PREBUNDLE_RECIPE, prebundleScript: LIVE_PREBUNDLE_SCRIPT,
@@ -26,6 +26,6 @@ export function bootstrapConfig(publicKey: string) {
 }
 export function createBootstrapSource(publicKey: string) {
   const source = `${AGENT_SOURCE}${SERVER_SOURCE}\nawait startBootstrap(${JSON.stringify(bootstrapConfig(publicKey))});\n`;
-  if (Buffer.byteLength(source) > MAX_BOOTSTRAP_BYTES) throw new LiveError('builder_unavailable');
+  if (Buffer.byteLength(source) > MAX_BOOTSTRAP_BYTES) throw new LiveError('builder_unavailable', 'bootstrap_too_large');
   return source;
 }
