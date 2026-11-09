@@ -1,107 +1,99 @@
-# Feature: compose-host-user
+# Feature: Fix live provider select ENOBUFS
 
 ## Objective
-- [ ] Run sentropic Docker compose services as the host user so bind-mounted outputs are no longer root-owned.
+- [ ] Fix `select` ENOBUFS by bounding every `gh api` call with `--jq` projection, `per_page` and explicit `maxBuffer`, with explicit route+size errors.
 
 ## Scope / Guardrails
-- [ ] Scope limited to compose user mapping and Makefile UID/GID exports plus container HOME/npm cache writability.
-- [ ] No migration in `api/drizzle/*.sql`.
-- [ ] Make-only workflow, Docker via `.tmp/packets/docker-slot.sh make ...` only, `ENV` always last.
-- [ ] Branch work in `tmp/worktrees/compose-host-user`, never on root.
-- [ ] Test env `ENV=test-compose-host-user`, ports `API_PORT=8891 UI_PORT=5291 MAILDEV_UI_PORT=1191`.
-- [ ] Never `ENV=dev`, never `make clean-all`, no Python.
-- [ ] Commits via `make commit MSG="..."` single line English, no attribution trailer, stage specific files only.
-- [ ] Do NOT clean existing root-owned files of other worktrees (needs root, out of scope).
+- [ ] Worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
+- [ ] ENV `test-live-provider-enobufs` last in every `make` command; ports API_PORT=8895 UI_PORT=5295 MAILDEV_UI_PORT=1195.
+- [ ] Docker only via `.tmp/packets/docker-slot.sh make ...`; never ENV=dev; never `make clean-all`; no Python.
+- [ ] Commits via `make commit MSG="..."` only; no attribution trailer; max 150 lines per commit.
+- [ ] Generic fix only; no dual path; no weakening of `schedule-health` or any gate.
 - [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**:
-- [ ] `docker-compose.dev.yml`
-- [ ] `docker-compose.idp.yml`
-- [ ] `docker-compose.e2e-vscode.yml`
-- [ ] `docker-compose.test.yml`
-- [ ] `e2e/tests/01-app.spec.ts` (captures debug vers `test-results/`)
-- [ ] `e2e/tests/02-auth-routes.spec.ts` (captures debug vers `test-results/`)
-- [ ] `BRANCH.md`
-- [ ] **Forbidden Paths (must not change in this branch)**:
-- [ ] `Makefile`
-- [ ] `docker-compose*.yml`
-- [ ] `.cursor/rules/**`
-- [ ] `plan/NN-BRANCH_*.md` (except this branch file)
-- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-- [ ] `api/drizzle/*.sql` (max 1 file)
-- [ ] `.github/workflows/**`
-- [ ] **Exception process**:
-- [ ] Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+- **Allowed Paths (implementation scope)**:
+  - `scripts/ci/live-provider-receipt.mjs`
+  - `scripts/ci/live-provider-receipt.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `BRANCH.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `api/drizzle/*.sql`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] `attention` BRCHU-EX1: exception to touch `Makefile` and `docker-compose.dev.yml`, `docker-compose.idp.yml`, `docker-compose.e2e-vscode.yml`, `docker-compose.test.yml` (default-forbidden).
-- [ ] Rationale: owner order 08/11 — bind-mounted outputs are root-owned in 31 worktrees, needs sudo cleanup.
-- [ ] Impact: dev/test compose services run as `UID:GID`; postgres and named-volume-only services unchanged.
-- [ ] Rollback: revert the commit.
-- [x] `acknowledge` scoped smoke `tests/smoke/api-health.test.ts` on `up-api-test` stack: 10 failed / 1 passed (`identity_contract_unavailable` 500s on authenticated endpoints); A/B rerun as root (`UID=0 GID=0`) fails identically — not caused by host-user mapping; no CI job runs this suite (only `test-api-smoke-restore` with prod backup). No fix attempted, no assertion loosened.
-- [x] `attention` CI run 42555500059: `test-e2e` (6 shards) + `e2e-vscode` fail with `EACCES: permission denied, rmdir '/app/test-results'` — root cause in two parts: (a) Docker creates missing gitignored bind dirs (`e2e/test-results`, `e2e/.auth`) as root — fixed by host-owned `mkdir -p` in `ci-test-env` and `prepare-node-workspace` (plus `data/backup`); (b) Playwright `rmdir`s its output dir, which needs write on parent `/app` (image-owned root) — fixed by `--output=test-results/out-<shard|vscode|smoke>` so the managed dir is a removable entry inside the host-owned bind. No `chmod 777` on new dirs.
-- [x] `attention` CI run 42559201108: `e2e-vscode` + shards 2/3/4 green (fixes above validated); shards 1/6 fail on `page.screenshot({ path: 'debug-*.png' })` to CWD `/app` (image-owned root) — fixed by writing to `test-results/debug-*.png` (host-owned bind). Shard 5: `00-ai-generation` fails with `Impossible de creer un brouillon de dossier` on the API side (provider path unchanged, `api` container still root on `up-e2e`) — passed on the next head, non-systematic.
-- [x] `attention` CI run 42560844577: only shard 1 fails — `07-matrix.spec.ts` lock/presence `User A leaves` poll (2s) `Expected: true, Received: false`, 45/46 pass. Local repro on same head via `make test-e2e E2E_SPEC=tests/07-matrix.spec.ts ENV=e2e-compose-host-user`: 17/17 pass including the failing test — non-systematic timing flake in SSE presence propagation, unrelated to UID mapping (no app/server file touched). Recorded per AI-flaky rule: command `make test-e2e ENV=e2e-ci` (shard 1), file `e2e/tests/07-matrix.spec.ts:477`, signature `lock-release presence poll 2s false`. Owner sign-off required before merge (not this lane).
+- [x] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
+- [x] BR01-EX1: touch `.github/workflows/ci.yml` (`global` paths-filter only): add `scripts/ci/live-provider-receipt.mjs` and `scripts/ci/live-provider-receipt.test.mjs`. Rationale: any `scripts/**` change classifies as `root-lock-toolchain`, whose `consumer-contracts-verify` gate requires the six integration lanes, but those lanes only run when `api`, `ui` or `global` matches; without this, a `scripts/ci`-only PR can never go green (run 42548638007: `consumer-contracts` + `ci-gate` failure). Impact: strictly more CI for these two paths (full integration), same family as `image-receipt`/`compatibility-classifier` already listed; no gate, threshold or assertion loosened. Rollback: remove the two lines; dispatch returns to `manifest_guard`-only.
+- [x] ARGON-1: PR #970 Argon review REQUEST_CHANGES (BLOCKER `pages()` double `[key]` fails `select` 100%; MAJOR missing `select`/`health` CLI e2e against stubbed `gh`; MINOR hardcoded `100` vs `GH_PER_PAGE` + checkbox coherence). Addressed in Lot 3.
+- [x] BR01-EX1b: run 42552089131 `validate-publishable-manifests` pins the exact `global` scripts list (`publishable-ci-wiring.test.mjs:144`); the two deliberate BR01-EX1 additions are added to the pin. The pin stays an exact match (any other unlisted addition still fails): evolution of the intended contract, not a loosening.
 
 ## AI Flaky tests
-- [ ] Acceptance rule:
-- [ ] Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-- [ ] Non-systematic means at least one success on the same commit and same command.
-- [ ] test-e2e (1) failed on 7ff33b1ed (merge of main only): tests/07-matrix.spec.ts:477 Matrix lock/presence "User A leaves -> lock released -> User B can lock" (5.3s); the same test passed on 58e9a714b and failed transiently on PR #966 c5357329d before passing on a fresh head. Not accepted as flaky until a fresh run passes; no rerun, no skip, no timeout change.
-- [ ] Never amend tests with additive timeouts.
-- [ ] If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-- [ ] Capture explicit user sign-off before merge.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] Rationale: single compose ownership fix, one test cycle, no sub-workstream CI.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams need independent CI or long-running validation)
+- Rationale: single small CI fix, one branch, one CI.
 
 ## UAT Management (in orchestration context)
-- [ ] **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- [ ] UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- [ ] Execution flow (mandatory):
-- [ ] Develop and run tests in `tmp/worktrees/compose-host-user`.
-- [ ] Push branch before UAT.
-- [ ] Run user UAT from root workspace (`ENV=dev` reserved for user, branch never touches it).
-- [ ] Switch back to `tmp/worktrees/compose-host-user` after UAT.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI change in this branch: no UAT surface.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-- [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
-- [ ] Create isolated worktree `tmp/worktrees/compose-host-user` on `fix/compose-host-user` from `origin/main` (HEAD `a56b19c01`).
-- [ ] Verify branch via `git -C tmp/worktrees/compose-host-user branch --show-current` returns `fix/compose-host-user`.
-- [ ] Capture Makefile targets for debug/testing.
-- [ ] Define environment mapping (`ENV=test-compose-host-user`, `API_PORT=8891`, `UI_PORT=5291`, `MAILDEV_UI_PORT=1191`).
-- [ ] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-compose-host-user` with `ENV` last.
-- [ ] Confirm scope and guardrails.
-- [ ] Validate scope boundaries and declare `BRCHU-EX1` before touching forbidden paths.
-- [x] **Lot 1 — Compose user mapping**
-- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to bind-mount writer services in `docker-compose.dev.yml` (`api`, `ui`, `openvscode-dev`, `ui-playwright-dev`, `playwright-dev`).
-- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `auth-idp` in `docker-compose.idp.yml`; keep `idp-screen-smoke` unchanged (read-only bind, no bind writes).
-- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `openvscode` and `e2e-vscode` in `docker-compose.e2e-vscode.yml`; keep `mock-api-vscode` unchanged (no volumes).
-- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `e2e` in `docker-compose.test.yml`; keep base `docker-compose.yml` unchanged (no bind mounts; `postgres` named volume unchanged).
-- [x] Keep `postgres`, `minio`, `minio-init` unchanged (named volumes or no bind writes).
-- [x] List every other compose file with evidence of bind writes or no writes.
-- [x] Set `HOME=/tmp` and `npm_config_cache=/tmp/npm-cache` env on switched Node services; no `chmod 777`; no legacy fallback, no dual path.
-- [x] Makefile: export `UID`/`GID` from `id -u`/`id -g`; replace any `sudo chown 1000:1000` with `chown $(id -u):$(id -g)`.
-- [ ] Lot gate:
-- [ ] `make scope-check` advisory before commit.
-- [x] **Lot 2 — Validation**
-- [x] `make typecheck` via docker-slot on `ENV=test-compose-host-user` (PASS exit 0, svelte-check 0 errors, 2026-11-08).
-- [x] Scoped `make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-compose-host-user` (22/22 PASS as UID 1000).
-- [x] `make up-api-test ENV=test-compose-host-user` healthy, api runs as `1000:1000`, fresh files under `api/` and `data/` owned by `antoinefa:antoinefa`.
-- [x] `make down ENV=test-compose-host-user` after validation (no leftover containers).
-- [ ] **Lot N-1 — Docs consolidation**
-- [ ] No spec file touched; nothing to consolidate.
-- [ ] **Lot N — Final validation**
-- [ ] Typecheck & Lint
-- [ ] Retest UI (cf Lot 2, copy checklist)
-- [ ] Retest API (cf Lot 2, copy checklist)
-- [ ] Retest e2e (cf lots e2e_groups like in Lot 1)
-- [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
-- [ ] Record explicit user sign-off if any AI flaky test is accepted
-- [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md` to `Package Publication`.
-- [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-- [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-- [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Create worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
+  - [x] Verify branch with `git -C tmp/worktrees/fix-live-provider-enobufs branch --show-current`.
+  - [x] Write `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`.
+  - [x] Confirm root cause from job log 128713986254 plus `live-provider-receipt.mjs:103` default 1 MiB `maxBuffer`.
+  - [x] Confirm `make` targets: `test-ci-live-provider-receipt`, `ci-live-provider-select`, `ci-live-provider-health`.
+  - [x] Define environment mapping (`test-live-provider-enobufs`) and ports (API 8895, UI 5295, Maildev 1195).
+  - [x] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-live-provider-enobufs` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+- [ ] **Lot 1 — Bound every gh call plus regression test**
+  - [x] Replace bare `execFileSync('gh', ['api', route])` with bounded helper (`--jq` projection, `per_page`, explicit `maxBuffer`, explicit route+size error on overflow).
+  - [x] Apply helper to `select` runs, jobs, artifacts, pull-request runs, `health` and `finish` schedule routes.
+  - [x] Keep `scheduleHealth`, `qualifiedMain`, `liveReceipt`, `readPages` gates byte-identical in behavior.
+  - [x] Add unit test in `scripts/ci/live-provider-receipt.test.mjs`: large response handled/reported (overflow becomes explicit route+size error; projections bound size).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>` if impacted (Node script only: at least `node --check` equivalent via test target).
+    - [ ] **API tests**
+      - [ ] No API change: none.
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] No UI change: none.
+    - [ ] **E2E tests**
+      - [ ] No E2E change: none.
+    - [ ] Scoped gate: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
+- [ ] **Lot 2 — Dispatch fix plus final validation**
+  - [x] Add `live-provider-receipt` files to the `global` paths-filter under BR01-EX1 (conditional path with rationale, impact, rollback).
+  - [x] Retest scoped: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs` (14/14).
+  - [x] Retest scoped: `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25, classifier and gate untouched in behavior).
+  - [x] Local verify simulation: `consumer-contracts --verify` ok:true with `global=true`, reproduces the CI failure with `manifest_guard`-only.
+  - [x] Push 2044ede94, update PR body with `BRANCH.md` (PR #970, no merge).
+  - [x] Iterate new-head CI to green (no rerun, no skip): run 42554897053 success on head a57246c82; PR MERGEABLE/CLEAN.
+  - [ ] Do NOT merge.
+  - [x] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
+- [ ] **Lot 3 — Argon review fixes (BLOCKER + MAJOR + MINORs)**
+  - [x] Fix `pages()` double `[key]` indexation (BLOCKER) and use `GH_PER_PAGE` in `readPages` (MINOR).
+  - [x] Add CLI `select` + `health` end-to-end test against stubbed `gh` (MAJOR): `--jq`, pagination runs/jobs/artifacts to `selection.json`, explicit overflow error.
+  - [x] Fix `BRANCH.md` checkbox coherence (MINOR).
+  - [x] Retest scoped: `test-ci-live-provider-receipt` (15/15) via `node --test`.
+  - [x] Retest scoped via `make`: `test-ci-live-provider-receipt` (15/15), `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25), `test-publishable-manifests` (137/137), `scope-check` PASS C2.
+  - [x] Commit via `make commit`, push, CI green (no rerun, no skip): 93e727c3d, run 42610893119 success; PR MERGEABLE/CLEAN.
+  - [x] Update `.tmp/rv/fix-live-provider-enobufs.md`.
+  - [ ] Do NOT merge.
