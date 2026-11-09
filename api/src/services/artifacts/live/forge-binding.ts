@@ -13,7 +13,9 @@ export interface ForgeBinding { repoId: string; branch: string; subPath: string 
 export interface BuilderRepository {
   storageScopeId: string; repoId: string; locator: string; installationRef: string; allowedSubPaths: readonly string[];
   /** Workspace-scoped installs (e.g. `["ui"]`): when set, only the root-lockfile subset reachable from those
-   * workspaces is streamed and installed, equivalent to `npm ci --workspace=<ws>` from the root. */
+   * workspaces is streamed and installed, exactly `npm ci --workspace=<ws>` without `--include-workspace-root`.
+   * Repository-wide: applies to every `allowedSubPaths` entry of this repository. An empty array (or any shape
+   * or traversal violation) refuses the whole forge configuration (`forgeConfig` returns null, fail-closed). */
   installWorkspaces?: readonly string[];
 }
 /** The enabled SG0-app host: its registry targets, the lifecycle lease and the credential invalidation bus. */

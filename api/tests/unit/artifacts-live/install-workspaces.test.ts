@@ -4,10 +4,11 @@ import { createDependencyCache, type CacheIdentity, type CacheObject, type Cache
   type DependencyFile } from '../../../src/services/artifacts/live/cache';
 import { sha256 } from '../../../src/services/artifacts/live/integrity';
 import { GB1_QUALIFICATION_PATH } from '../../../src/services/artifacts/live/gb1-qualification';
-import { BUILDER_IMAGE, INSTALL_RECIPE } from '../../../src/services/artifacts/live/recipes';
+import { BUILDER_IMAGE, INSTALL_RECIPE, installRecipeFor } from '../../../src/services/artifacts/live/recipes';
 
-/** Monorepo fixture: root workspaces ["api","ui","packages/*"], one root lockfile, ui on workspace links. */
-const REMOTES = ['node_modules/express', 'node_modules/lodash', 'node_modules/vite', 'node_modules/vitest',
+/** Monorepo fixture: root workspaces ["api","ui","packages/*"], one root lockfile, ui on workspace links.
+ * Scoped rule is exactly `npm ci --workspace` without `--include-workspace-root`: no root dependency is kept. */
+const REMOTES = ['node_modules/express', 'node_modules/lodash', 'node_modules/vite',
   'node_modules/zod', 'node_modules/node-fetch', 'node_modules/data-uri-to-buffer'];
 const bytesOf = (path: string) => Buffer.from(`tarball:${path}`);
 const sriOf = (path: string) => `sha512-${createHash('sha512').update(bytesOf(path)).digest('base64')}`;
@@ -85,11 +86,19 @@ describe('workspace-scoped installs', () => {
     const f = harness(['ui']);
     const receipt = await f.cache.acquire(f.source());
     expect(receipt.inventory.map(pin => pin.path).sort()).toEqual([...REMOTES.filter(p => p !== 'node_modules/express')].sort());
-    expect(f.fetched).toHaveLength(6);
+    expect(f.fetched).toHaveLength(5);
     expect(f.fetched).not.toContain('node_modules/express');
+    expect(f.fetched).not.toContain('node_modules/vitest');
     expect(f.ports.cleanInstall).toHaveBeenCalledWith(expect.objectContaining({
       recipe: expect.objectContaining({ args: expect.arrayContaining(['--workspace=ui']) }) }));
     expect(INSTALL_RECIPE.args.join(' ')).not.toContain('--workspace');
+  });
+
+  it('should build the same workspace flags on the API recipe and the pod (no divergent construction)', async () => {
+    const selection = ['ui', 'packages/domain'];
+    expect(installRecipeFor(selection).args).toEqual([...INSTALL_RECIPE.args,
+      ...[...selection].sort().map(w => `--workspace=${w}`)]);
+    expect(installRecipeFor([])).toBe(INSTALL_RECIPE);
   });
 
   it('should keep locked-tarball verification as strict on the subset', async () => {

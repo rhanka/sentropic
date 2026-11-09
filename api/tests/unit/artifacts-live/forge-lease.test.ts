@@ -1,12 +1,13 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
-import { runtimeGeneration } from '../../../src/services/artifacts/live/forge-lease';
+import { createLeaseForgeReads, runtimeGeneration } from '../../../src/services/artifacts/live/forge-lease';
 import type { LiveState } from '../../../src/services/artifacts/live/records';
 import { FORGE_LIMITS } from '../../../src/services/artifacts/live/forge-tar';
 import { GB1_QUALIFICATION_PATH } from '../../../src/services/artifacts/live/gb1-qualification';
-import { BUILDER_IMAGE } from '../../../src/services/artifacts/live/recipes';
-import { key } from './fixture';
-import { binding, failure, HEAD, QUALIFICATION, REPO, setup, sha256, STAGED, tarball, TOP, TREE } from './forge-fixture';
+import { BUILDER_IMAGE, installRecipeFor } from '../../../src/services/artifacts/live/recipes';
+import { createForgeBindings, forgeConfig } from '../../../src/services/artifacts/live/forge-binding';
+import { key, memoryRows } from './fixture';
+import { binding, failure, HEAD, leaseHost, QUALIFICATION, REPO, reposEnv, repository, setup, sha256, STAGED, tarball, TOP, TREE } from './forge-fixture';
 
 describe('lease forge reads: head and reachable (contract §4)', () => {
   it('should read the branch head and map a missing branch to git_branch_missing', async () => {
@@ -91,5 +92,42 @@ describe('lease forge reads: snapshot (contract §4)', () => {
     expect(await failure(many.reads.snapshot(key, HEAD))).toMatchObject({ code: 'limit_exceeded' });
     const big = await setup(); big.state.archive = tarball([...REPO, { path: 'big.bin', data: Buffer.alloc(FORGE_LIMITS.fileBytes + 1) }]);
     expect(await failure(big.reads.snapshot(key, HEAD))).toMatchObject({ code: 'limit_exceeded' });
+  });
+
+  it('should leave the cache identity unscoped by default', async () => {
+    const s = await setup();
+    const snap = await s.reads.snapshot(key, HEAD);
+    expect(snap.cacheIdentity.installWorkspaces).toEqual([]);
+  });
+
+  it('should validate the workspace selection at snapshot and scope the cache identity', async () => {
+    const s = await setup();
+    const mono = tarball([
+      { path: 'package.json', data: JSON.stringify({ name: 'radar', workspaces: ['ui'] }) },
+      { path: 'ui/package.json', data: '{"name":"ui"}' },
+      { path: 'package-lock.json', data: '{"lockfileVersion":3}' },
+      { path: 'sentropic.artifact.json', data: JSON.stringify({ version: 1, buildScript: 'build:artifact', outputDir: 'dist', lockfilePath: 'package-lock.json' }) },
+      { path: GB1_QUALIFICATION_PATH, data: QUALIFICATION },
+    ]);
+    s.state.archive = mono;
+    const host = leaseHost({ acquire: s.acquire });
+    const config = forgeConfig(reposEnv([{ ...repository, installWorkspaces: ['ui'] }]), host);
+    expect(config).toBeTruthy();
+    const bindings = createForgeBindings(memoryRows(), config!);
+    await bindings.admit(key, 1, binding);
+    let n = 0;
+    const reads = createLeaseForgeReads({ config: config!, bindings, generation: async () => 1,
+      fetch: s.fetch as unknown as typeof globalThis.fetch, now: () => 1_700_000_000_000, id: () => `stage-ws-${++n}` });
+    const snap = await reads.snapshot(key, HEAD);
+    expect(snap.cacheIdentity.installWorkspaces).toEqual(['ui']);
+    expect(snap.cacheIdentity.policyRevision).toBe(sha256(JSON.stringify([installRecipeFor(['ui']), 'http://npm-relay.npm-relay.svc.cluster.local:4873/'])));
+    const badHost = leaseHost({ acquire: s.acquire });
+    const badConfig = forgeConfig(reposEnv([{ ...repository, installWorkspaces: ['missing'] }]), badHost);
+    const badBindings = createForgeBindings(memoryRows(), badConfig!);
+    await badBindings.admit(key, 1, binding);
+    let m = 0;
+    const badReads = createLeaseForgeReads({ config: badConfig!, bindings: badBindings, generation: async () => 1,
+      fetch: s.fetch as unknown as typeof globalThis.fetch, now: () => 1_700_000_000_000, id: () => `stage-bad-${++m}` });
+    expect(await failure(badReads.snapshot(key, HEAD))).toMatchObject({ code: 'build_descriptor_invalid' });
   });
 });
