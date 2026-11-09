@@ -69,7 +69,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS,
     sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
-    fetch: fetchLockedTarball, storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) },
+    fetch: (pin, relay, signal) => fetchLockedTarball(pin, relay, undefined, signal),
+    storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) },
   options.installBudget ?? defaultInstallBudget());
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
     waiterTtlMs: options.admission.waiterTtlMs, now: options.now, holders: () => store.active() });

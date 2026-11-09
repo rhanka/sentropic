@@ -20,20 +20,28 @@ function unavailable(reason?: string): never { throw new LiveError('builder_unav
  * cache sink as soon as it is read: the API holds one tarball or one installed file at a time. */
 export function createCleanInstall(core: SupervisorCore,
   source: (stagingRef: string) => Promise<readonly TransferFile[]>): CachePorts['cleanInstall'] {
-  async function clear(runtime: LiveRuntime) {
-    if (JSON.stringify((await core.call(runtime, 'clear', { paths: ['/tmp'] })).cleared) !== '["/tmp"]') unavailable('install_clean_unconfirmed');
+  async function clear(runtime: LiveRuntime, signal?: AbortSignal) {
+    if (JSON.stringify((await core.call(runtime, 'clear', { paths: ['/tmp'] }, { signal })).cleared) !== '["/tmp"]') unavailable('install_clean_unconfirmed');
   }
   return async input => {
     const runtime = input.runtime;
+    const signal = input.signal;
     if (!runtime || JSON.stringify(input.recipe) !== JSON.stringify(INSTALL_RECIPE)) unavailable('install_recipe_invalid');
+    signal?.throwIfAborted();
     const files = await source(input.stagingRef);
+    signal?.throwIfAborted();
     const lock = files.find(file => file.path === LOCKFILE);
     if (!lock || !Buffer.from(lock.bytes).equals(Buffer.from(input.lockfile))) unavailable('staging_invalid');
-    await clear(runtime);
-    const sourceSent = await core.transfer(runtime, 'install', files, TREE_LIMITS, stagingFailure);
+    await clear(runtime, signal);
+    // Every sent frame and drained page reports progress, so a large source tree or tarball never trips the stall
+    // watchdog mid-transfer; the abort signal cuts a superseded install at the next frame or file instead of
+    // leaving it running against a pod the teardown already deleted.
+    const bounds = { signal, onProgress: () => input.progress?.report() };
+    const sourceSent = await core.transfer(runtime, 'install', files, TREE_LIMITS, stagingFailure, bounds);
     const staged: { path: string; integrity: string }[] = [];
     async function* tarballs(items: AsyncIterable<{ pin: IntegrityPin; bytes: Uint8Array }>) {
       for await (const tarball of items) {
+        signal?.throwIfAborted();
         verifySri(tarball.bytes, tarball.pin.integrity);
         const path = `${staged.length}.tgz`;
         staged.push({ path, integrity: tarball.pin.integrity });
@@ -42,22 +50,23 @@ export function createCleanInstall(core: SupervisorCore,
       }
     }
     const cacheSent = await core.stream(runtime, 'npm-cache', tarballs(input.tarballs), TARBALL_LIMITS,
-      failure('dependency_integrity_missing'));
+      failure('dependency_integrity_missing'), bounds);
     const runId = core.id();
     // The offline `npm ci` emits no observable progress; the stall timer suspends across it (the ceiling still
     // applies) and resumes for the drain below.
     input.progress?.suspendStall(true);
     try {
       const data = await core.call(runtime, 'install', { recipe: 'install', runId, source: sourceSent, cache: cacheSent,
-        tarballs: staged });
+        tarballs: staged }, { signal });
       if (data.exitCode !== 0) unavailable('install_failed');
     } finally { input.progress?.suspendStall(false); }
+    signal?.throwIfAborted();
     // npm bin and workspace links are re-derived at materialization; only regular files enter the cache.
     await core.drain(runtime, 'dependencies', TREE_LIMITS, 'skip', cacheFailure, async file => {
       await input.sink({ path: file.path, mode: file.mode & 0o111 ? 365 : 292, bytes: file.bytes });
       input.progress?.report();
-    });
-    await clear(runtime);
+    }, bounds);
+    await clear(runtime, signal);
     return { runId };
   };
 }

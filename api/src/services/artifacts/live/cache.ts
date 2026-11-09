@@ -21,15 +21,17 @@ export interface CacheReceipt {
 export interface CacheObject { receipt: CacheReceipt; manifest: readonly DependencyEntry[] }
 export interface CachePorts {
   signingKey(): Uint8Array;
-  /** Downloads exact pinned tarballs through this relay; redirects/alternate registries are forbidden. */
-  fetch(pin: IntegrityPin, relay: typeof NPM_RELAY): Promise<Uint8Array>;
+  /** Downloads exact pinned tarballs through this relay; redirects/alternate registries are forbidden. The watchdog
+   * aborts `signal` on a cut install so a hung fetch stops instead of holding the relay. */
+  fetch(pin: IntegrityPin, relay: typeof NPM_RELAY, signal?: AbortSignal): Promise<Uint8Array>;
   /** Fresh empty install directory, fixed npm config, verified tarballs read one at a time, no branch .npmrc or hooks.
    * Each installed regular file goes to `sink` as soon as it is read, so neither side holds the whole tree. The
    * optional `progress` feeds the install watchdog: report every streamed tarball and drained file, and suspend the
-   * stall timer across the opaque offline `npm ci` sub-phase (still covered by the ceiling). */
+   * stall timer across the opaque offline `npm ci` sub-phase (still covered by the ceiling). The watchdog aborts
+   * `signal` on a cut install; the installer stops at the next frame or file and never admits. */
   cleanInstall(input: { lockfile: Uint8Array; identity: CacheIdentity; recipe: typeof INSTALL_RECIPE;
     stagingRef: string; runtime?: LiveRuntime; tarballs: AsyncIterable<{ pin: IntegrityPin; bytes: Uint8Array }>;
-    sink(file: DependencyFile): Promise<void>; progress?: InstallProgress }): Promise<{ runId: string }>;
+    sink(file: DependencyFile): Promise<void>; progress?: InstallProgress; signal?: AbortSignal }): Promise<{ runId: string }>;
   storage: {
     read(key: string): Promise<CacheObject | undefined>;
     /** Atomic immutable create: partial entries are invisible; returns the winning complete object. */
@@ -92,7 +94,7 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
   return {
     async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
       runtime?: LiveRuntime) {
-      return withinInstallBudget(async progress => {
+      return withinInstallBudget(async (progress, signal) => {
         const identity = source.cacheIdentity;
         if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
         // GB1 at the pinned commit (W5 port); the qualification file digest is the identity's integrity digest.
@@ -108,7 +110,7 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         /** One verified tarball at a time; an altered one stops the stream before the pod runs the install. */
         async function* tarballs() {
           for (const pin of inventory) {
-            const bytes = await ports.fetch(pin, NPM_RELAY);
+            const bytes = await ports.fetch(pin, NPM_RELAY, signal);
             verifySri(bytes, pin.integrity);
             progress.report();
             yield { pin, bytes };
@@ -123,7 +125,7 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
           progress.report();
         };
         const installed = await ports.cleanInstall({ ...source, identity, runtime, recipe: INSTALL_RECIPE,
-          tarballs: tarballs(), sink, progress });
+          tarballs: tarballs(), sink, progress, signal });
         if (!installed.runId) invalid();
         const receipt = { key, identity, treeSha256: treeDigest(manifest), inventory,
           runId: installed.runId, installOptions: INSTALL_RECIPE };
