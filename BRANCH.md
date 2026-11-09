@@ -1,117 +1,74 @@
-# Feature: artifacts install progress watchdog
+# Fix: compose-backup-owner (root-owned data/backup + workspace writers)
 
 ## Objective
-Replace the flat 300 s wall clock for the dependency install phase with a progress-based watchdog and add phase observability on the build-only and live paths.
+- [ ] Fix the follow-up gap of merged PR #973 (fix/compose-host-user): no root-owned file is left on the host under data/backup and the workspace after backup/restore and docker writer targets run.
+- [ ] Keep make db-backup / db-restore working with backups visible on the host, and run every workspace-writing docker run as the host user through one Makefile variable.
 
 ## Scope / Guardrails
-- Scope limited to `api/src/services/artifacts/live/**` and `api/tests/unit/artifacts-live/**`.
-- One migration max in `api/drizzle/*.sql` (if applicable).
-- Make-only workflow, no direct Docker commands.
-- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/worktrees/fix-install-timeout` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [ ] Worktree tmp/worktrees/compose-backup-owner on branch fix/compose-backup-owner from origin/main aa21ecdfd, verified with git branch --show-current before any work.
+- [ ] Test env ENV=test-compose-backup with API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215, ENV always last on make commands, never ENV=dev, never make clean-all, no Python.
+- [ ] Make-only workflow, Docker through .tmp/packets/docker-slot.sh, one slot per command, never nested, make down-volumes ENV=test-compose-backup at the end.
+- [ ] Atomic commits under 150 lines via make commit MSG="...", specific git add, no attribution trailer.
+- [ ] All new text in English.
+- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/services/artifacts/live/**`
-  - `api/tests/unit/artifacts-live/**`
   - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
-  - `docker-compose*.yml`
+  - `docker-compose.dev.yml` (only if verification forces a compose change; untouched so far)
+  - `.tmp/rv/compose-backup-owner.md` (French verification report, untracked)
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile` (covered by BRCBO-EX1 below)
+  - `docker-compose*.yml` (covered by BRCBO-EX1 below)
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
-  - `packages/**/src/**` (version bump per Package Publication rule if touched)
+  - `api/drizzle/*.sql` (max 1 file, not needed here)
+  - `.github/workflows/**` (not needed here)
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - [ ] BRCBO-EX1 declared in ## Feedback Loop before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [ ] BRLOCK-EX1 retained verbatim in Scope / Guardrails (policy reference intact)
+- [ ] BRCBO-EX1 (scope exception for Makefile + docker-compose*.yml, default-forbidden): rationale: PR #973 left postgres/minio bind-mount writes into ./data/backup root-owned and ~8 workspace-writing docker runs without host user (verified audit: 370 docker run sites, 211 already host-user, 134 deletion-only, 16 others classified below); impact: Makefile-only behavior change (run writers as UID:GID, chown backup after pg_dump), no image/volume/data-layout change, backups stay host-visible bind-mount files; rollback: git revert the branch commits, ownership normalizes again on next backup run.
+- [ ] Root-stay exceptions (verified, must stay root with reason): 134 pure rm -rf deletion-only docker runs (need root to delete legacy root-owned cruft, deletions create no files); chown normalizers Makefile 355/368/2547/1182 + new db-backup step (chown itself requires 0:0); :ro mounts (kernel read-only, cannot create host files); no-workspace-mount runs 672/780/2069/3078/3995 (no host write possible, 3078 output via host redirect); scanners 3929/3942-trivy/4025/4026 (scan-only, JSON via host-shell redirect); minio/minio-init user 0:0 kept (Chainguard uid 65532 vs pre-existing root-owned minio_data named volume, backup writes go through MINIO_EXEC as host user); test.yml api root default (no workspace bind, CI ephemeral).
+- [ ] Already-compliant equivalence note: 167 docker run sites already pass literal -u "$$(id -u):$$(id -g)" -e HOME=/tmp, behaviorally identical to the new variable, left untouched for diff minimality.
 
 ## AI Flaky tests
-- Acceptance rule:
-- [ ] test-e2e (1) failed on bc6c4ef65: tests/03-chat.spec.ts:416 "devrait envoyer le bon contexte primaire au backend selon la route" (3.7s); the diff only touches the artifact builder install path (api/src/services/artifacts/live/*). Not accepted as flaky until a fresh run passes; no rerun, no skip, no timeout change.
-- [ ] test-e2e (4) failed on 3996c17cf: tests/02-organizations.spec.ts:391 Read-only (viewer) "détail: champs non éditables" (11.2s); on the same code the shard-1 chat test of bc6c4ef65 PASSED and this test PASSED on bc6c4ef65 — non-systematic UI e2e failures unrelated to the artifact builder diff. Fresh run requested; no rerun, no skip, no timeout change.
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [ ] Acceptance rule: accept only non-systematic provider/network/model nondeterminism as flaky accepted, with same-commit same-command success evidence, never additive timeouts, user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single orthogonal api-only fix, no app-specific code, one test cycle.
+- [ ] Rationale: single small fix train (data/backup + writer variable), one PR, one CI.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/fix-install-timeout`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`/home/antoinefa/src/sentropic`, `ENV=dev`).
-  - Switch back to `tmp/worktrees/fix-install-timeout` after UAT.
+- [ ] **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- [ ] No UI change in this branch, no UAT required.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Create isolated worktree `tmp/worktrees/fix-install-timeout` on branch `fix/artifacts-install-progress-watchdog` from `origin/main` (verified `f69bc2a03`).
-  - [x] Capture Makefile targets for debug/testing (`make test-api-unit`, `make typecheck-api`, `make lint-api`).
-  - [x] Define environment mapping: `ENV=test-fix-install-timeout`, `API_PORT=8921`, `UI_PORT=5321`, `MAILDEV_UI_PORT=1221`.
-  - [x] Confirm command style: `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make ... ENV=test-fix-install-timeout` with `ENV` last, foreground only.
-  - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-
-- [ ] **Lot 1 — Observability: phase start/end/duration + failing phase name**
-  - [x] Add phase runner helper logging `artifact_live_phase` with fields `key` hash, `phase`, `ms`, `outcome`, `reason`, no secret.
-  - [x] Wire it on build-only phases (`install`, `prepare`, `build`, `verify`) and live paths (`prepare-live`, `project`, `idle`).
-  - [x] Failing phase persists in job reason (e.g. `phase_timeout:install`) via existing `jobs.fail` / `stateDetail`.
-  - [x] Lot gate:
-    - [x] `make typecheck-api` + `make lint-api` (both green 2026-11-09; lint shows only pre-existing `no-console` warnings outside `live/`)
-    - [x] **API tests**
-      - [x] New `api/tests/unit/artifacts-live/deadline.test.ts` (phase log fields, no secret in logs)
-      - [x] Scoped runs while evolving: `make test-api-unit SCOPE="tests/unit/artifacts-live/deadline.test.ts tests/unit/artifacts-live/cache.test.ts" ENV=test-fix-install-timeout` (27/27 green, no unhandled errors)
-      - [x] Sub-lot gate: `make test-api ENV=test-fix-install-timeout` (deferred to CI per owner OPTIM rule: lanes run scoped tests, full suites run in CI)
-      - [x] AI flaky tests run (non-blocking only under acceptance rule): deferred to CI (`make test-api-ai` needs model access; change touches no AI path)
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] None (api-only change, no UI surface)
-    - [ ] **E2E tests**
-      - [ ] None (api-only change, no user flow change)
-
-- [ ] **Lot 2 — Progress watchdog for the install phase**
-  - [x] Replace flat 300 s wall clock for install with stall watchdog (no progress for N s, e.g. 60 s) + absolute ceiling sized for ~1500 packages / ~1 GB cold cache at measured relay rate (justify, e.g. 20 min), env-configurable with safe default.
-  - [x] Thread install progress (tarball streamed / bytes) from fetch + cleanInstall + sink into the watchdog.
-  - [x] Keep other phase bounds unchanged (install alone streams ~1 GB over the relay with no api-visible progress signal; prebundle/dev/build/verify are pod-local and keep their 300 s recipe + phase bounds).
-  - [x] Update `runStaleMs` for the longer install bound.
-  - [x] Verify cache written after successful cold install and cut install poisons nothing.
-  - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
-  - [x] Lot gate: same API checklist as Lot 1 plus `cache.test.ts` watchdog cases (progress alive, stall, ceiling, reason carries phase, no poison).
-
-- [ ] **Lot 3 — Independent review findings (Wonder dedup, REQUEST_CHANGES)**
-  - [x] B1: stall arms only on the first progress report (no cut of the 120-600 s pre-progress windows); progress per sent put frame and drained page.
-  - [x] M1: watchdog abort propagates to fetch, queue wait and supervisor frames; cut install stops and never admits.
-  - [x] M2: start log carries `reason: 'started'`; bare `phase_timeout` rewritten to `phase_timeout:<phase>`; idle `verify` wrapped in `runPhase`.
-  - [x] MINORs: env bounds clamped to 2^31-1; ceiling comment reconciled with recipe/stream inner bounds; post-settle reports ignored; timing margins widened.
-  - [x] Tests: slow-start cold install not cut early; stall/ceiling/abort cases; signal threading; per-frame progress; queue abort.
-  - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
-  - [x] Lot gate: `make typecheck-api` + `make lint-api` + scoped `test-api-unit` (deadline, cache, supervisor-install, heavy).
-
+- [ ] **Lot 0 — Baseline & constraints**
+  - [ ] Worktree tmp/worktrees/compose-backup-owner on fix/compose-backup-owner from origin/main aa21ecdfd verified.
+  - [ ] Read rules/MASTER.md, rules/workflow.md, .tmp/packets/COMMON-RULES.md.
+  - [ ] Env mapping: ENV=test-compose-backup, API_PORT=8915, UI_PORT=5315, MAILDEV_UI_PORT=1215.
+  - [ ] Audit done: 370 docker run sites joined across continuations, 211 with -u, 134 pure rm, 8 writers fixed + db-backup chown (see Feedback Loop).
+  - [ ] BRCBO-EX1 declared before touching Makefile.
+- [ ] **Lot 1 — data/backup ownership**
+  - [ ] db-backup: normalize ownership after pg_dump via compose run postgres as 0:0 with HOST_UID/HOST_GID chown on the new dump (existing 355/368 pattern).
+  - [ ] doc-backup/doc-backup-prod need no change (MINIO_EXEC already host-user, tar runs on host), verify empirically.
+  - [ ] db-restore/doc-restore/db-backup-prod need no change (no host writes: cp into container, host mkdir/tar/redirect), verify empirically.
+  - [ ] minio user 0:0 kept (see Feedback Loop), no named-volume move.
+  - [ ] Lot gate: make db-backup then stat -c %U on the dump shows host user, no root-owned file under data/backup.
+- [ ] **Lot 2 — DOCKER_RUN_USER variable**
+  - [ ] Define DOCKER_RUN_USER = -u $(UID):$(GID) -e HOME=/tmp once next to UID/GID exports (UID/GID from #973).
+  - [ ] Apply to Makefile 1259 (typecheck-llm-mesh), 1460 (--check), 1473 (audit versions), 1477 (typecheck-skills, ln -s writer), 1593 (typecheck-flow), 2881 (test-llm-mesh via ARTIFACTS_RUN), 2893 (bench-live-speech OUT= writer), 2989 (test-skills, ln -s + vitest writer), 3942 node-audit branch.
+  - [ ] Lot gate: grep shows every writable-workspace docker run uses the variable or the equivalent literal, exceptions listed in Feedback Loop only.
+- [ ] **Lot 3 — Verification on ENV=test-compose-backup**
+  - [ ] Run make typecheck-llm-mesh API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find packages/llm-mesh -user root empty.
+  - [ ] Run make typecheck-api API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find api -user root empty (touched paths incl. node_modules/.vite-temp).
+  - [ ] Run make db-backup + db-restore BACKUP_FILE=<new> SKIP_CONFIRM=true API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, stat -c %U host-owned, find data -user root empty.
+  - [ ] End with make down-volumes ENV=test-compose-backup.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest API (cf Lot1, copy checklist)
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md` → Package Publication.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [ ] Typecheck & Lint for impacted surface (Makefile/compose only, no src change, no package bump needed).
+  - [ ] Final gate step 1: create PR from this BRANCH.md text, push fix/compose-backup-owner, iterate to green CI (no rerun, no skip).
+  - [ ] Final gate step 2: French report in .tmp/rv/compose-backup-owner.md, no external review (conductor runs it), Do NOT merge.
