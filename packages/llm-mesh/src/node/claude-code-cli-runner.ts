@@ -1,19 +1,32 @@
 // @sentropic/llm-mesh/node/claude-code-cli-runner.ts
 //
 // Concrete Node host for the Claude Code runtime client. Spawns the `claude`
-// CLI headless (`-p`, `--output-format stream-json`, `--model`, `--effort`,
-// optional `--system-prompt-file`), feeds the projected prompt over stdin,
-// and normalizes stream-json output to ClaudeCodeCliEvent.
+// CLI headless (`-p --verbose --output-format stream-json --model --effort`,
+// optional `--system-prompt-file`, plus confinement flags), feeds the
+// projected prompt over stdin, and normalizes stream-json output to
+// ClaudeCodeCliEvent.
 //
 // Secret boundary: the seat OAuth access projection travels as
 // CLAUDE_CODE_OAUTH_TOKEN in the CHILD env only. It never appears on argv,
-// in logs, or in thrown messages. ANTHROPIC_API_KEY is stripped from the
-// child env so the CLI cannot prefer key auth over the seat grant.
+// in logs, or in thrown messages. The child env is an allowlist (PATH and a
+// few locale/timezone knobs copied from the parent); every known
+// authentication, endpoint, and cloud carrier is purged before the seat token
+// is injected, so the CLI cannot prefer ambient key auth over the seat grant
+// and ambient secrets never reach the CLI or its hook/MCP descendants.
+// Confinement: the CLI runs with `--tools ""`, `--strict-mcp-config` (no
+// MCP config, so no MCP servers), `--safe-mode` (no hooks, skills, plugins,
+// or ambient settings), and `--no-session-persistence`, inside a fresh
+// sandbox directory used as cwd, HOME, and CLAUDE_CONFIG_DIR. A non-empty
+// tool/MCP inventory in the CLI `init` line fails the run closed.
 // Quota signals (5-hour session limit, rate limits, overload) surface as
 // ClaudeCliQuotaError; every other host failure is a fixed-message runner
 // error with no CLI output attached.
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import type { AnthropicAdapterClient } from '../adapters.js';
 import {
   ClaudeCliQuotaError,
@@ -24,7 +37,8 @@ import {
   type ClaudeCodeCliRequest,
   type ClaudeCodeCliRunner,
 } from '../transport/claude-code-runtime-client.js';
-import { diagnoseClaudeCodeQuota, parseClaudeCodeLine, renderClaudeCodeCliPrompt } from './claude-code-cli-wire.js';
+import type { ClaudeCodeLineOutcome } from './claude-code-cli-wire.js';
+import { appendCappedTail, diagnoseClaudeCodeQuota, extractQuotaText, parseClaudeCodeLine, renderClaudeCodeCliPrompt } from './claude-code-cli-wire.js';
 
 export const CLAUDE_CODE_OAUTH_ENV_VAR = 'CLAUDE_CODE_OAUTH_TOKEN';
 export const CLAUDE_CODE_STREAM_PROTOCOL = 'claude-code-stream-json-v1';
@@ -32,6 +46,27 @@ export const DEFAULT_CLAUDE_CODE_CLI_PATH = 'claude';
 export const DEFAULT_CLAUDE_CODE_EFFORT = 'medium';
 export const DEFAULT_CLAUDE_CODE_TIMEOUT_MS = 300_000;
 export const CLAUDE_CODE_RESULT_TIMEOUT_MS = 15_000;
+/** SIGTERM grace before the group SIGKILL escalation. */
+const KILL_GRACE_MS = 2_000;
+/** One NDJSON line past this fails the run instead of growing the buffer. */
+const MAX_STDOUT_LINE_CHARS = 1_048_576;
+/** Whole-run stdout past this fails the run instead of growing memory. */
+const MAX_STDOUT_TOTAL_BYTES = 33_554_432;
+/** Probe output past this fails the probe instead of growing memory. */
+const MAX_PROBE_OUTPUT_BYTES = 65_536;
+/** Oldest qualified CLI line: every confinement flag below was verified on 2.1.x. */
+const MIN_CLAUDE_CODE_MAJOR = 2;
+const MIN_CLAUDE_CODE_MINOR = 1;
+const REQUIRED_CLAUDE_CODE_FLAGS = [
+  '--verbose',
+  '--output-format',
+  '--model',
+  '--effort',
+  '--system-prompt-file',
+  '--tools',
+  '--strict-mcp-config',
+  '--no-session-persistence',
+] as const;
 const STDERR_TAIL_BYTES = 8_192;
 
 export interface NodeClaudeCodeCliRunnerOptions {

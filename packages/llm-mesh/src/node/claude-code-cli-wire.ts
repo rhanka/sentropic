@@ -34,6 +34,7 @@ export interface QuotaDiagnosis {
 }
 
 const QUOTA_PATTERN = /5-hour|usage.?limit|rate.?limit|too many requests|\b429\b|quota|overloaded/i;
+const STRUCTURED_QUOTA_KEYS = ['result', 'message', 'error'] as const;
 const RETRY_AFTER_PATTERN = /(\d+)\s*(milliseconds?|seconds?|minutes?|hours?)/i;
 
 const readRetryAfterMs = (text: string): number | undefined => {
@@ -48,6 +49,35 @@ const readRetryAfterMs = (text: string): number | undefined => {
   return Number.isSafeInteger(ms) ? ms : undefined;
 };
 
+/**
+ * Quota-relevant text out of a CLI error payload: CLI-owned message fields
+ * only (`result`, `message`, `error`, string or numeric `code`). Numeric
+ * telemetry beside them (token usage, costs) is never signal, so a bare
+ * `429` buried in `usage` cannot trip the quota circuit.
+ */
+export const extractQuotaText = (payload: unknown): string | undefined => {
+  if (!isRecord(payload)) return undefined;
+  const parts: string[] = [];
+  for (const key of STRUCTURED_QUOTA_KEYS) {
+    const value = payload[key];
+    if (typeof value === 'string' && value.length > 0) parts.push(value);
+  }
+  const code: unknown = payload['code'];
+  if (typeof code === 'string' && code.length > 0) parts.push(code);
+  else if (typeof code === 'number' && Number.isSafeInteger(code)) parts.push(String(code));
+  return parts.length > 0 ? parts.join(' ') : undefined;
+};
+
+/**
+ * Append a chunk to a byte-capped stderr tail. A non-positive cap keeps
+ * nothing (the caller still drains the pipe, but stores no bytes).
+ */
+export const appendCappedTail = (current: Buffer, chunk: Uint8Array, capBytes: number): Buffer => {
+  if (capBytes <= 0) return Buffer.from('');
+  const next = Buffer.concat([current, Buffer.from(chunk)]);
+  return next.length <= capBytes ? next : Buffer.from(next.subarray(next.length - capBytes));
+};
+
 /** Match quota prose in CLI-owned text only (stderr, error payloads). */
 export const diagnoseClaudeCodeQuota = (text: unknown): QuotaDiagnosis => {
   if (typeof text !== 'string' || text.length === 0) return { quota: false };
@@ -57,6 +87,7 @@ export const diagnoseClaudeCodeQuota = (text: unknown): QuotaDiagnosis => {
 };
 
 export type ClaudeCodeLineOutcome =
+  | { type: 'system_init'; init: { tools?: unknown; mcpServers?: unknown } }
   | { type: 'text'; text: string }
   | { type: 'tool_use'; event: Extract<ClaudeCodeCliEvent, { type: 'tool_use' }> }
   | { type: 'stop_reason'; reason: unknown }
@@ -79,6 +110,13 @@ export const parseClaudeCodeLine = (line: string): ClaudeCodeLineOutcome[] => {
     return [];
   }
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return [];
+  if (parsed.type === 'system' && parsed.subtype === 'init') {
+    const init: { tools?: unknown; mcpServers?: unknown } = {};
+    if ('tools' in parsed) init.tools = parsed['tools'];
+    if ('mcp_servers' in parsed) init.mcpServers = parsed['mcp_servers'];
+    else if ('mcpServers' in parsed) init.mcpServers = parsed['mcpServers'];
+    return [{ type: 'system_init', init }];
+  }
   if (parsed.type === 'assistant') {
     const message = parsed.message;
     if (!isRecord(message) || !Array.isArray(message.content)) return [];
