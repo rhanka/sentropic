@@ -24,6 +24,23 @@ export const DEFAULT_CUSTODIAN_REFRESH_POLICY: CustodianRefreshPolicy = {
   minSkewMs: 600_000,
 };
 
+/** Clamp a host-supplied policy to safe bounds; invalid fields fall back. */
+export function sanitizeCustodianRefreshPolicy(
+  policy?: CustodianRefreshPolicy,
+): CustodianRefreshPolicy {
+  const fallback = DEFAULT_CUSTODIAN_REFRESH_POLICY;
+  const skewRatio = policy?.skewRatio;
+  const minSkewMs = policy?.minSkewMs;
+  return {
+    skewRatio: Number.isFinite(skewRatio) && (skewRatio as number) > 0 && (skewRatio as number) <= 1
+      ? (skewRatio as number)
+      : fallback.skewRatio,
+    minSkewMs: Number.isFinite(minSkewMs) && (minSkewMs as number) >= 0
+      ? (minSkewMs as number)
+      : fallback.minSkewMs,
+  };
+}
+
 export interface RefreshWindowInput {
   expiresAtMs: number;
   /** Credential issuance instant; NaN/undefined falls back to the floor window. */
@@ -59,6 +76,7 @@ export type CustodianAccountAction =
   | 'refreshed'
   | 'refresh-failed-reauth'
   | 'refresh-deferred-retry'
+  | 'refresh-in-flight'
   | 'expired-no-grant'
   | 'skipped-healthy'
   | 'skipped-external'
