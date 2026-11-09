@@ -111,6 +111,41 @@ describe('builder pod admission and recovery', () => {
     expect((replaced.spec as { selector: Record<string, string> }).selector['sentropic.dev/artifact-generation']).toBe('1');
     expect(f.objects.size).toBe(2);
   });
+  it('should skip quiesce when the pod uid was never recorded', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    await f.ports.store.transaction(key, async unit => { unit.state!.runtime.podUid = null; unit.state!.runtime.phase = 'REVIVING'; });
+    // Production admit() refuses any supervisor command without a pod uid; teardown must not need one.
+    f.ports.worker.quiesce = vi.fn(async () => { throw new LiveError('builder_unavailable', 'supervisor_channel_error'); });
+    await f.controller.recover(key);
+    expect(f.ports.worker.quiesce).not.toHaveBeenCalled();
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0);
+  });
+  it('should delete the pod when quiesce fails on an active pod', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    f.ports.worker.quiesce = vi.fn(async () => { throw new LiveError('builder_unavailable', 'supervisor_relay_502'); });
+    await expect(f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 }))
+      .resolves.toEqual({ liveSessionId: live.sessionId, state: 'stopped' });
+    expect(f.ports.worker.quiesce).toHaveBeenCalledTimes(1);
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0);
+  });
+  it('should bound a hanging quiesce instead of blocking the stop', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    f.ports.worker.quiesce = vi.fn(() => new Promise<never>(() => {}));
+    await expect(f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 }))
+      .resolves.toEqual({ liveSessionId: live.sessionId, state: 'stopped' });
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0);
+  }, 20_000);
+  it('should skip the pod delete without a known uid when the pod is already gone', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    f.objects.delete('pods' + live.podName);
+    await f.ports.pods.remove(key, { ...live, podUid: null });
+    expect(f.core.delete).toHaveBeenCalledTimes(1);
+    expect(f.core.delete).toHaveBeenCalledWith('services', live.podName, expect.any(String));
+    expect(f.objects.size).toBe(0);
+  });
   it('should probe the pod fence before deciding to quiesce', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     expect(await f.ports.pods.probe(key, live)).toBe('active');
