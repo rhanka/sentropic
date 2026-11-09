@@ -34,6 +34,7 @@
 ## Feedback Loop
 - [x] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
 - [x] BR01-EX1: touch `.github/workflows/ci.yml` (`global` paths-filter only): add `scripts/ci/live-provider-receipt.mjs` and `scripts/ci/live-provider-receipt.test.mjs`. Rationale: any `scripts/**` change classifies as `root-lock-toolchain`, whose `consumer-contracts-verify` gate requires the six integration lanes, but those lanes only run when `api`, `ui` or `global` matches; without this, a `scripts/ci`-only PR can never go green (run 42548638007: `consumer-contracts` + `ci-gate` failure). Impact: strictly more CI for these two paths (full integration), same family as `image-receipt`/`compatibility-classifier` already listed; no gate, threshold or assertion loosened. Rollback: remove the two lines; dispatch returns to `manifest_guard`-only.
+- [x] ARGON-1: PR #970 Argon review REQUEST_CHANGES (BLOCKER `pages()` double `[key]` fails `select` 100%; MAJOR missing `select`/`health` CLI e2e against stubbed `gh`; MINOR hardcoded `100` vs `GH_PER_PAGE` + checkbox coherence). Addressed in Lot 3.
 - [x] BR01-EX1b: run 42552089131 `validate-publishable-manifests` pins the exact `global` scripts list (`publishable-ci-wiring.test.mjs:144`); the two deliberate BR01-EX1 additions are added to the pin. The pin stays an exact match (any other unlisted addition still fails): evolution of the intended contract, not a loosening.
 
 ## AI Flaky tests
@@ -54,7 +55,7 @@
 - No UI change in this branch: no UAT surface.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Create worktree `tmp/worktrees/fix-live-provider-enobufs` on branch `fix/live-provider-select-enobufs` from `origin/main`.
   - [x] Verify branch with `git -C tmp/worktrees/fix-live-provider-enobufs branch --show-current`.
   - [x] Write `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`.
@@ -64,7 +65,7 @@
   - [x] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-live-provider-enobufs` with `ENV` last.
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-- [x] **Lot 1 — Bound every gh call plus regression test**
+- [ ] **Lot 1 — Bound every gh call plus regression test**
   - [x] Replace bare `execFileSync('gh', ['api', route])` with bounded helper (`--jq` projection, `per_page`, explicit `maxBuffer`, explicit route+size error on overflow).
   - [x] Apply helper to `select` runs, jobs, artifacts, pull-request runs, `health` and `finish` schedule routes.
   - [x] Keep `scheduleHealth`, `qualifiedMain`, `liveReceipt`, `readPages` gates byte-identical in behavior.
@@ -84,6 +85,15 @@
   - [x] Retest scoped: `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25, classifier and gate untouched in behavior).
   - [x] Local verify simulation: `consumer-contracts --verify` ok:true with `global=true`, reproduces the CI failure with `manifest_guard`-only.
   - [x] Push 2044ede94, update PR body with `BRANCH.md` (PR #970, no merge).
-  - [ ] Iterate new-head CI to green (no rerun, no skip).
+  - [x] Iterate new-head CI to green (no rerun, no skip): run 42554897053 success on head a57246c82; PR MERGEABLE/CLEAN.
   - [ ] Do NOT merge.
-  - [ ] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
+  - [x] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
+- [ ] **Lot 3 — Argon review fixes (BLOCKER + MAJOR + MINORs)**
+  - [x] Fix `pages()` double `[key]` indexation (BLOCKER) and use `GH_PER_PAGE` in `readPages` (MINOR).
+  - [x] Add CLI `select` + `health` end-to-end test against stubbed `gh` (MAJOR): `--jq`, pagination runs/jobs/artifacts to `selection.json`, explicit overflow error.
+  - [x] Fix `BRANCH.md` checkbox coherence (MINOR).
+  - [x] Retest scoped: `test-ci-live-provider-receipt` (15/15) via `node --test`.
+  - [x] Retest scoped via `make`: `test-ci-live-provider-receipt` (15/15), `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25), `test-publishable-manifests` (137/137), `scope-check` PASS C2.
+  - [ ] Commit via `make commit`, push, CI green (no rerun, no skip).
+  - [ ] Update `.tmp/rv/fix-live-provider-enobufs.md`.
+  - [ ] Do NOT merge.
