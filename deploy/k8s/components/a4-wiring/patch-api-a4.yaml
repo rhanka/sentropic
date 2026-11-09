@@ -1,14 +1,21 @@
+# Tenant provisions custody and qualified budgets before the authorized API boot.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: auth-idp
+  name: api
 spec:
   template:
     spec:
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
       containers:
-        - name: auth-idp
-          command: ["node", "/run/cm-runtime/launch.mjs", "--idp"]
+        - name: api
+          command: ["node", "/run/cm-runtime/launch.mjs"]
           env:
+            - name: CM_A4_NAMESPACE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.namespace }
             - name: EMAIL_CODE_HMAC_KEY_ACTIVE
               valueFrom:
                 secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_ACTIVE }
@@ -25,7 +32,10 @@ spec:
               valueFrom:
                 secretKeyRef: { name: sentropic-identity-budgets, key: CM_IDENTITY_DELETION_BUDGETS_JSON }
           volumeMounts:
+            - { name: cm-cutover, mountPath: /run/cm-cutover, readOnly: true }
             - { name: cm-runtime, mountPath: /run/cm-runtime, readOnly: true }
       volumes:
+        - name: cm-cutover
+          persistentVolumeClaim: { claimName: sentropic-a4-custody, readOnly: true }
         - name: cm-runtime
           configMap: { name: sentropic-a4-runtime, defaultMode: 0444 }

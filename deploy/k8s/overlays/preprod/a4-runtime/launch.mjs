@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-export const activeRef = 'email-code-hmac:v1:preprod:15c2f8b66073655a';
+// The key ring tier follows the pod namespace (downward API, deploy/k8s/components/a4-wiring).
+export const tiers = Object.freeze({ 'sentropic-preprod': 'preprod', sentropic: 'prod' });
 export const approvalRef = 'qk-secret-custody-r2:Q-K=A:2026-11-02';
 const scriptName = /^[a-z][a-z0-9-]*$/;
 export const entrypoint = args => {
@@ -19,11 +20,14 @@ export function compose(source) {
   const env = { ...source };
   if (env.CM_IDENTITY_EMAIL_CODE_POLICY !== 'hmac-sha256'
     || env.CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF !== approvalRef) throw new Error('hmac_custody_invalid');
+  const tier = Object.hasOwn(tiers, env.CM_A4_NAMESPACE ?? '') ? tiers[env.CM_A4_NAMESPACE] : undefined;
+  if (!tier) throw new Error('hmac_custody_invalid');
+  const refPattern = new RegExp(`^email-code-hmac:v1:${tier}:[a-f0-9]{16}$`);
   const keys = {};
   for (const slot of ['ACTIVE', 'PREVIOUS']) {
     const hex = env[`EMAIL_CODE_HMAC_KEY_${slot}`], ref = env[`EMAIL_CODE_HMAC_KEY_${slot}_REF`];
     if (slot === 'PREVIOUS' && hex === undefined && ref === undefined) continue;
-    if (!/^[a-f0-9]{64}$/.test(hex ?? '') || !/^email-code-hmac:v1:preprod:[a-f0-9]{16}$/.test(ref ?? '')
+    if (!/^[a-f0-9]{64}$/.test(hex ?? '') || !refPattern.test(ref ?? '')
       || Object.hasOwn(keys, ref)) throw new Error('hmac_custody_invalid');
     const key = Buffer.from(hex, 'hex');
     try {

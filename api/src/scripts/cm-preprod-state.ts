@@ -5,7 +5,7 @@ import { a4MappingAssetSha256 } from '../services/identity/cm-import-manifest';
 import { a4DeclaredIdpRpId, mapA4IdentitySource, readA4IdentitySource } from '../services/identity/cm-import-source';
 import { loadA4RemoteSnapshot, reconcileA4RemoteSnapshot } from '../services/identity/cm-import-remote-snapshot';
 import { getWebAuthnConfig } from '../services/webauthn-config';
-import { canonical, custody, protectedBytes, sha256, type PreprodRequest } from './cm-preprod-contract';
+import { a4Tier, canonical, custody, protectedBytes, sha256, type PreprodRequest } from './cm-preprod-contract';
 
 /** No DDL, journal writes, receipt payloads, or SQL identity rows leave this connection. */
 export async function inspectPreprod(client: PoolClient, request: PreprodRequest) {
@@ -15,8 +15,9 @@ export async function inspectPreprod(client: PoolClient, request: PreprodRequest
   const remote = await loadA4RemoteSnapshot(remotePath);
   const rp = getWebAuthnConfig();
   const verifier = { rpId: rp.rpID, origins: typeof rp.origin === 'string' ? [rp.origin] : [...rp.origin] };
-  if (verifier.rpId !== 'preprod.sentropic.sent-tech.ca'
-    || canonical(verifier.origins) !== '["https://preprod.sentropic.sent-tech.ca"]') throw new Error('wrong_verifier');
+  const expected = a4Tier(request.namespace);
+  if (verifier.rpId !== expected.rpId
+    || canonical(verifier.origins) !== canonical([expected.origin])) throw new Error('wrong_verifier');
   await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   try {
     await client.query("SET LOCAL statement_timeout = '30000'");
