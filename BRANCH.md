@@ -58,6 +58,7 @@ Generic platform job-failure email alerting: frozen OpsJobFailureV1 contract, pu
 - `blocked-unrelated`: docker image builds fail at api/Dockerfile audit-gate (allowlist GHSA-w3rx-r6r6-pgpr + GHSA-5p2g-fcmc-qvqq past review_due 2026-09-08); no .security/lock change in this branch, owner=CI maintainers. Workaround: migration 0023 hand-written in drizzle style (SQL + journal, no snapshot like 0009-0022); typecheck/lint/api-tests left to CI.
 
 ## AI Flaky tests
+- Recorded (run 42714699575, head 1b16459cb): `test-e2e (4)` — `tests/02-organizations` (« détail champs non éditables »), `page.waitForURL: Timeout 10000ms`. Unrelated: 0 files `ui|e2e|apps` in this branch's diff, full suite green on functionally identical head f2b196c68 (run 42711326219, delta = BRANCH.md prose only), and a different e2e shard failed on the previous run (non-systematic across shards). Left for conductor sign-off; no code change made for it.
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
   - Non-systematic means at least one success on the same commit and same command.
