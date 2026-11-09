@@ -41,12 +41,12 @@ export function fakePod(overrides: Partial<Record<FrameBody['op'], Handler>> = {
     },
     stage: body => commit(body.args),
     dependencies: body => ({ ...commit(body.args), readOnly: true }),
-    install: () => ({ exitCode: 0 }),
+    install: () => ({ exitCode: 0, signal: null, output: '' }),
     overlay: body => { revision = body.args.revision; return { ...commit(body.args), revision }; },
     hostFile: body => ({ sha256: sha256(String(body.args.source)) }),
-    prebundle: () => ({ prebundled: true }),
+    prebundle: () => ({ prebundled: true, exitCode: 0, signal: null, output: '' }),
     dev: body => ({ revision, routeEpoch: body.fence.routeEpoch }),
-    build: () => ({ exitCode: 0 }),
+    build: () => ({ exitCode: 0, signal: null, output: '' }),
     snapshot: body => {
       const files = (options.dist ?? DIST).map(f => ({ path: f.path, type: 'file', mode: f.mode, size: f.bytes.length, offset: 0,
         data: Buffer.from(f.bytes).toString('base64') }));

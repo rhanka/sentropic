@@ -1,6 +1,7 @@
 import type { CachePorts } from './cache';
 import type { IntegrityPin } from './integrity';
 import { verifySri } from './integrity';
+import { classifyRecipeFailure, readRecipeDiagnostics } from './recipe-diagnostics';
 import { LiveError, type LiveRuntime } from './records';
 import { INSTALL_RECIPE } from './recipes';
 import { failure, type SupervisorCore } from './supervisor-channel';
@@ -58,7 +59,14 @@ export function createCleanInstall(core: SupervisorCore,
     try {
       const data = await core.call(runtime, 'install', { recipe: 'install', runId, source: sourceSent, cache: cacheSent,
         tarballs: staged }, { signal });
-      if (data.exitCode !== 0) unavailable('install_failed');
+      // The pod returns its bounded scrubbed tail with the exit code and signal; the classified cause rides the
+      // job reason while the tail stays a log-only detail, never ledger material.
+      const diagnostics = readRecipeDiagnostics(data);
+      if (!diagnostics || (diagnostics.exitCode === 0 && diagnostics.signal !== null)) unavailable('install_unconfirmed');
+      if (diagnostics.exitCode !== 0) {
+        const detail = diagnostics.output === '' ? undefined : diagnostics.output;
+        throw new LiveError('builder_unavailable', `install_failed:${classifyRecipeFailure(diagnostics)}`, detail);
+      }
     } finally { input.progress?.suspendStall(false); }
     signal?.throwIfAborted();
     // npm bin and workspace links are re-derived at materialization; only regular files enter the cache.
