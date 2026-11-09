@@ -2,7 +2,7 @@ import type { Context, Hono } from 'hono';
 import type { IdentityAuthCompletionFlowV1, IdentityAuthHonoTransactionBindingV1,
   IdentityAuthRefusalV1 } from '@sentropic/cluster-mesh/identity/auth-hono';
 import { withAppCmAuth } from '../../../services/identity/cm-auth-runtime';
-import type { CmIdentityTransaction } from '../../../services/identity/cm-transaction';
+import { closedRefusalCode, CmHttpRefusalError, type CmIdentityTransaction } from '../../../services/identity/cm-transaction';
 import type { CmRegistrationPresentation } from '../../../services/identity/cm-auth-binding';
 import { assertCmHostHealthy } from '../../../services/identity/cm-host-scope';
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
@@ -13,8 +13,9 @@ interface StagedResponse {
   readonly headers: readonly (readonly [string, string])[];
   readonly body: string;
 }
-class HttpRefusal extends Error {
-  constructor(readonly response: StagedResponse) { super('identity_http_refusal'); }
+/** Rolls the attempt back and publishes the staged error DTO; the host logs it as a refusal. */
+class HttpRefusal extends CmHttpRefusalError {
+  constructor(readonly response: StagedResponse) { super(response.status, closedRefusalCode(response.body)); }
 }
 const publish = (response: StagedResponse): Response => new Response(
   response.status === 204 || response.status === 304 ? null : response.body,

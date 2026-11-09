@@ -8,7 +8,7 @@ import {
 } from '@sentropic/auth-ui';
 
 import type { User } from '$lib/stores/session';
-import { apiFetch } from '$lib/utils/api';
+import { apiFetchResponse } from '$lib/utils/api';
 
 const VALID_ROLES = ['admin_app', 'admin_org', 'editor', 'guest'] as const;
 type UserRole = (typeof VALID_ROLES)[number];
@@ -43,7 +43,8 @@ export const createSentropicAuthTransport = (
 ): AuthUiTransport =>
   createDefaultFetchTransport({
     baseUrl: '/auth',
-    fetch: (input, init) => apiFetch(input, init),
+    // Non-throwing: the transport maps a 4xx to its closed error code itself.
+    fetch: (input, init) => apiFetchResponse(input, init),
     onUnauthorized: options.onUnauthorized,
   });
 
