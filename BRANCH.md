@@ -18,6 +18,7 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `package-lock.json`
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
   - `packages/llm-mesh/src/service/facade.ts`
   - `packages/llm-mesh/src/service/custodian-refresh.ts`
