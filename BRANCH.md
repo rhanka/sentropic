@@ -96,6 +96,15 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - [x] `fixtures/selected/package.json` + `package-lock.json`: llm-mesh pin lines 0.33.0 -> 0.33.1 only (no other lane version touched); lock integrity = CI-packed sibling sha512 of this branch 0.33.1 tarball (pack is content-deterministic; the heavy local refresh is not runnable here — mcp-platform dist absent and install-internal-packages blocked by root-owned vitest cruft).
   - [x] Scoped runs: prepare-artifacts 20/20, llm-surface 12/12, gateway-surface 7/7 ENV=test-llm-mesh-claude-seat.
   - [ ] `make scope-check` PASS, commit, push, CI green.
+- [ ] **Lot 5 — Correctifs review Wonder (BLOCKER/MAJOR/MINOR, PR #981)**
+  - [x] BLOCKER env : allowlist minimale (`PATH` + locale/TZ), purge préfixes auth/endpoint/cloud, câblée dans `execute` + probe.
+  - [x] BLOCKER confinement CLI : `--verbose` (requis stream-json 2.1.x, vérifié sur CLI réel), `--tools ""`, `--strict-mcp-config` sans `--mcp-config`, `--no-session-persistence`, sandbox (cwd/HOME/`CLAUDE_CONFIG_DIR`), init fail-closed sur inventaire non vide.
+  - [x] MAJOR timeout/abort : groupe détaché, escalade SIGTERM → SIGKILL groupe, teardown des pipes, attente `close`, deadline dure indépendante de la lecture.
+  - [x] MAJOR mémoire : caps ligne/total stdout, stderr en bytes, probe capée, `StringDecoder` + flush résiduel.
+  - [x] MAJOR qualification : probe `--version` >= 2.1 + `--help` (flags de confinement requis), test e2e factory → client → wire.
+  - [x] MINOR : abort avant spawn, `ClaudeCliQuotaError` exporté de `./node`, quota structuré d'abord, CHANGELOG (patch assumé : ranges consumers `<0.34.0`).
+  - [x] Seat import : aucun changement nécessaire (`SeatCli` inclut `claude`, paire `claude → claude-code`, tests existants).
+  - [x] Vérifié empiriquement sur CLI réel 2.1.321 : erreur `--verbose` requise, init `tools:[]`/`mcp_servers:[]`, hooks ambiants sans sandbox, aucun hook avec sandbox, `apiKeySource:"none"`, échec auth typé.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest llm-mesh suite (cf Lot1, copy checklist)
