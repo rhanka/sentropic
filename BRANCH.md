@@ -67,8 +67,8 @@
   - [x] Run make typecheck-llm-mesh API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find packages/llm-mesh -user root empty (PASS 09/11, exit 0, find empty).
   - [x] Run make typecheck-api API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find api -user root empty (PASS 09/11, exit 0, find count 0).
   - [x] Run make db-backup + db-restore BACKUP_FILE=app-2026-11-09T16-45-27.dump SKIP_CONFIRM=true API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup (both exit 0, 09/11), stat -c %U host-owned, find data -user root empty, find packages/llm-mesh + api/node_modules/.vite-temp -user root empty.
-  - [ ] End with make down-volumes ENV=test-compose-backup.
+  - [x] End with make down-volumes ENV=test-compose-backup (09/11, test volumes removed).
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint for impacted surface (Makefile/compose only, no src change, no package bump needed).
-  - [ ] Final gate step 1: create PR from this BRANCH.md text, push fix/compose-backup-owner, iterate to green CI (no rerun, no skip).
-  - [ ] Final gate step 2: French report in .tmp/rv/compose-backup-owner.md, no external review (conductor runs it), Do NOT merge.
+  - [x] Typecheck & Lint for impacted surface (Makefile/compose only, no src change, no package bump needed).
+  - [x] Final gate step 1: PR #987 created from this BRANCH.md text, fix/compose-backup-owner pushed; CI pending conductor follow-up (no checks attached at creation, no rerun, no skip).
+  - [x] Final gate step 2: French report in .tmp/rv/compose-backup-owner.md, no external review (conductor runs it), Do NOT merge.
