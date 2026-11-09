@@ -20,7 +20,7 @@ describe('Radar llm-mesh compatibility range', () => {
   it.each(['0.19.2', '0.22.0', '0.27.9', '0.28.0', '0.28.9', '0.29.0', '0.30.0', '0.31.0', '0.32.0', '0.33.0', '0.34.0'])('should admit the qualified version %s', (version) => {
     expect(satisfiesRange(version, range)).toBe(true);
   });
-  it.each(['0.19.1', '0.19.3', '0.20.0', '0.21.2', '0.22.0-dev.1'])
+  it.each(['0.19.1', '0.19.3', '0.20.0', '0.21.2', '0.22.0-dev.1', '0.35.0'])
     ('should refuse the unqualified version %s', (version) => {
       expect(satisfiesRange(version, range)).toBe(false);
     });

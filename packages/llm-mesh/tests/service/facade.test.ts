@@ -286,6 +286,39 @@ describe('LlmMeshFacade', () => {
     expect(JSON.stringify(report)).not.toContain('grant-facade');
   });
 
+  it('restores the refresh window from updatedAt, not the enrollment age', async () => {
+    // m1: a long-enrolled account with a freshly issued credential must not
+    // refresh. The persisted `updatedAt` (issuance bound) decides the TTL,
+    // not `enrollmentCompletedAt`. Seeded enrollment 3 h ago, credential
+    // issued now, expiry in 60 min: window 15 min, remaining 60 — healthy.
+    const nowMs = Date.parse('2027-01-01T00:00:00.000Z');
+    const keyring = new InMemoryKeyring();
+    const facade = createLlmMeshFacade({ mode: 'portal',
+      configResolver: { async resolveConfig() { return {}; } }, keyring,
+      custodian: { now: () => nowMs } });
+    const iso = (ms: number): string => new Date(ms).toISOString();
+    await keyring.setSecret('sentropic-llm-mesh:facade-aged:public', JSON.stringify({
+      accountId: 'facade-aged', accountLabel: 'owner-aged label', providerId: 'cloud-code',
+      status: 'active', createdAt: iso(nowMs - 180 * 60_000), updatedAt: iso(nowMs),
+      account: { accountId: 'facade-aged', ownerScopeRef: 'owner-aged',
+        accountLabel: 'owner-aged label', targetProviderId: 'openai',
+        transportProviderId: 'cloud-code', status: 'active',
+        enrollmentCompletedAt: iso(nowMs - 180 * 60_000) },
+    }));
+    await keyring.setSecret('sentropic-llm-mesh:facade-aged:envelope', JSON.stringify({
+      accountId: 'facade-aged', accessToken: 'old-access-facade-aged',
+      refreshToken: 'grant-facade-aged', expiresAt: iso(nowMs + 60 * 60_000),
+      authClientConfigVersion: 'v1.0.0',
+    }));
+    await keyring.setSecret('sentropic-llm-mesh:accounts:index', JSON.stringify(['facade-aged']));
+    const fetchFn = vi.fn(async () => { throw new Error('no network in unit tests'); });
+    vi.stubGlobal('fetch', fetchFn);
+    const report = await facade.runCustodianRefreshCycle();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(report.accounts).toHaveLength(1);
+    expect(report.accounts[0]).toMatchObject({ action: 'skipped-healthy', readiness: 'ready' });
+  });
+
   it('starts and stops the custodian loop through the facade', async () => {
     const facade = createLlmMeshFacade({ mode: 'portal',
       configResolver: { async resolveConfig() { return {}; } },

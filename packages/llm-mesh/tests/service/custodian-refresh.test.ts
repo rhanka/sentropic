@@ -635,4 +635,67 @@ describe('runCustodianRefreshCycle', () => {
     expect(refresh).not.toHaveBeenCalled();
     expect(alerts).toEqual([]);
   });
+
+  it('should retry an alert on the next cycle after the sink throws', async () => {
+    // A throwing sink clears the epoch entry (including through the
+    // same-cycle backstop), so the already-reauth cycle re-emits instead of
+    // losing the owner alert silently.
+    const alerts: ReauthAlertEvent[] = [];
+    let calls = 0;
+    const refresh = vi.fn(async () => { throw new Error('provider refresh failed'); });
+    const provider = { refresh } as unknown as EnrollmentProvider;
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+      { now: () => T0 + 55 * MINUTE, reauthAlert: { notifyReauthRequired: (event) => {
+        calls += 1;
+        if (calls <= 2) throw new Error('sink down');
+        alerts.push(event);
+      } } });
+    seed(service, { accountId: 'acct-sink', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-s', enrollmentCompletedAt: iso(T0) });
+    const first = await service.runCustodianRefreshCycle();
+    expect(first.accounts[0]).toMatchObject(
+      { action: 'refresh-failed-reauth', readiness: 'reauth-required' });
+    expect(alerts).toEqual([]);
+    const second = await service.runCustodianRefreshCycle();
+    expect(second.accounts[0]).toMatchObject(
+      { action: 'already-reauth', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'refresh-failed' });
+  });
+
+  it('should clamp an invalid loop interval to the default and floor tiny ones', async () => {
+    // NaN, zero and negative intervals cannot schedule ticks; the loop
+    // falls back to ~60 s (plus up to 10 % stagger), and sub-second
+    // intervals floor to ~1 s. Bounds stay clear of the stagger ceiling so
+    // the test never flakes on the jitter.
+    vi.useFakeTimers();
+    try {
+      const { service } = makeService('ok', T0, []);
+      seed(service, { accountId: 'acct-loop', ownerScopeRef: 'owner',
+        expiresAt: iso(T0 + 600 * MINUTE), refreshToken: 'grant-loop', enrollmentCompletedAt: iso(T0) });
+      for (const invalid of [Number.NaN, 0, -5]) {
+        const reports: CustodianRefreshReport[] = [];
+        const stop = service.startCustodianLoop(invalid, (report) => { reports.push(report); });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(reports).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(59_999);
+        expect(reports).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(reports).toHaveLength(2);
+        stop();
+      }
+      const floored: CustodianRefreshReport[] = [];
+      const stopFloor = service.startCustodianLoop(500, (report) => { floored.push(report); });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(floored).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(999);
+      expect(floored).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(floored).toHaveLength(2);
+      stopFloor();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
