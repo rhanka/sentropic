@@ -39,9 +39,11 @@ stage=migrations
 createdb identity_schema
 for migration in /workspace/api/drizzle/*.sql; do sql -d identity_schema -f "$migration"; done
 sql -d identity_schema -f /workspace/api/drizzle/control/0013_oauth_refresh_tokens.sql
-# 0022 (A1) needs the CM consent-authority tables its rekey reads; the phase-1
-# stand-in below carries no rows, so the rekey is a proven no-op here.
+# 0022 (A1) needs the CM consent-authority tables its rekey reads, plus the user
+# accounts its replaced invalidation functions read at runtime; the phase-1
+# stand-ins below carry no rows, so the rekey is a proven no-op here.
 sql -d identity_schema -c 'CREATE SCHEMA IF NOT EXISTS cm_identity'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_user_accounts (user_id text PRIMARY KEY)'
 sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenants (slug text PRIMARY KEY, status text, tenant_id text)'
 sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenant_memberships (user_id text, tenant_id text, status text)'
 sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_oauth_consents (consent_id text PRIMARY KEY, tenant_id text, user_id text, client_id text, granted_at text, revoked_at text)'
@@ -52,7 +54,7 @@ createdb -T identity_schema preprod
 # protocol phase runs. The test double carries the replica owner ids only; the
 # real table is owned by the custody schema asset, never by this suite.
 sql -d preprod -c 'CREATE SCHEMA IF NOT EXISTS cm_identity'
-sql -d preprod -c 'CREATE TABLE cm_identity.identity_user_accounts (user_id text PRIMARY KEY)'
+sql -d preprod -c 'CREATE TABLE IF NOT EXISTS cm_identity.identity_user_accounts (user_id text PRIMARY KEY)'
 sql -d preprod -c "INSERT INTO cm_identity.identity_user_accounts VALUES ('prod-user-8')"
 stage=fixtures
 sql -d app -f "$fixtures/prod.sql"
@@ -309,7 +311,7 @@ grep -Fq '"consents_upserted":1' /dev/termination-log
 grep -Fq '"consents_removed":0' /dev/termination-log
 unchanged
 sync -v dry_run=0
-assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid'] AND updated_at = '2026-10-03' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod scope change applied')"
+assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid'] AND updated_at = '2026-10-03' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id IS NULL), 'prod scope change applied')"
 assert_sql 'UPDATE test_before SET state = test_state()'
 sync -v dry_run=0
 grep -Fxq 'consents_upserted|0' /tmp/sql.log
@@ -321,12 +323,12 @@ sql -d app -c "INSERT INTO oauth_consents (user_id, client_id, tenant_id, scopes
 refresh_relay
 sync -v dry_run=0
 assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid', 'email'] FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'other-tenant'), 'consent tenant preserved')"
-sql -d app -c "DELETE FROM oauth_consents WHERE tenant_id = 'sentropic'"
+sql -d app -c "DELETE FROM oauth_consents WHERE client_id = 'radar-immobilier' AND tenant_id IS NULL"
 refresh_relay
 sync -v dry_run=0
 grep -Fxq 'consents_upserted|0' /tmp/sql.log
 grep -Fxq 'consents_removed|1' /tmp/sql.log
-assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod revocation applied'); SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE tenant_id = 'other-tenant') = 1, 'other tenant grant retained')"
+assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id IS NULL), 'prod revocation applied'); SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE tenant_id = 'other-tenant') = 1, 'other tenant grant retained')"
 assert_sql "SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), 'protected clients, keys and grants unchanged')"
 echo 'PASS: tenant grants remain separate; prod revocation removes only its mapped grant'
 . /workspace/deploy/ci/idp-identity-sync/clients-test.sh
