@@ -322,6 +322,34 @@ describe.each(PROFILES.map((profileName) => ({ profileName })))('G5 replica sync
     expect(kept.credentials['u-1'].find((row) => row.proofId === 'cred-1')?.revokedAt).toBe(LATER);
   });
 
+  it('converges the source rpId onto a live replica credential; a locally revoked one keeps its stamp', async () => {
+    const source = await openEnv();
+    const replica = await openEnv();
+    const live = credential('cred-1', 'u-1', { counter: 3, rpId: 'parent.example.test' });
+    const revoked = credential('cred-2', 'u-1', { rpId: 'parent.example.test' });
+    await seedAccount(source.uow, { record: account('u-1', 'one@example.test'), credentials: [live, revoked] });
+    // The replica import stamped another tier's RP ID on rows the source authored.
+    await seedAccount(replica.uow, {
+      record: account('u-1', 'one@example.test'),
+      credentials: [{ ...live, rpId: 'app.replica.example.test', revision: 2 },
+        { ...revoked, rpId: 'app.replica.example.test', revokedAt: LATER }],
+    });
+
+    const exporter = createIdentityReplicaExporterV1({ unitOfWork: source.uow, clock: () => NOW, exportOptions: READ });
+    const batch = await exporter.exportBatch({ syncId: 'sync-rp', sourcePlacement: 'prod', sourceSnapshotRef: 'relay/rp' });
+    const sync = createIdentityReplicaSyncV1({ unitOfWork: replica.uow, clock: () => NOW, syncOptions: SYNC, validationOptions: READ });
+    await expect(sync.validate(batch)).resolves.toMatchObject({ valid: true });
+    const receipt = await sync.syncBatch(batch);
+    expect(receipt.counts.credential).toEqual({ inserted: 0, updated: 1, unchanged: 0, revokedApplied: 0, revokedKept: 1 });
+
+    const byId = new Map((await readState(replica.uow, ['u-1'])).credentials['u-1'].map((row) => [row.proofId, row]));
+    expect(byId.get('cred-1')).toMatchObject({ rpId: 'parent.example.test', counter: 3, revision: 3, revokedAt: null });
+    expect(byId.get('cred-2')).toMatchObject({ rpId: 'app.replica.example.test', revokedAt: LATER });
+    // Replay is a no-op once converged.
+    const replay = await sync.syncBatch(batch);
+    expect(replay.counts.credential).toEqual({ inserted: 0, updated: 0, unchanged: 1, revokedApplied: 0, revokedKept: 1 });
+  });
+
   it('consent rules: revoked local is never resurrected, unknown tenant conflicts', async () => {
     const source = await openEnv();
     const replica = await openEnv();
