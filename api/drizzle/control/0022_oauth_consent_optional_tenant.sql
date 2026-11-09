@@ -84,6 +84,13 @@ DO $$
 DECLARE r record;
   stamp text := to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
 BEGIN
+  -- No CM authority tables (artifact host slot or pre-cutover database): no CM
+  -- authority exists, so no grant can move; the rekey is a proven no-op here.
+  IF to_regclass('cm_identity.cm_tenants') IS NULL
+    OR to_regclass('cm_identity.cm_tenant_memberships') IS NULL
+    OR to_regclass('cm_identity.cm_oauth_consents') IS NULL THEN
+    RETURN;
+  END IF;
   FOR r IN
     SELECT DISTINCT ON (c.user_id, c.client_id) c.user_id, c.client_id, c.tenant_id AS tid,
       cg.consent_id, cg.granted_at, gov.tenant_id AS governing
