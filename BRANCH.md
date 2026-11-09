@@ -22,6 +22,7 @@
 - [ ] `packages/artifacts/tests/live-host-reconcile.test.ts`
 - [ ] `packages/artifacts/tests/fixtures/live-host-reconcile.ts`
 - [ ] `packages/artifacts/package.json`
+- [ ] `packages/artifacts/src/mcp-core.ts`
 - [ ] `packages/artifacts/CHANGELOG.md`
 - [ ] `BRANCH.md`
 - [ ] `.h2a/reviews/reconcile-pending-builds-argon.md`
@@ -40,6 +41,10 @@
 - [ ] `api/package-lock.json`
 - [ ] `packages/cluster-mesh/tests/packaging/fixtures/selected/**`
 - [ ] `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+- [ ] `api/src/services/mcp/cluster-registry.ts`
+- [ ] `api/tests/api/app-mcp-installed.test.ts`
+- [ ] `api/tests/api/app-mcp-registry.test.ts`
+- [ ] `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
 - [ ] `.github/workflows/**`
 - [ ] **Exception process**:
 - [ ] Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
@@ -47,7 +52,8 @@
 ## Feedback Loop
 - [ ] `attention` BRRP-EX1: root and api lock workspace entries follow artifacts 0.2.25 (version strings only), as BRLW-EX1 did. Impact: lockfiles only. Rollback: revert with the bump.
 - [ ] `attention` BRRP-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.25 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive), mirrored in `artifacts-tuple.spec.ts`, as BRLW-EX2 did. Impact: test fixtures only. Rollback: revert with the bump.
-- [ ] No scope exception beyond BRRP-EX1/BRRP-EX2.
+- [ ] `attention` BRRP-EX3: the 0.2.25 release repins the APP-P1 manifest digest through its version field only (as the 0.2.24 release did): `api/src/services/mcp/cluster-registry.ts` digest + comment and the three `api/tests/api/*.test.ts` version/digest assertions. Impact: version strings and pins only. Rollback: revert with the bump.
+- [ ] No scope exception beyond BRRP-EX1/BRRP-EX2/BRRP-EX3.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -79,13 +85,14 @@
 - [ ] `packages/artifacts/tests/live-host-reconcile.test.ts`: stale failure applies job `build_failed` and binding `build_failed`; builder `published` with receipt applies job `published` with the receipt `releaseId` and never invents one; still-pending stays; malformed status is skipped; terminal jobs are never regressed; concurrent sweep is bounded.
 - [ ] Scoped run: `docker-slot.sh make test-artifacts SCOPE=tests/live-host-reconcile.test.ts ENV=test-reconcile-builds`.
 - [ ] Lot gate: `make typecheck-artifacts` + `make lint-artifacts` via `docker-slot.sh`, then `make scope-check`.
-- [ ] **Lot 2 — Release 0.2.25**
-- [ ] Bump `packages/artifacts/package.json` to `0.2.25` (strictly above npm `0.2.24`, re-check after any rebase).
-- [ ] `packages/artifacts/CHANGELOG.md` entry for `0.2.25`.
-- [ ] BRRP-EX1: root and `api` lock workspace entries follow `0.2.25`.
-- [ ] BRRP-EX2: cluster-mesh selected fixture follows `0.2.25` (repack via `make pack-artifacts`, repin integrity), mirrored in `artifacts-tuple.spec.ts`.
-- [ ] Validate with the publishable-manifests make target and `make pack-artifacts`.
-- [ ] Full `docker-slot.sh make test-artifacts ENV=test-reconcile-builds` PASS.
+- [x] **Lot 2 — Release 0.2.25**
+- [x] Bump `packages/artifacts/package.json` to `0.2.25` (strictly above npm `0.2.24`, re-check after any rebase), `ARTIFACTS_PROVIDER_VERSION` follows (BRRP-EX3).
+- [x] APP-P1 manifest digest repin through the version field only (BRRP-EX3): `51e82e14...` computed in-suite, corroborated via the mesh re-export.
+- [x] `packages/artifacts/CHANGELOG.md` entry for `0.2.25`.
+- [x] BRRP-EX1: root and `api` lock workspace entries follow `0.2.25`.
+- [x] BRRP-EX2: cluster-mesh selected fixture follows `0.2.25` (three deterministic `make pack-artifacts` runs, same sha256 `83bf5956...`, sha512 repin), mirrored in `artifacts-tuple.spec.ts`.
+- [x] Validate with the publishable-manifests make target and `make pack-artifacts`: `PASS @sentropic/artifacts@0.2.25 mode=block`. `check-publishable-manifest` cannot run locally (target never mounts `/workspace`, pre-existing, out of scope); CI runs it.
+- [x] Full `docker-slot.sh make test-artifacts ENV=test-reconcile-builds` PASS (101 files, 1008 tests).
 - [ ] **Lot 3 — PR, CI, review**
 - [ ] Open PR with this `BRANCH.md` as body, push branch to origin.
 - [ ] CI green on the exact head (no rerun, no skip, no `[skip ci]`).

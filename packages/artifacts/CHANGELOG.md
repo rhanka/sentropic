@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.25
+
+- `@sentropic/artifacts/live-host` ships a generic pending-build reconcile: `reconcilePendingBuilds`
+  sweeps the host jobs stuck in `build_pending`/`building` past a threshold with bounded concurrency,
+  and `reconcilePendingBuild` reconciles one job on demand for the `live_status`, `git_publish` and
+  `artifacts_get` read paths. Both read the builder `GET /v1/builds/:artifactId/:jobId` status
+  (`build_pending`/`published`/`build_failed`, `code`/`reason`, `releaseId`) through a host status
+  client and apply only allowed transitions: the job moves to `build_failed` (with the builder
+  `code`/`reason`) or to `published` (with the `releaseId` from the stored handoff receipt first, then
+  from the builder status; without either no release is invented), and the git binding moves from
+  `build_pending` to `build_failed` under the version CAS (`server/git-bindings.ts:51`, action
+  `publish`). The binding leads so a crash between the two writes still converges; terminal rows are
+  never regressed, rows are never deleted, and disagreements fail closed (`receipt-conflict`,
+  `binding-conflict`, `no-release`). Host ports only (`ReconcileJobStore`, `ReconcileStatusClient`,
+  the package `GitBindingStore`, optional `HostLedger.find`); no immo code in the package.
+- `ARTIFACTS_PROVIDER_VERSION` follows the package (0.2.25): the APP-P1 manifest digest changes
+  through its version field only (four-tool selection and tool definitions unchanged).
+
 ## 0.2.24
 
 - `artifacts_live_status` and `artifacts_live_control` start no longer walk the repository tree: they
