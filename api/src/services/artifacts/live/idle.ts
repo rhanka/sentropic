@@ -2,7 +2,7 @@ import type { LivePorts } from './ports';
 import { assertFence, automaticEligible, conflict, idleDeadline, LiveError, publicationBaseline, type LiveKey,
   type LiveRuntime, type LiveState } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
-import { withinPhase } from './deadline';
+import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 
 const idle = (ports: LivePorts, state: LiveState | undefined): state is LiveState =>
@@ -41,8 +41,10 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
         baselineSeq: state.progress.publicationBaselineSeq, initial: state.progress.initialUnpublishedBranchEligible };
     });
     await ports.worker.clean(runtime);
-    const cache = await withinPhase(ports.cache.acquire(source, runtime));
-    await ports.worker.prepare(runtime, source, cache);
+    // The phase closures capture the fenced post-transition runtime, not the pre-guard union.
+    const installing = runtime;
+    const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, installing));
+    await runPhase(key, 'prepare', () => ports.worker.prepare(installing, source, cache));
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
     await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING') conflict('stale_fence');
@@ -69,12 +71,12 @@ async function admittedBuild(ports: LivePorts, key: LiveKey, runtime: LiveRuntim
       state.runtime.phase = 'BUILDING';
     });
     const attempt = runtime.attempt!;
-    const candidate = await withinPhase(ports.worker.build(runtime, attempt));
+    const candidate = await runPhase(key, 'build', () => withinPhase(ports.worker.build(runtime, attempt)));
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING' || state.runtime.attempt?.id !== attempt.id) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt.candidateDigest = candidate.candidateDigest;
     });
-    await ports.worker.verify(runtime, runtime.attempt!);
+    await runPhase(key, 'verify', () => ports.worker.verify(runtime, runtime.attempt!));
     const finalHead = await observeHead(ports, key, runtime);
     if (finalHead !== attempt.headSha) throw new LiveError('git_head_moved');
     runtime = await ports.store.transaction(key, async unit => {
