@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.33.1
+
+- Concrete Node Claude seat host (`@sentropic/llm-mesh/node`):
+  `NodeClaudeCodeCliRunner` spawns the `claude` CLI headless (`-p`,
+  `--output-format stream-json`, `--model`, `--effort`, optional
+  `--system-prompt-file`), feeds the projected prompt over stdin, and
+  normalizes stream-json output to `ClaudeCodeCliEvent`. The seat OAuth
+  access projection travels as `CLAUDE_CODE_OAUTH_TOKEN` in the child env
+  only (never argv, never logs); `ANTHROPIC_API_KEY` is stripped from the
+  child env. Quota signals (5-hour session limit, rate limits, overload)
+  surface as the typed `ClaudeCliQuotaError` (status 429, retryable
+  `rate_limit`); every other host failure is a fixed-message runner error.
+- `ClaudeCodeRuntimeClient` passes quota signals through as a fresh typed
+  `claude_cli_rate_limited` failure (numeric fields only, secret boundary
+  intact), so `AnthropicAdapter.normalizeError` yields a retryable
+  `rate_limit` for the consumer quota circuit.
+- Factory `createClaudeSeatAnthropicClient` plus `probeClaudeCodeCliCapabilities`
+  (`claude --version` with a token-free env) for consumers building
+  `clients.anthropic`.
+
 ## 0.33.0
 
 - Seat onboarding (design r3, lots L1–L5): the `SeatOnboardingV1` contract
