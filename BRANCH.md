@@ -73,6 +73,7 @@
   - [x] Observability: every new LiveError builder_unavailable on the live path gets a reason (npm_relay_status, supervisor_relay_502, k8s_wait_deleted_timeout, forge_status, cache_s3_unavailable).
   - [x] pods.ts ensure: replace a leftover service with a stale selector under its uid precondition instead of stale_fence.
   - [x] cache-storage.ts: name S3 effect failures cache_s3_unavailable, read rethrows builder_unavailable without quarantining.
+  - [x] Address Argon B1-B3: bound quiesce with non-fatal failure, skip when podUid null, uid-guarded pod delete; record teardown cause (NB1).
 - [x] **Lot 2 — Scoped api unit tests**
   - [x] delete uses Background (deleteOptions unit test).
   - [x] teardown completes on a terminal/terminating pod without worker.quiesce.
