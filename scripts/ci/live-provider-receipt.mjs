@@ -69,7 +69,7 @@ export function* readPages(readPage, key) {
     const next = readPage(page)[key];
     if (!Array.isArray(next)) throw new Error(`Missing GitHub page: ${key}`);
     yield* next;
-    if (next.length < 100) return;
+    if (next.length < GH_PER_PAGE) return;
   }
 }
 export const readAllPages = (readPage, key) => [...readPages(readPage, key)];
@@ -121,7 +121,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const [command, dir = '.tmp/live-provider'] = process.argv.slice(2);
   mkdirSync(dir, { recursive: true });
   const api = (route, jq) => ghApi(route, jq);
-  const pages = (route, key, jq) => readAllPages(page => api(`${route}?per_page=${GH_PER_PAGE}&page=${page}`, jq)[key], key);
+  const pages = (route, key, jq) => readAllPages(page => api(`${route}?per_page=${GH_PER_PAGE}&page=${page}`, jq), key);
   if (command === 'select') {
     const runs = readPages(page => api(`repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=${GH_PER_PAGE}&page=${page}`, GH_RUN_JQ), 'workflow_runs');
     let selected = false;

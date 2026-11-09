@@ -252,3 +252,137 @@ test('should bound every GitHub response with an explicit maxBuffer and report t
     for (const field of heavy) assert.ok(!jq.includes(field), `${jq.slice(0, 24)} drops heavy field ${field}`);
   }
 });
+
+test('should run select and health end to end against a stubbed gh with pagination, jq and explicit overflow', () => {
+  mkdirSync('.tmp', { recursive: true });
+  const dir = realpathSync(mkdtempSync('.tmp/br-select-e2e-'));
+  const NL = String.fromCharCode(10);
+  try {
+    const binDir = dir + '/bin';
+    mkdirSync(binDir, { recursive: true });
+    const stub = binDir + '/gh';
+    const stubLines = [
+      '#!' + process.execPath,
+      "const fs = require('node:fs');",
+      'const args = process.argv.slice(2);',
+      'if (process.env.BR_SELECT_GH_LOG) fs.appendFileSync(process.env.BR_SELECT_GH_LOG, JSON.stringify(args) + String.fromCharCode(10));',
+      "const route = args[1] || '';",
+      "const query = (route.split('?')[1] || '').split('#')[0];",
+      'const page = Number(new URLSearchParams(query).get(String.fromCharCode(112, 97, 103, 101)) || 1);',
+      "const mode = process.env.BR_SELECT_STUB_MODE || 'success';",
+      "const sourceSha = 'a'.repeat(40);",
+      "if (mode === 'overflow' && route.includes('workflows/ci.yml/runs?branch=main')) {",
+      '  fs.writeSync(1, JSON.stringify({ workflow_runs: [{ id: 1, padding: new Array(600 * 1024 + 1).join("x") }] }) + String.fromCharCode(10));',
+      '  process.exit(0);',
+      '}',
+      "if (route.includes('/jobs')) {",
+      "  const afterRuns = (route.split('/runs/')[1] || '').split('/')[0] || '0';",
+      '  const id = Number(afterRuns);',
+      "  if (id !== 1001) { console.log(JSON.stringify({ jobs: [] })); process.exit(0); }",
+      "  const required = ['test-api-ai (ai-specs-0)', 'test-api-ai (ai-specs-1)', 'test-api-ai (ai-specs-2)', 'test-e2e (1)', 'test-e2e (2)', 'test-e2e (3)', 'test-e2e (4)', 'test-e2e (5)', 'test-e2e (6)', 'e2e-vscode', 'publish-api-image', 'publish-ui-image'].map(function (name) { return { name: name, conclusion: 'success' }; });",
+      '  if (page === 1) {',
+      '    const first = required.slice(0, 5);',
+      '    const dummy = [];',
+      '    for (let i = 0; i < 100 - first.length; i++) dummy.push({ name: "dummy-" + i, conclusion: "success" });',
+      '    console.log(JSON.stringify({ jobs: first.concat(dummy) }));',
+      '  } else if (page === 2) {',
+      '    console.log(JSON.stringify({ jobs: required.slice(5) }));',
+      '  } else {',
+      '    console.log(JSON.stringify({ jobs: [] }));',
+      '  }',
+      '  process.exit(0);',
+      '}',
+      "if (route.includes('/artifacts')) {",
+      '  if (page === 1) {',
+      '    const dummy = [];',
+      '    for (let i = 0; i < 99; i++) dummy.push({ name: "dummy-art-" + i, expired: true });',
+      "    dummy.push({ name: 'live-provider-api-identity', expired: false });",
+      '    console.log(JSON.stringify({ artifacts: dummy }));',
+      '  } else if (page === 2) {',
+      "    console.log(JSON.stringify({ artifacts: [{ name: 'live-provider-ui-identity', expired: false }] }));",
+      '  } else {',
+      '    console.log(JSON.stringify({ artifacts: [] }));',
+      '  }',
+      '  process.exit(0);',
+      '}',
+      "if (route.includes('event=pull_request')) { console.log(JSON.stringify({ workflow_runs: [] })); process.exit(0); }",
+      "if (route.includes('workflows/ci.yml/runs?branch=main')) {",
+      '  if (page === 1) {',
+      '    const runs = [];',
+      '    for (let i = 0; i < 100; i++) runs.push({ id: i + 1, head_branch: "main", event: "push", status: "completed", conclusion: "success", head_sha: "b".repeat(40), workflow_id: 5, run_attempt: 1, head_commit: { tree_id: "f".repeat(40) }, repository: { full_name: "rhanka/sentropic" }, head_repository: { full_name: "rhanka/sentropic" } });',
+      '    console.log(JSON.stringify({ workflow_runs: runs }));',
+      '  } else if (page === 2) {',
+      "    console.log(JSON.stringify({ workflow_runs: [{ id: 1001, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', head_sha: sourceSha, workflow_id: 5, run_attempt: 1, head_commit: { tree_id: 'e'.repeat(40) }, repository: { full_name: 'rhanka/sentropic' }, head_repository: { full_name: 'rhanka/sentropic' } }] }));",
+      '  } else {',
+      '    console.log(JSON.stringify({ workflow_runs: [] }));',
+      '  }',
+      '  process.exit(0);',
+      '}',
+      "if (route.includes('llm-live-daily')) {",
+      "  if (mode === 'empty-schedule') { console.log(JSON.stringify({ workflow_runs: [] })); process.exit(0); }",
+      '  const created = new Date(Date.now() - 3600 * 1000).toISOString();',
+      "  console.log(JSON.stringify({ workflow_runs: [{ id: 9, event: 'schedule', status: 'completed', conclusion: 'success', display_title: 'Live provider qualification', created_at: created }] }));",
+      '  process.exit(0);',
+      '}',
+      'console.log(JSON.stringify({}));'
+    ];
+    writeFileSync(stub, stubLines.join(NL), { mode: 0o755 });
+    const runCli = function (command, receiptDir, logFile, stubMode) {
+      writeFileSync(logFile, '');
+      return spawnSync(process.execPath, ['scripts/ci/live-provider-receipt.mjs', command, receiptDir], {
+        encoding: 'utf8',
+        env: Object.assign({}, process.env, { PATH: binDir + ':' + process.env.PATH, BR_SELECT_GH_LOG: logFile, BR_SELECT_STUB_MODE: stubMode, GITHUB_OUTPUT: dir + '/github-output.txt' })
+      });
+    };
+    const receiptDir = dir + '/receipt';
+    const selectLog = dir + '/gh-select.log';
+    const selected = runCli('select', receiptDir, selectLog, 'success');
+    assert.equal(selected.status, 0, selected.stderr);
+    const selection = JSON.parse(readFileSync(receiptDir + '/selection.json', 'utf8'));
+    assert.equal(selection.sourceSha, 'a'.repeat(40));
+    assert.equal(selection.run, 1001);
+    const calls = readFileSync(selectLog, 'utf8').trim().split(NL).filter(Boolean).map(JSON.parse);
+    assert.ok(calls.length > 100, 'expected paginated gh calls, saw ' + calls.length);
+    for (const callArgs of calls) {
+      assert.ok(callArgs.includes('api'), 'every gh call uses api');
+      assert.ok(callArgs.includes('--jq'), 'every gh call passes --jq');
+    }
+    const jqFor = function (fragment) {
+      const hit = calls.find(function (callArgs) { return callArgs[1].includes(fragment); });
+      assert.ok(hit, 'missing gh call for ' + fragment);
+      return hit[hit.indexOf('--jq') + 1];
+    };
+    assert.equal(jqFor('branch=main'), GH_RUN_JQ);
+    assert.equal(jqFor('/jobs'), GH_JOB_JQ);
+    assert.equal(jqFor('/artifacts'), GH_ARTIFACT_JQ);
+    const pagesSeen = function (fragment) {
+      const seen = [];
+      for (const callArgs of calls) {
+        if (callArgs[1].includes(fragment)) {
+          const q = (callArgs[1].split('?')[1] || '').split('#')[0];
+          const p = new URLSearchParams(q).get(String.fromCharCode(112, 97, 103, 101));
+          if (p && seen.includes(p) === false) seen.push(p);
+        }
+      }
+      return seen.sort();
+    };
+    assert.deepEqual(pagesSeen('branch=main'), ['1', '2']);
+    assert.deepEqual(pagesSeen('/runs/1001/jobs'), ['1', '2']);
+    assert.deepEqual(pagesSeen('/runs/1001/artifacts'), ['1', '2']);
+    const healthLog = dir + '/gh-health.log';
+    const health = runCli('health', dir + '/health-receipt', healthLog, 'success');
+    assert.equal(health.status, 0, health.stderr);
+    assert.ok(health.stdout.includes('"healthy": true'), 'health reports healthy, saw ' + health.stdout.slice(0, 120));
+    const healthCalls = readFileSync(healthLog, 'utf8').trim().split(NL).filter(Boolean).map(JSON.parse);
+    const healthHasJq = healthCalls.some(function (callArgs) { return callArgs.includes('--jq') && callArgs[callArgs.indexOf('--jq') + 1] === GH_SCHEDULE_JQ; });
+    assert.ok(healthHasJq, 'health passes the schedule jq projection');
+    const overflowLog = dir + '/gh-overflow.log';
+    const overflowed = runCli('select', dir + '/overflow-receipt', overflowLog, 'overflow');
+    assert.notEqual(overflowed.status, 0, 'oversized GitHub response fails closed');
+    const overflowText = String(overflowed.stdout) + String(overflowed.stderr);
+    assert.ok(overflowText.includes('exceeded 524288 bytes'), 'overflow reports the explicit maxBuffer size, saw ' + overflowText.slice(0, 200));
+    assert.ok(overflowText.includes('workflows/ci.yml/runs'), 'overflow names the overflowing route');
+    const unhealthy = runCli('health', dir + '/unhealthy-receipt', dir + '/gh-unhealthy.log', 'empty-schedule');
+    assert.notEqual(unhealthy.status, 0, 'missing schedule fails health');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
