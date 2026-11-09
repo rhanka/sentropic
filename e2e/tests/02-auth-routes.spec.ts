@@ -16,8 +16,8 @@ test.describe('Public · Authentication Routes Access', () => {
     // Vérifier que le body est présent
     await expect(page.locator('body')).toBeAttached();
     
-    // Prendre une capture d'écran pour debug
-    await page.screenshot({ path: 'debug-login-page.png' });
+    // Prendre une capture d'écran pour debug (bind monté, propriété hôte conservée)
+    await page.screenshot({ path: 'test-results/debug-login-page.png' });
     
     // Vérifier le contenu de la page
     const bodyText = await page.locator('body').textContent();
@@ -37,8 +37,8 @@ test.describe('Public · Authentication Routes Access', () => {
     // Vérifier que le body est présent
     await expect(page.locator('body')).toBeAttached();
     
-    // Prendre une capture d'écran pour debug
-    await page.screenshot({ path: 'debug-register-page.png' });
+    // Prendre une capture d'écran pour debug (bind monté, propriété hôte conservée)
+    await page.screenshot({ path: 'test-results/debug-register-page.png' });
     
     // Vérifier le contenu de la page
     const bodyText = await page.locator('body').textContent();
