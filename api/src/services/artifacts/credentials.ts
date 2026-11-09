@@ -1,5 +1,6 @@
 import { MCP_SCOPES } from '@sentropic/mcp-auth';
 import type { CurrentArtifactIdentity } from './authorization';
+import { cmTenantlessOAuthConsentId } from '../auth/oauth-consent-key';
 
 const denied = { readable: false, writable: false } as const;
 export const ARTIFACT_SESSION_CLIENT = 'sentropic-session';
@@ -31,8 +32,11 @@ export function createArtifactCredentialReader(options: {
          AND t.token_type = 'access_token' AND t.audience = $5
          AND t.dpop_jkt IS NOT DISTINCT FROM $6::text
          AND (NOT c.dpop_bound_access_tokens OR t.dpop_jkt IS NOT NULL)
-         AND cg.revoked_at IS NULL AND t.expires_at > clock_timestamp() FOR SHARE OF t, c, g, cg`,
-      [identity.credentialId, identity.subject, identity.clientId, identity.tenantId, options.resource, options.jkt]);
+         AND cg.revoked_at IS NULL AND cg.consent_id <> $7 AND t.expires_at > clock_timestamp()
+       FOR SHARE OF t, c, g, cg`,
+      // A tenant-less consent shares the (user, client, tenant) tuple of its governing tenant: never accept it.
+      [identity.credentialId, identity.subject, identity.clientId, identity.tenantId, options.resource, options.jkt,
+        cmTenantlessOAuthConsentId(identity.subject, identity.clientId)]);
     const row = result.rows[0];
     if (!row) return denied;
     // A separate statement sees revocations committed during the preceding row-lock wait.
