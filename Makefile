@@ -1691,6 +1691,9 @@ oauth-register-service-client-job: ## Provision one client_credentials service_c
 # Impact: one additive target; no existing target touched. Rollback: delete this target; the
 # versioned Job yaml stays valid for a direct kubectl apply. The SECRET_FILE (0600) holds exactly
 # the four CM_ACCOUNT_APPROVE_* lines; the image defaults to the namespace's api Deployment image.
+# BRCMAL-EX1 (fix/cm-account-approve-launcher): read-only preflight; the Job starts through the
+# namespace A4 launcher, and an older launcher would boot a second api instead of the script, so a
+# direct kubectl apply of the Job yaml (which skips this preflight) needs the same check by hand.
 # Usage: make cm-account-approve-job SECRET_FILE=<0600 env file> [CM_ACCOUNT_APPROVE_JOB_NAMESPACE=sentropic] [CM_ACCOUNT_APPROVE_JOB_IMAGE=<image>] [KUBECONFIG=<file>] ENV=<env>
 CM_ACCOUNT_APPROVE_JOB_NAMESPACE ?= sentropic
 CM_ACCOUNT_APPROVE_JOB_IMAGE ?=
@@ -1706,6 +1709,8 @@ cm-account-approve-job: ## Approve one cm_identity account role via the versione
 	test -n "$$IMG" || IMG="$$(kubectl -n "$$NS" get deployment/api -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].image}')"; \
 	test -n "$$IMG" || { echo "ERROR: cannot resolve the api image in $$NS; set CM_ACCOUNT_APPROVE_JOB_IMAGE"; exit 1; }; \
 	echo "Approving in namespace $$NS with image $$IMG"; \
+	kubectl -n "$$NS" get configmap sentropic-a4-runtime -o jsonpath='{.data.launch\.mjs}' | grep -qF "args[0] === '--script'" \
+		|| { echo "ERROR: $$NS serves no A4 launcher with the --script mode (ConfigMap sentropic-a4-runtime); deploy it first"; exit 1; }; \
 	trap 'kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true' EXIT; \
 	kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; \
 	kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true; \
@@ -2395,6 +2400,7 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
 include deploy/ci/artifact-content/tests.mk
 include deploy/ci/preprod-a4/targets.mk
+include deploy/ci/artifact-data-guard/targets.mk
 
 .PHONY: test-artifact-content
 test-artifact-content: ## Qualify content process behavior, types and lint on the API test executor
@@ -3304,9 +3310,11 @@ restore-api-sut: ci-test-env ## Restore a dump before the first production boot;
 	$(CI_COMPOSE) stop api api-sut auth-idp
 	$(CI_COMPOSE) up -d --wait postgres
 	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
+# Restore SUT is single-RP by construction (api-sut only, rehearsal checkpoint): declare the IdP RP so the A4 import provenance guard accepts the carried prod credentials.
 	@set -eu; overlay="$$(mktemp)"; genoverlay="$$(mktemp)"; trap 'rm -f "$$overlay" "$$genoverlay"' EXIT; \
 	printf '%s\n' 'services:' '  api-sut:' '    environment:' \
 		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' \
+		'      CM_IDENTITY_CUTOVER_IDP_RP_ID: localhost' \
 		'      WEBAUTHN_RP_ID: localhost' \
 		'      WEBAUTHN_ORIGIN: http://localhost:$(or $(UI_PORT),5173)' > "$$overlay"; \
 	printf '%s\n' 'services:' '  api-sut:' '    volumes:' \
@@ -4150,14 +4158,10 @@ k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui       --timeout=300s
 
-k8s-deploy-preprod: ## BR-55c: deploy main->preprod (ns sentropic-preprod) with the immutable content-hash image pin. NEVER touches the prod (sentropic) ns.
-	# BR-55c (D-c1/D-c4): pin the immutable per-content image tags (API_VERSION/UI_VERSION
-	# = content sha1 — the SAME tags publish-{api,ui}-image push) into the preprod overlay,
-	# then apply. This kills the floating :main staleness. The preprod-scoped KUBECONFIG
-	# (poc-k8s, namespace-scoped to sentropic-preprod) can ONLY write this ns — the prod
-	# `sentropic` ns is unreachable. The auth-idp shares the api image, so pinning the api
-	# image covers it. Idempotent: the images: block is appended once per checkout.
-	@grep -q '^images:' deploy/k8s/overlays/preprod/kustomization.yaml || printf '\nimages:\n  - name: %s/%s\n    newTag: "%s"\n  - name: %s/%s\n    newTag: "%s"\n' "$(REGISTRY)" "$(API_IMAGE_NAME)" "$(API_VERSION)" "$(REGISTRY)" "$(UI_IMAGE_NAME)" "$(UI_VERSION)" >> deploy/k8s/overlays/preprod/kustomization.yaml
+k8s-deploy-preprod: ## BR-55c: apply overlays/preprod-a4 (ns sentropic-preprod) with the digests pinned in overlays/preprod. NEVER touches the prod (sentropic) ns.
+	# The preprod-scoped KUBECONFIG (poc-k8s, namespace-scoped to sentropic-preprod) can ONLY
+	# write this ns — the prod `sentropic` ns is unreachable. The auth-idp shares the api
+	# image. deploy-preprod runs `make preprod-repin` first (BRREPIN-EX1).
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/preprod-a4
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
@@ -4186,8 +4190,11 @@ k8s-db-restore-preprod: ## Seed the preprod DB from a prod dump [BACKUP_FILE=pro
 	@set -eu ; \
 	POD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres -o jsonpath='{.items[0].metadata.name}'); \
 	test -n "$$POD" || { echo "❌ Error: no postgres pod found in namespace $(K8S_PREPROD_NAMESPACE)"; exit 1; }; \
-	echo "▶ Restoring data/backup/$(BACKUP_FILE) into $(K8S_PREPROD_NAMESPACE)/$$POD..."; \
 	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
+		psql -q -h 127.0.0.1 -U app -d app < deploy/ci/artifact-data-guard/refuse-artifact-data.sql \
+		|| { echo "❌ Refusing: $(K8S_PREPROD_NAMESPACE) holds artifact data that this restore would delete (BRREPIN-EX1)"; exit 1; }; \
+	echo "▶ Restoring data/backup/$(BACKUP_FILE) into $(K8S_PREPROD_NAMESPACE)/$$POD..."; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
 		pg_restore -h 127.0.0.1 -U app -d app --clean --if-exists --no-owner --no-privileges < "data/backup/$(BACKUP_FILE)"; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
@@ -5036,12 +5043,18 @@ include .security/ci-lockfile-installs.mk
 check-image-registry: ## Reject the retired registry anywhere in tracked files
 	@node scripts/ci/check-image-registry.mjs
 
-.PHONY: check-preprod-images test-ghcr-images
-check-preprod-images: ## Check the actual rendered recovery pins by anonymous digest
+.PHONY: check-preprod-images preprod-repin test-ghcr-images
+check-preprod-images: ## Check the actual rendered preprod pins by anonymous digest
 	@node scripts/ci/check-preprod-images.mjs
 
+# BRREPIN-EX1: deploy-preprod pins this commit's images (same-run publications first) unless a hold is committed.
+PREPROD_PUBLICATIONS_DIR ?= tmp/preprod-publications
+PREPROD_PUBLISHED_KINDS ?=
+preprod-repin: ## Repin overlays/preprod to the deployed commit's API/UI digests; keeps a committed preprod-image-hold
+	@PREPROD_PUBLISHED_KINDS="$(PREPROD_PUBLISHED_KINDS)" node scripts/ci/preprod-repin.mjs deploy/k8s/overlays/preprod/kustomization.yaml "$(PREPROD_PUBLICATIONS_DIR)"
+
 test-ghcr-images: ci-test-env test-ghcr-login test-ui-image-version ## Reject registry collisions and private or altered manifests
-	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs
+	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs scripts/ci/preprod-repin.test.mjs
 
 .PHONY: test-ghcr-login
 test-ghcr-login: ci-test-env ## Exercise the real Make login recipe with fixture credentials

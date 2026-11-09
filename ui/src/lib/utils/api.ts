@@ -24,10 +24,11 @@ export class ApiError extends Error {
 }
 
 /**
- * Make an authenticated API request
- * Automatically includes credentials (cookies) for authentication
+ * Make an authenticated API request that returns every response, non-2xx included.
+ * Automatically includes credentials (cookies) for authentication. The auth transport needs
+ * the refusal body: a throwing fetch would surface every 4xx as « Network request failed ».
  */
-export async function apiFetch(
+export async function apiFetchResponse(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> {
@@ -55,7 +56,7 @@ export async function apiFetch(
   })();
 
   const authToken = getApiAuthToken();
-  const response = await fetch(url, {
+  return fetch(url, {
     ...options,
     credentials: authToken ? 'omit' : 'include',
     headers: {
@@ -65,6 +66,17 @@ export async function apiFetch(
       ...options.headers,
     },
   });
+}
+
+/**
+ * Make an authenticated API request
+ * Automatically includes credentials (cookies) for authentication
+ */
+export async function apiFetch(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const response = await apiFetchResponse(endpoint, options);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({

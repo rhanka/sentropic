@@ -6,8 +6,17 @@ export const custody = '/run/cm-cutover';
 export const sha256 = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const ref = z.string().trim().min(1).max(512).refine(value => !/placeholder|<|>|TODO|example|pending/i.test(value));
-export const requestSchema = z.object({
-  format: z.literal('preprod-a4-request/1'), namespace: z.literal('sentropic-preprod'),
+// A4 operator tiers: the request names its namespace, and the namespace fixes the format prefix,
+// the email-code HMAC ring tier and the product WebAuthn verifier the import mapping is bound to.
+const tiers = {
+  'sentropic-preprod': { tier: 'preprod', rpId: 'preprod.sentropic.sent-tech.ca', origin: 'https://preprod.sentropic.sent-tech.ca' },
+  sentropic: { tier: 'prod', rpId: 'sent-tech.ca', origin: 'https://sentropic.sent-tech.ca' },
+} as const;
+export type A4Namespace = keyof typeof tiers;
+export const a4Tier = (namespace: A4Namespace) => tiers[namespace];
+const requestFields = z.object({
+  format: z.enum(['preprod-a4-request/1', 'prod-a4-request/1']), namespace: z.enum(['sentropic-preprod', 'sentropic']),
+  emailCodeActiveKeyRef: z.string().regex(/^email-code-hmac:v1:(?:preprod|prod):[a-f0-9]{16}$/),
   operationId: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/),
   candidateCommit: z.string().regex(/^[a-f0-9]{40}$/).refine(value => value !== '0'.repeat(40)),
   candidateImage: z.string().regex(/^ghcr\.io\/rhanka\/sentropic-api@sha256:[a-f0-9]{64}$/),
@@ -16,18 +25,25 @@ export const requestSchema = z.object({
   sourceMetadataDispositionRef: ref, remoteSnapshotRef: ref, remoteSnapshotDigest: digest,
   legacyWritersStopped: z.literal(true), remoteFileWriterStopped: z.literal(true),
 }).strict();
+export const requestSchema = requestFields.superRefine((request, context) => {
+  // Refinements may also see partial input: read every field defensively.
+  const tier = Object.hasOwn(tiers, String(request.namespace)) ? a4Tier(request.namespace).tier : undefined;
+  if (!tier || request.format !== `${tier}-a4-request/1` || !String(request.emailCodeActiveKeyRef).startsWith(`email-code-hmac:v1:${tier}:`)) {
+    context.addIssue({ code: 'custom', message: 'tier_mismatch' });
+  }
+});
 export type PreprodRequest = z.infer<typeof requestSchema>;
 
 export const evidenceSchema = z.object({
-  format: z.literal('preprod-a4-snapshot/1'), operationId: z.string(), candidateCommit: z.string(), candidateImage: z.string(),
+  format: z.enum(['preprod-a4-snapshot/1', 'prod-a4-snapshot/1']), operationId: z.string(), candidateCommit: z.string(), candidateImage: z.string(),
   requestSha256: digest, sourceContentSha256: digest, schemaSha256: digest, journalSha256: digest, remoteSnapshotDigest: digest,
   mappingSha256: digest, identityAssetSha256: digest, connectorAssetSha256: digest,
   backupKey: z.string().regex(/^pg\/[0-9]{8}T[0-9]{6}Z\.sql\.gz$/), backupSha256: digest,
   backupBytes: z.number().int().positive(), writerFenceRef: ref,
 }).strict();
 export const rehearsalSchema = z.object({
-  format: z.literal('preprod-a4-rehearsal/2'), receiptRef: ref, applicabilityReviewRef: ref,
-  candidateCommit: requestSchema.shape.candidateCommit, candidateImage: requestSchema.shape.candidateImage,
+  format: z.enum(['preprod-a4-rehearsal/2', 'prod-a4-rehearsal/2']), receiptRef: ref, applicabilityReviewRef: ref,
+  candidateCommit: requestFields.shape.candidateCommit, candidateImage: requestFields.shape.candidateImage,
   sourceContentSha256: digest, schemaSha256: digest, journalSha256: digest, remoteSnapshotDigest: digest,
   mappingSha256: digest, identityAssetSha256: digest, connectorAssetSha256: digest,
   restoredBackupSha256: digest, candidateBootPassed: z.literal(true), functionalAuthPassed: z.literal(true),

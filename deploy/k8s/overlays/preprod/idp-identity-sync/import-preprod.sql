@@ -106,7 +106,8 @@ WITH removed AS (
   DELETE FROM oauth_consents c
   WHERE c.user_id IN (SELECT id FROM src_replica_users) AND c.client_id IN (SELECT preprod_client_id FROM client_map)
     AND NOT EXISTS (SELECT FROM desired_consents d
-                    WHERE (d.user_id, d.client_id, d.tenant_id) = (c.user_id, c.client_id, c.tenant_id))
+                    WHERE (d.user_id, d.client_id, d.tenant_id)
+                      IS NOT DISTINCT FROM (c.user_id, c.client_id, c.tenant_id))
   RETURNING 1
 )
 SELECT 'consents_removed', count(*) FROM removed;

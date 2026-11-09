@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sentropic
+# A4 runtime of the prod namespace `sentropic` (docs/runbooks/prod-a4-cutover.md). Nothing applies
+# this overlay before the owner-approved prod cutover: the fenced `wire` operation installs the same
+# wiring, then the cutover IaC change pins the candidate images in ../prod and switches
+# `make k8s-deploy` to this overlay. Until then it renders the A4 wiring over the live prod pins.
+resources:
+  - ../prod
+  - ../preprod/a4-runtime
+components:
+  - ../../components/a4-wiring
