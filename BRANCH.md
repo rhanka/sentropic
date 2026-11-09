@@ -68,7 +68,7 @@ Add a minimal generic static-key Gemini client to @sentropic/llm-mesh so immo ca
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`); no exceptions needed.
 - [ ] **Lot 1 — Static-key Gemini runtime client**
-  - [ ] Add `packages/llm-mesh/src/transport/gemini-api-key-runtime-client.ts` implementing `GeminiAdapterClient`: `POST {baseUrl}/v1beta/models/{model}:generateContent`, header `x-goog-api-key`, default model `gemini-3.8-flash`; caller-provided key only, never logged, never in errors; error mapping 429/RESOURCE_EXHAUSTED to `rate_limited`, 402/billing to distinct non-retryable `billing_unavailable`, 401/403 to `auth_failed`; copy the Mistral Bearer client pattern.
+  - [x] Add `packages/llm-mesh/src/transport/gemini-api-key-runtime-client.ts` wire projection (request shape, systemInstruction, tools, generationConfig).
   - [ ] Export the client and its factory from `packages/llm-mesh/src/index.ts` for use as `geminiClient` injection.
   - [ ] Add `packages/llm-mesh/tests/transport/gemini-api-key-runtime-client.test.ts` with stubbed fetch: request shape, header present, error mapping (429, 402, 401), no key in error messages.
   - [ ] Lot gate:
