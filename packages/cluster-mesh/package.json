@@ -88,6 +88,14 @@
       "types": "./dist/compose/comments.d.ts",
       "import": "./dist/compose/comments.js"
     },
+    "./notifications": {
+      "types": "./dist/notifications/index.d.ts",
+      "import": "./dist/notifications/index.js"
+    },
+    "./loaders/notifications": {
+      "types": "./dist/loaders/notifications/index.d.ts",
+      "import": "./dist/loaders/notifications/index.js"
+    },
     "./llm-mesh": {
       "types": "./dist/integrations/llm-mesh/index.d.ts",
       "import": "./dist/integrations/llm-mesh/index.js"

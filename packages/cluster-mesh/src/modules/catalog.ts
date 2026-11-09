@@ -25,6 +25,7 @@ export const JOSE_RANGE = '^5.10.0';
  * Spelled as a bounded interval: the minimal release-range parser has no `||`. */
 export const AUTH_HONO_RANGE = '>=0.15.0 <0.19.0';
 export const COMMENTS_RANGE = '^0.3.0';
+export const NOTIFICATIONS_RANGE = '>=0.21.0 <0.26.0';
 
 export interface PeerRequirement {
   readonly packageName: string;
@@ -119,6 +120,10 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.26.0',
     requiredMembers: ['createCommentsModule', 'createCommentsPostgresStorage'], namespace: '/comments', meshCoherence: false,
     authPeers: [{ packageName: '@sentropic/comments', subpath: '.', range: COMMENTS_RANGE, requiredMembers: ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord'] }] },
+  notifications: { id: 'notifications', owner: 'notifications', packageName: '@sentropic/cluster-mesh', subpath: './notifications',
+    range: NOTIFICATIONS_RANGE,
+    requiredMembers: ['OPS_JOB_FAILURE_CONTRACT_V1', 'validateOpsJobFailureV1', 'applyOpsJobFailureEvent', 'createDeclaredOpsRecipientsPort'],
+    meshCoherence: false, authPeers: [] },
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {
