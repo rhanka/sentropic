@@ -58,32 +58,32 @@
   - Switch back to `tmp/worktrees/fix-live-teardown` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and constraints**
-  - [ ] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, .tmp/packets/COMMON-RULES.md, .tmp/rv/diag-live-pod-delete.md sections 1-3.
-  - [ ] Worktree tmp/worktrees/fix-live-teardown on branch fix/artifacts-live-teardown-stuck from origin/main (6b2fc2295, includes #966).
-  - [ ] Verify branch with git -C <wt> branch --show-current before any action.
-  - [ ] ENV=test-fix-live-teardown, API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181.
-  - [ ] Confirm scope and guardrails (api only, no host contract change, no packages/artifacts).
-- [ ] **Lot 1 — Generic live teardown fixes (api only)**
-  - [ ] kubernetes.ts: delete pods and services with propagationPolicy Background, keep uid preconditions.
-  - [ ] kubernetes.ts: waitDeleted keeps 404 invariant for live pods, reports k8s_wait_deleted_timeout on terminal/deleting pods past the bound.
-  - [ ] pods.ts + ports.ts: probe pod state (active/absent/terminating/terminal).
-  - [ ] transitions.ts: skip worker.quiesce when pod gone/terminal/terminating, preserve stateDetail when detail undefined, failed() persists code:reason.
-  - [ ] controller.ts: reconcile RECOVERING via recover, recover preserves root cause, lease skips teardown-transient phases.
-  - [ ] Observability: every new LiveError builder_unavailable on the live path gets a reason (npm_relay_status, supervisor_relay_502, k8s_wait_deleted_timeout, forge_status, cache_s3_unavailable).
-  - [ ] pods.ts ensure: replace a leftover service with a stale selector under its uid precondition instead of stale_fence.
-  - [ ] cache-storage.ts: name S3 effect failures cache_s3_unavailable, read rethrows builder_unavailable without quarantining.
-- [ ] **Lot 2 — Scoped api unit tests**
-  - [ ] delete uses Background (deleteOptions unit test).
-  - [ ] teardown completes on a terminal/terminating pod without worker.quiesce.
-  - [ ] RECOVERING to DORMANT on tick once the pod is gone.
-  - [ ] reasons are logged and persisted as code:reason.
-  - [ ] Update oom and heavy-phases stateDetail expectations to code:reason (evolution).
-  - [ ] Update cache-storage privacy-check expectations to code:reason (evolution); add S3 outage naming and service-replace tests.
-  - [ ] Scoped runs: make test-api SCOPE=tests/unit/artifacts-live/... ENV=test-fix-live-teardown last.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, .tmp/packets/COMMON-RULES.md, .tmp/rv/diag-live-pod-delete.md sections 1-3.
+  - [x] Worktree tmp/worktrees/fix-live-teardown on branch fix/artifacts-live-teardown-stuck from origin/main (6b2fc2295, includes #966).
+  - [x] Verify branch with git -C <wt> branch --show-current before any action.
+  - [x] ENV=test-fix-live-teardown, API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181.
+  - [x] Confirm scope and guardrails (api only, no host contract change, no packages/artifacts).
+- [x] **Lot 1 — Generic live teardown fixes (api only)**
+  - [x] kubernetes.ts: delete pods and services with propagationPolicy Background, keep uid preconditions.
+  - [x] kubernetes.ts: waitDeleted keeps 404 invariant for live pods, reports k8s_wait_deleted_timeout on terminal/deleting pods past the bound.
+  - [x] pods.ts + ports.ts: probe pod state (active/absent/terminating/terminal).
+  - [x] transitions.ts: skip worker.quiesce when pod gone/terminal/terminating, preserve stateDetail when detail undefined, failed() persists code:reason.
+  - [x] controller.ts: reconcile RECOVERING via recover, recover preserves root cause, lease skips teardown-transient phases.
+  - [x] Observability: every new LiveError builder_unavailable on the live path gets a reason (npm_relay_status, supervisor_relay_502, k8s_wait_deleted_timeout, forge_status, cache_s3_unavailable).
+  - [x] pods.ts ensure: replace a leftover service with a stale selector under its uid precondition instead of stale_fence.
+  - [x] cache-storage.ts: name S3 effect failures cache_s3_unavailable, read rethrows builder_unavailable without quarantining.
+- [x] **Lot 2 — Scoped api unit tests**
+  - [x] delete uses Background (deleteOptions unit test).
+  - [x] teardown completes on a terminal/terminating pod without worker.quiesce.
+  - [x] RECOVERING to DORMANT on tick once the pod is gone.
+  - [x] reasons are logged and persisted as code:reason.
+  - [x] Update oom and heavy-phases stateDetail expectations to code:reason (evolution).
+  - [x] Update cache-storage privacy-check expectations to code:reason (evolution); add S3 outage naming and service-replace tests.
+  - [x] Scoped runs: make test-api SCOPE=tests/unit/artifacts-live/... ENV=test-fix-live-teardown last.
 - [ ] **Lot 3 — Gates, PR and CI**
-  - [ ] make typecheck-api, make lint-api via docker-slot.sh.
-  - [ ] Scoped make test-api via docker-slot.sh.
+  - [x] make typecheck-api, make lint-api via docker-slot.sh.
+  - [x] Scoped make test-api via docker-slot.sh.
   - [ ] Open PR (title/body from BRANCH.md), push, iterate to green CI (no rerun, no skip, no timeout increase).
   - [ ] Do NOT merge.
 - [ ] **Lot 4 — Report**
