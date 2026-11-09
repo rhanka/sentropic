@@ -165,6 +165,12 @@ export class LocalAccountTransportService {
   private readonly claimedOwnerScopes = new Map<string, string>();
   /** enrollmentId → providerId, so poll completion reaches the owning provider. */
   private readonly enrollmentProviders = new Map<string, string>();
+  /**
+   * Last credential issuance per account (enrollment, restore, or refresh).
+   * The proactive window is derived from this issuance age, never from the
+   * enrollment age: a refreshed credential restarts its own TTL.
+   */
+  private readonly credentialIssuedAtMs = new Map<string, number>();
   private readonly pendingClaudeAccounts = new Set<string>();
   private claudePersistenceTail: Promise<void> = Promise.resolve();
   private readonly claudeSessions = new Map<string, ClaudeEnrollmentSession>();
@@ -1015,6 +1021,7 @@ export class LocalAccountTransportService {
     this.coordinator.removeAccount(accountId);
     this.accountsMap.delete(accountId);
     this.credentialVersions.delete(accountId);
+    this.credentialIssuedAtMs.delete(accountId);
     this.accountRemovalBarrierRefs.delete(accountId);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
@@ -1031,6 +1038,11 @@ export class LocalAccountTransportService {
     const executableAccount = this.coordinator.addAccount(account);
     this.accountsMap.set(account.accountId, executableAccount);
     this.credentialVersions.set(account.accountId, configVersion);
+    const enrolledAtMs = account.enrollmentCompletedAt
+      ? Date.parse(account.enrollmentCompletedAt)
+      : Number.NaN;
+    this.credentialIssuedAtMs.set(account.accountId,
+      Number.isFinite(enrolledAtMs) ? enrolledAtMs : this.nowMs());
     if (removalBarrierRef) {
       this.accountRemovalBarrierRefs.set(account.accountId, removalBarrierRef);
     } else {
@@ -1368,6 +1380,8 @@ export class LocalAccountTransportService {
         if (await this.isAccountRemoved(input.accountId)) throw new Error('Account removed');
         Object.assign(account, updated);
         this.credentialVersions.set(input.accountId, refreshed.authClientConfigVersion);
+        // The refreshed credential restarts its own TTL from this issuance.
+        this.credentialIssuedAtMs.set(input.accountId, this.nowMs());
         return { ...refreshed, refreshToken: updated.refreshToken ?? undefined };
       } catch (error) {
         if ((account && !this.accountsMap.has(input.accountId))
@@ -1659,6 +1673,7 @@ export class LocalAccountTransportService {
       this.coordinator.removeAccount(accountId);
       this.accountsMap.delete(accountId);
       this.credentialVersions.delete(accountId);
+      this.credentialIssuedAtMs.delete(accountId);
       this.accountRemovalBarrierRefs.delete(accountId);
     }
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
@@ -1709,6 +1724,13 @@ export class LocalAccountTransportService {
           envelope.authClientConfigVersion,
           publicRecord.removalBarrierRef,
         );
+        // A restore must not reuse the enrollment age as the TTL origin: the
+        // persisted `updatedAt` is the newest issuance-safe bound the keyring
+        // holds (it only ever moves the window later, never earlier).
+        const restoredIssuedAtMs = Date.parse(publicRecord.updatedAt);
+        if (Number.isFinite(restoredIssuedAtMs)) {
+          this.credentialIssuedAtMs.set(accountId, restoredIssuedAtMs);
+        }
         if (ownerClaim && ownerClaim.ownerScopeRef === restoredAccount.ownerScopeRef) {
           this.claimedOwnerScopes.set(accountId, ownerClaim.ownerScopeRef);
         }
@@ -1817,9 +1839,9 @@ export class LocalAccountTransportService {
         accounts.push({ ...base, action: 'skipped-no-expiry', readiness: 'ready' });
         continue;
       }
-      const enrolledAt = account.enrollmentCompletedAt ? Date.parse(account.enrollmentCompletedAt) : Number.NaN;
+      const issuedAtMs = this.credentialIssuedAtMs.get(account.accountId);
       if (!shouldRefreshProactively({ expiresAtMs: expiredAt,
-        ...(Number.isFinite(enrolledAt) ? { enrolledAtMs: enrolledAt } : {}), nowMs: now }, policy)) {
+        ...(issuedAtMs !== undefined && Number.isFinite(issuedAtMs) ? { issuedAtMs } : {}), nowMs: now }, policy)) {
         accounts.push({ ...base, action: 'skipped-healthy', readiness: 'ready' });
         continue;
       }

@@ -102,6 +102,34 @@ describe('runCustodianRefreshCycle', () => {
     expect(alerts).toEqual([]);
   });
 
+  it('should not refresh every tick for a long-enrolled account with a fresh credential', async () => {
+    // B1: the window must restart at each credential issuance. An account
+    // enrolled 3h ago whose current credential lives 60 minutes opens a
+    // 15-minute window, not a 60-minute one derived from the enrollment age.
+    const nowRef = { current: T0 };
+    const refresh = vi.fn(async (input: { accountId: string }) => ({
+      accountId: input.accountId, accessToken: 'fresh-access',
+      refreshToken: 'rotated-refresh', expiresAt: iso(nowRef.current + 60 * MINUTE),
+      authClientConfigVersion: 'v1.0.0',
+    }));
+    const provider = { refresh } as unknown as EnrollmentProvider;
+    const alerts: ReauthAlertEvent[] = [];
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+      { now: () => nowRef.current, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    seed(service, { accountId: 'acct-aged', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 5 * MINUTE), refreshToken: 'grant-aged',
+      enrollmentCompletedAt: iso(T0 - 180 * MINUTE) });
+    const first = await service.runCustodianRefreshCycle();
+    expect(first.accounts[0]).toMatchObject({ action: 'refreshed', readiness: 'ready' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    nowRef.current = T0 + 30 * MINUTE;
+    const second = await service.runCustodianRefreshCycle();
+    expect(second.accounts[0]).toMatchObject({ action: 'skipped-healthy', readiness: 'ready' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(alerts).toEqual([]);
+  });
+
   it('should skip external seats and static keys without a refresh grant', async () => {
     const { service, refresh } = makeService('ok', T0, []);
     seed(service, { accountId: 'acct-external', ownerScopeRef: 'owner',

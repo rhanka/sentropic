@@ -26,8 +26,8 @@ export const DEFAULT_CUSTODIAN_REFRESH_POLICY: CustodianRefreshPolicy = {
 
 export interface RefreshWindowInput {
   expiresAtMs: number;
-  /** Enrollment instant; NaN/undefined falls back to the floor window. */
-  enrolledAtMs?: number;
+  /** Credential issuance instant; NaN/undefined falls back to the floor window. */
+  issuedAtMs?: number;
   nowMs: number;
 }
 
@@ -48,9 +48,9 @@ export function shouldRefreshProactively(
   const { expiresAtMs, nowMs } = input;
   if (!Number.isFinite(expiresAtMs)) return false;
   if (expiresAtMs <= nowMs) return true;
-  const enrolledAtMs = input.enrolledAtMs;
-  const ttlMs = enrolledAtMs !== undefined && Number.isFinite(enrolledAtMs)
-    ? expiresAtMs - enrolledAtMs
+  const issuedAtMs = input.issuedAtMs;
+  const ttlMs = issuedAtMs !== undefined && Number.isFinite(issuedAtMs)
+    ? expiresAtMs - issuedAtMs
     : Number.NaN;
   return expiresAtMs - nowMs <= refreshSkewMs(ttlMs, policy);
 }
