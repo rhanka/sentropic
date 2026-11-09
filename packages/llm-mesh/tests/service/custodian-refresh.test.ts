@@ -27,15 +27,17 @@ const stubProvider = (behavior: 'ok' | 'fail', nowRef: { current: number }) => {
 
 const seed = (service: LocalAccountTransportService, input: { accountId: string;
   ownerScopeRef: string; refreshToken?: string | null; expiresAt?: string | null;
-  enrollmentCompletedAt?: string; external?: boolean }): void => {
+  enrollmentCompletedAt?: string; external?: boolean; transportProviderId?: 'cloud-code' | 'muse';
+  metadata?: Record<string, unknown> }): void => {
   service.registerAccount({ accountId: input.accountId, ownerScopeRef: input.ownerScopeRef,
     accountLabel: `${input.ownerScopeRef} label`, targetProviderId: 'openai' as const,
-    transportProviderId: 'cloud-code' as const, accessToken: 'old-access',
+    transportProviderId: (input.transportProviderId ?? 'cloud-code') as const, accessToken: 'old-access',
     ...(input.refreshToken === undefined ? {} : { refreshToken: input.refreshToken }),
     ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }), status: 'active',
     ...(input.enrollmentCompletedAt ? { enrollmentCompletedAt: input.enrollmentCompletedAt } : {}),
     ...(input.external ? { metadata: markExternalSeatAuthority(undefined, { seatRef: 'seat-1',
-      ownerScope: input.ownerScopeRef, epoch: 1, generation: 1, operationId: 'op-test-1' }) } : {}),
+      ownerScope: input.ownerScopeRef, epoch: 1, generation: 1, operationId: 'op-test-1' }) }
+      : (input.metadata ? { metadata: input.metadata } : {})),
   });
 };
 
@@ -199,6 +201,135 @@ describe('runCustodianRefreshCycle', () => {
       .listEligible({ principalRef: 'owner', ownerScopeRef: 'owner' });
     expect(eligible).toHaveLength(1);
     expect(eligible[0].readiness).toBe('reauth-required');
+  });
+
+  it('should refresh a CLI-imported Muse account through the cycle instead of flipping', async () => {
+    // B3 (r2): the Muse CLI import stores no refresh grant, but the
+    // credential IS renewable — the provider re-reads the CLI store and
+    // re-mints. An expired CLI account must refresh like a grant account,
+    // not freeze in reauth_required.
+    const nowRef = { current: T0 };
+    const museRefresh = vi.fn(async (input: { accountId: string }) => ({
+      accountId: input.accountId, accessToken: 'minted-cli-key',
+      expiresAt: iso(nowRef.current + 60 * MINUTE), authClientConfigVersion: '1',
+    }));
+    const alerts: ReauthAlertEvent[] = [];
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['muse', { refresh: museRefresh } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } }, undefined,
+      { now: () => nowRef.current, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    // Expired past the skew window: the old code flipped grant-less
+    // accounts before any provider call.
+    seed(service, { accountId: 'acct-muse-cli', ownerScopeRef: 'owner',
+      transportProviderId: 'muse', expiresAt: iso(T0 - MINUTE),
+      enrollmentCompletedAt: iso(T0 - 120 * MINUTE) });
+    nowRef.current = T0;
+    const report = await service.runCustodianRefreshCycle();
+    expect(museRefresh).toHaveBeenCalledTimes(1);
+    expect(report.accounts[0]).toMatchObject({ action: 'refreshed', readiness: 'ready' });
+    expect(alerts).toEqual([]);
+    const eligible = await service.createRouteDirectory({} as never)
+      .listEligible({ principalRef: 'owner', ownerScopeRef: 'owner' });
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0].readiness).toBe('ready');
+  });
+
+  it('should still flip a direct-billed Muse key with no grant on expiry', async () => {
+    // B3 (r2): a direct API key has no CLI store to re-read
+    // (`auth_type: 'api_key'`) — only re-import rotates it. It keeps the
+    // grant-less flip, and the provider is never called.
+    const museRefresh = vi.fn(async (input: { accountId: string }) => ({
+      accountId: input.accountId, accessToken: 'minted-cli-key',
+      expiresAt: iso(T0 + 60 * MINUTE), authClientConfigVersion: 'direct-api-key-v1',
+    }));
+    const alerts: ReauthAlertEvent[] = [];
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['muse', { refresh: museRefresh } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } }, undefined,
+      { now: () => T0 + 120 * MINUTE, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    seed(service, { accountId: 'acct-muse-direct', ownerScopeRef: 'owner',
+      transportProviderId: 'muse', expiresAt: iso(T0 + 60 * MINUTE),
+      enrollmentCompletedAt: iso(T0),
+      metadata: { billing_type: 'direct', auth_type: 'api_key' } });
+    const report = await service.runCustodianRefreshCycle();
+    expect(museRefresh).not.toHaveBeenCalled();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'expired-no-grant', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'expired-no-grant' });
+  });
+
+  it('should warn once before a grant-less expiry and still alert on the flip', async () => {
+    // B3-partial (r2): a grant-less credential gets no refresh, so the
+    // expiry flip alone leaves no plannable window. Inside the refresh
+    // window the cycle warns once (`expiring-no-grant`, upcoming expiry in
+    // the report) on its own epoch; the later expiry flip still alerts.
+    const nowRef = { current: T0 };
+    const alerts: ReauthAlertEvent[] = [];
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['cloud-code', { refresh: vi.fn() } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } }, undefined,
+      { now: () => nowRef.current, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    // TTL 60 min from issuance, expiry in 5 min: remaining (5) <= window
+    // (min(60, max(10, 15)) = 15), so the warning fires.
+    seed(service, { accountId: 'acct-warn', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 5 * MINUTE), refreshToken: null, enrollmentCompletedAt: iso(T0 - 55 * MINUTE) });
+    // Far-future static key: no warning, expiry exposed for planning.
+    seed(service, { accountId: 'acct-far', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 365 * 24 * 60 * MINUTE), refreshToken: null,
+      enrollmentCompletedAt: iso(T0 - 55 * MINUTE) });
+    const first = await service.runCustodianRefreshCycle();
+    expect(first.accounts).toHaveLength(2);
+    const warned = first.accounts.find((entry) => entry.expiresAt === iso(T0 + 5 * MINUTE));
+    expect(warned).toMatchObject({ action: 'skipped-no-grant', readiness: 'ready' });
+    const far = first.accounts.find((entry) => entry.expiresAt === iso(T0 + 365 * 24 * 60 * MINUTE));
+    expect(far).toMatchObject({ action: 'skipped-no-grant', readiness: 'ready' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'expiring-no-grant', expiresAt: iso(T0 + 5 * MINUTE) });
+    expect(JSON.stringify(alerts)).not.toContain('acct-warn');
+    // A second cycle in the window does not warn again.
+    const second = await service.runCustodianRefreshCycle();
+    expect(second.accounts.find((entry) => entry.expiresAt === iso(T0 + 5 * MINUTE)))
+      .toMatchObject({ action: 'skipped-no-grant', readiness: 'ready' });
+    expect(alerts).toHaveLength(1);
+    // Past expiry the account flips and alerts on the separate flip epoch.
+    nowRef.current = T0 + 10 * MINUTE;
+    const third = await service.runCustodianRefreshCycle();
+    expect(third.accounts.find((entry) => entry.action === 'expired-no-grant'))
+      .toMatchObject({ readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(2);
+    expect(alerts[1]).toMatchObject({ reason: 'expired-no-grant' });
+  });
+
+  it('should read reauth-required for an external seat with unknown expiry', async () => {
+    // M4 (r2): the seat import stores `''` for an unknown provider expiry,
+    // and unknown is not infinite validity. The report reads not-ready —
+    // like the route directory — without flipping or alerting.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = makeService('ok', T0, alerts);
+    seed(service, { accountId: 'acct-ext-unknown', ownerScopeRef: 'owner',
+      expiresAt: null, refreshToken: null, enrollmentCompletedAt: iso(T0), external: true });
+    const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'skipped-external', readiness: 'reauth-required' });
+    expect(report.accounts[0]).not.toHaveProperty('expiredAt');
+    expect(refresh).not.toHaveBeenCalled();
+    expect(alerts).toEqual([]);
+  });
+
+  it('should read not-ready for a grant-holding account with no usable expiry', async () => {
+    // M4 (r2): without an expiry the custodian cannot schedule a renewal,
+    // so the account must not be reported ready. No flip: routing still
+    // serves the live credential until a real failure.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = makeService('ok', T0, alerts);
+    seed(service, { accountId: 'acct-noexpiry', ownerScopeRef: 'owner',
+      expiresAt: null, refreshToken: 'grant-nx', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'skipped-no-expiry', readiness: 'reauth-required' });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(alerts).toEqual([]);
   });
 
   it('should defer without flipping on a transient provider failure', async () => {
