@@ -3310,9 +3310,11 @@ restore-api-sut: ci-test-env ## Restore a dump before the first production boot;
 	$(CI_COMPOSE) stop api api-sut auth-idp
 	$(CI_COMPOSE) up -d --wait postgres
 	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
+# Restore SUT is single-RP by construction (api-sut only, rehearsal checkpoint): declare the IdP RP so the A4 import provenance guard accepts the carried prod credentials.
 	@set -eu; overlay="$$(mktemp)"; genoverlay="$$(mktemp)"; trap 'rm -f "$$overlay" "$$genoverlay"' EXIT; \
 	printf '%s\n' 'services:' '  api-sut:' '    environment:' \
 		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' \
+		'      CM_IDENTITY_CUTOVER_IDP_RP_ID: localhost' \
 		'      WEBAUTHN_RP_ID: localhost' \
 		'      WEBAUTHN_ORIGIN: http://localhost:$(or $(UI_PORT),5173)' > "$$overlay"; \
 	printf '%s\n' 'services:' '  api-sut:' '    volumes:' \
