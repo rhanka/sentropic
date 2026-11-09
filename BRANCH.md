@@ -30,7 +30,7 @@
   - [ ] BRCBO-EX1 declared in ## Feedback Loop before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [ ] BRCBO-EX1 (scope exception for Makefile + docker-compose*.yml, default-forbidden): rationale: PR #973 left postgres/minio bind-mount writes into ./data/backup root-owned and ~8 workspace-writing docker runs without host user (verified audit: 370 docker run sites, 211 already host-user, 134 deletion-only, 16 others classified below); impact: Makefile-only behavior change (run writers as UID:GID, chown backup after pg_dump), no image/volume/data-layout change, backups stay host-visible bind-mount files; rollback: git revert the branch commits, ownership normalizes again on next backup run.
+- [ ] BRCBO-EX1 (scope exception for Makefile + docker-compose*.yml, default-forbidden): rationale: PR #973 left postgres/minio bind-mount writes into ./data/backup root-owned and 9 workspace-writing docker runs without host user (verified audit: 370 docker run sites, 211 already host-user, 134 deletion-only, 16 others classified below); impact: Makefile-only behavior change (run writers as UID:GID, chown backup after pg_dump), no image/volume/data-layout change, backups stay host-visible bind-mount files; rollback: git revert the branch commits, ownership normalizes again on next backup run.
 - [ ] Root-stay exceptions (verified, must stay root with reason): 134 pure rm -rf deletion-only docker runs (need root to delete legacy root-owned cruft, deletions create no files); chown normalizers Makefile 355/368/2547/1182 + new db-backup step (chown itself requires 0:0); :ro mounts (kernel read-only, cannot create host files); no-workspace-mount runs 672/780/2069/3078/3995 (no host write possible, 3078 output via host redirect); scanners 3929/3942-trivy/4025/4026 (scan-only, JSON via host-shell redirect); minio/minio-init user 0:0 kept (Chainguard uid 65532 vs pre-existing root-owned minio_data named volume, backup writes go through MINIO_EXEC as host user); test.yml api root default (no workspace bind, CI ephemeral).
 - [ ] Already-compliant equivalence note: 167 docker run sites already pass literal -u "$$(id -u):$$(id -g)" -e HOME=/tmp, behaviorally identical to the new variable, left untouched for diff minimality.
 
@@ -48,21 +48,21 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Worktree tmp/worktrees/compose-backup-owner on fix/compose-backup-owner from origin/main aa21ecdfd verified.
-  - [ ] Read rules/MASTER.md, rules/workflow.md, .tmp/packets/COMMON-RULES.md.
-  - [ ] Env mapping: ENV=test-compose-backup, API_PORT=8915, UI_PORT=5315, MAILDEV_UI_PORT=1215.
-  - [ ] Audit done: 370 docker run sites joined across continuations, 211 with -u, 134 pure rm, 8 writers fixed + db-backup chown (see Feedback Loop).
-  - [ ] BRCBO-EX1 declared before touching Makefile.
+  - [x] Worktree tmp/worktrees/compose-backup-owner on fix/compose-backup-owner from origin/main aa21ecdfd verified.
+  - [x] Read rules/MASTER.md, rules/workflow.md, .tmp/packets/COMMON-RULES.md.
+  - [x] Env mapping: ENV=test-compose-backup, API_PORT=8915, UI_PORT=5315, MAILDEV_UI_PORT=1215.
+  - [x] Audit done: 370 docker run sites joined across continuations, 211 with -u, 134 pure rm, 9 writers fixed + db-backup chown (see Feedback Loop).
+  - [x] BRCBO-EX1 declared before touching Makefile.
 - [ ] **Lot 1 — data/backup ownership**
-  - [ ] db-backup: normalize ownership after pg_dump via compose run postgres as 0:0 with HOST_UID/HOST_GID chown on the new dump (existing 355/368 pattern).
+  - [x] db-backup: normalize ownership after pg_dump via compose run postgres as 0:0 with HOST_UID/HOST_GID chown on the new dump (existing 355/368 pattern).
   - [ ] doc-backup/doc-backup-prod need no change (MINIO_EXEC already host-user, tar runs on host), verify empirically.
   - [ ] db-restore/doc-restore/db-backup-prod need no change (no host writes: cp into container, host mkdir/tar/redirect), verify empirically.
-  - [ ] minio user 0:0 kept (see Feedback Loop), no named-volume move.
+  - [x] minio user 0:0 kept (see Feedback Loop), no named-volume move.
   - [ ] Lot gate: make db-backup then stat -c %U on the dump shows host user, no root-owned file under data/backup.
 - [ ] **Lot 2 — DOCKER_RUN_USER variable**
-  - [ ] Define DOCKER_RUN_USER = -u $(UID):$(GID) -e HOME=/tmp once next to UID/GID exports (UID/GID from #973).
-  - [ ] Apply to Makefile 1259 (typecheck-llm-mesh), 1460 (--check), 1473 (audit versions), 1477 (typecheck-skills, ln -s writer), 1593 (typecheck-flow), 2881 (test-llm-mesh via ARTIFACTS_RUN), 2893 (bench-live-speech OUT= writer), 2989 (test-skills, ln -s + vitest writer), 3942 node-audit branch.
-  - [ ] Lot gate: grep shows every writable-workspace docker run uses the variable or the equivalent literal, exceptions listed in Feedback Loop only.
+  - [x] Define DOCKER_RUN_USER = -u $(UID):$(GID) -e HOME=/tmp once next to UID/GID exports (UID/GID from #973).
+  - [x] Apply to Makefile 1259 (typecheck-llm-mesh), 1460 (--check), 1473 (audit versions), 1477 (typecheck-skills, ln -s writer), 1593 (typecheck-flow), 2881 (test-llm-mesh via ARTIFACTS_RUN), 2893 (bench-live-speech OUT= writer), 2989 (test-skills, ln -s + vitest writer), 3942 node-audit branch.
+  - [x] Lot gate: grep shows every writable-workspace docker run uses the variable or the equivalent literal, exceptions listed in Feedback Loop only.
 - [ ] **Lot 3 — Verification on ENV=test-compose-backup**
   - [ ] Run make typecheck-llm-mesh API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find packages/llm-mesh -user root empty.
   - [ ] Run make typecheck-api API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find api -user root empty (touched paths incl. node_modules/.vite-temp).

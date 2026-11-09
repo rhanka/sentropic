@@ -10,6 +10,9 @@ export COMPOSE_PROJECT_NAME ?= $(ENV)
 # outputs are host-owned (no sudo cleanup). Compose interpolates these.
 export UID ?= $(shell id -u)
 export GID ?= $(shell id -g)
+# BRCBO-EX1: single host-user flag set for every workspace-writing `docker run`
+# (follow-up of BRCHU-EX1 for raw docker runs and backup writers).
+DOCKER_RUN_USER = -u $(UID):$(GID) -e HOME=/tmp
 DOCKER_COMPOSE  ?= docker compose
 # BR06-EX1: opt in with DISK_HYGIENE_THRESHOLD=90 (empty disables the guard).
 export DISK_HYGIENE_THRESHOLD ?=
@@ -1256,7 +1259,7 @@ typecheck-api: prepare-node-workspace ## Run API type checks
 
 .PHONY: typecheck-llm-mesh
 typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: lint-llm-mesh lint-llm-gateway lint-cluster-mesh
 lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned mesh/gateway package
@@ -1457,7 +1460,7 @@ refresh-llm-model-equivalences: ## Regenerate the pinned model-equivalence counc
 
 .PHONY: check-llm-model-equivalences
 check-llm-model-equivalences: ## Check model-equivalence generation and freshness
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/llm-model-equivalences/refresh.mjs --check
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/llm-model-equivalences/refresh.mjs --check
 
 # BR75-EX1 — make-only entrypoint for the recurring LLM model-update scaffold.
 .PHONY: llm-mesh-add-model
@@ -1470,11 +1473,11 @@ llm-mesh-add-model: ## Scaffold a model from BASE (set DRY_RUN=1 to preview)
 
 .PHONY: audit-llm-routing-package-versions
 audit-llm-routing-package-versions: ## Compare local LLM routing package versions with npm latest
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for package_dir in llm-mesh llm-gateway; do package="$$(node -p "require(\"./packages/$$package_dir/package.json\").name")"; local_version="$$(node -p "require(\"./packages/$$package_dir/package.json\").version")"; registry_version="$$(npm view "$$package" version)"; printf "%s local=%s registry=%s\n" "$$package" "$$local_version" "$$registry_version"; done'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for package_dir in llm-mesh llm-gateway; do package="$$(node -p "require(\"./packages/$$package_dir/package.json\").name")"; local_version="$$(node -p "require(\"./packages/$$package_dir/package.json\").version")"; registry_version="$$(npm view "$$package" version)"; printf "%s local=%s registry=%s\n" "$$package" "$$local_version" "$$registry_version"; done'
 
 .PHONY: typecheck-skills
 typecheck-skills: ## Run @sentropic/skills type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: build-skills pack-skills
 build-skills: ## Build @sentropic/skills in an isolated Compose tool directory
@@ -1590,7 +1593,7 @@ publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway u
 
 .PHONY: typecheck-flow
 typecheck-flow: install-internal-packages ## Run @sentropic/flow type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
 .PHONY: build-flow
 build-flow: install-internal-packages ## Build @sentropic/flow dist package
@@ -2878,7 +2881,7 @@ test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-llm-mesh
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
-	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@$(ARTIFACTS_RUN) $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
 # BR04-EX1 — @sentropic/live-speech bench (r3 L3 bench lane; P1-5/P2-1).
 # Compiles the session to a scratch dist (never committed), installs the pinned
@@ -2890,7 +2893,7 @@ test-llm-mesh: ## Run @sentropic/llm-mesh tests
 # outside the repo, so manual runs never dirty the tree).
 .PHONY: bench-live-speech
 bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
 
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
@@ -2986,7 +2989,7 @@ test-pkg-chat-core: build-chat-core ## Run core and client runtime unit tests wi
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh scripts/test.sh
 .PHONY: test-skills
 test-skills: ## Run @sentropic/skills tests
-		@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+		@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-ui
 test-ui: build-chat-core up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
@@ -3673,6 +3676,7 @@ db-backup: backup-dir up ## Backup local database to file
 			export PGPASSWORD=\"app\"; \
 			pg_dump -h localhost -U app -d app -F c -f /backups/app-$${TIMESTAMP}.dump; \
 		fi" && \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) postgres sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /backups/app-$${TIMESTAMP}.dump' && \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-backup-prod
@@ -3939,7 +3943,7 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 	@mkdir -p .security
 	@echo "  📋 Step 1: Executing SCA scan..."
 	@if [ "$*" = "api" ] || [ "$*" = "ui" ]; then \
-		docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf sh -lc "npm audit --json --workspace sentropic-$* || true" > .security/sca-$*.json; \
+		docker run --rm $(DOCKER_RUN_USER) -v "${PWD}:/workspace" -w /workspace node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf sh -lc "npm audit --json --workspace sentropic-$* || true" > .security/sca-$*.json; \
 	else \
 		docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true; \
 	fi
