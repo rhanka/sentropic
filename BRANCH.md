@@ -75,35 +75,35 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
   - [x] Confirm environment mapping: `ENV=test-llm-mesh-lot1`, `API_PORT=8911`, `UI_PORT=5311`, `MAILDEV_UI_PORT=1211`.
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed (none needed).
-- [ ] **Lot 1 — Custodian mesh-managed, proactive refresh, reauth alert**
-  - [ ] Add `ReauthAlertSink` port (`reauth-alert.ts`): owner-scoped event, diagnostic account ref only, first-transition emission.
-  - [ ] Add custodian refresh cycle (`custodian-refresh.ts`): skew policy (25 percent TTL remaining or 10 min), injected clock, per-account report.
-  - [ ] Wire cycle + sink into `LocalAccountTransportService` (skip external seats, reuse single-flight, flip `reauth_required` early).
-  - [ ] Expose cycle, loop start/stop and sink options via `createLlmMeshFacade`.
-  - [ ] Vibe/Muse re-enrollment path unchanged (fail-closed refresh kept, diagnostic points at re-enrollment).
-  - [ ] Lot gate:
-    - [ ] `make typecheck` + `make lint` for impacted components
-    - [ ] **API tests**
-      - [ ] Add `packages/llm-mesh/tests/service/custodian-refresh.test.ts` (refresh before expiry under injected clock; refresh failure yields reauth diagnostic with no business call; two same-transport accounts coexist with owner isolation).
-      - [ ] Scoped runs while evolving: `make test-api SCOPE=packages/llm-mesh/tests/service/custodian-refresh.test.ts ENV=test-llm-mesh-lot1`
-      - [ ] Sub-lot gate: existing `packages/llm-mesh/tests/service/*` + `packages/llm-mesh/tests/service/facade.test.ts` stay green
+- [x] **Lot 1 — Custodian mesh-managed, proactive refresh, reauth alert**
+  - [x] Add `ReauthAlertSink` port (`reauth-alert.ts`): owner-scoped event, diagnostic account ref only, first-transition emission.
+  - [x] Add custodian refresh cycle (`custodian-refresh.ts`): skew policy (25 percent TTL remaining or 10 min), injected clock, per-account report.
+  - [x] Wire cycle + sink into `LocalAccountTransportService` (skip external seats, reuse single-flight, flip `reauth_required` early).
+  - [x] Expose cycle, loop start/stop and sink options via `createLlmMeshFacade`.
+  - [x] Vibe/Muse re-enrollment path unchanged (fail-closed refresh kept, diagnostic points at re-enrollment).
+  - [x] Lot gate:
+    - [x] `make typecheck` + `make lint` for impacted components
+    - [x] **API tests**
+      - [x] Add `packages/llm-mesh/tests/service/custodian-refresh.test.ts` (refresh before expiry under injected clock; refresh failure yields reauth diagnostic with no business call; two same-transport accounts coexist with owner isolation).
+      - [x] Scoped runs while evolving: `make test-api SCOPE=packages/llm-mesh/tests/service/custodian-refresh.test.ts ENV=test-llm-mesh-lot1`
+      - [x] Sub-lot gate: existing `packages/llm-mesh/tests/service/*` + `packages/llm-mesh/tests/service/facade.test.ts` stay green
       - [ ] AI flaky tests run (non-blocking only under acceptance rule) and document status/signature in `BRANCH.md`
-    - [ ] **UI tests (TypeScript)**
-      - [ ] None (no UI change).
-    - [ ] **E2E tests**
-      - [ ] None (no user-facing flow change; live preprod probe is a GO item run by the conductor with owner enrollment).
+    - [x] **UI tests (TypeScript)**
+      - [x] None (no UI change).
+    - [x] **E2E tests**
+      - [x] None (no user-facing flow change; live preprod probe is a GO item run by the conductor with owner enrollment).
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] Preprod probe GO: owner interactive enrollment done + 1 generation per enrolled transport green (conductor-owned).
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] No spec consolidation needed (no `spec/BRANCH_SPEC_EVOL.md` created).
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest API (cf Lot 1, copy checklist)
-  - [ ] Retest UI (none, no UI change)
-  - [ ] Retest e2e (none, no E2E change)
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [x] Typecheck & Lint
+  - [x] Retest API (cf Lot 1, copy checklist)
+  - [x] Retest UI (none, no UI change)
+  - [x] Retest e2e (none, no E2E change)
+  - [x] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped `packages/llm-mesh/package.json` version (patch) — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [x] Bumped `packages/llm-mesh/package.json` version (patch) — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [x] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
