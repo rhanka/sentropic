@@ -94,6 +94,6 @@
   - [x] Fix `BRANCH.md` checkbox coherence (MINOR).
   - [x] Retest scoped: `test-ci-live-provider-receipt` (15/15) via `node --test`.
   - [x] Retest scoped via `make`: `test-ci-live-provider-receipt` (15/15), `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25), `test-publishable-manifests` (137/137), `scope-check` PASS C2.
-  - [ ] Commit via `make commit`, push, CI green (no rerun, no skip).
-  - [ ] Update `.tmp/rv/fix-live-provider-enobufs.md`.
+  - [x] Commit via `make commit`, push, CI green (no rerun, no skip): 93e727c3d, run 42610893119 success; PR MERGEABLE/CLEAN.
+  - [x] Update `.tmp/rv/fix-live-provider-enobufs.md`.
   - [ ] Do NOT merge.
