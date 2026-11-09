@@ -55,5 +55,13 @@ export const ensureSigningKey = async (kid: string) => {
   const keys = createJwksAdapter();
   if (await keys.getActiveKey()) return;
   try { await keys.generateAndStoreNewKey({ kid }); }
-  catch (error) { if (!await keys.getActiveKey()) throw error; }
+  catch (error) {
+    // The insert lost the race: another file committed the active key first. This instance negatively cached
+    // the pre-race lookup, so poll with a fresh adapter until the winner's key becomes visible.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (await createJwksAdapter().getActiveKey()) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw error;
+  }
 };
