@@ -108,7 +108,7 @@ Unblock the preprod P1 build (job 31bc4ffc) failing in `readForgeTarball` with a
   - [x] Typecheck & Lint (`make typecheck-api` exit 0; lint covered by CI `api-static`)
   - [x] Retest API (forge-tar-symlink 4, forge-lease 8, forge-lease-source 5, host-build-api 12 — all green)
   - [x] Final gate step 1: PR #975 created with `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [x] Final gate step 2: branch CI green on fresh head 171694a56 (dispatch run 42613816671 `success`; prior run 42612023738 failed only on provider-dependent AI spec `00-ai-generation`, re-proven by `test-e2e (5)` success on the fresh head).
   - [x] Record review to `.h2a/reviews/fix-forge-tar-muse.md` (Muse Wonder max APPROVE; Argon 429 / vibe 402 unavailable).
-  - [ ] Write French report to `/home/antoinefa/src/sentropic/.tmp/rv/fix-forge-tar.md` (root cause with exact header, PR, head, CI, review).
-  - [ ] Do NOT merge.
+  - [x] Write French report to `/home/antoinefa/src/sentropic/.tmp/rv/fix-forge-tar.md` (root cause with exact header, PR, head, CI, review).
+  - [x] Do NOT merge.
