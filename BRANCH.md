@@ -20,6 +20,11 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
   - `BRANCH.md`
   - `package-lock.json`
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/llm-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
   - `packages/llm-mesh/src/service/facade.ts`
   - `packages/llm-mesh/src/service/custodian-refresh.ts`
   - `packages/llm-mesh/src/service/reauth-alert.ts`
@@ -43,6 +48,7 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
 - `attention`: D2 accepted for the owner tenant only; kill-switch cross-user stays OFF for any other use.
 - `attention`: D3 Gemini-only fallback (gemini-3.8-flash) is Lot 5 scope, not this branch; this branch only keeps the static-key class and budget admission points untouched.
 - `acknowledge`: D4 reauth alert to conductor (h2a) + owner browser re-auth is implemented here as a pluggable sink.
+- `attention`: bump follow-through per repo convention (3b9626d35, d4c503eb0): hardcoded version in `decision-public-surface.test.ts`, `CHANGELOG.md` entry, and `selected` fixture lock regen via `refresh-lazy-package-lock`; ranges already cover 0.33.1 (gateway `^0.33.0`, cluster-mesh `<0.34.0`), no range edit.
 - `attention`: Gemini API key provided by owner as named secret; secret name proposed in the lane report, never printed or committed.
 
 ## AI Flaky tests

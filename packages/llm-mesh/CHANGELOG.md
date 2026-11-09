@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.33.1
+
+- Custodian Lot 1: proactive refresh cycle (`runCustodianRefreshCycle`) over
+  mesh-managed accounts inside the skew window (25 percent of TTL remaining,
+  10 min floor, injected clock), per-account secret-free report; `reauth_required`
+  flips early on refresh failure and emits a secret-free `ReauthAlertSink` event
+  (diagnostic account ref only, once per epoch); `startCustodianLoop` /
+  `stopCustodianLoop` for the hosted loop. External seats stay skipped, static
+  keys without a refresh grant keep re-enrollment (no refresh).
+
 ## 0.33.0
 
 - Seat onboarding (design r3, lots L1–L5): the `SeatOnboardingV1` contract
