@@ -53,8 +53,8 @@
   - [x] Object store README rollback keeps the PVC and bucket.
 - [x] **Lot 3 — Wiring (BRREPIN-EX1, BRREPIN-EX2)**
   - [x] Makefile targets and CI steps.
-- [ ] **Lot 4 — Validation**
-  - [ ] `docker-slot.sh make test-ghcr-images ENV=test-t1-repin`.
-  - [ ] `docker-slot.sh make test-artifact-data-guard ENV=test-t1-repin` + planted-violation negative check.
-  - [ ] Live smoke: `make preprod-repin` with origin/main content tags resolves both digests anonymously (file restored after).
-  - [ ] Opus read-only review `.h2a/reviews/t1-fix-ci-preprod-auto-repin-opus.md`.
+- [x] **Lot 4 — Validation**
+  - [x] `docker-slot.sh make test-ghcr-images ENV=test-t1-repin`: 45/45 PASS.
+  - [x] `docker-slot.sh make test-artifact-data-guard ENV=test-t1-repin`: 7/7 + whole-tree scan PASS; planted `DROP TABLE artifacts.records` fails closed (`ARTIFACT DATA GUARD ... drop-table`, exit 1), removed after.
+  - [x] Live smoke: `API_VERSION=71a3bd UI_VERSION=81fa0d make preprod-repin PREPROD_PUBLISHED_KINDS=` resolves both digests anonymously and rewrites the pins (file restored after, tree clean).
+  - [ ] Argon read-only review `.h2a/reviews/t1-fix-ci-preprod-auto-repin-argon.md` (Opus unavailable: quota; resume lane).
