@@ -38,6 +38,18 @@ describe('live heavy gate (client of the cluster-mesh heavy-phase queue)', () =>
     expect((await queue.status('n')).entries.map(e => e.subject)).toEqual(['v1']);
     held.resolve(); await holder; expect(late).not.toHaveBeenCalled();
   });
+  it('should abort a queued wait on the watchdog signal and leave the queue without running', async () => {
+    const { gate, queue } = world(); const held = deferred(); const late = vi.fn(async () => 'never');
+    const holder = gate.run('v1', 'build', () => held.promise);
+    const controller = new AbortController();
+    const waiting = gate.run('v2', 'build', late, { signal: controller.signal });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    controller.abort();
+    await expect(waiting).rejects.toThrow();
+    expect(late).not.toHaveBeenCalled();
+    expect((await queue.status('n')).entries.map(e => e.subject)).toEqual(['v1']);
+    held.resolve(); await holder;
+  });
   it('should keep a durable waiter at its position and expose it as queued', async () => {
     const { gate } = world(); const held = deferred();
     const holder = gate.run('v1', 'build', () => held.promise);
