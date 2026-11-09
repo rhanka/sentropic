@@ -171,7 +171,7 @@ describe('pod bootstrap agent: workspace-scoped installs', () => {
   it('should run npm ci with sorted workspace flags and prefer the nested lock entry', async () => {
     const calls: Spawned[] = [];
     const pod = await harness({ spawn: fakeSpawn(calls, async () => 0) });
-    await expect(install(pod, scopedSource, scopedTarballs, ['ui'])).resolves.toEqual({ exitCode: 0 });
+    await expect(install(pod, scopedSource, scopedTarballs, ['ui'])).resolves.toEqual({ exitCode: 0, signal: null, output: '' });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ executable: INSTALL_RECIPE.executable,
       args: [...INSTALL_RECIPE.args, '--workspace=ui'] });
