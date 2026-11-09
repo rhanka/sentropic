@@ -83,8 +83,8 @@ Generic platform job-failure email alerting: frozen OpsJobFailureV1 contract, pu
   - [x] Confirm scope and guardrails.
 - [ ] **Lot 1 — cluster-mesh notifications capability**
   - [x] Frozen OpsJobFailureV1 contract + validation (targetKey product key, eventId dedup, 1 KiB detail cap, untrusted-string handling).
-  - [ ] Pure incident state machine (firing/digest/escalation/resolved, anti-flap 1h, cap 10/h/target, dead-man stale).
-  - [ ] RecipientsPort (admins of target X) + validated platform-declared v1 resolver.
+  - [x] Pure incident state machine (firing/digest/escalation/resolved, anti-flap 1h, cap 10/h/target, dead-man stale).
+  - [x] RecipientsPort (admins of target X) + validated platform-declared v1 resolver.
   - [ ] Module registration (modules/contracts.ts, modules/catalog.ts, loaders, package export).
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh ENV=test-notify-l1`
