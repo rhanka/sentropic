@@ -16,6 +16,9 @@ spec:
             - name: CM_A4_NAMESPACE
               valueFrom:
                 fieldRef: { fieldPath: metadata.namespace }
+            - name: CM_IDENTITY_CUTOVER_IDP_RP_ID
+              valueFrom:
+                configMapKeyRef: { name: auth-idp, key: WEBAUTHN_RP_ID }
             - name: EMAIL_CODE_HMAC_KEY_ACTIVE
               valueFrom:
                 secretKeyRef: { name: email-code-hmac, key: EMAIL_CODE_HMAC_KEY_ACTIVE }
