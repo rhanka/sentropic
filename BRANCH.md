@@ -1,7 +1,7 @@
 # Feature: llm-mesh Lot 1 custodian refresh
 
 ## Objective
-Mesh-managed custodian with proactive refresh before expiry, per-account probe and reauth alert.
+Mesh-managed custodian with proactive refresh before expiry, per-account custody-state report and reauth alert (live per-account probe is the preprod GO item, Lot 2 scope).
 
 ## Scope / Guardrails
 - Scope limited to `packages/llm-mesh/src`, `packages/llm-mesh/tests`, `packages/llm-mesh/package.json`.
@@ -29,7 +29,19 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
   - `packages/llm-mesh/src/service/custodian-refresh.ts`
   - `packages/llm-mesh/src/service/reauth-alert.ts`
   - `packages/llm-mesh/tests/service/custodian-refresh.test.ts`
+  - `packages/llm-mesh/tests/service/custodian-refresh-policy.test.ts`
+  - `packages/llm-mesh/tests/service/facade.test.ts`
   - `packages/llm-mesh/package.json`
+  - `packages/llm-gateway/package.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -47,7 +59,8 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
 - `attention`: D1 owner decision 09/11 custodian in cluster (llm-mesh holds and maintains ALL owner accounts, permanently; immo is a device with no account/keyring/import).
 - `attention`: D2 accepted for the owner tenant only; kill-switch cross-user stays OFF for any other use.
 - `attention`: D3 Gemini-only fallback (gemini-3.8-flash) is Lot 5 scope, not this branch; this branch only keeps the static-key class and budget admission points untouched.
-- `acknowledge`: D4 reauth alert to conductor (h2a) + owner browser re-auth is implemented here as a pluggable sink.
+- `acknowledge`: D4 alert is emitted here via `ReauthAlertSink` (status flip + secret-free event, once per epoch); host wiring (h2a forward + owner re-auth gate + loop start, exactly one loop per owner scope) is Lot 2 scope — this branch stays library-only by design (M5).
+- `attention`: CUSTODIAN-EX1 — the M6 minor bump widens llm-mesh consumer ranges (`llm-gateway`, `cluster-mesh` peer + catalog + pinned specs/train/fixtures, `cluster-mesh` dev bump per precedent `3b9626d35`/`c9f19941f`); rollback = revert the bump commit, no src behavior depends on the version string.
 - `attention`: bump follow-through per repo convention (3b9626d35, d4c503eb0): hardcoded version in `decision-public-surface.test.ts`, `CHANGELOG.md` entry, and `selected` fixture lock regen via `refresh-lazy-package-lock`; ranges already cover 0.33.1 (gateway `^0.33.0`, cluster-mesh `<0.34.0`), no range edit.
 - `attention`: CI run 42635384823 e2e shard 1 single failure `tests/07-matrix.spec.ts:477` (Matrix lock/presence, User A leaves lock release, 9.9s, `toBe` Object.is). Out of branch scope (no UI/API change; llm-mesh additions are inert without `startCustodianLoop` wiring, Lot 2). Main push run 42625546540 is green on the same spec. Treated as non-systematic UI flake pending the fresh-head rerun.
 - `attention`: Gemini API key provided by owner as named secret; secret name proposed in the lane report, never printed or committed.
@@ -102,6 +115,17 @@ Mesh-managed custodian with proactive refresh before expiry, per-account probe a
       - [x] None (no user-facing flow change; live preprod probe is a GO item run by the conductor with owner enrollment).
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] Preprod probe GO: owner interactive enrollment done + 1 generation per enrolled transport green (conductor-owned).
+- [x] **Lot R — Wonder review rework (BLOCKERs + MAJORs, all with regression tests)**
+  - [x] B1 issuance-based TTL (no refresh-every-tick) + policy/cycle tests
+  - [x] B2 epoch cleared on (re-)enrollment + re-alert test
+  - [x] B3 grant-less expiry flips + alerts; expired external reads reauth-required + tests
+  - [x] M1 error classification (defer transient, flip definitive) + 3 tests
+  - [x] M2 jitter + single-loop-per-owner contract in loop/facade docs
+  - [x] M3 onError + immediate tick + interval validation; persist-fail still alerts (acquire-path test); refresh-in-flight report; route flip stays cycle-reported
+  - [x] M4 readiness aligned with route directory (expired external); live network probe stays preprod GO (no probe method on EnrollmentProvider, quota rule)
+  - [x] M5 D4 label corrected (sink here, host wiring Lot 2); facade option-wiring tests; loop is host-started, single per owner scope
+  - [x] M6 minor bump 0.34.0 + consumer range/fixture alignment per CUSTODIAN-EX1
+  - [x] MINORs: policy sanitize + test; full injected clock (no wall-time in custody decisions); custodian controls on admin facade; Allowed Paths list the policy test; CHANGELOG describes custody-state report (no probe overclaim); diagnostic ref stays report-only (no lookup use)
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] No spec consolidation needed (no `spec/BRANCH_SPEC_EVOL.md` created).
 - [ ] **Lot N — Final validation**
