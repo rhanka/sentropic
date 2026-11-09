@@ -2,7 +2,17 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-export const namespace = 'sentropic-preprod';
+// A4 operator tiers. Each owner-signed input names its tier in `format` and `namespace`, and every
+// kubectl call runs in that namespace only. The operator names the tier explicitly (A4_TIER).
+export const tiers = Object.freeze({
+  preprod: Object.freeze({ tier: 'preprod', namespace: 'sentropic-preprod', origin: 'https://preprod.sentropic.sent-tech.ca' }),
+  prod: Object.freeze({ tier: 'prod', namespace: 'sentropic', origin: 'https://sentropic.sent-tech.ca' }),
+});
+export function tierOf(env) {
+  if (!Object.hasOwn(tiers, env.A4_TIER ?? '')) throw new Error('tier_invalid');
+  return tiers[env.A4_TIER];
+}
+export const wiring = 'deploy/k8s/components/a4-wiring';
 export const podName = 'sentropic-a4-custodian';
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export const canonical = value => JSON.stringify(value && typeof value === 'object'
@@ -10,7 +20,8 @@ export const canonical = value => JSON.stringify(value && typeof value === 'obje
     : Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
       .map(([key, item]) => [key, JSON.parse(canonical(item))])) : value);
 
-export function kubectl(config, args, input) {
+export function kubectl(config, args, input, namespace) {
+  if (!Object.values(tiers).some(tier => tier.namespace === namespace)) throw new Error('namespace_invalid');
   const result = spawnSync('kubectl', ['--kubeconfig', config, '--namespace', namespace,
     '--request-timeout=60s', ...args], { input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
   if (result.status !== 0 || result.error) throw new Error('kubectl_failed');
@@ -23,8 +34,8 @@ export function privateInput(path, max = 32768) {
   return readFileSync(path, 'utf8');
 }
 /** Prior approval binds the immutable annex without claiming any post-fence observation. */
-export function assertAuthorization(authorization) {
-  if (authorization.format !== 'preprod-a4-authorization/1' || authorization.namespace !== namespace
+export function assertAuthorization(authorization, tier) {
+  if (authorization.format !== `${tier.tier}-a4-authorization/1` || authorization.namespace !== tier.namespace
     || typeof authorization.authorizationRef !== 'string' || !authorization.authorizationRef.trim()
     || authorization.authorizationRef.length > 512 || /placeholder|<|>|TODO|example|pending/i.test(authorization.authorizationRef)
     || !/^[a-z][a-z0-9-]{0,39}$/.test(authorization.operationId)
@@ -33,10 +44,11 @@ export function assertAuthorization(authorization) {
     throw new Error('authorization_invalid');
   }
 }
-export function assertRequest(request) {
+export function assertRequest(request, tier) {
   const refs = ['authorizationRef', 'writerFenceRef', 'rollbackCheckpointRef', 'rollbackLimitsRef',
     'sourceMetadataDispositionRef', 'remoteSnapshotRef'];
-  if (request.format !== 'preprod-a4-request/1' || request.namespace !== namespace
+  if (request.format !== `${tier.tier}-a4-request/1` || request.namespace !== tier.namespace
+    || !new RegExp(`^email-code-hmac:v1:${tier.tier}:[a-f0-9]{16}$`).test(request.emailCodeActiveKeyRef ?? '')
     || refs.some(name => typeof request[name] !== 'string' || !request[name].trim() || request[name].length > 512
       || /placeholder|<|>|TODO|example|pending/i.test(request[name]))
     || request.legacyWritersStopped !== true || request.remoteFileWriterStopped !== true

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.0-dev.19
+
+- Identity replica sync (`mapA4IdentitySource` provenance): legacy WebAuthn credentials carry
+  no RP column while the app and the IdP registered into the same table, so the import stamps
+  them only on a single-RP tier and fails closed otherwise (`CM_IDENTITY_CUTOVER_IDP_RP_ID`
+  declared by the operator, compared against the tier `rpId`). Unknown or split provenance
+  refuses the import instead of guessing.
+
 ## 0.26.0-dev.18
 
 - GitHub App router (`createGitHubAppRouter`): responses carry `referrer-policy: same-origin`

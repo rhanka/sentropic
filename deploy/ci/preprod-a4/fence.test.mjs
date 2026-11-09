@@ -13,7 +13,7 @@ const commands = [['scale', 'deployment/api', '--replicas=0'],
 function setup(overrides = {}, binding = {}) {
   const grant = { ...authorization, ...binding, format: 'preprod-a4-execution/1', actions: { fence: commands } };
   const bytes = JSON.stringify(grant), fake = fixture();
-  const env = { A4_KUBECONFIG_FILE: '/private/kube', A4_AUTHORIZATION_FILE: '/private/authorization',
+  const env = { A4_TIER: 'preprod', A4_KUBECONFIG_FILE: '/private/kube', A4_AUTHORIZATION_FILE: '/private/authorization',
     A4_REQUEST_FILE: '/private/request', A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(bytes),
     A4_ACTION: 'fence', A4_DRY_RUN: '0', A4_PHASE: 'checkpoint' };
   let request = { ...approvedRequest, legacyWritersStopped: false, remoteFileWriterStopped: false };

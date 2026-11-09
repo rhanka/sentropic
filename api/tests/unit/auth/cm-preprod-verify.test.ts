@@ -15,7 +15,8 @@ vi.mock('../../../src/scripts/cm-preprod-contract', async original => ({
     candidateCommit: 'a'.repeat(40), candidateImage: `ghcr.io/rhanka/sentropic-api@sha256:${'b'.repeat(64)}`,
     backupTemplateSha256: 'b'.repeat(64), authorizationRef: 'track:approval', writerFenceRef: 'track:fence',
     rollbackCheckpointRef: 'track:rollback', rollbackLimitsRef: 'track:limits', sourceMetadataDispositionRef: 'track:metadata',
-    remoteSnapshotRef: 'custody:remote', remoteSnapshotDigest: 'b'.repeat(64), legacyWritersStopped: true, remoteFileWriterStopped: true }),
+    remoteSnapshotRef: 'custody:remote', remoteSnapshotDigest: 'b'.repeat(64), legacyWritersStopped: true, remoteFileWriterStopped: true,
+    emailCodeActiveKeyRef: 'email-code-hmac:v1:preprod:15c2f8b66073655a' }),
 }));
 const migrationHash = readMigrationFiles({ migrationsFolder: './drizzle/control' }).find(row => row.folderMillis === 1793577600000)!.hash;
 let failure = '', queries: string[] = [];
