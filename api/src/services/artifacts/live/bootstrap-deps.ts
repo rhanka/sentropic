@@ -1,10 +1,14 @@
 /**
- * Pod agent section: W2 offline clean install (W3 `install { recipe, runId, source, cache, tarballs }`).
+ * Pod agent section: W2 offline clean install (W3 `install { recipe, runId, source, cache, tarballs, workspaces }`).
  * - `source` is the staged source tree, placed in a fresh /tmp/install (no node_modules, .npmrc or .yarnrc).
  * - `cache` carries the trusted-cache tarballs; each is re-verified against its SRI and stored at npm's
  *   content-addressed path in /tmp/npm-cache. A lockfile entry without a staged literal integrity refuses
- *   with `integrity` before npm runs, so the install never depends on a fetch.
- * - Then the frozen `npm ci --offline --ignore-scripts` runs in /tmp/install with the host environment.
+ *   with `integrity` before npm runs, so the install never depends on a fetch. In workspace-scoped mode the
+ *   pod recomputes the expected root-lockfile subset from the staged lockfile plus `workspaces` (same rule as
+ *   the API: selected and linked workspaces, no root dependencies) and refuses `integrity_missing` when any
+ *   expected tarball is not staged — never an opaque npm failure, never a sealed partial tree.
+ * - Then the frozen `npm ci --offline --ignore-scripts` (plus one `--workspace=<dir>` per selection, sorted)
+ *   runs in /tmp/install with the host environment.
  * The supervisor exports the result with `snapshot { root: 'dependencies' }` (bootstrap-procs.ts).
  */
 export const DEPENDENCY_OPS_SOURCE = String.raw`
@@ -51,18 +55,87 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
       || name.startsWith('/') || name.endsWith('/')) return false;
     return name.split('/').every((s) => s !== '' && s !== '.' && s !== '..' && /^[A-Za-z0-9._@+-]+$/.test(s));
   }
+  function recordOf(value) {
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
+  }
+  function depsOf(entry, sections) {
+    const out = [];
+    for (const section of sections) {
+      const group = recordOf(entry[section]);
+      if (group) for (const name of Object.keys(group)) out.push(name);
+    }
+    return out;
+  }
+  function resolveLocked(packages, fromDir, name) {
+    let dir = fromDir;
+    for (;;) {
+      const candidate = dir ? dir + '/node_modules/' + name : 'node_modules/' + name;
+      if (Object.hasOwn(packages, candidate)) return candidate;
+      if (!dir) return null;
+      dir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '';
+    }
+  }
+  function subsetKeep(packages, selection) {
+    const SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+    const REMOTE = ['dependencies', 'optionalDependencies', 'peerDependencies'];
+    const keep = new Set(); const visited = new Set(selection); const queue = [...selection];
+    const expanded = new Set(); const stack = [];
+    const pushRemote = (found) => { if (!keep.has(found)) { keep.add(found); if (!expanded.has(found)) { expanded.add(found); stack.push(found); } } };
+    const follow = (dep, base) => {
+      const found = resolveLocked(packages, base, dep);
+      if (!found) return;
+      const target = recordOf(packages[found]);
+      if (!target) return;
+      if (target.link === true) {
+        const resolved = typeof target.resolved === 'string' ? target.resolved : '';
+        if (resolved && Object.hasOwn(packages, resolved) && !visited.has(resolved)) { visited.add(resolved); queue.push(resolved); }
+        return;
+      }
+      pushRemote(found);
+    };
+    while (queue.length) {
+      const dir = queue.shift();
+      const entry = recordOf(packages[dir]);
+      if (!entry) continue;
+      for (const dep of depsOf(entry, SECTIONS)) follow(dep, dir);
+      while (stack.length) {
+        const remotePath = stack.pop();
+        const remoteEntry = recordOf(packages[remotePath]);
+        if (!remoteEntry) continue;
+        for (const dep of depsOf(remoteEntry, REMOTE)) follow(dep, remotePath);
+      }
+    }
+    while (stack.length) {
+      const remotePath = stack.pop();
+      const remoteEntry = recordOf(packages[remotePath]);
+      if (!remoteEntry) continue;
+      for (const dep of depsOf(remoteEntry, REMOTE)) follow(dep, remotePath);
+    }
+    return keep;
+  }
   async function requireCovered(staged, workspaces) {
     let lock = null;
     try { lock = JSON.parse(await agentFs.readFile(at(INSTALL_DIR + '/package-lock.json'), 'utf8')); } catch { agentFail('failed', 'lockfile_missing'); }
     if (!lock || !lock.packages || typeof lock.packages !== 'object' || Array.isArray(lock.packages)) agentFail('failed', 'invalid_lockfile');
     if (workspaces.length > 0) {
+      const packages = lock.packages;
+      for (const name of workspaces) if (!Object.hasOwn(packages, name)) agentFail('failed', 'unknown_workspace');
+      const keep = subsetKeep(packages, workspaces);
       const locked = new Set();
-      for (const entry of Object.values(lock.packages)) {
+      for (const entry of Object.values(packages)) {
         if (!entry || typeof entry !== 'object' || entry.link === true || typeof entry.resolved !== 'string'
           || !/^https?:\/\//.test(entry.resolved) || typeof entry.integrity !== 'string') continue;
         locked.add(entry.integrity);
       }
+      const expected = new Set();
+      for (const path of keep) {
+        const entry = recordOf(packages[path]);
+        if (!entry || entry.link === true || typeof entry.resolved !== 'string' || !/^https?:\/\//.test(entry.resolved)
+          || typeof entry.integrity !== 'string') agentFail('integrity', 'integrity_missing');
+        expected.add(entry.integrity);
+      }
       for (const integrity of staged) if (!locked.has(integrity)) agentFail('integrity', 'integrity_missing');
+      for (const integrity of expected) if (!staged.has(integrity)) agentFail('integrity', 'integrity_missing');
       return;
     }
     for (const [path, entry] of Object.entries(lock.packages)) {
