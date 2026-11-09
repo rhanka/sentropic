@@ -9,11 +9,12 @@
  */
 import { sql } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
-import type { NativeUsagePricing } from '@sentropic/llm-mesh';
+import { METERED_STATIC_KEY_FALLBACK_TRANSPORTS, type NativeUsagePricing } from '@sentropic/llm-mesh';
 import type { CallerAuthPort, CostContext, RouteAttemptSettlement, RouteMeteringSink, RouteRequestSettlement } from '@sentropic/llm-gateway';
 import { ensureCheckedGatewayBody, gatewayRequestBodyLimit, isGatewayBodyPath } from '@sentropic/llm-gateway';
 
 import { createId } from '../../utils/id';
+import { logger } from '../../logger';
 import { outboxWriter } from '../outbox/outbox-writer';
 import {
   lockBudgets, modelBucketKey, nativePricingEligible, pgTextArray, priceWeight, principalOf, usageCost, type LedgerDatabase, type LedgerTx, type PricingRow,
@@ -165,6 +166,89 @@ export interface RouteSettlementOptions {
   readonly now?: () => Date;
 }
 
+/**
+ * Lot 5 paid-fallback overflow alert (owner D3): on the FIRST settled request
+ * of the month that went out on a metered static-key fallback transport, emit
+ * `llm.fallback.first_use` with spend-to-date and the monthly cap (the
+ * projected maximum exposure once subscriptions are gone). Fenced by the
+ * ledger in the same transaction: two exactly-concurrent first uses may emit
+ * twice with identical content, which the conductor dedupes by aggregate id.
+ * The alert carries money only — no prompt, completion, key or account text.
+ */
+const startOfMonthUtc = (at: Date): Date => new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1));
+
+interface FallbackUse {
+  readonly transport: string;
+  readonly model: string;
+}
+
+const fallbackFirstUse = (
+  attempts: readonly RouteAttemptSettlement[],
+  requestedModel: string,
+): FallbackUse | undefined => {
+  const used = attempts.find((attempt) =>
+    METERED_STATIC_KEY_FALLBACK_TRANSPORTS.includes(attempt.transportProviderId ?? ''));
+  if (!used?.transportProviderId) return undefined;
+  return { transport: used.transportProviderId, model: used.modelId ?? requestedModel };
+};
+
+/** True when no fallback row for this transport exists yet this month. Runs BEFORE the insert. */
+const isFallbackFirstUse = async (
+  tx: LedgerTx,
+  tenantId: string,
+  transport: string,
+  monthStart: Date,
+): Promise<boolean> => {
+  const [prior] = (await tx.execute(sql`SELECT 1 AS present FROM control.cost_ledger
+    WHERE tenant_id = ${tenantId} AND created_at >= ${monthStart}
+      AND attempts @> ${JSON.stringify([{ transportProviderId: transport }])}::jsonb
+    LIMIT 1`)).rows;
+  return !prior;
+};
+
+const emitFallbackFirstUse = async (
+  tx: LedgerTx,
+  input: {
+    readonly hold: HoldRow;
+    readonly requestId: string;
+    readonly use: FallbackUse;
+    readonly monthStart: Date;
+  },
+): Promise<void> => {
+  const [bucket] = (await tx.execute(sql`SELECT cap_micro_usd, spent_micro_usd, reset_at FROM control.budgets
+    WHERE id = ANY(${pgTextArray(input.hold.budgetIds)}) AND scope_kind = 'tenant'
+    ORDER BY id LIMIT 1`)).rows as Array<Record<string, unknown>>;
+  const spendMicroUsd = bucket ? Number(bucket.spent_micro_usd) : 0;
+  const capMicroUsd = bucket?.cap_micro_usd === null || bucket?.cap_micro_usd === undefined
+    ? null
+    : Number(bucket.cap_micro_usd);
+  const periodStart = input.monthStart.toISOString().slice(0, 7);
+  await outboxWriter.append(tx as Parameters<typeof outboxWriter.append>[0], {
+    aggregateType: 'llm_fallback',
+    aggregateId: `${input.hold.tenantId}:${periodStart}:${input.use.transport}`,
+    channel: 'llm_settlement',
+    tenantId: input.hold.tenantId,
+    workspaceId: input.hold.workspaceId,
+    envelope: {
+      type: 'llm.fallback.first_use',
+      requestId: input.requestId,
+      transportProviderId: input.use.transport,
+      modelId: input.use.model,
+      spendMicroUsd,
+      capMicroUsd,
+      projectedMaxMicroUsd: capMicroUsd,
+      periodStart,
+    },
+  });
+  logger.warn(
+    {
+      tenantId: input.hold.tenantId, transportProviderId: input.use.transport, modelId: input.use.model,
+      spendMicroUsd, capMicroUsd, periodStart,
+    },
+    'LLM paid fallback engaged: subscription accounts did not serve this request',
+  );
+};
+
 export const createRouteSettlement = (options: RouteSettlementOptions): RouteMeteringSink & {
   /** Readiness: the 0008 ledger attribution columns answer a bounded query. */
   probe(): Promise<boolean>;
@@ -217,6 +301,11 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
       input: settlement.usage.inputTokens, output: settlement.usage.outputTokens,
       result: RESULT[settlement.outcome], attempts: JSON.stringify(attempts),
     };
+    const fallbackUse = fallbackFirstUse(settlement.attempts, settlement.requestedModel);
+    const fallbackMonthStart = fallbackUse ? startOfMonthUtc(now) : undefined;
+    const firstFallbackUse = fallbackUse && fallbackMonthStart
+      ? await isFallbackFirstUse(tx, hold.tenantId, fallbackUse.transport, fallbackMonthStart)
+      : false;
     const inserted = await tx.execute(sql`INSERT INTO control.cost_ledger (id, idempotency_key, user_id, workspace_id,
         tenant_id, operation, provider_id, model_id, input_tokens, output_tokens, total_tokens, cost_micro_usd,
         principal_kind, principal_key, budget_strategy_id, pricing_version, result, hold_id, quote_ref,
@@ -290,6 +379,14 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
       tenantId: hold.tenantId, workspaceId: hold.workspaceId,
       envelope: { type: 'llm.request.settled', requestId, holdId: holdRef, costMicroUsd: Number(total), result: values.result },
     });
+    if (firstFallbackUse && fallbackUse && fallbackMonthStart && inserted.rows.length > 0) {
+      await emitFallbackFirstUse(tx, {
+        hold,
+        requestId: requestId!,
+        use: fallbackUse,
+        monthStart: fallbackMonthStart,
+      });
+    }
   };
 
   return {
