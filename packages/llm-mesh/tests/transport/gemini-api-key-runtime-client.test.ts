@@ -88,4 +88,65 @@ describe('Gemini static-key runtime client (mesh-side upstream transport)', () =
     expect(record.retryAfterMs).toBe(7_000);
     expect(String((failure as Error).message)).toBe('Gemini API key rate limit exceeded (429)');
   });
+
+  it('maps 402 to a distinct non-retryable billing failure naming depleted prepayment', async () => {
+    const fetchFn = vi.fn(async () => new Response(
+      JSON.stringify({ error: { code: 402, message: 'Payment Required' } }),
+      { status: 402 },
+    ));
+    const client = new GeminiApiKeyRuntimeClient({ apiKey: API_KEY, fetch: fetchFn });
+
+    const failure = await client.generate({ ...request }).catch((error: unknown) => error);
+    const record = failure as Record<string, unknown>;
+
+    expect(record.status).toBe(402);
+    expect(record.code).toBe('billing_unavailable');
+    expect(String((failure as Error).message)).toContain('prepayment credits are depleted');
+  });
+
+  it('maps 401 and 403 to auth_failed', async () => {
+    for (const status of [401, 403]) {
+      const fetchFn = vi.fn(async () => new Response(
+        JSON.stringify({ error: { code: status, status: 'UNAUTHENTICATED' } }),
+        { status },
+      ));
+      const client = new GeminiApiKeyRuntimeClient({ apiKey: API_KEY, fetch: fetchFn });
+
+      const failure = await client.generate({ ...request }).catch((error: unknown) => error);
+
+      expect((failure as Record<string, unknown>).status).toBe(status);
+      expect((failure as Record<string, unknown>).code).toBe('auth_failed');
+    }
+  });
+
+  it('never leaks the key in thrown errors', async () => {
+    const fetchFn = vi.fn(async () => new Response('forbidden', { status: 403 }));
+    const client = new GeminiApiKeyRuntimeClient({ apiKey: API_KEY, fetch: fetchFn });
+
+    const failure = await client.generate({ ...request }).catch((error: unknown) => error);
+
+    expect(JSON.stringify(failure)).not.toContain(API_KEY);
+  });
+
+  it('refuses an empty key without echoing it', () => {
+    expect(() => new GeminiApiKeyRuntimeClient({ apiKey: '  ' })).toThrow('Gemini API key is missing');
+    try {
+      new GeminiApiKeyRuntimeClient({ apiKey: '' });
+    } catch (error) {
+      expect(JSON.stringify(error)).not.toContain('test');
+    }
+  });
+
+  it('streams a single-shot completion ending in done', async () => {
+    const fetchFn = vi.fn(async () => okResponse(successPayload));
+    const client = createGeminiApiKeyClient({ apiKey: API_KEY, fetch: fetchFn });
+
+    const events = [];
+    for await (const event of await client.stream({ ...request })) {
+      events.push(event);
+    }
+
+    expect(events.map((event) => event.type)).toEqual(['content_delta', 'done']);
+    expect(events[1]).toMatchObject({ data: { finishReason: 'stop' } });
+  });
 });
