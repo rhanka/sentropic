@@ -18,14 +18,14 @@ const labels = (key: LiveKey, runtime: LiveRuntime) => ({
  * Memory); their achievable total stays bounded by the container ephemeral limit (WORKER_EPHEMERAL_LIMIT_MIB), which is quota-bound and
  * never raised here. Measured install of a ~1 GiB unpacked tree (preprod 2026-11-09, 745 paths, ~854 MiB unpacked):
  * source ~105, scratch ~1530 peak (tarballs + working copy + npm tmp), dependencies ~854. Defaults hold a ~1 GiB
- * tree with margin within the 3400Mi pod total: dependencies +50%, scratch +17%, source +144%. */
+ * tree with margin within the 3400Mi pod total: dependencies +50%, scratch +9%, source kept at 384 (forge snapshot up to 192 MiB plus build output). */
 export interface WorkerSizing { sourceMiB: number; scratchMiB: number; dependenciesMiB: number }
 /** Env overrides of the volume caps in MiB; unset or out of range falls back to the safe default (names only).
  * The container limits are quota-bound constants, so no env sizing can break the tenant ResourceQuota fit. */
 export const VOLUME_SOURCE_MB_ENV = 'ARTIFACT_VOLUME_SOURCE_MB';
 export const VOLUME_SCRATCH_MB_ENV = 'ARTIFACT_VOLUME_SCRATCH_MB';
 export const VOLUME_DEPENDENCIES_MB_ENV = 'ARTIFACT_VOLUME_DEPENDENCIES_MB';
-export const DEFAULT_WORKER_SIZING = Object.freeze({ sourceMiB: 256, scratchMiB: 1792, dependenciesMiB: 1280 });
+export const DEFAULT_WORKER_SIZING = Object.freeze({ sourceMiB: 384, scratchMiB: 1664, dependenciesMiB: 1280 });
 /** Container ephemeral limit: the pod is evicted when source+scratch+dependencies (+ logs) pass it, so it bounds the volume
  * total. 3 x 3400Mi = 10200Mi fits the builder namespace quota limits.ephemeral-storage 10Gi: three concurrent builder
  * pods instead of four, so that a ~1 GiB unpacked install (peak ~2.5 GiB on disk, measured 2026-11-09) is not evicted. */
