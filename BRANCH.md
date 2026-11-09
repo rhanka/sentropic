@@ -29,6 +29,7 @@
   - `api/tests/unit/deployment-secrets.test.ts`
   - `api/tests/unit/secret-crypto.test.ts`
   - `api/tests/unit/secret-reencrypt.test.ts`
+  - `api/tests/unit/auth/cm-connector-envelope.test.ts`
   - `docs/secrets.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
