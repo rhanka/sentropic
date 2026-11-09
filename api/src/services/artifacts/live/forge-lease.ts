@@ -120,7 +120,7 @@ export function createLeaseForgeReads(options: {
       if (rows.length !== entry.manifest.length || rows.some((row, i) => {
         const m = entry.manifest[i]!;
         return row.path !== m.path || row.mode !== m.mode || row.size !== m.size || row.sha256 !== m.sha256;
-      })) return unstable();
+      })) return unstable('source_changed');
       return again.files;
     },
   };
