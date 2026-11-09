@@ -59,6 +59,7 @@ Generic platform job-failure email alerting: frozen OpsJobFailureV1 contract, pu
 
 ## AI Flaky tests
 - Recorded (run 42714699575, head 1b16459cb): `test-e2e (4)` — `tests/02-organizations` (« détail champs non éditables »), `page.waitForURL: Timeout 10000ms`. Unrelated: 0 files `ui|e2e|apps` in this branch's diff, full suite green on functionally identical head f2b196c68 (run 42711326219, delta = BRANCH.md prose only), and a different e2e shard failed on the previous run (non-systematic across shards). Left for conductor sign-off; no code change made for it.
+- Recorded (run 42716635293, head 677af64eb): `validate-cluster-mesh (postgres)` — `tests/storage/postgres-instance-ownership.spec.ts` (« idle-expired lease takeover »), `CanonicalOwnershipError: retained session expired`, 149 passed / 1 failed. Unrelated: timing-sensitive lease-expiry test, 0 files `storage` in this branch's diff, lane green on functionally identical head f2b196c68 (run 42711326219). Third distinct timing flake in three runs (e2e-5, e2e-4, pg-lease), all other jobs green every time. Left for conductor sign-off; no code change made for it.
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
   - Non-systematic means at least one success on the same commit and same command.
