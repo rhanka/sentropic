@@ -21,6 +21,7 @@ import { composeSupervisor } from './supervisor-composition';
 import type { SupervisorSources } from './supervisor';
 import { createRelaySupervisorChannel, SUPERVISOR_COMMAND_TIMEOUT_MS } from './supervisor-relay';
 import { createBuildJobs, jobForgeBinding, runStaleMs } from './build-jobs';
+import { defaultInstallBudget, type InstallBudget } from './deadline';
 import { createHostBuildApi, type HostBuildEnv, type HostIdentity } from './host-build-api';
 import { createHostLiveApi } from './host-live-api';
 import { createRemoteLive } from './remote-live';
@@ -55,6 +56,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     /** Live pod slots of this environment from per-environment configuration; the owner decision is 4 on one d2-4. */
     admission: { capacity?: number; waiterTtlMs: number };
     cache: Pick<CachePorts, 'signingKey'>;
+    /** Progress-based bound of the dependency install phase (stall watchdog plus absolute ceiling). */
+    installBudget?: InstallBudget;
   }) {
   const channel = createRelaySupervisorChannel({ baseUrl: options.relayUrl });
   const store = createPostgresLiveStore(options.pool);
@@ -66,7 +69,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS,
     sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
-    fetch: fetchLockedTarball, storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) });
+    fetch: fetchLockedTarball, storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) },
+  options.installBudget ?? defaultInstallBudget());
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
     waiterTtlMs: options.admission.waiterTtlMs, now: options.now, holders: () => store.active() });
   return createLiveController({ ...options, cache, store, admission, heavy,
@@ -89,7 +93,7 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
   forgeBindings: Pick<ForgeBindings, 'admit' | 'validate'>;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
-    runStaleMs(options.heavy.maxWaitMs));
+    runStaleMs(options.heavy.maxWaitMs, options.installBudget?.ceilingMs));
   const candidates = createCandidateStore();
   const publication = createHandoffPublication({ host: options.host, candidates, outcomes: jobs,
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });
