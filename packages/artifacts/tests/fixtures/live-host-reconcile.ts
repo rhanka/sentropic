@@ -21,7 +21,7 @@ export function reconcileJobStore(initial: Record<string, JobRow> = {}) {
         .slice(0, limit)
         .map(([raw, row]) => {
           const [scopeId, artifactId, jobId] = JSON.parse(raw) as [string, string, string];
-          return { scopeId, artifactId, jobId, state: row.state as 'build_pending' | 'building', updatedAtMs: row.updatedAtMs };
+          return { scopeId, artifactId, jobId, updatedAtMs: row.updatedAtMs };
         });
     },
     async read(input) {
@@ -33,7 +33,8 @@ export function reconcileJobStore(initial: Record<string, JobRow> = {}) {
       if (!row) return 'not-found';
       if (row.state !== 'build_pending' && row.state !== 'building') return 'already-terminal';
       rows.set(key(input.scopeId, input.artifactId, input.jobId),
-        { state: 'build_failed', code: input.code, ...(input.reason ? { reason: input.reason } : {}), updatedAtMs: 0 });
+        { state: 'build_failed', ...(input.code !== undefined ? { code: input.code } : {}),
+          ...(input.reason ? { reason: input.reason } : {}), updatedAtMs: 0 });
       return 'updated';
     },
     async markPublished(input) {
