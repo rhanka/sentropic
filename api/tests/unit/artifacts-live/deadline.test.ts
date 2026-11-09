@@ -158,4 +158,25 @@ describe('phase logging', () => {
     expect(lines[1]).toMatchObject({ outcome: 'fail', reason: 'builder_unavailable' });
     expect(JSON.stringify(lines)).not.toContain('relay token abc');
   });
+  it('carries a classified recipe detail on the fail line, scrubbed and bounded, never the raw secret', async () => {
+    const lines: Array<Record<string, unknown>> = [];
+    const failure = new LiveError('builder_unavailable', 'install_failed:enospc',
+      `${'w'.repeat(9000)}\n//registry.npmjs.org/:_authToken=secret-detail\nnpm error code ENOSPC`);
+    await expect(runPhase(key, 'install', async () => { throw failure; },
+      { log: fields => lines.push(fields as Record<string, unknown>), now: () => 0 })).rejects.toBe(failure);
+    expect(lines[1]).toMatchObject({ outcome: 'fail', reason: 'builder_unavailable:install_failed:enospc' });
+    const detail = lines[1].detail as string;
+    expect(Buffer.byteLength(detail)).toBeLessThanOrEqual(4096);
+    expect(detail).toContain('npm error code ENOSPC');
+    expect(detail).toContain('//registry.npmjs.org/:_authToken=[redacted]');
+    expect(JSON.stringify(lines)).not.toContain('secret-detail');
+  });
+  it('omits the detail field when the error carries none', async () => {
+    const lines: Array<Record<string, unknown>> = [];
+    await expect(runPhase(key, 'install', async () => { throw new LiveError('builder_unavailable', 'install_failed:exit_1'); },
+      { log: fields => lines.push(fields as Record<string, unknown>), now: () => 0 }))
+      .rejects.toMatchObject({ code: 'builder_unavailable' });
+    expect(lines[1]).toMatchObject({ outcome: 'fail', reason: 'builder_unavailable:install_failed:exit_1' });
+    expect(lines[1]).not.toHaveProperty('detail');
+  });
 });
