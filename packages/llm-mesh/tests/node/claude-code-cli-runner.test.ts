@@ -124,8 +124,11 @@ case "$mode" in
     sleep 30 & SLEEP_PID=$!
     wait $SLEEP_PID
     ;;
-  version)
-    printf '%s\n' '2.1.296 (Claude Code)'
+  noisy-orphan)
+    trap '' TERM
+    (while true; do date +%s%N >> "$dump/heartbeat"; sleep 0.2; done) &
+    sleep 30 &
+    wait
     ;;
 esac
 `;
@@ -365,6 +368,19 @@ describe('node claude CLI runner', () => {
       .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('timed out') });
   });
 
+  it('should reap a SIGTERM-ignoring tree on timeout', async () => {
+    await setMode('noisy-orphan');
+    const runner = new NodeClaudeCodeCliRunner({ timeoutMs: 500 });
+    await expect(collect(runner.run({ access, request: request(), signal: never })))
+      .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('timed out') });
+    await waitFor('heartbeat');
+    const countBeats = async (): Promise<number> =>
+      (await readDump('heartbeat')).split('\n').filter((line) => line.length > 0).length;
+    const before = await countBeats();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(await countBeats()).toBe(before);
+  });
+
   it('should refuse invalid options before spawning', async () => {
     expect(() => new NodeClaudeCodeCliRunner({ effort: 'med ium' })).toThrow(/effort/);
     expect(() => new NodeClaudeCodeCliRunner({ timeoutMs: 0 })).toThrow(/timeout/);
@@ -420,6 +436,20 @@ describe('node claude CLI runner', () => {
     });
     const env = await readDump('env');
     expect(env).toContain('oauth_set=no');
+  });
+
+  it('should reject a CLI older than the qualified line', async () => {
+    await setMode('old-version');
+    await expect(probeClaudeCodeCliCapabilities({
+      source: 'fake-source', qualificationRef: 'fake-receipt',
+    })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('2.1') });
+  });
+
+  it('should reject a CLI missing confinement flags', async () => {
+    await setMode('help-stripped');
+    await expect(probeClaudeCodeCliCapabilities({
+      source: 'fake-source', qualificationRef: 'fake-receipt',
+    })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('confinement') });
   });
 
   it('should build the consumer anthropic client through the factory', () => {
