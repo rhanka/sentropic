@@ -141,3 +141,98 @@ const toWireBody = (request: GenerateRequest): Record<string, unknown> => {
     },
   };
 };
+
+const candidateOf = (payload: unknown): Record<string, unknown> | null => {
+  const record = asRecord(payload);
+  const candidates = record?.candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  return asRecord(candidates[0]);
+};
+
+const extractText = (payload: unknown): string => {
+  const parts = asRecord(asRecord(candidateOf(payload))?.content)?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .map((part) => textOf(asRecord(part)?.text) ?? '')
+    .join('');
+};
+
+const extractToolCalls = (payload: unknown): ToolCall[] => {
+  const parts = asRecord(asRecord(candidateOf(payload))?.content)?.parts;
+  if (!Array.isArray(parts)) return [];
+  const calls: ToolCall[] = [];
+  for (const part of parts) {
+    const call = asRecord(asRecord(part)?.functionCall);
+    if (!call || typeof call.name !== 'string' || !call.name) continue;
+    const args = 'args' in call ? call.args : undefined;
+    const argumentsText = typeof args === 'string' ? args : JSON.stringify(args ?? {});
+    const toolCallId = `gemini-apikey-call-${calls.length}`;
+    calls.push({
+      toolCallId,
+      providerCallId: toolCallId,
+      name: call.name,
+      argumentsText,
+      ...(typeof args === 'object' && args !== null ? { arguments: args } : {}),
+    });
+  }
+  return calls;
+};
+
+const rawFinishOf = (payload: unknown): string | null => {
+  const finish = asRecord(candidateOf(payload))?.finishReason;
+  return typeof finish === 'string' && finish ? finish : null;
+};
+
+const finishOf = (rawFinish: string | null, sawToolCalls: boolean, text: string): FinishReason => {
+  if (sawToolCalls) return 'tool_calls';
+  if (rawFinish === 'MAX_TOKENS') return 'length';
+  if (rawFinish === 'SAFETY' || rawFinish === 'BLOCKLIST' || rawFinish === 'PROHIBITED_CONTENT') {
+    return 'content_filter';
+  }
+  return text ? 'stop' : 'unknown';
+};
+
+const extractUsage = (payload: unknown): TokenUsage | undefined => {
+  const usage = asRecord(asRecord(payload)?.usageMetadata);
+  if (!usage) return undefined;
+  const inputTokens = numOf(usage.promptTokenCount);
+  const outputTokens = numOf(usage.candidatesTokenCount);
+  const totalTokens = numOf(usage.totalTokenCount);
+  if (inputTokens === undefined && outputTokens === undefined && totalTokens === undefined) {
+    return undefined;
+  }
+  return {
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    providerRawUsage: payload,
+  };
+};
+
+interface ClassifiedFailure {
+  readonly status: number;
+  readonly code: string;
+  readonly message: string;
+}
+
+// Fixed messages only: the provider body and the key never enter errors.
+const classifyFailure = (status: number, body: unknown): ClassifiedFailure => {
+  const error = asRecord(asRecord(body)?.error);
+  const code = textOf(error?.code) ?? textOf(error?.status) ?? '';
+  const normalized = code.toUpperCase();
+  if (status === 429 || normalized === 'RESOURCE_EXHAUSTED' || normalized.includes('RATE_LIMIT')) {
+    return { status: 429, code: 'rate_limited', message: 'Gemini API key rate limit exceeded (429)' };
+  }
+  if (status === 402 || normalized.includes('BILLING') || normalized === 'FAILED_PRECONDITION') {
+    return {
+      status: 402,
+      code: 'billing_unavailable',
+      message: 'Gemini API key billing unavailable (402): prepayment credits are depleted',
+    };
+  }
+  if (status === 401 || status === 403
+    || normalized === 'UNAUTHENTICATED' || normalized === 'PERMISSION_DENIED') {
+    return { status, code: 'auth_failed', message: `Gemini API key authentication failed (${status})` };
+  }
+  return { status, code: 'http_error', message: `Gemini API key HTTP error (${status})` };
+};
