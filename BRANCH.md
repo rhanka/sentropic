@@ -54,6 +54,7 @@ Generic platform job-failure email alerting: frozen OpsJobFailureV1 contract, pu
 
 ## Feedback Loop
 - `done`: cluster-mesh bumped 0.26.0-dev.19 → 0.26.0-dev.20 in-lane (rules/workflow.md Package Publication is mandatory; enforce-package-bump blocks merge otherwise; no wagon rule found in rules/)
+- `done`: bump synced train-style (precedent 70d7c4642): root + api lockfiles, selected packaging fixture (package.json + lock), CHANGELOG dev.20 entry — validate-cluster-mesh packaging specs pin the manifest version
 - `blocked-unrelated`: docker image builds fail at api/Dockerfile audit-gate (allowlist GHSA-w3rx-r6r6-pgpr + GHSA-5p2g-fcmc-qvqq past review_due 2026-09-08); no .security/lock change in this branch, owner=CI maintainers. Workaround: migration 0023 hand-written in drizzle style (SQL + journal, no snapshot like 0009-0022); typecheck/lint/api-tests left to CI.
 
 ## AI Flaky tests
