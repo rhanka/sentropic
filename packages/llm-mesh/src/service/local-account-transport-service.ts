@@ -45,7 +45,7 @@ import type {
   PreparedRouteAttempt, RouteFailureClassification,
 } from '../routing-contracts.js';
 import {
-  DEFAULT_CUSTODIAN_REFRESH_POLICY,
+  sanitizeCustodianRefreshPolicy,
   shouldRefreshProactively,
   type CustodianAccountReport,
   type CustodianRefreshPolicy,
@@ -1115,7 +1115,7 @@ export class LocalAccountTransportService {
     }
 
     const account = this.accountsMap.get(acquisition.material.accountId ?? '');
-    const nowMs = typeof input.now === 'number' ? input.now : Date.now();
+    const nowMs = typeof input.now === 'number' ? input.now : this.nowMs();
 
     // Check if access token is expired
     // L1 external policy: custodied seats never refresh here and never
@@ -1227,7 +1227,7 @@ export class LocalAccountTransportService {
       const parsedExpiry = typeof rawExpiry === 'string' && rawExpiry
         ? Date.parse(rawExpiry)
         : Number.NaN;
-      const expiredAt = Number.isFinite(parsedExpiry) && parsedExpiry <= Date.now()
+      const expiredAt = Number.isFinite(parsedExpiry) && parsedExpiry <= this.nowMs()
         ? new Date(parsedExpiry).toISOString()
         : undefined;
       diagnostics.push({
@@ -1246,7 +1246,7 @@ export class LocalAccountTransportService {
   private isCredentialExpired(account: { expiresAt?: string | null }): boolean {
     if (!account.expiresAt) return false;
     const expiresAtMs = Date.parse(account.expiresAt);
-    return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
+    return Number.isFinite(expiresAtMs) && expiresAtMs <= this.nowMs();
   }
 
   /**
@@ -1399,7 +1399,7 @@ export class LocalAccountTransportService {
         if (!account || refreshed.accountId !== input.accountId
           || !refreshed.accessToken?.trim() || /[\r\n]/.test(refreshed.accessToken)
           || !Number.isFinite(Date.parse(refreshed.expiresAt))
-          || Date.parse(refreshed.expiresAt) <= Date.now()
+          || Date.parse(refreshed.expiresAt) <= this.nowMs()
           || (providerId === 'claude-code' && refreshed.authClientConfigVersion !== input.credentialVersion)
           || (refreshed.refreshToken !== undefined && (!refreshed.refreshToken.trim()
             || /[\r\n]/.test(refreshed.refreshToken)))) throw new Error('Invalid refresh grant');
@@ -1793,7 +1793,13 @@ export class LocalAccountTransportService {
     const account = this.accountsMap.get(accountId);
     if (account) {
       account.status = 'reauth_required';
-      await this.persistAccountState(account);
+      // The in-memory flip is the source of truth; a keyring outage must
+      // not swallow the owner alert.
+      try {
+        await this.persistAccountState(account);
+      } catch {
+        // The persist retries on the next tick; the alert goes out now.
+      }
       await this.emitReauthAlert(account, reason);
     }
   }
@@ -1848,7 +1854,7 @@ export class LocalAccountTransportService {
   async runCustodianRefreshCycle(): Promise<CustodianRefreshReport> {
     await this.restorePersistedAccounts();
     const now = this.nowMs();
-    const policy = this.serviceOptions.refreshPolicy ?? DEFAULT_CUSTODIAN_REFRESH_POLICY;
+    const policy = sanitizeCustodianRefreshPolicy(this.serviceOptions.refreshPolicy);
     const accounts: CustodianAccountReport[] = [];
     let refreshed = 0;
     for (const account of [...this.accountsMap.values()]) {
@@ -1903,7 +1909,9 @@ export class LocalAccountTransportService {
         continue;
       }
       if (this.refreshInFlight.has(account.accountId)) {
-        accounts.push({ ...base, action: 'skipped-healthy', readiness: 'ready' });
+        // A refresh is already running for this account; report its pending
+        // state instead of stacking another one or claiming it is healthy.
+        accounts.push({ ...base, action: 'refresh-in-flight', readiness: 'ready' });
         continue;
       }
       try {

@@ -9,16 +9,16 @@ import { LocalAccountTransportService } from '../../src/service/local-account-tr
 import { markExternalSeatAuthority } from '../../src/service/external-seat-authority.js';
 
 const MINUTE = 60_000;
-// Anchored on the real clock: provider refresh validation uses Date.now(), so
-// stubbed expiries must lie in the real future while the custodian clock stays set per test.
-const T0 = Date.now();
+// Fixed origin: every custody decision reads the injected clock, so stubbed
+// expiries derive from the same clock and the suite never touches wall time.
+const T0 = 1_750_000_000_000;
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-const stubProvider = (behavior: 'ok' | 'fail') => {
+const stubProvider = (behavior: 'ok' | 'fail', nowRef: { current: number }) => {
   const refresh = vi.fn(async (input: { accountId: string }) => {
     if (behavior === 'fail') throw new Error('provider refresh failed');
     return { accountId: input.accountId, accessToken: 'fresh-access',
-      refreshToken: 'rotated-refresh', expiresAt: iso(Date.now() + 24 * 60 * MINUTE),
+      refreshToken: 'rotated-refresh', expiresAt: iso(nowRef.current + 24 * 60 * MINUTE),
       authClientConfigVersion: 'v1.0.0' };
   });
   return { provider: { refresh } as unknown as EnrollmentProvider, refresh };
@@ -39,10 +39,11 @@ const seed = (service: LocalAccountTransportService, input: { accountId: string;
 };
 
 const makeService = (behavior: 'ok' | 'fail', now: number, alerts: ReauthAlertEvent[]) => {
-  const { provider, refresh } = stubProvider(behavior);
+  const nowRef = { current: now };
+  const { provider, refresh } = stubProvider(behavior, nowRef);
   const service = new LocalAccountTransportService(new InMemoryKeyring(),
     new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
-    { now: () => now, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    { now: () => nowRef.current, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
   return { service, refresh };
 };
 
@@ -319,6 +320,76 @@ describe('runCustodianRefreshCycle', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('should report a refresh already in flight instead of stacking refreshes', async () => {
+    // m3: a concurrent cycle must not claim the account is healthy or fire a
+    // second refresh while the first one is still running.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let entered = false;
+    const refresh = vi.fn(async (input: { accountId: string }) => {
+      entered = true;
+      await gate;
+      return { accountId: input.accountId, accessToken: 'fresh-access',
+        refreshToken: 'rotated-refresh', expiresAt: iso(T0 + 30 * 24 * 60 * MINUTE),
+        authClientConfigVersion: 'v1.0.0' };
+    });
+    const provider = { refresh } as unknown as EnrollmentProvider;
+    const service = new LocalAccountTransportService(new InMemoryKeyring(),
+      new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+      { now: () => T0 + 55 * MINUTE, reauthAlert: { notifyReauthRequired: () => {} } });
+    seed(service, { accountId: 'acct-flight', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-f', enrollmentCompletedAt: iso(T0) });
+    const first = service.runCustodianRefreshCycle();
+    await vi.waitFor(() => expect(entered).toBe(true));
+    const second = await service.runCustodianRefreshCycle();
+    expect(second.accounts[0]).toMatchObject({ action: 'refresh-in-flight', readiness: 'ready' });
+    release();
+    const settled = await first;
+    expect(settled.accounts[0]).toMatchObject({ action: 'refreshed', readiness: 'ready' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('should still alert when persisting the flip fails', async () => {
+    // M3: on the acquire path no cycle backstop re-emits, so a keyring
+    // outage during the flip persist must not swallow the owner alert.
+    const nowRef = { current: T0 };
+    const refresh = vi.fn(async (input: { accountId: string }) => ({
+      accountId: input.accountId, accessToken: 'fresh-access',
+      refreshToken: 'rotated-refresh', expiresAt: iso(nowRef.current + 5 * MINUTE),
+      authClientConfigVersion: 'v1.0.0',
+    }));
+    const provider = { refresh } as unknown as EnrollmentProvider;
+    const alerts: ReauthAlertEvent[] = [];
+    const keyring = new InMemoryKeyring();
+    const service = new LocalAccountTransportService(keyring,
+      new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+      { now: () => nowRef.current, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+    seed(service, { accountId: 'acct-persist', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 - MINUTE), refreshToken: 'grant-s', enrollmentCompletedAt: iso(T0) });
+    const acquireInput = { accountId: 'acct-persist', ownerScopeRef: 'owner',
+      targetProviderId: 'openai' as const, transportProviderId: 'cloud-code' as const };
+    // Persist a public record through one successful acquire-time refresh.
+    await service.release(await service.acquire(acquireInput));
+    expect(alerts).toEqual([]);
+    // The credential lapses, the provider reports a definitive revocation,
+    // and every later public-record write fails.
+    nowRef.current = T0 + 10 * MINUTE;
+    refresh.mockImplementation(async () => {
+      throw new Error('Codex token refresh failed (400): {"error":"invalid_grant"}');
+    });
+    // The fence write (first public write of the failing acquire) succeeds
+    // so the provider failure is definitive; the flip persist then fails.
+    let publicWrites = 0;
+    const innerSetSecret = keyring.setSecret.bind(keyring);
+    keyring.setSecret = async (key: string, secret: string): Promise<void> => {
+      if (key.endsWith(':public') && ++publicWrites > 1) throw new Error('keyring down');
+      return innerSetSecret(key, secret);
+    };
+    await expect(service.acquire(acquireInput)).rejects.toThrow(/reauthentication required/);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'refresh-failed' });
   });
 
   it('should read reauth-required for an expired external seat without flipping it', async () => {

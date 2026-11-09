@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_CUSTODIAN_REFRESH_POLICY,
   refreshSkewMs,
+  sanitizeCustodianRefreshPolicy,
   shouldRefreshProactively,
 } from '../../src/service/custodian-refresh.js';
 
@@ -26,6 +28,16 @@ describe('custodian refresh policy', () => {
       nowMs: T0 + 10 * MINUTE })).toBe(false);
     expect(shouldRefreshProactively({ expiresAtMs: T0 - MINUTE, issuedAtMs: issuedAt,
       nowMs: T0 })).toBe(true);
+  });
+
+  it('should sanitize an invalid host policy to safe bounds', () => {
+    expect(sanitizeCustodianRefreshPolicy(undefined)).toEqual(DEFAULT_CUSTODIAN_REFRESH_POLICY);
+    expect(sanitizeCustodianRefreshPolicy({ skewRatio: Number.NaN, minSkewMs: -1 }))
+      .toEqual(DEFAULT_CUSTODIAN_REFRESH_POLICY);
+    expect(sanitizeCustodianRefreshPolicy({ skewRatio: 2, minSkewMs: 60_000 }))
+      .toEqual({ skewRatio: 0.25, minSkewMs: 60_000 });
+    expect(sanitizeCustodianRefreshPolicy({ skewRatio: 0.5, minSkewMs: Number.POSITIVE_INFINITY }))
+      .toEqual({ skewRatio: 0.5, minSkewMs: 600_000 });
   });
 
   it('should bound the window by credential issuance, not enrollment age', () => {
