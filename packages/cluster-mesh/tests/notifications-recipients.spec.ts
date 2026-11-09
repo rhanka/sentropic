@@ -22,8 +22,8 @@ describe('declared ops recipients resolver', () => {
       }),
     });
     expect(await port.listRecipientsForTarget('immo-prod')).toEqual([
-      { accountId: 'u-owner', email: 'owner@example.com' },
-      { accountId: 'u-farid', email: 'farid@example.com' },
+      { accountId: 'u-owner', email: 'owner@example.com', basis: 'platform-declaration:immo-prod' },
+      { accountId: 'u-farid', email: 'farid@example.com', basis: 'platform-declaration:immo-prod' },
     ]);
   });
 
@@ -43,7 +43,9 @@ describe('declared ops recipients resolver', () => {
       }),
       onSkipped,
     });
-    expect(await port.listRecipientsForTarget('immo-prod')).toEqual([{ accountId: 'u-ok', email: 'ok@example.com' }]);
+    expect(await port.listRecipientsForTarget('immo-prod')).toEqual([
+      { accountId: 'u-ok', email: 'ok@example.com', basis: 'platform-declaration:immo-prod' },
+    ]);
     expect(onSkipped.mock.calls.map((call) => call[0])).toEqual([
       { targetKey: 'immo-prod', accountId: 'u-ghost', reason: 'unknown_account' },
       { targetKey: 'immo-prod', accountId: 'u-off', reason: 'account_not_active' },
