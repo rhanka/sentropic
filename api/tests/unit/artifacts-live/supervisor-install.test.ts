@@ -11,6 +11,9 @@ const pin = { path: 'node_modules/vite', url: 'https://registry.npmjs.org/vite/-
   integrity: `sha512-${createHash('sha512').update(tgz).digest('base64')}` };
 const inputs = (bytes = tgz) => ({ lockfile: Buffer.from('{"lockfileVersion":3}'), identity: {} as never, recipe: INSTALL_RECIPE,
   stagingRef: 'ref-h', runtime, tarballs: stream([{ pin, bytes }]), sink: vi.fn(async (_file: DependencyFile) => undefined) });
+const scopedInputs = () => ({ lockfile: Buffer.from('{"lockfileVersion":3}'),
+  identity: { installWorkspaces: ['ui'] } as never, recipe: { ...INSTALL_RECIPE, args: [...INSTALL_RECIPE.args, '--workspace=ui'] } as never,
+  stagingRef: 'ref-h', runtime, tarballs: stream([{ pin, bytes: tgz }]), sink: vi.fn(async (_file: DependencyFile) => undefined) });
 const exported = { snapshot: () => ({ next: null, entries: [
   { path: 'node_modules/vite/bin/vite.js', type: 'file', mode: 0o755, size: 2, offset: 0, data: Buffer.from('#!').toString('base64') },
   { path: 'node_modules/.bin/vite', type: 'symlink', mode: 0o777, size: 0, offset: 0, data: '' },
@@ -116,5 +119,17 @@ describe('supervisor offline clean install', () => {
   it('should refuse an exported tree with special files as an invalid dependency cache', async () => {
     const special = fakePod({ snapshot: () => ({ next: null, entries: [{ path: 'node_modules/x', type: 'other', mode: 0, size: 0, offset: 0, data: '' }] }) });
     await expect(special.supervisor.cleanInstall(inputs())).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+  });
+  it('should forward the workspace selection to the pod with the scoped recipe', async () => {
+    const pod = fakePod(exported);
+    await expect(pod.supervisor.cleanInstall(scopedInputs())).resolves.toEqual(expect.objectContaining({ runId: expect.any(String) }));
+    expect(pod.bodies[3].args).toMatchObject({ recipe: 'install', workspaces: ['ui'],
+      tarballs: [{ path: '0.tgz', integrity: pin.integrity }] });
+  });
+  it('should refuse a scoped recipe that does not match the identity selection', async () => {
+    const pod = fakePod(exported);
+    await expect(pod.supervisor.cleanInstall({ ...scopedInputs(), recipe: INSTALL_RECIPE as never }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'install_recipe_invalid' });
+    expect(pod.ops()).not.toContain('install');
   });
 });
