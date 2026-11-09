@@ -88,7 +88,7 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
 
 - [ ] **Lot 2 — Progress watchdog for the install phase**
   - [ ] Replace flat 300 s wall clock for install with stall watchdog (no progress for N s, e.g. 60 s) + absolute ceiling sized for ~1500 packages / ~1 GB cold cache at measured relay rate (justify, e.g. 20 min), env-configurable with safe default.
-  - [ ] Thread install progress (tarball streamed / bytes) from fetch + cleanInstall + sink into the watchdog.
+  - [x] Thread install progress (tarball streamed / bytes) from fetch + cleanInstall + sink into the watchdog.
   - [ ] Keep other phase bounds unchanged (state reasoning).
   - [ ] Update `runStaleMs` for the longer install bound.
   - [ ] Verify cache written after successful cold install and cut install poisons nothing.

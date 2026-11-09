@@ -37,18 +37,26 @@ export function createCleanInstall(core: SupervisorCore,
         verifySri(tarball.bytes, tarball.pin.integrity);
         const path = `${staged.length}.tgz`;
         staged.push({ path, integrity: tarball.pin.integrity });
+        input.progress?.report();
         yield { path, mode: 0o444, bytes: tarball.bytes };
       }
     }
     const cacheSent = await core.stream(runtime, 'npm-cache', tarballs(input.tarballs), TARBALL_LIMITS,
       failure('dependency_integrity_missing'));
     const runId = core.id();
-    const data = await core.call(runtime, 'install', { recipe: 'install', runId, source: sourceSent, cache: cacheSent,
-      tarballs: staged });
-    if (data.exitCode !== 0) unavailable('install_failed');
+    // The offline `npm ci` emits no observable progress; the stall timer suspends across it (the ceiling still
+    // applies) and resumes for the drain below.
+    input.progress?.suspendStall(true);
+    try {
+      const data = await core.call(runtime, 'install', { recipe: 'install', runId, source: sourceSent, cache: cacheSent,
+        tarballs: staged });
+      if (data.exitCode !== 0) unavailable('install_failed');
+    } finally { input.progress?.suspendStall(false); }
     // npm bin and workspace links are re-derived at materialization; only regular files enter the cache.
-    await core.drain(runtime, 'dependencies', TREE_LIMITS, 'skip', cacheFailure, file =>
-      input.sink({ path: file.path, mode: file.mode & 0o111 ? 365 : 292, bytes: file.bytes }));
+    await core.drain(runtime, 'dependencies', TREE_LIMITS, 'skip', cacheFailure, async file => {
+      await input.sink({ path: file.path, mode: file.mode & 0o111 ? 365 : 292, bytes: file.bytes });
+      input.progress?.report();
+    });
     await clear(runtime);
     return { runId };
   };

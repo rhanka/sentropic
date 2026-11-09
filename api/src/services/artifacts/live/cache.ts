@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { safeDependencyPath, sha256, verifySri, type IntegrityPin } from './integrity';
 import { integrityEvidence, qualifyBuild, type Gb1Source } from './gb1-qualification';
+import { defaultInstallBudget, withinInstallBudget, type InstallBudget, type InstallProgress } from './deadline';
 import { LiveError, type LiveRuntime } from './records';
 import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY } from './recipes';
 import { TREE_LIMITS } from './supervisor-transfer';
@@ -23,10 +24,12 @@ export interface CachePorts {
   /** Downloads exact pinned tarballs through this relay; redirects/alternate registries are forbidden. */
   fetch(pin: IntegrityPin, relay: typeof NPM_RELAY): Promise<Uint8Array>;
   /** Fresh empty install directory, fixed npm config, verified tarballs read one at a time, no branch .npmrc or hooks.
-   * Each installed regular file goes to `sink` as soon as it is read, so neither side holds the whole tree. */
+   * Each installed regular file goes to `sink` as soon as it is read, so neither side holds the whole tree. The
+   * optional `progress` feeds the install watchdog: report every streamed tarball and drained file, and suspend the
+   * stall timer across the opaque offline `npm ci` sub-phase (still covered by the ceiling). */
   cleanInstall(input: { lockfile: Uint8Array; identity: CacheIdentity; recipe: typeof INSTALL_RECIPE;
     stagingRef: string; runtime?: LiveRuntime; tarballs: AsyncIterable<{ pin: IntegrityPin; bytes: Uint8Array }>;
-    sink(file: DependencyFile): Promise<void> }): Promise<{ runId: string }>;
+    sink(file: DependencyFile): Promise<void>; progress?: InstallProgress }): Promise<{ runId: string }>;
   storage: {
     read(key: string): Promise<CacheObject | undefined>;
     /** Atomic immutable create: partial entries are invisible; returns the winning complete object. */
@@ -62,7 +65,7 @@ function treeDigest(manifest: readonly DependencyEntry[]) {
   }
   return sha256(JSON.stringify(rows));
 }
-export function createDependencyCache(ports: CachePorts) {
+export function createDependencyCache(ports: CachePorts, budget: InstallBudget = defaultInstallBudget()) {
   async function read(key: string) {
     try { return await ports.storage.read(key); }
     catch (error) {
@@ -89,44 +92,49 @@ export function createDependencyCache(ports: CachePorts) {
   return {
     async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
       runtime?: LiveRuntime) {
-      const identity = source.cacheIdentity;
-      if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
-      // GB1 at the pinned commit (W5 port); the qualification file digest is the identity's integrity digest.
-      const evidence = integrityEvidence(qualifyBuild(source.gb1));
-      if (evidence.lockSha256 !== identity.lockSha256 || evidence.digest !== identity.integrityDigest) invalid();
-      const { inventory } = evidence;
-      const key = cacheKey(identity);
-      const existing = await read(key);
-      if (existing) {
-        try { return verify(existing, identity); }
-        catch (error) { await ports.storage.quarantine(key); throw error; }
-      }
-      /** One verified tarball at a time; an altered one stops the stream before the pod runs the install. */
-      async function* tarballs() {
-        for (const pin of inventory) {
-          const bytes = await ports.fetch(pin, NPM_RELAY);
-          verifySri(bytes, pin.integrity);
-          yield { pin, bytes };
+      return withinInstallBudget(async progress => {
+        const identity = source.cacheIdentity;
+        if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
+        // GB1 at the pinned commit (W5 port); the qualification file digest is the identity's integrity digest.
+        const evidence = integrityEvidence(qualifyBuild(source.gb1));
+        if (evidence.lockSha256 !== identity.lockSha256 || evidence.digest !== identity.integrityDigest) invalid();
+        const { inventory } = evidence;
+        const key = cacheKey(identity);
+        const existing = await read(key);
+        if (existing) {
+          try { return verify(existing, identity); }
+          catch (error) { await ports.storage.quarantine(key); throw error; }
         }
-      }
-      const manifest: DependencyEntry[] = [];
-      const sink = async (file: DependencyFile) => {
-        if (manifest.length >= TREE_LIMITS.files || !(file.bytes instanceof Uint8Array)) invalid();
-        const digest = sha256(file.bytes);
-        await ports.storage.putFile(digest, file.bytes);
-        manifest.push({ path: file.path, mode: file.mode, size: file.bytes.byteLength, sha256: digest });
-      };
-      const installed = await ports.cleanInstall({ ...source, identity, runtime, recipe: INSTALL_RECIPE, tarballs: tarballs(), sink });
-      if (!installed.runId) invalid();
-      const receipt = { key, identity, treeSha256: treeDigest(manifest), inventory,
-        runId: installed.runId, installOptions: INSTALL_RECIPE };
-      const object = { receipt: { ...receipt, seal: seal(receipt) }, manifest };
-      const admitted = await ports.storage.admit(key, object);
-      try {
-        verify(admitted, identity);
-        if (admitted.receipt.treeSha256 !== receipt.treeSha256) invalid();
-      } catch (error) { await ports.storage.quarantine(key); throw error; }
-      return admitted.receipt;
+        /** One verified tarball at a time; an altered one stops the stream before the pod runs the install. */
+        async function* tarballs() {
+          for (const pin of inventory) {
+            const bytes = await ports.fetch(pin, NPM_RELAY);
+            verifySri(bytes, pin.integrity);
+            progress.report();
+            yield { pin, bytes };
+          }
+        }
+        const manifest: DependencyEntry[] = [];
+        const sink = async (file: DependencyFile) => {
+          if (manifest.length >= TREE_LIMITS.files || !(file.bytes instanceof Uint8Array)) invalid();
+          const digest = sha256(file.bytes);
+          await ports.storage.putFile(digest, file.bytes);
+          manifest.push({ path: file.path, mode: file.mode, size: file.bytes.byteLength, sha256: digest });
+          progress.report();
+        };
+        const installed = await ports.cleanInstall({ ...source, identity, runtime, recipe: INSTALL_RECIPE,
+          tarballs: tarballs(), sink, progress });
+        if (!installed.runId) invalid();
+        const receipt = { key, identity, treeSha256: treeDigest(manifest), inventory,
+          runId: installed.runId, installOptions: INSTALL_RECIPE };
+        const object = { receipt: { ...receipt, seal: seal(receipt) }, manifest };
+        const admitted = await ports.storage.admit(key, object);
+        try {
+          verify(admitted, identity);
+          if (admitted.receipt.treeSha256 !== receipt.treeSha256) invalid();
+        } catch (error) { await ports.storage.quarantine(key); throw error; }
+        return admitted.receipt;
+      }, budget);
     },
     /** Reverify the seal and manifest on every read-only materialization, warm hit included, then rehash each file as it
      * is read: the caller holds one file (at most 64 MiB) at a time. Any mismatch quarantines the entry. */
