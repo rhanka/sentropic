@@ -9,6 +9,7 @@
 - [x] The builder ledger states stay internal (`BuildJobRecord.state` unchanged); only the HTTP view maps them.
 - [x] Make only; no Python; no attribution trailers; no CI skip or rerun; never ENV=dev.
 - [x] No package source change, so no package version bump.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
