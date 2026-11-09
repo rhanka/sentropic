@@ -151,6 +151,10 @@ describe('builder pod admission and recovery', () => {
     expect(await f.ports.pods.probe(key, live)).toBe('active');
     f.objects.delete('pods' + live.podName);
     expect(await f.ports.pods.probe(key, live)).toBe('absent');
+    await f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 });
+    const relive = await f.controller.start(key);
+    f.objects.get('pods' + relive.podName)!.metadata.labels['sentropic.dev/artifact-generation'] = '999';
+    await expect(f.ports.pods.probe(key, relive)).rejects.toMatchObject({ reason: 'stale_fence' });
   });
   it('should build a selected reachable historical commit without starting live or staging a draft', async () => {
     const f = fixture(); await f.controller.buildOnly(key, 'job-A');
