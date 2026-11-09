@@ -113,7 +113,9 @@ describe('host build API (M3-B)', () => {
   it('presumes a run dead after its heavy-gate wait and its bounded phases, never after a pod lifetime', async () => {
     expect(BUILD_ONLY_PHASES).toEqual(['install', 'prepare', 'build', 'verify']);
     expect(PHASE_DEADLINE_MS).toBe(300_000);
-    expect(runStaleMs(0)).toBe(1_200_000); expect(STALE).toBe(HEAVY_WAIT_MS + 1_200_000);
+    expect(runStaleMs(0, 300_000)).toBe(1_200_000);
+    expect(runStaleMs(0)).toBe(1_200_000 + 3 * PHASE_DEADLINE_MS);
+    expect(STALE).toBe(HEAVY_WAIT_MS + 1_200_000 + 3 * PHASE_DEADLINE_MS);
     const s = setup(); await s.jobs.admit(k, 'job-1', binding);
     s.advance(STALE - 1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(false);
     s.advance(1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(true);
