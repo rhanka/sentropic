@@ -121,8 +121,13 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       const pod = await core.get<Pod>('pods', runtime.podName);
       if (pod && (Object.entries(labels(key, runtime)).some(([k, v]) => pod.metadata.labels[k] !== v)
         || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid))) conflict('stale_fence');
-      await core.delete('pods', runtime.podName, pod?.metadata.uid ?? runtime.podUid ?? undefined);
-      await core.waitDeleted('pods', runtime.podName, pod?.metadata.uid ?? runtime.podUid ?? undefined);
+      // A pod the apiserver already reports as gone needs no DELETE; without a known uid a delete by bare
+      // name could race a concurrent session recreating this deterministic name.
+      const uid = pod?.metadata.uid ?? runtime.podUid ?? undefined;
+      if (uid !== undefined) {
+        await core.delete('pods', runtime.podName, uid);
+        await core.waitDeleted('pods', runtime.podName, uid);
+      }
       // Never remove a replacement service from a stale callback.
       const service = await core.get<{ metadata: Pod['metadata'] }>('services', runtime.podName);
       if (service && Object.entries(labels(key, runtime)).some(([k, v]) => service.metadata.labels[k] !== v)) conflict('stale_fence');
