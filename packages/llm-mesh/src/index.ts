@@ -31,6 +31,7 @@ export * from './transport/cloud-code-runtime-client.js';
 export * from './transport/claude-code-runtime-client.js';
 export * from './transport/muse-runtime-client.js';
 export * from './transport/mistral-runtime-client.js';
+export * from './transport/gemini-api-key-runtime-client.js';
 export * from './streaming.js';
 export * from './speech/index.js';
 export * from './tools.js';
