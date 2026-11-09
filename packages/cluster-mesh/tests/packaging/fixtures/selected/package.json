@@ -18,6 +18,6 @@
     "hono": "4.13.17",
     "jose": "5.10.0",
     "pg": "8.23.1",
-    "@sentropic/auth-ui": "0.9.0"
+    "@sentropic/auth-ui": "0.9.1"
   }
 }
