@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createMemoryGitBindingStore } from '../src/server/git-bindings.js';
 import { jobKey, type HandoffReceipt } from '../src/live-host/handoff.js';
 import {
   parseReconcileBuilderStatus, reconcilePendingBuild, reconcilePendingBuilds, ReconcileError,
@@ -28,16 +29,22 @@ describe('live-host pending build reconcile (stuck build_pending/building)', () 
   it('applies the receipt releaseId on builder published and never invents a release', async () => {
     const id = JSON.stringify([SCOPE, ARTIFACT, JOB]);
     const receipts = { find: async (job: string) => job === jobKey(key) ? receipt('release-receipt') : undefined };
-    // The stored handoff receipt supplies the releaseId when the builder status carries none.
+    // The stored handoff receipt supplies the releaseId when the builder status carries none, but the
+    // still-pending binding is reported: the host publish transaction owns that transition.
     const first = reconcileJobStore({ [id]: { state: 'building', updatedAtMs: 0 } });
     const publishedBindings = await buildPendingBindings();
     const out = await reconcilePendingBuild({ jobs: first.store,
       status: reconcileStatusClient({ [JOB]: { jobId: JOB, state: 'published' } }).client,
       bindings: publishedBindings, receipts }, key);
-    expect(out).toMatchObject({ outcome: 'job-published', job: 'updated', binding: 'unchanged' });
+    expect(out).toMatchObject({ outcome: 'binding-not-pending', job: 'updated', binding: 'unchanged' });
     expect(await first.store.read(key)).toMatchObject({ state: 'published', releaseId: 'release-receipt' });
-    // The binding stays build_pending on success: the host publish path owns that transition.
     expect(await publishedBindings.get(SCOPE, ARTIFACT)).toMatchObject({ state: 'build_pending', version: 2 });
+    // When the host publish path already moved the binding on, the job close is clean.
+    const moved = reconcileJobStore({ [id]: { state: 'building', updatedAtMs: 0 } });
+    const clean = await reconcilePendingBuild({ jobs: moved.store,
+      status: reconcileStatusClient({ [JOB]: { jobId: JOB, state: 'published', releaseId: 'release-receipt' } }).client,
+      bindings: await attachedBindings(), receipts }, key);
+    expect(clean).toMatchObject({ outcome: 'job-published', job: 'updated', binding: 'unchanged' });
 
     // Without a receipt and without a status releaseId, nothing is invented.
     const second = reconcileJobStore({ [id]: { state: 'building', updatedAtMs: 0 } });
@@ -127,6 +134,82 @@ describe('live-host pending build reconcile (stuck build_pending/building)', () 
     const conflict = await reconcilePendingBuild({ jobs: racing,
       status: reconcileStatusClient({ [JOB]: failed }).client, bindings }, key);
     expect(conflict).toMatchObject({ outcome: 'binding-conflict', job: 'updated', binding: 'unchanged' });
+  });
+
+  it('contains a poison item and converges after a crash between the two writes', async () => {
+    const id = JSON.stringify([SCOPE, ARTIFACT, JOB]);
+    // A host-store outage on one item is data, and the sweep still attempts the next item.
+    const rows: Record<string, { state: string; updatedAtMs: number }> = {
+      [JSON.stringify([SCOPE, ARTIFACT, 'job-a'])]: { state: 'building', updatedAtMs: 0 },
+      [JSON.stringify([SCOPE, ARTIFACT, 'job-b'])]: { state: 'building', updatedAtMs: 0 },
+    };
+    const { store } = reconcileJobStore(rows);
+    const failing = store.read.bind(store);
+    store.read = (async (input: { jobId: string }) => {
+      if (input.jobId === 'job-a') throw new Error('store down for job-a');
+      return failing(input as never);
+    }) as typeof store.read;
+    const bothFailed = { 'job-a': { jobId: 'job-a', state: 'build_failed' as const, code: 'x' },
+      'job-b': { jobId: 'job-b', state: 'build_failed' as const } };
+    const report = await reconcilePendingBuilds({ jobs: store,
+      status: reconcileStatusClient(bothFailed as never).client, bindings: await buildPendingBindings(ARTIFACT, 'job-b') });
+    expect(report.items).toMatchObject([
+      { jobId: 'job-a', outcome: 'store-error', job: 'unchanged', binding: 'unchanged' },
+      { jobId: 'job-b', outcome: 'job-build-failed', job: 'updated', binding: 'updated' },
+    ]);
+    // A crash after the binding write still converges: a rerun finds the job pending and finishes it.
+    const crash = reconcileJobStore({ [id]: { state: 'building', updatedAtMs: 0 } });
+    const bindings = await buildPendingBindings();
+    const mark = crash.store.markFailed.bind(crash.store);
+    let crashed = false;
+    crash.store.markFailed = (async (input: never) => {
+      if (!crashed) { crashed = true; throw new Error('crash between the writes'); }
+      return mark(input);
+    }) as typeof crash.store.markFailed;
+    const options = { jobs: crash.store, status: reconcileStatusClient({ [JOB]: failed }).client, bindings };
+    const lost = await reconcilePendingBuild(options, key);
+    expect(lost).toMatchObject({ outcome: 'store-error', job: 'unchanged', binding: 'updated' });
+    const rerun = await reconcilePendingBuild(options, key);
+    expect(rerun).toMatchObject({ outcome: 'job-build-failed', job: 'updated', binding: 'unchanged' });
+    expect(await bindings.events(SCOPE, ARTIFACT)).toHaveLength(3);
+  });
+
+  it('codes a codeless builder failure, audits the binding event and reads missing rows as not-found', async () => {
+    const id = JSON.stringify([SCOPE, ARTIFACT, JOB]);
+    const { store } = reconcileJobStore({ [id]: { state: 'building', updatedAtMs: 0 } });
+    const bindings = await buildPendingBindings();
+    const out = await reconcilePendingBuild({ jobs: store,
+      status: reconcileStatusClient({ [JOB]: { jobId: JOB, state: 'build_failed' } }).client, bindings }, key);
+    expect(out).toMatchObject({ outcome: 'job-build-failed', job: 'updated', binding: 'updated' });
+    expect(await store.read(key)).toMatchObject({ state: 'build_failed', code: 'builder_unavailable' });
+    const events = await bindings.events(SCOPE, ARTIFACT);
+    expect(events.map(event => event.action)).toEqual(['attach', 'publish', 'publish']);
+    expect(events[2]).toMatchObject({ actorId: 'system:reconcile-pending-builds', invocationId: 'reconcile:job-1' });
+    // A paused binding and a missing binding never move; the job still closes per builder truth.
+    const paused = reconcileJobStore({ [id]: { state: 'building', updatedAtMs: 0 } });
+    const pausing = await attachedBindings();
+    const current = (await pausing.get(SCOPE, ARTIFACT))!;
+    await pausing.write({ binding: { ...current, state: 'paused', generation: 2, version: 2, updatedAt: current.updatedAt },
+      expectedVersion: 1, actorId: 'alice', idempotencyKey: 'pause-1', commandHash: 'pause-1', event: { action: 'pause' } });
+    const kept = await reconcilePendingBuild({ jobs: paused.store,
+      status: reconcileStatusClient({ [JOB]: failed }).client, bindings: pausing }, key);
+    expect(kept).toMatchObject({ outcome: 'job-build-failed', job: 'updated', binding: 'unchanged' });
+    const missing = reconcileJobStore({ [id]: { state: 'building', updatedAtMs: 0 } });
+    const gone = await reconcilePendingBuild({ jobs: missing.store,
+      status: reconcileStatusClient({ [JOB]: failed }).client, bindings: createMemoryGitBindingStore() }, key);
+    expect(gone).toMatchObject({ outcome: 'job-build-failed', job: 'updated', binding: 'unchanged' });
+    // A row the host never recorded is not-found without calling the builder.
+    const calls = reconcileStatusClient({ [JOB]: failed });
+    const fresh = reconcileJobStore({});
+    expect(await reconcilePendingBuild({ jobs: fresh.store, status: calls.client,
+      bindings: createMemoryGitBindingStore() }, key)).toMatchObject({ outcome: 'job-not-found' });
+    expect(calls.load()).toBe(0);
+  });
+
+  it('treats the builder status as bounded: extra keys ignored, whitespace-only code stored', async () => {
+    expect(parseReconcileBuilderStatus({ jobId: JOB, state: 'build_failed', code: '  ', extra: 1 }, JOB))
+      .toEqual({ jobId: JOB, state: 'build_failed', code: '  ' });
+    expect(parseReconcileBuilderStatus({ jobId: JOB, state: 'published', releaseId: '' }, JOB)).toBeUndefined();
   });
 
   it('sweeps only stale jobs with bounded concurrency and fails closed on bad options', async () => {
