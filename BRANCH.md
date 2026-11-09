@@ -77,9 +77,11 @@
       - [ ] No E2E change: none.
     - [ ] Scoped gate: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
 - [ ] **Lot 2 — Dispatch fix plus final validation**
-  - [ ] Add `live-provider-receipt` files to the `global` paths-filter under BR01-EX1 (conditional path with rationale, impact, rollback).
-  - [ ] Retest scoped: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs`.
-  - [ ] Retest scoped: `test-ci-compatibility`, `test-ci-consumer-contracts` (classifier and gate untouched in behavior).
-  - [ ] Push, update PR body with `BRANCH.md`, iterate to green CI (no rerun, no skip).
+  - [x] Add `live-provider-receipt` files to the `global` paths-filter under BR01-EX1 (conditional path with rationale, impact, rollback).
+  - [x] Retest scoped: `.tmp/packets/docker-slot.sh make test-ci-live-provider-receipt ENV=test-live-provider-enobufs` (14/14).
+  - [x] Retest scoped: `test-ci-compatibility` (20/20), `test-ci-consumer-contracts` (25/25, classifier and gate untouched in behavior).
+  - [x] Local verify simulation: `consumer-contracts --verify` ok:true with `global=true`, reproduces the CI failure with `manifest_guard`-only.
+  - [x] Push 2044ede94, update PR body with `BRANCH.md` (PR #970, no merge).
+  - [ ] Iterate new-head CI to green (no rerun, no skip).
   - [ ] Do NOT merge.
   - [ ] Write French report to `.tmp/rv/fix-live-provider-enobufs.md`.
