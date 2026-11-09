@@ -71,7 +71,7 @@ Replace the flat 300 s wall clock for the dependency install phase with a progre
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
 
 - [ ] **Lot 1 — Observability: phase start/end/duration + failing phase name**
-  - [ ] Add phase runner helper logging `artifact_live_phase` with fields `key` hash, `phase`, `ms`, `outcome`, `reason`, no secret.
+  - [x] Add phase runner helper logging `artifact_live_phase` with fields `key` hash, `phase`, `ms`, `outcome`, `reason`, no secret.
   - [ ] Wire it on build-only phases (`install`, `prepare`, `build`, `verify`) and live paths (`prepare-live`, `project`, `idle`).
   - [ ] Failing phase persists in job reason (e.g. `phase_timeout:install`) via existing `jobs.fail` / `stateDetail`.
   - [ ] Lot gate:
