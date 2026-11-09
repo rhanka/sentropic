@@ -6,6 +6,10 @@ export REGISTRY := $(if $(filter local ghcr.io/rhanka,$(REGISTRY)),$(REGISTRY),g
 
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
+# BRCHU-EX1: run bind-mount writer services as the host user so container
+# outputs are host-owned (no sudo cleanup). Compose interpolates these.
+export UID ?= $(shell id -u)
+export GID ?= $(shell id -g)
 DOCKER_COMPOSE  ?= docker compose
 # BR06-EX1: opt in with DISK_HYGIENE_THRESHOLD=90 (empty disables the guard).
 export DISK_HYGIENE_THRESHOLD ?=
@@ -348,7 +352,7 @@ build-ui: ## Build the SvelteKit UI (static)
 build-ext-chrome: ## Build Chrome extension to ui/chrome-ext/dist
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npx --no-install svelte-kit sync && npm run build:ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/chrome-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/chrome-ext/dist'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/chrome-ext/dist/manifest.json && test -f /workspace/ui/chrome-ext/dist/content.js && test -f /workspace/ui/chrome-ext/dist/chrome-ext/popup.html && test -f /workspace/ui/chrome-ext/dist/chrome-ext/sidepanel.html'
 	@echo "✅ Extension built in ui/chrome-ext/dist"
 
@@ -361,7 +365,7 @@ dev-ext: up-ui ## Watch build Chrome extension
 build-ext-vscode: ## Build VSCode extension package to ui/static/vscode-extension
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npx --no-install svelte-kit sync && npm run build:vscode-ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/static/vscode-extension/sentropic-vscode-extension.vsix && test -f /workspace/ui/vscode-ext/dist/extension.cjs'
 	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
 
@@ -3123,7 +3127,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	    receipt="test-results/browser-$${E2E_SHARD:-scoped}"; \
 	    rm -f "$$receipt.expected.json" "$$receipt.actual.json"; \
 	    status=0; CI_BROWSER_EXPECTED_FILE="$$receipt.expected.json" PLAYWRIGHT_JSON_OUTPUT_FILE="$$receipt.actual.json" npx --no-install playwright test "$$@" \
-	      --project=chromium --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	      --project=chromium --output="test-results/out-$${E2E_SHARD:-scoped}" --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
 	    node /app/browser-shards.mjs reconcile "$$receipt.expected.json" "$$receipt.actual.json" || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping services..."
@@ -3149,7 +3153,7 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
 	    rm -f test-results/vscode.expected.json test-results/vscode.actual.json; \
 	    status=0; CI_BROWSER_EXPECTED_FILE=test-results/vscode.expected.json PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/vscode.actual.json npx --no-install playwright test "$$spec_path" \
-	      --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	      --output="test-results/out-vscode" --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
 	    node /app/browser-shards.mjs reconcile test-results/vscode.expected.json test-results/vscode.actual.json || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping VSCode E2E services..."
@@ -3157,7 +3161,7 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 
 .PHONY: test-smoke
 test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx --no-install playwright test --grep "devrait charger"
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx --no-install playwright test --output="test-results/out-smoke" --grep "devrait charger"
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
 
@@ -3212,9 +3216,10 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
 prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+	@mkdir -p data/backup e2e/.auth e2e/test-results
 	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
 
 .PHONY: dev
@@ -3290,7 +3295,7 @@ latest-prod-backup: ## Print the latest production dump basename for the restore
 	@find data/backup -maxdepth 1 -name 'prod-*.dump' -printf '%T@ %f\n' | sort -nr | head -n 1 | cut -d' ' -f2-
 ci-test-env:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
-	@mkdir -p .tmp/live-provider && chmod 777 .tmp/live-provider
+	@mkdir -p .tmp/live-provider e2e/.auth e2e/test-results && chmod 777 .tmp/live-provider
 
 CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,data) ORDER BY id)::text,'[]')) FROM initiatives
 CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
