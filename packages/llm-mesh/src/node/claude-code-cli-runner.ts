@@ -324,15 +324,16 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
   private async *consume(
     child: ChildProcess,
     prompt: string,
-    signal: AbortSignal,
+    stop: AbortSignal,
   ): AsyncGenerator<ClaudeCodeCliEvent> {
     const stdout = child.stdout;
     const stderr = child.stderr;
     if (!stdout || !stderr) throw runnerError('claude CLI runner lost the CLI pipes');
-    let stderrTail = '';
+    // Byte-capped tail: the pipe is always drained, but at most
+    // collectStderrBytes are retained (0 keeps nothing).
+    let stderrTail = Buffer.from('');
     stderr.on('data', (chunk: Buffer) => {
-      stderrTail += chunk.toString('utf8');
-      if (stderrTail.length > this.stderrTailBytes) stderrTail = stderrTail.slice(-this.stderrTailBytes);
+      stderrTail = appendCappedTail(stderrTail, chunk, this.stderrTailBytes);
     });
     const failures: unknown[] = [];
     child.once('error', (error: unknown) => { failures.push(error); });
@@ -350,21 +351,50 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       } catch { /* the exit path below reports the failure */ }
     })();
     void stdinError;
+    const decoder = new StringDecoder('utf8');
     let buffer = '';
+    let totalBytes = 0;
     let toolCalls = 0;
     let textEmitted = false;
     let lastStopReason: unknown;
+    let sawInit = false;
+    let toolsInventory: unknown;
+    let mcpInventory: unknown;
     let result: { finishReason: 'stop' | 'length' | 'tool_calls';
       usage?: { inputTokens?: number; outputTokens?: number }; resultText?: string } | undefined;
     let errorPayload: unknown;
+    const applyOutcome = (outcome: ClaudeCodeLineOutcome): ClaudeCodeCliEvent[] => {
+      if (outcome.type === 'system_init') {
+        sawInit = true;
+        toolsInventory = outcome.init.tools;
+        mcpInventory = outcome.init.mcpServers;
+        return [];
+      }
+      if (outcome.type === 'text') { textEmitted = true; return [{ type: 'text_delta', text: outcome.text }]; }
+      // Local tools are disabled at the CLI, so a tool_use block can only
+      // describe a server-side execution. It is republished verbatim; the
+      // non-empty init inventory above is the fail-closed enforcement point.
+      if (outcome.type === 'tool_use') { toolCalls += 1; return [outcome.event]; }
+      if (outcome.type === 'stop_reason') { lastStopReason = outcome.reason; return []; }
+      if (outcome.type === 'result') { result = outcome.result; return []; }
+      errorPayload = (outcome as { payload: unknown }).payload;
+      return [];
+    };
     const exitCode = new Promise<number | null>((resolve) => {
       child.once('exit', (code) => resolve(code));
       child.once('error', () => resolve(null));
     });
     try {
       for await (const chunk of stdout) {
-        if (signal.aborted) return;
-        buffer += chunk.toString('utf8');
+        if (stop.aborted) return;
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_STDOUT_TOTAL_BYTES) {
+          throw runnerError('claude CLI runner refused an oversized CLI output');
+        }
+        buffer += decoder.write(chunk);
+        if (buffer.length > MAX_STDOUT_LINE_CHARS) {
+          throw runnerError('claude CLI runner refused an oversized CLI output line');
+        }
         let boundary = buffer.indexOf('\n');
         while (boundary >= 0) {
           const line = buffer.slice(0, boundary).trim();
@@ -372,21 +402,38 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
           boundary = buffer.indexOf('\n');
           if (!line) continue;
           for (const outcome of parseClaudeCodeLine(line)) {
-            if (outcome.type === 'text') { textEmitted = true; yield { type: 'text_delta', text: outcome.text }; }
-            else if (outcome.type === 'tool_use') { toolCalls += 1; yield outcome.event; }
-            else if (outcome.type === 'stop_reason') lastStopReason = outcome.reason;
-            else if (outcome.type === 'result') result = outcome.result;
-            else if (outcome.type === 'error_payload') errorPayload = outcome.payload;
+            const events = applyOutcome(outcome);
+            for (const event of events) yield event;
           }
         }
       }
-    } catch {
+      // A final line without a trailing newline is still a line.
+      buffer += decoder.end();
+      if (buffer.trim().length > 0) {
+        for (const outcome of parseClaudeCodeLine(buffer.trim())) {
+          const events = applyOutcome(outcome);
+          for (const event of events) yield event;
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ClaudeCliRunnerError') throw error;
       throw runnerError('claude CLI runner failed while reading CLI output');
     }
     await writePrompt;
     const code = await exitCode;
+    if (sawInit
+      && ((Array.isArray(toolsInventory) && toolsInventory.length > 0)
+        || (Array.isArray(mcpInventory) && mcpInventory.length > 0))) {
+      throw runnerError('claude CLI runner refused a non-empty CLI tool inventory');
+    }
     if (errorPayload !== undefined || result === undefined) {
-      const diagnosis = diagnoseClaudeCodeQuota(`${JSON.stringify(errorPayload)} ${stderrTail}`);
+      const structuredText = errorPayload === undefined ? undefined : extractQuotaText(errorPayload);
+      const structured = structuredText === undefined
+        ? { quota: false as const }
+        : diagnoseClaudeCodeQuota(structuredText);
+      const diagnosis = structured.quota
+        ? structured
+        : diagnoseClaudeCodeQuota(stderrTail.toString('utf8'));
       if (diagnosis.quota) throw new ClaudeCliQuotaError(diagnosis.retryAfterMs);
       if (code !== 0) {
         const spawnFailure = failures.length > 0;
