@@ -72,6 +72,7 @@ Add a minimal generic static-key Gemini client to @sentropic/llm-mesh so immo ca
   - [x] Add response extraction and typed failure mapping (429 rate_limited, 402 billing_unavailable, 401/403 auth_failed).
   - [x] Add `GeminiApiKeyRuntimeClient` + `createGeminiApiKeyClient` factory, export from package index for `geminiClient` injection.
   - [x] Add stubbed-fetch unit tests part 1 (request shape, header, systemInstruction, 429 mapping).
+  - [x] Add stubbed-fetch unit tests part 2 (402 billing, 401/403 auth, key secrecy, stream).
   - [ ] Export the client and its factory from `packages/llm-mesh/src/index.ts` for use as `geminiClient` injection.
   - [ ] Add `packages/llm-mesh/tests/transport/gemini-api-key-runtime-client.test.ts` with stubbed fetch: request shape, header present, error mapping (429, 402, 401), no key in error messages.
   - [ ] Lot gate:
