@@ -19,7 +19,12 @@ export const hostGate = (authenticate: (c: Context) => HostIdentity | null): Mid
   if (!identity || !ID.test(identity.storageScopeId)) return c.json({ error: 'host_not_bound' }, 403);
   c.set('identity', identity); await next();
 };
-const view = (record: BuildJobRecord) => ({ jobId: record.jobId, state: record.state,
+/** Host-facing job state: the G0 v3 §2.6 `GitBuildJobState` of `@sentropic/artifacts` (git-tools-contracts.ts), the
+ * only vocabulary a host client accepts; the ledger's own states never leave the builder. */
+type HostJobState = 'build_pending' | 'published' | 'build_failed';
+const HOST_STATE: Record<BuildJobRecord['state'], HostJobState> = {
+  accepted: 'build_pending', published: 'published', failed: 'build_failed' };
+const view = (record: BuildJobRecord) => ({ jobId: record.jobId, state: HOST_STATE[record.state],
   ...(record.code ? { code: record.code } : {}), ...(record.reason ? { reason: record.reason } : {}),
   ...(record.receipt ? { releaseId: record.receipt.releaseId } : {}) });
 
