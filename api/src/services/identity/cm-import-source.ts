@@ -39,15 +39,24 @@ export async function readA4IdentitySource(client: PoolClient, readOnly = false)
   return { rows, inventory };
 }
 
+/** RP ID the IdP verified passkeys under while it shared the legacy credential table with the app.
+ *  Operator-declared (e.g. from the auth-idp WEBAUTHN_RP_ID); null when undeclared. */
+export const a4DeclaredIdpRpId = (source: Readonly<Record<string, string | undefined>> = process.env): string | null =>
+  source.CM_IDENTITY_CUTOVER_IDP_RP_ID?.trim() || null;
+
 export async function mapA4IdentitySource(source: A4SourceSnapshot, options: {
   readonly importedAt: string; readonly rpId: string; readonly origins: readonly string[];
-  readonly remotelyRevokedSessionIds: ReadonlySet<string>;
+  readonly idpRpId: string | null; readonly remotelyRevokedSessionIds: ReadonlySet<string>;
 }): Promise<IdentityImportRowV1[]> {
   assertA4SourceInventory(source.inventory);
   const rows: IdentityImportRowV1[] = [];
   const each = (table: Table): readonly A4SourceRow[] => source.rows.get(table) ?? invalidA4Import();
   for (const row of each('users')) rows.push(mapA4Account(row));
-  for (const row of each('webauthn_credentials')) rows.push({ entity: 'credential', record: mapA4Credential(row, options.rpId) });
+  const credentials = each('webauthn_credentials');
+  // Legacy credentials carry no RP column and the app and the IdP registered into the same table:
+  // one stamp is faithful only on a single-RP tier. Unknown or split provenance fails closed.
+  if (credentials.length > 0 && options.idpRpId !== options.rpId) invalidA4Import();
+  for (const row of credentials) rows.push({ entity: 'credential', record: mapA4Credential(row, options.rpId) });
   for (const [table, kind] of [['webauthn_challenges', 'webauthn_challenge'], ['email_verification_codes', 'email_code'],
     ['magic_links', 'magic_link']] as const) {
     // Owner decision B (2026-11-05), in every mode: validate known source
