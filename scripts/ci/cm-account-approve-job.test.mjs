@@ -16,7 +16,7 @@ const JOB = 'cm-account-approve';
 const SECRET = 'cm-account-approval';
 // The A4 launcher composes the email-code HMAC custody exactly as for the api pod, then runs the script.
 const LAUNCH = ['node', '/run/cm-runtime/launch.mjs', '--script', 'cm-account-approve'];
-const A4_API_PATCH = 'deploy/k8s/overlays/preprod-a4/patch-api-a4.yaml';
+const A4_API_PATCH = 'deploy/k8s/components/a4-wiring/patch-api-a4.yaml';
 
 // What the Make target applies: the versioned Job with the `approve` image pinned
 // (`kubectl set image --local ... approve=<api image>`).
@@ -68,11 +68,15 @@ test('the Job receives the same HMAC custody wiring and runtime volume as the A4
   const apiContainer = api.containers.find((candidate) => candidate.name === 'api');
   const hmac = apiContainer.env.filter((entry) => entry.name.startsWith('EMAIL_CODE_HMAC_'));
   assert.equal(hmac.length, 4, 'active and previous key plus their refs');
-  for (const entry of container.env) {
+  const namespace = { name: 'CM_A4_NAMESPACE', valueFrom: { fieldRef: { fieldPath: 'metadata.namespace' } } };
+  assert.deepEqual(apiContainer.env.find((entry) => entry.name === 'CM_A4_NAMESPACE'), namespace);
+  assert.deepEqual(container.env.find((entry) => entry.name === 'CM_A4_NAMESPACE'), namespace);
+  const jobHmac = container.env.filter((entry) => entry.name !== 'CM_A4_NAMESPACE');
+  for (const entry of jobHmac) {
     assert.equal(entry.value, undefined, `${entry.name}: no literal value`);
     assert.equal(entry.valueFrom.secretKeyRef.name, 'email-code-hmac');
   }
-  assert.deepEqual(container.env, hmac);
+  assert.deepEqual(jobHmac, hmac);
   assert.deepEqual(container.volumeMounts, [{ name: 'cm-runtime', mountPath: '/run/cm-runtime', readOnly: true }]);
   assert.deepEqual(pod.volumes, [api.volumes.find((volume) => volume.name === 'cm-runtime')]);
   assert.equal(pod.volumes[0].configMap.name, 'sentropic-a4-runtime');
