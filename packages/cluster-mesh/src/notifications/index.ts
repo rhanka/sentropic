@@ -29,3 +29,11 @@ export {
   type OpsAccountLookupV1, type OpsAccountRecordV1, type OpsAlertRecipientV1,
   type OpsAlertRecipientsPortV1, type OpsDeclaredRecipientsInputV1, type OpsRecipientSkipReason,
 } from './recipients.js';
+export {
+  createCachedOpsRecipientsPort, fetchOpsProductRecipients, validateOpsProductRecipientsPayload,
+  OPS_PRODUCT_RECIPIENTS_CACHE_TTL_MS, OPS_PRODUCT_RECIPIENTS_STALE_MS, OPS_PRODUCT_RECIPIENTS_TIMEOUT_MS,
+  OpsProductRecipientsError,
+  type OpsCachedProductRecipientsInput, type OpsFetchLike, type OpsFetchProductRecipientsInput,
+  type OpsMinimalResponse, type OpsProductAdminEntryV1, type OpsProductRecipientsFailureCode,
+  type OpsValidatedProductRecipientsV1,
+} from './recipients-http.js';
