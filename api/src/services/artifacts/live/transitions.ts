@@ -33,14 +33,20 @@ export async function checkpoint(ports: LivePorts, key: LiveKey, runtime: LiveRu
   await ports.drafts.checkpoint(key, draft);
   return draft;
 }
-/** Always retain the old pod fence until its deletion has been confirmed. */
+/** Always retain the old pod fence until its deletion has been confirmed. A stop or recover without its own detail
+ * preserves the root cause instead of clearing it. */
 export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, detail?: string) {
   runtime = await transition(ports, key, runtime, state => {
-    state.runtime.routeEpoch++; state.runtime.phase = 'SAVING'; state.runtime.stateDetail = detail;
+    state.runtime.routeEpoch++; state.runtime.phase = 'SAVING'; state.runtime.stateDetail = detail ?? state.runtime.stateDetail;
   });
   await ports.routes.revoke(key, runtime);
   try {
-    await ports.worker.quiesce(runtime);
+    // A gone, terminal or terminating pod cannot answer the supervisor: quiesce would only block (up to the TCP
+    // connect timeout) before failing. Only an active pod is quiesced; an unreadable apiserver fails closed to it.
+    let quiesce = true;
+    try { quiesce = (await ports.pods.probe(key, runtime)) === 'active'; }
+    catch (error) { if (!(error instanceof LiveError) || error.code !== 'builder_unavailable') throw error; }
+    if (quiesce) await ports.worker.quiesce(runtime);
     // The process tree is gone: the live reservation and any queued or admitted phase of this pod leave the node queue.
     await ports.heavy.hold(runtime.podName, { live: false }); await ports.heavy.cancel(runtime.podName);
     await checkpoint(ports, key, runtime);
@@ -57,7 +63,8 @@ export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRunt
   }).then(async dormant => { await ports.admission.release(key); return dormant; });
 }
 export async function failed(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, error: unknown) {
-  const detail = error instanceof LiveError ? error.code : 'builder_unavailable';
+  const detail = error instanceof LiveError ? (error.reason ? `${error.code}:${error.reason}` : error.code)
+    : 'builder_unavailable';
   // If checkpoint/deletion cannot be confirmed, RECOVERING retains the pod identity and blocks replacement.
   try { await teardown(ports, key, runtime, detail); }
   catch { /* teardown persisted RECOVERING, or another fenced operation won; never touch its pod. */ }
