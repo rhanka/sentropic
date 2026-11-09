@@ -183,6 +183,8 @@ export const oauthClients = pgTable('oauth_clients', {
   // C1: per-client subject allowlist (empty = no restriction, zero change for
   // existing clients). Enforced at authorize before consent with `access_denied`.
   allowedUserIds: text('allowed_user_ids').array().notNull().default(sql`'{}'`),
+  // A1: false = a user with no approved tenant membership may keep a tenant-less consent (no `tid`).
+  requireTenant: boolean('require_tenant').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
@@ -279,9 +281,9 @@ export const oauthTokens = pgTable('oauth_tokens', {
 // skips the consent screen when the stored scopes are a superset of the requested scopes. No row ⇒
 // re-consent (always-consent legacy behavior). Migration 0035.
 // ARCH-11 G1a (§1.5, Codex-found cross-tenant consent bypass): the grant is TENANTIZED — a grant in
-// org-A must NOT be reused when the same client authorizes in org-B. `tenant_id` is DEFAULT-safe
-// ('sentropic') so old-pod inserts during the roll still satisfy NOT NULL; the unique key carries
-// the tenant leg. G1a is DATA-only: the getGrant/saveGrant tenant threading is G1c.
+// org-A must NOT be reused when the same client authorizes in org-B. The unique key carries the
+// tenant leg. A1 (control 0022): `tenant_id` is nullable with no default; NULL = tenant-less consent
+// of a `require_tenant = false` client, and the unique index is NULLS NOT DISTINCT (declared in SQL).
 export const oauthConsents = pgTable('oauth_consents', {
   offlineGrantId: text('offline_grant_id'),
   offlineIssuer: text('offline_issuer'),
@@ -294,7 +296,8 @@ export const oauthConsents = pgTable('oauth_consents', {
   clientId: text('client_id')
     .notNull()
     .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
-  tenantId: text('tenant_id').notNull().default('sentropic'),
+  // A1: NULL = tenant-less consent; the unique key is NULLS NOT DISTINCT (control 0022).
+  tenantId: text('tenant_id'),
   scopes: text('scopes').array().notNull().default(sql`'{}'`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),

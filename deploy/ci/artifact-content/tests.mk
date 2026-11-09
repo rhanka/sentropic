@@ -12,8 +12,10 @@ test-artifact-content-manifests: ## Render and qualify closed content infrastruc
 		docker run --rm --network none -v "$$rendered/k8s:/workspace:ro" \
 			$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/overlays/$$tier-pinned > "$$rendered/$$tier-pinned.yaml"; \
 	done; \
-	docker run --rm --network none -v "$(CURDIR)/deploy/k8s:/workspace:ro" \
-		$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/overlays/preprod-a4 > "$$rendered/preprod-a4.yaml"; \
+	for tier in preprod-a4 prod-a4; do \
+		docker run --rm --network none -v "$(CURDIR)/deploy/k8s:/workspace:ro" \
+			$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/overlays/$$tier > "$$rendered/$$tier.yaml"; \
+	done; \
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
 		-v "$(CURDIR)/deploy/ci/artifact-content:/tests:ro" -v "$$rendered:/rendered:ro" \
 		-v "$(CURDIR)/packages/artifacts/src:/routing:ro" -v "$(CURDIR)/scripts/ci:/ci:ro" \

@@ -24,9 +24,12 @@ const resolveLocale = (): string => {
   return raw.startsWith('en') ? 'en' : 'fr';
 };
 
-export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const url = endpoint.startsWith('http') ? endpoint : endpoint;
-  const response = await fetch(url, {
+/**
+ * Same-origin request (credentials, locale) that returns every response, non-2xx included. The auth
+ * transport needs the refusal body: a throwing fetch would surface every 4xx as « Network request failed ».
+ */
+export async function apiFetchResponse(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  return fetch(endpoint, {
     ...options,
     credentials: 'include',
     headers: {
@@ -35,6 +38,10 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
       ...options.headers,
     },
   });
+}
+
+export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const response = await apiFetchResponse(endpoint, options);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({

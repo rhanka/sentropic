@@ -1,20 +1,20 @@
 import { pathToFileURL } from 'node:url';
 import { assertDigestOutput, assertFence, assertRequest, canonical, digest,
-  kubectl, namespace, podName, privateInput } from './guards.mjs';
+  kubectl, podName, privateInput, tierOf } from './guards.mjs';
 
 export function run(env = process.env, call = kubectl, read = privateInput) {
-  const phase = env.A4_PHASE ?? 'checkpoint', dryRun = env.A4_DRY_RUN ?? '1';
+  const phase = env.A4_PHASE ?? 'checkpoint', dryRun = env.A4_DRY_RUN ?? '1', tier = tierOf(env), { namespace } = tier;
   if (!['inspect', 'snapshot', 'checkpoint'].includes(phase) || !['0', '1'].includes(dryRun)
     || !env.A4_KUBECONFIG_FILE) throw new Error('arguments_invalid');
   read(env.A4_KUBECONFIG_FILE); // Owner-only file; contents are never forwarded or printed.
-  const k = (args, input) => call(env.A4_KUBECONFIG_FILE, args, input);
+  const k = (args, input) => call(env.A4_KUBECONFIG_FILE, args, input, namespace);
   const json = args => JSON.parse(k(args));
   const cron = json(['get', 'cronjob', 'pgbackup', '-o', 'json']);
   if (cron.metadata.namespace !== namespace || !cron.spec.jobTemplate.spec?.template?.spec) throw new Error('backup_path_invalid');
   const backupTemplateSha256 = digest(canonical(cron.spec.jobTemplate.spec));
   if (phase === 'inspect') return `backupTemplateSha256=${backupTemplateSha256}\n`;
   const requestBytes = read(env.A4_REQUEST_FILE), request = JSON.parse(requestBytes);
-  assertRequest(request);
+  assertRequest(request, tier);
   if (request.backupTemplateSha256 !== backupTemplateSha256) throw new Error('backup_template_changed');
   const fence = () => assertFence(json(['get', 'deployments,statefulsets,daemonsets,cronjobs,jobs', '-o', 'json']).items,
     json(['get', 'pods', '-o', 'json']).items, request.candidateImage);

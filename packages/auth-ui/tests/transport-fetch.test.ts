@@ -68,6 +68,25 @@ describe('default fetch transport', () => {
     }
   });
 
+  it('surfaces the closed code of a nested { error: { code, message } } DTO', async () => {
+    fetchMock.mockResolvedValue(makeResponse(
+      { error: { code: 'authentication_verification_failed', message: 'Authentication verification failed.' } },
+      { status: 401 },
+    ));
+    const transport = createDefaultFetchTransport({ baseUrl: '/auth', fetch: fetchMock });
+
+    const result = await transport.verifyEmailCode({ email: 'u@example.com', code: '000000' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toBe('Authentication verification failed. (authentication_verification_failed)');
+      expect(result.error.retryable).toBe(false);
+    }
+
+    fetchMock.mockResolvedValue(makeResponse({ error: { code: 'credential_not_found' } }, { status: 401 }));
+    const codeOnly = await transport.verifyEmailCode({ email: 'u@example.com', code: '000000' });
+    expect(codeOnly.ok ? null : codeOnly.error.message).toBe('credential_not_found');
+  });
+
   it('triggers onUnauthorized when an authenticated request gets 401', async () => {
     const onUnauthorized = vi.fn();
     fetchMock.mockResolvedValue(makeResponse({ message: 'no session' }, { status: 401 }));
