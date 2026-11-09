@@ -92,6 +92,40 @@ export type SeatExportUnavailableReason =
   | 'owner-mismatch'
   | 'record-invalid';
 
+/**
+ * A refresh failure that must NOT flip the account: the grant was not
+ * consumed (explicit 429/5xx with a response, network failure, or a
+ * preparation failure before any provider request), so a retry is safe.
+ * Extends {@link AccountTransportAcquireError} so `acquire()` callers keep
+ * their handling unchanged.
+ */
+export class RefreshDeferredError extends AccountTransportAcquireError {
+  constructor() {
+    super('Token refresh deferred; retry later', 'no_active_account');
+  }
+}
+
+// An explicit revocation marker always wins: the grant is dead, retrying is
+// pointless and rotating again could harm the grant family.
+const DEFINITIVE_REFRESH_FAILURE =
+  /invalid_grant|invalidated|revoked|deleted|disabled|unauthorized_client|invalid or missing refresh token/i;
+// A provider `(status)` marker or a transport-level signal with no grant
+// consumption: retrying is safe. Any other 4xx or unknown shape stays
+// fail-closed toward reauth (the fence justifies it).
+const TRANSIENT_REFRESH_FAILURE =
+  /\(\s*(429|5\d\d)\s*\)|\b429\b|network|no response|timed?\s?out|ECONN|EAI_AGAIN|ETIMEDOUT|socket hang up|fetch failed/i;
+
+type RefreshFailureKind = 'reauth' | 'retry';
+
+function classifyRefreshFailure(error: unknown): RefreshFailureKind {
+  const message = error instanceof Error ? error.message : String(error);
+  if (DEFINITIVE_REFRESH_FAILURE.test(message)) return 'reauth';
+  const status = /\(\s*(\d{3})\s*\)/.exec(message)?.[1];
+  if (status === '429' || (status !== undefined && status.startsWith('5'))) return 'retry';
+  if (TRANSIENT_REFRESH_FAILURE.test(message)) return 'retry';
+  return 'reauth';
+}
+
 /** Typed refusal for exportSeatBundle; the code is `seat-export-unavailable:<reason>`. */
 export class SeatExportUnavailableError extends Error {
   readonly code: string;
@@ -1391,11 +1425,16 @@ export class LocalAccountTransportService {
           || await this.isAccountRemoved(input.accountId).catch(() => false)) {
           throw new AccountTransportAcquireError(`Account ${input.accountId} has been removed`, 'no_active_account');
         }
-        if ((!requestMayHaveBeenSent || error instanceof ClaudeRefreshPreparationError)
+        const failure: RefreshFailureKind = error instanceof ClaudeRefreshPreparationError
+          ? 'retry'
+          : classifyRefreshFailure(error);
+        if ((failure === 'retry' || !requestMayHaveBeenSent)
           && account?.status !== 'reauth_required') {
-          // A fence write can commit and then throw, but no provider request occurred.
+          // The grant was not consumed: restore the pre-request fence and
+          // defer without flipping. A fence write can commit and then throw,
+          // but no provider request occurred.
           if (account) await this.persistAccountState(account, true).catch(() => {});
-          throw new AccountTransportAcquireError('Token refresh preparation failed; retry later', 'no_active_account');
+          throw new RefreshDeferredError();
         }
         await this.markReauthRequired(input.accountId).catch(() => {});
         throw new AccountTransportAcquireError('Token refresh failed; reauthentication required', 'no_active_account');
@@ -1796,8 +1835,10 @@ export class LocalAccountTransportService {
 
   /**
    * Proactive custodian cycle (Lot 1): refresh every mesh-managed account
-   * inside its skew window before expiry, probe readiness, flip
-   * `reauth_required` early on refresh failure and alert (D4).
+   * inside its skew window before expiry, flip `reauth_required` early on
+   * definitive refresh failure and alert (D4). Transient failures (explicit
+   * 429/5xx, network errors, preparation failures) defer without flipping:
+   * the grant is still live and the next tick retries.
    *
    * Externally custodied seats never refresh here and are skipped. Static
    * keys with no refresh grant (Vibe long-lived keys, Muse direct keys)
@@ -1874,7 +1915,14 @@ export class LocalAccountTransportService {
         this.alertedReauth.delete(account.accountId);
         refreshed += 1;
         accounts.push({ ...base, action: 'refreshed', readiness: 'ready' });
-      } catch {
+      } catch (error) {
+        // A deferred failure never flipped the status and never alerted: the
+        // grant is still live, the next tick retries.
+        if (error instanceof RefreshDeferredError) {
+          accounts.push({ ...base, action: 'refresh-deferred-retry', readiness: 'ready',
+            ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
+          continue;
+        }
         // refreshToken() already flipped the status and alerted; ensure the
         // alert epoch is recorded even when the persist raced. The widened
         // read defeats the early-continue narrowing above, by design.
