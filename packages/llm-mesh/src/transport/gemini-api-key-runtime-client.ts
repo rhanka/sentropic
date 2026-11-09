@@ -236,3 +236,116 @@ const classifyFailure = (status: number, body: unknown): ClassifiedFailure => {
   }
   return { status, code: 'http_error', message: `Gemini API key HTTP error (${status})` };
 };
+
+export class GeminiApiKeyRuntimeClient implements GeminiAdapterClient {
+  private readonly fetchFn: typeof fetch;
+  private readonly baseUrl: string;
+  private readonly modelId: string;
+  private readonly apiKey: string;
+  private readonly originator: string;
+  private readonly userAgent: string;
+
+  constructor(options: GeminiApiKeyRuntimeClientOptions) {
+    if (!hasHeaderValue(options.apiKey)) {
+      throw Object.assign(new Error('Gemini API key is missing'), { status: 401, code: 'auth_failed' });
+    }
+    this.apiKey = options.apiKey;
+    this.fetchFn = options.fetch ?? fetch;
+    this.baseUrl = (options.baseUrl ?? GEMINI_API_KEY_DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.modelId = options.modelId ?? GEMINI_API_KEY_DEFAULT_MODEL_ID;
+    this.originator = options.originator ?? 'sentropic-llm-mesh';
+    this.userAgent = options.userAgent ?? '@sentropic/llm-mesh';
+  }
+
+  private async post(request: GenerateRequest, modelId: string): Promise<Response> {
+    const url = `${this.baseUrl}/v1beta/models/${encodeURIComponent(modelId)}:generateContent`;
+    const response = await this.fetchFn(url, {
+      method: 'POST',
+      signal: request.signal,
+      headers: {
+        'x-goog-api-key': this.apiKey,
+        'content-type': 'application/json',
+        accept: 'application/json',
+        originator: this.originator,
+        'user-agent': this.userAgent,
+      },
+      body: JSON.stringify(toWireBody(request)),
+    });
+    if (!response.ok) {
+      // Key and provider prose never enter the message: status + code only.
+      let body: unknown;
+      try {
+        body = JSON.parse(await response.text());
+      } catch {
+        body = undefined;
+      }
+      const failure = classifyFailure(response.status, body);
+      const retryAfter = Number(response.headers.get('retry-after'));
+      throw Object.assign(new Error(failure.message), {
+        status: failure.status,
+        code: failure.code,
+        ...(Number.isFinite(retryAfter) && retryAfter > 0
+          ? { retryAfterMs: retryAfter * 1_000 }
+          : {}),
+      });
+    }
+    return response;
+  }
+
+  async generate(request: GenerateRequest, _context?: ProviderRuntimeContext): Promise<GenerateResponse> {
+    const modelId = request.modelId ?? this.modelId;
+    const response = await this.post(request, modelId);
+    const payload: unknown = await response.json();
+    const text = extractText(payload);
+    const toolCalls = extractToolCalls(payload);
+    const rawFinish = rawFinishOf(payload);
+    const usage = extractUsage(payload);
+    return {
+      id: textOf(asRecord(payload)?.responseId) ?? 'gemini_apikey_response',
+      providerId: 'gemini',
+      modelId,
+      message: {
+        role: 'assistant',
+        content: text,
+        ...(toolCalls.length > 0 ? { toolCalls } : {}),
+      },
+      text,
+      toolCalls,
+      finishReason: finishOf(rawFinish, toolCalls.length > 0, text),
+      ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
+      ...(usage ? { usage } : {}),
+    };
+  }
+
+  async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
+    const response = await this.generate(request, context);
+    return (async function* (): AsyncGenerator<StreamEvent> {
+      if (response.text) {
+        yield { type: 'content_delta', data: { delta: response.text } };
+      }
+      for (const call of response.toolCalls) {
+        yield { type: 'tool_call_start', data: call };
+      }
+      yield {
+        type: 'done',
+        data: {
+          finishReason: response.finishReason,
+          ...(response.providerRawFinishReason
+            ? { providerRawFinishReason: response.providerRawFinishReason }
+            : {}),
+          ...(response.usage ? { usage: response.usage } : {}),
+        },
+      };
+    })();
+  }
+}
+
+export const createGeminiApiKeyClient = (
+  apiKeyOrOptions: string | GeminiApiKeyRuntimeClientOptions,
+  rest: Partial<GeminiApiKeyRuntimeClientOptions> = {},
+): GeminiApiKeyRuntimeClient => {
+  if (typeof apiKeyOrOptions === 'string') {
+    return new GeminiApiKeyRuntimeClient({ ...rest, apiKey: apiKeyOrOptions });
+  }
+  return new GeminiApiKeyRuntimeClient({ ...rest, ...apiKeyOrOptions });
+};
