@@ -1,0 +1,14 @@
+# Prod twin of the preprod S2S issuer/resource pin (#963, overlays/preprod/patch-api-config.yaml).
+# The github-app broker (/api/v1/github-app/broker/*) and artifact builder (/api/v1/artifacts/builder)
+# guards verify S2S client_credentials tokens against these DECLARED values: behind the plain-HTTP
+# ui nginx hop the request-derived origin is `http://sentropic.sent-tech.ca`, while the standalone
+# IdP (auth.sent-tech.ca, base 35-auth-idp.yaml OAUTH_ISSUER_URL) mints them with
+# `iss=https://auth.sent-tech.ca` and `aud=https://sentropic.sent-tech.ca` (= AUTH_CALLBACK_BASE_URL).
+# The live pre-A4 prod image does not read these keys; they take effect with the A4 prod release.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api
+data:
+  OAUTH_SERVICE_ISSUER_URL: "https://auth.sent-tech.ca"
+  OAUTH_SERVICE_RESOURCE_URI: "https://sentropic.sent-tech.ca"
