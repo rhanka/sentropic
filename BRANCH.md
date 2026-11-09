@@ -95,8 +95,8 @@
 - [x] Full `docker-slot.sh make test-artifacts ENV=test-reconcile-builds` PASS (101 files, 1008 tests).
 - [x] **Lot 3 — PR, CI, review**
 - [x] Open PR with this `BRANCH.md` as body, push branch to origin (PR #979).
-- [x] Rebase on `origin/main` (`ec3c0bcc8`), Post-Rebase Gate holds (`0.2.25` above npm `0.2.24`).
-- [ ] CI green on the exact head (no rerun, no skip, no `[skip ci]`): `validate-cluster-mesh (source|lazy)` failed on the fixture root deps (fixed in `eb207c7eb`); `prepare-artifacts.spec.ts` is the durable collateral.
+- [x] Rebase on `origin/main` (`ec3c0bcc8`, then `f69bc2a03`), Post-Rebase Gate holds (`0.2.25` above npm `0.2.24`).
+- [ ] CI green on the exact head (no rerun, no skip, no `[skip ci]`): `validate-cluster-mesh (source|lazy)` failed on the fixture root deps (fixed); `prepare-artifacts.spec.ts` is the durable collateral. No run started for the previous head (lost synchronize event); this push re-triggers a fresh `pull_request` run.
 - [ ] Review: Argon high unavailable (agy 429, resets in ~106h), vibe GLM fallback 402 exhausted; Muse Wonder single-leg review at `.h2a/reviews/reconcile-pending-builds-argon.md` verdict REQUEST_CHANGES (F1 store-error containment, F2 binding-not-pending, F3 missing pins, F4-F7 cleanups); addressing now, second leg still missing.
 - [ ] Do NOT merge.
 - [ ] **Lot N — Final validation and report**
