@@ -3,7 +3,7 @@ import { createModuleRegistry } from '../src/modules/registry.js';
 import { PackageTree, moduleSource } from './fixtures/package-tree.js';
 
 describe('speech peer admission', () => {
-  it.each(['0.19.2', '0.22.0', '0.26.9', '0.27.1', '0.27.9'])(
+  it.each(['0.19.2', '0.22.0', '0.26.9', '0.27.1', '0.27.9', '0.35.0'])(
     'should refuse speech on llm-mesh %s before evaluating the peer', async (version) => {
       const tree = new PackageTree();
       try {

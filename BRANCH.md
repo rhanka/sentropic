@@ -22,6 +22,10 @@
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `api/tests/unit/gateway-package-version.test.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/llm-mesh/src/node/cli/enroll-cli.ts`
@@ -64,6 +68,7 @@
 ## Feedback Loop
 - [x] BRENROLL-EX1: root lockfile follows the `@sentropic/llm-mesh` 0.33.0 to 0.34.0 bump (version strings only, regenerated via make). Impact: lockfile only. Rollback: revert with the bump.
 - [x] BRENROLL-EX2: admit the 0.34 line in `packages/llm-gateway/package.json` (`|| ^0.34.0`) and `packages/cluster-mesh/package.json` (`<0.35.0`), range strings only (follows 3b9626d35). The sibling lane `feat/llm-mesh-lot1-custodian-refresh` carries the identical cluster-mesh range value with its own dev.20 release; rebase takes either side. Impact: range strings only. Rollback: revert with the bump.
+- [x] BRENROLL-EX4: update the `0.22.4` pin to `0.22.5` in `api/tests/unit/gateway-package-version.test.ts` (one literal following the EX3 gateway bump; `api/**` is otherwise forbidden). Impact: version evidence only. Rollback: revert with the bump.
 - [x] BRENROLL-EX3: align the hardcoded `LLM_MESH_RANGE` in `packages/cluster-mesh/src/modules/catalog.ts` (`<0.34.0` to `<0.35.0`, one line) with the admitted peer range, bump `@sentropic/llm-gateway` 0.22.4 to 0.22.5 (patch, precedent 143392cea) and `@sentropic/cluster-mesh` 0.26.0-dev.19 to 0.26.0-dev.21 (sibling lane owns dev.20), and update the six cluster-mesh specs asserting the old boundary (admit 0.34.0, refuse 0.35.0), and sync the `selected` fixture tuple (precedents 6cc8c7a5e, 8c2e210d4), plus root `package-lock.json` regenerated via `make lock-root` (workspace version strings only, BRENROLL-EX1 pattern). Reason: CI evidence on head dc09c4c28 (run 42662913703) — every api-sut container exits 1 with `ClusterMeshTopologyError` (installed mesh 0.34.0 vs required `<0.34.0`), and package-candidates demands a gateway bump for the widened range (143392cea proves the bumpGate requires it; EX2's no-bump reading was wrong). Impact: mesh coherence restored, no API change. Rollback: revert with the range.
 
 ## AI Flaky tests
@@ -119,6 +124,18 @@
     - [x] `make test-cluster-mesh SCOPE=tests/modules/registry.spec.ts ENV=test-llm-mesh-enroll` green (51 passed).
     - [x] Scoped topology-ranges (20 passed) plus speech-peer (18 passed) green.
     - [x] Regenerated lockfiles via `make lock-root`.
+- [x] **Lot 5 — Run 42710018359 follow-up (version pins plus fixture integrity)**
+  - [x] Widen `LLM_MESH_SPEECH_RANGE` to `<0.35.0` (llm-mesh 0.34.0 exports `./speech`; the source lane loads it).
+  - [x] Move 0.34.0 refuse to admit in `speech-peer.spec.ts`.
+  - [x] Bump `TRAIN_LLM_MESH_VERSION` to 0.34.0 and `TRAIN_LLM_GATEWAY_VERSION` to 0.22.5 in `tests/fixtures/train.ts`.
+  - [x] Fix the `<0.34.0` regex in `skew-invariants.ts`.
+  - [x] Update the api `0.22.4` pin to `0.22.5` (BRENROLL-EX4).
+  - [x] Regenerate the `selected` fixture lock via `refresh-lazy-package-lock` (plus registry-URL form for the unpublished mesh/gateway entries, as CI's receipt path demands; sibling hashes qSVv/vNA1 match CI's own log lines).
+  - [x] Correct the stale artifacts 0.2.25 integrity 4NL6 to jc0f (registry metadata plus local build agree).
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh` green.
+    - [x] Scoped cluster-mesh specs green (speech-peer 20, skew-invariants 5, tuple-skew 21, registry 51, topology-ranges 20).
+    - [x] `refresh-lazy-package-lock` output committed.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck and lint.
   - [x] Retest llm-mesh scoped plus full `make test-llm-mesh ENV=test-llm-mesh-enroll`.
