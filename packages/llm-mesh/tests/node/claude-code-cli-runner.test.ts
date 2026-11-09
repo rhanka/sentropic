@@ -20,6 +20,11 @@ import type { ClaudeCodeCliRequest } from '../../src/transport/claude-code-runti
 const TOKEN = 'fake-oauth-token-canary';
 const OTHER_TOKEN = 'parent-key-canary';
 
+const credential = () => ({ type: 'account-transport' as const, provider: 'claude-code',
+  accessToken: TOKEN, refreshToken: 'fake-refresh-canary',
+  expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  metadata: { scopes: ['user:inference'] } });
+
 const request = (modelId = 'claude-opus-5-5'): ClaudeCodeCliRequest => ({
   modelId,
   messages: [{ role: 'user', content: [{ type: 'text', text: 'Summarize this page' }] }],
@@ -452,14 +457,21 @@ describe('node claude CLI runner', () => {
     })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('confinement') });
   });
 
-  it('should build the consumer anthropic client through the factory', () => {
+  it('should serve the consumer anthropic client end-to-end through the factory', async () => {
     const client = createClaudeSeatAnthropicClient({
       capabilities: { protocol: 'claude-code-stream-json-v1',
-        cliVersion: 'fake-version', source: 'fake-source', qualificationRef: 'fake-receipt' },
+        cliVersion: '2.1.296', source: 'fake-source', qualificationRef: 'fake-receipt' },
       effort: 'medium',
+      cliPath: join(dir, 'claude'),
     });
-    expect(client).toBeDefined();
     expect(typeof client.stream).toBe('function');
     expect(typeof client.generate).toBe('function');
+    const response = await client.generate(
+      { modelId: 'claude-opus-5-5', messages: [{ role: 'user', content: 'Summarize this page' }] },
+      { auth: credential() },
+    );
+    expect(response.text).toBe('Hello');
+    expect(response.finishReason).toBe('stop');
+    expect(response.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
   });
 });
