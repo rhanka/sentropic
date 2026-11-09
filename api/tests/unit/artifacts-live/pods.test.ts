@@ -4,6 +4,8 @@ import { builderPod, defaultWorkerSizing, podName, readWorkerSizing } from '../.
 import { deleteOptions } from '../../../src/services/artifacts/live/kubernetes';
 import { LiveError } from '../../../src/services/artifacts/live/records';
 import { BUILDER_IMAGE } from '../../../src/services/artifacts/live/recipes';
+import { MAX_BUILDER_PODS } from '../../../src/services/artifacts/live/service';
+import { PRODUCT_HEAVY } from '../../../src/services/artifacts/live/product-builder';
 
 describe('builder pod admission and recovery', () => {
   it('should emit the exact VAP/PSA manifest without credentials or persistent volumes', async () => {
@@ -22,17 +24,17 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'NODE_OPTIONS', value: '--max-old-space-size=384' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } });
     expect(pod.spec.containers[0].env.filter(entry => 'valueFrom' in entry)).toHaveLength(1);
-    expect(pod.spec.volumes).toEqual([{ name: 'source', emptyDir: { sizeLimit: '256Mi' } },
-      { name: 'scratch', emptyDir: { sizeLimit: '1792Mi' } }, { name: 'dependencies', emptyDir: { sizeLimit: '1280Mi' } }]);
+    expect(pod.spec.volumes).toEqual([{ name: 'source', emptyDir: { sizeLimit: '384Mi' } },
+      { name: 'scratch', emptyDir: { sizeLimit: '1664Mi' } }, { name: 'dependencies', emptyDir: { sizeLimit: '1280Mi' } }]);
     expect(pod.metadata.labels['sentropic.dev/artifact-binding']).toBeDefined();
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
   });
-  it('should bound each emptyDir by its role cap on disk and fit four builder pods on one d2-4 node', async () => {
+  it('should bound each emptyDir by its role cap on disk and fit three builder pods in the ephemeral quota', async () => {
     const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted', placement);
     const { requests, limits } = pod.spec.containers[0].resources;
     const mebibytes = (value: string) => Number(/^(\d+)(Mi|Gi)$/.exec(value)![1]) * (value.endsWith('Gi') ? 1024 : 1);
     // On disk (never medium: Memory): every sizeLimit holds within its role cap; the container ephemeral limit bounds the total.
-    const caps: Record<string, number> = { source: 256, scratch: 1792, dependencies: 1280 };
+    const caps: Record<string, number> = { source: 384, scratch: 1664, dependencies: 1280 };
     for (const volume of pod.spec.volumes) {
       expect(mebibytes(volume.emptyDir.sizeLimit)).toBeLessThanOrEqual(caps[volume.name]);
       expect(volume.emptyDir).not.toHaveProperty('medium');
@@ -44,20 +46,22 @@ describe('builder pod admission and recovery', () => {
     expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1458);
     expect(mebibytes(limits.memory)).toBeGreaterThan(mebibytes(requests.memory));
     // Tenant LimitRange (cpu <= 1 per container) and ResourceQuota (requests.cpu 1, limits.memory 6Gi,
-    // limits.ephemeral-storage 10Gi, pods 5) admit four pods; four limits fit the quota (4 CPU, 6Gi, 10Gi)
-    // and four memory requests fit the 1706 MiB node share.
+    // limits.ephemeral-storage 10Gi, pods 5) admit MAX_BUILDER_PODS = 3 pods; three limits fit the quota (3 CPU, 4.5Gi, 3 x 3400Mi <= 10Gi)
+    // and even four memory requests fit the 1706 MiB node share.
     expect(Number(limits.cpu)).toBeLessThanOrEqual(1);
     expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1000);
     expect(4 * Number(limits.cpu)).toBeLessThanOrEqual(4);
     expect(4 * mebibytes(limits.memory)).toBeLessThanOrEqual(6 * 1024);
-    expect(4 * mebibytes(limits['ephemeral-storage'])).toBeLessThanOrEqual(10 * 1024);
+    expect(MAX_BUILDER_PODS * mebibytes(limits['ephemeral-storage'])).toBeLessThanOrEqual(10 * 1024);
+    expect(MAX_BUILDER_PODS).toBe(3);
+    expect(PRODUCT_HEAVY.maxPods).toBe(MAX_BUILDER_PODS);
     expect(4 * mebibytes(requests.memory)).toBeLessThanOrEqual(1706);
   });
   it('should hold a ~1 GiB unpacked tree with margin by default and stay quota-safe under env sizing', async () => {
     // A ~1 GiB unpacked tree (preprod 2026-11-09: ~854 MiB unpacked, 745 paths): dependencies +25% over 1024,
     // scratch +17% over the ~1530 peak (tarballs + working copy + npm tmp), source +265% over the ~105 measured.
     const defaults = defaultWorkerSizing();
-    expect(defaults).toEqual({ sourceMiB: 256, scratchMiB: 1792, dependenciesMiB: 1280 });
+    expect(defaults).toEqual({ sourceMiB: 384, scratchMiB: 1664, dependenciesMiB: 1280 });
     expect(defaults.dependenciesMiB).toBeGreaterThanOrEqual(1024 * 1.2);
     expect(readWorkerSizing({})).toEqual(defaults);
     expect(readWorkerSizing({ ARTIFACT_VOLUME_SOURCE_MB: '384', ARTIFACT_VOLUME_SCRATCH_MB: '1600',
