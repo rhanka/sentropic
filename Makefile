@@ -6,6 +6,10 @@ export REGISTRY := $(if $(filter local ghcr.io/rhanka,$(REGISTRY)),$(REGISTRY),g
 
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
+# BRCHU-EX1: run bind-mount writer services as the host user so container
+# outputs are host-owned (no sudo cleanup). Compose interpolates these.
+export UID ?= $(shell id -u)
+export GID ?= $(shell id -g)
 DOCKER_COMPOSE  ?= docker compose
 # BR06-EX1: opt in with DISK_HYGIENE_THRESHOLD=90 (empty disables the guard).
 export DISK_HYGIENE_THRESHOLD ?=
@@ -348,7 +352,7 @@ build-ui: ## Build the SvelteKit UI (static)
 build-ext-chrome: ## Build Chrome extension to ui/chrome-ext/dist
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npx --no-install svelte-kit sync && npm run build:ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/chrome-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/chrome-ext/dist'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/chrome-ext/dist/manifest.json && test -f /workspace/ui/chrome-ext/dist/content.js && test -f /workspace/ui/chrome-ext/dist/chrome-ext/popup.html && test -f /workspace/ui/chrome-ext/dist/chrome-ext/sidepanel.html'
 	@echo "✅ Extension built in ui/chrome-ext/dist"
 
@@ -361,7 +365,7 @@ dev-ext: up-ui ## Watch build Chrome extension
 build-ext-vscode: ## Build VSCode extension package to ui/static/vscode-extension
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npx --no-install svelte-kit sync && npm run build:vscode-ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/static/vscode-extension/sentropic-vscode-extension.vsix && test -f /workspace/ui/vscode-ext/dist/extension.cjs'
 	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
 
@@ -3214,7 +3218,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
 
 .PHONY: dev
