@@ -58,6 +58,7 @@ export function shouldRefreshProactively(
 export type CustodianAccountAction =
   | 'refreshed'
   | 'refresh-failed-reauth'
+  | 'expired-no-grant'
   | 'skipped-healthy'
   | 'skipped-external'
   | 'skipped-no-grant'
