@@ -188,6 +188,15 @@ export interface LlmMeshFacade {
   acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition>;
   release(acquisition: AccountTransportAcquisition): Promise<void>;
 
+  // Lot 1 custodian (D1 cluster custody, D4 reauth alert): proactive refresh
+  // cycle over mesh-managed accounts, secret-free report per account.
+  runCustodianRefreshCycle(): Promise<CustodianRefreshReport>;
+  startCustodianLoop(
+    intervalMs: number,
+    onReport?: (report: CustodianRefreshReport) => void,
+  ): () => void;
+  stopCustodianLoop(): void;
+
   // Provider adapter
   getAdapter(providerId: AccountTransportProviderId): ProviderAdapter;
   createRoutePlanner(
