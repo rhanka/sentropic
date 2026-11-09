@@ -56,7 +56,7 @@ AGENT_SECTIONS.push(function processOps(ctx) {
     state.prebundled = false;
     await agentAtomicWrite(at(PREBUNDLE_SCRIPT), Buffer.from(ctx.recipes.prebundleScript, 'utf8'), 0o444);
     // A failed pre-bundle returns its diagnostics for classification on the API instead of a bare refusal,
-    // so the phase log names the cause; the supervisor fails closed on `prebundled: false`.
+    // so the phase log names the cause; the supervisor fails closed on prebundled: false.
     const prebundled = await ctx.runToExit(ctx.recipes.prebundle, '/workspace');
     if (prebundled.exitCode !== 0) {
       return { prebundled: false, exitCode: prebundled.exitCode, signal: prebundled.signal, output: prebundled.output };
