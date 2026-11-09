@@ -33,6 +33,7 @@ Mesh-managed custodian with proactive refresh before expiry, per-account custody
   - `packages/llm-mesh/tests/service/facade.test.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-gateway/package.json`
+  - `api/tests/unit/gateway-package-version.test.ts`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/src/modules/catalog.ts`
   - `packages/cluster-mesh/tests/fixtures/train.ts`
@@ -61,7 +62,7 @@ Mesh-managed custodian with proactive refresh before expiry, per-account custody
 - `attention`: D2 accepted for the owner tenant only; kill-switch cross-user stays OFF for any other use.
 - `attention`: D3 Gemini-only fallback (gemini-3.8-flash) is Lot 5 scope, not this branch; this branch only keeps the static-key class and budget admission points untouched.
 - `acknowledge`: D4 alert is emitted here via `ReauthAlertSink` (status flip + secret-free event, once per epoch); host wiring (h2a forward + owner re-auth gate + loop start, exactly one loop per owner scope) is Lot 2 scope — this branch stays library-only by design (M5).
-- `attention`: CUSTODIAN-EX1 — the M6 minor bump widens llm-mesh consumer ranges (`llm-gateway`, `cluster-mesh` peer + catalog + pinned specs/train/fixtures, `cluster-mesh` dev bump per precedent `3b9626d35`/`c9f19941f`); rollback = revert the bump commit, no src behavior depends on the version string.
+- `attention`: CUSTODIAN-EX1 — the M6 minor bump widens llm-mesh consumer ranges (`llm-gateway`, `cluster-mesh` peer + catalog + pinned specs/train/fixtures, `cluster-mesh` dev bump per precedent `3b9626d35`/`c9f19941f`) plus the `llm-gateway` 0.22.4 → 0.22.5 patch the package-candidates bumpGate requires on published manifests with changed dependency maps (precedent `143392cea`; api version-evidence test follows the bump); rollback = revert the bump commits, no src behavior depends on the version strings.
 - `attention`: bump follow-through per repo convention (3b9626d35, d4c503eb0): hardcoded version in `decision-public-surface.test.ts`, `CHANGELOG.md` entry, and `selected` fixture lock regen via `refresh-lazy-package-lock`; ranges already cover 0.33.1 (gateway `^0.33.0`, cluster-mesh `<0.34.0`), no range edit.
 - `attention`: CI run 42635384823 e2e shard 1 single failure `tests/07-matrix.spec.ts:477` (Matrix lock/presence, User A leaves lock release, 9.9s, `toBe` Object.is). Out of branch scope (no UI/API change; llm-mesh additions are inert without `startCustodianLoop` wiring, Lot 2). Main push run 42625546540 is green on the same spec. Treated as non-systematic UI flake pending the fresh-head rerun.
 - `attention`: Gemini API key provided by owner as named secret; secret name proposed in the lane report, never printed or committed.
