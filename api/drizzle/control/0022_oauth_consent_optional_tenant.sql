@@ -1,7 +1,8 @@
 -- A1 (prod A4 prerequisite): an OAuth consent is keyed by (user, client) with an OPTIONAL tenant.
 -- A tenant-optional client (`require_tenant = false`) keeps a tenant-less consent (tenant_id NULL, no
--- `tid`) for a user with no approved membership; every other client keeps requiring one. Existing
--- tenant-keyed rows keep their exact key: no consent is rewritten or lost.
+-- `tid`) for a user with no approved membership; every other client keeps requiring one. Tenant-keyed
+-- rows keep their key; a pre-0022 grant that only a tenant default keyed moves to the tenant-less key
+-- with its offline evidence (A1-REKEY below), so no consent is lost.
 ALTER TABLE public.oauth_clients ADD COLUMN IF NOT EXISTS require_tenant boolean NOT NULL DEFAULT true;
 --> statement-breakpoint
 ALTER TABLE public.oauth_consents ALTER COLUMN tenant_id DROP DEFAULT;
@@ -14,7 +15,9 @@ DROP INDEX IF EXISTS public.oauth_consents_user_id_client_id_tenant_id_unique;
 CREATE UNIQUE INDEX oauth_consents_user_id_client_id_tenant_id_unique
   ON public.oauth_consents (user_id, client_id, tenant_id) NULLS NOT DISTINCT;
 --> statement-breakpoint
--- A consent change revokes the families of its own key, the tenant-less key included.
+-- A consent change revokes the families of its own key, the tenant-less key included. The 0013/0015
+-- `coalesce(tenant_id, 'sentropic')` association of NULL-tenant families is replaced by the exact key:
+-- A1-REKEY re-associates those families with their tenant-less consent in this same migration.
 CREATE OR REPLACE FUNCTION public.oauth_refresh_consent_invalidate()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -40,7 +43,8 @@ BEGIN
   RETURN NEW;
 END $$;
 --> statement-breakpoint
--- Making a client tenant-bound is a policy narrowing: its refresh families are revoked.
+-- Making a client tenant-bound, or re-homing it to another tenant, narrows its policy: its refresh
+-- families are revoked (tenant-keyed families included).
 CREATE OR REPLACE FUNCTION public.oauth_refresh_client_invalidate()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE u text;
@@ -51,7 +55,7 @@ BEGIN
       AND NEW.allowed_user_ids IS NOT DISTINCT FROM OLD.allowed_user_ids
       AND NEW.dpop_bound_access_tokens IS NOT DISTINCT FROM OLD.dpop_bound_access_tokens
       AND NEW.token_endpoint_auth_method IS NOT DISTINCT FROM OLD.token_endpoint_auth_method
-      AND (OLD.require_tenant OR NOT NEW.require_tenant)
+      AND (OLD.require_tenant OR NOT NEW.require_tenant) AND NEW.tenant_id IS NOT DISTINCT FROM OLD.tenant_id
       THEN RETURN NEW; END IF;
   END IF;
   FOR u IN SELECT user_id FROM public.oauth_refresh_tokens WHERE client_id = OLD.client_id
@@ -65,5 +69,45 @@ BEGIN
   RETURN NEW;
 END $$;
 --> statement-breakpoint
--- The claude.ai immo-mcp connector serves immo users who are not sentropic tenant members (Q3-A).
-UPDATE public.oauth_clients SET require_tenant = false WHERE client_id = 'immo-mcp';
+-- Clients whose users are not sentropic tenant members (Q3-A: one approval realm per app): the
+-- claude.ai immo-mcp connector, the immo RP (prod and preprod ids) and the free-auth design system.
+-- Tenant-bound (unchanged): sentropic-mcp, h2a-cli and every other or future client (default true).
+UPDATE public.oauth_clients SET require_tenant = false
+  WHERE client_id IN ('immo-mcp', 'radar-immobilier', 'radar-immobilier-preprod', 'design-system');
+--> statement-breakpoint
+-- A1-REKEY: a tenant-keyed grant of a tenant-optional client, whose user has no approved membership
+-- in that tenant and whose CM authority is live, moves to the tenant-less key: same row, scopes and
+-- offline evidence (its NULL-tenant refresh families match it again), CM authority re-issued under the
+-- tenant-less id with the same grant time, and the tenant-keyed CM authority revoked. A revoked or
+-- missing authority is never resurrected; an existing tenant-less grant is kept as is.
+DO $$
+DECLARE r record;
+  stamp text := to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+BEGIN
+  FOR r IN
+    SELECT DISTINCT ON (c.user_id, c.client_id) c.user_id, c.client_id, c.tenant_id AS tid,
+      cg.consent_id, cg.granted_at, gov.tenant_id AS governing
+    FROM public.oauth_consents c
+    JOIN public.oauth_clients k ON k.client_id = c.client_id AND NOT k.require_tenant
+    JOIN cm_identity.cm_tenants gov ON gov.slug = k.tenant_id AND gov.status = 'active'
+    JOIN cm_identity.cm_tenants t ON t.slug = c.tenant_id
+    JOIN cm_identity.cm_oauth_consents cg ON cg.revoked_at IS NULL AND cg.consent_id = encode(sha256(convert_to(
+      '["app-oauth-consent",' || to_json(c.user_id)::text || ',' || to_json(c.client_id)::text || ','
+      || to_json(t.tenant_id)::text || ']', 'UTF8')), 'hex')
+    WHERE c.tenant_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM cm_identity.cm_tenant_memberships m
+        WHERE m.user_id = c.user_id AND m.tenant_id = t.tenant_id AND m.status = 'approved')
+      AND NOT EXISTS (SELECT 1 FROM public.oauth_consents n
+        WHERE n.user_id = c.user_id AND n.client_id = c.client_id AND n.tenant_id IS NULL)
+    ORDER BY c.user_id, c.client_id, c.updated_at DESC
+  LOOP
+    UPDATE public.oauth_consents SET tenant_id = NULL
+      WHERE user_id = r.user_id AND client_id = r.client_id AND tenant_id = r.tid;
+    INSERT INTO cm_identity.cm_oauth_consents (consent_id, tenant_id, user_id, client_id, granted_at, revoked_at)
+      VALUES (encode(sha256(convert_to('["app-oauth-consent",' || to_json(r.user_id)::text || ','
+        || to_json(r.client_id)::text || ',null]', 'UTF8')), 'hex'), r.governing, r.user_id, r.client_id, r.granted_at, NULL)
+      ON CONFLICT (consent_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, granted_at = EXCLUDED.granted_at,
+        revoked_at = NULL;
+    UPDATE cm_identity.cm_oauth_consents SET revoked_at = stamp WHERE consent_id = r.consent_id;
+  END LOOP;
+END $$;
