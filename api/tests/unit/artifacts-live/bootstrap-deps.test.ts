@@ -35,7 +35,7 @@ async function npmCi(call: Spawned) {
 async function install(pod: Pod, files = source, staged = tarballs) {
   const sent = await pod.transfer('install', files);
   const cache = await pod.transfer('npm-cache', staged.map(t => t.file));
-  return pod.send('install', { recipe: 'install', runId: 'run-1', source: sent, cache,
+  return pod.send('install', { recipe: 'install', runId: 'run-1', source: sent, cache, workspaces: [],
     tarballs: staged.map(t => ({ path: t.file.path, integrity: t.integrity })) });
 }
 /** W3 `readSnapshot` reassembly of contiguous slices (links skipped by the pod). */
@@ -109,7 +109,7 @@ describe('pod bootstrap agent: offline install and dependency materialization', 
         quarantine: async () => undefined, putFile: async (digest, bytes) => { blobs.set(digest, bytes); },
         getFile: async digest => blobs.get(digest) } });
     const identity = { storageScopeId: 's', repoId: 'r', lockSha256: createHash('sha256').update(lock).digest('hex'), platform: 'linux-x64',
-      nodeVersion: '24', npmVersion: '11', image: BUILDER_IMAGE, policyRevision: 'p1', workspaceTopology: 'ui', integrityDigest: createHash('sha256').digest('hex') };
+      nodeVersion: '24', npmVersion: '11', image: BUILDER_IMAGE, policyRevision: 'p1', workspaceTopology: 'ui', integrityDigest: createHash('sha256').digest('hex'), installWorkspaces: [] };
     // GB1 at the pinned commit: no script entry in the lock, so no qualification file (digest of zero bytes).
     const gb1 = { subPath: '', files: { 'sentropic.artifact.json': gb1Descriptor, 'package-lock.json': lock.toString(),
       'ui/package.json': '{"name":"ui"}',
