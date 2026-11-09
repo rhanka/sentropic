@@ -5,7 +5,7 @@
 - [ ] Keep make db-backup / db-restore working with backups visible on the host, and run every workspace-writing docker run as the host user through one Makefile variable.
 
 ## Scope / Guardrails
-- [ ] Worktree tmp/worktrees/compose-backup-owner on branch fix/compose-backup-owner from origin/main aa21ecdfd, verified with git branch --show-current before any work.
+- [ ] Worktree tmp/worktrees/compose-backup-owner on branch fix/compose-backup-owner from origin/main e0fde09 (rebased 09/11, BRANCH.md sole conflict kept via -X theirs), verified with git branch --show-current before any work.
 - [ ] Test env ENV=test-compose-backup with API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215, ENV always last on make commands, never ENV=dev, never make clean-all, no Python.
 - [ ] Make-only workflow, Docker through .tmp/packets/docker-slot.sh, one slot per command, never nested, make down-volumes ENV=test-compose-backup at the end.
 - [ ] Atomic commits under 150 lines via make commit MSG="...", specific git add, no attribution trailer.
@@ -55,10 +55,10 @@
   - [x] BRCBO-EX1 declared before touching Makefile.
 - [ ] **Lot 1 — data/backup ownership**
   - [x] db-backup: normalize ownership after pg_dump via compose run postgres as 0:0 with HOST_UID/HOST_GID chown on the new dump (existing 355/368 pattern).
-  - [ ] doc-backup/doc-backup-prod need no change (MINIO_EXEC already host-user, tar runs on host), verify empirically.
-  - [ ] db-restore/doc-restore/db-backup-prod need no change (no host writes: cp into container, host mkdir/tar/redirect), verify empirically.
+  - [x] doc-backup/doc-backup-prod need no change (MINIO_EXEC already --user host-uid, Makefile 3761, tar runs on host).
+  - [x] db-restore/doc-restore/db-backup-prod need no change (no host writes: cp into container, host mkdir/tar/redirect).
   - [x] minio user 0:0 kept (see Feedback Loop), no named-volume move.
-  - [ ] Lot gate: make db-backup then stat -c %U on the dump shows host user, no root-owned file under data/backup.
+  - [x] Lot gate: make db-backup 09/11 16:45 ENV=test-compose-backup exit 0, dump app-2026-11-09T16-45-27.dump stat antoinefa:antoinefa, find data -user root empty.
 - [ ] **Lot 2 — DOCKER_RUN_USER variable**
   - [x] Define DOCKER_RUN_USER = -u $(UID):$(GID) -e HOME=/tmp once next to UID/GID exports (UID/GID from #973).
   - [x] Apply to Makefile 1259 (typecheck-llm-mesh), 1460 (--check), 1473 (audit versions), 1477 (typecheck-skills, ln -s writer), 1593 (typecheck-flow), 2881 (test-llm-mesh via ARTIFACTS_RUN), 2893 (bench-live-speech OUT= writer), 2989 (test-skills, ln -s + vitest writer), 3942 node-audit branch.
@@ -66,7 +66,7 @@
 - [ ] **Lot 3 — Verification on ENV=test-compose-backup**
   - [x] Run make typecheck-llm-mesh API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find packages/llm-mesh -user root empty (PASS 09/11, exit 0, find empty).
   - [x] Run make typecheck-api API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find api -user root empty (PASS 09/11, exit 0, find count 0).
-  - [ ] Run make db-backup + db-restore BACKUP_FILE=<new> SKIP_CONFIRM=true API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, stat -c %U host-owned, find data -user root empty.
+  - [x] Run make db-backup + db-restore BACKUP_FILE=app-2026-11-09T16-45-27.dump SKIP_CONFIRM=true API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup (both exit 0, 09/11), stat -c %U host-owned, find data -user root empty, find packages/llm-mesh + api/node_modules/.vite-temp -user root empty.
   - [ ] End with make down-volumes ENV=test-compose-backup.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint for impacted surface (Makefile/compose only, no src change, no package bump needed).
