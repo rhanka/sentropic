@@ -15,6 +15,7 @@
 - **Allowed Paths (implementation scope)**:
   - `scripts/ci/live-provider-receipt.mjs`
   - `scripts/ci/live-provider-receipt.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -33,6 +34,7 @@
 ## Feedback Loop
 - [x] ENOBUFS-1: `select` fails with `Error: spawnSync gh ENOBUFS` at `live-provider-receipt.mjs:103` on route `repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100&page=1` (run 42474921060, job 128713986254): confirmed from job log plus raw size ~117KB per 10 runs.
 - [x] BR01-EX1: touch `.github/workflows/ci.yml` (`global` paths-filter only): add `scripts/ci/live-provider-receipt.mjs` and `scripts/ci/live-provider-receipt.test.mjs`. Rationale: any `scripts/**` change classifies as `root-lock-toolchain`, whose `consumer-contracts-verify` gate requires the six integration lanes, but those lanes only run when `api`, `ui` or `global` matches; without this, a `scripts/ci`-only PR can never go green (run 42548638007: `consumer-contracts` + `ci-gate` failure). Impact: strictly more CI for these two paths (full integration), same family as `image-receipt`/`compatibility-classifier` already listed; no gate, threshold or assertion loosened. Rollback: remove the two lines; dispatch returns to `manifest_guard`-only.
+- [x] BR01-EX1b: run 42552089131 `validate-publishable-manifests` pins the exact `global` scripts list (`publishable-ci-wiring.test.mjs:144`); the two deliberate BR01-EX1 additions are added to the pin. The pin stays an exact match (any other unlisted addition still fails): evolution of the intended contract, not a loosening.
 
 ## AI Flaky tests
 - Acceptance rule:
