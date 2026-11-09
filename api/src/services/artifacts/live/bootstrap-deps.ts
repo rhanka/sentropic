@@ -70,7 +70,8 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
       for (const file of set.files) await ctx.place(file, INSTALL_DIR);
     } finally { await set.dispose(); }
     await requireCovered(await stageTarballs(cache, tarballs));
-    return { exitCode: await ctx.runToExit(ctx.recipes.install, INSTALL_DIR) };
+    const result = await ctx.runToExit(ctx.recipes.install, INSTALL_DIR, ctx.options.installEnv);
+    return { exitCode: result.exitCode, signal: result.signal, output: result.output };
   });
 });
 `;
