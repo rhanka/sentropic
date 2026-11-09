@@ -46,10 +46,10 @@
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Repin to the host build API job state contract build**
-  - [x] `deploy/k8s/overlays/preprod/kustomization.yaml`: api digest swapped sha256:f9e11434…c2 → sha256:8a0039e8198e98b1433003266ae389c6f0cf2360b05d1ac77c97f01144675c61; ui digest unchanged sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0; provenance comment rewritten (run 42512631809, publish-ui-image skips).
-  - [x] `deploy/ci/preprod-a4/bundle.selftest.mjs`: api tag expectation swapped to the new digest; ui expectation and the four prod asserts unchanged.
-- [x] **Lot 2 — Final validation**
-  - [x] `make check-preprod-images ENV=test-repin-975` PASS (both rendered pins verified by anonymous digest pull, 2026-11-08).
-  - [x] `docker-slot.sh make test-artifact-content-manifests API_PORT=8857 UI_PORT=5257 MAILDEV_UI_PORT=1157 ENV=test-repin-975` PASS (artifact-content bundle selftest 211 PASS 0 failures, A4 unit 32/32, A4 bundle selftest: api/auth-idp/artifact-content on sha256:8a0039e8…61, ui on sha256:bf1aa509…e0, prod unchanged).
-  - [ ] PR « deploy(preprod): repin to the remote live rows persistence fix », CI green on the exact head, merge by s-conductor.
+- [x] **Lot 1 — Repin to the forge tarball and live teardown build (#975, #971)**
+  - [x] `deploy/k8s/overlays/preprod/kustomization.yaml`: api digest swapped sha256:69bd39eb…44 → sha256:8a0039e8198e98b1433003266ae389c6f0cf2360b05d1ac77c97f01144675c61 (main ec3c0bcc8, run 42627071304); ui digest unchanged sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0; provenance comment rewritten.
+  - [x] `deploy/ci/preprod-a4/bundle.selftest.mjs`: api tag expectation swapped to the new digest; ui expectation and the prod asserts unchanged.
+- [ ] **Lot 2 — Validation**
+  - [x] GHCR anonymous manifest fetch of the api digest: HTTP 200 (2026-11-09).
+  - [ ] No local make run on this branch: the preprod-a4 and artifact-content selftests run in the PR CI on the exact head.
+  - [ ] PR « deploy(preprod): repin the api to the ec3c0bcc8 build (forge tar links, live teardown) », CI green on the exact head, merge by s-conductor.
