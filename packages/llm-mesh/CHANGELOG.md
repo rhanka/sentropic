@@ -2,15 +2,21 @@
 
 ## Unreleased
 
-## 0.33.1
+## 0.34.0
 
-- Custodian Lot 1: proactive refresh cycle (`runCustodianRefreshCycle`) over
-  mesh-managed accounts inside the skew window (25 percent of TTL remaining,
-  10 min floor, injected clock), per-account secret-free report; `reauth_required`
-  flips early on refresh failure and emits a secret-free `ReauthAlertSink` event
-  (diagnostic account ref only, once per epoch); `startCustodianLoop` /
-  `stopCustodianLoop` for the hosted loop. External seats stay skipped, static
-  keys without a refresh grant keep re-enrollment (no refresh).
+- Custodian Lot 1 (new surface, minor): proactive refresh cycle
+  (`runCustodianRefreshCycle`) over mesh-managed accounts inside the skew
+  window (25 percent of credential TTL remaining from issuance, 10 min
+  floor, injected clock), per-account secret-free custody-state report.
+  Definitive refresh failures flip `reauth_required` early and emit a
+  secret-free `ReauthAlertSink` event (diagnostic account ref only, once per
+  epoch); transient failures (explicit 429/5xx, network errors, preparation
+  failures) defer without flipping. `startCustodianLoop` / `stopCustodianLoop`
+  run the hosted loop (immediate first cycle, jittered cadence, `onError`
+  surface, exactly one loop per owner scope); the custodian controls live on
+  the administrative facade. External seats stay skipped (an expired one reads
+  reauth-required without flipping); grant-less credentials flip on expiry
+  for a planned re-enrollment.
 
 ## 0.33.0
 
