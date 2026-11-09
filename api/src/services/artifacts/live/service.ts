@@ -32,7 +32,7 @@ import type { ForgeBindings } from './forge-binding';
 export const LIVE_NODE_CAPACITY = 4;
 /** Builder pods present at once per environment (tenant ResourceQuota pods 5, s-archi 07/11 21:15): every creation
  * takes one of these pod slots in the heavy-phase queue first. */
-export const MAX_BUILDER_PODS = 4;
+export const MAX_BUILDER_PODS = 3;
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
  * AL-T supplies authenticated owner operations; AL-D supplies the encrypted draft port;
  * SG4 supplies transactional publication. Every supervisor frame rides the artifact-content relay (A-LIVE §8.1):
