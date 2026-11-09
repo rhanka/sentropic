@@ -16,6 +16,14 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/llm-mesh/src/node/cli/enroll-cli.ts`
   - `packages/llm-mesh/src/node/cli/enroll-args.ts`
   - `packages/llm-mesh/src/node/cli/enroll-command.ts`
@@ -55,7 +63,8 @@
 
 ## Feedback Loop
 - [x] BRENROLL-EX1: root lockfile follows the `@sentropic/llm-mesh` 0.33.0 to 0.34.0 bump (version strings only, regenerated via make). Impact: lockfile only. Rollback: revert with the bump.
-- [x] BRENROLL-EX2: admit the 0.34 line in `packages/llm-gateway/package.json` (`|| ^0.34.0`) and `packages/cluster-mesh/package.json` (`<0.35.0`), range strings only, no consumer version bump (follows 3b9626d35; the gateway bumpGate pattern rides the next gateway release as 143392cea did). The sibling lane `feat/llm-mesh-lot1-custodian-refresh` carries the identical cluster-mesh range value with its own dev.20 release; rebase takes either side. Impact: range strings only. Rollback: revert with the bump.
+- [x] BRENROLL-EX2: admit the 0.34 line in `packages/llm-gateway/package.json` (`|| ^0.34.0`) and `packages/cluster-mesh/package.json` (`<0.35.0`), range strings only (follows 3b9626d35). The sibling lane `feat/llm-mesh-lot1-custodian-refresh` carries the identical cluster-mesh range value with its own dev.20 release; rebase takes either side. Impact: range strings only. Rollback: revert with the bump.
+- [x] BRENROLL-EX3: align the hardcoded `LLM_MESH_RANGE` in `packages/cluster-mesh/src/modules/catalog.ts` (`<0.34.0` to `<0.35.0`, one line) with the admitted peer range, bump `@sentropic/llm-gateway` 0.22.4 to 0.22.5 (patch, precedent 143392cea) and `@sentropic/cluster-mesh` 0.26.0-dev.19 to 0.26.0-dev.21 (sibling lane owns dev.20), and update the six cluster-mesh specs asserting the old boundary (admit 0.34.0, refuse 0.35.0), and sync the `selected` fixture tuple (precedents 6cc8c7a5e, 8c2e210d4), plus root `package-lock.json` regenerated via `make lock-root` (workspace version strings only, BRENROLL-EX1 pattern). Reason: CI evidence on head dc09c4c28 (run 42662913703) — every api-sut container exits 1 with `ClusterMeshTopologyError` (installed mesh 0.34.0 vs required `<0.34.0`), and package-candidates demands a gateway bump for the widened range (143392cea proves the bumpGate requires it; EX2's no-bump reading was wrong). Impact: mesh coherence restored, no API change. Rollback: revert with the range.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -88,14 +97,28 @@
     - [x] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
 - [x] **Lot 2 — Tests with stubbed fetch**
   - [x] Add `packages/llm-mesh/tests/node/enroll-cli-testkit.ts`, `enroll-cli-enroll.test.ts`, `enroll-cli-probe.test.ts`: device happy path, user-code-only output, key-by-env-name, no secret in stdout/stderr, probe error mapping (402 `billing_not_configured` flagged as the non-seat `muse.ts` path).
-  - [ ] Lot gate:
-    - [ ] Scoped run `make test-llm-mesh SCOPE=tests/node/enroll-cli-enroll.test.ts ENV=test-llm-mesh-enroll` plus probe file.
+  - [x] Lot gate:
+    - [x] Scoped run `make test-llm-mesh SCOPE=tests/node/enroll-cli-enroll.test.ts ENV=test-llm-mesh-enroll` plus probe file (3 plus 3 green).
 - [x] **Lot 3 — Version, README, changelog**
   - [x] Bump `@sentropic/llm-mesh` minor (new public `bin` surface) above npm latest, update `CHANGELOG.md`.
   - [x] Add a short English README section with the exact immo detection keyring commands.
   - [x] Regenerate lockfiles via make.
   - [x] Lot gate:
     - [x] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
+- [x] **Lot 4 — CI coherence fix (run 42662913703 evidence)**
+  - [x] Align hardcoded `LLM_MESH_RANGE` in `packages/cluster-mesh/src/modules/catalog.ts` with the admitted peer range.
+  - [x] Bump `packages/llm-gateway/package.json` 0.22.4 to 0.22.5 and `packages/cluster-mesh/package.json` 0.26.0-dev.19 to 0.26.0-dev.21.
+  - [x] Update the five cluster-mesh specs asserting the old literal (admit 0.34.0, refuse 0.35.0).
+  - [x] Declare BRENROLL-EX3 with CI log evidence and precedent correction.
+  - [x] Sync the `selected` fixture tuple (package.json plus lock) to mesh 0.34.0, gateway 0.22.5, dev.21 (registry tarball integrity stays for the train refresh post-publish; no spec asserts it).
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh` green.
+    - [x] Scoped `make test-cluster-mesh SCOPE=tests/packaging/tuple-skew.spec.ts ENV=test-llm-mesh-enroll` green (21 passed, 2 skipped).
+    - [x] `make test-cluster-mesh SCOPE=tests/packaging/prepare-artifacts.spec.ts ENV=test-llm-mesh-enroll` green (20 passed).
+    - [x] `make test-cluster-mesh SCOPE=tests/packaging/artifacts-tuple.spec.ts ENV=test-llm-mesh-enroll` green (5 passed, 3 skipped).
+    - [x] `make test-cluster-mesh SCOPE=tests/modules/registry.spec.ts ENV=test-llm-mesh-enroll` green (51 passed).
+    - [x] Scoped topology-ranges (20 passed) plus speech-peer (18 passed) green.
+    - [x] Regenerated lockfiles via `make lock-root`.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck and lint.
   - [x] Retest llm-mesh scoped plus full `make test-llm-mesh ENV=test-llm-mesh-enroll`.
