@@ -27,7 +27,7 @@ test('should verify internal gates with UI stopped, then HTTP only through the r
     if (args[0] === 'exec') return `verificationSha256=${sha}\n`;
     assert.fail('unexpected call');
   };
-  const env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request' };
+  const env = { A4_TIER: 'preprod', A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request' };
   const read = path => path.endsWith('request') ? JSON.stringify(request) : path === '/private/grant' ? JSON.stringify(grant) : 'private';
   const result = await verify(env, call, read, () => assert.fail('stopped UI must not be probed'));
   assert(result.trim().split('\n').every(line => /^[A-Za-z]+Sha256=[a-f0-9]{64}$/.test(line)));

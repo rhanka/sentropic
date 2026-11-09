@@ -7,7 +7,7 @@ import { approvedRequest, image } from './fixtures.mjs';
 const fixture = (commands = [['scale', 'deployment/api', '--replicas=1']]) => {
   const grant = { ...approvedRequest, format: 'preprod-a4-execution/1', actions: { 'start-api': commands } };
   const bytes = JSON.stringify(grant), calls = [];
-  const env = { A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request', A4_ACTION: 'start-api',
+  const env = { A4_TIER: 'preprod', A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request', A4_ACTION: 'start-api',
     A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(bytes) };
   return { env, calls, call: (...args) => { calls.push(args); return 'PRIVATE-RESPONSE-SENTINEL'; },
     read: path => path === env.A4_REQUEST_FILE ? JSON.stringify(approvedRequest) : path === env.A4_EXECUTION_FILE ? bytes : 'private' };
