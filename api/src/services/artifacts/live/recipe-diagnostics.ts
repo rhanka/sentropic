@@ -16,7 +16,12 @@ export function scrubRecipeOutput(value: string): string {
   return value
     .replace(/(\/\/)[^/\s@]+@/g, `$1${RECIPE_SCRUB_TOKEN}@`)
     .replace(/(_authToken|_auth)\s*=\s*[^\s]+/gi, `$1=${RECIPE_SCRUB_TOKEN}`)
-    .replace(/(Authorization\s*:\s*)[^\r\n]+/gi, `$1${RECIPE_SCRUB_TOKEN}`);
+    .replace(/(Authorization\s*:\s*)[^\r\n]+/gi, `$1${RECIPE_SCRUB_TOKEN}`)
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, `$1 ${RECIPE_SCRUB_TOKEN}`)
+    .replace(/\b(npm_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b/g,
+      RECIPE_SCRUB_TOKEN)
+    .replace(/\b([A-Za-z0-9_]*(?:token|secret|password|passwd|api[_-]?key)[A-Za-z0-9_]*)(\s*[:=]\s*)[^\s'",;]+/gi,
+      `$1$2${RECIPE_SCRUB_TOKEN}`);
 }
 
 /** Keeps the last `maxBytes` bytes without splitting a multibyte sequence; the head is dropped, never the tail. */
@@ -36,6 +41,7 @@ export interface RecipeResult { exitCode: number | null; signal: string | null; 
 export function classifyRecipeFailure(result: RecipeResult): string {
   if (/ENOSPC|no space left on device/i.test(result.output)) return 'enospc';
   if (/ENOTCACHED|only-if-cached|no cached response|not in cache/i.test(result.output)) return 'enotcached';
+  if (result.signal === 'TIMEOUT') return 'timeout';
   if (result.exitCode === 137 || result.signal === 'SIGKILL'
     || /heap out of memory|out of memory|allocation failure/i.test(result.output)) return 'oom';
   if (typeof result.signal === 'string' && result.signal.length > 0) return `signal_${result.signal}`;
@@ -44,10 +50,15 @@ export function classifyRecipeFailure(result: RecipeResult): string {
 }
 
 /** Fail-closed read of a pod recipe reply: the shape is exact, the tail is canonical base64 within the wire bound
- * and comes back decoded, scrubbed and truncated. Anything else is refused, never guessed. */
+ * and comes back decoded, scrubbed and truncated. Anything else is refused, never guessed. A pod adopted from the
+ * previous bootstrap (same frame version) answers without `signal`/`output`, and its pre-bundle without `exitCode`:
+ * those absent fields read as no signal, an empty tail and, for a confirmed pre-bundle, exit 0. */
 export function readRecipeDiagnostics(data: unknown): RecipeResult | undefined {
   if (!data || typeof data !== 'object') return undefined;
-  const { exitCode, signal, output } = data as Record<string, unknown>;
+  const reply = data as Record<string, unknown>;
+  const exitCode = reply.exitCode === undefined && reply.prebundled === true ? 0 : reply.exitCode;
+  const signal = reply.signal === undefined ? null : reply.signal;
+  const output = reply.output === undefined ? '' : reply.output;
   if (!(exitCode === null || (typeof exitCode === 'number' && Number.isSafeInteger(exitCode)))) return undefined;
   if (!(signal === null || (typeof signal === 'string' && /^[A-Z0-9]{1,16}$/.test(signal)))) return undefined;
   if (typeof output !== 'string' || output.length > MAX_WIRE_OUTPUT_BYTES) return undefined;
