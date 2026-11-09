@@ -103,7 +103,11 @@ const fakeDeps = (world: FakeWorld) => {
         return 'mid-1';
       },
     },
-    recipients: { listRecipientsForTarget: async () => [{ accountId: 'u-1', email: 'admin@example.com' }] },
+    recipients: {
+      listRecipientsForTarget: async () => [
+        { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod' },
+      ],
+    },
     clock: () => world.clock,
     policy: DEFAULT_OPS_NOTIFICATION_POLICY_V1,
     withIncidentLock: async <T>(_: string, work: () => Promise<T>): Promise<T> => work(),
@@ -122,7 +126,9 @@ describe('runOpsNotificationSweep', () => {
     expect(result.sent).toBe(1);
     expect(w.sent).toEqual([{ to: 'admin@example.com' }]);
     expect(w.deliveries.get('d-1')).toMatchObject({ status: 'sent', messageId: 'mid-1' });
-    expect(w.deliveries.get('d-1')!.recipients).toEqual([{ accountId: 'u-1', email: 'admin@example.com' }]);
+    expect(w.deliveries.get('d-1')!.recipients).toEqual([
+      { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod' },
+    ]);
   });
 
   it('creates the 24 h escalation delivery for a firing incident with no new event', async () => {

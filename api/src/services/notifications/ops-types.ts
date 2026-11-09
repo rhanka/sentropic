@@ -18,7 +18,7 @@ export interface OpsDeliveryRecordV1 {
   readonly subject: string;
   readonly textBody: string;
   readonly htmlBody: string;
-  readonly recipients: readonly { readonly accountId: string; readonly email: string }[];
+  readonly recipients: readonly { readonly accountId: string; readonly email: string; readonly basis: string }[];
   readonly eventId: string | null;
   readonly attempts: number;
   readonly lastError: string | null;

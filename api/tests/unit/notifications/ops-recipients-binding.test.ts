@@ -11,7 +11,7 @@ const accounts = (records: Record<string, { status: 'active' | 'disabled'; email
   },
 });
 
-const platformAdmins = [{ accountId: 'u-platform', email: 'platform@example.com' }];
+const platformAdmins = [{ accountId: 'u-platform', email: 'platform@example.com', basis: 'platform-admin-fallback' }];
 
 describe('parseOpsTargetsDeclaration', () => {
   it('parses a target to account-ids map and drops empty entries', () => {
@@ -37,8 +37,8 @@ describe('createOpsRecipientsPort', () => {
       platformAdmins: async () => platformAdmins,
     });
     expect(await port.listRecipientsForTarget('immo-prod')).toEqual([
-      { accountId: 'u-owner', email: 'owner@example.com' },
-      { accountId: 'u-farid', email: 'farid@example.com' },
+      { accountId: 'u-owner', email: 'owner@example.com', basis: 'platform-declaration:immo-prod' },
+      { accountId: 'u-farid', email: 'farid@example.com', basis: 'platform-declaration:immo-prod' },
     ]);
   });
 
@@ -61,7 +61,7 @@ describe('createOpsRecipientsPort', () => {
       platformAdmins: async () => platformAdmins,
     });
     expect(await port.listRecipientsForTarget('immo-prod')).toEqual([
-      { accountId: 'u-ok', email: 'ok@example.com' },
+      { accountId: 'u-ok', email: 'ok@example.com', basis: 'platform-declaration:immo-prod' },
     ]);
   });
 
@@ -75,7 +75,7 @@ describe('createOpsRecipientsPort', () => {
       platformAdmins: async () => [],
     });
     expect(await port.listRecipientsForTarget('immo-prod')).toEqual([
-      { accountId: 'u-1', email: 'live@example.com' },
+      { accountId: 'u-1', email: 'live@example.com', basis: 'platform-declaration:immo-prod' },
     ]);
     expect(lookup.findAccount).toHaveBeenCalledWith('u-1');
   });

@@ -13,6 +13,14 @@ import type { AccountStatus } from '../identity-contracts/types.js';
 export interface OpsAlertRecipientV1 {
   readonly accountId: string;
   readonly email: string;
+  /**
+   * Why this account counts as an admin of the target: the validated product
+   * `basis` value (`workspace:manage_members` / `app:is_admin`), or the
+   * platform-owned fallback (`platform-declaration:<targetKey>` for declared
+   * ids, `platform-admin-fallback` for transverse `admin_app` operators).
+   * Persisted in the delivery audit so every mail is attributable.
+   */
+  readonly basis: string;
 }
 
 /**
@@ -88,7 +96,7 @@ export function createDeclaredOpsRecipientsPort(input: OpsDeclaredRecipientsInpu
         }
         if (seen.has(email)) continue;
         seen.add(email);
-        recipients.push({ accountId, email });
+        recipients.push({ accountId, email, basis: `platform-declaration:${targetKey}` });
       }
       return recipients;
     },
