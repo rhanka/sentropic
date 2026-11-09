@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fixture, key, owner } from './fixture';
-import { publicationBaseline } from '../../../src/services/artifacts/live/records';
+import { LiveError, publicationBaseline } from '../../../src/services/artifacts/live/records';
 
 describe('artifact live controller', () => {
   it('should project only the current durable draft and ignore exact projection replay', async () => {
@@ -76,6 +76,36 @@ describe('artifact live controller', () => {
     await f.controller.start(key); f.ports.worker.verify = vi.fn(async () => { f.binding.releaseId = 'other'; });
     f.advance(900_001); await expect(f.controller.reap(key)).rejects.toMatchObject({ code: 'pointer_conflict' });
     expect(f.published).toEqual([]); expect((await f.state())?.progress.initialUnpublishedBranchEligible).toBe(true);
+  });
+  it('should finish an interrupted teardown on reconcile once the pod is gone', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    await f.ports.store.transaction(key, async unit => { unit.state!.runtime.phase = 'RECOVERING'; });
+    f.objects.delete('pods' + live.podName);
+    await f.controller.reconcile(key);
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0);
+  });
+  it('should not renew a lease for a runtime owned by an in-flight teardown', async () => {
+    const f = fixture(); await f.controller.start(key);
+    expect(await f.controller.lease(key)).toBe(true);
+    vi.mocked(f.ports.worker.renew).mockClear();
+    for (const phase of ['RECOVERING', 'SAVING', 'QUIESCING', 'DECOMMISSIONING'] as const) {
+      await f.ports.store.transaction(key, async unit => { unit.state!.runtime.phase = phase; });
+      expect(await f.controller.lease(key)).toBe(false);
+    }
+    expect(f.ports.worker.renew).not.toHaveBeenCalled();
+  });
+  it('should preserve the recorded cause when a stop finishes the teardown', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    await f.ports.store.transaction(key, async unit => { unit.state!.runtime.stateDetail = 'builder_unavailable:npm_relay_status'; });
+    await f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 });
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', stateDetail: 'builder_unavailable:npm_relay_status' });
+  });
+  it('should persist code and reason when preparation fails after the pod exists', async () => {
+    const f = fixture();
+    f.ports.worker.clean = vi.fn(async () => { throw new LiveError('builder_unavailable', 'supervisor_relay_502'); });
+    await expect(f.controller.start(key)).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'supervisor_relay_502' });
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', stateDetail: 'builder_unavailable:supervisor_relay_502' });
   });
   it('should teardown after revocation without returning source metadata', async () => {
     const f = fixture(); const live = await f.controller.start(key); f.binding.healthy = false;
