@@ -76,7 +76,7 @@ async function admittedBuild(ports: LivePorts, key: LiveKey, runtime: LiveRuntim
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING' || state.runtime.attempt?.id !== attempt.id) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt.candidateDigest = candidate.candidateDigest;
     });
-    await ports.worker.verify(runtime, runtime.attempt!);
+    await runPhase(key, 'verify', () => ports.worker.verify(runtime, runtime.attempt!));
     const finalHead = await observeHead(ports, key, runtime);
     if (finalHead !== attempt.headSha) throw new LiveError('git_head_moved');
     runtime = await ports.store.transaction(key, async unit => {
