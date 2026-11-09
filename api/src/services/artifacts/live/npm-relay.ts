@@ -12,10 +12,13 @@ export async function fetchLockedTarball(pin: IntegrityPin, relay: typeof NPM_RE
   }
   const target = new URL(relay);
   target.pathname = url.pathname;
-  const response = await transport(target, {
-    redirect: 'error', headers: { 'accept-encoding': 'identity' }, signal: AbortSignal.timeout(30_000),
-  });
-  if (response.status !== 200 || !response.body) throw new LiveError('builder_unavailable');
+  let response: Response;
+  try {
+    response = await transport(target, {
+      redirect: 'error', headers: { 'accept-encoding': 'identity' }, signal: AbortSignal.timeout(30_000),
+    });
+  } catch { throw new LiveError('builder_unavailable', 'npm_relay_unreachable'); }
+  if (response.status !== 200 || !response.body) throw new LiveError('builder_unavailable', `npm_relay_${response.status}`);
   const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0;
   for (;;) {
     const chunk = await reader.read(); if (chunk.done) break;
