@@ -76,12 +76,26 @@ case "$mode" in
     printf '%s\n' '{"type":"assistant","message":{"type":"message","role":"assistant","content":[{"type":"text","text":"Looking"},{"type":"tool_use","id":"call-1","name":"lookup","input":{"q":"test"}}],"stop_reason":"tool_use"}}'
     printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"input_tokens":8,"output_tokens":4}}'
     ;;
+  init-tools)
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[{"name":"Bash"}],"mcp_servers":[]}'
+    printf '%s\n' '{"type":"assistant","message":{"type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}]}}'
+    printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"Hello","usage":{"input_tokens":3,"output_tokens":2}}'
+    ;;
+  init-mcp)
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[{"name":"evil"}]}'
+    printf '%s\n' '{"type":"assistant","message":{"type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}]}}'
+    printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"Hello","usage":{"input_tokens":3,"output_tokens":2}}'
+    ;;
   quota5h)
     printf '%s\n' "Error: You've hit your 5-hour limit. Please try again in 30 minutes." >&2
     exit 1
     ;;
   quota-retry)
     printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Rate limit exceeded, please retry in 2 minutes"}'
+    exit 1
+    ;;
+  numeric-429)
+    printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"done","usage":{"input_tokens":429,"output_tokens":429}}'
     exit 1
     ;;
   fail)
@@ -249,6 +263,42 @@ describe('node claude CLI runner', () => {
       .rejects.toMatchObject({ name: 'AbortError' });
     await expect(readDump('argv')).rejects.toThrow();
   });
+
+  it.each(['init-tools', 'init-mcp'])('should fail closed on a non-empty %s inventory', async (mode) => {
+    await setMode(mode);
+    const runner = new NodeClaudeCodeCliRunner();
+    await expect(collect(runner.run({ access, request: request(), signal: never })))
+      .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('inventory') });
+  });
+
+  it('should accept a final line without a trailing newline', async () => {
+    await setMode('noeol');
+    const runner = new NodeClaudeCodeCliRunner();
+    const events = await collect(runner.run({ access, request: request(), signal: never }));
+    expect(events).toEqual([
+      { type: 'text_delta', text: 'Héllo wörld' },
+      { type: 'result', finishReason: 'stop', usage: { inputTokens: 3, outputTokens: 2 } },
+    ]);
+  });
+
+  it('should refuse an oversized CLI output line', async () => {
+    await setMode('longline');
+    const runner = new NodeClaudeCodeCliRunner();
+    await expect(collect(runner.run({ access, request: request(), signal: never })))
+      .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('output line') });
+  });
+
+  it('should refuse an oversized whole-run CLI output', async () => {
+    await setMode('flood');
+    const runner = new NodeClaudeCodeCliRunner();
+    const error = await collect(runner.run({ access, request: request(), signal: never })).then(
+      () => { throw new Error('should have thrown'); },
+      (cause: unknown) => cause,
+    );
+    expect(error).toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('oversized') });
+    expect((error as Error).message).not.toContain('output line');
+  });
+
   it('should normalize assistant tool blocks and terminal usage', async () => {
     await setMode('tool');
     const runner = new NodeClaudeCodeCliRunner();
@@ -342,6 +392,18 @@ describe('node claude CLI runner', () => {
     expect([...tail]).toEqual([...Buffer.from('bcé')]);
     expect(appendCappedTail(Buffer.from('abc'), Buffer.from('d'), 0).length).toBe(0);
   });
+
+  it('should not mistake usage counters for quota signals', async () => {
+    await setMode('numeric-429');
+    const runner = new NodeClaudeCodeCliRunner();
+    const error = await collect(runner.run({ access, request: request(), signal: never })).then(
+      () => { throw new Error('should have thrown'); },
+      (cause: unknown) => cause,
+    );
+    expect(error).not.toBeInstanceOf(ClaudeCliQuotaError);
+    expect(error).toMatchObject({ name: 'ClaudeCliRunnerError' });
+  });
+
   it('should render prompts deterministically', () => {
     expect(renderClaudeCodeCliPrompt(request())).toBe('user: Summarize this page\n');
   });
