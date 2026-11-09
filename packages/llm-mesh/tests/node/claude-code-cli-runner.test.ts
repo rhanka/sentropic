@@ -9,7 +9,9 @@ import {
   probeClaudeCodeCliCapabilities,
 } from '../../src/node/claude-code-cli-runner.js';
 import {
+  appendCappedTail,
   diagnoseClaudeCodeQuota,
+  extractQuotaText,
   renderClaudeCodeCliPrompt,
 } from '../../src/node/claude-code-cli-wire.js';
 import { ClaudeCliQuotaError } from '../../src/transport/claude-code-runtime-client.js';
@@ -271,6 +273,20 @@ describe('node claude CLI runner', () => {
     expect(diagnoseClaudeCodeQuota("You've hit your 5-hour limit")).toEqual({ quota: true });
   });
 
+  it('should ignore numeric telemetry when extracting quota text', () => {
+    expect(extractQuotaText({
+      type: 'result', result: 'done', usage: { input_tokens: 429, output_tokens: 429 },
+    })).toBe('done');
+    expect(extractQuotaText({ type: 'result', usage: { input_tokens: 429 } })).toBeUndefined();
+    expect(extractQuotaText({ type: 'result', code: 429 })).toBe('429');
+    expect(extractQuotaText(null)).toBeUndefined();
+  });
+
+  it('should cap stderr tails in bytes with a zero cap keeping nothing', () => {
+    const tail = appendCappedTail(Buffer.from('abc'), Buffer.from([0xc3, 0xa9]), 4);
+    expect([...tail]).toEqual([...Buffer.from('bcé')]);
+    expect(appendCappedTail(Buffer.from('abc'), Buffer.from('d'), 0).length).toBe(0);
+  });
   it('should render prompts deterministically', () => {
     expect(renderClaudeCodeCliPrompt(request())).toBe('user: Summarize this page\n');
   });
