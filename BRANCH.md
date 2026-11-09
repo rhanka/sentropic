@@ -36,6 +36,7 @@
 
 ## AI Flaky tests
 - [ ] Acceptance rule: accept only non-systematic provider/network/model nondeterminism as flaky accepted, with same-commit same-command success evidence, never additive timeouts, user sign-off before merge.
+- [ ] test-e2e (1) failed on ff31ec40b: tests/07-matrix.spec.ts:477 "User A leaves → lock released → User B can lock" (5.9s); Makefile-only diff; tracked main UI e2e instability (track 01M70VY5TT8KPY7EB0828BASZZ). Fresh head; no rerun, no skip, no timeout change.
 - [ ] test-e2e (5) failed on 00a4ca0a3: tests/00-ai-generation.spec.ts:181 "devrait générer des cas d'usage depuis l'accueil" (1.7m), signature: provider BadRequestError 400 "Unexpected Responses evaluator request" (AI allowlist, provider nondeterminism). Diff is Makefile-only. Fresh head; no rerun, no skip.
 - [ ] test-e2e (4) failed on 953c04c69: tests/02-organizations.spec.ts:391 Read-only (viewer) "détail: champs non éditables" (10.8s); the diff only touches the Makefile docker run user and data/backup ownership. Same test failed on unrelated PR #982 (3996c17cf) and passed on its next head; tracked as a main UI e2e instability (track 01M70VY5TT8KPY7EB0828BASZZ). Fresh head requested; no rerun, no skip, no timeout change.
 
