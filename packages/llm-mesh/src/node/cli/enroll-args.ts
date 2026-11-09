@@ -4,6 +4,7 @@
 // llm-mesh-enroll CLI. Secrets never enter error messages: only the env
 // var NAME is quoted, never its value.
 
+import { stderr, stdout } from 'node:process';
 import { CodexEnrollmentProvider } from '../../enrollment/codex.js';
 import type { EnrollmentProvider } from '../../enrollment/contracts.js';
 import { MuseCodeEnrollmentProvider } from '../../enrollment/muse-code.js';
@@ -92,8 +93,8 @@ export const usageText = (): string =>
   ].join('\n');
 
 export const defaultWriters = (): CliWriters => ({
-  out: (line) => process.stdout.write(`${line}\n`),
-  err: (line) => process.stderr.write(`${line}\n`),
+  out: (line) => stdout.write(`${line}\n`),
+  err: (line) => stderr.write(`${line}\n`),
 });
 
 export const fail = (writers: CliWriters, code: number, message: string): number => {
