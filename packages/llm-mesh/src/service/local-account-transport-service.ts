@@ -44,6 +44,23 @@ import type {
   AccountDirectoryPort, EligibleAccountDescriptor, PlannedRouteTarget,
   PreparedRouteAttempt, RouteFailureClassification,
 } from '../routing-contracts.js';
+import {
+  DEFAULT_CUSTODIAN_REFRESH_POLICY,
+  shouldRefreshProactively,
+  type CustodianAccountReport,
+  type CustodianRefreshPolicy,
+  type CustodianRefreshReport,
+} from './custodian-refresh.js';
+import type { ReauthAlertEvent, ReauthAlertReason, ReauthAlertSink } from './reauth-alert.js';
+
+export interface LocalAccountTransportServiceOptions {
+  /** Injected clock (ms); defaults to Date.now. Tests pin it. */
+  now?: () => number;
+  /** Reauth alert sink (D4); never called with secrets. Defaults to no-op. */
+  reauthAlert?: ReauthAlertSink;
+  /** Proactive refresh skew policy; defaults to 25 % TTL / 10 min floor. */
+  refreshPolicy?: CustodianRefreshPolicy;
+}
 
 type PersistedAccountTransportAccount = Omit<
   AccountTransportAccount,
@@ -152,14 +169,25 @@ export class LocalAccountTransportService {
   private claudePersistenceTail: Promise<void> = Promise.resolve();
   private readonly claudeSessions = new Map<string, ClaudeEnrollmentSession>();
   private routeAttemptSequence = 0;
+  /** Account ids already alerted for their current reauth_required epoch. */
+  private readonly alertedReauth = new Set<string>();
+  private custodianTimer: ReturnType<typeof setInterval> | null = null;
+  private custodianTickInFlight = false;
+  private readonly serviceOptions: LocalAccountTransportServiceOptions;
 
   constructor(
     private readonly keyring: KeyringAdapter,
     private readonly providers: Map<string, EnrollmentProvider>,
     private readonly configResolver: ConfigResolver,
     private readonly legacyAccountOwnerScopeRef?: string,
+    options?: LocalAccountTransportServiceOptions,
   ) {
     this.coordinator = new InMemoryAccountTransportCoordinator();
+    this.serviceOptions = options ?? {};
+  }
+
+  private nowMs(): number {
+    return this.serviceOptions.now?.() ?? Date.now();
   }
 
   // ── Enrollment (called via facade by h2a CLI) ──────────────────────────
