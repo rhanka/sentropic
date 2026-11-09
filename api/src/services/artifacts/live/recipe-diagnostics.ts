@@ -48,7 +48,7 @@ export function classifyRecipeFailure(result: RecipeResult): string {
 export function readRecipeDiagnostics(data: unknown): RecipeResult | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const { exitCode, signal, output } = data as Record<string, unknown>;
-  if (!(exitCode === null || Number.isSafeInteger(exitCode))) return undefined;
+  if (!(exitCode === null || (typeof exitCode === 'number' && Number.isSafeInteger(exitCode)))) return undefined;
   if (!(signal === null || (typeof signal === 'string' && /^[A-Z0-9]{1,16}$/.test(signal)))) return undefined;
   if (typeof output !== 'string' || output.length > MAX_WIRE_OUTPUT_BYTES) return undefined;
   let decoded: Buffer;
