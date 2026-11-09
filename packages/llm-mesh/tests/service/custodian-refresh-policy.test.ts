@@ -18,13 +18,23 @@ describe('custodian refresh policy', () => {
   });
 
   it('should refresh proactively inside the skew window under an injected clock', () => {
-    const enrolledAt = T0;
+    const issuedAt = T0;
     const expiresAt = T0 + 60 * MINUTE;
-    expect(shouldRefreshProactively({ expiresAtMs: expiresAt, enrolledAtMs: enrolledAt,
+    expect(shouldRefreshProactively({ expiresAtMs: expiresAt, issuedAtMs: issuedAt,
       nowMs: T0 + 50 * MINUTE })).toBe(true);
-    expect(shouldRefreshProactively({ expiresAtMs: expiresAt, enrolledAtMs: enrolledAt,
+    expect(shouldRefreshProactively({ expiresAtMs: expiresAt, issuedAtMs: issuedAt,
       nowMs: T0 + 10 * MINUTE })).toBe(false);
-    expect(shouldRefreshProactively({ expiresAtMs: T0 - MINUTE, enrolledAtMs: enrolledAt,
+    expect(shouldRefreshProactively({ expiresAtMs: T0 - MINUTE, issuedAtMs: issuedAt,
       nowMs: T0 })).toBe(true);
+  });
+
+  it('should bound the window by credential issuance, not enrollment age', () => {
+    // A credential issued at T0 with a 60-minute TTL opens a 15-minute
+    // window however old the enrollment is; otherwise every tick refreshes.
+    const expiresAt = T0 + 60 * MINUTE;
+    expect(shouldRefreshProactively({ expiresAtMs: expiresAt, issuedAtMs: T0,
+      nowMs: T0 + 30 * MINUTE })).toBe(false);
+    expect(shouldRefreshProactively({ expiresAtMs: expiresAt, issuedAtMs: T0,
+      nowMs: T0 + 50 * MINUTE })).toBe(true);
   });
 });
