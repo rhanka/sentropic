@@ -1,67 +1,77 @@
-# Feature: Artifacts GitHub branch resolution (0.2.23)
+# Feature: Prod A4 operator path (T1 prod A4 prerequisite)
 
 ## Objective
-- [x] Resolve a git-backed artifact branch through `GET /repos/{owner}/{repo}/git/ref/heads/{branch}` (per-segment encoding, slashes kept) returning `object.sha`; an absent branch (404 or 422) is `missing`, never `conflict`/`git_ref_not_allowed`, so attach reaches `createBranch` (immo preprod 08/11, i-cond).
-- [x] `resolveRef` returns the exact `refs/heads/<branch>` SHA for a slash branch (the 40-hex check at live-service.ts:100 already held on 0.2.22; the preprod `invalid_request` on live_control start maps to live-service.ts:49-51 or :101, caller arguments, reported to immo).
-- [x] Release `@sentropic/artifacts` 0.2.23 with `ARTIFACTS_PROVIDER_VERSION` and the APP-P1 digest repin.
+- [ ] Give the prod namespace `sentropic` the same fenced A4 operator procedure as preprod: tier-parameterized operator (`A4_TIER`), shared `components/a4-wiring`, `overlays/prod-a4`, prod S2S issuer/resource, tier-bound email-code HMAC ring names and product verifier, and a prod runbook (inventory 3.1.1, 3.1.5, 3.1.8).
 
 ## Scope / Guardrails
-- [x] Branch fix/artifacts-github-branch-resolve from main 4f4674b50; worktree tmp/worktrees/fix-github-forge-resolve; ENV=test-fix-gh-resolve.
-- [x] Make only; no Python; no attribution trailers; no CI skip or rerun; never ENV=dev.
-- [x] Immo DB untouched: the `git_live_draft_unavailable` requirements go to the lane report only.
+- [x] Branch feat/prod-a4-operator from origin/main c22163106; worktree tmp/worktrees/t1-prod-a4-operator; ENV=test-t1-operator; API_PORT=9283 UI_PORT=5483 MAILDEV_UI_PORT=1183 (no stack started by this wagon); never ENV=dev; end with `make down-volumes ENV=test-t1-operator` if a stack was started.
+- [x] Make-only; no Python; no attribution trailers; no version bump, lock or fixture regeneration (train lane); no PR (train T1 assembles).
+- [x] Preprod behavior unchanged: every preprod format, namespace, ring ref and verifier keeps working (existing tests only gain `A4_TIER=preprod`).
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/src/adapters/github-forge.ts`
-  - `packages/artifacts/src/server/git-tools-attach.ts`
-  - `packages/artifacts/src/mcp-core.ts`
-  - `packages/artifacts/tests/github-branch-resolve.test.ts`
-  - `packages/artifacts/package.json`
-  - `packages/artifacts/CHANGELOG.md`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
+  - `deploy/ci/preprod-a4/**`
+  - `deploy/ci/artifact-content/tests.mk`
+  - `deploy/k8s/components/a4-wiring/**`
+  - `deploy/k8s/overlays/preprod-a4/kustomization.yaml`
+  - `deploy/k8s/overlays/preprod/a4-runtime/launch.mjs`
+  - `deploy/k8s/overlays/prod/kustomization.yaml`
+  - `deploy/k8s/overlays/prod/patch-api-config.yaml`
+  - `deploy/k8s/overlays/prod-a4/**`
+  - `api/src/scripts/cm-preprod-checkpoint.ts`
+  - `api/src/scripts/cm-preprod-contract.ts`
+  - `api/src/scripts/cm-preprod-state.ts`
+  - `api/tests/unit/auth/cm-preprod-*.test.ts`
+  - `docs/runbooks/prod-a4-cutover.md`
+  - `docs/runbooks/preprod-a4-cutover.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
   - `ui/**`
-  - `deploy/**`
-  - `packages/cluster-mesh/src/**`
-  - `packages/cluster-mesh/package.json`
+  - `packages/**`
+  - `api/drizzle/**`
+  - `api/**` (except the listed scripts and unit tests)
+  - `deploy/**` (except the listed paths)
+  - `.github/workflows/**`
+  - `scripts/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `package-lock.json`
-  - `api/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - None required.
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] BRGH-EX1: root and api lock workspace entries follow artifacts 0.2.23 (version strings only). Rollback: revert with the bump.
-- [x] BRGH-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.23 (`prepare-artifacts.spec.ts` requires the fixture to equal the candidate tuple; CI run 42499490549 lazy/source failed on 0.2.22): fixture `package.json`/`package-lock.json` version strings plus the integrity pin of the locally packed `make pack-artifacts` archive (sha256 fa03b147… equals the manifest guard), mirrored in `artifacts-tuple.spec.ts`, as BR90-EX20 did for 0.2.22. Impact: test fixtures only, no cluster-mesh source or version change. Rollback: revert with the bump.
+- [ ] None.
 
 ## AI Flaky tests
-- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no flaky test encountered this branch.
+- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable so far.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**
-- Rationale: one owner-urgent fix PR, one CI.
+- [x] **Multi-branch**
+- Rationale: T1 wagon; the train lane merges it with the other wagons into one train branch with one PR and one CI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Branch resolution fix**
-  - [x] `github-forge.ts`: branch refs resolve through `git/ref/heads/<segments>` (`object.type` commit, exact `ref`), commit SHAs through `/commits/<sha>`, other non-`artifact/` refs (tags, abbreviated SHAs) through `/commits/<segments>` after a heads miss; 404/422 map to `missing`.
-  - [x] Review r1 (.h2a/reviews/pr-965-opus.md) majors: tag/abbreviated-SHA resolution restored; live start claim narrowed to bug 1.
-  - [x] `git-tools-attach.ts`: attach treats the port's `git_branch_missing` like `not_found`, so a new personal branch is created from `baseRef`.
-- [x] **Lot 2 — Tests (fake GitHub HTTP)**
-  - [x] `tests/github-branch-resolve.test.ts`: slash branch to full SHA with per-segment URL; 404/422 to `missing`; tag through `/commits` and no fallback for an `artifact/` branch; full SHA without ref lookup; `createBranch` 422 stays `conflict`; 422 on `/commits` to `not_found`; attach creates a new branch; live_control start succeeds on the resolved head.
-- [x] **Lot 3 — Release 0.2.23**
-  - [x] package, locks, `ARTIFACTS_PROVIDER_VERSION`, APP-P1 digest 61c50b33 to 428a7527 (version field only), CHANGELOG.
-- [ ] **Lot 4 — Final validation**
-  - [x] `docker-slot.sh make test-artifacts SCOPE=tests/g ENV=test-fix-gh-resolve` unit files PASS (146 tests; the 3 integration files need postgres and run in CI).
-  - [x] `docker-slot.sh make typecheck-artifacts ENV=test-fix-gh-resolve` PASS.
-  - [ ] PR, CI green on the exact head, review in `.h2a/reviews/`, merge by s-conductor.
+- [x] **Lot 1 — Tier-parameterized operator**
+  - [x] `guards.mjs`: `tiers` map (tier/namespace/origin), `tierOf(env)` fail-closed, `kubectl(config, args, input, namespace)` namespace-allowlisted, `assertAuthorization`/`assertRequest` tier-bound (format + namespace + `emailCodeActiveKeyRef` ring tier).
+  - [x] `execution.mjs`, `run.mjs`, `ops.mjs`, `verify.mjs`, `verification-boundary.mjs`: every call runs in the tier namespace; health probe uses the tier origin.
+  - [x] `targets.mk`: `k8s-prod-a4-{action,verify,custody,prepare}` twins; `export override A4_TIER` fixed by the target name (never overridable); manifests render covers `prod-a4`.
+- [x] **Lot 2 — Shared wiring and prod overlay**
+  - [x] A4 patches move `overlays/preprod-a4/*.yaml` → `components/a4-wiring/` (+ `CM_A4_NAMESPACE` downward-API env on api and auth-idp); `preprod-a4` consumes the component; `custody-pvc.yaml` drops the hardcoded namespace.
+  - [x] New `overlays/prod-a4` (namespace `sentropic`, same wiring + runtime, live prod pins until the cutover IaC change).
+  - [x] `overlays/prod/patch-api-config.yaml`: prod S2S `OAUTH_SERVICE_ISSUER_URL`/`OAUTH_SERVICE_RESOURCE_URI` (A4 release only).
+- [x] **Lot 3 — API contract tier and ring per tier**
+  - [x] `cm-preprod-contract.ts`: `a4Tier(namespace)`, `prod-a4-*` formats, tier-cross-check on format/namespace/`emailCodeActiveKeyRef`.
+  - [x] `launch.mjs`: ring tier follows the pod namespace (`CM_A4_NAMESPACE`); unknown or foreign namespace refused.
+  - [x] `inspectPreprod` verifier follows the request namespace (prod: `sent-tech.ca`).
+- [x] **Lot 4 — Prod runbook**
+  - [x] `docs/runbooks/prod-a4-cutover.md`: bindings table, prerequisites (T1/T1-ops/T2 gates, tenant checks, G7 stopped), execution, post-verification IaC change, A5 acceptance.
+  - [x] `docs/runbooks/preprod-a4-cutover.md`: canonical-procedure pointer, tier-bound inputs, request `emailCodeActiveKeyRef` row.
+- [ ] **Lot 5 — Validation**
+  - [ ] `docker-slot.sh make test-preprod-a4 ENV=test-t1-operator` (node suite incl. `tier.test.mjs`).
+  - [ ] `docker-slot.sh make test-preprod-a4-manifests ENV=test-t1-operator` (renders prod/preprod/preprod-a4/prod-a4 + bundle selftests).
+  - [ ] `docker-slot.sh make test-preprod-a4-api ENV=test-t1-operator` (typecheck, lint, build, bundle CLI check).
+  - [ ] `docker-slot.sh make test-artifact-content-manifests ENV=test-t1-operator` (renders preprod-a4 + prod-a4).
+  - [ ] Argon read-only review `.h2a/reviews/t1-feat-prod-a4-operator-argon.md` (Opus unavailable: quota; resume lane).
