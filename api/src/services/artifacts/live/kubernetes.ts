@@ -67,8 +67,7 @@ export function createInClusterKubernetes(placement: BuilderPlacement, options: 
     async waitDeleted(resource, name, uid) {
       const deadline = Date.now() + 30_000;
       do {
-        const current = await call<{ metadata: { uid: string; deletionTimestamp?: string }; status?: { phase?: string } }>(
-          'GET', resource, name);
+        const current = await call<{ metadata: { uid: string } }>('GET', resource, name);
         if (!current) return;
         if (uid && current.metadata.uid !== uid) conflict('stale_fence');
         await delay(100);
