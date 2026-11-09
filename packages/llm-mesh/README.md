@@ -140,6 +140,38 @@ const facade = createLlmMeshFacade({
 That migration option is only for pre-ownerScope local records. New enrollment
 always takes ownership from `StartEnrollmentInput.ownerScope`.
 
+## Device-flow enrollment CLI (`llm-mesh-enroll`)
+
+The `llm-mesh-enroll` bin enrolls seat-billed device-flow accounts
+(muse-code first, repeatable for N accounts) and probes them. The keyring
+passphrase is read from the environment variable named by
+`--keyring-key-env` (never from argv); stdout carries one JSON object per
+line, secrets never reach stdout, stderr, or error messages.
+
+```sh
+export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held passphrase, set in the environment
+
+# 1. Enroll one account (repeat with a new --label per account).
+#    The owner approves each device login on accountscenter.meta.com.
+llm-mesh-enroll enroll --provider muse-code \
+  --keyring-dir ~/.sentropic/immo-detection-keyring \
+  --owner-scope tenant-immo:signal-detection \
+  --label "Immo Detection 1" \
+  --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
+
+# 2. Probe the stored account (prints status plus latency plus usage only).
+llm-mesh-enroll probe --provider muse-code \
+  --keyring-dir ~/.sentropic/immo-detection-keyring \
+  --account <account-id-from-enroll> \
+  --model muse-wonder-1.0 --effort low \
+  --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
+```
+
+A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
+direct-key path: re-enroll a seat account with the device flow above.
+Exit codes: 0 ok, 2 usage, 3 enrollment failed, 4 account not found,
+5 keyring key, 6 probe failed, 7 billing not configured.
+
 ## Claude subscription enrollment (LOT 1)
 
 The facade supports browser PKCE enrollment and renewable Claude CLI credential

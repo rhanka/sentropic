@@ -11,6 +11,9 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "llm-mesh-enroll": "./dist/node/cli/enroll-cli.js"
+  },
   "exports": {
     "./speech": {
       "types": "./dist/speech/index.d.ts",
