@@ -18,6 +18,7 @@ import type {
 } from '../enrollment/contracts.js';
 import { MUSE_DIRECT_BILLING_TYPE } from '../enrollment/muse.js';
 import { ClaudeRefreshPreparationError } from '../enrollment/claude-code.js';
+import { MusePostRotationError } from '../enrollment/muse-code.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 import { listModelProfilesByProvider } from '../catalog.js';
 import type { LlmMesh } from '../mesh.js';
@@ -93,8 +94,8 @@ export type SeatExportUnavailableReason =
   | 'record-invalid';
 
 /**
- * A refresh failure that must NOT flip the account: the grant was not
- * consumed (explicit 429/5xx with a response, network failure, or a
+ * A refresh failure that must NOT flip the account: the grant was provably
+ * not consumed (an explicit 429/5xx token-endpoint response, or a typed local
  * preparation failure before any provider request), so a retry is safe.
  * Extends {@link AccountTransportAcquireError} so `acquire()` callers keep
  * their handling unchanged.
@@ -109,20 +110,23 @@ export class RefreshDeferredError extends AccountTransportAcquireError {
 // pointless and rotating again could harm the grant family.
 const DEFINITIVE_REFRESH_FAILURE =
   /invalid_grant|invalidated|revoked|deleted|disabled|unauthorized_client|invalid or missing refresh token/i;
-// A provider `(status)` marker or a transport-level signal with no grant
-// consumption: retrying is safe. Any other 4xx or unknown shape stays
-// fail-closed toward reauth (the fence justifies it).
-const TRANSIENT_REFRESH_FAILURE =
-  /\(\s*(429|5\d\d)\s*\)|\b429\b|network|no response|timed?\s?out|ECONN|EAI_AGAIN|ETIMEDOUT|socket hang up|fetch failed/i;
+// Only an explicit token-endpoint error response proves the grant was NOT
+// consumed: HTTP 429/5xx with a response, in either provider shape (the
+// `(status)` form or Claude's `HTTP <status>` form). Transport signals with
+// no response (network, timeout, reset, abort, `fetch failed`) prove nothing:
+// the server may have rotated the grant before the socket died. They stay
+// fail-closed toward reauth, as do post-rotation failures (typed
+// `MusePostRotationError`) and any other 4xx or unknown shape.
+const EXPLICIT_RETRYABLE_STATUS =
+  /\(\s*(429|5\d\d)\s*\)|\bHTTP\s+(429|5\d\d)\b|\b429\b/i;
 
 type RefreshFailureKind = 'reauth' | 'retry';
 
 function classifyRefreshFailure(error: unknown): RefreshFailureKind {
+  if (error instanceof MusePostRotationError) return 'reauth';
   const message = error instanceof Error ? error.message : String(error);
   if (DEFINITIVE_REFRESH_FAILURE.test(message)) return 'reauth';
-  const status = /\(\s*(\d{3})\s*\)/.exec(message)?.[1];
-  if (status === '429' || (status !== undefined && status.startsWith('5'))) return 'retry';
-  if (TRANSIENT_REFRESH_FAILURE.test(message)) return 'retry';
+  if (EXPLICIT_RETRYABLE_STATUS.test(message)) return 'retry';
   return 'reauth';
 }
 
@@ -1429,11 +1433,14 @@ export class LocalAccountTransportService {
         const failure: RefreshFailureKind = error instanceof ClaudeRefreshPreparationError
           ? 'retry'
           : classifyRefreshFailure(error);
-        if ((failure === 'retry' || !requestMayHaveBeenSent)
+        if ((!requestMayHaveBeenSent || failure === 'retry')
           && account?.status !== 'reauth_required') {
-          // The grant was not consumed: restore the pre-request fence and
-          // defer without flipping. A fence write can commit and then throw,
-          // but no provider request occurred.
+          // The grant was provably not consumed: either no provider request
+          // went out yet (a fence write can commit and then throw), or the
+          // token endpoint answered with an explicit 429/5xx. Restore the
+          // pre-request fence and defer without flipping. Every other
+          // failure (timeout, reset, mint/persistence after a possible
+          // rotation) falls through to the fail-closed flip below.
           if (account) await this.persistAccountState(account, true).catch(() => {});
           throw new RefreshDeferredError();
         }
