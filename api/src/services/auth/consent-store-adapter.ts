@@ -1,6 +1,6 @@
 import type { AuthHonoConsentGrant, AuthHonoConsentStorePort } from '@sentropic/auth-hono';
 import { IdentityCustodyErrorV1, oauthTenantStoreV1 } from '@sentropic/cluster-mesh';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, type SQL } from 'drizzle-orm';
 
 import { oauthClients, oauthConsents } from '../../db/schema';
@@ -8,30 +8,30 @@ import { bindCmAppDatabase, runCmIdentityWrite, type CmIdentityTransaction } fro
 import { lockOAuthRefresh } from './oauth-refresh-adapter';
 import { issueCmOAuthTid, isCmTenantRefusal, requireCmOAuthTransaction } from '../identity/cm-oauth-tenancy';
 import { cmOAuthConsentId } from '../identity/cm-import-tenancy';
+import { cmTenantlessOAuthConsentId } from './oauth-consent-key';
 
 interface CreateConsentStoreAdapterOptions {
   transaction?: CmIdentityTransaction;
   now?: () => Date;
 }
 
-/** The tenant-less authority key is disjoint from every tenant-keyed one (JSON null vs a string). */
-export const cmTenantlessOAuthConsentId = (userId: string, clientId: string): string =>
-  createHash('sha256').update(JSON.stringify(['app-oauth-consent', userId, clientId, null])).digest('hex');
-
 /** Protocol key (`tid` slug or null), CM authority tenant (registry id) and CM consent id. */
 interface ConsentKey { readonly tid: string | null; readonly tenantId: string; readonly consentId: string }
 
+/** A tenant claim keys on the user's approved membership; a refusal propagates. */
+async function tenantConsentKey(tx: CmIdentityTransaction, userId: string, clientId: string,
+  tenantSlug: string): Promise<ConsentKey> {
+  const claim = await issueCmOAuthTid(tx, userId, tenantSlug);
+  return { tid: claim.tid, tenantId: claim.tenantId, consentId: cmOAuthConsentId(userId, clientId, claim.tenantId) };
+}
+
 /**
- * A tenant claim keys on the user's approved membership (refusals propagate). Without one, only a
- * tenant-optional client keys a consent, governed by the client's own active registry tenant; any
- * other client returns null: the consent is unkeyable and no authority is conferred.
+ * Without a tenant claim, only a tenant-optional client keys a consent, governed by the client's own
+ * active registry tenant; any other client returns null: unkeyable, no authority is conferred.
  */
 async function resolveConsentKey(tx: CmIdentityTransaction, userId: string, clientId: string,
   tenantSlug: string | undefined): Promise<ConsentKey | null> {
-  if (tenantSlug) {
-    const claim = await issueCmOAuthTid(tx, userId, tenantSlug);
-    return { tid: claim.tid, tenantId: claim.tenantId, consentId: cmOAuthConsentId(userId, clientId, claim.tenantId) };
-  }
+  if (tenantSlug) return tenantConsentKey(tx, userId, clientId, tenantSlug);
   const [client] = await bindCmAppDatabase(tx)
     .select({ requireTenant: oauthClients.requireTenant, tenantId: oauthClients.tenantId })
     .from(oauthClients).where(eq(oauthClients.clientId, clientId)).limit(1);
@@ -41,17 +41,24 @@ async function resolveConsentKey(tx: CmIdentityTransaction, userId: string, clie
   return { tid: null, tenantId: tenant.tenantId, consentId: cmTenantlessOAuthConsentId(userId, clientId) };
 }
 
-/** The subject comes from verified application authority; no request selects another owner. */
-export const revokeCmOAuthConsent = (input: { userId: string; clientId: string; tenantId: string }): Promise<boolean> =>
+const grantFilter = (userId: string, clientId: string, tid: string | null): SQL => and(
+  eq(oauthConsents.userId, userId), eq(oauthConsents.clientId, clientId),
+  tid === null ? isNull(oauthConsents.tenantId) : eq(oauthConsents.tenantId, tid)) as SQL;
+
+/**
+ * The subject comes from verified application authority; no request selects another owner. Without a
+ * tenant, the tenant-less key is withdrawn whatever the client policy is now (withdrawal needs no authority).
+ */
+export const revokeCmOAuthConsent = (input: { userId: string; clientId: string; tenantId?: string }): Promise<boolean> =>
   runCmIdentityWrite(async tx => {
     await tx.lockSubject(input.userId);
     const database = bindCmAppDatabase(tx);
     await lockOAuthRefresh(database, input);
-    const claim = await issueCmOAuthTid(tx, input.userId, input.tenantId);
+    const key = input.tenantId ? await tenantConsentKey(tx, input.userId, input.clientId, input.tenantId)
+      : { tid: null, consentId: cmTenantlessOAuthConsentId(input.userId, input.clientId) };
     const at = new Date().toISOString();
-    const changed = await tx.stores.oauth.revokeConsent(cmOAuthConsentId(input.userId, input.clientId, claim.tenantId), at);
-    await database.delete(oauthConsents).where(and(eq(oauthConsents.userId, input.userId),
-      eq(oauthConsents.clientId, input.clientId), eq(oauthConsents.tenantId, claim.tid)));
+    const changed = await tx.stores.oauth.revokeConsent(key.consentId, at);
+    await database.delete(oauthConsents).where(grantFilter(input.userId, input.clientId, key.tid));
     await tx.advanceSubjectRevision(input.userId, at, false);
     return changed;
   });
@@ -66,10 +73,6 @@ export const createConsentStoreAdapter = (
     const record = await oauthTenantStoreV1(tx).findConsent(key.consentId);
     return record !== null && record.revokedAt === undefined && record.tenantId === key.tenantId;
   };
-
-  const grantFilter = (userId: string, clientId: string, tid: string | null): SQL => and(
-    eq(oauthConsents.userId, userId), eq(oauthConsents.clientId, clientId),
-    tid === null ? isNull(oauthConsents.tenantId) : eq(oauthConsents.tenantId, tid)) as SQL;
 
   return {
     async getGrant(userId, clientId, tenantId): Promise<AuthHonoConsentGrant | null> {

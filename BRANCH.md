@@ -13,6 +13,8 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `api/src/services/auth/consent-store-adapter.ts`
+  - `api/src/services/auth/oauth-consent-key.ts`
+  - `api/src/services/artifacts/credentials.ts`
   - `api/src/db/schema.ts`
   - `api/drizzle/control/0022_oauth_consent_optional_tenant.sql`
   - `api/drizzle/control/meta/_journal.json`
@@ -36,7 +38,7 @@
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [ ] None.
+- [ ] `attention` (s-archi ruling): the tenant-less CM authority row carries the client's registry tenant (`sentropic`); the artifacts host excludes the tenant-less consent id explicitly. Opus r1 finding 4.
 
 ## AI Flaky tests
 - Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable so far.
@@ -54,6 +56,7 @@
   - [x] Refresh-family triggers: consent invalidation matches the tenant with IS NOT DISTINCT FROM; client tightening of `require_tenant` revokes the client's families.
 - [x] **Lot 3 — Consent store**
   - [x] Tenant-less key for a tenant-optional client: app row tenant NULL, CM authority row with its own consent id under the client's active registry tenant; tenant-bound clients keep the no-op.
+  - [x] `revokeCmOAuthConsent` withdraws the tenant-less key when no tenant is given; the artifacts host never accepts the tenant-less CM consent id.
 - [ ] **Lot 4 — Validation**
   - [ ] `make typecheck-api` and `make lint-api`.
   - [ ] Scoped API tests: `oauth-consent-optional-tenant`, `cm-oauth-consent`, `oauth-refresh.integration`, `arch11-tenant-data`, `oauth-consent-persistence`, `arch11-consent-tenant-enforce`, `oauth-state-adapter.refresh`.
