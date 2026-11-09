@@ -19,16 +19,16 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
 - **Allowed Paths (implementation scope)**:
   - `packages/llm-mesh/src/node/claude-code-cli-*.ts`
   - `packages/llm-mesh/src/node/index.ts`
+  - `packages/llm-mesh/src/global.d.ts`
   - `packages/llm-mesh/src/transport/claude-code-runtime-client.ts`
-  - `packages/llm-mesh/src/catalog.ts`
-  - `packages/llm-mesh/src/providers.ts`
-  - `packages/llm-mesh/src/routing-targets.ts`
   - `packages/llm-mesh/tests/node/claude-code-cli-runner.test.ts`
   - `packages/llm-mesh/tests/transport/claude-code-runtime-client.test.ts`
   - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/tests/routing-targets.test.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -45,7 +45,10 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- No exceptions declared.
+- `BR01-EX1` (declared 2026-11-09, active): touch `packages/cluster-mesh/tests/fixtures/train.ts` + `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json|package-lock.json` (llm-mesh pin lines only).
+  - Reason: the ordered 0.33.1 bump breaks the cluster-mesh selected-fixture alignment gate (`prepare-artifacts.spec.ts` strict pin path) and cascades into `llm-surface`/`gateway-surface` loader state assertions (`TRAIN_LLM_MESH_VERSION` vs workspace version); CI cannot go green without the sync.
+  - Impact: test-fixture data only, no cluster-mesh source change; llm-mesh lines only (no other lane version touched).
+  - Rollback: `git checkout origin/main -- <those 3 files>` restores the 0.33.0 pins.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -88,6 +91,11 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
 - [x] **Lot 3 — Version, changelog, lockfiles, full gates**
   - [x] Bump packages/llm-mesh/package.json 0.33.0 -> 0.33.1 (npm latest is 0.33.0), CHANGELOG entry, lockfiles via make lock-root (root lock workspace entry 0.33.1; gateway ^0.33.0 and cluster-mesh peer <0.34.0 ranges already cover it).
   - [x] Full `make test-llm-mesh ENV=test-llm-mesh-claude-seat` 101 files / 1778 tests green, typecheck + lint green; pinned version test moved 0.33.0 -> 0.33.1.
+- [x] **Lot 4 — CI fallout: cluster-mesh fixture sync (BR01-EX1)**
+  - [x] `packages/cluster-mesh/tests/fixtures/train.ts`: TRAIN_LLM_MESH_VERSION 0.33.0 -> 0.33.1.
+  - [x] `fixtures/selected/package.json` + `package-lock.json`: llm-mesh pin lines 0.33.0 -> 0.33.1 only (no other lane version touched); lock integrity = CI-packed sibling sha512 of this branch 0.33.1 tarball (pack is content-deterministic; the heavy local refresh is not runnable here — mcp-platform dist absent and install-internal-packages blocked by root-owned vitest cruft).
+  - [x] Scoped runs: prepare-artifacts 20/20, llm-surface 12/12, gateway-surface 7/7 ENV=test-llm-mesh-claude-seat.
+  - [ ] `make scope-check` PASS, commit, push, CI green.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest llm-mesh suite (cf Lot1, copy checklist)
