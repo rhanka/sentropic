@@ -5,11 +5,15 @@ services:
     # recorded production receipt redirects dev `build`/`run`/`up` at the
     # production digest, which ships without npm (BR81-EX5).
     image: ${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION:-latest}
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./:/workspace
       - workspace_node_modules:/workspace/node_modules
     command: sh -c "npm run db:migrate && npm run dev"
     environment:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/npm-cache
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:${UI_PORT:-5173},http://127.0.0.1:${UI_PORT:-5173},http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*}
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN}
@@ -26,10 +30,14 @@ services:
       - DOC_STORAGE_SECRET_KEY=${DOC_STORAGE_SECRET_KEY:-minioadmin}
 
   ui:
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./:/workspace
       - workspace_node_modules:/workspace/node_modules
     environment:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/npm-cache
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:${API_PORT:-8787}/api/v1}
       - VITE_EXTENSION_PROFILE=${VITE_EXTENSION_PROFILE:-uat}
       - VITE_EXTENSION_API_BASE_URL=${VITE_EXTENSION_API_BASE_URL:-http://localhost:${API_PORT:-8787}/api/v1}
@@ -73,11 +81,14 @@ services:
   openvscode-dev:
     profiles: ["vscode"]
     image: gitpod/openvscode-server:latest
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     working_dir: /workspace
     entrypoint:
       - /bin/sh
       - /workspace/scripts/openvscode-dev-entrypoint.sh
     environment:
+      - HOME=/tmp
       - OPENVSCODE_SERVER_ROOT=/home/.openvscode-server
     ports:
       - "${OPENVSCODE_PORT:-3114}:3000"
@@ -96,10 +107,14 @@ services:
       dockerfile: ./ui/Dockerfile
       target: ${TARGET:-development}
     working_dir: /workspace/ui
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./:/workspace
       - workspace_node_modules:/workspace/node_modules
     environment:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/npm-cache
       - NODE_ENV=development
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://host.docker.internal:8787/api/v1}
       - VITE_EXTENSION_PROFILE=${VITE_EXTENSION_PROFILE:-uat}
@@ -118,7 +133,11 @@ services:
     build:
       context: ./e2e
       dockerfile: Dockerfile
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/npm-cache
       - UI_BASE_URL=${UI_BASE_URL:-http://host.docker.internal:${PLAYWRIGHT_DEV_UI_PORT:-5174}}
       - API_BASE_URL=${API_BASE_URL:-http://host.docker.internal:8787}
       - MAILDEV_API_URL=${MAILDEV_API_URL:-http://maildev:1080}

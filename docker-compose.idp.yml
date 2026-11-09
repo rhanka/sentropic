@@ -19,6 +19,8 @@ services:
     working_dir: /workspace
     # Reuse the dev workspace mount so apps/auth-idp source + node_modules (incl.
     # tsx) are available without a separate build pipeline.
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./:/workspace
       - workspace_node_modules:/workspace/node_modules
@@ -26,6 +28,8 @@ services:
     # host port (API_PORT), so the port mapping below is always valid.
     command: sh -c "npx --no-install tsx watch apps/auth-idp/index.ts"
     environment:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/npm-cache
       - NODE_ENV=development
       - IDP_PORT=8787
       - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
