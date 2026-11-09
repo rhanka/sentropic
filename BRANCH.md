@@ -93,10 +93,11 @@
 - [x] BRRP-EX2: cluster-mesh selected fixture follows `0.2.25` (three deterministic `make pack-artifacts` runs, same sha256 `83bf5956...`, sha512 repin), mirrored in `artifacts-tuple.spec.ts`.
 - [x] Validate with the publishable-manifests make target and `make pack-artifacts`: `PASS @sentropic/artifacts@0.2.25 mode=block`. `check-publishable-manifest` cannot run locally (target never mounts `/workspace`, pre-existing, out of scope); CI runs it.
 - [x] Full `docker-slot.sh make test-artifacts ENV=test-reconcile-builds` PASS (101 files, 1008 tests).
-- [ ] **Lot 3 — PR, CI, review**
-- [ ] Open PR with this `BRANCH.md` as body, push branch to origin.
-- [ ] CI green on the exact head (no rerun, no skip, no `[skip ci]`).
-- [ ] Argon high review via `.tmp/packets/run-argon.sh` to `.h2a/reviews/reconcile-pending-builds-argon.md`; address findings or record them.
+- [x] **Lot 3 — PR, CI, review**
+- [x] Open PR with this `BRANCH.md` as body, push branch to origin (PR #979).
+- [x] Rebase on `origin/main` (`ec3c0bcc8`), Post-Rebase Gate holds (`0.2.25` above npm `0.2.24`).
+- [ ] CI green on the exact head (no rerun, no skip, no `[skip ci]`): `validate-cluster-mesh (source|lazy)` failed on the fixture root deps (fixed in `eb207c7eb`); `prepare-artifacts.spec.ts` is the durable collateral.
+- [ ] Review: Argon high unavailable (agy 429, resets in ~106h), vibe GLM fallback 402 exhausted; Muse Wonder single-leg review at `.h2a/reviews/reconcile-pending-builds-argon.md` verdict REQUEST_CHANGES (F1 store-error containment, F2 binding-not-pending, F3 missing pins, F4-F7 cleanups); addressing now, second leg still missing.
 - [ ] Do NOT merge.
 - [ ] **Lot N — Final validation and report**
 - [ ] Post-rebase gate: package version still above npm latest.
