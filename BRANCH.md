@@ -82,7 +82,7 @@ Generic platform job-failure email alerting: frozen OpsJobFailureV1 contract, pu
   - [x] Confirm command style: docker-slot.sh make ... ENV=test-notify-l1 with ENV last.
   - [x] Confirm scope and guardrails.
 - [ ] **Lot 1 — cluster-mesh notifications capability**
-  - [ ] Frozen OpsJobFailureV1 contract + validation (targetKey product key, eventId dedup, 1 KiB detail cap, untrusted-string handling).
+  - [x] Frozen OpsJobFailureV1 contract + validation (targetKey product key, eventId dedup, 1 KiB detail cap, untrusted-string handling).
   - [ ] Pure incident state machine (firing/digest/escalation/resolved, anti-flap 1h, cap 10/h/target, dead-man stale).
   - [ ] RecipientsPort (admins of target X) + validated platform-declared v1 resolver.
   - [ ] Module registration (modules/contracts.ts, modules/catalog.ts, loaders, package export).
