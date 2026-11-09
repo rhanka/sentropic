@@ -33,7 +33,8 @@
 - [x] No scope exception required.
 
 ## AI Flaky tests
-- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). Not applicable: no AI test in scope.
+- Acceptance rule: Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and command). No AI test in scope.
+- [ ] test-e2e (5) failed on 4ad97c63c: tests/00-ai-generation.spec.ts:181 (AI use-case generation from the home page, 1.1m, provider-dependent); the diff touches only the builder host build API view. Not accepted as flaky until a fresh run on the next head passes; no rerun, no skip, no timeout change.
 
 ## Orchestration Mode (AI-selected)
 - [x] Mono-branch: one owner-urgent fix PR, one CI.
