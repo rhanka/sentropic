@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   OPS_JOB_FAILURE_CONTRACT_V1,
   OPS_JOB_FAILURE_DETAIL_MAX_BYTES,
+  opsCanonicalRunKey,
   opsIncidentKey,
   truncateOpsDetail,
   validateOpsJobFailureV1,
@@ -94,7 +95,57 @@ describe('OpsJobFailureV1 contract', () => {
 
   it('rejects a bad timestamp and bad links', () => {
     expect(validateOpsJobFailureV1({ ...base, occurredAt: 'not-a-date' }).ok).toBe(false);
+    expect(validateOpsJobFailureV1({ ...base, occurredAt: '09/11/2026 10:00' }).ok).toBe(false);
+    expect(validateOpsJobFailureV1({ ...base, occurredAt: '2026-11-09 10:00:00' }).ok).toBe(false);
     expect(validateOpsJobFailureV1({ ...base, links: { logs: '' } }).ok).toBe(false);
+    const badScheme = validateOpsJobFailureV1({ ...base, links: { logs: 'http://logs.example.com/run' } });
+    expect(badScheme.ok).toBe(false);
+    if (!badScheme.ok) expect(badScheme.code).toBe('bad_links');
+    const jsScheme = validateOpsJobFailureV1({ ...base, links: { run: 'javascript:alert(1)' } });
+    expect(jsScheme.ok).toBe(false);
+    const creds = validateOpsJobFailureV1({ ...base, links: { logs: 'https://user:pass@logs.example.com/run' } });
+    expect(creds.ok).toBe(false);
+    const good = validateOpsJobFailureV1({ ...base, links: { logs: 'https://logs.example.com/run-1' } });
+    expect(good.ok).toBe(true);
+  });
+
+  it('rejects unknown fields instead of stripping them', () => {
+    const top = validateOpsJobFailureV1({ ...base, extra: 'nope' });
+    expect(top.ok).toBe(false);
+    if (!top.ok) expect(top.code).toBe('unknown_field');
+    const jobRef = validateOpsJobFailureV1({ ...base, jobRef: { ...base.jobRef, uid: 'x' } });
+    expect(jobRef.ok).toBe(false);
+    if (!jobRef.ok) expect(jobRef.code).toBe('unknown_field');
+    const links = validateOpsJobFailureV1({ ...base, links: { logs: 'https://logs.example.com/r', dashboard: 'https://d.example.com' } });
+    expect(links.ok).toBe(false);
+    if (!links.ok) expect(links.code).toBe('unknown_field');
+  });
+
+  it('rejects job ref segments with slashes or control characters', () => {
+    expect(validateOpsJobFailureV1({ ...base, jobRef: { ...base.jobRef, name: 'a/b' } }).ok).toBe(false);
+    expect(validateOpsJobFailureV1({ ...base, jobRef: { ...base.jobRef, name: 'evil\nname' } }).ok).toBe(false);
+    expect(validateOpsJobFailureV1({ ...base, jobRef: { ...base.jobRef, name: ' radar' } }).ok).toBe(false);
+    expect(validateOpsJobFailureV1({ ...base, jobRef: { ...base.jobRef, namespace: 'a/b' } }).ok).toBe(false);
+    expect(validateOpsJobFailureV1({ ...base, detail: 42 }).ok).toBe(false);
+    const badDetail = validateOpsJobFailureV1({ ...base, detail: 42 });
+    if (!badDetail.ok) expect(badDetail.code).toBe('bad_detail');
+  });
+
+  it('rejects future and ancient timestamps when the server clock is passed', () => {
+    const now = '2026-11-09T10:00:00.000Z';
+    const future = validateOpsJobFailureV1(
+      { ...base, occurredAt: '2026-11-09T10:06:00.000Z' },
+      { nowIso: now },
+    );
+    expect(future.ok).toBe(false);
+    if (!future.ok) expect(future.code).toBe('bad_occurred_at');
+    const ancient = validateOpsJobFailureV1(
+      { ...base, occurredAt: '2026-09-01T10:00:00.000Z' },
+      { nowIso: now },
+    );
+    expect(ancient.ok).toBe(false);
+    const fresh = validateOpsJobFailureV1({ ...base, occurredAt: now }, { nowIso: now });
+    expect(fresh.ok).toBe(true);
   });
 
   it('truncates the free detail to 1 KiB without splitting UTF-8', () => {
@@ -113,6 +164,16 @@ describe('OpsJobFailureV1 contract', () => {
     expect(opsIncidentKey('immo-prod', undefined, 'radar-refresh-pv')).toBe('immo-prod//radar-refresh-pv');
     expect(opsIncidentKey('immo-prod', undefined, 'radar-refresh-pv')).not.toBe(
       opsIncidentKey('immo-preprod', undefined, 'radar-refresh-pv'),
+    );
+  });
+
+  it('escapes slashes in incident keys so distinct jobs never collide', () => {
+    expect(opsIncidentKey('immo-prod', 'a/b', 'c')).not.toBe(opsIncidentKey('immo-prod', 'a', 'b/c'));
+    expect(opsCanonicalRunKey('immo-prod', 'immo', 'radar', 'run-1', 'failed')).toBe(
+      opsCanonicalRunKey('immo-prod', 'immo', 'radar', 'run-1', 'failed'),
+    );
+    expect(opsCanonicalRunKey('immo-prod', 'immo', 'radar', 'run-1', 'failed')).not.toBe(
+      opsCanonicalRunKey('immo-prod', 'immo', 'radar', 'run-1', 'succeeded'),
     );
   });
 });
