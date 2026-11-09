@@ -89,9 +89,24 @@ case "$mode" in
     exit 3
     ;;
   noresult)
-    printf '%s\n' '{"type":"system","subtype":"init"}'
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
+    ;;
+  noeol)
+    printf '%s' '{"type":"result","subtype":"success","is_error":false,"result":"Héllo wörld","usage":{"input_tokens":3,"output_tokens":2}}'
+    ;;
+  longline)
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
+    head -c 1200000 /dev/zero | tr '\0' 'A'
+    exit 0
+    ;;
+  flood)
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
+    yes '{"type":"noise","n":1}' | head -c 40000000
+    exit 0
     ;;
   slow)
+    SLEEP_PID=""
+    trap 'if [ -n "$SLEEP_PID" ]; then kill $SLEEP_PID 2>/dev/null; fi; touch "$dump/killed"; exit 0' TERM
     sleep 30 & SLEEP_PID=$!
     wait $SLEEP_PID
     ;;
@@ -167,9 +182,9 @@ describe('node claude CLI runner', () => {
     const runner = new NodeClaudeCodeCliRunner();
     const events = await collect(runner.run({ access, request: request(), signal: never }));
     await waitFor('argv');
-    expect((await readDump('argv')).split('\n').filter(Boolean)).toEqual([
-      '-p', '--output-format', 'stream-json', '--model', 'claude-opus-5-5', '--effort', 'medium',
-    ]);
+    expect(await readDump('argv')).toBe(['-p', '--verbose', '--output-format', 'stream-json',
+      '--model', 'claude-opus-5-5', '--effort', 'medium',
+      '--tools', '', '--strict-mcp-config', '--no-session-persistence'].join('\n') + '\n');
     expect(events).toEqual([
       { type: 'text_delta', text: 'Hello' },
       { type: 'result', finishReason: 'stop', usage: { inputTokens: 3, outputTokens: 2 } },
@@ -182,10 +197,10 @@ describe('node claude CLI runner', () => {
     await collect(runner.run({ access, request: request(), signal: never }));
     await waitFor('stdin');
     expect(await readDump('stdin')).toBe('user: Summarize this page\n');
-    expect((await readDump('argv')).split('\n').filter(Boolean)).toEqual([
-      '-p', '--output-format', 'stream-json', '--model', 'claude-opus-5-5', '--effort', 'medium',
-      '--system-prompt-file', '/tmp/fake-system.md',
-    ]);
+    expect(await readDump('argv')).toBe(['-p', '--verbose', '--output-format', 'stream-json',
+      '--model', 'claude-opus-5-5', '--effort', 'medium',
+      '--tools', '', '--strict-mcp-config', '--no-session-persistence',
+      '--system-prompt-file', '/tmp/fake-system.md'].join('\n') + '\n');
     const env = await readDump('env');
     expect(env).toContain(`oauth_value=${TOKEN}`);
     expect(env).toContain('anthropic_key=absent');
@@ -194,8 +209,48 @@ describe('node claude CLI runner', () => {
     expect(argv).not.toContain(OTHER_TOKEN);
   });
 
+  it('should pass only an allowlist env with the seat token to the child', async () => {
+    process.env.ANTHROPIC_API_KEY = OTHER_TOKEN;
+    process.env.ANTHROPIC_AUTH_TOKEN = 'parent-auth-canary';
+    process.env.ANTHROPIC_BASE_URL = 'https://parent.example.invalid';
+    process.env.AWS_SECRET_ACCESS_KEY = 'parent-aws-canary';
+    process.env.GOOGLE_API_KEY = 'parent-google-canary';
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'parent-oauth-canary';
+    const runner = new NodeClaudeCodeCliRunner();
+    await collect(runner.run({ access, request: request(), signal: never }));
+    await waitFor('env');
+    const env = await readDump('env');
+    expect(env).toContain(`oauth_value=${TOKEN}`);
+    expect(env).toContain('path_set=yes');
+    expect(env).not.toContain('parent');
+    expect(env).not.toContain(OTHER_TOKEN);
+    expect(env).not.toMatch(/^leak_/m);
+  });
+
+  it('should run the CLI inside an isolated sandbox cwd', async () => {
+    const runner = new NodeClaudeCodeCliRunner();
+    await collect(runner.run({ access, request: request(), signal: never }));
+    await waitFor('cwd');
+    const env = await readDump('env');
+    const home = /home=(.*)/.exec(env)?.[1];
+    const config = /config=(.*)/.exec(env)?.[1];
+    expect(home).toBeDefined();
+    expect(config).toBe(home);
+    expect(await readDump('cwd')).toBe(`${home}\n`);
+    expect(home).toContain('claude-seat-');
+    expect(home).not.toBe(process.cwd());
+  });
+
+  it('should refuse an already-aborted signal without spawning', async () => {
+    const runner = new NodeClaudeCodeCliRunner();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(collect(runner.run({ access, request: request(), signal: controller.signal })))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    await expect(readDump('argv')).rejects.toThrow();
+  });
   it('should normalize assistant tool blocks and terminal usage', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'tool';
+    await setMode('tool');
     const runner = new NodeClaudeCodeCliRunner();
     const events = await collect(runner.run({ access, request: request(), signal: never }));
     expect(events).toEqual([

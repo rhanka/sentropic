@@ -86,6 +86,62 @@ const validEffort = (value: string): boolean => /^[A-Za-z0-9-]{1,16}$/.test(valu
 const validModelId = (value: string): boolean =>
   /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(value) && value.length <= 256;
 
+/**
+ * Parent env names copied into the CLI child. Everything else — ambient
+ * secrets, auth carriers, endpoints, cloud credentials — never crosses.
+ */
+const CHILD_ENV_COPY = ['PATH', 'LANG', 'LC_ALL', 'TZ', 'NO_COLOR'] as const;
+
+/**
+ * Auth/endpoint/cloud carriers purged from the child env before the seat
+ * token is injected. The allowlist above already excludes them; this is
+ * belt-and-suspenders in case the allowlist ever grows.
+ */
+const PURGED_ENV_PREFIXES = [
+  'ANTHROPIC_',
+  'CLAUDE_CODE_',
+  'AWS_',
+  'GOOGLE_',
+  'GEMINI_',
+  'AZURE_',
+  'VERTEX_',
+  'BEDROCK_',
+] as const;
+
+/**
+ * Minimal child env: allowlist copy, purge, then the sandbox dirs and — when
+ * a seat projection is supplied — the seat token. The probe passes no token
+ * and never runs a workload.
+ */
+const buildChildEnv = (
+  sandboxDir: string,
+  accessToken?: string,
+): Record<string, string | undefined> => {
+  const env: Record<string, string | undefined> = {};
+  for (const name of CHILD_ENV_COPY) {
+    const value = process.env[name];
+    if (value !== undefined) env[name] = value;
+  }
+  if (process.platform === 'win32') {
+    const systemRoot = process.env['SystemRoot'];
+    if (systemRoot !== undefined) env['SystemRoot'] = systemRoot;
+  }
+  for (const name of Object.keys(env)) {
+    if (PURGED_ENV_PREFIXES.some((prefix) => name.startsWith(prefix))) delete env[name];
+  }
+  if (accessToken !== undefined) env[CLAUDE_CODE_OAUTH_ENV_VAR] = accessToken;
+  env['CLAUDE_CONFIG_DIR'] = sandboxDir;
+  env['HOME'] = sandboxDir;
+  env['TMPDIR'] = sandboxDir;
+  env['TMP'] = sandboxDir;
+  env['TEMP'] = sandboxDir;
+  env['XDG_CONFIG_HOME'] = sandboxDir;
+  env['XDG_CACHE_HOME'] = sandboxDir;
+  env['XDG_DATA_HOME'] = sandboxDir;
+  env['XDG_STATE_HOME'] = sandboxDir;
+  return env;
+};
+
 const abortedError = (): Error => {
   const error = new Error('claude CLI runner aborted');
   error.name = 'AbortError';
@@ -98,18 +154,55 @@ const runnerError = (message: string): Error => {
   return error;
 };
 
-const kill = (child: ChildProcess | undefined): void => {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  try { child.kill('SIGTERM'); } catch { /* already gone */ }
+/**
+ * Signal the whole process group on POSIX (the child is spawned detached, so
+ * its pid is the group id) and the direct child on win32. Skipped only when
+ * our own stdio pipes are already closed — while they are open the group is
+ * necessarily alive, so there is no pid-reuse race.
+ */
+const killTree = (
+  child: ChildProcess | undefined,
+  closed: () => boolean,
+  signal: 'SIGTERM' | 'SIGKILL',
+): void => {
+  if (!child || closed()) return;
+  try {
+    if (child.pid !== undefined && process.platform !== 'win32') process.kill(-child.pid, signal);
+    else if (child.exitCode === null) child.kill(signal);
+  } catch { /* already gone */ }
 };
 
-const awaitExit = async (child: ChildProcess, timeoutMs: number): Promise<void> => {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, timeoutMs);
+const destroyPipes = (child: ChildProcess | undefined): void => {
+  try { child?.stdin?.destroy(); } catch { /* already gone */ }
+  try { child?.stdout?.destroy(); } catch { /* already gone */ }
+  try { child?.stderr?.destroy(); } catch { /* already gone */ }
+};
+
+const waitForClose = async (
+  child: ChildProcess,
+  closed: () => boolean,
+  timeoutMs: number,
+): Promise<boolean> => {
+  if (closed()) return true;
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
     (timer as unknown as { unref?: () => void }).unref?.();
-    child.once('exit', () => { clearTimeout(timer); resolve(); });
+    child.once('close', () => { clearTimeout(timer); resolve(true); });
   });
+};
+
+/**
+ * Hard teardown: SIGTERM the group, escalate to a group SIGKILL past the
+ * grace, destroy our pipe ends so a surviving grandchild holding stdout can
+ * neither block nor orphan the run, then await the close.
+ */
+const shutdown = async (child: ChildProcess | undefined, closed: () => boolean): Promise<void> => {
+  if (!child) return;
+  killTree(child, closed, 'SIGTERM');
+  if (await waitForClose(child, closed, KILL_GRACE_MS)) return;
+  killTree(child, closed, 'SIGKILL');
+  destroyPipes(child);
+  await waitForClose(child, closed, CLAUDE_CODE_RESULT_TIMEOUT_MS);
 };
 
 export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
@@ -161,41 +254,70 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       throw runnerError('claude CLI runner refused an invalid access projection');
     }
     if (!validModelId(request.modelId)) throw runnerError('claude CLI runner refused an invalid model id');
-    const args = ['-p', '--output-format', 'stream-json',
-      '--model', request.modelId, '--effort', this.effort,
-      ...(this.systemPromptFile ? ['--system-prompt-file', this.systemPromptFile] : [])];
-    const env: Record<string, string | undefined> = { ...process.env };
-    delete env.ANTHROPIC_API_KEY;
-    env[CLAUDE_CODE_OAUTH_ENV_VAR] = access.accessToken;
+    // No token-bearing process exists before this point: abort and prompt
+    // rendering both precede the spawn.
+    if (signal.aborted) throw abortedError();
+    const prompt = renderClaudeCodeCliPrompt(request);
+    if (signal.aborted) throw abortedError();
+    const sandboxDir = await mkdtemp(join(tmpdir(), 'claude-seat-')).catch(() => {
+      throw runnerError('claude CLI runner failed to isolate the CLI workspace');
+    });
     let child: ChildProcess | undefined;
+    let closed = false;
+    const isClosed = (): boolean => closed;
     try {
-      child = spawn(this.cliPath, args, { env: env as Record<string, string>, stdio: ['pipe', 'pipe', 'pipe'] });
-    } catch {
-      throw runnerError('claude CLI runner failed to spawn the CLI');
-    }
-    const abort = () => { kill(child); };
-    if (signal.aborted) { kill(child); await awaitExit(child, CLAUDE_CODE_RESULT_TIMEOUT_MS); throw abortedError(); }
-    signal.addEventListener('abort', abort, { once: true });
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-    try {
-      timer = setTimeout(() => { timedOut = true; kill(child); }, this.timeoutMs);
-      (timer as unknown as { unref?: () => void }).unref?.();
-      const prompt = renderClaudeCodeCliPrompt(request);
-      yield* this.consume(child, prompt, signal);
-      if (signal.aborted) throw abortedError();
-      if (timedOut) throw runnerError('claude CLI runner timed out waiting for the CLI result');
-    } catch (error) {
-      if (signal.aborted) throw abortedError();
-      if (timedOut) throw runnerError('claude CLI runner timed out waiting for the CLI result');
-      if (error instanceof ClaudeCliQuotaError) throw error;
-      if (error instanceof Error && error.name === 'ClaudeCliRunnerError') throw error;
-      throw runnerError('claude CLI runner failed while reading CLI output');
+      // --verbose is required with -p --output-format stream-json on the 2.1
+      // line; --tools "" disables every built-in (local) tool; with
+      // --strict-mcp-config and no --mcp-config no MCP server can load;
+      // --no-session-persistence keeps the seat run off disk.
+      const args = ['-p', '--verbose', '--output-format', 'stream-json',
+        '--model', request.modelId, '--effort', this.effort,
+        '--tools', '', '--strict-mcp-config', '--no-session-persistence',
+        ...(this.systemPromptFile ? ['--system-prompt-file', this.systemPromptFile] : [])];
+      const env = buildChildEnv(sandboxDir, access.accessToken);
+      try {
+        child = spawn(this.cliPath, args,
+          { env: env as Record<string, string>, stdio: ['pipe', 'pipe', 'pipe'],
+            cwd: sandboxDir, detached: process.platform !== 'win32' });
+      } catch {
+        throw runnerError('claude CLI runner failed to spawn the CLI');
+      }
+      child.once('close', () => { closed = true; });
+      // The internal stop fires on external abort and on timeout; consume
+      // observes it so a SIGTERM-ignoring CLI cannot hold the run open.
+      const stop = new AbortController();
+      const onAbort = (): void => { stop.abort(); void shutdown(child, isClosed); };
+      if (signal.aborted) { onAbort(); throw abortedError(); }
+      signal.addEventListener('abort', onAbort, { once: true });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let timedOut = false;
+      try {
+        timer = setTimeout(() => {
+          timedOut = true;
+          stop.abort();
+          void shutdown(child, isClosed);
+        }, this.timeoutMs);
+        (timer as unknown as { unref?: () => void }).unref?.();
+        yield* this.consume(child, prompt, stop.signal);
+        if (stop.signal.aborted) {
+          if (signal.aborted) throw abortedError();
+          if (timedOut) throw runnerError('claude CLI runner timed out waiting for the CLI result');
+          throw runnerError('claude CLI runner stopped before the CLI result');
+        }
+        if (timedOut) throw runnerError('claude CLI runner timed out waiting for the CLI result');
+      } catch (error) {
+        if (signal.aborted) throw abortedError();
+        if (timedOut) throw runnerError('claude CLI runner timed out waiting for the CLI result');
+        if (error instanceof ClaudeCliQuotaError) throw error;
+        if (error instanceof Error && error.name === 'ClaudeCliRunnerError') throw error;
+        throw runnerError('claude CLI runner failed while reading CLI output');
+      } finally {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
+        await shutdown(child, isClosed);
+      }
     } finally {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', abort);
-      kill(child);
-      if (child) await awaitExit(child, CLAUDE_CODE_RESULT_TIMEOUT_MS);
+      await rm(sandboxDir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 
