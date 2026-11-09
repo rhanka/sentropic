@@ -473,7 +473,61 @@ export interface ClaudeCodeCliProbeOptions {
   readonly timeoutMs?: number;
 }
 
-/** Probe `claude --version` with a token-free env; never runs a workload. */
+/**
+ * Run one probe command with a token-free allowlist env inside the sandbox;
+ * never runs a workload. Output is byte-capped; stderr is drained.
+ */
+const runProbeCommand = (
+  cliPath: string,
+  args: readonly string[],
+  env: Record<string, string | undefined>,
+  sandboxDir: string,
+  timeoutMs: number,
+): Promise<string> => new Promise((resolve, reject) => {
+  let child: ChildProcess;
+  try {
+    child = spawn(cliPath, args,
+      { env: env as Record<string, string>, stdio: ['ignore', 'pipe', 'pipe'], cwd: sandboxDir });
+  } catch {
+    reject(runnerError('claude CLI probe failed to spawn the CLI'));
+    return;
+  }
+  let closed = false;
+  child.once('close', () => { closed = true; });
+  const isClosed = (): boolean => closed;
+  const decoder = new StringDecoder('utf8');
+  let received = 0;
+  let output = Buffer.from('');
+  child.stdout?.on('data', (chunk: Buffer) => {
+    received += chunk.length;
+    if (received <= MAX_PROBE_OUTPUT_BYTES) output = Buffer.concat([output, chunk]);
+  });
+  child.stderr?.on('data', () => { /* drained, never retained */ });
+  const timer = setTimeout(() => {
+    killTree(child, isClosed, 'SIGKILL');
+    destroyPipes(child);
+    reject(runnerError('claude CLI probe timed out'));
+  }, timeoutMs);
+  (timer as unknown as { unref?: () => void }).unref?.();
+  child.once('error', () => {
+    clearTimeout(timer);
+    reject(runnerError('claude CLI probe failed to run the CLI'));
+  });
+  child.once('exit', (code) => {
+    clearTimeout(timer);
+    if (code !== 0) {
+      reject(runnerError('claude CLI probe could not read the CLI'));
+      return;
+    }
+    if (received > MAX_PROBE_OUTPUT_BYTES) {
+      reject(runnerError('claude CLI probe refused an oversized CLI output'));
+      return;
+    }
+    resolve(output.toString('utf8') + decoder.end());
+  });
+});
+
+/** Probe `claude --version` and `claude --help` with a token-free env; never runs a workload. */
 export const probeClaudeCodeCliCapabilities = (
   options: ClaudeCodeCliProbeOptions,
 ): Promise<ClaudeCodeCliCapabilities> => {
@@ -481,33 +535,29 @@ export const probeClaudeCodeCliCapabilities = (
   if (!nonEmpty(options.qualificationRef)) throw new Error('claude CLI probe needs a qualification reference');
   const cliPath = options.cliPath ?? DEFAULT_CLAUDE_CODE_CLI_PATH;
   const timeoutMs = options.timeoutMs ?? CLAUDE_CODE_RESULT_TIMEOUT_MS;
-  return new Promise((resolve, reject) => {
-    const env: Record<string, string | undefined> = { ...process.env };
-    delete env.ANTHROPIC_API_KEY;
-    delete env[CLAUDE_CODE_OAUTH_ENV_VAR];
-    let child: ChildProcess;
-    try {
-      child = spawn(cliPath, ['--version'], { env: env as Record<string, string>, stdio: ['ignore', 'pipe', 'pipe'] });
-    } catch {
-      reject(runnerError('claude CLI probe failed to spawn the CLI'));
-      return;
-    }
-    let output = '';
-    child.stdout?.on('data', (chunk: Buffer) => { output += chunk.toString('utf8'); });
-    const timer = setTimeout(() => { kill(child); reject(runnerError('claude CLI probe timed out')); }, timeoutMs);
-    (timer as unknown as { unref?: () => void }).unref?.();
-    child.once('error', () => { clearTimeout(timer); reject(runnerError('claude CLI probe failed to run the CLI')); });
-    child.once('exit', (code) => {
-      clearTimeout(timer);
-      const match = /(\d+\.\d+\.\d+[^ \r\n]*)/.exec(output);
-      if (code === 0 && match) {
-        resolve({ protocol: CLAUDE_CODE_STREAM_PROTOCOL, cliVersion: match[1]!,
-          source: options.source, qualificationRef: options.qualificationRef });
-      } else {
-        reject(runnerError('claude CLI probe could not read the CLI version'));
-      }
+  return (async (): Promise<ClaudeCodeCliCapabilities> => {
+    const sandboxDir = await mkdtemp(join(tmpdir(), 'claude-seat-probe-')).catch(() => {
+      throw runnerError('claude CLI probe failed to isolate the CLI workspace');
     });
-  });
+    try {
+      const env = buildChildEnv(sandboxDir);
+      const version = await runProbeCommand(cliPath, ['--version'], env, sandboxDir, timeoutMs);
+      const match = /(\d+)\.(\d+)\.(\d+)/.exec(version);
+      const major = match === null ? NaN : Number(match[1]);
+      const minor = match === null ? NaN : Number(match[2]);
+      if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor)
+        || major < MIN_CLAUDE_CODE_MAJOR || (major === MIN_CLAUDE_CODE_MAJOR && minor < MIN_CLAUDE_CODE_MINOR)) {
+        throw runnerError('claude CLI probe requires claude 2.1 or newer');
+      }
+      const help = await runProbeCommand(cliPath, ['--help'], env, sandboxDir, timeoutMs);
+      const missing = REQUIRED_CLAUDE_CODE_FLAGS.filter((flag) => !help.includes(flag));
+      if (missing.length > 0) throw runnerError('claude CLI probe found a CLI missing confinement flags');
+      return { protocol: CLAUDE_CODE_STREAM_PROTOCOL, cliVersion: `${major}.${minor}.${Number(match![3])}`,
+        source: options.source, qualificationRef: options.qualificationRef };
+    } finally {
+      await rm(sandboxDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  })();
 };
 
 /**
