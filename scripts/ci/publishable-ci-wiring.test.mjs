@@ -147,6 +147,7 @@ test('dedicated manifest_guard filter: only exact image and consumer-policy guar
   const globalGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs',
     'scripts/ci/image-config.mjs',
     'scripts/ci/compatibility-classifier.mjs', 'scripts/ci/compatibility-classifier.test.mjs',
+    'scripts/ci/live-provider-receipt.mjs', 'scripts/ci/live-provider-receipt.test.mjs',
     'scripts/ci/consumer-contracts.mjs', 'scripts/ci/consumer-contracts.test.mjs',
     'scripts/ci/consumer-boundaries.json',
     'scripts/ci/resolve-ui-image.mjs', 'scripts/ci/resolve-ui-image.test.mjs',
