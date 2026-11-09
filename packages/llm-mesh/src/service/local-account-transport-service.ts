@@ -215,6 +215,8 @@ export class LocalAccountTransportService {
   private routeAttemptSequence = 0;
   /** Account ids already alerted for their current reauth_required epoch. */
   private readonly alertedReauth = new Set<string>();
+  /** Account ids already warned about an upcoming no-grant expiry (once per enrollment). */
+  private readonly warnedExpiringNoGrant = new Set<string>();
   private custodianTimer: ReturnType<typeof setTimeout> | null = null;
   private custodianTickInFlight = false;
   private custodianLoopGeneration = 0;
@@ -1078,8 +1080,10 @@ export class LocalAccountTransportService {
     this.accountsMap.set(account.accountId, executableAccount);
     this.credentialVersions.set(account.accountId, configVersion);
     // A (re-)enrollment opens a fresh alert epoch: the owner has just
-    // re-authenticated, so the next outage must alert again.
+    // re-authenticated, so the next outage must alert again. The
+    // pre-expiry warning window reopens as well.
     this.alertedReauth.delete(account.accountId);
+    this.warnedExpiringNoGrant.delete(account.accountId);
     const enrolledAtMs = account.enrollmentCompletedAt
       ? Date.parse(account.enrollmentCompletedAt)
       : Number.NaN;
@@ -1813,6 +1817,30 @@ export class LocalAccountTransportService {
     }
   }
 
+  /** Secret-free custody event for an account (diagnostic ref only). */
+  private buildCustodyAlertEvent(
+    account: AccountTransportAccount,
+    reason: ReauthAlertReason,
+  ): ReauthAlertEvent {
+    const rawExpiry = account.expiresAt;
+    const parsedExpiry = typeof rawExpiry === 'string' && rawExpiry
+      ? Date.parse(rawExpiry)
+      : Number.NaN;
+    return {
+      at: new Date(this.nowMs()).toISOString(),
+      ownerScopeRef: account.ownerScopeRef ?? '',
+      transportProviderId: String(account.transportProviderId),
+      accountRef: this.diagnosticAccountRef(account.accountId),
+      ...(Number.isFinite(parsedExpiry) && parsedExpiry <= this.nowMs()
+        ? { expiredAt: new Date(parsedExpiry).toISOString() }
+        : {}),
+      ...(reason === 'expiring-no-grant' && Number.isFinite(parsedExpiry) && parsedExpiry > this.nowMs()
+        ? { expiresAt: new Date(parsedExpiry).toISOString() }
+        : {}),
+      reason,
+    };
+  }
+
   /**
    * Emit the D4 reauth alert once per reauth_required epoch. The event is
    * secret-free (diagnostic account ref only); a throwing sink never breaks
@@ -1826,22 +1854,8 @@ export class LocalAccountTransportService {
     this.alertedReauth.add(account.accountId);
     const sink = this.serviceOptions.reauthAlert;
     if (!sink) return;
-    const rawExpiry = account.expiresAt;
-    const parsedExpiry = typeof rawExpiry === 'string' && rawExpiry
-      ? Date.parse(rawExpiry)
-      : Number.NaN;
-    const event: ReauthAlertEvent = {
-      at: new Date(this.nowMs()).toISOString(),
-      ownerScopeRef: account.ownerScopeRef ?? '',
-      transportProviderId: String(account.transportProviderId),
-      accountRef: this.diagnosticAccountRef(account.accountId),
-      ...(Number.isFinite(parsedExpiry) && parsedExpiry <= this.nowMs()
-        ? { expiredAt: new Date(parsedExpiry).toISOString() }
-        : {}),
-      reason,
-    };
     try {
-      await sink.notifyReauthRequired(event);
+      await sink.notifyReauthRequired(this.buildCustodyAlertEvent(account, reason));
     } catch {
       // Alert delivery never breaks custody; the status persists and the
       // next cycle retries the alert after clearing a stale epoch entry.
@@ -1850,15 +1864,44 @@ export class LocalAccountTransportService {
   }
 
   /**
+   * Warn once per enrollment that a grant-less credential is about to
+   * expire. Re-enrollment is the only rotation path, so the warning opens
+   * the plannable window the expiry flip alone cannot give. It uses its own
+   * epoch: the later `expired-no-grant` flip must still alert.
+   */
+  private async emitExpiringNoGrantWarning(
+    account: AccountTransportAccount,
+  ): Promise<void> {
+    if (this.warnedExpiringNoGrant.has(account.accountId)) return;
+    this.warnedExpiringNoGrant.add(account.accountId);
+    const sink = this.serviceOptions.reauthAlert;
+    if (!sink) return;
+    try {
+      await sink.notifyReauthRequired(this.buildCustodyAlertEvent(account, 'expiring-no-grant'));
+    } catch {
+      // A throwing sink retries on the next cycle, like the reauth alert.
+      this.warnedExpiringNoGrant.delete(account.accountId);
+    }
+  }
+
+  /**
    * Proactive custodian cycle (Lot 1): refresh every mesh-managed account
    * inside its skew window before expiry, flip `reauth_required` early on
-   * definitive refresh failure and alert (D4). Transient failures (explicit
-   * 429/5xx, network errors, preparation failures) defer without flipping:
-   * the grant is still live and the next tick retries.
+   * definitive refresh failure and alert (D4). Only provably unconsumed
+   * failures defer without flipping: explicit 429/5xx token-endpoint
+   * responses and typed local preparation failures. Timeouts, resets,
+   * mint/persistence failures after a possible rotation, and unknown shapes
+   * flip fail-closed: the grant may already be consumed.
    *
-   * Externally custodied seats never refresh here and are skipped. Static
+   * Externally custodied seats never refresh here and are skipped; an
+   * unknown or elapsed expiry reads reauth-required (it awaits the next
+   * import) without flipping a status the custodian never owns. A
+   * CLI-imported Muse credential carries no refresh grant yet IS renewable
+   * (the mesh re-reads the CLI store), so it follows the grant path. Static
    * keys with no refresh grant (Vibe long-lived keys, Muse direct keys)
-   * are skipped: their rotation path is re-enrollment, not refresh.
+   * are skipped: their rotation path is re-enrollment, not refresh. They
+   * warn once inside the refresh window (`expiring-no-grant`, with the
+   * upcoming expiry in the report) and flip on expiry.
    */
   async runCustodianRefreshCycle(): Promise<CustodianRefreshReport> {
     await this.restorePersistedAccounts();
@@ -1879,9 +1922,11 @@ export class LocalAccountTransportService {
       if (isExternalSeatAccount(account)) {
         // Mirrors the route directory: an expired external projection reads
         // reauth-required (it awaits the next import), without flipping a
-        // status the custodian never owns or alerting the owner.
+        // status the custodian never owns or alerting the owner. An unknown
+        // expiry is not infinite validity: it reads reauth-required too.
+        const unknownExpiry = !Number.isFinite(expiredAt);
         accounts.push({ ...base, action: 'skipped-external',
-          readiness: expired ? 'reauth-required' : 'ready',
+          readiness: expired || unknownExpiry ? 'reauth-required' : 'ready',
           ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
         continue;
       }
@@ -1894,21 +1939,47 @@ export class LocalAccountTransportService {
           ...(expired ? { expiredAt: new Date(expiredAt).toISOString() } : {}) });
         continue;
       }
-      if (!account.refreshToken?.trim()) {
+      // A CLI-imported Muse credential carries no refresh grant, yet it IS
+      // renewable: mesh refresh re-reads the CLI store and re-mints (same
+      // wire as the acquire path). Only direct-billed Muse keys
+      // (`auth_type: 'api_key'`, no CLI store) are truly grant-less.
+      const metadata = account.metadata as Record<string, unknown> | undefined;
+      const isMuseDirectKey = metadata?.['auth_type'] === 'api_key';
+      const museCliRefreshable = account.transportProviderId === 'muse'
+        && !isMuseDirectKey && !isDeviceFlowSeatAccount(account);
+      if (!account.refreshToken?.trim() && !museCliRefreshable) {
         // No renewable grant: an expired credential cannot recover on its
         // own, so it flips to reauth_required and alerts (planned
-        // re-enrollment). An unexpired one stays ready without alerting.
+        // re-enrollment). An unexpired one stays ready and warns once inside
+        // the refresh window, with the upcoming expiry exposed for planning.
         if (expired) {
           await this.markReauthRequired(account.accountId, 'expired-no-grant');
           accounts.push({ ...base, action: 'expired-no-grant', readiness: 'reauth-required',
             expiredAt: new Date(expiredAt).toISOString() });
           continue;
         }
-        accounts.push({ ...base, action: 'skipped-no-grant', readiness: 'ready' });
+        if (!Number.isFinite(expiredAt)) {
+          // Grant-less and dateless: nothing can schedule or heal this
+          // credential; it reads not-ready until re-enrollment records one.
+          accounts.push({ ...base, action: 'skipped-no-expiry', readiness: 'reauth-required' });
+          continue;
+        }
+        const upcomingExpiry = new Date(expiredAt).toISOString();
+        accounts.push({ ...base, action: 'skipped-no-grant', readiness: 'ready',
+          expiresAt: upcomingExpiry });
+        const issuedAtMs = this.credentialIssuedAtMs.get(account.accountId);
+        if (shouldRefreshProactively({ expiresAtMs: expiredAt,
+          ...(issuedAtMs !== undefined && Number.isFinite(issuedAtMs) ? { issuedAtMs } : {}),
+          nowMs: now }, policy)) {
+          await this.emitExpiringNoGrantWarning(account);
+        }
         continue;
       }
       if (!Number.isFinite(expiredAt)) {
-        accounts.push({ ...base, action: 'skipped-no-expiry', readiness: 'ready' });
+        // The custodian cannot schedule a renewal without an expiry; the
+        // account reads not-ready until a successful acquire-time refresh
+        // records one. No flip: routing still serves the live credential.
+        accounts.push({ ...base, action: 'skipped-no-expiry', readiness: 'reauth-required' });
         continue;
       }
       const issuedAtMs = this.credentialIssuedAtMs.get(account.accountId);
@@ -1931,6 +2002,7 @@ export class LocalAccountTransportService {
           credentialVersion: version,
         });
         this.alertedReauth.delete(account.accountId);
+        this.warnedExpiringNoGrant.delete(account.accountId);
         refreshed += 1;
         accounts.push({ ...base, action: 'refreshed', readiness: 'ready' });
       } catch (error) {
