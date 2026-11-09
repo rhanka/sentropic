@@ -96,8 +96,8 @@ export async function readForgeTarball(body: ReadableStream<Uint8Array>, subPath
       const first = slash < 0 ? name : name.slice(0, slash);
       if (top === null) top = first; else if (first !== top) unstable('top_mismatch');
       const path = slash < 0 ? '' : name.slice(slash + 1).replace(/\/+$/, '');
-      // GitHub archives store git links as type 1/2 entries: validated like every entry, then skipped
-      // (never staged, link targets are never resolved) instead of failing the whole tree.
+      // GitHub archives store git links as type 1/2 entries: checksum/size/top-validated like every entry,
+      // then skipped (never staged, link targets are never resolved) instead of failing the whole tree.
       if (type === '5' || type === '1' || type === '2' || (type === '0' && size === 0 && name.endsWith('/'))) {
         await take(padded, false); continue;
       }

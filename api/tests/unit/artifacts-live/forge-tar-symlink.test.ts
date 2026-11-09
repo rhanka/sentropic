@@ -5,8 +5,8 @@ import { failure, HEAD, REPO, setup, STAGED, tarball, TOP } from './forge-fixtur
 
 /** P1 2026-11-09: rhanka/radar-immobilier@93116b8 ships two symlinks (entry 1563:
  * `deploy/k8s/40-immo-mcp-http-deploy.yaml -> immo-mcp/40-immo-mcp-http-deploy.yaml`).
- * GitHub archives are legitimate input: links are validated like every entry, then skipped
- * (never staged, link targets never resolved) instead of failing the whole tree. */
+ * GitHub archives are legitimate input: links are checksum/size/top-validated like every entry,
+ * then skipped (never staged, link targets never resolved) instead of failing the whole tree. */
 describe('forge tarball: link entries from GitHub archives', () => {
   it('should skip the preprod symlinks instead of failing the tree', async () => {
     const s = await setup();

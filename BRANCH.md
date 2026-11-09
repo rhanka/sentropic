@@ -40,6 +40,9 @@ Unblock the preprod P1 build (job 31bc4ffc) failing in `readForgeTarball` with a
 
 ## Feedback Loop
 - [x] `attention`: preprod P1 job 31bc4ffc (artifact bbe43e9c, rhanka/radar-immobilier@93116b8) failed in api job ledger as `failed`/`unstable_tree` with no reason; runtime DORMANT with stateDetail unstable_tree; host job still `building` (owner-urgent, blocks preprod variant P1).
+- [x] `attention`: PR #975 `pull_request` open event created no CI run (same anomaly as #873). Fallback: `workflow_dispatch` run 42612023738 on head cfcfee831.
+- [x] `attention`: dispatch run 42612023738 `test-e2e (5)` failed on AI spec `tests/00-ai-generation.spec.ts:181` (`TimeoutError: page.waitForResponse POST /api/v1/initiatives/generate`, console `Impossible de créer un brouillon de dossier`, 37 passed / 1 failed / 1 skipped). Provider-dependent AI generation flake, unrelated to the forge parser (no shared code path). Recorded per AI-flaky rule; fresh head pushed for re-proof.
+- [x] `attention`: Argon review unavailable (429 quota, resets in ~108h), vibe fallback unavailable (402 budget exhausted). Review done by Muse Wonder max: APPROVE, no required fixes (`.h2a/reviews/fix-forge-tar-muse.md`).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -102,10 +105,10 @@ Unblock the preprod P1 build (job 31bc4ffc) failing in `readForgeTarball` with a
   - [x] Lot gate: copy exact checklist of Lot 1.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest API (cf Lot 1, copy checklist)
-  - [ ] Final gate step 1: create PR with `BRANCH.md` text as PR body (source of truth).
+  - [x] Typecheck & Lint (`make typecheck-api` exit 0; lint covered by CI `api-static`)
+  - [x] Retest API (forge-tar-symlink 4, forge-lease 8, forge-lease-source 5, host-build-api 12 — all green)
+  - [x] Final gate step 1: PR #975 created with `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Record Gemini Argon high review to `.h2a/reviews/fix-forge-tar-argon.md`.
+  - [x] Record review to `.h2a/reviews/fix-forge-tar-muse.md` (Muse Wonder max APPROVE; Argon 429 / vibe 402 unavailable).
   - [ ] Write French report to `/home/antoinefa/src/sentropic/.tmp/rv/fix-forge-tar.md` (root cause with exact header, PR, head, CI, review).
   - [ ] Do NOT merge.
