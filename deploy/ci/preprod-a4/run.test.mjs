@@ -7,7 +7,7 @@ import { approvedRequest, commit, cron, fixture, image, sha } from './fixtures.m
 
 const request = { ...approvedRequest, namespace: 'sentropic-preprod', operationId: 'approved-cutover', candidateCommit: commit,
   candidateImage: image, backupTemplateSha256: digest(canonical(cron.spec.jobTemplate.spec)) };
-const env = { A4_KUBECONFIG_FILE: '/private/kubeconfig', A4_REQUEST_FILE: '/private/request', A4_DRY_RUN: '1' };
+const env = { A4_TIER: 'preprod', A4_KUBECONFIG_FILE: '/private/kubeconfig', A4_REQUEST_FILE: '/private/request', A4_DRY_RUN: '1' };
 const read = path => path.endsWith('request') ? JSON.stringify(request) : 'PRIVATE-KUBECONFIG-SENTINEL';
 
 for (const phase of ['snapshot', 'checkpoint']) test(`should perform no writes in ${phase} dry-run`, () => {
