@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EnrollmentProvider } from '../../src/enrollment/contracts.js';
 import { ClaudeRefreshPreparationError } from '../../src/enrollment/claude-code.js';
+import { MusePostRotationError } from '../../src/enrollment/muse-code.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
 import type { CustodianRefreshReport } from '../../src/service/custodian-refresh.js';
 import type { KeyringAdapter } from '../../src/service/facade.js';
@@ -44,6 +45,15 @@ const makeService = (behavior: 'ok' | 'fail', now: number, alerts: ReauthAlertEv
   const service = new LocalAccountTransportService(new InMemoryKeyring(),
     new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
     { now: () => nowRef.current, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
+  return { service, refresh };
+};
+
+const failWith = (failure: unknown, now: number, alerts: ReauthAlertEvent[]) => {
+  const refresh = vi.fn(async () => { throw failure; });
+  const provider = { refresh } as unknown as EnrollmentProvider;
+  const service = new LocalAccountTransportService(new InMemoryKeyring(),
+    new Map([['cloud-code', provider]]), { async resolveConfig() { return {}; } }, undefined,
+    { now: () => now, reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } } });
   return { service, refresh };
 };
 
@@ -248,6 +258,94 @@ describe('runCustodianRefreshCycle', () => {
     seed(service, { accountId: 'acct-prep', ownerScopeRef: 'owner',
       expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-p', enrollmentCompletedAt: iso(T0) });
     const report = await service.runCustodianRefreshCycle();
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-deferred-retry', readiness: 'ready' });
+    expect(alerts).toEqual([]);
+  });
+
+  it('should defer a real Claude 5xx token-endpoint response without flipping', async () => {
+    // M1 (r2): Claude emits `HTTP <status> <code>` with no parentheses, so
+    // the old classifier let a real 503 fall through to reauth_required. An
+    // explicit error response proves the grant was not consumed: the next
+    // tick retries without an owner alert.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = failWith(
+      new Error('Claude enrollment: HTTP 503 oauth_error; reauthenticate'), T0 + 55 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-claude-503', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-c', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-deferred-retry', readiness: 'ready' });
+    expect(alerts).toEqual([]);
+  });
+
+  it('should flip fail-closed on a Claude timeout that may have rotated the grant', async () => {
+    // M1 (r2): `token request timed out` proves no response, not no
+    // rotation — the server may have rotated the grant before the abort.
+    // Replaying it on the next tick could double-spend the grant family,
+    // so the account flips instead of deferring.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = failWith(
+      new Error('Claude enrollment: token request timed out; reauthenticate'),
+      T0 + 55 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-claude-timeout', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-c', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-failed-reauth', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'refresh-failed' });
+  });
+
+  it('should flip fail-closed on a raw transport failure with no response', async () => {
+    // M1 (r2): Codex and Cloud Code let raw `fetch` errors bubble up. With
+    // no response there is no proof the grant survived, so the account
+    // flips instead of replaying a possibly consumed grant.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = failWith(
+      new TypeError('fetch failed'), T0 + 55 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-codex-fetch', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-x', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-failed-reauth', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'refresh-failed' });
+  });
+
+  it('should flip fail-closed on a Muse mint failure after token rotation', async () => {
+    // M1 (r2): the token endpoint already answered, so the `(503)` inside
+    // the mint error must NOT read as a safe retry. The typed
+    // post-rotation signal fails closed instead of restoring the fence and
+    // replaying the old grant.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = failWith(
+      new MusePostRotationError('Muse key mint failed (503): Service Unavailable'),
+      T0 + 55 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-muse-mint', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-m', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(report.accounts[0]).toMatchObject(
+      { action: 'refresh-failed-reauth', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ reason: 'refresh-failed' });
+  });
+
+  it('should defer a Muse token-endpoint 503 before any rotation', async () => {
+    // M1 (r2): a 503 from the token endpoint itself is pre-rotation — no
+    // new grant was issued — so the explicit response still defers safely.
+    const alerts: ReauthAlertEvent[] = [];
+    const { service, refresh } = failWith(
+      new Error('Muse token refresh failed (503): Service Unavailable'),
+      T0 + 55 * MINUTE, alerts);
+    seed(service, { accountId: 'acct-muse-503', ownerScopeRef: 'owner',
+      expiresAt: iso(T0 + 60 * MINUTE), refreshToken: 'grant-m', enrollmentCompletedAt: iso(T0) });
+    const report = await service.runCustodianRefreshCycle();
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(report.accounts[0]).toMatchObject(
       { action: 'refresh-deferred-retry', readiness: 'ready' });
     expect(alerts).toEqual([]);
