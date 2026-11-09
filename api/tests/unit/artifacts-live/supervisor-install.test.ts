@@ -4,6 +4,8 @@ import { INSTALL_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/
 import type { DependencyFile } from '../../../src/services/artifacts/live/cache';
 import { fakePod, refuse, runtime, stream } from './supervisor-pod';
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 const tgz = Buffer.from('package tarball');
 const pin = { path: 'node_modules/vite', url: 'https://registry.npmjs.org/vite/-/vite-1.0.0.tgz', version: '1.0.0',
   integrity: `sha512-${createHash('sha512').update(tgz).digest('base64')}` };
@@ -49,6 +51,33 @@ describe('supervisor offline clean install', () => {
     const pod = fakePod(exported);
     await expect(pod.supervisor.cleanInstall(inputs(Buffer.from('other')))).rejects.toMatchObject({ code: 'dependency_integrity_mismatch' });
     expect(pod.ops()).not.toContain('install');
+  });
+  it('should report progress per frame and suspend the stall across the offline install', async () => {
+    const pod = fakePod(exported);
+    const progress = { report: vi.fn(), suspendStall: vi.fn() };
+    await pod.supervisor.cleanInstall({ ...inputs(), progress });
+    // Source transfer frames, staged tarball frames and drained files all report; the opaque `npm ci` suspends.
+    expect(progress.report.mock.calls.length).toBeGreaterThan(3);
+    expect(progress.suspendStall).toHaveBeenNthCalledWith(1, true);
+    expect(progress.suspendStall).toHaveBeenNthCalledWith(2, false);
+  });
+  it('should stop a pre-aborted install before sending any frame', async () => {
+    const pod = fakePod(exported);
+    const controller = new AbortController(); controller.abort();
+    await expect(pod.supervisor.cleanInstall({ ...inputs(), signal: controller.signal })).rejects.toThrow();
+    expect(pod.channel.send).not.toHaveBeenCalled();
+  });
+  it('should abort a cut install mid-drain and send no further frames', async () => {
+    const pod = fakePod(exported);
+    const controller = new AbortController();
+    const sent = () => pod.channel.send.mock.calls.length;
+    const input = { ...inputs(), signal: controller.signal,
+      sink: vi.fn(async (_file: DependencyFile) => { controller.abort(); }) };
+    await expect(pod.supervisor.cleanInstall(input))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'supervisor_channel_aborted' });
+    const cut = sent();
+    await delay(60);
+    expect(sent()).toBe(cut);
   });
   it('should fail closed on a missing staged tarball or a failed install, never falling back to the network', async () => {
     const missing = fakePod({ ...exported, install: () => refuse('integrity') });

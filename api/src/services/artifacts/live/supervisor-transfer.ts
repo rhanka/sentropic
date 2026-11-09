@@ -71,7 +71,8 @@ export function putWriter(transfer: string, target: TransferTarget) {
  * no duplicate or unsafe path, limits enforced while streaming. Each finished file goes to `sink` before the next page
  * is read, so the reader holds one file (at most `fileBytes`) and one bounded reply. */
 export async function streamSnapshot(page: (cursor: number) => Promise<Record<string, unknown>>, limits: TreeLimits,
-  links: 'refuse' | 'skip', fail: TransferFailure, sink: (file: TransferFile) => Promise<void>): Promise<void> {
+  links: 'refuse' | 'skip', fail: TransferFailure, sink: (file: TransferFile) => Promise<void>,
+  onPage?: () => void): Promise<void> {
   const seen = new Set<string>(); let count = 0;
   let current: { path: string; mode: number; size: number; bytes: Buffer; received: number } | null = null;
   let total = 0; let cursor = 0; let budget = limits.files + Math.ceil(limits.totalBytes / 4096);
@@ -102,6 +103,7 @@ export async function streamSnapshot(page: (cursor: number) => Promise<Record<st
       bytes.copy(open.bytes, open.received); open.received += bytes.length;
       if (open.received === size) { current = null; await sink({ path, mode: open.mode, bytes: open.bytes }); }
     }
+    onPage?.();
     if (next === null) break;
     cursor = next as number;
   }
