@@ -64,8 +64,8 @@
   - [x] Apply to Makefile 1259 (typecheck-llm-mesh), 1460 (--check), 1473 (audit versions), 1477 (typecheck-skills, ln -s writer), 1593 (typecheck-flow), 2881 (test-llm-mesh via ARTIFACTS_RUN), 2893 (bench-live-speech OUT= writer), 2989 (test-skills, ln -s + vitest writer), 3942 node-audit branch.
   - [x] Lot gate: grep shows every writable-workspace docker run uses the variable or the equivalent literal, exceptions listed in Feedback Loop only.
 - [ ] **Lot 3 — Verification on ENV=test-compose-backup**
-  - [ ] Run make typecheck-llm-mesh API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find packages/llm-mesh -user root empty.
-  - [ ] Run make typecheck-api API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find api -user root empty (touched paths incl. node_modules/.vite-temp).
+  - [x] Run make typecheck-llm-mesh API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find packages/llm-mesh -user root empty (PASS 09/11, exit 0, find empty).
+  - [x] Run make typecheck-api API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, find api -user root empty (PASS 09/11, exit 0, find count 0).
   - [ ] Run make db-backup + db-restore BACKUP_FILE=<new> SKIP_CONFIRM=true API_PORT=8915 UI_PORT=5315 MAILDEV_UI_PORT=1215 ENV=test-compose-backup, stat -c %U host-owned, find data -user root empty.
   - [ ] End with make down-volumes ENV=test-compose-backup.
 - [ ] **Lot N — Final validation**
