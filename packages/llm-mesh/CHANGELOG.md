@@ -10,13 +10,20 @@
   floor, injected clock), per-account secret-free custody-state report.
   Definitive refresh failures flip `reauth_required` early and emit a
   secret-free `ReauthAlertSink` event (diagnostic account ref only, once per
-  epoch); transient failures (explicit 429/5xx, network errors, preparation
-  failures) defer without flipping. `startCustodianLoop` / `stopCustodianLoop`
-  run the hosted loop (immediate first cycle, jittered cadence, `onError`
-  surface, exactly one loop per owner scope); the custodian controls live on
-  the administrative facade. External seats stay skipped (an expired one reads
-  reauth-required without flipping); grant-less credentials flip on expiry
-  for a planned re-enrollment.
+  epoch). Only provably unconsumed failures defer without flipping
+  (explicit 429/5xx token-endpoint responses, typed local preparation
+  failures); timeouts, resets, mint/persistence failures after a possible
+  grant rotation (typed `MusePostRotationError`), and unknown shapes flip
+  fail-closed so a consumed grant is never replayed. `startCustodianLoop` /
+  `stopCustodianLoop` run the hosted loop (immediate first cycle, jittered
+  cadence, `onError` surface, exactly one loop per owner scope); the
+  custodian controls live on the administrative facade. External seats stay
+  skipped (an expired or unknown-expiry one reads reauth-required without
+  flipping); grant-less credentials warn once inside the window
+  (`expiring-no-grant`, upcoming expiry exposed in the report) and flip on
+  expiry for a planned re-enrollment. A CLI-imported Muse credential carries
+  no refresh grant yet refreshes through the cycle (CLI store re-read),
+  unlike direct-billed Muse keys (`auth_type: 'api_key'`).
 
 ## 0.33.0
 
