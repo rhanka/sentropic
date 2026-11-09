@@ -44,7 +44,7 @@
   - [x] `api/tests/api/auth/tenant-first-member-bootstrap.test.ts`: admin_app self-approval of a `requested` row in a tenant with no approved member (status, decidedBy, `membership.approved` audit by the caller); second self-approval refused once a member exists; non-admin_app refused; `invited`/`suspended`/absent rows refused; self-reject refused, self-suspend unchanged.
 - [x] **Lot 2 — Guard**
   - [x] `cm-membership.ts`: the self-decision check runs after the tenant workspace locks, inside the SERIALIZABLE write, and admits only the first-member bootstrap.
-- [ ] **Lot 3 — Validation**
-  - [ ] `make typecheck-api` and `make lint-api`.
-  - [ ] Scoped API tests: `tenant-first-member-bootstrap`, `tenant-membership`.
-  - [ ] Opus read-only review in `.h2a/reviews/t1-cm-first-member-bootstrap-opus.md`.
+- [x] **Lot 3 — Validation**
+  - [x] `make typecheck-api` PASS (tsc --noEmit clean, `.tmp/rv/t1-a-typecheck-bootstrap.log`, make_exit=0) and `make lint-api` PASS (0 errors, 243 pre-existing warnings, none in wagon files, `.tmp/rv/t1-a-lint-bootstrap.log`).
+  - [x] Scoped API tests on head 6a8f12cd3: `tenant-first-member-bootstrap` + `tenant-membership`, 22/22 PASS (`.tmp/rv/t1-a-tests-bootstrap.log`, make_exit=0).
+  - [x] Opus read-only review in `.h2a/reviews/t1-cm-first-member-bootstrap-opus.md`: APPROVE on 094423ce9; head adds role-member forcing (answers Opus finding 2) + SSI comment reword (finding 1).
