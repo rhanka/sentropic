@@ -19,6 +19,7 @@
   - `api/drizzle/control/0022_oauth_consent_optional_tenant.sql`
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/api/auth/oauth-consent-optional-tenant.test.ts`
+  - `api/tests/api/auth/oauth-consent-tenantless-rekey.test.ts`
   - `api/tests/utils/oauth-consent-flow.ts`
   - `api/tests/api/tenancy/arch11-tenant-data.test.ts`
   - `spec/DATA_MODEL.md`
@@ -64,5 +65,6 @@
   - [x] `revokeCmOAuthConsent` withdraws the tenant-less key when no tenant is given; the artifacts host never accepts the tenant-less CM consent id.
 - [ ] **Lot 4 — Validation**
   - [ ] `make typecheck-api` and `make lint-api`.
-  - [ ] Scoped API tests: `oauth-consent-optional-tenant`, `cm-oauth-consent`, `oauth-refresh.integration`, `arch11-tenant-data`, `oauth-consent-persistence`, `arch11-consent-tenant-enforce`, `oauth-state-adapter.refresh`.
-  - [ ] Opus read-only review in `.h2a/reviews/t1-oauth-consent-optional-tid-opus.md`; s-archi review before the train merges.
+  - [ ] Scoped API tests: `oauth-consent-optional-tenant`, `oauth-consent-tenantless-rekey`, `cm-oauth-consent`, `oauth-refresh.integration`, `arch11-tenant-data`, `oauth-consent-persistence`, `arch11-consent-tenant-enforce`, `oauth-state-adapter.refresh`, `artifacts-host-credentials`.
+  - [x] Opus read-only review r1 `.h2a/reviews/t1-oauth-consent-optional-tid-opus.md` on bc68edbbf: REQUEST_CHANGES (2 MAJOR, 5 MINOR, 3 NIT); findings 1, 2, 3, 5, 8, 9, 10 fixed, 4 partly fixed, 4/6/7 in the Feedback Loop.
+  - [ ] Argon review r2 (resume lane: Opus quota out); s-archi review before the train merges.
