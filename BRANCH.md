@@ -1,110 +1,117 @@
-# Feature: Artifacts reconcile pending builds (0.2.25)
+# Feature: artifacts install progress watchdog
 
 ## Objective
-- [ ] Add a generic `reconcilePendingBuilds` in `packages/artifacts/src/live-host` that polls the builder `GET /v1/builds/:artifactId/:jobId` for host jobs stuck in `build_pending`/`building` and applies only allowed transitions through the package stores, with host ports for the job store and the status client.
+Replace the flat 300 s wall clock for the dependency install phase with a progress-based watchdog and add phase observability on the build-only and live paths.
 
 ## Scope / Guardrails
-- [ ] Scope limited to the generic reconcile in `@sentropic/artifacts/live-host`, its unit tests, the 0.2.25 release files and the report.
-- [ ] No migration in `api/drizzle/*.sql`.
-- [ ] Make-only workflow, Docker via `.tmp/packets/docker-slot.sh make ...` in the foreground only, `ENV` always last.
-- [ ] Branch work in `tmp/worktrees/reconcile-pending-builds`, never on root.
-- [ ] Test env `ENV=test-reconcile-builds`, ports `API_PORT=8907 UI_PORT=5307 MAILDEV_UI_PORT=1207`.
-- [ ] Never `ENV=dev`, never `make clean-all`, no Python.
-- [ ] Commits via `make commit MSG="..."` single line English, no attribution trailer, stage specific files only, max 150 lines per commit.
-- [ ] No immo code in the package: generic ports only, immo wires them (wiring listed in `.tmp/rv/reconcile-pending-builds.md`).
-- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- [ ] Do NOT merge: PR stays open for s-conductor.
+- Scope limited to `api/src/services/artifacts/live/**` and `api/tests/unit/artifacts-live/**`.
+- One migration max in `api/drizzle/*.sql` (if applicable).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/fix-install-timeout` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**:
-  - [ ] `packages/artifacts/src/live-host/reconcile.ts`
-  - [ ] `packages/artifacts/src/live-host/index.ts`
-  - [ ] `packages/artifacts/tests/live-host-reconcile.test.ts`
-  - [ ] `packages/artifacts/tests/live-host-reconcile-pg.integration.test.ts`
-  - [ ] `packages/artifacts/tests/fixtures/live-host-reconcile.ts`
-  - [ ] `packages/artifacts/package.json`
-  - [ ] `packages/artifacts/src/mcp-core.ts`
-  - [ ] `packages/artifacts/CHANGELOG.md`
-  - [ ] `BRANCH.md`
-  - [ ] `.h2a/reviews/reconcile-pending-builds-argon.md`
-  - [ ] `.tmp/rv/reconcile-pending-builds.md`
-- [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `Makefile`
-  - [ ] `docker-compose*.yml`
-  - [ ] `.cursor/rules/**`
-  - [ ] `plan/NN-BRANCH_*.md` (except this branch file)
-  - [ ] `ui/**`
-  - [ ] `api/**`
-  - [ ] `deploy/**`
-  - [ ] `.track/**`
-- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `package-lock.json`
-  - [ ] `api/package-lock.json`
-  - [ ] `packages/cluster-mesh/tests/packaging/fixtures/selected/**`
-  - [ ] `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
-  - [ ] `api/src/services/mcp/cluster-registry.ts`
-  - [ ] `api/tests/api/app-mcp-installed.test.ts`
-  - [ ] `api/tests/api/app-mcp-registry.test.ts`
-  - [ ] `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
-  - [ ] `.github/workflows/**`
-- [ ] **Exception process**:
-- [ ] Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+- **Allowed Paths (implementation scope)**:
+  - `api/src/services/artifacts/live/**`
+  - `api/tests/unit/artifacts-live/**`
+  - `BRANCH.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `packages/**/src/**` (version bump per Package Publication rule if touched)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] `attention` BRRP-EX1: root and api lock workspace entries follow artifacts 0.2.25 (version strings only), as BRLW-EX1 did. Impact: lockfiles only. Rollback: revert with the bump.
-- [ ] `attention` BRRP-EX2: the cluster-mesh selected packaging fixture follows artifacts 0.2.25 (version strings plus the integrity pin of the locally packed `make pack-artifacts` archive), mirrored in `artifacts-tuple.spec.ts`, as BRLW-EX2 did. Impact: test fixtures only. Rollback: revert with the bump.
-- [ ] `attention` BRRP-EX3: the 0.2.25 release repins the APP-P1 manifest digest through its version field only (as the 0.2.24 release did): `api/src/services/mcp/cluster-registry.ts` digest + comment and the three `api/tests/api/*.test.ts` version/digest assertions. Impact: version strings and pins only. Rollback: revert with the bump.
-- [ ] No scope exception beyond BRRP-EX1/BRRP-EX2/BRRP-EX3.
+- [ ] BRLOCK-EX1 retained verbatim in Scope / Guardrails (policy reference intact)
 
 ## AI Flaky tests
-- [ ] Acceptance rule:
-- [ ] Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-- [ ] Non-systematic means at least one success on the same commit and same command.
-- [ ] Never amend tests with additive timeouts.
-- [ ] If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-- [ ] Capture explicit user sign-off before merge.
+- Acceptance rule:
+- [ ] test-e2e (1) failed on bc6c4ef65: tests/03-chat.spec.ts:416 "devrait envoyer le bon contexte primaire au backend selon la route" (3.7s); the diff only touches the artifact builder install path (api/src/services/artifacts/live/*). Not accepted as flaky until a fresh run passes; no rerun, no skip, no timeout change.
+- [ ] test-e2e (4) failed on 3996c17cf: tests/02-organizations.spec.ts:391 Read-only (viewer) "détail: champs non éditables" (11.2s); on the same code the shard-1 chat test of bc6c4ef65 PASSED and this test PASSED on bc6c4ef65 — non-systematic UI e2e failures unrelated to the artifact builder diff. Fresh run requested; no rerun, no skip, no timeout change.
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick**
-- [ ] Rationale: one package feature, one test cycle, one PR, no merge.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single orthogonal api-only fix, no app-specific code, one test cycle.
 
 ## UAT Management (in orchestration context)
-- [ ] **Mono-branch**: no user-visible surface (package API only), no UAT.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/fix-install-timeout`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`/home/antoinefa/src/sentropic`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/fix-install-timeout` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-- [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
-- [ ] Worktree `tmp/worktrees/reconcile-pending-builds` on branch `feat/artifacts-reconcile-pending-builds` from `origin/main` (`d20f5af11`).
-- [ ] Ports: `API_PORT=8907 UI_PORT=5307 MAILDEV_UI_PORT=1207`, `ENV=test-reconcile-builds`.
-- [ ] Confirm pre-bump: `npm view @sentropic/artifacts version` is `0.2.24`, target `0.2.25`.
-- [ ] Validate scope boundaries and declare BRRP-EX1/BRRP-EX2 before touching locks/fixtures.
-- [x] **Lot 1 — Generic reconcile in live-host**
-- [x] `packages/artifacts/src/live-host/reconcile.ts`: `reconcilePendingBuilds` sweep (older-than threshold enforced by the sweep on top of the host filter, bounded concurrency, never deletes) plus `reconcilePendingBuild` single-job entry for the `live_status` / `git_publish` / `artifacts_get` read paths.
-- [x] Host ports as interfaces: pending-job store read/update, builder status client (`GET /v1/builds/:artifactId/:jobId` shape `{jobId, state: build_pending|published|build_failed, code?, reason?, releaseId?}`), bindings via `GitBindingStore` get/write, optional receipt read via `HostLedger.find`.
-- [x] Allowed transitions only: job `build_pending`/`building` to `build_failed` (`+code`/`+reason` optional hints) or `published` (`+releaseId` from the stored receipt when wired, else the builder status, never invented); binding `build_pending` to `build_failed` (`server/git-bindings.ts:51`, version CAS, failure code on `stateDetail`); idempotent across re-pended `jobId`s (version-bound key); typed errors plus bounded `store-error` stages.
-- [x] Fail-closed hardening (dedup review): wired ledger without receipt is `no-release`; `build_failed` is re-read before writes (receipt overrides, fresher status wins); a race won by `attached` leaves the job alone; a still-pending binding leaves the job pending (`binding-still-pending`).
-- [x] Export from `packages/artifacts/src/live-host/index.ts` (plus `RECONCILE_ERROR_STAGES`).
-- [x] `packages/artifacts/tests/live-host-reconcile.test.ts` (18 tests): stale failure applies job `build_failed` and binding `build_failed` with `stateDetail`; builder `published` with receipt and moved-on binding applies job `published`, with a still-pending binding leaves the job pending; still-pending stays; malformed status is skipped; terminal jobs are never regressed; concurrent sweep is bounded; one finding-specific test per BLOCKER/MAJOR/MINOR.
-- [x] `packages/artifacts/tests/live-host-reconcile-pg.integration.test.ts` (2 tests): the failure path against the real Postgres adapter, SQL-verified (`state`, `state_detail`, `version`), including the re-pended-`jobId` write-anew.
-- [x] Scoped run: `docker-slot.sh make test-artifacts SCOPE=tests/live-host-reconcile.test.ts ENV=test-reconcile-builds`.
-- [ ] Lot gate: `make typecheck-artifacts` + `make lint-artifacts` via `docker-slot.sh`, then `make scope-check`.
-- [x] **Lot 2 — Release 0.2.25**
-- [x] Bump `packages/artifacts/package.json` to `0.2.25` (strictly above npm `0.2.24`, re-check after any rebase), `ARTIFACTS_PROVIDER_VERSION` follows (BRRP-EX3).
-- [x] APP-P1 manifest digest repin through the version field only (BRRP-EX3): `51e82e14...` computed in-suite, corroborated via the mesh re-export.
-- [x] `packages/artifacts/CHANGELOG.md` entry for `0.2.25`.
-- [x] BRRP-EX1: root and `api` lock workspace entries follow `0.2.25`.
-- [x] BRRP-EX2: cluster-mesh selected fixture follows `0.2.25` (three deterministic `make pack-artifacts` runs, same sha256 `83bf5956...`, sha512 repin), mirrored in `artifacts-tuple.spec.ts`.
-- [x] Validate with the publishable-manifests make target and `make pack-artifacts`: `PASS @sentropic/artifacts@0.2.25 mode=block`. `check-publishable-manifest` cannot run locally (target never mounts `/workspace`, pre-existing, out of scope); CI runs it.
-- [x] Full `docker-slot.sh make test-artifacts ENV=test-reconcile-builds` PASS (101 files, 1008 tests).
-- [x] **Lot 3 — PR, CI, review**
-- [x] Open PR with this `BRANCH.md` as body, push branch to origin (PR #979).
-- [x] Rebase on `origin/main` (`ec3c0bcc8`, then `f69bc2a03`), Post-Rebase Gate holds (`0.2.25` above npm `0.2.24`).
-- [x] Merge `origin/main` (`aa21ecdfd`, train #974) into the branch per lane instruction (no rebase, no force push); kept this branch `BRANCH.md` (`--ours`); fixture lock union keeps artifacts `0.2.25` and follows cluster-mesh `dev.19`. Version Gate still holds (`0.2.25` above npm `0.2.24`).
-- [ ] CI green on the exact head (no rerun, no skip, no `[skip ci]`).
-- [ ] Review: independent Muse Wonder dedup review at `.h2a/reviews/pr-979-wonder-dedup.md` verdict REQUEST_CHANGES (2 BLOCKERs B1/B2, 5 MAJORs M1-M5, MINORs); every BLOCKER and MAJOR fixed with finding-specific tests (14/18 new tests fail pre-fix, 4 behavior-preserving pass), MINORs treated; verdict to confirm on the new head.
-- [ ] Do NOT merge.
-- [ ] **Lot N — Final validation and report**
-- [ ] Post-rebase gate: package version still above npm latest.
-- [ ] `make scope-check` clean on the final head.
-- [ ] Write `.tmp/rv/reconcile-pending-builds.md` in French with the exact wiring immo must add.
-- [ ] End with `make down-volumes ENV=test-reconcile-builds`.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Create isolated worktree `tmp/worktrees/fix-install-timeout` on branch `fix/artifacts-install-progress-watchdog` from `origin/main` (verified `f69bc2a03`).
+  - [x] Capture Makefile targets for debug/testing (`make test-api-unit`, `make typecheck-api`, `make lint-api`).
+  - [x] Define environment mapping: `ENV=test-fix-install-timeout`, `API_PORT=8921`, `UI_PORT=5321`, `MAILDEV_UI_PORT=1221`.
+  - [x] Confirm command style: `/home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make ... ENV=test-fix-install-timeout` with `ENV` last, foreground only.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+
+- [ ] **Lot 1 — Observability: phase start/end/duration + failing phase name**
+  - [x] Add phase runner helper logging `artifact_live_phase` with fields `key` hash, `phase`, `ms`, `outcome`, `reason`, no secret.
+  - [x] Wire it on build-only phases (`install`, `prepare`, `build`, `verify`) and live paths (`prepare-live`, `project`, `idle`).
+  - [x] Failing phase persists in job reason (e.g. `phase_timeout:install`) via existing `jobs.fail` / `stateDetail`.
+  - [x] Lot gate:
+    - [x] `make typecheck-api` + `make lint-api` (both green 2026-11-09; lint shows only pre-existing `no-console` warnings outside `live/`)
+    - [x] **API tests**
+      - [x] New `api/tests/unit/artifacts-live/deadline.test.ts` (phase log fields, no secret in logs)
+      - [x] Scoped runs while evolving: `make test-api-unit SCOPE="tests/unit/artifacts-live/deadline.test.ts tests/unit/artifacts-live/cache.test.ts" ENV=test-fix-install-timeout` (27/27 green, no unhandled errors)
+      - [x] Sub-lot gate: `make test-api ENV=test-fix-install-timeout` (deferred to CI per owner OPTIM rule: lanes run scoped tests, full suites run in CI)
+      - [x] AI flaky tests run (non-blocking only under acceptance rule): deferred to CI (`make test-api-ai` needs model access; change touches no AI path)
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None (api-only change, no UI surface)
+    - [ ] **E2E tests**
+      - [ ] None (api-only change, no user flow change)
+
+- [ ] **Lot 2 — Progress watchdog for the install phase**
+  - [x] Replace flat 300 s wall clock for install with stall watchdog (no progress for N s, e.g. 60 s) + absolute ceiling sized for ~1500 packages / ~1 GB cold cache at measured relay rate (justify, e.g. 20 min), env-configurable with safe default.
+  - [x] Thread install progress (tarball streamed / bytes) from fetch + cleanInstall + sink into the watchdog.
+  - [x] Keep other phase bounds unchanged (install alone streams ~1 GB over the relay with no api-visible progress signal; prebundle/dev/build/verify are pod-local and keep their 300 s recipe + phase bounds).
+  - [x] Update `runStaleMs` for the longer install bound.
+  - [x] Verify cache written after successful cold install and cut install poisons nothing.
+  - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
+  - [x] Lot gate: same API checklist as Lot 1 plus `cache.test.ts` watchdog cases (progress alive, stall, ceiling, reason carries phase, no poison).
+
+- [ ] **Lot 3 — Independent review findings (Wonder dedup, REQUEST_CHANGES)**
+  - [x] B1: stall arms only on the first progress report (no cut of the 120-600 s pre-progress windows); progress per sent put frame and drained page.
+  - [x] M1: watchdog abort propagates to fetch, queue wait and supervisor frames; cut install stops and never admits.
+  - [x] M2: start log carries `reason: 'started'`; bare `phase_timeout` rewritten to `phase_timeout:<phase>`; idle `verify` wrapped in `runPhase`.
+  - [x] MINORs: env bounds clamped to 2^31-1; ceiling comment reconciled with recipe/stream inner bounds; post-settle reports ignored; timing margins widened.
+  - [x] Tests: slow-start cold install not cut early; stall/ceiling/abort cases; signal threading; per-frame progress; queue abort.
+  - [ ] Explain first-81 s serial chain (file:line) in the final report; remove avoidable waits only if trivial.
+  - [x] Lot gate: `make typecheck-api` + `make lint-api` + scoped `test-api-unit` (deadline, cache, supervisor-install, heavy).
+
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest API (cf Lot1, copy checklist)
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md` → Package Publication.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
