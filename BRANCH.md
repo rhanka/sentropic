@@ -12,6 +12,7 @@ Scope the preprod artifact builder dependency install of `rhanka/radar-immobilie
 - **Allowed Paths (implementation scope)**:
   - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
   - `deploy/ci/artifact-content/bundle-checks.mjs`
+  - `deploy/ci/artifact-content/bundle.selftest.mjs`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
