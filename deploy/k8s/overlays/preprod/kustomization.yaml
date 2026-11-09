@@ -34,15 +34,15 @@ patches:
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
 
-# Repin to the b1a570474 main build (2026-11-08): API sha256:69bd39eb…44 from main CI run 42549233598
+# Repin to the ec3c0bcc8 main build (2026-11-09): API sha256:8a0039e8…61 from main CI run 42627071304
 # (publish-api-image success, receipt and GHCR manifest verified; publish-ui-image skips on this head —
 # no ui path changed — so the UI stays on sha256:bf1aa509…e0 published by the 7106defa7 build, run
-# 42485651003). Brings preprod to the host build API answering in the GitBuildJobState vocabulary (#969)
+# 42485651003). Brings preprod to the forge tarball link handling (#975) and the live teardown fix (#971), over the host build API job state contract (#969)
 # over the remote live rows persistence fix (#967), the S2S service issuer fix (#963) and the GitHub App
 # form-origin fix (#960).
 # Continuous deployment applies ../preprod-a4 (this overlay plus the A4 runtime wiring).
 images:
   - name: ghcr.io/rhanka/sentropic-api
-    digest: sha256:69bd39eb0aee104b59e39271c9badc06ebf0410f54032b5a6d476c6832604444
+    digest: sha256:8a0039e8198e98b1433003266ae389c6f0cf2360b05d1ac77c97f01144675c61
   - name: ghcr.io/rhanka/sentropic-ui
     digest: sha256:bf1aa5096ad41750a3dec307c37d0929a418f76c168588d3b8dc8287ab34d3e0
