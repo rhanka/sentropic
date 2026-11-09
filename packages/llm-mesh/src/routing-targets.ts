@@ -565,6 +565,17 @@ export const isExactModelTarget = (requested: string, target: Pick<TargetMapping
   return target.model === model && (!provider || target.providerId === provider);
 };
 
+/**
+ * Paid static-key fallback targets (Lot 5, owner D3, Gemini only): appended
+ * LAST to the candidate chain of the listed models, after every subscription
+ * target. Plan-time fallbackRank keeps them behind subscription accounts even
+ * when accounts enroll later; the quote prices them so budget admission always
+ * applies before the key is spent. The OpenAI fallback was rejected on cost.
+ */
+export const METERED_STATIC_KEY_FALLBACK_TARGET_MAPPINGS: readonly TargetMapping[] = [
+  { providerId: 'gemini', transportProviderId: 'gemini-apikey', model: 'gemini-3.8-flash' },
+];
+
 export const createCanonicalTargetCandidatesResolver = (
   options: CanonicalTargetResolverOptions = {},
 ): ModelTargetCandidatesResolver => {
@@ -581,7 +592,15 @@ export const createCanonicalTargetCandidatesResolver = (
   };
   return (model) => {
     const targets = merged[model] ?? [];
-    return options.allowEquivalentModels === true ? targets : targets.filter((target) => isExactModelTarget(model, target));
+    const chain = options.allowEquivalentModels === true
+      ? targets
+      : targets.filter((target) => isExactModelTarget(model, target));
+    return [
+      ...chain,
+      ...METERED_STATIC_KEY_FALLBACK_TARGET_MAPPINGS.filter(
+        (target) => isExactModelTarget(model, target),
+      ),
+    ];
   };
 };
 
