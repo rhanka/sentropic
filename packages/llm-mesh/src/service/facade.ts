@@ -131,6 +131,21 @@ export interface LlmMeshAccountAdministration {
     accountId: string,
     input: AccountOwnerInput,
   ): Promise<RemoveAccountResult>;
+
+  // Lot 1 custodian controls (D1 cluster custody, D4 reauth alert): proactive
+  // refresh cycle over mesh-managed accounts, secret-free report per account.
+  // Custody controls live on the administration surface, not the runtime
+  // facade: holding an acquire/release handle must not allow stopping the
+  // loop or reading the multi-owner report. The host runs exactly one loop
+  // per owner scope (no distributed lock here) and observes failures
+  // through onError.
+  runCustodianRefreshCycle(): Promise<CustodianRefreshReport>;
+  startCustodianLoop(
+    intervalMs: number,
+    onReport?: (report: CustodianRefreshReport) => void,
+    onError?: (error: unknown) => void,
+  ): () => void;
+  stopCustodianLoop(): void;
 }
 
 export interface LlmMeshFacade {
@@ -187,18 +202,6 @@ export interface LlmMeshFacade {
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
   acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition>;
   release(acquisition: AccountTransportAcquisition): Promise<void>;
-
-  // Lot 1 custodian (D1 cluster custody, D4 reauth alert): proactive refresh
-  // cycle over mesh-managed accounts, secret-free report per account. The
-  // host runs exactly one loop per owner scope (no distributed lock here)
-  // and observes failures through onError.
-  runCustodianRefreshCycle(): Promise<CustodianRefreshReport>;
-  startCustodianLoop(
-    intervalMs: number,
-    onReport?: (report: CustodianRefreshReport) => void,
-    onError?: (error: unknown) => void,
-  ): () => void;
-  stopCustodianLoop(): void;
 
   // Provider adapter
   getAdapter(providerId: AccountTransportProviderId): ProviderAdapter;
