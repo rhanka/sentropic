@@ -1,91 +1,107 @@
-# Feature: Fix live teardown stuck (Background delete, RECOVERING progress, reasons)
+# Feature: compose-host-user
 
 ## Objective
-- Unstick live teardown after a dead worker pod: Background deletes, skip quiesce on gone/terminal/terminating pods, RECOVERING progresses on scheduler tick to DORMANT, every builder_unavailable carries a reason persisted as code:reason.
+- [ ] Run sentropic Docker compose services as the host user so bind-mounted outputs are no longer root-owned.
 
 ## Scope / Guardrails
-- Scope limited to api live teardown path and scoped api unit tests.
-- Make-only workflow, Docker only through .tmp/packets/docker-slot.sh.
-- Never ENV=dev, never make clean-all, no Python, commits via make commit MSG="..." only.
-- ENV=test-fix-live-teardown with API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181.
-- All new text in English.
-- Do NOT change the frozen host contract (RECONCILE/PAGE/SEAL/STOP key sets, DRAFT_LIMITS) and do not touch packages/artifacts.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [ ] Scope limited to compose user mapping and Makefile UID/GID exports plus container HOME/npm cache writability.
+- [ ] No migration in `api/drizzle/*.sql`.
+- [ ] Make-only workflow, Docker via `.tmp/packets/docker-slot.sh make ...` only, `ENV` always last.
+- [ ] Branch work in `tmp/worktrees/compose-host-user`, never on root.
+- [ ] Test env `ENV=test-compose-host-user`, ports `API_PORT=8891 UI_PORT=5291 MAILDEV_UI_PORT=1191`.
+- [ ] Never `ENV=dev`, never `make clean-all`, no Python.
+- [ ] Commits via `make commit MSG="..."` single line English, no attribution trailer, stage specific files only.
+- [ ] Do NOT clean existing root-owned files of other worktrees (needs root, out of scope).
+- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `BRANCH.md` (branch plan)
-  - `api/src/services/artifacts/live/**`
-  - `api/tests/unit/artifacts-live/**`
-  - `.tmp/rv/fix-live-teardown.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- [ ] **Allowed Paths (implementation scope)**:
+- [ ] `docker-compose.dev.yml`
+- [ ] `docker-compose.idp.yml`
+- [ ] `docker-compose.e2e-vscode.yml`
+- [ ] `docker-compose.test.yml`
+- [ ] `e2e/tests/01-app.spec.ts` (captures debug vers `test-results/`)
+- [ ] `e2e/tests/02-auth-routes.spec.ts` (captures debug vers `test-results/`)
+- [ ] `BRANCH.md`
+- [ ] **Forbidden Paths (must not change in this branch)**:
+- [ ] `Makefile`
+- [ ] `docker-compose*.yml`
+- [ ] `.cursor/rules/**`
+- [ ] `plan/NN-BRANCH_*.md` (except this branch file)
+- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+- [ ] `api/drizzle/*.sql` (max 1 file)
+- [ ] `.github/workflows/**`
+- [ ] **Exception process**:
+- [ ] Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [ ] lot0-env: owned ENV=test-fix-live-teardown and ports API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181 recorded
+- [ ] `attention` BRCHU-EX1: exception to touch `Makefile` and `docker-compose.dev.yml`, `docker-compose.idp.yml`, `docker-compose.e2e-vscode.yml`, `docker-compose.test.yml` (default-forbidden).
+- [ ] Rationale: owner order 08/11 — bind-mounted outputs are root-owned in 31 worktrees, needs sudo cleanup.
+- [ ] Impact: dev/test compose services run as `UID:GID`; postgres and named-volume-only services unchanged.
+- [ ] Rollback: revert the commit.
+- [x] `acknowledge` scoped smoke `tests/smoke/api-health.test.ts` on `up-api-test` stack: 10 failed / 1 passed (`identity_contract_unavailable` 500s on authenticated endpoints); A/B rerun as root (`UID=0 GID=0`) fails identically — not caused by host-user mapping; no CI job runs this suite (only `test-api-smoke-restore` with prod backup). No fix attempted, no assertion loosened.
+- [x] `attention` CI run 42555500059: `test-e2e` (6 shards) + `e2e-vscode` fail with `EACCES: permission denied, rmdir '/app/test-results'` — root cause in two parts: (a) Docker creates missing gitignored bind dirs (`e2e/test-results`, `e2e/.auth`) as root — fixed by host-owned `mkdir -p` in `ci-test-env` and `prepare-node-workspace` (plus `data/backup`); (b) Playwright `rmdir`s its output dir, which needs write on parent `/app` (image-owned root) — fixed by `--output=test-results/out-<shard|vscode|smoke>` so the managed dir is a removable entry inside the host-owned bind. No `chmod 777` on new dirs.
+- [x] `attention` CI run 42559201108: `e2e-vscode` + shards 2/3/4 green (fixes above validated); shards 1/6 fail on `page.screenshot({ path: 'debug-*.png' })` to CWD `/app` (image-owned root) — fixed by writing to `test-results/debug-*.png` (host-owned bind). Shard 5: `00-ai-generation` fails with `Impossible de creer un brouillon de dossier` on the API side (provider path unchanged, `api` container still root on `up-e2e`) — passed on the next head, non-systematic.
+- [x] `attention` CI run 42560844577: only shard 1 fails — `07-matrix.spec.ts` lock/presence `User A leaves` poll (2s) `Expected: true, Received: false`, 45/46 pass. Local repro on same head via `make test-e2e E2E_SPEC=tests/07-matrix.spec.ts ENV=e2e-compose-host-user`: 17/17 pass including the failing test — non-systematic timing flake in SSE presence propagation, unrelated to UID mapping (no app/server file touched). Recorded per AI-flaky rule: command `make test-e2e ENV=e2e-ci` (shard 1), file `e2e/tests/07-matrix.spec.ts:477`, signature `lock-release presence poll 2s false`. Owner sign-off required before merge (not this lane).
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [ ] Acceptance rule:
+- [ ] Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+- [ ] Non-systematic means at least one success on the same commit and same command.
+- [ ] test-e2e (1) failed on 7ff33b1ed (merge of main only): tests/07-matrix.spec.ts:477 Matrix lock/presence "User A leaves -> lock released -> User B can lock" (5.3s); the same test passed on 58e9a714b and failed transiently on PR #966 c5357329d before passing on a fresh head. Not accepted as flaky until a fresh run passes; no rerun, no skip, no timeout change.
+- [ ] Never amend tests with additive timeouts.
+- [ ] If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+- [ ] Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: Single orthogonal api-only fix with scoped unit tests.
+- [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] Rationale: single compose ownership fix, one test cycle, no sub-workstream CI.
 
 ## UAT Management (in orchestration context)
 - [ ] **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- UAT checkpoints are listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/fix-live-teardown`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
-  - Switch back to `tmp/worktrees/fix-live-teardown` after UAT.
+- [ ] UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- [ ] Execution flow (mandatory):
+- [ ] Develop and run tests in `tmp/worktrees/compose-host-user`.
+- [ ] Push branch before UAT.
+- [ ] Run user UAT from root workspace (`ENV=dev` reserved for user, branch never touches it).
+- [ ] Switch back to `tmp/worktrees/compose-host-user` after UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, .tmp/packets/COMMON-RULES.md, .tmp/rv/diag-live-pod-delete.md sections 1-3.
-  - [x] Worktree tmp/worktrees/fix-live-teardown on branch fix/artifacts-live-teardown-stuck from origin/main (6b2fc2295, includes #966).
-  - [x] Verify branch with git -C <wt> branch --show-current before any action.
-  - [x] ENV=test-fix-live-teardown, API_PORT=8881 UI_PORT=5281 MAILDEV_UI_PORT=1181.
-  - [x] Confirm scope and guardrails (api only, no host contract change, no packages/artifacts).
-- [x] **Lot 1 — Generic live teardown fixes (api only)**
-  - [x] kubernetes.ts: delete pods and services with propagationPolicy Background, keep uid preconditions.
-  - [x] kubernetes.ts: waitDeleted keeps 404 invariant for live pods, reports k8s_wait_deleted_timeout on terminal/deleting pods past the bound.
-  - [x] pods.ts + ports.ts: probe pod state (active/absent/terminating/terminal).
-  - [x] transitions.ts: skip worker.quiesce when pod gone/terminal/terminating, preserve stateDetail when detail undefined, failed() persists code:reason.
-  - [x] controller.ts: reconcile RECOVERING via recover, recover preserves root cause, lease skips teardown-transient phases.
-  - [x] Observability: every new LiveError builder_unavailable on the live path gets a reason (npm_relay_status, supervisor_relay_502, k8s_wait_deleted_timeout, forge_status, cache_s3_unavailable).
-  - [x] pods.ts ensure: replace a leftover service with a stale selector under its uid precondition instead of stale_fence.
-  - [x] cache-storage.ts: name S3 effect failures cache_s3_unavailable, read rethrows builder_unavailable without quarantining.
-  - [x] Address Argon B1-B3: bound quiesce with non-fatal failure, skip when podUid null, uid-guarded pod delete; record teardown cause (NB1).
-- [x] **Lot 2 — Scoped api unit tests**
-  - [x] delete uses Background (deleteOptions unit test).
-  - [x] teardown completes on a terminal/terminating pod without worker.quiesce.
-  - [x] RECOVERING to DORMANT on tick once the pod is gone.
-  - [x] reasons are logged and persisted as code:reason.
-  - [x] Update oom and heavy-phases stateDetail expectations to code:reason (evolution).
-  - [x] Update cache-storage privacy-check expectations to code:reason (evolution); add S3 outage naming and service-replace tests.
-  - [x] Scoped runs: make test-api SCOPE=tests/unit/artifacts-live/... ENV=test-fix-live-teardown last.
-- [x] **Lot 3 — Gates, PR and CI**
-  - [x] make typecheck-api, make lint-api via docker-slot.sh.
-  - [x] Scoped make test-api via docker-slot.sh.
-  - [x] Open PR (title/body from BRANCH.md), push, iterate to green CI (no rerun, no skip, no timeout increase).
-  - [ ] Do NOT merge.
-- [x] **Lot 4 — Report**
-  - [x] Report in French to .tmp/rv/fix-live-teardown.md: PR number, head sha, CI state, tests, files changed.
+- [ ] **Lot 0 — Baseline & constraints**
+- [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
+- [ ] Create isolated worktree `tmp/worktrees/compose-host-user` on `fix/compose-host-user` from `origin/main` (HEAD `a56b19c01`).
+- [ ] Verify branch via `git -C tmp/worktrees/compose-host-user branch --show-current` returns `fix/compose-host-user`.
+- [ ] Capture Makefile targets for debug/testing.
+- [ ] Define environment mapping (`ENV=test-compose-host-user`, `API_PORT=8891`, `UI_PORT=5291`, `MAILDEV_UI_PORT=1191`).
+- [ ] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-compose-host-user` with `ENV` last.
+- [ ] Confirm scope and guardrails.
+- [ ] Validate scope boundaries and declare `BRCHU-EX1` before touching forbidden paths.
+- [x] **Lot 1 — Compose user mapping**
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to bind-mount writer services in `docker-compose.dev.yml` (`api`, `ui`, `openvscode-dev`, `ui-playwright-dev`, `playwright-dev`).
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `auth-idp` in `docker-compose.idp.yml`; keep `idp-screen-smoke` unchanged (read-only bind, no bind writes).
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `openvscode` and `e2e-vscode` in `docker-compose.e2e-vscode.yml`; keep `mock-api-vscode` unchanged (no volumes).
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `e2e` in `docker-compose.test.yml`; keep base `docker-compose.yml` unchanged (no bind mounts; `postgres` named volume unchanged).
+- [x] Keep `postgres`, `minio`, `minio-init` unchanged (named volumes or no bind writes).
+- [x] List every other compose file with evidence of bind writes or no writes.
+- [x] Set `HOME=/tmp` and `npm_config_cache=/tmp/npm-cache` env on switched Node services; no `chmod 777`; no legacy fallback, no dual path.
+- [x] Makefile: export `UID`/`GID` from `id -u`/`id -g`; replace any `sudo chown 1000:1000` with `chown $(id -u):$(id -g)`.
+- [ ] Lot gate:
+- [ ] `make scope-check` advisory before commit.
+- [x] **Lot 2 — Validation**
+- [x] `make typecheck` via docker-slot on `ENV=test-compose-host-user` (PASS exit 0, svelte-check 0 errors, 2026-11-08).
+- [x] Scoped `make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-compose-host-user` (22/22 PASS as UID 1000).
+- [x] `make up-api-test ENV=test-compose-host-user` healthy, api runs as `1000:1000`, fresh files under `api/` and `data/` owned by `antoinefa:antoinefa`.
+- [x] `make down ENV=test-compose-host-user` after validation (no leftover containers).
+- [ ] **Lot N-1 — Docs consolidation**
+- [ ] No spec file touched; nothing to consolidate.
+- [ ] **Lot N — Final validation**
+- [ ] Typecheck & Lint
+- [ ] Retest UI (cf Lot 2, copy checklist)
+- [ ] Retest API (cf Lot 2, copy checklist)
+- [ ] Retest e2e (cf lots e2e_groups like in Lot 1)
+- [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+- [ ] Record explicit user sign-off if any AI flaky test is accepted
+- [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md` to `Package Publication`.
+- [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+- [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+- [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
