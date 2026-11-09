@@ -1,6 +1,8 @@
 services:
   openvscode:
     image: gitpod/openvscode-server:latest
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     command:
       - --host
       - 0.0.0.0
@@ -10,6 +12,7 @@ services:
       - --telemetry-level
       - off
     environment:
+      - HOME=/tmp
       - OPENVSCODE_SERVER_ROOT=/home/.openvscode-server
     ports:
       - "${OPENVSCODE_PORT:-3115}:3000"
@@ -26,7 +29,11 @@ services:
     build:
       context: ./e2e
       dockerfile: Dockerfile
+    # BRCHU-EX1: run as the host user so bind-mounted outputs stay host-owned.
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/npm-cache
       - API_BASE_URL=${API_BASE_URL:-http://localhost:${API_PORT:-8787}}
       - UI_BASE_URL=${UI_BASE_URL:-http://localhost:${UI_PORT:-5173}}
       - OPENVSCODE_BASE_URL=${OPENVSCODE_BASE_URL:-http://localhost:${OPENVSCODE_PORT:-3115}}
