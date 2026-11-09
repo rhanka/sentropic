@@ -23,6 +23,7 @@
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
   - `packages/cluster-mesh/tests/speech-peer.spec.ts`
   - `packages/cluster-mesh/tests/fixtures/train.ts`
   - `api/tests/unit/gateway-package-version.test.ts`
@@ -132,6 +133,11 @@
   - [x] Update the api `0.22.4` pin to `0.22.5` (BRENROLL-EX4).
   - [x] Regenerate the `selected` fixture lock via `refresh-lazy-package-lock` (plus registry-URL form for the unpublished mesh/gateway entries, as CI's receipt path demands; sibling hashes qSVv/vNA1 match CI's own log lines).
   - [x] Correct the stale artifacts 0.2.25 integrity 4NL6 to jc0f (registry metadata plus local build agree).
+- [x] **Lot 6 — Run 42718308820 follow-up (artifacts pin plus infra flake)**
+  - [x] Move the 4NL6 pin to jc0f in `artifacts-tuple.spec.ts` (same stale-data correction).
+  - [x] `validate-cowork-bridge` failed on a Docker Hub 502 while pulling the node image (runner infra, no branch code executed) — proven transient, covered by the fresh push; no rerun used.
+  - [x] Lot gate:
+    - [x] Scoped `artifacts-tuple` green locally (5 passed, 3 skipped).
   - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh` green.
     - [x] Scoped cluster-mesh specs green (speech-peer 20, skew-invariants 5, tuple-skew 21, registry 51, topology-ranges 20).
