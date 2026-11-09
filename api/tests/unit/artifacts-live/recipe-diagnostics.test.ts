@@ -85,6 +85,26 @@ describe('recipe diagnostics', () => {
     expect(read!.output.endsWith('Authorization: [redacted]')).toBe(true);
   });
 
+  it('should classify a recipe cut by its own timer as timeout, never as oom', () => {
+    expect(classifyRecipeFailure({ exitCode: null, signal: 'TIMEOUT', output: '' })).toBe('timeout');
+    expect(classifyRecipeFailure({ exitCode: null, signal: 'SIGKILL', output: '' })).toBe('oom');
+  });
+
+  it('should scrub bearer values, known token formats and secret-named assignments', () => {
+    const raw = ['Bearer abcdefgh12345678', `npm_${'a'.repeat(36)}`, `ghp_${'b'.repeat(36)}`, 'AKIAABCDEFGHIJKLMNOP',
+      'NPM_TOKEN=s3cr3tvalue', 'db_password: hunter22', 'api_key=xyz123'].join('\n');
+    const out = scrubRecipeOutput(raw);
+    for (const leaked of ['abcdefgh12345678', 'a'.repeat(36), 'b'.repeat(36), 'AKIAABCDEFGHIJKLMNOP', 's3cr3tvalue',
+      'hunter22', 'xyz123']) expect(out).not.toContain(leaked);
+    expect(scrubRecipeOutput(out)).toBe(out);
+  });
+
+  it('should read a reply from a pod adopted from the previous bootstrap', () => {
+    expect(readRecipeDiagnostics({ exitCode: 1 })).toEqual({ exitCode: 1, signal: null, output: '' });
+    expect(readRecipeDiagnostics({ prebundled: true })).toEqual({ exitCode: 0, signal: null, output: '' });
+    expect(readRecipeDiagnostics({ prebundled: false })).toBeUndefined();
+  });
+
   it('should refuse a malformed pod reply instead of guessing', () => {
     for (const data of [undefined, null, 42, 'x', {}, { exitCode: '1', signal: null, output: '' },
       { exitCode: 1, signal: 'sig term', output: '' }, { exitCode: 1, signal: null, output: '!!!not-base64!!!' },

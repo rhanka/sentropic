@@ -114,6 +114,9 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if (!diagnostics || typeof (data as Record<string, unknown>).prebundled !== 'boolean') {
         unavailable('prebundle_unconfirmed');
       }
+      // A confirmed pre-bundle must also report a clean exit; an inconsistent reply is refused, never trusted.
+      if ((data as { prebundled: boolean }).prebundled === true
+        && (diagnostics.exitCode !== 0 || diagnostics.signal !== null)) unavailable('prebundle_unconfirmed');
       if ((data as { prebundled: boolean }).prebundled !== true) {
         const detail = diagnostics.output === '' ? undefined : diagnostics.output;
         throw new LiveError('builder_unavailable', `prebundle_failed:${classifyRecipeFailure(diagnostics)}`, detail);
