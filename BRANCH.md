@@ -95,6 +95,6 @@ Add per-repository `installWorkspaces` so a workspace app (radar-immobilier P1 `
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
   - [ ] `packages/<pkg>/package.json` bump: N/A (api-only branch, no `packages/*/src/**` change; `enforce-package-bump` does not trigger).
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [x] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth): PR #985.
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers (CI run 42705976678 in progress on head 609823af6).
   - [ ] Final gate step 3: Do NOT merge (conductor owns the merge); leave `BRANCH.md` in place and report.
