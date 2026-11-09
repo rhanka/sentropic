@@ -26,22 +26,46 @@ const access = { accessToken: TOKEN, expiresAt: Date.now() + 3_600_000, scopes: 
 const never = new AbortController().signal;
 
 const FAKE = String.raw`#!/bin/sh
-dump="$FAKE_CLAUDE_DUMP_DIR"
-SLEEP_PID=""
-trap 'if [ -n "$SLEEP_PID" ]; then kill $SLEEP_PID 2>/dev/null; fi; touch "$dump/killed"; exit 0' TERM
+here="$(dirname "$0")"
+dump="$here/dump"
+mkdir -p "$dump"
+mode="$(cat "$here/mode" 2>/dev/null)"
+if [ -z "$mode" ]; then mode=record; fi
 {
   for a in "$@"; do printf '%s\n' "$a"; done
 } > "$dump/argv"
 {
   if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then printf 'oauth_set=yes\noauth_value=%s\n' "$CLAUDE_CODE_OAUTH_TOKEN"; else printf 'oauth_set=no\n'; fi
   if [ -n "$ANTHROPIC_API_KEY" ]; then printf 'anthropic_key=present\n'; else printf 'anthropic_key=absent\n'; fi
+  for v in ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN GOOGLE_API_KEY GEMINI_API_KEY; do
+    eval "val=\${$v:-}"
+    if [ -n "$val" ]; then printf 'leak_%s=present\n' "$v"; fi
+  done
+  printf 'home=%s\n' "$HOME"
+  printf 'config=%s\n' "$CLAUDE_CONFIG_DIR"
+  if [ -n "$PATH" ]; then printf 'path_set=yes\n'; else printf 'path_set=no\n'; fi
 } > "$dump/env"
+if [ "$1" = "--version" ]; then
+  case "$mode" in
+    old-version) printf '%s\n' '1.9.0 (Claude Code)' ;;
+    *) printf '%s\n' '2.1.296 (Claude Code)' ;;
+  esac
+  exit 0
+fi
+if [ "$1" = "--help" ]; then
+  case "$mode" in
+    help-stripped)
+      printf '%s\n' '--verbose' '--output-format' '--model' '--effort' '--tools' '--no-session-persistence' '--system-prompt-file' ;;
+    *)
+      printf '%s\n' '--verbose' '--output-format' '--model' '--effort' '--system-prompt-file' '--tools' '--strict-mcp-config' '--no-session-persistence' ;;
+  esac
+  exit 0
+fi
+pwd > "$dump/cwd"
 cat > "$dump/stdin"
-mode="$FAKE_CLAUDE_MODE"
-if [ -z "$mode" ]; then mode=record; fi
 case "$mode" in
   record)
-    printf '%s\n' '{"type":"system","subtype":"init"}'
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
     printf '%s\n' 'not-json noise'
     printf '%s\n' '{"type":"assistant","message":{"type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}]}}'
     printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"Hello","usage":{"input_tokens":3,"output_tokens":2}}'
@@ -79,6 +103,10 @@ let dir = '';
 let dump = '';
 let savedPath: string | undefined;
 let savedToken: string | undefined;
+let savedExtra: Record<string, string | undefined> = {};
+
+const EXTRA_ENV = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'AWS_SECRET_ACCESS_KEY',
+  'AWS_SESSION_TOKEN', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'] as const;
 
 const collect = async (source: AsyncIterable<unknown>) => {
   const events: unknown[] = [];
@@ -89,6 +117,10 @@ const collect = async (source: AsyncIterable<unknown>) => {
 const readDump = async (name: string): Promise<string> => {
   const { readFile } = await import('node:fs/promises');
   return readFile(join(dump, name), 'utf8');
+};
+
+const setMode = async (mode: string): Promise<void> => {
+  await writeFile(join(dir, 'mode'), mode, 'utf8');
 };
 
 const waitFor = async (name: string, timeoutMs = 10_000): Promise<void> => {
@@ -102,14 +134,18 @@ const waitFor = async (name: string, timeoutMs = 10_000): Promise<void> => {
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'fake-claude-'));
-  dump = await mkdtemp(join(tmpdir(), 'fake-claude-dump-'));
+  dump = join(dir, 'dump');
   await writeFile(join(dir, 'claude'), FAKE, 'utf8');
   await chmod(join(dir, 'claude'), 0o755);
+  await setMode('record');
   savedPath = process.env.PATH;
   savedToken = process.env.ANTHROPIC_API_KEY;
+  savedExtra = {};
+  for (const name of EXTRA_ENV) {
+    savedExtra[name] = process.env[name];
+    delete process.env[name];
+  }
   process.env.PATH = `${dir}:${savedPath ?? ''}`;
-  process.env.FAKE_CLAUDE_DUMP_DIR = dump;
-  delete process.env.FAKE_CLAUDE_MODE;
   delete process.env.ANTHROPIC_API_KEY;
 });
 
@@ -117,8 +153,11 @@ afterEach(() => {
   process.env.PATH = savedPath;
   if (savedToken === undefined) delete process.env.ANTHROPIC_API_KEY;
   else process.env.ANTHROPIC_API_KEY = savedToken;
-  delete process.env.FAKE_CLAUDE_DUMP_DIR;
-  delete process.env.FAKE_CLAUDE_MODE;
+  for (const name of EXTRA_ENV) {
+    const saved = savedExtra[name];
+    if (saved === undefined) delete process.env[name];
+    else process.env[name] = saved;
+  }
 });
 
 describe('node claude CLI runner', () => {
@@ -165,7 +204,7 @@ describe('node claude CLI runner', () => {
   });
 
   it('should map the 5-hour session limit to the typed quota failure', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'quota5h';
+    await setMode('quota5h');
     const runner = new NodeClaudeCodeCliRunner();
     const error = await collect(runner.run({ access, request: request(), signal: never })).then(
       () => { throw new Error('should have thrown'); },
@@ -177,7 +216,7 @@ describe('node claude CLI runner', () => {
   });
 
   it('should read the retry delay from quota prose', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'quota-retry';
+    await setMode('quota-retry');
     const runner = new NodeClaudeCodeCliRunner();
     const error = await collect(runner.run({ access, request: request(), signal: never })).then(
       () => { throw new Error('should have thrown'); },
@@ -188,21 +227,21 @@ describe('node claude CLI runner', () => {
   });
 
   it('should surface non-quota exits as plain runner errors', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'fail';
+    await setMode('fail');
     const runner = new NodeClaudeCodeCliRunner();
     await expect(collect(runner.run({ access, request: request(), signal: never })))
       .rejects.toMatchObject({ name: 'ClaudeCliRunnerError' });
   });
 
   it('should surface a clean exit without a result as a plain runner error', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'noresult';
+    await setMode('noresult');
     const runner = new NodeClaudeCodeCliRunner();
     await expect(collect(runner.run({ access, request: request(), signal: never })))
       .rejects.toMatchObject({ name: 'ClaudeCliRunnerError' });
   });
 
   it('should kill the child on abort and report AbortError', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'slow';
+    await setMode('slow');
     const runner = new NodeClaudeCodeCliRunner();
     const controller = new AbortController();
     const pending = collect(runner.run({ access, request: request(), signal: controller.signal }));
@@ -213,7 +252,7 @@ describe('node claude CLI runner', () => {
   });
 
   it('should time out a silent child', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'slow';
+    await setMode('slow');
     const runner = new NodeClaudeCodeCliRunner({ timeoutMs: 300 });
     await expect(collect(runner.run({ access, request: request(), signal: never })))
       .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('timed out') });
@@ -237,7 +276,6 @@ describe('node claude CLI runner', () => {
   });
 
   it('should probe capabilities from the CLI version without a token', async () => {
-    process.env.FAKE_CLAUDE_MODE = 'version';
     const capabilities = await probeClaudeCodeCliCapabilities({
       source: 'fake-source', qualificationRef: 'fake-receipt',
     });
