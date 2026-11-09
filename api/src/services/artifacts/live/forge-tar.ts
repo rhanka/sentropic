@@ -10,7 +10,7 @@ export const FORGE_LIMITS = Object.freeze({ files: 65_536, fileBytes: 64 * 1024 
   compressedBytes: 256 * 1024 * 1024 });
 const META_BYTES = 1024 * 1024;
 const GB1_NAMES = new Set(['package.json', 'package-lock.json', 'sentropic.artifact.json']);
-export const unstable = (): never => { throw new LiveError('unstable_tree'); };
+export const unstable = (reason: string): never => { throw new LiveError('unstable_tree', reason); };
 const limit = (): never => { throw new LiveError('limit_exceeded', 'forge_snapshot'); };
 export interface ForgeTree {
   /** Regular files under `subPath`, relative to it, mode 0644 or 0755. */
@@ -30,7 +30,7 @@ function excluded(path: string, subPath: string): boolean {
 const octal = (field: Buffer) => {
   if (field[0]! & 0x80) return limit();
   const text = field.toString('latin1').replace(/[\0 ]+$/, '').trim();
-  return /^[0-7]*$/.test(text) ? Number.parseInt(text || '0', 8) : unstable();
+  return /^[0-7]*$/.test(text) ? Number.parseInt(text || '0', 8) : unstable('bad_number');
 };
 const cstring = (field: Buffer) => { const end = field.indexOf(0); return field.subarray(0, end < 0 ? field.length : end).toString('utf8'); };
 function checksum(header: Buffer) {
@@ -42,7 +42,7 @@ function pax(data: Buffer): Record<string, string> {
   const records: Record<string, string> = {}; let at = 0;
   while (at < data.length) {
     const space = data.indexOf(0x20, at); const length = Number(data.subarray(at, space).toString('latin1'));
-    if (space < 0 || !Number.isSafeInteger(length) || length <= 0 || at + length > data.length) return unstable();
+    if (space < 0 || !Number.isSafeInteger(length) || length <= 0 || at + length > data.length) return unstable('bad_pax');
     const line = data.subarray(space + 1, at + length - 1).toString('utf8'); const eq = line.indexOf('=');
     if (eq > 0) records[line.slice(0, eq)] = line.slice(eq + 1);
     at += length;
@@ -55,7 +55,7 @@ function reader(source: AsyncIterable<Buffer>) {
   return async (n: number, keep: boolean): Promise<Buffer> => {
     const parts: Buffer[] = []; let need = n;
     while (need > 0) {
-      if (head.length === 0) { const next = await it.next(); if (next.done) return unstable(); head = next.value; continue; }
+      if (head.length === 0) { const next = await it.next(); if (next.done) return unstable('truncated'); head = next.value; continue; }
       const slice = head.subarray(0, need); head = head.subarray(slice.length); need -= slice.length;
       if (keep) parts.push(slice);
     }
@@ -63,8 +63,8 @@ function reader(source: AsyncIterable<Buffer>) {
   };
 }
 
-/** Streams a GitHub tarball (gzip + tar): strips the top directory, keeps regular files under `subPath`, refuses links
- * and special entries, excludes secrets, generated output and the descriptor `outputDir`, and enforces the limits. */
+/** Streams a GitHub tarball (gzip + tar): strips the top directory, keeps regular files under `subPath`, skips links
+ * and refuses special entries, excludes secrets, generated output and the descriptor `outputDir`, and enforces the limits. */
 export async function readForgeTarball(body: ReadableStream<Uint8Array>, subPath: string): Promise<ForgeTree> {
   let compressed = 0;
   const counter = new Transform({ transform(chunk: Buffer, _encoding, done) {
@@ -79,27 +79,31 @@ export async function readForgeTarball(body: ReadableStream<Uint8Array>, subPath
     for (;;) {
       const header = await take(512, true);
       if (header.every(byte => byte === 0)) break;
-      if (!checksum(header)) unstable();
+      if (!checksum(header)) unstable('bad_checksum');
       const type = header[156] === 0 ? '0' : String.fromCharCode(header[156]!);
       let size = octal(header.subarray(124, 136));
       if (type === 'x' || type === 'g' || type === 'L') {
-        if (size > META_BYTES) unstable();
+        if (size > META_BYTES) unstable('meta_too_large');
         const data = (await take(Math.ceil(size / 512) * 512, true)).subarray(0, size);
         if (type === 'x') extended = pax(data); else if (type === 'L') longName = cstring(data);
         continue;
       }
       const prefix = cstring(header.subarray(345, 500)); const short = cstring(header.subarray(0, 100));
       const name = extended.path ?? longName ?? (prefix ? `${prefix}/${short}` : short);
-      if (extended.size !== undefined) size = /^\d+$/.test(extended.size) ? Number(extended.size) : unstable();
+      if (extended.size !== undefined) size = /^\d+$/.test(extended.size) ? Number(extended.size) : unstable('bad_size');
       extended = {}; longName = null;
       const padded = Math.ceil(size / 512) * 512; const slash = name.indexOf('/');
       const first = slash < 0 ? name : name.slice(0, slash);
-      if (top === null) top = first; else if (first !== top) unstable();
+      if (top === null) top = first; else if (first !== top) unstable('top_mismatch');
       const path = slash < 0 ? '' : name.slice(slash + 1).replace(/\/+$/, '');
-      if (type === '5' || (type === '0' && size === 0 && name.endsWith('/'))) { await take(padded, false); continue; }
-      if (!safeDependencyPath(path)) unstable();
+      // GitHub archives store git links as type 1/2 entries: validated like every entry, then skipped
+      // (never staged, link targets are never resolved) instead of failing the whole tree.
+      if (type === '5' || type === '1' || type === '2' || (type === '0' && size === 0 && name.endsWith('/'))) {
+        await take(padded, false); continue;
+      }
+      if (!safeDependencyPath(path)) unstable('unsafe_path');
       if (excluded(path, subPath)) { await take(padded, false); continue; }
-      if (type !== '0' && type !== '7') unstable();
+      if (type !== '0' && type !== '7') unstable('special_entry');
       const inside = subPath === '' || path.startsWith(`${subPath}/`);
       const base = path.slice(path.lastIndexOf('/') + 1);
       const read = path === GB1_QUALIFICATION_PATH || GB1_NAMES.has(base);
