@@ -69,15 +69,15 @@
 - [ ] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-compose-host-user` with `ENV` last.
 - [ ] Confirm scope and guardrails.
 - [ ] Validate scope boundaries and declare `BRCHU-EX1` before touching forbidden paths.
-- [ ] **Lot 1 — Compose user mapping**
-- [ ] Add `user: "${UID:-1000}:${GID:-1000}"` to bind-mount writer services in `docker-compose.dev.yml` (`api`, `ui`, `openvscode-dev`, `ui-playwright-dev`, `playwright-dev`).
-- [ ] Add `user: "${UID:-1000}:${GID:-1000}"` to `auth-idp` in `docker-compose.idp.yml`; keep `idp-screen-smoke` unchanged (read-only bind, no bind writes).
-- [ ] Add `user: "${UID:-1000}:${GID:-1000}"` to `openvscode` and `e2e-vscode` in `docker-compose.e2e-vscode.yml`; keep `mock-api-vscode` unchanged (no volumes).
-- [ ] Add `user: "${UID:-1000}:${GID:-1000}"` to `e2e` in `docker-compose.test.yml`; keep base `docker-compose.yml` unchanged (no bind mounts; `postgres` named volume unchanged).
-- [ ] Keep `postgres`, `minio`, `minio-init` unchanged (named volumes or no bind writes).
-- [ ] List every other compose file with evidence of bind writes or no writes.
-- [ ] Set `HOME=/tmp` and `npm_config_cache=/tmp/npm-cache` env on switched Node services; no `chmod 777`; no legacy fallback, no dual path.
-- [ ] Makefile: export `UID`/`GID` from `id -u`/`id -g`; replace any `sudo chown 1000:1000` with `chown $(id -u):$(id -g)`.
+- [x] **Lot 1 — Compose user mapping**
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to bind-mount writer services in `docker-compose.dev.yml` (`api`, `ui`, `openvscode-dev`, `ui-playwright-dev`, `playwright-dev`).
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `auth-idp` in `docker-compose.idp.yml`; keep `idp-screen-smoke` unchanged (read-only bind, no bind writes).
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `openvscode` and `e2e-vscode` in `docker-compose.e2e-vscode.yml`; keep `mock-api-vscode` unchanged (no volumes).
+- [x] Add `user: "${UID:-1000}:${GID:-1000}"` to `e2e` in `docker-compose.test.yml`; keep base `docker-compose.yml` unchanged (no bind mounts; `postgres` named volume unchanged).
+- [x] Keep `postgres`, `minio`, `minio-init` unchanged (named volumes or no bind writes).
+- [x] List every other compose file with evidence of bind writes or no writes.
+- [x] Set `HOME=/tmp` and `npm_config_cache=/tmp/npm-cache` env on switched Node services; no `chmod 777`; no legacy fallback, no dual path.
+- [x] Makefile: export `UID`/`GID` from `id -u`/`id -g`; replace any `sudo chown 1000:1000` with `chown $(id -u):$(id -g)`.
 - [ ] Lot gate:
 - [ ] `make scope-check` advisory before commit.
 - [ ] **Lot 2 — Validation**
