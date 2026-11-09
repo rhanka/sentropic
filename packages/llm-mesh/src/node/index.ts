@@ -142,6 +142,7 @@ export {
   createClaudeSeatAnthropicClient,
   probeClaudeCodeCliCapabilities,
 } from './claude-code-cli-runner.js';
+export { ClaudeCliQuotaError } from '../transport/claude-code-runtime-client.js';
 export type { ClaudeCodeLineOutcome, QuotaDiagnosis } from './claude-code-cli-wire.js';
 export {
   diagnoseClaudeCodeQuota,
