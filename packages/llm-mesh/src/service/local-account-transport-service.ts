@@ -1770,7 +1770,9 @@ export class LocalAccountTransportService {
         // A restore must not reuse the enrollment age as the TTL origin: the
         // persisted `updatedAt` is the newest issuance-safe bound the keyring
         // holds (it only ever moves the window later, never earlier).
-        const restoredIssuedAtMs = Date.parse(publicRecord.updatedAt);
+        const restoredIssuedAtMs = typeof publicRecord.updatedAt === 'string'
+          ? Date.parse(publicRecord.updatedAt)
+          : Number.NaN;
         if (Number.isFinite(restoredIssuedAtMs)) {
           this.credentialIssuedAtMs.set(accountId, restoredIssuedAtMs);
         }
@@ -2003,7 +2005,7 @@ export class LocalAccountTransportService {
           if (live()) schedule(staggerMs());
         });
       }, delayMs);
-      timer.unref?.();
+      (timer as unknown as { unref?: () => void }).unref?.();
       this.custodianTimer = timer;
     };
     // Immediate first cycle: readiness is reported at boot, not after one

@@ -40,6 +40,7 @@ Mesh-managed custodian with proactive refresh before expiry, per-account custody
   - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/speech-peer.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
