@@ -16,6 +16,11 @@ metadata retention boundary. A partial unique index permits only one active leaf
 Generic scope unions and tier-imported consents confer no offline authority.
 Control migration `0013_oauth_refresh_tokens` creates these public auth objects and
 their client/user/anchor serialization functions and lifecycle triggers.
+Control migration `0022_oauth_consent_optional_tenant` makes the consent tenant optional:
+`oauth_consents.tenant_id` is nullable with no default (NULL = tenant-less consent, no `tid`),
+unique per `(user_id, client_id, tenant_id)` with NULLS NOT DISTINCT. `oauth_clients.require_tenant`
+(default true) decides whether a user without an approved tenant membership may keep a tenant-less
+consent; the tenant-less CM authority row is governed by the client's own active registry tenant.
 
 ```mermaid
 erDiagram
