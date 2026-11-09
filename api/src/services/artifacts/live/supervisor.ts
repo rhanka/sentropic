@@ -135,7 +135,7 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if (!same(command, BUILD_RECIPE) || !same(env, buildEnvironment())) unavailable('build_invalid');
       const data = await call(runtime, 'build', { recipe: 'build', attemptId: attempt.id, headSha: attempt.headSha, treeSha: attempt.treeSha });
       const diagnostics = readRecipeDiagnostics(data);
-      if (!diagnostics) unavailable('build_unconfirmed');
+      if (!diagnostics || (diagnostics.exitCode === 0 && diagnostics.signal !== null)) unavailable('build_unconfirmed');
       if (diagnostics.exitCode !== 0) {
         const detail = diagnostics.output === '' ? undefined : diagnostics.output;
         throw new LiveError('builder_unavailable', `build_failed:${classifyRecipeFailure(diagnostics)}`, detail);
