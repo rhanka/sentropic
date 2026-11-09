@@ -115,7 +115,7 @@ export async function readForgeTarball(body: ReadableStream<Uint8Array>, subPath
     }
   } catch (error) {
     if (error instanceof LiveError) throw error;
-    throw new LiveError('builder_unavailable');
+    throw new LiveError('builder_unavailable', 'forge_tarball_error');
   } finally { gunzip.destroy(); }
   return { files: withoutOutput(files, gb1, subPath), gb1 };
 }

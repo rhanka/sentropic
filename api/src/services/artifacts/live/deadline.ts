@@ -7,7 +7,7 @@ export async function withinPhase<T>(work: Promise<T>, milliseconds = PHASE_DEAD
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([work, new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new LiveError('builder_unavailable')), milliseconds); timer.unref();
+      timer = setTimeout(() => reject(new LiveError('builder_unavailable', 'phase_timeout')), milliseconds); timer.unref();
     })]);
   } finally { clearTimeout(timer); }
 }

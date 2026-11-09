@@ -10,11 +10,12 @@ export const LEASE_MARGIN_MS = 60_000;
 export const USER_AGENT = 'sentropic-artifact-builder';
 const HEADERS = Object.freeze({ accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28',
   'user-agent': USER_AGENT });
-export const unavailable = (): never => { throw new LiveError('builder_unavailable'); };
+export const unavailable = (): never => { throw new LiveError('builder_unavailable', 'forge_unavailable'); };
 export const discard = async (response: Response) => { try { await response.body?.cancel(); } catch { /* closed */ } };
-/** The JSON body of a 200 answer; any other status or body is builder_unavailable, with no detail. */
+/** The JSON body of a 200 answer; any other status or body is builder_unavailable, with its status as reason. */
 export const json = async (response: Response): Promise<Record<string, unknown>> => {
-  if (response.status !== 200) { await discard(response); return unavailable(); }
+  if (response.status !== 200) { await discard(response);
+    throw new LiveError('builder_unavailable', `forge_status_${response.status}`); }
   try { return await response.json() as Record<string, unknown>; } catch { return unavailable(); }
 };
 export const field = (value: unknown, name: string): unknown =>
