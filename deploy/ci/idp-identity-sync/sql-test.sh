@@ -39,6 +39,13 @@ stage=migrations
 createdb identity_schema
 for migration in /workspace/api/drizzle/*.sql; do sql -d identity_schema -f "$migration"; done
 sql -d identity_schema -f /workspace/api/drizzle/control/0013_oauth_refresh_tokens.sql
+# 0022 (A1) needs the CM consent-authority tables its rekey reads; the phase-1
+# stand-in below carries no rows, so the rekey is a proven no-op here.
+sql -d identity_schema -c 'CREATE SCHEMA IF NOT EXISTS cm_identity'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenants (slug text PRIMARY KEY, status text, tenant_id text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenant_memberships (user_id text, tenant_id text, status text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_oauth_consents (consent_id text PRIMARY KEY, tenant_id text, user_id text, client_id text, granted_at text, revoked_at text)'
+sql -d identity_schema -f /workspace/api/drizzle/control/0022_oauth_consent_optional_tenant.sql
 createdb -T identity_schema app
 createdb -T identity_schema preprod
 # Phase-1 schema stand-in: the CM sync runner converges cm_identity before the
@@ -65,7 +72,7 @@ sql -d app -c "DO \$\$ BEGIN
   IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'users') <> 0 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'webauthn_credentials') <> 0 THEN RAISE EXCEPTION 'legacy identity grants must be revoked'; END IF;
 END \$\$;"
 sql -d app -c "DO \$\$ BEGIN
-  IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'oauth_clients') <> 14 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'idp_oauth_client_secret_presence') <> 2 THEN RAISE EXCEPTION 'reader client grants'; END IF;
+  IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'oauth_clients') <> 15 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'idp_oauth_client_secret_presence') <> 2 THEN RAISE EXCEPTION 'reader client grants'; END IF;
 END \$\$;"
 reject 'reader cannot read unexported client IDs' 'permission denied' -d app -U idp_identity_reader -c 'SELECT * FROM oauth_clients'
 reject 'reader cannot read client secret hashes' 'permission denied' -d app -U idp_identity_reader -c 'SELECT client_secret_hash FROM oauth_clients'
@@ -80,7 +87,7 @@ export_bundle() { PGDATABASE=app PGUSER=idp_identity_reader sh "$prod/export-pro
 export_bundle
 [ "$(head -n 1 consents.csv)" = 'user_id,client_id,tenant_id,scopes,created_at,updated_at' ]
 [ "$(wc -l < consents.csv)" -eq 2 ]
-[ "$(head -n 1 clients.csv)" = 'client_id,has_secret,name,redirect_uris,allowed_scopes,grant_types,response_types,token_endpoint_auth_method,dpop_bound_access_tokens,require_pkce,resource_indicators,tenant_id,owner_user_id,created_at,updated_at' ]
+[ "$(head -n 1 clients.csv)" = 'client_id,has_secret,name,redirect_uris,allowed_scopes,grant_types,response_types,token_endpoint_auth_method,dpop_bound_access_tokens,require_pkce,resource_indicators,tenant_id,require_tenant,owner_user_id,created_at,updated_at' ]
 [ ! -e users.csv ] && [ ! -e webauthn.csv ] && [ ! -e snapshot.csv ]
 ! grep -Fq -e 'synthetic-prod-hash' -e 'synthetic-new-prod-hash' -e 'prod-immo' -e 'prod-confidential' -e 'synthetic-prod-workload-hash' /tmp/relay/*
 echo 'PASS: protocol-only export consents=1 clients=4, no secrets, no runner files'
