@@ -55,10 +55,15 @@ AGENT_SECTIONS.push(function processOps(ctx) {
     await repoPhase(true);
     state.prebundled = false;
     await agentAtomicWrite(at(PREBUNDLE_SCRIPT), Buffer.from(ctx.recipes.prebundleScript, 'utf8'), 0o444);
-    if (await ctx.runToExit(ctx.recipes.prebundle, '/workspace') !== 0) agentFail('failed', 'prebundle_failed');
+    // A failed pre-bundle returns its diagnostics for classification on the API instead of a bare refusal,
+    // so the phase log names the cause; the supervisor fails closed on `prebundled: false`.
+    const prebundled = await ctx.runToExit(ctx.recipes.prebundle, '/workspace');
+    if (prebundled.exitCode !== 0) {
+      return { prebundled: false, exitCode: prebundled.exitCode, signal: prebundled.signal, output: prebundled.output };
+    }
     if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
     state.prebundled = true;
-    return { prebundled: true };
+    return { prebundled: true, exitCode: 0, signal: null, output: '' };
   });
   /** Idempotent for one session/lease: projections reuse the running Vite so HMR applies the overlay. */
   ctx.define('dev', ['recipe'], async ({ recipe }, fence) => {
@@ -84,9 +89,9 @@ AGENT_SECTIONS.push(function processOps(ctx) {
     await agentNoLinks(at, '/workspace', 'ui/dist/index');
     await agentFs.rm(at(OUTPUT_DIR), { recursive: true, force: true });
     state.snapshots.output = null;
-    const exitCode = await ctx.runToExit(ctx.recipes.build, '/workspace', options.buildEnv);
+    const built = await ctx.runToExit(ctx.recipes.build, '/workspace', options.buildEnv);
     if (!(await ctx.terminateAll())) agentFail('failed', 'tree_survived');
-    return { exitCode };
+    return { exitCode: built.exitCode, signal: built.signal, output: built.output };
   });
   async function listing(spec) {
     const files = []; let total = 0;
