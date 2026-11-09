@@ -43,7 +43,9 @@ sql -d identity_schema -f /workspace/api/drizzle/control/0013_oauth_refresh_toke
 # accounts its replaced invalidation functions read at runtime; the phase-1
 # stand-ins below carry no rows, so the rekey is a proven no-op here.
 sql -d identity_schema -c 'CREATE SCHEMA IF NOT EXISTS cm_identity'
-sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_user_accounts (user_id text PRIMARY KEY)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_user_accounts (user_id text PRIMARY KEY, email text, account_status text, global_role text, created_at text, updated_at text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_account_profiles (user_id text PRIMARY KEY, email_verified text, display_name text, approval_due_at text, approved_at text, approved_by_user_id text, disabled_at text, disabled_reason text, legacy_account_status text)'
+sql -d identity_schema -c 'CREATE TABLE cm_identity.identity_webauthn_credentials (proof_id text PRIMARY KEY, user_id text, credential_id text, public_key_cose text, counter text, revision text, rp_id text, device_name text, transports_json text, uv text, device_type text, backed_up text, created_at text, last_used_at text, revoked_at text)'
 sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenants (slug text PRIMARY KEY, status text, tenant_id text)'
 sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_tenant_memberships (user_id text, tenant_id text, status text)'
 sql -d identity_schema -c 'CREATE TABLE cm_identity.cm_oauth_consents (consent_id text PRIMARY KEY, tenant_id text, user_id text, client_id text, granted_at text, revoked_at text)'
