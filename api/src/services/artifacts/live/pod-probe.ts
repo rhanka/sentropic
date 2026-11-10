@@ -22,17 +22,21 @@ const probeDue = (pod: { phase?: string; creationTimestamp?: string }, now: numb
 };
 /** `ensure` plus, for an adopted pod old enough to answer, one bounded supervisor probe (`renew`: fenced and
  * side-effect free). A silent supervisor deletes the adopted pod and recreates it inside the heavy pod slot.
- * A fence error never triggers a replacement. */
+ * A fence error never triggers a replacement. The replacement carries a new uid, so the caller must persist a
+ * `routeEpoch` bump atomically with the adoption: the supervisor channel refuses, at equal epochs, another
+ * `podUid` (`stale_fence`). Returns whether the pod was replaced. */
 export async function ensureResponsivePod(deps: Pick<LivePorts, 'pods' | 'worker' | 'now'>, key: LiveKey,
-  runtime: LiveRuntime): Promise<{ uid: string }> {
+  runtime: LiveRuntime): Promise<{ uid: string; replaced: boolean }> {
   const first = await deps.pods.ensure(key, runtime);
-  if (!first.adopted || !probeDue(first, deps.now())) return { uid: first.uid };
+  if (!first.adopted || !probeDue(first, deps.now())) return { uid: first.uid, replaced: false };
   const probed = { ...runtime, podUid: first.uid };
   try { await withinPhase(deps.worker.renew(probed), SUPERVISOR_PROBE_TIMEOUT_MS); }
   catch (error) {
     if (!(error instanceof LiveError) || error.code !== 'builder_unavailable') throw error;
     await deps.pods.remove(key, probed);
-    return { uid: (await deps.pods.ensure(key, runtime)).uid };
+    // A fenced runtime (wake) still carries the dead uid: a fresh intent recreates under the same lease labels.
+    const fresh = runtime.podUid === null ? runtime : { ...runtime, podUid: null };
+    return { uid: (await deps.pods.ensure(key, fresh)).uid, replaced: true };
   }
-  return { uid: first.uid };
+  return { uid: first.uid, replaced: false };
 }
