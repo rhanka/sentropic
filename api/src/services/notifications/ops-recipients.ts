@@ -188,6 +188,23 @@ export function parseOpsRecipientsUrls(raw: string | undefined): Record<string, 
   return urls;
 }
 
+/**
+ * Fail-closed bearer check: when at least one target configures a product
+ * `recipientsUrl`, the service-client bearer is mandatory. Without it the
+ * pull would go out unauthenticated and fail at runtime instead of boot.
+ */
+export function assertOpsRecipientsBearerConfigured(
+  urls: Record<string, string>,
+  bearer: string | undefined,
+): void {
+  if (Object.keys(urls).length === 0) return;
+  if (!bearer || bearer.trim().length === 0) {
+    throw new Error(
+      'ops recipients bearer is required when OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON configures a target (missing OPS_JOB_FAILURE_RECIPIENTS_BEARER)',
+    );
+  }
+}
+
 /** Strict variant for boot validation: a typoed URL is a startup failure. */
 export function parseOpsRecipientsUrlsStrict(raw: string | undefined): Record<string, string> {
   if (!raw || raw.trim().length === 0) return {};
