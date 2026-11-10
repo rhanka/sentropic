@@ -129,6 +129,11 @@ node:http so no undici 300 s headers timeout cuts a command; each command is bou
   base from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (no secret); preprod is
   `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls
   `<base>/live-host/v1/job` and `<base>/live-host/v1/handoff`.
+  A build-only job for a binding the host never reconciled refuses
+  `git_live_conflict:binding_unreconciled` at admission (no pod, no phase line);
+  the host must `POST /v1/live/reconcile` once before the first build of an
+  artifact. The job ledger and `GET /v1/builds/:artifactId/:jobId` carry that
+  `code:reason`.
 - The same service composes the host live API (`createHostLiveApi`) behind the
   same gate; the scope always comes from the host identity, never the body.
   Bodies are closed and bounded (2 KiB control, 2 MiB page, 512 KiB seal).

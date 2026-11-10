@@ -82,7 +82,7 @@ describe('remote drafts (D0 staging)', () => {
   });
   it('should keep the package fences monotonic and the last session invitation state per generation', async () => {
     const { live } = setup(); const s = { generation: 1, ownerId: 'owner', liveSessionId: 's1', leaseEpoch: 2, routeEpoch: 3 };
-    await expect(live.session(key)).rejects.toMatchObject({ reason: 'stale_session' });
+    await expect(live.session(key)).rejects.toMatchObject({ code: 'git_live_conflict', reason: 'binding_unreconciled' });
     await live.reconciled(key, s);
     expect(await live.invitations.current(key, 1)).toEqual({ epoch: 0, expiresAt: null });
     await live.invitation(key, 1, { epoch: 2, expiresAt: 5000 });

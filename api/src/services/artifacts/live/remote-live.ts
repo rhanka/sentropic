@@ -16,6 +16,7 @@ export interface RemoteRows {
 /** Rows are named by the immutable pod name of the binding (a digest of scope and artifact), which the runtime carries. */
 export const rowOf = (binding: string, ...rest: Array<string | number>) => JSON.stringify([binding, ...rest]);
 const stale = (): never => conflict('stale_session');
+const unreconciled = (): never => conflict('binding_unreconciled');
 const fencesOf = (s: RemoteSession): PackageFences => ({ liveSessionId: s.liveSessionId, leaseEpoch: s.leaseEpoch, routeEpoch: s.routeEpoch });
 
 /**
@@ -50,8 +51,8 @@ export function createRemoteLive(rows: RemoteRows) {
       const s = await read(key);
       return s && s.generation === generation ? fencesOf(s) : stale();
     },
-    /** Binding generation and owner the host reconciled last; a binding never reconciled is stale. */
-    session: async (key: LiveKey) => (await read(key)) ?? stale(),
+    /** Binding generation and owner the host reconciled last; a binding never reconciled refuses binding_unreconciled. */
+    session: async (key: LiveKey) => (await read(key)) ?? unreconciled(),
   };
 }
 export type RemoteLive = ReturnType<typeof createRemoteLive>;
