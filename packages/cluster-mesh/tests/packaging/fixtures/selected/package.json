@@ -7,10 +7,10 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1152.0",
-    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.26.0-dev.20.tgz",
+    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.26.0-dev.21.tgz",
     "@sentropic/comments": "0.3.1",
-    "@sentropic/llm-gateway": "0.22.5",
-    "@sentropic/llm-mesh": "0.34.1",
+    "@sentropic/llm-gateway": "0.22.6",
+    "@sentropic/llm-mesh": "0.35.0",
     "@sentropic/mcp-auth": "0.2.1",
     "@sentropic/artifacts": "0.2.25",
     "@sentropic/auth-hono": "0.18.1",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 0.22.6: admit `@sentropic/llm-mesh` `^0.35.0` in the mesh dependency range
+  (follows the 0.35.0 enroll CLI release; patch, precedent 143392cea).
 - 0.20.1: widen the optional `@sentropic/auth-hono` peer to `^0.15.0 || ^0.16.0`
   (immo token exchange; strictly above main 0.20.0 after the #662 merge).
 - OpenAI Responses ingress (`POST /responses` + `POST /v1/responses`,
