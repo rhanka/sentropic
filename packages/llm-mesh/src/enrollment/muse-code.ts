@@ -39,6 +39,19 @@ export const MUSE_KEY_MINT_URL = 'https://api.meta.ai/muse-code/key';
 export const MUSE_KEY_MINT_API_VERSION = '1.0.0';
 export const MUSE_NATIVE_CONFIG_VERSION = 'muse-device-flow-v1';
 
+/**
+ * A refresh failure that must NOT defer: the token endpoint already answered
+ * (a new grant may have been issued and the old one consumed) and only the
+ * post-rotation key mint failed. Replaying the old grant is unsafe, so the
+ * custodian treats this as fail-closed toward `reauth_required`.
+ */
+export class MusePostRotationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MusePostRotationError';
+  }
+}
+
 export interface MuseCodeEnrollmentOptions {
   clientId?: string;
   fetchFn?: typeof fetch;
@@ -309,7 +322,15 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
     if (!accessToken) {
       throw new Error('Muse token refresh returned no access token');
     }
-    const minted = await this.mintApiKey(accessToken);
+    // The token endpoint already answered: a mint failure from here on is
+    // post-rotation, so it carries a typed signal instead of a plain status
+    // string (a `(503)` inside would otherwise look like a safe retry).
+    let minted: MintedMuseApiKey;
+    try {
+      minted = await this.mintApiKey(accessToken);
+    } catch (error) {
+      throw new MusePostRotationError(error instanceof Error ? error.message : String(error));
+    }
     const credential = this.buildCredential({
       apiKey: minted.apiKey,
       email: minted.email,

@@ -394,9 +394,18 @@ test.describe('Gestion des organisations', () => {
         await page.goto('/organizations');
         await page.waitForLoadState('domcontentloaded');
 
-        const firstCard = page.locator('article').first();
-        await firstCard.click();
-        await page.waitForURL(/\/organizations\/[a-zA-Z0-9-]+$/, { timeout: 10_000 });
+        await expect(page.getByText('Org Readonly E2E', { exact: true })).toBeVisible({ timeout: 10_000 });
+        const targetCard = page
+          .locator('article', { has: page.locator('h2', { hasText: 'Org Readonly E2E' }) })
+          .first();
+        const detailResponse = page.waitForResponse(
+          (res) => res.url().includes('/api/v1/organizations/') && res.request().method() === 'GET' && res.status() === 200,
+          { timeout: 10_000 },
+        );
+        await targetCard.click();
+        await page.waitForURL(/\/organizations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 10_000 });
+        const detailRes = await detailResponse;
+        expect(detailRes.url()).toContain(page.url().split('/').pop() ?? '');
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
         await expect(disabledField).toBeVisible({ timeout: 10_000 });
