@@ -404,7 +404,8 @@ test.describe('Gestion des organisations', () => {
         );
         await targetCard.click();
         await page.waitForURL(/\/organizations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 10_000 });
-        await detailResponse;
+        const detailRes = await detailResponse;
+        expect(detailRes.url()).toContain(page.url().split('/').pop() ?? '');
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
         await expect(disabledField).toBeVisible({ timeout: 10_000 });
