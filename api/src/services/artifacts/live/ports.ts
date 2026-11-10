@@ -64,6 +64,8 @@ export interface LivePorts {
   pods: {
     ensure(key: LiveKey, runtime: LiveRuntime): Promise<{ uid: string }>;
     remove(key: LiveKey, runtime: LiveRuntime): Promise<void>;
+    /** Pod liveness for teardown: a gone, terminal or terminating pod never needs a supervisor quiesce. */
+    probe(key: LiveKey, runtime: LiveRuntime): Promise<'active' | 'absent' | 'terminating' | 'terminal'>;
   };
   cache: { acquire(source: SourceSnapshot, runtime: LiveRuntime): Promise<CacheReceipt> };
   /** Trusted supervisor transport: monotonic routeEpoch fences every operation, including delayed requests.

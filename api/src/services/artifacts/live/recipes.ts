@@ -8,6 +8,17 @@ export const BUILDER_TOOLCHAIN = Object.freeze({ platform: 'linux/amd64', nodeVe
 export const ARTIFACT_PUBLIC_ENV = Object.freeze({ VITE_ARTIFACT_MODE: '1', VITE_API_BASE_URL: '/__app' });
 /** Host-owned V8 heap cap for every worker Node process (4 live pods per d2-4 node). It never caps esbuild's native memory. */
 export const NODE_HEAP_OPTIONS = '--max-old-space-size=384';
+/** Env override of the install heap in MiB; unset or out of range falls back to the safe default (names only). */
+export const INSTALL_HEAP_MB_ENV = 'ARTIFACT_INSTALL_HEAP_MB';
+/** Default install heap in MiB. npm reify on a ~1 GiB tree needs headroom past the 384 worker default; the same
+ * 1024 the clean build verified under the same 1536Mi container (peak 1388.6 MiB) leaves comparable headroom here. */
+export const INSTALL_HEAP_MB_DEFAULT = 1024;
+export function readInstallHeapMb(env: Readonly<Record<string, string | undefined>>): number {
+  const parsed = Number(env[INSTALL_HEAP_MB_ENV]?.trim());
+  return Number.isSafeInteger(parsed) && parsed >= 256 && parsed <= 1280 ? parsed : INSTALL_HEAP_MB_DEFAULT;
+}
+/** The clean install alone runs with the install heap: npm ci reifies the whole tree in one Node process. */
+export const NODE_INSTALL_HEAP_OPTIONS = `--max-old-space-size=${INSTALL_HEAP_MB_DEFAULT}`;
 /** The clean build alone needs a 1 GiB heap (immo measured: heap OOM at 384 and 768); verified at 1536Mi: peak 1388.6 MiB. */
 export const NODE_BUILD_HEAP_OPTIONS = '--max-old-space-size=1024';
 /** Host-owned native memory caps for every phase (one live pod in its cgroup, 2026-11-07): glibc keeps 2 malloc
@@ -23,9 +34,29 @@ export function artifactEnvironment() {
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
     npm_config_update_notifier: 'false', ...ARTIFACT_PUBLIC_ENV };
 }
+/** Workspace-scoped install, exactly `npm ci --workspace=<ws>` from the root without `--include-workspace-root`:
+ * the frozen base plus one `--workspace=<dir>` flag per selected workspace (sorted, trusted server-side only).
+ * No root dependency is installed in scoped mode: a tool the workspace build needs must be declared in the workspace.
+ * Empty means full. */
+export function installRecipeFor(workspaces: readonly string[] = []): typeof INSTALL_RECIPE {
+  const sorted = [...workspaces].sort();
+  if (sorted.length === 0) return INSTALL_RECIPE;
+  return Object.freeze({ executable: INSTALL_RECIPE.executable,
+    args: [...INSTALL_RECIPE.args, ...sorted.map(name => `--workspace=${name}`)],
+    timeoutMs: INSTALL_RECIPE.timeoutMs });
+}
+/** True when the recipe is the frozen base or its workspace-scoped form for this selection. */
+export function isInstallRecipe(recipe: unknown, workspaces: readonly string[] = []): boolean {
+  return JSON.stringify(recipe) === JSON.stringify(installRecipeFor(workspaces));
+}
 /** Clean build only: the same host environment with the build heap. */
 export function buildEnvironment() {
   return { ...artifactEnvironment(), NODE_OPTIONS: NODE_BUILD_HEAP_OPTIONS };
+}
+/** Clean install only: the same host environment with the install heap. */
+export function installEnvironment(heapMb: number = INSTALL_HEAP_MB_DEFAULT) {
+  const heap = Number.isSafeInteger(heapMb) && heapMb >= 256 && heapMb <= 1280 ? heapMb : INSTALL_HEAP_MB_DEFAULT;
+  return { ...artifactEnvironment(), NODE_OPTIONS: `--max-old-space-size=${heap}` };
 }
 /** W2 static deny: verified tarballs are staged in the npm cache; the relay is never contacted from a pod. */
 export const INSTALL_RECIPE = Object.freeze({

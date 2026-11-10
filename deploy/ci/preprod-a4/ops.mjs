@@ -1,13 +1,14 @@
 import { pathToFileURL } from 'node:url';
-import { assertDigestOutput, assertRequest, canonical, digest, kubectl, namespace, podName, privateInput } from './guards.mjs';
+import { assertDigestOutput, assertRequest, canonical, digest, kubectl, podName, privateInput, tierOf, wiring } from './guards.mjs';
 
 export function ops(env = process.env, call = kubectl, read = privateInput) {
   if (!['wire', 'budgets', 'custodian', 'stage'].includes(env.A4_OPERATION)
     || !['0', '1'].includes(env.A4_DRY_RUN ?? '1')) throw new Error('arguments_invalid');
+  const tier = tierOf(env), { namespace } = tier;
   read(env.A4_KUBECONFIG_FILE);
   const requestBytes = read(env.A4_REQUEST_FILE), request = JSON.parse(requestBytes);
-  assertRequest(request);
-  const k = (args, input) => call(env.A4_KUBECONFIG_FILE, args, input);
+  assertRequest(request, tier);
+  const k = (args, input) => call(env.A4_KUBECONFIG_FILE, args, input, namespace);
   if (env.A4_OPERATION === 'budgets') {
     const bytes = read(env.A4_BUDGETS_FILE), budgets = JSON.parse(bytes);
     const names = ['reservation', 'deletion', 'diagnostic', 'read', 'workspace', 'replicaExport', 'replicaValidation', 'replicaSync'];
@@ -35,11 +36,11 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     if (env.A4_DRY_RUN === '0') {
       k(['apply', '-f', 'deploy/ci/preprod-a4/custody-pvc.yaml']);
       k(['apply', '-f', '-'], runtime);
-      k(['patch', 'configmap', 'api', '--type=merge', '--patch-file=deploy/k8s/overlays/preprod-a4/patch-api-config.yaml']);
-      k(['patch', 'deployment', 'api', '--type=strategic', '--patch-file=deploy/k8s/overlays/preprod-a4/patch-api-a4.yaml']);
+      k(['patch', 'configmap', 'api', '--type=merge', `--patch-file=${wiring}/patch-api-config.yaml`]);
+      k(['patch', 'deployment', 'api', '--type=strategic', `--patch-file=${wiring}/patch-api-a4.yaml`]);
       k(['set', 'image', 'deployment/api', `api=${request.candidateImage}`]);
-      k(['patch', 'configmap', 'auth-idp', '--type=merge', '--patch-file=deploy/k8s/overlays/preprod-a4/patch-auth-idp-config.yaml']);
-      k(['patch', 'deployment', 'auth-idp', '--type=strategic', '--patch-file=deploy/k8s/overlays/preprod-a4/patch-auth-idp-a4.yaml']);
+      k(['patch', 'configmap', 'auth-idp', '--type=merge', `--patch-file=${wiring}/patch-auth-idp-config.yaml`]);
+      k(['patch', 'deployment', 'auth-idp', '--type=strategic', `--patch-file=${wiring}/patch-auth-idp-a4.yaml`]);
       k(['set', 'image', 'deployment/auth-idp', `auth-idp=${request.candidateImage}`]);
     }
     return `runtimeManifestSha256=${digest(runtime)}\n`;

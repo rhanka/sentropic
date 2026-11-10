@@ -22,6 +22,9 @@ Operational reference for all environment secrets used by the Sentropic API.
 | `PREPROD_EMAIL_CODE_HMAC_KEY_ACTIVE` | Active (issuing) key of the email-code HMAC ring, preprod tier. Distinct value from prod, generated separately. | 90-day three-phase cycle, preprod rotates and verifies first. | Central `.env` → GitHub environment secret `EMAIL_CODE_HMAC_KEY_ACTIVE` (`sentropic-idp-run`) → workflow-applied k8s Secret `email-code-hmac` in `sentropic-preprod`. | preprod. |
 | `PREPROD_EMAIL_CODE_HMAC_KEY_PREVIOUS` | Single non-issuing ring member, preprod tier. | Same cycle as prod PREVIOUS. | Same chain as ACTIVE (`EMAIL_CODE_HMAC_KEY_PREVIOUS` in `sentropic-idp-run`). | preprod. |
 
+| `JWT_SECRET` | HS256 key of the api session JWTs and email tickets; HMAC key of LLM transport session ids. The IdP gets its own value from Secret `auth-idp-session-signing`. | Rotation ends every session signed with the previous value (owner decision). | k8s Secret `sentropic-api` (api), `auth-idp-session-signing` (IdP). | Every deployed runtime: the api and the IdP refuse to boot without a provisioned value (see below). |
+| `SECRET_ENCRYPTION_KEY` | Seed of the `v1` at-rest key (`enc:v1:` envelopes, connector revocation custody, SG0-app custody). | Never change it without the re-encryption procedure below. | k8s Secret `sentropic-api`. | Every deployed runtime (fail-closed boot gate). |
+
 The matching `*_EMAIL_CODE_HMAC_KEY_ACTIVE_REF` / `*_EMAIL_CODE_HMAC_KEY_PREVIOUS_REF` variables are non-secret metadata (`email-code-hmac:v1:<tier>:<fp16>`); they travel as GitHub environment **variables** and inside the same k8s Secret so one apply moves value and ref together. Test/e2e compositions generate throwaway keys with the same `make email-code-hmac-*` targets against `.env.$(ENV)` (tier segment `test`).
 
 ## OAUTH_SIGNING_KEK — detailed procedure
@@ -77,6 +80,18 @@ When rotating `OAUTH_SIGNING_KEK` itself:
    ```
 3. Update the secret in GitHub Actions environment and in the Kubernetes SealedSecret.
 4. Roll the API pod to pick up the new KEK.
+
+## JWT_SECRET and SECRET_ENCRYPTION_KEY — fail-closed
+
+A deployed runtime (`NODE_ENV=production` outside the CI e2e production-image runtime) never signs or seals with a public key: an unset, blank or committed development seed value makes the api and the IdP exit at boot (`Deployment secret check failed at startup`, naming the variable only). Dev and test keep the development seeds, named once in `api/src/config/deployment-secrets.ts`. Provision both keys in an environment BEFORE it runs an image with this gate.
+
+## SECRET_ENCRYPTION_KEY re-encryption
+
+`node dist/index.js --secret-reencrypt [--apply]` (api image, target namespace, A4 launcher env) moves every envelope of `public.settings.value`, `public.document_connector_accounts.token_secret`, `public.llm_provider_accounts.token_secret` and `control.connector_revocation_custody` from a source key to the provisioned `SECRET_ENCRYPTION_KEY`. Source: `--from-development-seed` (an environment that ran without a key) or `SECRET_REENCRYPT_SOURCE_KEY` (a previous key). Dry run by default; `--apply` writes in one transaction. Output: one JSON line per run with `current` / `moved` / `unreadable` counts per store and the identifiers of unreadable rows (never a value). Exit 2 when some envelope opens under neither key: record those rows as lost. Re-running is safe (`current` rows are untouched).
+
+- First key of an environment (prod): dry run, then `--apply --from-development-seed` with the new key as `SECRET_ENCRYPTION_KEY` in the tool env; set the key in Secret `sentropic-api`; restart api and IdP; re-run (catches writes made in between); then deploy an image with the boot gate.
+- Key already set over seed-sealed data (preprod since 2026-11-08 10:20Z): `--apply --from-development-seed` moves the older envelopes and leaves the newer ones `current`.
+- The SG0-app custody is not in scope: it is sealed only under a provisioned key.
 
 ## Kubernetes secret location
 

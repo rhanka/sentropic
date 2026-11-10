@@ -25,6 +25,15 @@ const AGENT_SHA = /^[a-f0-9]{40,64}$/;
 const AGENT_RESERVED = '.artifact-transfer';
 const AGENT_SECTIONS = [];
 let agentTemp = 0;
+/** Bytes of recipe output kept: the tail of stdout+stderr in arrival order, mirroring RECIPE_TAIL_BYTES on the API. */
+const AGENT_TAIL_BYTES = 4096;
+const agentScrub = (text) => String(text)
+  .replace(/(\/\/)[^/\s@]+@/g, '$1[redacted]')
+  .replace(/(_authToken|_auth)\s*=\s*[^\s]+/gi, '$1=[redacted]')
+  .replace(/(Authorization\s*:\s*)[^\r\n]+/gi, '$1[redacted]')
+  .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+\/=-]{8,}/gi, '$1 [redacted]')
+  .replace(/\b(npm_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b/g, '[redacted]')
+  .replace(/\b([A-Za-z0-9_]*(?:token|secret|password|passwd|api[_-]?key)[A-Za-z0-9_]*)(\s*[:=]\s*)[^\s'",;]+/gi, '$1$2[redacted]');
 
 export class AgentError extends Error {
   constructor(code, reason) { super(reason || code); this.code = code; this.reason = reason || code; }
@@ -89,7 +98,7 @@ async function agentUnlock(path) {
 
 export function createAgent(options) {
   const root = options.root || '/';
-  if (!options.env || !options.buildEnv) throw new AgentError('failed', 'environment_missing');
+  if (!options.env || !options.buildEnv || !options.installEnv) throw new AgentError('failed', 'environment_missing');
   const ctx = { options, recipes: options.recipes, env: options.env, ops: {}, resets: [],
     at: (path) => agentPath.join(root, path),
     state: { fence: null, phase: 'stopped', live: false, child: null, revision: null, groups: new Set() },
@@ -111,24 +120,71 @@ export function createAgent(options) {
     }
     return false;
   };
-  /** Frozen recipes only: own process group, no shell, the host environment built from zero, no inherited stdio. */
+  /** Frozen recipes only: own process group, no shell, the host environment built from zero. Recipe stdio is
+   * piped and drained into a bounded tail (arrival order across stdout+stderr), so a verbose recipe can neither
+   * block on a full pipe nor grow pod memory; the tail is scrubbed before it ever leaves the pod. */
   ctx.spawnRecipe = (recipe, cwd, env = ctx.env) => {
     const child = options.spawn(recipe.executable, [...recipe.args],
-      { cwd: ctx.at(cwd), env: { ...env }, shell: false, detached: true, stdio: 'ignore' });
+      { cwd: ctx.at(cwd), env: { ...env }, shell: false, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     if (Number.isSafeInteger(child.pid)) ctx.state.groups.add(child.pid);
     ctx.state.child = child;
+    const chunks = []; let size = 0; let cut = false;
+    const take = (data) => {
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(String(data));
+      chunks.push(buf); size += buf.length;
+      while (size > AGENT_TAIL_BYTES) {
+        const head = chunks[0]; const drop = size - AGENT_TAIL_BYTES;
+        cut = true;
+        if (drop >= head.length) { chunks.shift(); size -= head.length; }
+        else { chunks[0] = head.subarray(drop); size = AGENT_TAIL_BYTES; }
+      }
+    };
+    child.recipeTail = () => Buffer.concat(chunks);
+    // A tail whose head was dropped starts mid-line: that partial line is discarded, so a secret whose label was cut
+    // off can never survive the scrub.
+    child.recipeCut = () => cut;
+    for (const stream of [child.stdout, child.stderr]) {
+      if (stream && typeof stream.on === 'function') {
+        stream.on('data', take); stream.on('error', () => undefined);
+      }
+    }
     return child;
   };
+  /** Runs a recipe to exit, returning its bounded scrubbed output tail with the exit code and signal. After the exit
+   * event the tail waits for both pipes to end (bounded grace), since the last stderr chunk often names the cause.
+   * A recipe cut by its own timer reports the signal TIMEOUT, so a timeout is never classified as a memory kill. */
   ctx.runToExit = (recipe, cwd, env) => new Promise((resolve) => {
+    let settled = false;
+    const done = (exitCode, signal, output) => { if (!settled) { settled = true; resolve({ exitCode, signal, output }); } };
     let child;
-    try { child = ctx.spawnRecipe(recipe, cwd, env); } catch { resolve(-1); return; }
-    const timer = setTimeout(() => { ctx.terminateAll(); }, recipe.timeoutMs);
+    try { child = ctx.spawnRecipe(recipe, cwd, env); } catch { done(null, null, ''); return; }
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ctx.terminateAll(); }, recipe.timeoutMs);
     if (timer.unref) timer.unref();
-    child.once('error', () => { clearTimeout(timer); resolve(-1); });
-    child.once('exit', (code) => {
+    const tail = () => {
+      try {
+        let raw = child.recipeTail ? child.recipeTail().toString('utf8') : '';
+        if (child.recipeCut && child.recipeCut()) { const nl = raw.indexOf('\n'); raw = nl >= 0 ? raw.slice(nl + 1) : ''; }
+        return Buffer.from(agentScrub(raw), 'utf8').subarray(-AGENT_TAIL_BYTES).toString('base64');
+      } catch { return ''; }
+    };
+    child.once('error', () => { clearTimeout(timer); done(null, null, tail()); });
+    child.once('exit', (code, signal) => {
       clearTimeout(timer);
       if (ctx.state.child === child) ctx.state.child = null;
-      resolve(Number.isSafeInteger(code) ? code : -1);
+      const finish = () => done(Number.isSafeInteger(code) ? code : null,
+        timedOut ? 'TIMEOUT' : (typeof signal === 'string' ? signal : null), tail());
+      const open = [child.stdout, child.stderr].filter((s) => s && typeof s.once === 'function'
+        && !s.readableEnded && !s.destroyed);
+      if (open.length === 0) { finish(); return; }
+      let left = open.length;
+      const grace = setTimeout(finish, 1000);
+      if (grace.unref) grace.unref();
+      for (const stream of open) {
+        let seen = false;
+        const ended = () => { if (seen) return; seen = true; left -= 1; if (left === 0) { clearTimeout(grace); finish(); } };
+        stream.once('end', ended); stream.once('close', ended);
+      }
     });
   });
   for (const section of AGENT_SECTIONS) section(ctx);
