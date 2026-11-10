@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultProviderAdapters } from '../../src/adapters.js';
+import { AnthropicAdapter, createDefaultProviderAdapters } from '../../src/adapters.js';
 import type { AuthInput, SecretAuthMaterial } from '../../src/auth.js';
 import type { StreamRequest } from '../../src/generation.js';
-import { ClaudeCodeRuntimeClient, type ClaudeCodeCliCapabilities,
+import { ClaudeCodeRuntimeClient, ClaudeCliQuotaError, type ClaudeCodeCliCapabilities,
   type ClaudeCodeCliEvent, type ClaudeCodeCliRunner } from '../../src/index.js';
 
 const now = Date.parse('2026-09-26T12:00:00Z');
@@ -420,5 +420,47 @@ describe('Claude CLI final protocol checks', () => {
     controller.abort('fake-canary');
     await expect(collect(source)).rejects.toMatchObject({ name: 'AbortError', code: 'claude_cli_aborted' });
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+describe('Claude CLI quota passthrough', () => {
+  const quotaRunner = (error: unknown) => ({
+    run: vi.fn<ClaudeCodeCliRunner['run']>(() => {
+      throw error;
+    }),
+  });
+  const quotaClient = (error: unknown) => new ClaudeCodeRuntimeClient({
+    runner: quotaRunner(error), capabilities, now: () => now,
+  });
+  const quotaAuth = () => ({ auth: credential() });
+
+  it('should surface the host quota error as a fresh typed rate_limited failure', async () => {
+    const client = quotaClient(new ClaudeCliQuotaError(120_000));
+    const error = await client.generate(request(), quotaAuth()).catch((cause) => cause);
+    expect(error).toMatchObject({ code: 'claude_cli_rate_limited', status: 429,
+      retryable: true, retryReason: 'rate_limit', retryAfterMs: 120_000 });
+    expect(String(error)).not.toContain('canary');
+    expect(JSON.stringify(error)).not.toMatch(/canary|raw-child-output/);
+  });
+
+  it('should map a foreign 429 runner shape to the same typed failure', async () => {
+    const client = quotaClient(Object.assign(new Error('foreign quota'), { status: 429, retryAfterMs: 5_000 }));
+    const error = await client.generate(request(), quotaAuth()).catch((cause) => cause);
+    expect(error).toMatchObject({ code: 'claude_cli_rate_limited', status: 429, retryAfterMs: 5_000 });
+    expect(error.message).toBe('Claude CLI quota exhausted');
+  });
+
+  it('should keep generic runner failures untyped without quota leakage', async () => {
+    const client = quotaClient(Object.assign(new Error('foreign failure'), { status: 401 }));
+    const error = await client.generate(request(), quotaAuth()).catch((cause) => cause);
+    expect(error).toMatchObject({ code: 'claude_cli_runner' });
+    expect(error.status).toBeUndefined();
+  });
+
+  it('should normalize the quota failure to a retryable rate_limit for the consumer circuit', async () => {
+    const adapter = new AnthropicAdapter({ client: quotaClient(new ClaudeCliQuotaError()) });
+    const error = await adapter.generate(request(), quotaAuth()).catch((cause) => cause);
+    expect(adapter.normalizeError(error)).toMatchObject({ providerId: 'anthropic',
+      retryable: true, retryReason: 'rate_limit', statusCode: 429 });
   });
 });
