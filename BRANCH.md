@@ -38,6 +38,7 @@ Stop the recurring builder-pod loss loop (preprod 09/11: evicted worker pod re-a
 
 ## Feedback Loop
 - `attention`: PR #991 (`fix/artifacts-worker-memory-request`, worker request=limit=1536Mi, 2 pods) is separate and still open; this branch builds on origin/main and stays compatible with either sizing (no memory value is hardcoded here).
+- `attention`: PR #993 opened 2026-11-10 (head `a13cc7d48`); GitHub created no CI run on `opened` or `reopened`, so this bookkeeping commit re-triggers via `synchronize`.
 
 ## AI Flaky tests
 - Acceptance rule:
