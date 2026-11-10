@@ -38,7 +38,8 @@ Stop the recurring builder-pod loss loop (preprod 09/11: evicted worker pod re-a
 
 ## Feedback Loop
 - `attention`: PR #991 (`fix/artifacts-worker-memory-request`, worker request=limit=1536Mi, 2 pods) is separate and still open; this branch builds on origin/main and stays compatible with either sizing (no memory value is hardcoded here).
-- `attention`: PR #993 opened 2026-11-10 (head `a13cc7d48`); GitHub created no CI run on `opened` or `reopened`, so this bookkeeping commit re-triggers via `synchronize`.
+- `attention`: PR #993 opened 2026-11-10 (head `a13cc7d48`); GitHub created no CI run on `opened` or `reopened`, so a bookkeeping commit re-triggered via `synchronize`.
+- `attention`: full dispatch 42758433286 failed only on `api-image-guards` (content entrypoint `Dynamic require of "node:os"`). Root cause in branch: `pods.ts` imported `deadline` → `logger` → `pino`, and `apps/artifact-content` bundles `pods.ts` (podName) into the ESM entrypoint via esbuild. Fix: `notePodLoss` + `ensureResponsivePod` moved to API-only `pod-probe.ts`; `pods.ts` imports stay bundle-safe (records, recipe-diagnostics, recipes). Bundle repro in container: 0 `Dynamic require` shims, boot serves `200 ok` on `/healthz`.
 
 ## AI Flaky tests
 - Acceptance rule:
