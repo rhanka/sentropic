@@ -70,7 +70,7 @@ export const runProbe = async (
   // The Muse Chat wire takes no reasoning controls (the client refuses a
   // non-empty reasoning block), so --effort is validated for forward
   // compatibility but not forwarded.
-  let adapter: { generate: (req: unknown, ctx: unknown) => Promise<{ modelId: string; usage?: unknown }> };
+  let adapter: import('../../adapters.js').MuseAdapter;
   try {
     const { MuseAdapter } = await import('../../adapters.js');
     const { MuseRuntimeClient } = await import('../../transport/muse-runtime-client.js');

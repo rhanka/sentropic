@@ -115,6 +115,6 @@ export interface EnrollmentProvider {
   resolve(credential: PreparedCredential): Promise<ResolvedProviderMetadata>;
   refresh(input: RefreshInput): Promise<PreparedCredential>;
   waitForCallback?(enrollmentId: string): Promise<CompletedEnrollment>;
-  pollForCompletion?(enrollmentId: string): Promise<CompletedEnrollment>;
+  pollForCompletion?(enrollmentId: string, maxAttempts?: number): Promise<CompletedEnrollment>;
   cancel?(enrollmentId: string): Promise<void>;
 }
