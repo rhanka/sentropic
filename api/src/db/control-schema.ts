@@ -1272,6 +1272,7 @@ export const opsNotificationDeliveries = controlSchema.table(
   (table) => ({
     incidentIdx: index('ops_deliveries_incident_idx').on(table.incidentId),
     statusIdx: index('ops_deliveries_status_idx').on(table.status, table.createdAt),
+    pendingIdx: index('ops_deliveries_pending_idx').on(table.status, table.nextAttemptAt, table.createdAt),
     targetSentIdx: index('ops_deliveries_target_sent_idx').on(table.targetKey, table.status, table.sentAt),
     kindCheck: check(
       'ops_deliveries_kind_check',
@@ -1308,6 +1309,9 @@ export const opsSeenEvents = controlSchema.table(
     canonicalKey: text('canonical_key').notNull(),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
+  (table) => ({
+    canonicalIdx: index('ops_seen_events_canonical_idx').on(table.canonicalKey),
+  }),
 );
 
 export type OpsSeenEventRow = typeof opsSeenEvents.$inferSelect;
