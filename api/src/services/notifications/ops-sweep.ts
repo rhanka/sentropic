@@ -13,7 +13,6 @@ import {
   DEFAULT_OPS_NOTIFICATION_POLICY_V1,
   dueOpsTimeDrivenMails,
   isOpsHeartbeatOverdue,
-  isOpsMailCapExceeded,
   openOpsStaleIncident,
   type OpsAlertRecipientsPortV1,
   type OpsNotificationPolicyV1,
@@ -26,11 +25,10 @@ import {
   opsTemMailer,
   renderOpsConfigMail,
   renderOpsMail,
-  type OpsMailerPort,
 } from './ops-mail';
 import { createOpsPlatformAdminsPort, createOpsRecipientsPort } from './ops-recipients';
 import { DrizzleOpsNotificationStore } from './ops-store';
-import type { OpsClockPort, OpsDeliveryRecordV1, OpsNotificationStorePort } from './ops-types';
+import type { OpsClockPort, OpsDeliveryRecordV1, OpsMailerPort, OpsNotificationStorePort } from './ops-types';
 
 export const OPS_SWEEP_INTERVAL_MS = 60_000;
 export const OPS_SWEEP_CLAIM_LIMIT = 25;
@@ -149,9 +147,13 @@ async function capBlocked(
   policy: OpsNotificationPolicyV1,
 ): Promise<boolean> {
   const sinceIso = new Date(Date.parse(nowIso) - 60 * 60 * 1000).toISOString();
+  // Counts are already windowed by the store (`sent_at` strictly inside the
+  // trailing hour), so a plain threshold comparison is exact — no timestamp
+  // fabrication (a fabricated boundary instant would fall out of the window
+  // under the strict `>` of the pure helper and silently disable the cap).
   const counts = await store.listRecentSentMailCounts(sinceIso);
   const targetMails = counts.find((row) => row.targetKey === delivery.targetKey)?.mails ?? 0;
-  if (isOpsMailCapExceeded(Array.from({ length: targetMails }, () => sinceIso), nowIso, policy)) return true;
+  if (targetMails >= policy.maxMailsPerHourPerTarget) return true;
   const globalMails = counts.reduce((sum, row) => sum + row.mails, 0);
   if (globalMails >= OPS_SWEEP_MAX_MAILS_PER_HOUR_GLOBAL) return true;
   for (const recipient of targets) {
@@ -235,14 +237,14 @@ export async function runOpsNotificationSweep(deps: OpsSweepDeps = {}): Promise<
           result.suppressed += 1;
           return;
         }
-        await sendToAll(store, mailer, delivery, targets, clock());
+        await sendToAll(store, mailer, delivery, targets, clock);
         result.sent += 1;
       });
     } catch (error) {
       if (error instanceof OpsSendAbortError) {
         // Permanent provider error: the delivery is already failed above.
         result.failed += 1;
-        return;
+        continue;
       }
       const message = error instanceof Error ? error.message.slice(0, 500) : 'ops send failed';
       await failOrRetry(store, delivery, message, clock());
