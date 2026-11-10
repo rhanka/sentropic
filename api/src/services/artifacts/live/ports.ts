@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { LiveAttempt, LiveKey, LivePhase, LiveRuntime, LiveState } from './records';
+import type { PodReport } from './pods';
 import type { LiveAdmission } from './admission';
 import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
@@ -62,10 +63,15 @@ export interface LivePorts {
     checkpoint(key: LiveKey, draft: DraftSnapshot): Promise<void>;
   };
   pods: {
-    ensure(key: LiveKey, runtime: LiveRuntime): Promise<{ uid: string }>;
+    /** `adopted` marks a pre-existing pod (never created by this call); `phase`/`creationTimestamp` gate the
+     * supervisor probe. A fresh intent never adopts a dead pod: it is deleted and recreated fenced. */
+    ensure(key: LiveKey, runtime: LiveRuntime): Promise<{ uid: string; adopted: boolean; phase?: string; creationTimestamp?: string }>;
     remove(key: LiveKey, runtime: LiveRuntime): Promise<void>;
     /** Pod liveness for teardown: a gone, terminal or terminating pod never needs a supervisor quiesce. */
     probe(key: LiveKey, runtime: LiveRuntime): Promise<'active' | 'absent' | 'terminating' | 'terminal'>;
+    /** Closed Kubernetes status of the runtime's pod for loss classification, or undefined when the apiserver
+     * reports it gone. Fences like every pod read. */
+    describe(key: LiveKey, runtime: LiveRuntime): Promise<PodReport | undefined>;
   };
   cache: { acquire(source: SourceSnapshot, runtime: LiveRuntime): Promise<CacheReceipt> };
   /** Trusted supervisor transport: monotonic routeEpoch fences every operation, including delayed requests.
