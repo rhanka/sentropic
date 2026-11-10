@@ -27,6 +27,7 @@ const state = (extra: Partial<OpsIncidentStateV1> = {}): OpsIncidentStateV1 => (
   lastEscalationAt: null,
   resolvedAt: null,
   lastHeartbeatAt: null,
+  lastOccurredAt: '2026-11-09T10:00:00.000Z',
   ...extra,
 });
 
