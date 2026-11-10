@@ -157,6 +157,43 @@ describe('POST /api/v1/ops/ingest', () => {
     expect(await big.json()).toMatchObject({ error: 'body_too_large' });
   });
 
+  it('rejects oversized streamed bodies without a content-length', async () => {
+    const chunk = new TextEncoder().encode('x'.repeat(40 * 1024));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const request = new Request('http://localhost/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: stream,
+      duplex: 'half',
+    } as RequestInit);
+    const response = await router.request(request);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ error: 'body_too_large' });
+  });
+
+  it('maps a full target queue to 429 without touching the store', async () => {
+    const stub = createOpsJobFailuresRouter({
+      ingest: async () => ({
+        incidentKey: 'immo-prod/immo/q', status: 'firing' as const, mails: [],
+        deduped: false, stale: false, conflict: false, quotaExceeded: true,
+      }),
+      guard: testGuard as never,
+      allowlist: TEST_ALLOWLIST,
+    });
+    const response = await stub.request('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(failedBody('quota', 'k8s:quota-run:failed')),
+    });
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ error: 'queue_full' });
+  });
+
   it('serializes concurrent ingests of one incident into a single firing mail', async () => {
     const name = jobName('race');
     const bodies = [1, 2].map((run) => failedBody('race', `k8s:${name}-run-${run}:failed`));

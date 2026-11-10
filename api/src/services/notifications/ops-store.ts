@@ -298,6 +298,16 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     return rows.map((row) => ({ targetKey: row.target_key, mails: Number(row.mails) }));
   }
 
+  async countPendingForTarget(targetKey: string): Promise<number> {
+    const rows = await this.handle.select({ id: opsNotificationDeliveries.id })
+      .from(opsNotificationDeliveries)
+      .where(and(
+        eq(opsNotificationDeliveries.targetKey, targetKey),
+        sql`${opsNotificationDeliveries.status} IN ('pending', 'sending')`,
+      ));
+    return rows.length;
+  }
+
   async countRecentSentTo(email: string, sinceIso: string): Promise<number> {
     const result = await this.handle.execute(sql`
       SELECT COUNT(*)::int AS count

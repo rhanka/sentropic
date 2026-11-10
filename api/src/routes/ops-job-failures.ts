@@ -120,6 +120,36 @@ const bindingFor = (allowlist: OpsIngestAllowlist | Record<string, string[]>, cl
 const readLimitedBody = async (c: Context): Promise<{ text: string } | { limited: true }> => {
   const declared = c.req.header('content-length');
   if (declared !== undefined && Number(declared) > OPS_JOB_FAILURE_MAX_BODY_BYTES) return { limited: true };
+  // Streaming bound: never buffer an unbounded body when the emitter omits
+  // Content-Length. Chunks are counted as they arrive; the first byte past
+  // the limit aborts the read instead of materializing the whole payload.
+  const body = c.req.raw.body;
+  if (body) {
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > OPS_JOB_FAILURE_MAX_BODY_BYTES) {
+          await reader.cancel().catch(() => {});
+          return { limited: true };
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { text: new TextDecoder('utf-8').decode(merged) };
+  }
   const text = await c.req.text().catch(() => null);
   if (text === null) return { limited: true };
   if (Buffer.byteLength(text, 'utf8') > OPS_JOB_FAILURE_MAX_BODY_BYTES) return { limited: true };
@@ -163,6 +193,9 @@ export const createOpsJobFailuresRouter = (options: OpsJobFailuresRouterOptions 
     const result = await ingest(validated.event, clientId ? { ingestedBy: clientId } : undefined);
     if (result.conflict) {
       return c.json({ error: 'event_id_conflict', message: 'eventId reused with a different payload' }, 409);
+    }
+    if (result.quotaExceeded) {
+      return c.json({ error: 'queue_full', message: 'target queue is full, retry later' }, 429);
     }
     return c.json(result);
   });
