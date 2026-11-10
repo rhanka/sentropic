@@ -148,7 +148,13 @@
     - [x] `make typecheck-cluster-mesh` green.
     - [x] Scoped cluster-mesh specs green (speech-peer 20, skew-invariants 5, tuple-skew 21, registry 51, topology-ranges 20).
     - [x] `refresh-lazy-package-lock` output committed.
-- [ ] **Lot N — Final validation**
+- [x] **Lot N — Final validation**
+  - [x] Typecheck and lint (typecheck-cluster-mesh green at Lots 4–6).
+  - [x] Retest llm-mesh scoped plus cluster-mesh scoped (all green, see Lots 4–6).
+  - [x] Bumped `packages/llm-mesh/package.json` version above npm latest (0.34.0 > 0.33.0; gateway 0.22.5 > 0.22.4).
+  - [x] Final gate step 1: PR #983 open with `BRANCH.md` text as PR body (pre-existing).
+  - [x] Final gate step 2: branch CI green on run 42725904700 without rerun or skip.
+  - [x] French report at `.tmp/rv/llm-mesh-enroll-cli.md` with the exact commands.
   - [x] Typecheck and lint.
   - [x] Retest llm-mesh scoped plus full `make test-llm-mesh ENV=test-llm-mesh-enroll`.
   - [x] Bumped `packages/llm-mesh/package.json` version above npm latest.
