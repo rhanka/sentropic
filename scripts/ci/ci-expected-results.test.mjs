@@ -28,6 +28,17 @@ test('should select API and E2E gates for global changes on every pull request',
   }
 });
 
+test('should retain daily identities only on main pushes that build the images', () => {
+  const inert = { changes: { idp_sync: 'true', ui: 'false', api: 'false', global: 'false' }, event: 'push', ref: 'refs/heads/main' };
+  assert.equal(workflowExpected(workflow, inert).find(row => row.job === 'retain-daily-identities').selected, false);
+  for (const filter of ['ui', 'api', 'global']) {
+    const applied = workflowExpected(workflow, { ...inert, changes: { ...inert.changes, [filter]: 'true' } });
+    assert.equal(applied.find(row => row.job === 'retain-daily-identities').selected, true, filter);
+  }
+  const pr = workflowExpected(workflow, { ...inert, changes: { api: 'true' }, event: 'pull_request', ref: 'refs/heads/topic' });
+  assert.equal(pr.find(row => row.job === 'retain-daily-identities').selected, false);
+});
+
 test('should require completed PR and main receipts of the same policy within the baseline', () => {
   const sample = (id, event, head_branch) => ({ policyDigest: 'final-policy', run: {
     id, event, head_branch, status: 'completed', conclusion: 'success',
