@@ -50,6 +50,7 @@ declare module 'node:fs/promises' {
     isSymbolicLink(): boolean;
   }
   export function chmod(path: string, mode: number): Promise<void>;
+  export function mkdtemp(prefix: string): Promise<string>;
   export function lstat(path: string): Promise<Stats>;
   export function link(existingPath: string, newPath: string): Promise<void>;
   export function mkdir(
@@ -72,6 +73,15 @@ declare module 'node:fs/promises' {
 
 declare module 'node:os' {
   export function homedir(): string;
+  export function tmpdir(): string;
+}
+
+declare module 'node:string_decoder' {
+  export class StringDecoder {
+    constructor(encoding: string);
+    write(chunk: Buffer): string;
+    end(): string;
+  }
 }
 
 declare module 'node:path' {
@@ -81,6 +91,45 @@ declare module 'node:path' {
   export function relative(from: string, to: string): string;
   export function resolve(...paths: string[]): string;
   export const sep: string;
+}
+
+declare module 'node:child_process' {
+  export type ChildProcessStdio =
+    | 'ignore' | 'pipe' | 'inherit'
+    | readonly ['ignore' | 'pipe' | 'inherit', 'ignore' | 'pipe' | 'inherit', 'ignore' | 'pipe' | 'inherit'];
+  export interface ChildProcessReadable {
+    on(event: 'data', listener: (chunk: Buffer) => void): void;
+    destroy(): void;
+    [Symbol.asyncIterator](): AsyncIterator<Buffer>;
+  }
+  export interface ChildProcessWritable {
+    write(data: string, callback: (error?: Error) => void): void;
+    end(): void;
+    destroy(): void;
+    once(event: 'error' | 'close', listener: () => void): void;
+  }
+  export interface ChildProcess {
+    readonly stdin: ChildProcessWritable | null;
+    readonly stdout: ChildProcessReadable | null;
+    readonly stderr: ChildProcessReadable | null;
+    readonly exitCode: number | null;
+    readonly signalCode: string | null;
+    readonly pid?: number;
+    kill(signal: string): boolean;
+    once(event: 'exit', listener: (code: number | null) => void): void;
+    once(event: 'close', listener: (code: number | null) => void): void;
+    once(event: 'error', listener: (error: unknown) => void): void;
+  }
+  export function spawn(
+    command: string,
+    args: readonly string[],
+    options: {
+      env?: Record<string, string | undefined>;
+      stdio?: ChildProcessStdio;
+      cwd?: string;
+      detached?: boolean;
+    },
+  ): ChildProcess;
 }
 
 declare module 'http' {
@@ -114,4 +163,6 @@ declare const Buffer: {
 
 declare const process: {
   env: Record<string, string | undefined>;
+  platform: string;
+  kill(pid: number, signal?: string): void;
 };
