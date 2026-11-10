@@ -13,7 +13,7 @@ Give a never-reconciled binding its own explicit refusal code at build admission
 - UAT qualification branch/worktree must be commit-identical under qualification (same HEAD SHA; no extra commits before sign-off).
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- No BRLOCK line in BRANCH.md: the BRLOCK-EX1 policy reference lives in `.security/ci-lockfile-policy.json` only (PR #992 merged).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -56,22 +56,22 @@ Give a never-reconciled binding its own explicit refusal code at build admission
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
   - [x] Create isolated worktree `tmp/worktrees/binding-unreconciled` on branch `fix/artifacts-binding-unreconciled` from `origin/main` (83f2bcc27).
   - [x] Verify branch: `git -C tmp/worktrees/binding-unreconciled branch --show-current` returns `fix/artifacts-binding-unreconciled`.
-  - [x] Check PR #992 state: OPEN, not merged, so keep the BRLOCK-EX1 policy line above.
+  - [x] Check PR #992 state: MERGED (1160c5f37) after rebase, so no BRLOCK line (new template).
   - [x] Define environment mapping (`ENV=test-binding-unrec`) and ports for this branch.
   - [x] Confirm command style: `make ... ENV=<env>` with `ENV` last; Docker only via `.tmp/packets/docker-slot.sh make ...` in the foreground.
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`); no `BRxx-EXn` needed.
-- [ ] **Lot 1 — Explicit binding_unreconciled refusal**
-  - [ ] Update `api/src/services/artifacts/live/remote-live.ts`: `session()` throws `LiveError('git_live_conflict', 'binding_unreconciled')` when no row exists; older/other generation keeps `stale_session`.
-  - [ ] Verify `api/src/services/artifacts/live/product-builder.ts` binding and `api/src/services/artifacts/live/host-build-api.ts` run need no code change (reason already propagates to the job ledger and `GET /v1/builds/:artifactId/:jobId`).
-  - [ ] Document in `api/src/services/artifacts/live/README.md` remote-host section: host must `POST /v1/live/reconcile` once before the first build of an artifact.
-  - [ ] Evolve API tests (file-by-file):
-    - [ ] Update `api/tests/unit/artifacts-live/remote-drafts.test.ts`: never-reconciled `session()` expects `binding_unreconciled`; fences/other-generation still `stale_session`.
-    - [ ] Extend `api/tests/unit/artifacts-live/job-admission.test.ts`: never-reconciled binding refusal at admission creates no pod and leaves the binding dormant.
-    - [ ] Extend `api/tests/unit/artifacts-live/host-build-api.test.ts`: build throwing `binding_unreconciled` is carried on the host job record (`GET` shows `code`/`reason`).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-binding-unrec` (via `docker-slot.sh`, foreground)
-    - [ ] Scoped API tests: `remote-drafts`, `host-build-api`, `job-admission` suites on `ENV=test-binding-unrec`
+- [x] **Lot 1 — Explicit binding_unreconciled refusal**
+  - [x] Update `api/src/services/artifacts/live/remote-live.ts`: `session()` throws `LiveError('git_live_conflict', 'binding_unreconciled')` when no row exists; older/other generation keeps `stale_session`.
+  - [x] Verify `api/src/services/artifacts/live/product-builder.ts` binding and `api/src/services/artifacts/live/host-build-api.ts` run need no code change (reason already propagates to the job ledger and `GET /v1/builds/:artifactId/:jobId`).
+  - [x] Document in `api/src/services/artifacts/live/README.md` remote-host section: host must `POST /v1/live/reconcile` once before the first build of an artifact.
+  - [x] Evolve API tests (file-by-file):
+    - [x] Update `api/tests/unit/artifacts-live/remote-drafts.test.ts`: never-reconciled `session()` expects `binding_unreconciled`; fences/other-generation still `stale_session`.
+    - [x] Extend `api/tests/unit/artifacts-live/job-admission.test.ts`: never-reconciled binding refusal at admission creates no pod and writes no phase.
+    - [x] Extend `api/tests/unit/artifacts-live/host-build-api.test.ts`: build throwing `binding_unreconciled` is carried on the host job record (`GET` shows `code`/`reason`).
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-binding-unrec` (via `docker-slot.sh`, foreground): pass
+    - [x] Scoped API tests on `ENV=test-binding-unrec`: `remote-drafts` 8 passed, `job-admission` 7 passed, `host-build-api` 13 passed, Postgres `artifacts-live-remote-rows` 4 passed
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint for impacted components
   - [ ] Retest scoped API suites (cf Lot 1)
