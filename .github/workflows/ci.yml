@@ -402,6 +402,8 @@ jobs:
               - 'scripts/ci/consumer-contracts.mjs'
               - 'scripts/ci/consumer-contracts.test.mjs'
               - 'scripts/ci/consumer-boundaries.json'
+              - 'scripts/ci/ci-lockfile-installs.mjs'
+              - 'scripts/ci/ci-lockfile-installs.test.mjs'
               - 'scripts/ci/resolve-ui-image.mjs'
               - 'scripts/ci/resolve-ui-image.test.mjs'
               - 'scripts/ci/ui-image-version.sh'
