@@ -19,7 +19,7 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.nodeSelector).toEqual({ nodepool: 'artifact-builders' });
     expect(pod.spec.tolerations).toEqual([{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }]);
     const res = pod.spec.containers[0].resources;
-    expect(res.requests).toEqual({ cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' });
+    expect(res.requests).toEqual({ cpu: '250m', memory: '1536Mi', 'ephemeral-storage': '0' });
     expect(res.limits).toEqual({ cpu: '1', memory: '1536Mi', 'ephemeral-storage': '3400Mi' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'NODE_OPTIONS', value: '--max-old-space-size=384' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } });
@@ -29,7 +29,7 @@ describe('builder pod admission and recovery', () => {
     expect(pod.metadata.labels['sentropic.dev/artifact-binding']).toBeDefined();
     expect(podName({ ...key, storageScopeId: 'other' })).not.toBe(podName(key));
   });
-  it('should bound each emptyDir by its role cap on disk and fit three builder pods in the ephemeral quota', async () => {
+  it('should bound each emptyDir by its role cap on disk and fit MAX_BUILDER_PODS builder pods in the memory and ephemeral quotas', async () => {
     const f = fixture(); const runtime = await f.controller.start(key); const pod = builderPod(key, runtime, 'trusted', placement);
     const { requests, limits } = pod.spec.containers[0].resources;
     const mebibytes = (value: string) => Number(/^(\d+)(Mi|Gi)$/.exec(value)![1]) * (value.endsWith('Gi') ? 1024 : 1);
@@ -40,22 +40,21 @@ describe('builder pod admission and recovery', () => {
       expect(volume.emptyDir).not.toHaveProperty('medium');
     }
     expect(mebibytes(limits['ephemeral-storage'])).toBe(3400);
-    expect(3 * 3400).toBeLessThanOrEqual(10 * 1024);
     expect(pod.spec.volumes.reduce((sum: number, volume: { emptyDir: { sizeLimit: string } }) => sum + mebibytes(volume.emptyDir.sizeLimit), 0)).toBeLessThanOrEqual(3400 - 64);
-    // k8s measured the d2-4 node: 1458m CPU free after system pods; only memory limits overcommit.
-    expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1458);
-    expect(mebibytes(limits.memory)).toBeGreaterThan(mebibytes(requests.memory));
-    // Tenant LimitRange (cpu <= 1 per container) and ResourceQuota (requests.cpu 1, limits.memory 6Gi,
-    // limits.ephemeral-storage 10Gi, pods 5) admit MAX_BUILDER_PODS = 3 pods; three limits fit the quota (3 CPU, 4.5Gi, 3 x 3400Mi <= 10Gi)
-    // and even four memory requests fit the 1706 MiB node share.
+    // k8s measured the d2-4 node: 1458m CPU free after system pods; only CPU overcommits (memory request = limit).
+    expect(MAX_BUILDER_PODS * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1458);
+    expect(mebibytes(requests.memory)).toBe(mebibytes(limits.memory));
+    // Tenant LimitRange (cpu <= 1 per container) and ResourceQuota (requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi,
+    // limits.ephemeral-storage 10Gi) admit MAX_BUILDER_PODS = 2 pods, live or build: the memory request is the full limit,
+    // so the scheduler never overcommits a builder node into a kubelet eviction (k8s 09/11).
     expect(Number(limits.cpu)).toBeLessThanOrEqual(1);
-    expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1000);
-    expect(4 * Number(limits.cpu)).toBeLessThanOrEqual(4);
-    expect(4 * mebibytes(limits.memory)).toBeLessThanOrEqual(6 * 1024);
+    expect(MAX_BUILDER_PODS * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1000);
+    expect(MAX_BUILDER_PODS * Number(limits.cpu)).toBeLessThanOrEqual(4);
+    expect(MAX_BUILDER_PODS * mebibytes(requests.memory)).toBeLessThanOrEqual(3 * 1024);
+    expect(MAX_BUILDER_PODS * mebibytes(limits.memory)).toBeLessThanOrEqual(6 * 1024);
     expect(MAX_BUILDER_PODS * mebibytes(limits['ephemeral-storage'])).toBeLessThanOrEqual(10 * 1024);
-    expect(MAX_BUILDER_PODS).toBe(3);
+    expect(MAX_BUILDER_PODS).toBe(2);
     expect(PRODUCT_HEAVY.maxPods).toBe(MAX_BUILDER_PODS);
-    expect(4 * mebibytes(requests.memory)).toBeLessThanOrEqual(1706);
   });
   it('should hold a ~1 GiB unpacked tree with margin by default and stay quota-safe under env sizing', async () => {
     // A ~1 GiB unpacked tree (preprod 2026-11-09: ~854 MiB unpacked, 745 paths): dependencies +25% over 1024,
