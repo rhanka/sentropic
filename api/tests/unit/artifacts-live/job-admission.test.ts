@@ -31,6 +31,14 @@ describe('builder job admission (M1 pending job)', () => {
     expect(order(f.ports.jobBinding)).toBeLessThan(order(f.ports.forge.reachable));
     expect(f.published).toEqual(['A']);
   });
+  it('refuses a never-reconciled binding at admission before any pod exists and writes no phase', async () => {
+    const f = fixture();
+    vi.mocked(f.ports.binding).mockRejectedValueOnce(new LiveError('git_live_conflict', 'binding_unreconciled'));
+    await expect(f.controller.buildOnly(key, 'job-1')).rejects
+      .toMatchObject({ code: 'git_live_conflict', reason: 'binding_unreconciled' });
+    expect(f.core.create).not.toHaveBeenCalled(); expect(f.ports.worker.build).not.toHaveBeenCalled();
+    expect(await f.state()).toBeUndefined();
+  });
   it('refuses a job without a recordable binding before any forge read or pod', async () => {
     const f = fixture(); vi.mocked(f.ports.jobBinding).mockRejectedValueOnce(new LiveError('binding_conflict'));
     await expect(f.controller.buildOnly(key, 'job-1')).rejects.toMatchObject({ code: 'binding_conflict' });
