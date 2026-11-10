@@ -254,6 +254,21 @@ if (process.env.NODE_ENV !== 'test') {
     }
   }
 
+  // Ops notification declarations (notify L1): fail-closed boot validation.
+  // A typoed operator declaration crashes the boot with a clear message
+  // instead of silently changing alert routing.
+  try {
+    const [{ parseOpsTargetsDeclarationStrict }, { parseOpsIngestAllowlistStrict }] = await Promise.all([
+      import('./services/notifications/ops-recipients'),
+      import('./routes/ops-job-failures'),
+    ]);
+    parseOpsTargetsDeclarationStrict(env.OPS_JOB_FAILURE_TARGETS_JSON);
+    parseOpsIngestAllowlistStrict(env.OPS_JOB_FAILURE_INGEST_CLIENTS_JSON);
+  } catch (error) {
+    logger.error({ err: error }, 'Ops notification declarations invalid; refusing to boot');
+    throw error;
+  }
+
   // Ops notification sweep (notify L1): time-driven mails, dead-man
   // incidents and pending-delivery sends. Suppressible for tests
   // (OPS_NOTIFY_SWEEP_AUTOSTART=false); the sweep itself never throws.
