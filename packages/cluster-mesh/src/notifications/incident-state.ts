@@ -137,7 +137,7 @@ export function openOpsStaleIncident(
     status: 'firing', firstSeenAt: nowIso, lastSeenAt: nowIso,
     occurrenceCount: 1, consecutiveFailures: 0,
     lastReason: 'stale', lastSeverity: null, lastRunId: null, lastEventId: `dead-man:${nowIso}`,
-    lastLinks: null, lastMailAt: nowIso,
+    lastLinks: null, lastDetail: null, lastMailAt: nowIso,
     escalationLevel: 0, lastEscalationAt: null, resolvedAt: null,
     lastHeartbeatAt: null, lastOccurredAt: nowIso,
   };
