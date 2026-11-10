@@ -54,17 +54,28 @@ if [ -z "$mode" ]; then mode=record; fi
 } > "$dump/env"
 if [ "$1" = "--version" ]; then
   case "$mode" in
-    old-version) printf '%s\n' '1.9.0 (Claude Code)' ;;
-    *) printf '%s\n' '2.1.296 (Claude Code)' ;;
+    old-version) printf '%s\n' '1.9.0 (Claude Code)'; exit 0 ;;
+    probe-hang)
+      trap '' TERM
+      (while true; do date +%s%N >> "$dump/heartbeat"; sleep 0.2; done) &
+      sleep 30 &
+      wait
+      ;;
+    probe-flood)
+      head -c 70000 /dev/zero | tr '\0' 'V'; printf '\n'; exit 0 ;;
+    *) printf '%s\n' '2.1.296 (Claude Code)'; exit 0 ;;
   esac
-  exit 0
 fi
 if [ "$1" = "--help" ]; then
   case "$mode" in
     help-stripped)
-      printf '%s\n' '--verbose' '--output-format' '--model' '--effort' '--tools' '--no-session-persistence' '--system-prompt-file' ;;
+      printf '%s\n' '-p' '--verbose' '--output-format' 'stream-json' '--model' '--effort' '--tools' '--no-session-persistence' '--system-prompt-file' ;;
+    help-nostream)
+      printf '%s\n' '-p' '--verbose' '--output-format' '--model' '--effort' '--tools' '--strict-mcp-config' '--no-session-persistence' '--system-prompt-file' ;;
+    help-nop)
+      printf '%s\n' '--verbose' '--output-format' 'stream-json' '--model' '--effort' '--tools' '--strict-mcp-config' '--no-session-persistence' '--system-prompt-file' ;;
     *)
-      printf '%s\n' '--verbose' '--output-format' '--model' '--effort' '--system-prompt-file' '--tools' '--strict-mcp-config' '--no-session-persistence' ;;
+      printf '%s\n' '-p' '--verbose' '--output-format' 'stream-json' '--model' '--effort' '--system-prompt-file' '--tools' '--strict-mcp-config' '--no-session-persistence' ;;
   esac
   exit 0
 fi
@@ -78,8 +89,20 @@ case "$mode" in
     printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"Hello","usage":{"input_tokens":3,"output_tokens":2}}'
     ;;
   tool)
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
     printf '%s\n' '{"type":"assistant","message":{"type":"message","role":"assistant","content":[{"type":"text","text":"Looking"},{"type":"tool_use","id":"call-1","name":"lookup","input":{"q":"test"}}],"stop_reason":"tool_use"}}'
     printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"input_tokens":8,"output_tokens":4}}'
+    ;;
+  split-utf8)
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
+    printf '%s' '{"type":"assistant","message":{"type":"message","role":"assistant","content":[{"type":"text","text":"H'
+    printf '\303'
+    sleep 0.5
+    printf '\251llo"}]}}\n'
+    printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"input_tokens":3,"output_tokens":2}}'
+    ;;
+  noinit-result)
+    printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"Hello","usage":{"input_tokens":3,"output_tokens":2}}'
     ;;
   init-tools)
     printf '%s\n' '{"type":"system","subtype":"init","tools":[{"name":"Bash"}],"mcp_servers":[]}'
@@ -111,6 +134,7 @@ case "$mode" in
     printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
     ;;
   noeol)
+    printf '%s\n' '{"type":"system","subtype":"init","tools":[],"mcp_servers":[]}'
     printf '%s' '{"type":"result","subtype":"success","is_error":false,"result":"Héllo wörld","usage":{"input_tokens":3,"output_tokens":2}}'
     ;;
   longline)
@@ -277,6 +301,45 @@ describe('node claude CLI runner', () => {
     const runner = new NodeClaudeCodeCliRunner();
     await expect(collect(runner.run({ access, request: request(), signal: never })))
       .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('inventory') });
+  });
+
+  it('should emit no event before refusing a non-empty init inventory', async () => {
+    await setMode('init-tools');
+    const runner = new NodeClaudeCodeCliRunner();
+    const seen: unknown[] = [];
+    await expect((async () => {
+      try {
+        for await (const event of runner.run({ access, request: request(), signal: never })) seen.push(event);
+      } catch (error) {
+        if (seen.length > 0) throw new Error(`emitted ${seen.length} events before refusing the inventory`);
+        throw error;
+      }
+    })()).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('inventory') });
+  });
+
+  it('should refuse a request with tool definitions without spawning', async () => {
+    const runner = new NodeClaudeCodeCliRunner();
+    const tooled = { ...request(), tools: [{ name: 'lookup', inputSchema: { type: 'object' } }] };
+    await expect(collect(runner.run({ access, request: tooled, signal: never })))
+      .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('tool definitions') });
+    await expect(readDump('argv')).rejects.toThrow();
+  });
+
+  it('should refuse a successful result without an init line', async () => {
+    await setMode('noinit-result');
+    const runner = new NodeClaudeCodeCliRunner();
+    await expect(collect(runner.run({ access, request: request(), signal: never })))
+      .rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('init') });
+  });
+
+  it('should decode a multi-byte character split across chunks', async () => {
+    await setMode('split-utf8');
+    const runner = new NodeClaudeCodeCliRunner();
+    const events = await collect(runner.run({ access, request: request(), signal: never }));
+    expect(events).toEqual([
+      { type: 'text_delta', text: 'Héllo' },
+      { type: 'result', finishReason: 'stop', usage: { inputTokens: 3, outputTokens: 2 } },
+    ]);
   });
 
   it('should accept a final line without a trailing newline', async () => {
@@ -455,6 +518,40 @@ describe('node claude CLI runner', () => {
     await expect(probeClaudeCodeCliCapabilities({
       source: 'fake-source', qualificationRef: 'fake-receipt',
     })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('confinement') });
+  });
+
+  it('should reject a CLI help without a stream-json value', async () => {
+    await setMode('help-nostream');
+    await expect(probeClaudeCodeCliCapabilities({
+      source: 'fake-source', qualificationRef: 'fake-receipt',
+    })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('stream-json') });
+  });
+
+  it('should reject a CLI help without headless print mode', async () => {
+    await setMode('help-nop');
+    await expect(probeClaudeCodeCliCapabilities({
+      source: 'fake-source', qualificationRef: 'fake-receipt',
+    })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('headless') });
+  });
+
+  it('should reap a hanging probe on timeout', async () => {
+    await setMode('probe-hang');
+    await expect(probeClaudeCodeCliCapabilities({
+      source: 'fake-source', qualificationRef: 'fake-receipt', timeoutMs: 400,
+    })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('timed out') });
+    await waitFor('heartbeat');
+    const countBeats = async (): Promise<number> =>
+      (await readDump('heartbeat')).split('\n').filter((line) => line.length > 0).length;
+    const before = await countBeats();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(await countBeats()).toBe(before);
+  });
+
+  it('should refuse an oversized probe output', async () => {
+    await setMode('probe-flood');
+    await expect(probeClaudeCodeCliCapabilities({
+      source: 'fake-source', qualificationRef: 'fake-receipt',
+    })).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringContaining('oversized') });
   });
 
   it('should serve the consumer anthropic client end-to-end through the factory', async () => {
