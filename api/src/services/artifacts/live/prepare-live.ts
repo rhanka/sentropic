@@ -1,6 +1,7 @@
 import type { LivePorts } from './ports';
 import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
-import { ensureResponsivePod, enrichPodLoss, isPodCause, notePodLoss } from './pods';
+import { enrichPodLoss, isPodCause } from './pods';
+import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, observeHead, transition } from './transitions';
 import { runPhase, withinPhase } from './deadline';
 
