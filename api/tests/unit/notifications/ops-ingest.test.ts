@@ -71,6 +71,7 @@ const fakeStore = (): OpsNotificationStorePort & {
     markDeliveryCapDelayed: async () => {},
     listRecentSentMailCounts: async () => [],
     countRecentSentTo: async () => 0,
+    countPendingForTarget: async () => 0,
     loadSeenEvent: async (eventId) => seen.get(eventId) ?? null,
     hasUnsentDelivery: async () => false,
     findSeenCanonical: async (canonicalKey) =>
@@ -168,6 +169,19 @@ describe('ingestOpsJobFailureEvent', () => {
     );
     expect(stale).toMatchObject({ stale: true, mails: [], status: 'resolved' });
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it('refuses new events with 429 state when the target queue is full', async () => {
+    const store = fakeStore();
+    const outbox = fakeOutbox();
+    store.countPendingForTarget = async () => 200;
+    const result = await ingestOpsJobFailureEvent(
+      { store, outbox, clock: () => T0 }, failed('k8s:run-9:failed', { runId: 'run-9' }),
+    );
+    expect(result).toMatchObject({ quotaExceeded: true, mails: [] });
+    expect(store.deliveries).toHaveLength(0);
+    expect(outbox.rows).toHaveLength(0);
+    expect(store.incidents.size).toBe(0);
   });
 
   it('resolves on succeeded with a recovery delivery', async () => {

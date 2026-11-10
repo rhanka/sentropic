@@ -141,6 +141,10 @@ const fakeDeps = (world: FakeWorld) => {
       [...world.deliveries.values()].filter(
         (row) => row.status === 'sent' && row.recipients.some((entry) => entry.email === email),
       ).length,
+    countPendingForTarget: async (targetKey) =>
+      [...world.deliveries.values()].filter(
+        (row) => row.targetKey === targetKey && (row.status === 'pending' || row.status === 'sending'),
+      ).length,
     reclaimStaleSending: async () => 0,
     loadSeenEvent: async () => null,
     findSeenCanonical: async () => null,

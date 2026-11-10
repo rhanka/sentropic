@@ -40,7 +40,12 @@ export interface OpsIngestResult {
   readonly deduped: boolean;
   readonly stale: boolean;
   readonly conflict: boolean;
+  /** True when the per-target pending queue is full: nothing was written, retry later. */
+  readonly quotaExceeded: boolean;
 }
+
+/** Per-target pending + sending delivery bound: ingestion 429s instead of queueing unboundedly. */
+export const OPS_INGEST_MAX_PENDING_PER_TARGET = 200;
 
 /** Aggregate identity for the durable outbox trace of every ingestion. */
 export const OPS_INCIDENT_AGGREGATE_TYPE = 'ops_incident';
@@ -63,10 +68,10 @@ export async function ingestOpsJobFailureEvent(
     // Same id, different bytes: the emitter reused an idempotence key for a
     // different event. Never collapse it into a silent dedup.
     if (seen.payloadSha256 !== payloadSha256) {
-      return { incidentKey, status: 'firing', mails: [], deduped: false, stale: false, conflict: true };
+      return { incidentKey, status: 'firing', mails: [], deduped: false, stale: false, conflict: true, quotaExceeded: false };
     }
     const existing = await store.loadIncident(incidentKey);
-    return { incidentKey, status: existing?.status ?? 'resolved', mails: [], deduped: true, stale: false, conflict: false };
+    return { incidentKey, status: existing?.status ?? 'resolved', mails: [], deduped: true, stale: false, conflict: false, quotaExceeded: false };
   }
   const canonical = await store.findSeenCanonical(canonicalKey);
   if (canonical && canonical.eventId !== event.eventId) {
@@ -76,8 +81,16 @@ export async function ingestOpsJobFailureEvent(
     const existing = await store.loadIncident(canonical.incidentId);
     return {
       incidentKey: canonical.incidentId, status: existing?.status ?? 'resolved',
-      mails: [], deduped: true, stale: false, conflict: false,
+      mails: [], deduped: true, stale: false, conflict: false, quotaExceeded: false,
     };
+  }
+
+  // Queue bound per target: a wedged or spamming target 429s instead of
+  // growing incidents, deliveries and outbox traces without limit. Nothing is
+  // written, so the emitter can retry the same eventId later.
+  if ((await store.countPendingForTarget(event.targetKey)) >= OPS_INGEST_MAX_PENDING_PER_TARGET) {
+    const existing = await store.loadIncident(incidentKey);
+    return { incidentKey, status: existing?.status ?? 'firing', mails: [], deduped: false, stale: false, conflict: false, quotaExceeded: true };
   }
 
   const nowIso = clock();
@@ -105,7 +118,7 @@ export async function ingestOpsJobFailureEvent(
     },
     channel: OPS_INCIDENT_OUTBOX_CHANNEL,
   });
-  return { incidentKey, status, mails: transition.mails, deduped: false, stale: transition.stale, conflict: false };
+  return { incidentKey, status, mails: transition.mails, deduped: false, stale: transition.stale, conflict: false, quotaExceeded: false };
 }
 
 /**
