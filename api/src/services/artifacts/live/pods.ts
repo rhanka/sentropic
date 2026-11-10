@@ -142,14 +142,15 @@ export function isPodCause(error: unknown): error is LiveError {
  * and `phase_timeout*` (too slow, not lost) never retry. */
 const RETRYABLE_REASONS = new Set(['pod_evicted', 'pod_gone', 'pod_unavailable', 'supervisor_unresponsive',
   'supervisor_relay_unreachable', 'supervisor_channel_aborted', 'k8s_unreachable', 'k8s_timeout']);
-const RETRYABLE_RELAY = /^supervisor_relay_[0-9]+$/;
+const RETRYABLE_RELAY = /^supervisor_relay_5[0-9][0-9]$/;
 export function isTransportLoss(error: unknown): error is LiveError {
   return error instanceof LiveError && error.code === 'builder_unavailable'
     && (RETRYABLE_REASONS.has(error.reason ?? '') || RETRYABLE_RELAY.test(error.reason ?? ''));
 }
-/** Relay or channel failures whose pod-level cause can still be read from the apiserver. */
-const ENRICHABLE_RELAY = /^supervisor_relay_[0-9]+$/;
-const ENRICHABLE_REASONS = new Set(['supervisor_relay_unreachable', 'supervisor_channel_aborted']);
+/** Relay or channel failures whose pod-level cause can still be read from the apiserver. A clean pod
+ * disappearance (`pod_missing`) already proves the pod is gone, even when a later describe cannot confirm it. */
+const ENRICHABLE_RELAY = /^supervisor_relay_5[0-9][0-9]$/;
+const ENRICHABLE_REASONS = new Set(['supervisor_relay_unreachable', 'supervisor_channel_aborted', 'pod_missing']);
 /** Rewrites a transport failure with the Kubernetes pod cause when the apiserver names one (eviction, OOM kill,
  * gone pod, silent supervisor). Passes everything else through, including an unreadable apiserver, so a
  * `supervisor_relay_*` reason is kept exactly when no pod-level cause is known. */
@@ -159,7 +160,11 @@ export async function enrichPodLoss(deps: { describe(key: LiveKey, runtime: Live
   const reason = error.reason ?? '';
   if (!ENRICHABLE_RELAY.test(reason) && !ENRICHABLE_REASONS.has(reason)) return error;
   let report: PodReport | undefined;
-  try { report = await deps.describe(key, runtime); } catch { return error; }
+  try { report = await deps.describe(key, runtime); }
+  catch {
+    if (reason === 'pod_missing') return new LiveError('builder_unavailable', 'pod_gone', 'NotFound');
+    return error;
+  }
   const loss = classifyPodLoss(report);
   // A present pod that never started (Pending) names no pod-level cause: a relay failure there is a boot race,
   // so the `supervisor_relay_*` reason is kept. Every dead, evicted, OOM-killed, gone or Running-but-silent pod

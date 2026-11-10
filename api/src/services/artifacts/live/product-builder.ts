@@ -35,7 +35,9 @@ export const SCHEDULER_INTERVAL_MS = 30_000;
 export const PRODUCT_HEAVY = Object.freeze({ maxWaitMs: 600_000, pollMs: 1_000, maxPods: 2,
   budget: Object.freeze({ budgetMiB: 1641, podBaseMiB: 19, entryTtlMs: 90_000,
     costs: Object.freeze({ install: 1370, prebundle: 980, dev: 390, build: 1370 }) }) });
-export const PRODUCT_ADMISSION = Object.freeze({ capacity: 4, waiterTtlMs: 60_000 });
+/** Two admission slots, like the two builder pod slots: a 3rd admitted session would only wait for a pod
+ * slot up to 600 s before a `queued` failure. */
+export const PRODUCT_ADMISSION = Object.freeze({ capacity: 2, waiterTtlMs: 60_000 });
 export const PRODUCT_LIVE_WAIT_MS = 25_000;
 const LABEL = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 

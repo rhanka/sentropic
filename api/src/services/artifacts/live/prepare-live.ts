@@ -32,7 +32,10 @@ async function preparePod(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) 
     state.runtime.liveTreeSha = draft.treeSha;
   });
   const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
-  runtime = await transition(ports, key, runtime, state => { state.runtime.podUid = pod.uid; });
+  runtime = await transition(ports, key, runtime, state => {
+    state.runtime.podUid = pod.uid;
+    if (pod.replaced) state.runtime.routeEpoch++;
+  });
   const source = await ports.forge.snapshot(key, head);
   if (source.headSha !== head) throw new LiveError('git_head_moved');
   await ports.worker.clean(runtime);
