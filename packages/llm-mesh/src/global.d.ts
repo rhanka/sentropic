@@ -117,7 +117,7 @@ declare module 'node:child_process' {
     readonly pid?: number;
     kill(signal: string): boolean;
     once(event: 'exit', listener: (code: number | null) => void): void;
-    once(event: 'close', listener: () => void): void;
+    once(event: 'close', listener: (code: number | null) => void): void;
     once(event: 'error', listener: (error: unknown) => void): void;
   }
   export function spawn(
