@@ -158,13 +158,12 @@ async function failOrRetry(
 /**
  * Hard recipient-weighted caps enforced on the batch itself (target, global,
  * per-address, trailing hour). Counts are already windowed by the store
- * (closed sends by `sent_at`, already-served recipients on open or failed
- * rows by `updated_at`), so a plain threshold comparison is exact across
- * sweeps and across deliveries of one sweep. Returns the outcome after
- * persisting progress: `sent` when every pending recipient was served
- * (delivery marked sent), `deferred` when the budget ran out first (served
- * recipients persisted, the caller requeues the remainder without consuming
- * the retry budget).
+ * (per-recipient `servedAt`, never row `updated_at`), so a plain threshold
+ * comparison is exact across sweeps and across deliveries of one sweep.
+ * Returns the outcome after persisting progress: `sent` when every pending
+ * recipient was served (delivery marked sent), `deferred` when the budget
+ * ran out first (served recipients persisted, the caller requeues the
+ * remainder without consuming the retry budget).
  */
 async function sendToAllCapped(
   store: SweepStore,
@@ -177,9 +176,10 @@ async function sendToAllCapped(
 ): Promise<'sent' | 'deferred'> {
   const sentEmails = new Set(delivery.recipients.map((entry) => entry.email));
   const pending = targets.filter((recipient) => !sentEmails.has(recipient.email));
-  const entries: { accountId: string; email: string; basis: string; messageId: string }[] =
+  const entries: { accountId: string; email: string; basis: string; messageId: string; servedAt?: string }[] =
     delivery.recipients.map((entry) => ({
       accountId: entry.accountId, email: entry.email, basis: entry.basis, messageId: entry.messageId ?? '',
+      ...(entry.servedAt ? { servedAt: entry.servedAt } : {}),
     }));
   let firstMessageId = delivery.messageId;
   if (pending.length === 0) {
@@ -219,7 +219,7 @@ async function sendToAllCapped(
       await store.markDeliveryFailed(delivery.id, error instanceof Error ? error.message.slice(0, 500) : 'ops send failed');
       throw new OpsSendAbortError();
     }
-    const entry = { ...recipient, messageId };
+    const entry = { ...recipient, messageId, servedAt: clock() };
     await store.markDeliveryRecipientSent(delivery.id, entry);
     entries.push(entry);
     sentEmails.add(recipient.email);

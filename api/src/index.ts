@@ -258,13 +258,17 @@ if (process.env.NODE_ENV !== 'test') {
   // A typoed operator declaration crashes the boot with a clear message
   // instead of silently changing alert routing.
   try {
-    const [{ parseOpsTargetsDeclarationStrict, parseOpsRecipientsUrlsStrict }, { parseOpsIngestAllowlistStrict }] = await Promise.all([
+    const [
+      { parseOpsTargetsDeclarationStrict, parseOpsRecipientsUrlsStrict, assertOpsRecipientsBearerConfigured },
+      { parseOpsIngestAllowlistStrict },
+    ] = await Promise.all([
       import('./services/notifications/ops-recipients'),
       import('./routes/ops-job-failures'),
     ]);
     parseOpsTargetsDeclarationStrict(env.OPS_JOB_FAILURE_TARGETS_JSON);
     parseOpsIngestAllowlistStrict(env.OPS_JOB_FAILURE_INGEST_CLIENTS_JSON);
-    parseOpsRecipientsUrlsStrict(env.OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON);
+    const recipientsUrls = parseOpsRecipientsUrlsStrict(env.OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON);
+    assertOpsRecipientsBearerConfigured(recipientsUrls, env.OPS_JOB_FAILURE_RECIPIENTS_BEARER);
   } catch (error) {
     logger.error({ err: error }, 'Ops notification declarations invalid; refusing to boot');
     throw error;
