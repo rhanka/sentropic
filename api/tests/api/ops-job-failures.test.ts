@@ -148,6 +148,20 @@ describe('POST /api/v1/ops/ingest', () => {
     expect(await big.json()).toMatchObject({ error: 'body_too_large' });
   });
 
+  it('serializes concurrent ingests of one incident into a single firing mail', async () => {
+    const name = jobName('race');
+    const bodies = [1, 2, 3].map((run) => failedBody('race', `k8s:${name}-run-${run}:failed`));
+    const responses = await Promise.all(bodies.map((body) => postIngest(body)));
+    for (const response of responses) expect(response.status).toBe(200);
+    const results = await Promise.all(responses.map((r) => r.json())) as { mails: string[] }[];
+    expect(results.flatMap((r) => r.mails)).toEqual(['firing']);
+    const incidents = await db.select().from(opsIncidents).where(eq(opsIncidents.targetKey, TARGET_KEY));
+    expect(incidents).toHaveLength(1);
+    const deliveries = await db.select().from(opsNotificationDeliveries)
+      .where(eq(opsNotificationDeliveries.incidentId, incidents[0]!.id));
+    expect(deliveries.filter((d) => d.kind === 'firing')).toHaveLength(1);
+  });
+
   it('binds the authenticated client to its targets', async () => {
     const withClient = (clientId: string) =>
       createOpsJobFailuresRouter({
