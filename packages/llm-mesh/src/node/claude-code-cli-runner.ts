@@ -14,10 +14,13 @@
 // is injected, so the CLI cannot prefer ambient key auth over the seat grant
 // and ambient secrets never reach the CLI or its hook/MCP descendants.
 // Confinement: the CLI runs with `--tools ""`, `--strict-mcp-config` (no
-// MCP config, so no MCP servers), `--safe-mode` (no hooks, skills, plugins,
-// or ambient settings), and `--no-session-persistence`, inside a fresh
-// sandbox directory used as cwd, HOME, and CLAUDE_CONFIG_DIR. A non-empty
-// tool/MCP inventory in the CLI `init` line fails the run closed.
+// MCP config, so no MCP servers), and `--no-session-persistence`, inside a
+// fresh sandbox directory used as cwd, HOME, and CLAUDE_CONFIG_DIR; ambient
+// hooks, skills, plugins, and settings never load from the sandbox. A
+// non-empty tool/MCP inventory in the CLI `init` line fails the run closed
+// immediately, before any further event is emitted, and a successful run
+// always observed an `init` line. Requests carrying tool definitions are
+// refused before spawning: the CLI host never silently drops them.
 // Quota signals (5-hour session limit, rate limits, overload) surface as
 // ClaudeCliQuotaError; every other host failure is a fixed-message runner
 // error with no CLI output attached.
@@ -166,9 +169,18 @@ const killTree = (
   signal: 'SIGTERM' | 'SIGKILL',
 ): void => {
   if (!child || closed()) return;
+  // POSIX: signal the detached process group first (the child is spawned
+  // detached, so its pid is the group id). When the group is already gone
+  // (ESRCH) fall back to the direct child so a non-group-leader child is
+  // still reaped; win32 has no process groups.
+  if (child.pid !== undefined && process.platform !== 'win32') {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch { /* group gone: fall through to the direct child */ }
+  }
   try {
-    if (child.pid !== undefined && process.platform !== 'win32') process.kill(-child.pid, signal);
-    else if (child.exitCode === null) child.kill(signal);
+    if (child.exitCode === null) child.kill(signal);
   } catch { /* already gone */ }
 };
 
@@ -254,6 +266,11 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       throw runnerError('claude CLI runner refused an invalid access projection');
     }
     if (!validModelId(request.modelId)) throw runnerError('claude CLI runner refused an invalid model id');
+    // Tool definitions are never forwarded: the CLI runs with `--tools ""`,
+    // so accepting them would silently drop caller intent. Refuse instead.
+    if (request.tools !== undefined && request.tools.length > 0) {
+      throw runnerError('claude CLI runner refused a request with tool definitions');
+    }
     // No token-bearing process exists before this point: abort and prompt
     // rendering both precede the spawn.
     if (signal.aborted) throw abortedError();
@@ -368,6 +385,12 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
         sawInit = true;
         toolsInventory = outcome.init.tools;
         mcpInventory = outcome.init.mcpServers;
+        // Fail fast at the init line: a build ignoring `--tools ""` must be
+        // rejected before any further event is consumed or emitted.
+        if ((Array.isArray(toolsInventory) && toolsInventory.length > 0)
+          || (Array.isArray(mcpInventory) && mcpInventory.length > 0)) {
+          throw runnerError('claude CLI runner refused a non-empty CLI tool inventory');
+        }
         return [];
       }
       if (outcome.type === 'text') { textEmitted = true; return [{ type: 'text_delta', text: outcome.text }]; }
@@ -421,11 +444,6 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
     }
     await writePrompt;
     const code = await exitCode;
-    if (sawInit
-      && ((Array.isArray(toolsInventory) && toolsInventory.length > 0)
-        || (Array.isArray(mcpInventory) && mcpInventory.length > 0))) {
-      throw runnerError('claude CLI runner refused a non-empty CLI tool inventory');
-    }
     if (errorPayload !== undefined || result === undefined) {
       const structuredText = errorPayload === undefined ? undefined : extractQuotaText(errorPayload);
       const structured = structuredText === undefined
@@ -443,6 +461,9 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       }
       throw runnerError('claude CLI runner ended without a CLI result');
     }
+    // A successful run always observed the `init` line: without it the tool
+    // inventory gate above never ran, so the result is untrusted.
+    if (!sawInit) throw runnerError('claude CLI runner ended without a CLI init line');
     const finishReason = toolCalls > 0 ? 'tool_calls'
       : lastStopReason === 'max_tokens' ? 'length' : result.finishReason;
     if (result.resultText !== undefined && !textEmitted && result.resultText.trim().length > 0) {
@@ -486,8 +507,11 @@ const runProbeCommand = (
 ): Promise<string> => new Promise((resolve, reject) => {
   let child: ChildProcess;
   try {
+    // Detached like the workload spawn so the timeout below can signal the
+    // whole group (killTree falls back to the direct child on win32).
     child = spawn(cliPath, args,
-      { env: env as Record<string, string>, stdio: ['ignore', 'pipe', 'pipe'], cwd: sandboxDir });
+      { env: env as Record<string, string>, stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: sandboxDir, detached: process.platform !== 'win32' });
   } catch {
     reject(runnerError('claude CLI probe failed to spawn the CLI'));
     return;
@@ -495,7 +519,6 @@ const runProbeCommand = (
   let closed = false;
   child.once('close', () => { closed = true; });
   const isClosed = (): boolean => closed;
-  const decoder = new StringDecoder('utf8');
   let received = 0;
   let output = Buffer.from('');
   child.stdout?.on('data', (chunk: Buffer) => {
@@ -513,7 +536,10 @@ const runProbeCommand = (
     clearTimeout(timer);
     reject(runnerError('claude CLI probe failed to run the CLI'));
   });
-  child.once('exit', (code) => {
+  // Resolve on `close`, not `exit`, so all stdio is drained: `exit` can fire
+  // while the last output bytes are still in flight. Buffer.concat keeps
+  // multi-byte characters split across chunks intact.
+  child.once('close', (code: number | null) => {
     clearTimeout(timer);
     if (code !== 0) {
       reject(runnerError('claude CLI probe could not read the CLI'));
@@ -523,7 +549,7 @@ const runProbeCommand = (
       reject(runnerError('claude CLI probe refused an oversized CLI output'));
       return;
     }
-    resolve(output.toString('utf8') + decoder.end());
+    resolve(output.toString('utf8'));
   });
 });
 
@@ -552,6 +578,10 @@ export const probeClaudeCodeCliCapabilities = (
       const help = await runProbeCommand(cliPath, ['--help'], env, sandboxDir, timeoutMs);
       const missing = REQUIRED_CLAUDE_CODE_FLAGS.filter((flag) => !help.includes(flag));
       if (missing.length > 0) throw runnerError('claude CLI probe found a CLI missing confinement flags');
+      // Flags alone are not enough: the probe pins the stream-json value and
+      // the `-p` headless switch the runner relies on.
+      if (!help.includes('stream-json')) throw runnerError('claude CLI probe found a CLI without stream-json output');
+      if (!/(^|\s)-p(\s|,|$)/m.test(help)) throw runnerError('claude CLI probe found a CLI without headless print mode');
       return { protocol: CLAUDE_CODE_STREAM_PROTOCOL, cliVersion: `${major}.${minor}.${Number(match![3])}`,
         source: options.source, qualificationRef: options.qualificationRef };
     } finally {
