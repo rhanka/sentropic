@@ -33,6 +33,8 @@ export interface OpsIncidentStateV1 {
   readonly lastEscalationAt: string | null;
   readonly resolvedAt: string | null;
   readonly lastHeartbeatAt: string | null;
+  /** Newest emitter `occurredAt` applied so far; older events are stale replays. */
+  readonly lastOccurredAt: string | null;
 }
 
 export interface OpsNotificationPolicyV1 {
@@ -64,6 +66,8 @@ export interface OpsIncidentTransitionV1 {
   readonly mails: readonly OpsIncidentMailV1[];
   readonly opened: boolean;
   readonly reopened: boolean;
+  /** True when the event was older than the incident and changed nothing. */
+  readonly stale: boolean;
 }
 
 function baseIncident(
@@ -80,7 +84,7 @@ function baseIncident(
     lastReason: null, lastSeverity: null, lastRunId: null, lastEventId: event.eventId,
     lastLinks: null, lastMailAt: null,
     escalationLevel: 0, lastEscalationAt: null, resolvedAt: null,
-    lastHeartbeatAt: null,
+    lastHeartbeatAt: null, lastOccurredAt: event.occurredAt,
   };
 }
 
@@ -97,6 +101,19 @@ export function openIncident(event: OpsJobFailureV1, nowIso: string): OpsInciden
 /** Dormant watch record for a jobRef seen only through heartbeats. No mail. */
 export function openDormantWatch(event: OpsJobFailureV1, nowIso: string): OpsIncidentStateV1 {
   return { ...baseIncident(event, nowIso, 'resolved'), lastHeartbeatAt: nowIso };
+}
+
+/** Newest emitter clock known to an incident (tolerates pre-migration rows). */
+export function lastKnownOccurredAt(state: OpsIncidentStateV1): string | null {
+  return state.lastOccurredAt ?? null;
+}
+
+/** True when the event predates everything the incident already applied. */
+export function isOpsStaleEvent(state: OpsIncidentStateV1 | null, occurredAt: string): boolean {
+  if (state === null) return false;
+  const last = lastKnownOccurredAt(state);
+  if (last === null) return false;
+  return Date.parse(occurredAt) < Date.parse(last);
 }
 
 /**
@@ -119,6 +136,6 @@ export function openOpsStaleIncident(
     lastReason: 'stale', lastSeverity: null, lastRunId: null, lastEventId: `dead-man:${nowIso}`,
     lastLinks: null, lastMailAt: nowIso,
     escalationLevel: 0, lastEscalationAt: null, resolvedAt: null,
-    lastHeartbeatAt: null,
+    lastHeartbeatAt: null, lastOccurredAt: nowIso,
   };
 }

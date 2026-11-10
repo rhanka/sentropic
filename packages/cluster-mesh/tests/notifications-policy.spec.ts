@@ -95,10 +95,10 @@ describe('ops incident state machine', () => {
   });
 
   it('watches heartbeats silently, opens dead-man stale, recovers on resume', () => {
-    const heartbeat = (eventId: string): OpsJobFailureV1 => ({
+    const heartbeat = (eventId: string, occurredAt: string = T0): OpsJobFailureV1 => ({
       v: 1, eventId, source: 'k8s', targetKey: 'immo-prod',
       jobRef: { namespace: 'immo', kind: 'CronJob', name: 'radar-refresh-pv' },
-      runId: eventId, outcome: 'heartbeat', occurredAt: T0,
+      runId: eventId, outcome: 'heartbeat', occurredAt,
     });
     const dormant = applyOpsJobFailureEvent(null, heartbeat('k8s:cron:schedule:1'), T0);
     expect(dormant.mails).toEqual([]);
@@ -109,9 +109,64 @@ describe('ops incident state machine', () => {
     const stale = openOpsStaleIncident('immo-prod', 'immo', 'radar-refresh-pv', 'CronJob', at(2 * HOUR));
     expect(stale.status).toBe('firing');
     expect(stale.lastReason).toBe('stale');
-    const resumed = applyOpsJobFailureEvent(stale, heartbeat('k8s:cron:schedule:2'), at(2 * HOUR + MIN));
+    const resumed = applyOpsJobFailureEvent(
+      stale,
+      heartbeat('k8s:cron:schedule:2', at(2 * HOUR + MIN)),
+      at(2 * HOUR + MIN),
+    );
     expect(resumed.mails).toEqual(['recovery']);
     expect(resumed.state?.status).toBe('resolved');
+  });
+
+  it('ignores a delayed failed that predates the recovery', () => {
+    const first = applyOpsJobFailureEvent(null, failed('k8s:run-2:failed', { occurredAt: at(10 * MIN) }), at(10 * MIN));
+    const resolved = applyOpsJobFailureEvent(
+      first.state,
+      { ...succeeded('k8s:run-2:succeeded'), occurredAt: at(20 * MIN) },
+      at(20 * MIN),
+    );
+    expect(resolved.state?.status).toBe('resolved');
+    const delayed = applyOpsJobFailureEvent(
+      resolved.state,
+      { ...failed('k8s:run-1:failed', { occurredAt: T0 }), runId: 'run-1' },
+      at(30 * MIN),
+    );
+    expect(delayed.stale).toBe(true);
+    expect(delayed.mails).toEqual([]);
+    expect(delayed.state?.status).toBe('resolved');
+  });
+
+  it('ignores an old succeeded while firing and refreshes the watch on success', () => {
+    const first = applyOpsJobFailureEvent(
+      null, failed('k8s:run-2:failed', { occurredAt: at(10 * MIN) }), at(10 * MIN),
+    );
+    const oldSuccess = applyOpsJobFailureEvent(
+      first.state,
+      { ...succeeded('k8s:run-1:succeeded'), occurredAt: T0 },
+      at(15 * MIN),
+    );
+    expect(oldSuccess.stale).toBe(true);
+    expect(oldSuccess.state?.status).toBe('firing');
+    const heartbeat = (eventId: string, occurredAt: string): OpsJobFailureV1 => ({
+      v: 1, eventId, source: 'k8s', targetKey: 'immo-prod',
+      jobRef: { namespace: 'immo', kind: 'CronJob', name: 'radar-refresh-pv' },
+      runId: eventId, outcome: 'heartbeat', occurredAt,
+    });
+    const dormant = applyOpsJobFailureEvent(null, heartbeat('k8s:cron:schedule:1', T0), T0);
+    const proven = applyOpsJobFailureEvent(
+      dormant.state,
+      { ...succeeded('k8s:run-9:succeeded'), occurredAt: at(30 * MIN) },
+      at(30 * MIN),
+    );
+    expect(proven.mails).toEqual([]);
+    expect(proven.state?.lastHeartbeatAt).toBe(at(30 * MIN));
+    const oldBeat = applyOpsJobFailureEvent(
+      proven.state,
+      heartbeat('k8s:cron:schedule:0', T0),
+      at(31 * MIN),
+    );
+    expect(oldBeat.stale).toBe(true);
+    expect(oldBeat.state?.lastHeartbeatAt).toBe(at(30 * MIN));
   });
 
   it('caps sends at 10 mails per hour per target', () => {
