@@ -10,10 +10,13 @@
 // replace the declaration without touching the policy or the send path.
 
 import {
+  createCachedOpsRecipientsPort,
   createDeclaredOpsRecipientsPort,
+  fetchOpsProductRecipients,
   normalizeOpsRecipientEmail,
   type OpsAccountLookupV1,
   type OpsAlertRecipientsPortV1,
+  type OpsFetchLike,
 } from '@sentropic/cluster-mesh/notifications';
 import { env } from '../../config/env';
 import { logger } from '../../logger';
@@ -136,6 +139,32 @@ export interface OpsRecipientsBindingDeps {
   readonly declaration?: Record<string, string[]>;
   readonly accounts?: OpsAccountLookupV1;
   readonly platformAdmins?: () => Promise<readonly { accountId: string; email: string; basis: string }[]>;
+  /** Optional product pull URLs: target -> recipientsUrl (conductor contract v1). */
+  readonly recipientsUrls?: Record<string, string>;
+  readonly fetchFn?: OpsFetchLike;
+  readonly now?: () => string;
+}
+
+/** Parse `OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON` (target -> recipientsUrl). */
+export function parseOpsRecipientsUrls(raw: string | undefined): Record<string, string> {
+  if (!raw || raw.trim().length === 0) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    logger.error('ops recipients urls are not valid JSON; product pull disabled');
+    return {};
+  }
+  if (!isRecord(parsed)) {
+    logger.error('ops recipients urls must be an object; product pull disabled');
+    return {};
+  }
+  const urls: Record<string, string> = {};
+  for (const [targetKey, url] of Object.entries(parsed)) {
+    if (typeof url !== 'string' || (!url.startsWith('https://') && !url.startsWith('http://localhost'))) continue;
+    urls[targetKey] = url;
+  }
+  return urls;
 }
 
 /**
@@ -154,8 +183,42 @@ export function createOpsRecipientsPort(deps: OpsRecipientsBindingDeps = {}): Op
       logger.warn({ targetKey, accountId, reason }, 'ops recipients declaration entry skipped');
     },
   });
+  // Optional product pull (conductor contract v1): targets with a configured
+  // recipientsUrl resolve through the validated product answer (cached
+  // 10 min, stale-while-error 24 h); every other target uses the declaration.
+  const urls = deps.recipientsUrls ?? parseOpsRecipientsUrls(env.OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON);
+  const now = deps.now ?? (() => new Date().toISOString());
+  const bearer = env.OPS_JOB_FAILURE_RECIPIENTS_BEARER;
+  const fetchFn: OpsFetchLike = deps.fetchFn ?? ((url, init) =>
+    fetch(url, {
+      signal: init.signal,
+      ...(bearer ? { headers: { authorization: `Bearer ${bearer}` } } : {}),
+    }),
+  );
+  const byTarget = new Map<string, OpsAlertRecipientsPortV1>();
+  const pullFor = (targetKey: string): OpsAlertRecipientsPortV1 => {
+    const cached = byTarget.get(targetKey);
+    if (cached) return cached;
+    const port = createCachedOpsRecipientsPort({
+      now,
+      onError: ({ code }) => logger.warn({ targetKey, code }, 'ops product recipients pull failed'),
+      load: async (key) => {
+        if (key !== targetKey) throw new Error('ops recipients pull target mismatch');
+        return fetchOpsProductRecipients({ url: urls[key]!, targetKey: key, fetchFn, nowIso: now() });
+      },
+    });
+    byTarget.set(targetKey, port);
+    return port;
+  };
   return {
     async listRecipientsForTarget(targetKey: string) {
+      if (urls[targetKey]) {
+        const recipients = await pullFor(targetKey).listRecipientsForTarget(targetKey);
+        if (recipients.length === 0) {
+          logger.warn({ targetKey }, 'ops product answered no admin; failing closed with a configuration alert');
+        }
+        return recipients;
+      }
       const recipients = await declared.listRecipientsForTarget(targetKey);
       if (recipients.length === 0) {
         logger.warn({ targetKey }, 'ops alert target has no usable admin; failing closed with a configuration alert');

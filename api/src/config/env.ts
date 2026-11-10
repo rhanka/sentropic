@@ -135,6 +135,13 @@ const envSchema = z.object({
   // ingestible targets, as JSON (ex. {"svc-k8s-watcher":["*"]}). Unset =
   // any scope-holder may ingest (legacy single-watcher shape, logged once).
   OPS_JOB_FAILURE_INGEST_CLIENTS_JSON: z.string().optional(),
+  // Ops product pull (notify L1, optional): product target -> recipientsUrl
+  // answering `GET ?target=<productKey>` with `{v:1,target,asOf,admins}`.
+  // Targets without a URL resolve through OPS_JOB_FAILURE_TARGETS_JSON.
+  OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON: z.string().optional(),
+  // Service-client bearer the platform presents to product recipientsUrls.
+  // Operator-provisioned, rotated with the product's service client.
+  OPS_JOB_FAILURE_RECIPIENTS_BEARER: z.string().optional(),
   // Autostart of the ops notification sweep; 'false' disables it (tests).
   OPS_NOTIFY_SWEEP_AUTOSTART: z.string().optional(),
   // WebAuthn Configuration

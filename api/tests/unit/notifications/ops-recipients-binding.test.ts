@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createOpsPlatformAdminsPort,
   createOpsRecipientsPort,
+  parseOpsRecipientsUrls,
   parseOpsTargetsDeclaration,
   parseOpsTargetsDeclarationStrict,
 } from '../../../src/services/notifications/ops-recipients';
@@ -90,6 +91,54 @@ describe('parseOpsTargetsDeclarationStrict', () => {
     expect(() => parseOpsTargetsDeclarationStrict('{"immo-prod":"u-1"}')).toThrow(/must be an array/);
     expect(parseOpsTargetsDeclarationStrict('{"immo-prod":["u-1"]}')).toEqual({ 'immo-prod': ['u-1'] });
     expect(parseOpsTargetsDeclarationStrict(undefined)).toEqual({});
+  });
+});
+
+describe('product pull recipientsUrls', () => {
+  const T0 = '2026-11-09T10:00:00.000Z';
+  const answer = {
+    v: 1, target: 'immo-prod', asOf: T0,
+    admins: [{ accountRef: 'u-product', email: 'product-admin@example.com', basis: ['app:is_admin'] }],
+  };
+
+  it('resolves a configured target through the validated product answer', async () => {
+    const seen: string[] = [];
+    const port = createOpsRecipientsPort({
+      declaration: { 'immo-prod': ['u-declared'] },
+      accounts: accounts({ 'u-declared': { status: 'active', email: 'declared@example.com' } }),
+      recipientsUrls: { 'immo-prod': 'https://immo.example.com/api/v1/ops/recipients' },
+      fetchFn: async (url) => {
+        seen.push(url);
+        return { ok: true, status: 200, json: async () => answer };
+      },
+      now: () => T0,
+    });
+    expect(await port.listRecipientsForTarget('immo-prod')).toEqual([
+      { accountId: 'u-product', email: 'product-admin@example.com', basis: 'app:is_admin' },
+    ]);
+    expect(seen[0]).toContain('target=immo-prod');
+  });
+
+  it('keeps unconfigured targets on the declaration and fails closed on pull errors', async () => {
+    const port = createOpsRecipientsPort({
+      declaration: { other: ['u-declared'] },
+      accounts: accounts({ 'u-declared': { status: 'active', email: 'declared@example.com' } }),
+      recipientsUrls: { 'immo-prod': 'https://immo.example.com/api/v1/ops/recipients' },
+      fetchFn: async () => { throw new Error('product down'); },
+      now: () => T0,
+    });
+    expect(await port.listRecipientsForTarget('other')).toEqual([
+      { accountId: 'u-declared', email: 'declared@example.com', basis: 'platform-declaration:other' },
+    ]);
+    await expect(port.listRecipientsForTarget('immo-prod')).rejects.toThrow();
+  });
+
+  it('parses the urls map and drops non-https entries', () => {
+    expect(parseOpsRecipientsUrls(undefined)).toEqual({});
+    expect(parseOpsRecipientsUrls('not-json')).toEqual({});
+    expect(parseOpsRecipientsUrls('{"immo-prod":"https://immo.example.com/r","bad":"ftp://x"}')).toEqual({
+      'immo-prod': 'https://immo.example.com/r',
+    });
   });
 });
 
