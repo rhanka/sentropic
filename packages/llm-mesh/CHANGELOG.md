@@ -2,40 +2,34 @@
 
 ## Unreleased
 
-## 0.33.1
+## 0.34.1
 
-- Patch release (not minor): the consumer ranges on this line
-  (`llm-gateway ^0.33.0`, cluster-mesh `<0.34.0`) only admit patches, so
-  the new seat host ships as 0.33.1 by package convention.
-- Concrete Node Claude seat host (`@sentropic/llm-mesh/node`):
-  `NodeClaudeCodeCliRunner` spawns the `claude` CLI headless (`-p
-  --verbose --output-format stream-json`, `--model`, `--effort`, optional
-  `--system-prompt-file`; `--verbose` is required with stream-json on the
-  2.1 line), feeds the projected prompt over stdin, and normalizes
-  stream-json output to `ClaudeCodeCliEvent`. The seat OAuth access
-  projection travels as `CLAUDE_CODE_OAUTH_TOKEN` in the child env only
-  (never argv); the child env is an allowlist (PATH plus locale/timezone
-  knobs) with auth/endpoint/cloud carriers purged, so ambient key auth can
-  neither override the seat grant nor leak to the CLI. Confinement:
-  `--tools ""`, `--strict-mcp-config` with no `--mcp-config`,
-  `--no-session-persistence`, and a fresh sandbox directory as cwd, HOME
-  and `CLAUDE_CONFIG_DIR`; a non-empty tool/MCP inventory in the CLI init
-  line fails the run closed. Timeouts and aborts escalate from a group
-  SIGTERM to a group SIGKILL with pipe teardown and close await; stdout
-  is line/total capped and stderr byte-capped. Quota signals (5-hour
-  session limit, rate limits, overload, matched on CLI-owned message
-  fields only) surface as the typed `ClaudeCliQuotaError` (status 429,
-  retryable `rate_limit`); every other host failure is a fixed-message
-  runner error carrying no CLI output.
-- `ClaudeCodeRuntimeClient` passes quota signals through as a fresh typed
-  `claude_cli_rate_limited` failure (numeric fields only, secret boundary
-  intact), so `AnthropicAdapter.normalizeError` yields a retryable
-  `rate_limit` for the consumer quota circuit.
-- Factory `createClaudeSeatAnthropicClient` plus `probeClaudeCodeCliCapabilities`
-  (`claude --version` minimum 2.1 plus `claude --help` confinement-flag
-  check, both with a token-free allowlist env) for consumers building
-  `clients.anthropic`; `./node` also re-exports `ClaudeCliQuotaError` for
-  consumer `instanceof` handling.
+- Patch on the 0.34 line (consumer ranges `llm-gateway ^0.34.0`, cluster-mesh `<0.35.0` admit 0.34.x): concrete Node Claude seat host (`@sentropic/llm-mesh/node`).
+- `NodeClaudeCodeCliRunner` spawns the `claude` CLI headless (`-p --verbose --output-format stream-json`, `--model`, `--effort`, optional `--system-prompt-file`; `--verbose` is required with stream-json on the 2.1 line), feeds the projected prompt over stdin, and normalizes stream-json output to `ClaudeCodeCliEvent`. The seat OAuth access projection travels as `CLAUDE_CODE_OAUTH_TOKEN` in the child env only (never argv); the child env is an allowlist (PATH plus locale/timezone knobs) with auth/endpoint/cloud carriers purged, so ambient key auth can neither override the seat grant nor leak to the CLI. Confinement: `--tools ""`, `--strict-mcp-config` with no `--mcp-config`, `--no-session-persistence`, and a fresh sandbox directory as cwd, HOME and `CLAUDE_CONFIG_DIR`; a non-empty tool/MCP inventory in the CLI init line fails the run closed. Timeouts and aborts escalate from a group SIGTERM to a group SIGKILL with pipe teardown and close await; stdout is line/total capped and stderr byte-capped. Quota signals (5-hour session limit, rate limits, overload, matched on CLI-owned message fields only) surface as the typed `ClaudeCliQuotaError` (status 429, retryable `rate_limit`); every other host failure is a fixed-message runner error carrying no CLI output.
+- `ClaudeCodeRuntimeClient` passes quota signals through as a fresh typed `claude_cli_rate_limited` failure (numeric fields only, secret boundary intact), so `AnthropicAdapter.normalizeError` yields a retryable `rate_limit` for the consumer quota circuit.
+- Factory `createClaudeSeatAnthropicClient` plus `probeClaudeCodeCliCapabilities` (`claude --version` minimum 2.1 plus `claude --help` confinement-flag check, both with a token-free allowlist env) for consumers building `clients.anthropic`; `./node` also re-exports `ClaudeCliQuotaError` for consumer `instanceof` handling.
+## 0.34.0
+
+- Custodian Lot 1 (new surface, minor): proactive refresh cycle
+  (`runCustodianRefreshCycle`) over mesh-managed accounts inside the skew
+  window (25 percent of credential TTL remaining from issuance, 10 min
+  floor, injected clock), per-account secret-free custody-state report.
+  Definitive refresh failures flip `reauth_required` early and emit a
+  secret-free `ReauthAlertSink` event (diagnostic account ref only, once per
+  epoch). Only provably unconsumed failures defer without flipping
+  (explicit 429/5xx token-endpoint responses, typed local preparation
+  failures); timeouts, resets, mint/persistence failures after a possible
+  grant rotation (typed `MusePostRotationError`), and unknown shapes flip
+  fail-closed so a consumed grant is never replayed. `startCustodianLoop` /
+  `stopCustodianLoop` run the hosted loop (immediate first cycle, jittered
+  cadence, `onError` surface, exactly one loop per owner scope); the
+  custodian controls live on the administrative facade. External seats stay
+  skipped (an expired or unknown-expiry one reads reauth-required without
+  flipping); grant-less credentials warn once inside the window
+  (`expiring-no-grant`, upcoming expiry exposed in the report) and flip on
+  expiry for a planned re-enrollment. A CLI-imported Muse credential carries
+  no refresh grant yet refreshes through the cycle (CLI store re-read),
+  unlike direct-billed Muse keys (`auth_type: 'api_key'`).
 
 ## 0.33.0
 
