@@ -39,6 +39,34 @@ PR #983 (OPEN, base `main`). Tête poussée : `8a9a54576`.
    chaînes de version uniquement) ; laissé au verdict du nouveau run.
 7. `ci-gate` : conséquence des échecs ci-dessus.
 
+## Suivi du run 42718308820 (4 échecs : 6 → 4)
+
+- `test-api-unit-integration` et `test-e2e` : repassés au vert (pins corrigés).
+- `validate-cluster-mesh (source)` et `(lazy)` : un seul test restant,
+  `artifacts-tuple` « pins the selected artifacts release archive » — la
+  spec figeait l'ancien hash 4NL6. Pin passé à jc0f (commit 846126952) ;
+  tout le reste de la lane source est vert (speech, gateway-surface,
+  llm-surface, skew-invariants).
+- `validate-cowork-bridge` : échec infra prouvé (Docker Hub 502 sur le pull
+  de l'image node, aucun code de branche exécuté, 18 s). Transitoire, couvert
+  par le push frais, aucun rerun.
+- Tête poussée : `846126952`, run 42722166769.
+
+## Suivi du run 42722166769 (2 échecs : 4 → 2)
+
+- `validate-cluster-mesh (source)` et `(lazy)` : VERTS (fixture + pin).
+- `test-api-unit-integration`, `validate-cowork-bridge` : VERTS.
+- `test-e2e (1)` : 45 passés, 1 échec — `07-matrix.spec.ts:572`
+  (lock/presence, timeout 2 s sur propagation de release). Même arbre
+  fonctionnel vert au run précédent ; surface non touchée. Candidat flake
+  enregistré dans `BRANCH.md` (sans acceptation, sans sign-off).
+- `ci-gate` : conséquence.
+
+Note : le push `d58d6993e` n'a déclenché aucun run (événement GitHub perdu,
+constaté : aucun check, PR restée ouverte). Le rebase suivant sur le nouveau
+`main` (`00d160d79`, #986 artifacts-live, sans recouvrement) a relancé la
+machinerie. La branche est de nouveau MERGEABLE après chaque rebase.
+
 ## Écarts procéduraux assumés
 
 - Compilations dist mcp-platform/artifacts/auth-ui rejouées en `docker run`
