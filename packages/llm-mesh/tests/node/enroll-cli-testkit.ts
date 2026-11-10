@@ -3,7 +3,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { CliWriters } from '../../src/node/cli/enroll-args.js';
+import { EXIT_CODES, type CliWriters } from '../../src/node/cli/enroll-args.js';
+import { runEnroll } from '../../src/node/cli/enroll-command.js';
 
 export const KEY_ENV = 'TEST_LLM_MESH_ENROLL_KEY';
 // 32-byte test key as 64 hex chars (the CLI refuses passphrase fallback).
@@ -32,7 +33,9 @@ export interface StubCalls {
   bodies: unknown[];
 }
 
-export const stubMuseDeviceFetch = (): { fetchFn: typeof fetch; calls: StubCalls } => {
+export const stubMuseDeviceFetch = (overrides: { email?: string; apiKey?: string } = {}): { fetchFn: typeof fetch; calls: StubCalls } => {
+  const email = overrides.email ?? OWNER_EMAIL;
+  const apiKey = overrides.apiKey ?? MINTED_KEY;
   const calls: StubCalls = { urls: [], bodies: [] };
   const decode = (body: unknown): unknown => {
     if (typeof body !== 'string') return body;
@@ -59,7 +62,7 @@ export const stubMuseDeviceFetch = (): { fetchFn: typeof fetch; calls: StubCalls
       return json({ access_token: DCA_TOKEN, refresh_token: REFRESH_TOKEN, expires_in: 3600 });
     }
     if (u.includes('/muse-code/key')) {
-      return json({ api_key: MINTED_KEY, user_email: OWNER_EMAIL });
+      return json({ api_key: apiKey, user_email: email });
     }
     throw new Error(`unexpected fetch: ${u}`);
   }) as typeof fetch;
@@ -87,3 +90,23 @@ export const tempDir = async (): Promise<{ dir: string; cleanup: () => Promise<v
 
 export const allOutput = (writers: { outLines: string[]; errLines: string[] }): string =>
   [...writers.outLines, ...writers.errLines].join('\n');
+
+export const enrollOne = async (dir: string, email: string, label: string): Promise<string> => {
+  const env = { [KEY_ENV]: PASSPHRASE };
+  const { fetchFn } = stubMuseDeviceFetch({ email, apiKey: `minted-${email}` });
+  const writers = captureWriters();
+  const code = await runEnroll(
+    {
+      command: 'enroll',
+      provider: 'muse-code',
+      keyringDir: dir,
+      keyringKeyEnv: KEY_ENV,
+      ownerScope: 'tenant-1:immo-detection',
+      label,
+    },
+    { fetchFn, writers, env },
+  );
+  if (code !== EXIT_CODES.ok) throw new Error(`enrollOne failed with exit ${code}`);
+  const stored = JSON.parse(writers.outLines[1] as string) as { accountId: string };
+  return stored.accountId;
+};

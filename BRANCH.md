@@ -160,7 +160,7 @@
   - [x] M1 upstream error bodies never relayed (status-only messages).
   - [x] M2 key derivation requires 32-byte hex/base64, passphrase fallback refused.
   - [x] M3 keyring reads inside try mapped to exit 5, corrupt envelope to exit 6, final handler JSON-only.
-  - [ ] M4 new tests (bin, repeatable N, perms, bad key, secret body, codex refusal).
+  - [x] M4 new tests (bin, repeatable N, perms, bad key, secret body, codex refusal).
   - [ ] m1 maxAttempts forwarded, effort documented; m2 unknown provider/flag handling; m4 exports plus changelog; m5 fixture plus report.
   - [ ] Bump llm-mesh to 0.35.0 (> main 0.34.0 and > npm 0.34.0), CHANGELOG, lockfiles.
   - [ ] Lot gate:

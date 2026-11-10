@@ -143,13 +143,17 @@ always takes ownership from `StartEnrollmentInput.ownerScope`.
 ## Device-flow enrollment CLI (`llm-mesh-enroll`)
 
 The `llm-mesh-enroll` bin enrolls seat-billed device-flow accounts
-(muse-code first, repeatable for N accounts) and probes them. The keyring
-passphrase is read from the environment variable named by
-`--keyring-key-env` (never from argv); stdout carries one JSON object per
-line, secrets never reach stdout, stderr, or error messages.
+(muse-code and codex, repeatable for N accounts) and probes muse-code seat
+accounts. The keyring key is read from the environment variable named by
+`--keyring-key-env` (never from argv): it must hold 32 bytes as 64 hex
+chars or 44/43-char base64 (a human passphrase is refused). stdout carries
+one JSON object per line, secrets never reach stdout, stderr, or error
+messages. `probe` only supports `--provider muse-code` and verifies the
+stored account provider before any token leaves the keyring; `--effort` is
+validated for forward compatibility but not forwarded on the Muse Chat wire.
 
 ```sh
-export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held passphrase, set in the environment
+export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held 32-byte key (hex), set in the environment
 
 # 1. Enroll one account (repeat with a new --label per account).
 #    The owner approves each device login on accountscenter.meta.com.
