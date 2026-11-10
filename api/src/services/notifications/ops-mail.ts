@@ -10,7 +10,7 @@ import { sendTransactionalEmail } from '../scw-tem-client';
 import type { OpsMailerPort } from './ops-types';
 
 const escapeHtml = (value: string): string =>
-  value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&gt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!));
+  value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!));
 
 /**
  * Subjects travel on one line: strip control characters and collapse

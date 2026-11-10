@@ -74,7 +74,7 @@ export function parseOpsTargetsDeclarationStrict(raw: string | undefined): Recor
   } catch {
     throw new Error('ops recipients declaration is not valid JSON');
   }
-  if (!isRecord(parsed)) throw new Error('ops recipients declaration must be an object');
+  if (!isRecord(parsed) || Array.isArray(parsed)) throw new Error('ops recipients declaration must be an object');
   for (const [targetKey, accountIds] of Object.entries(parsed)) {
     if (!Array.isArray(accountIds)) {
       throw new Error(`ops recipients declaration entry ${JSON.stringify(targetKey)} must be an array`);
