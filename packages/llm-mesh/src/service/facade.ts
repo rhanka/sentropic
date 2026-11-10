@@ -27,6 +27,25 @@ import {
   InMemoryRoutePlanner, type InMemoryRoutePlannerOptions,
 } from '../route-planner.js';
 import type { RoutePlanner } from '../routing-contracts.js';
+import type {
+  CustodianRefreshPolicy,
+  CustodianRefreshReport,
+} from './custodian-refresh.js';
+import type { ReauthAlertSink } from './reauth-alert.js';
+import type { LocalAccountTransportServiceOptions } from './local-account-transport-service.js';
+
+export type {
+  CustodianAccountAction,
+  CustodianAccountReport,
+  CustodianRefreshPolicy,
+  CustodianRefreshReport,
+} from './custodian-refresh.js';
+export type {
+  ReauthAlertEvent,
+  ReauthAlertReason,
+  ReauthAlertSink,
+} from './reauth-alert.js';
+export type { LocalAccountTransportServiceOptions } from './local-account-transport-service.js';
 
 export interface ProviderRequest {
   modelId: string;
@@ -78,12 +97,23 @@ export interface ConfigResolver {
   resolveConfig(configRef: string): Promise<Record<string, unknown>>;
 }
 
+export interface CustodianOptions {
+  /** Injected clock (ms); defaults to Date.now. Tests pin it. */
+  now?: () => number;
+  /** Reauth alert sink (D4: conductor h2a + owner re-auth); never receives secrets. */
+  reauthAlert?: ReauthAlertSink;
+  /** Proactive refresh skew policy; defaults to 25 % TTL / 10 min floor. */
+  refreshPolicy?: CustodianRefreshPolicy;
+}
+
 export interface FacadeOptions {
   configResolver: ConfigResolver;
   keyring?: KeyringAdapter;
   mode: 'cli' | 'portal';
   /** Explicit owner used only to bind pre-ownerScope local keyring records. */
   legacyAccountOwnerScopeRef?: string;
+  /** Lot 1 custodian loop options (clock, reauth sink, skew policy). */
+  custodian?: CustodianOptions;
 }
 
 export interface AccountOwnerInput {
@@ -101,6 +131,21 @@ export interface LlmMeshAccountAdministration {
     accountId: string,
     input: AccountOwnerInput,
   ): Promise<RemoveAccountResult>;
+
+  // Lot 1 custodian controls (D1 cluster custody, D4 reauth alert): proactive
+  // refresh cycle over mesh-managed accounts, secret-free report per account.
+  // Custody controls live on the administration surface, not the runtime
+  // facade: holding an acquire/release handle must not allow stopping the
+  // loop or reading the multi-owner report. The host runs exactly one loop
+  // per owner scope (no distributed lock here) and observes failures
+  // through onError.
+  runCustodianRefreshCycle(): Promise<CustodianRefreshReport>;
+  startCustodianLoop(
+    intervalMs: number,
+    onReport?: (report: CustodianRefreshReport) => void,
+    onError?: (error: unknown) => void,
+  ): () => void;
+  stopCustodianLoop(): void;
 }
 
 export interface LlmMeshFacade {
@@ -193,11 +238,17 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     ['mistral-vibe', new MistralVibeEnrollmentProvider()],
   ]);
 
+  const serviceOptions: LocalAccountTransportServiceOptions = {
+    ...(options.custodian?.now ? { now: options.custodian.now } : {}),
+    ...(options.custodian?.reauthAlert ? { reauthAlert: options.custodian.reauthAlert } : {}),
+    ...(options.custodian?.refreshPolicy ? { refreshPolicy: options.custodian.refreshPolicy } : {}),
+  };
   const service = new LocalAccountTransportService(
     keyring,
     providers,
     options.configResolver,
     options.legacyAccountOwnerScopeRef,
+    serviceOptions,
   );
 
   return {
@@ -245,6 +296,15 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async release(acquisition) {
       return service.release(acquisition);
+    },
+    async runCustodianRefreshCycle() {
+      return service.runCustodianRefreshCycle();
+    },
+    startCustodianLoop(intervalMs, onReport, onError) {
+      return service.startCustodianLoop(intervalMs, onReport, onError);
+    },
+    stopCustodianLoop() {
+      service.stopCustodianLoop();
     },
     getAdapter(providerId) {
       if (providerId === 'cloud-code') {
