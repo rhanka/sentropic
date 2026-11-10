@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
+import type { ReauthAlertEvent } from '../../src/service/reauth-alert.js';
 import {
   createLlmMeshFacade,
   type ConfigResolver,
@@ -236,6 +237,101 @@ describe('LlmMeshFacade', () => {
     await expect(restarted.removeAccount('acct-owner-a', { ownerScope: 'owner-a' }))
       .resolves.toEqual({ accountId: 'acct-owner-a', removed: true });
     await expect(restarted.listAccounts({ ownerScope: 'owner-a' })).resolves.toEqual([]);
+  });
+
+  it('wires custodian clock, sink and policy through to the cycle', async () => {
+    // m1: the facade `custodian` options must reach the service. The injected
+    // clock decides expiry, the sink receives the no-grant flip, and the tiny
+    // custom window skips an account the default 10-minute floor would
+    // refresh — with no provider call (fetch is stubbed to throw).
+    const nowMs = Date.parse('2027-01-01T00:00:00.000Z');
+    const alerts: ReauthAlertEvent[] = [];
+    const keyring = new InMemoryKeyring();
+    const facade = createLlmMeshFacade({ mode: 'portal',
+      configResolver: { async resolveConfig() { return {}; } }, keyring,
+      custodian: { now: () => nowMs,
+        reauthAlert: { notifyReauthRequired: (event) => { alerts.push(event); } },
+        refreshPolicy: { skewRatio: 0.001, minSkewMs: 0 } } });
+    const iso = (ms: number): string => new Date(ms).toISOString();
+    const seedPersisted = async (accountId: string, ownerScopeRef: string,
+      expiresAt: string, grant: boolean): Promise<void> => {
+      await keyring.setSecret(`sentropic-llm-mesh:${accountId}:public`, JSON.stringify({
+        accountId, accountLabel: `${ownerScopeRef} label`, providerId: 'cloud-code',
+        status: 'active', createdAt: iso(nowMs), updatedAt: iso(nowMs),
+        account: { accountId, ownerScopeRef, accountLabel: `${ownerScopeRef} label`,
+          targetProviderId: 'openai', transportProviderId: 'cloud-code',
+          status: 'active', enrollmentCompletedAt: iso(nowMs) },
+      }));
+      await keyring.setSecret(`sentropic-llm-mesh:${accountId}:envelope`, JSON.stringify({
+        accountId, accessToken: `old-access-${accountId}`,
+        ...(grant ? { refreshToken: `grant-${accountId}` } : {}),
+        expiresAt, authClientConfigVersion: 'v1.0.0',
+      }));
+    };
+    await seedPersisted('facade-tiny', 'owner-tiny', iso(nowMs + 5 * 60_000), true);
+    await seedPersisted('facade-old', 'owner-old', iso(nowMs - 60_000), false);
+    await keyring.setSecret('sentropic-llm-mesh:accounts:index',
+      JSON.stringify(['facade-tiny', 'facade-old']));
+    const fetchFn = vi.fn(async () => { throw new Error('no network in unit tests'); });
+    vi.stubGlobal('fetch', fetchFn);
+    const report = await facade.runCustodianRefreshCycle();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(report.checked).toBe(2);
+    expect(report.accounts.find((entry) => entry.ownerScopeRef === 'owner-tiny'))
+      .toMatchObject({ action: 'skipped-healthy', readiness: 'ready' });
+    expect(report.accounts.find((entry) => entry.ownerScopeRef === 'owner-old'))
+      .toMatchObject({ action: 'expired-no-grant', readiness: 'reauth-required' });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ ownerScopeRef: 'owner-old', reason: 'expired-no-grant' });
+    expect(JSON.stringify(report)).not.toContain('grant-facade');
+  });
+
+  it('restores the refresh window from updatedAt, not the enrollment age', async () => {
+    // m1: a long-enrolled account with a freshly issued credential must not
+    // refresh. The persisted `updatedAt` (issuance bound) decides the TTL,
+    // not `enrollmentCompletedAt`. Seeded enrollment 3 h ago, credential
+    // issued now, expiry in 60 min: window 15 min, remaining 60 — healthy.
+    const nowMs = Date.parse('2027-01-01T00:00:00.000Z');
+    const keyring = new InMemoryKeyring();
+    const facade = createLlmMeshFacade({ mode: 'portal',
+      configResolver: { async resolveConfig() { return {}; } }, keyring,
+      custodian: { now: () => nowMs } });
+    const iso = (ms: number): string => new Date(ms).toISOString();
+    await keyring.setSecret('sentropic-llm-mesh:facade-aged:public', JSON.stringify({
+      accountId: 'facade-aged', accountLabel: 'owner-aged label', providerId: 'cloud-code',
+      status: 'active', createdAt: iso(nowMs - 180 * 60_000), updatedAt: iso(nowMs),
+      account: { accountId: 'facade-aged', ownerScopeRef: 'owner-aged',
+        accountLabel: 'owner-aged label', targetProviderId: 'openai',
+        transportProviderId: 'cloud-code', status: 'active',
+        enrollmentCompletedAt: iso(nowMs - 180 * 60_000) },
+    }));
+    await keyring.setSecret('sentropic-llm-mesh:facade-aged:envelope', JSON.stringify({
+      accountId: 'facade-aged', accessToken: 'old-access-facade-aged',
+      refreshToken: 'grant-facade-aged', expiresAt: iso(nowMs + 60 * 60_000),
+      authClientConfigVersion: 'v1.0.0',
+    }));
+    await keyring.setSecret('sentropic-llm-mesh:accounts:index', JSON.stringify(['facade-aged']));
+    const fetchFn = vi.fn(async () => { throw new Error('no network in unit tests'); });
+    vi.stubGlobal('fetch', fetchFn);
+    const report = await facade.runCustodianRefreshCycle();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(report.accounts).toHaveLength(1);
+    expect(report.accounts[0]).toMatchObject({ action: 'skipped-healthy', readiness: 'ready' });
+  });
+
+  it('starts and stops the custodian loop through the facade', async () => {
+    const facade = createLlmMeshFacade({ mode: 'portal',
+      configResolver: { async resolveConfig() { return {}; } },
+      keyring: new InMemoryKeyring(),
+      custodian: { now: () => Date.parse('2027-01-01T00:00:00.000Z') } });
+    const reports: unknown[] = [];
+    const errors: unknown[] = [];
+    const stop = facade.startCustodianLoop(60_000,
+      (report) => { reports.push(report); }, (error) => { errors.push(error); });
+    await vi.waitFor(() => expect(reports).toHaveLength(1));
+    expect(errors).toEqual([]);
+    stop();
+    facade.stopCustodianLoop();
   });
 
   it('exposes the seat-bundle import entry and delegates canonical registration', async () => {
