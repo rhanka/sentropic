@@ -288,6 +288,17 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     };
   }
 
+  async hasUnsentDelivery(incidentId: string, kind: OpsDeliveryKindV1): Promise<boolean> {
+    const rows = await this.handle.select({ id: opsNotificationDeliveries.id })
+      .from(opsNotificationDeliveries)
+      .where(and(
+        eq(opsNotificationDeliveries.incidentId, incidentId),
+        eq(opsNotificationDeliveries.kind, kind),
+        sql`${opsNotificationDeliveries.status} IN ('pending', 'sending')`,
+      )).limit(1);
+    return rows.length > 0;
+  }
+
   async findSeenCanonical(canonicalKey: string): Promise<OpsSeenEventV1 | null> {
     const rows = await this.handle.select().from(opsSeenEvents)
       .where(eq(opsSeenEvents.canonicalKey, canonicalKey)).limit(1);
