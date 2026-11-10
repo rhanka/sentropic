@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/llm-mesh",
-  "version": "0.34.1",
+  "version": "0.35.0",
   "description": "Provider-agnostic LLM access runtime SDK for Sentropic.",
   "type": "module",
   "license": "MIT",
@@ -11,6 +11,9 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "llm-mesh-enroll": "./dist/node/cli/bin.js"
+  },
   "exports": {
     "./speech": {
       "types": "./dist/speech/index.d.ts",
