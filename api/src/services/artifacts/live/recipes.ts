@@ -34,6 +34,21 @@ export function artifactEnvironment() {
     npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
     npm_config_update_notifier: 'false', ...ARTIFACT_PUBLIC_ENV };
 }
+/** Workspace-scoped install, exactly `npm ci --workspace=<ws>` from the root without `--include-workspace-root`:
+ * the frozen base plus one `--workspace=<dir>` flag per selected workspace (sorted, trusted server-side only).
+ * No root dependency is installed in scoped mode: a tool the workspace build needs must be declared in the workspace.
+ * Empty means full. */
+export function installRecipeFor(workspaces: readonly string[] = []): typeof INSTALL_RECIPE {
+  const sorted = [...workspaces].sort();
+  if (sorted.length === 0) return INSTALL_RECIPE;
+  return Object.freeze({ executable: INSTALL_RECIPE.executable,
+    args: [...INSTALL_RECIPE.args, ...sorted.map(name => `--workspace=${name}`)],
+    timeoutMs: INSTALL_RECIPE.timeoutMs });
+}
+/** True when the recipe is the frozen base or its workspace-scoped form for this selection. */
+export function isInstallRecipe(recipe: unknown, workspaces: readonly string[] = []): boolean {
+  return JSON.stringify(recipe) === JSON.stringify(installRecipeFor(workspaces));
+}
 /** Clean build only: the same host environment with the build heap. */
 export function buildEnvironment() {
   return { ...artifactEnvironment(), NODE_OPTIONS: NODE_BUILD_HEAP_OPTIONS };

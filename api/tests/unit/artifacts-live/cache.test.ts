@@ -40,7 +40,7 @@ function cacheFixture(budget?: InstallBudget) {
       'package-lock.json': lockText, [GB1_QUALIFICATION_PATH]: qualification } };
     const cacheIdentity: CacheIdentity = { storageScopeId: 'scope', repoId: 'repo', lockSha256: sha256(lockfile),
       image: BUILDER_IMAGE, platform: 'linux/amd64', nodeVersion: '24', npmVersion: '11', policyRevision: 'p1',
-      workspaceTopology: 'root', integrityDigest: sha256(qualification) };
+      workspaceTopology: 'root', integrityDigest: sha256(qualification), installWorkspaces: [] };
     return { lockfile, cacheIdentity, stagingRef: 'verified-clean-checkout', gb1 };
   };
   return { lock, rows, ports, source, files, installed, cache: createDependencyCache(ports, budget), stored: () => stored! };

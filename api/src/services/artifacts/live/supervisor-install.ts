@@ -3,7 +3,7 @@ import type { IntegrityPin } from './integrity';
 import { verifySri } from './integrity';
 import { classifyRecipeFailure, readRecipeDiagnostics } from './recipe-diagnostics';
 import { LiveError, type LiveRuntime } from './records';
-import { INSTALL_RECIPE } from './recipes';
+import { isInstallRecipe } from './recipes';
 import { failure, type SupervisorCore } from './supervisor-channel';
 import { TREE_LIMITS, type TransferFile } from './supervisor-transfer';
 
@@ -27,7 +27,8 @@ export function createCleanInstall(core: SupervisorCore,
   return async input => {
     const runtime = input.runtime;
     const signal = input.signal;
-    if (!runtime || JSON.stringify(input.recipe) !== JSON.stringify(INSTALL_RECIPE)) unavailable('install_recipe_invalid');
+    const workspaces = [...(input.identity.installWorkspaces ?? [])].sort();
+    if (!runtime || !isInstallRecipe(input.recipe, workspaces)) unavailable('install_recipe_invalid');
     signal?.throwIfAborted();
     const files = await source(input.stagingRef);
     signal?.throwIfAborted();
@@ -58,7 +59,7 @@ export function createCleanInstall(core: SupervisorCore,
     input.progress?.suspendStall(true);
     try {
       const data = await core.call(runtime, 'install', { recipe: 'install', runId, source: sourceSent, cache: cacheSent,
-        tarballs: staged }, { signal });
+        tarballs: staged, workspaces }, { signal });
       // The pod returns its bounded scrubbed tail with the exit code and signal; the classified cause rides the
       // job reason while the tail stays a log-only detail, never ledger material.
       const diagnostics = readRecipeDiagnostics(data);
