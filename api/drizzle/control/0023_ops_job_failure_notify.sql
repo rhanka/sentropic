@@ -7,8 +7,9 @@
 -- silently. Tables are soft-referenced only (control-namespace rule: no FK).
 --
 -- Retention: ops_seen_events and ops_notification_deliveries are audit trail.
--- No automated purge in v1; a retention purge (90 days) is backlog until
--- `control.event_audit` (ARCH-14) becomes the projection target.
+-- The sweep purges terminal rows older than 90 days best-effort
+-- (`purgeExpiredOpsData`); when `control.event_audit` (ARCH-14) lands, these
+-- deliveries project into it instead of being deleted.
 CREATE TABLE control.ops_incidents (
   id text PRIMARY KEY,
   target_key text NOT NULL,

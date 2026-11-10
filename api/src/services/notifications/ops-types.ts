@@ -88,9 +88,17 @@ export interface OpsNotificationStorePort {
   markDeliveryFailed(id: string, error: string): Promise<void>;
   /** Transient failure or cap: stays pending with a backoff, retried by the next sweep. */
   markDeliveryRetryable(id: string, error: string, nextAttemptAtIso: string): Promise<void>;
-  /** Recipient-weighted sent mail counts per target since `sinceIso`. */
+  /**
+   * Recipient-weighted sent mail counts per target since `sinceIso`:
+   * closed sends plus already-served recipients on open or failed rows
+   * (partial progress, windowed by row `updated_at`), so the hourly budget
+   * holds across sweeps and across deliveries of one sweep.
+   */
   listRecentSentMailCounts(sinceIso: string): Promise<readonly { readonly targetKey: string; readonly mails: number }[]>;
-  /** Recipient-weighted sent mails to one address since `sinceIso`. */
+  /**
+   * Recipient-weighted sent mails to one address since `sinceIso`:
+   * same closed-plus-partial ledger as `listRecentSentMailCounts`.
+   */
   countRecentSentTo(email: string, sinceIso: string): Promise<number>;
   /** Pending + sending deliveries for one target (ingestion queue bound). */
   countPendingForTarget(targetKey: string): Promise<number>;
