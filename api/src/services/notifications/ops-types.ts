@@ -86,10 +86,6 @@ export interface OpsNotificationStorePort {
   ): Promise<void>;
   /** Terminal failure: retried attempts exhausted or permanent provider error. */
   markDeliveryFailed(id: string, error: string): Promise<void>;
-  /** @deprecated Cap-suppressed is requeued with a backoff since the sweep rewrite; kept for the old sweep. */
-  markDeliverySuppressed(id: string): Promise<void>;
-  /** @deprecated Replaced by listRecentSentMailCounts; kept for the old sweep. */
-  listRecentSentAt(targetKey: string, sinceIso: string): Promise<readonly string[]>;
   /** Transient failure or cap: stays pending with a backoff, retried by the next sweep. */
   markDeliveryRetryable(id: string, error: string, nextAttemptAtIso: string): Promise<void>;
   /** Recipient-weighted sent mail counts per target since `sinceIso`. */

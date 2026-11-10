@@ -145,6 +145,27 @@ export interface OpsRecipientsBindingDeps {
   readonly now?: () => string;
 }
 
+/**
+ * A product recipients URL is `https` (any host, no credentials) or plain
+ * `http` loopback only (`localhost`, `127.0.0.1`, `::1`, no credentials).
+ * Prefix matching is banned: `localhost.evil` and `localhost@evil` are
+ * rejected by hostname comparison, not by `startsWith`.
+ */
+export function isAllowedOpsRecipientsUrl(raw: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (parsed.username.length > 0 || parsed.password.length > 0) return false;
+  if (parsed.protocol === 'https:') return parsed.hostname.length > 0;
+  if (parsed.protocol === 'http:') {
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+  }
+  return false;
+}
+
 /** Parse `OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON` (target -> recipientsUrl). */
 export function parseOpsRecipientsUrls(raw: string | undefined): Record<string, string> {
   if (!raw || raw.trim().length === 0) return {};
@@ -161,7 +182,27 @@ export function parseOpsRecipientsUrls(raw: string | undefined): Record<string, 
   }
   const urls: Record<string, string> = {};
   for (const [targetKey, url] of Object.entries(parsed)) {
-    if (typeof url !== 'string' || (!url.startsWith('https://') && !url.startsWith('http://localhost'))) continue;
+    if (typeof url !== 'string' || !isAllowedOpsRecipientsUrl(url)) continue;
+    urls[targetKey] = url;
+  }
+  return urls;
+}
+
+/** Strict variant for boot validation: a typoed URL is a startup failure. */
+export function parseOpsRecipientsUrlsStrict(raw: string | undefined): Record<string, string> {
+  if (!raw || raw.trim().length === 0) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error('ops recipients urls are not valid JSON');
+  }
+  if (!isRecord(parsed) || Array.isArray(parsed)) throw new Error('ops recipients urls must be an object');
+  const urls: Record<string, string> = {};
+  for (const [targetKey, url] of Object.entries(parsed)) {
+    if (typeof url !== 'string' || !isAllowedOpsRecipientsUrl(url)) {
+      throw new Error(`ops recipients url for ${JSON.stringify(targetKey)} is not an allowed https/loopback URL`);
+    }
     urls[targetKey] = url;
   }
   return urls;
