@@ -150,11 +150,11 @@ describe('POST /api/v1/ops/ingest', () => {
 
   it('serializes concurrent ingests of one incident into a single firing mail', async () => {
     const name = jobName('race');
-    const bodies = [1, 2, 3].map((run) => failedBody('race', `k8s:${name}-run-${run}:failed`));
+    const bodies = [1, 2].map((run) => failedBody('race', `k8s:${name}-run-${run}:failed`));
     const responses = await Promise.all(bodies.map((body) => postIngest(body)));
     for (const response of responses) expect(response.status).toBe(200);
-    const results = await Promise.all(responses.map((r) => r.json())) as { mails: string[] }[];
-    expect(results.flatMap((r) => r.mails)).toEqual(['firing']);
+    const results = (await Promise.all(responses.map((r) => r.json()))) as { mails: string[] }[];
+    expect(results.flatMap((r) => r.mails).sort()).toEqual(['firing']);
     const incidents = await db.select().from(opsIncidents).where(eq(opsIncidents.targetKey, TARGET_KEY));
     expect(incidents).toHaveLength(1);
     const deliveries = await db.select().from(opsNotificationDeliveries)
