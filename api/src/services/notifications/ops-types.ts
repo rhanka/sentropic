@@ -46,6 +46,20 @@ export interface OpsNotificationStorePort {
   listHeartbeatWatches(): Promise<readonly OpsIncidentStateV1[]>;
   /** Records the actual send time so the digest clock tracks reality. */
   touchIncidentMailAt(incidentKey: string, sentAtIso: string): Promise<void>;
+  /** Atomically persists a time-driven state advance with its queued mails. */
+  saveIncidentWithDeliveries(
+    state: OpsIncidentStateV1,
+    deliveries: readonly {
+      readonly incidentId: string;
+      readonly targetKey: string;
+      readonly kind: OpsDeliveryKindV1;
+      readonly subject: string;
+      readonly textBody: string;
+      readonly htmlBody: string;
+    }[],
+  ): Promise<void>;
+  /** Cap-hit requeue: stays pending with a backoff without consuming the retry budget. */
+  markDeliveryCapDelayed(id: string, error: string, nextAttemptAtIso: string): Promise<void>;
   insertDelivery(input: {
     readonly incidentId: string;
     readonly targetKey: string;
