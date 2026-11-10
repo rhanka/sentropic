@@ -68,10 +68,11 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
       // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f): LimitRange tenant-defaults cpu <= 1 per container;
-      // ResourceQuota tenant-quota requests.cpu 1, limits.memory 6Gi, limits.ephemeral-storage 10Gi, pods 5; four requests
-      // fit the d2-4 node (4 x 420 = 1680 <= 1706 MiB); the ephemeral limit admits three pods (3 x 3400Mi = 10200Mi <= 10Gi).
-      // Only the limits overcommit.
-      resources: { requests: { cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' },
+      // ResourceQuota tenant-quota requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi, limits.ephemeral-storage 10Gi.
+      // The memory request is the measured build peak (k8s 09/11: ~1.23 GiB RSS at build end): a 420Mi request let the
+      // scheduler overcommit a 2 GiB-class builder node and the kubelet evicted the pod under memory pressure
+      // (supervisor_relay_502). 2 x 1280Mi fits requests.memory 3Gi (MAX_BUILDER_PODS = 2); only CPU still overcommits.
+      resources: { requests: { cpu: '250m', memory: '1280Mi', 'ephemeral-storage': '0' },
         limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
