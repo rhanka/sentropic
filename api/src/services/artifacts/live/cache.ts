@@ -3,13 +3,16 @@ import { safeDependencyPath, sha256, verifySri, type IntegrityPin } from './inte
 import { integrityEvidence, qualifyBuild, type Gb1Source } from './gb1-qualification';
 import { defaultInstallBudget, withinInstallBudget, type InstallBudget, type InstallProgress } from './deadline';
 import { LiveError, type LiveRuntime } from './records';
-import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY } from './recipes';
+import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY, installRecipeFor } from './recipes';
+import { subsetLockPaths, validateWorkspaces } from './workspace-subset';
 import { TREE_LIMITS } from './supervisor-transfer';
 
 export interface CacheIdentity {
   storageScopeId: string; repoId: string; lockSha256: string; platform: string;
   nodeVersion: string; npmVersion: string; image: string; policyRevision: string;
   workspaceTopology: string; integrityDigest: string;
+  /** Workspace-scoped installs (sorted, empty means the whole lockfile). Part of the cache key. */
+  installWorkspaces: readonly string[];
 }
 /** One regular dependency file of a sealed manifest; its bytes are one private object addressed by their sha256. */
 export interface DependencyEntry { path: string; mode: 292 | 365; size: number; sha256: string }
@@ -45,7 +48,7 @@ export interface CachePorts {
 function invalid(): never { throw new LiveError('dependency_cache_invalid'); }
 const cacheKey = (id: CacheIdentity) => `${id.lockSha256}/${sha256(JSON.stringify([
   id.storageScopeId, id.repoId, id.platform, id.nodeVersion, id.npmVersion, id.image,
-  id.policyRevision, id.workspaceTopology, id.integrityDigest,
+  id.policyRevision, id.workspaceTopology, id.integrityDigest, [...(id.installWorkspaces ?? [])].sort(),
 ]))}`;
 const DIGEST = /^[a-f0-9]{64}$/;
 /** Unchanged tree digest over [path, mode, sha256] rows; a size is bound by the per-file rehash on every read. */
@@ -100,7 +103,21 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         // GB1 at the pinned commit (W5 port); the qualification file digest is the identity's integrity digest.
         const evidence = integrityEvidence(qualifyBuild(source.gb1));
         if (evidence.lockSha256 !== identity.lockSha256 || evidence.digest !== identity.integrityDigest) invalid();
-        const { inventory } = evidence;
+        // Workspace subset after the full-lock qualification above: the lock stays validated whole (every remote
+        // entry still needs literal SRI or the sealed map), then only the reachable subset is fetched and installed.
+        const selection = [...(identity.installWorkspaces ?? [])].sort();
+        let inventory = evidence.inventory;
+        if (selection.length > 0) {
+          const lockText = Buffer.from(source.lockfile).toString('utf8');
+          const files = source.gb1.files as Record<string, string>;
+          const rootManifest = files['package.json'];
+          if (typeof rootManifest !== 'string') invalid();
+          const validated = validateWorkspaces(selection, rootManifest,
+            Object.keys(files).filter(path => path === 'package.json' || path.endsWith('/package.json')));
+          const keep = subsetLockPaths(lockText, validated);
+          inventory = evidence.inventory.filter(pin => keep.has(pin.path));
+        }
+        const recipe = installRecipeFor(selection);
         const key = cacheKey(identity);
         const existing = await read(key);
         if (existing) {
@@ -124,11 +141,11 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
           manifest.push({ path: file.path, mode: file.mode, size: file.bytes.byteLength, sha256: digest });
           progress.report();
         };
-        const installed = await ports.cleanInstall({ ...source, identity, runtime, recipe: INSTALL_RECIPE,
+        const installed = await ports.cleanInstall({ ...source, identity, runtime, recipe,
           tarballs: tarballs(), sink, progress, signal });
         if (!installed.runId) invalid();
         const receipt = { key, identity, treeSha256: treeDigest(manifest), inventory,
-          runId: installed.runId, installOptions: INSTALL_RECIPE };
+          runId: installed.runId, installOptions: recipe };
         const object = { receipt: { ...receipt, seal: seal(receipt) }, manifest };
         const admitted = await ports.storage.admit(key, object);
         try {

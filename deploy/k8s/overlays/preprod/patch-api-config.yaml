@@ -154,5 +154,7 @@ data:
   # Builder repositories (forge-binding.ts forgeConfig, #955): the forge the builder reads through the SG0-app lease.
   # installationRef is the SG0-app enrollment ref of the immo installation (`enroll_<36 hex/dash>`), never a numeric
   # GitHub installation id; the entry must match the GITHUB_APP_TARGETS_JSON target above. allowedSubPaths stays ['']
-  # until the pod bootstrap is subPath-aware. Absent or invalid, every forge read and binding refuses forge_unconfigured.
-  ARTIFACT_BUILDER_REPOSITORIES_JSON: '[{"storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier","locator":"rhanka/radar-immobilier","installationRef":"enroll_d6fac2e1-8328-4e74-8bc4-08aeafe54f11","allowedSubPaths":[""]}]'
+  # until the pod bootstrap is subPath-aware. installWorkspaces scopes the dependency install to the artifact build
+  # workspaces (npm ci --workspace each, no root dependencies; immo 09/11: the full monorepo install OOMs a builder pod).
+  # Absent or invalid, every forge read and binding refuses forge_unconfigured.
+  ARTIFACT_BUILDER_REPOSITORIES_JSON: '[{"storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier","locator":"rhanka/radar-immobilier","installationRef":"enroll_d6fac2e1-8328-4e74-8bc4-08aeafe54f11","allowedSubPaths":[""],"installWorkspaces":["ui","packages/radar-domain","packages/radar-scoring","packages/radar-sources"]}]'
