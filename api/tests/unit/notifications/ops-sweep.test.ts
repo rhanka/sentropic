@@ -3,6 +3,7 @@ import {
   DEFAULT_OPS_NOTIFICATION_POLICY_V1,
   type OpsIncidentStateV1,
 } from '@sentropic/cluster-mesh/notifications';
+import { OpsMailError } from '../../../src/services/notifications/ops-mail';
 import { runOpsNotificationSweep } from '../../../src/services/notifications/ops-sweep';
 import type {
   OpsDeliveryRecordV1,
@@ -29,6 +30,7 @@ const incident = (extra: Partial<OpsIncidentStateV1> = {}): OpsIncidentStateV1 =
   lastRunId: 'run-1',
   lastEventId: 'k8s:run-1:failed',
   lastLinks: null,
+  lastDetail: null,
   lastMailAt: iso(0),
   escalationLevel: 0,
   lastEscalationAt: null,
@@ -50,7 +52,8 @@ interface FakeWorld {
   incidents: Map<string, OpsIncidentStateV1>;
   deliveries: Map<string, OpsDeliveryRecordV1>;
   sent: { to: string }[];
-  failSend: boolean;
+  failSend: null | 'transient' | 'permanent';
+  sentMessageIds: string[];
   clock: string;
 }
 
@@ -62,8 +65,8 @@ const fakeDeps = (world: FakeWorld) => {
     listHeartbeatWatches: async () =>
       [...world.incidents.values()].filter((i) => i.status === 'resolved' && i.lastHeartbeatAt !== null),
     touchIncidentMailAt: async (key, sentAt) => {
-      const incident = world.incidents.get(key);
-      if (incident) world.incidents.set(key, { ...incident, lastMailAt: sentAt });
+      const row = world.incidents.get(key);
+      if (row) world.incidents.set(key, { ...row, lastMailAt: sentAt });
     },
     insertDelivery: async (input) => {
       const record = delivery({
@@ -74,8 +77,10 @@ const fakeDeps = (world: FakeWorld) => {
       world.deliveries.set(record.id, record);
       return record;
     },
-    claimPendingDeliveries: async () => {
-      const rows = [...world.deliveries.values()].filter((d) => d.status === 'pending');
+    claimPendingDeliveries: async (_limit, nowIso) => {
+      const rows = [...world.deliveries.values()].filter(
+        (d) => d.status === 'pending' && (d.nextAttemptAt === null || d.nextAttemptAt <= nowIso),
+      );
       for (const row of rows) {
         row.status = 'sending';
         row.attempts += 1;
@@ -122,6 +127,10 @@ const fakeDeps = (world: FakeWorld) => {
     loadSeenEvent: async () => null,
     findSeenCanonical: async () => null,
     recordSeenEvent: async () => {},
+    hasUnsentDelivery: async (incidentId, kind) =>
+      [...world.deliveries.values()].some(
+        (row) => row.incidentId === incidentId && row.kind === kind && (row.status === 'pending' || row.status === 'sending'),
+      ),
     markDeliverySuppressed: async (id) => { world.deliveries.get(id)!.status = 'suppressed'; },
     listRecentSentAt: async () =>
       [...world.deliveries.values()].filter((d) => d.status === 'sent').map((d) => d.sentAt ?? iso(0)),
@@ -130,9 +139,14 @@ const fakeDeps = (world: FakeWorld) => {
     store,
     mailer: {
       send: async (input: { to: string }) => {
-        if (world.failSend) throw new Error('ops_mail_delivery_failed');
+        if (world.failSend === 'transient') throw new Error('socket hang up');
+        if (world.failSend === 'permanent') {
+          throw new OpsMailError('ops_mail_delivery_failed: HTTP 400 bad request', false, 400);
+        }
         world.sent.push({ to: input.to });
-        return 'mid-1';
+        const id = `mid-${world.sentMessageIds.length + 1}`;
+        world.sentMessageIds.push(id);
+        return id;
       },
     },
     recipients: {
@@ -140,14 +154,21 @@ const fakeDeps = (world: FakeWorld) => {
         { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod' },
       ],
     },
+    configRecipients: {
+      listRecipientsForTarget: async () => [
+        { accountId: 'u-platform', email: 'platform@example.com', basis: 'platform-admin-fallback' },
+      ],
+    },
     clock: () => world.clock,
     policy: DEFAULT_OPS_NOTIFICATION_POLICY_V1,
     withIncidentLock: async <T>(_: string, work: () => Promise<T>): Promise<T> => work(),
+    withTargetLock: async <T>(_: string, work: () => Promise<T>): Promise<T> => work(),
   };
 };
 
 const world = (extra: Partial<FakeWorld> = {}): FakeWorld => ({
-  incidents: new Map(), deliveries: new Map(), sent: [], failSend: false, clock: iso(0), ...extra,
+  incidents: new Map(), deliveries: new Map(), sent: [],
+  failSend: null, sentMessageIds: [], clock: iso(0), ...extra,
 });
 
 describe('runOpsNotificationSweep', () => {
@@ -159,8 +180,9 @@ describe('runOpsNotificationSweep', () => {
     expect(w.sent).toEqual([{ to: 'admin@example.com' }]);
     expect(w.deliveries.get('d-1')).toMatchObject({ status: 'sent', messageId: 'mid-1' });
     expect(w.deliveries.get('d-1')!.recipients).toEqual([
-      { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod' },
+      { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod', messageId: 'mid-1' },
     ]);
+    expect(w.incidents.get('immo-prod/immo/radar-refresh-pv')!.lastMailAt).toBe(w.clock);
   });
 
   it('creates the 24 h escalation delivery for a firing incident with no new event', async () => {
@@ -188,26 +210,66 @@ describe('runOpsNotificationSweep', () => {
     expect(result.sent).toBe(1);
   });
 
-  it('suppresses sends past the hourly per-target cap and fails visibly on TEM errors', async () => {
+  it('requeues cap-hit deliveries with a backoff instead of dropping them', async () => {
     const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
     for (let index = 0; index < 10; index += 1) {
       w.deliveries.set(`sent-${index}`, delivery({
         id: `sent-${index}`, status: 'sent', sentAt: iso(30 * 60 * 1000),
+        recipients: [{ accountId: 'u-1', email: 'admin@example.com', basis: 'x', messageId: 'm' }],
       }));
     }
     w.deliveries.set('d-1', delivery());
     const capped = await runOpsNotificationSweep(fakeDeps(w));
     expect(capped.suppressed).toBe(1);
-    expect(w.sent).toHaveLength(0);
+    expect(capped.sent).toBe(0);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
+    expect(w.deliveries.get('d-1')!.nextAttemptAt).not.toBeNull();
+  });
 
-    const w2 = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]), failSend: true });
+  it('retries transient TEM errors with a backoff and fails permanent ones', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]), failSend: 'transient' });
+    w.deliveries.set('d-1', delivery());
+    const retried = await runOpsNotificationSweep(fakeDeps(w));
+    expect(retried.failed).toBe(1);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
+    expect(w.deliveries.get('d-1')!.nextAttemptAt).not.toBeNull();
+
+    const w2 = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]), failSend: 'permanent' });
     w2.deliveries.set('d-1', delivery());
     const failed = await runOpsNotificationSweep(fakeDeps(w2));
     expect(failed.failed).toBe(1);
     expect(w2.deliveries.get('d-1')).toMatchObject({ status: 'failed' });
   });
 
-  it('marks deliveries with no usable recipient as failed, never silently', async () => {
+  it('fails a delivery past the attempt ceiling instead of retrying forever', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({ attempts: 99 }));
+    const result = await runOpsNotificationSweep(fakeDeps(w));
+    expect(result.failed).toBe(1);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'failed' });
+  });
+
+  it('resumes a crashed multi-recipient send without resending served addresses', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({
+      recipients: [{ accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod', messageId: 'mid-old' }],
+    }));
+    const deps = {
+      ...fakeDeps(w),
+      recipients: {
+        listRecipientsForTarget: async () => [
+          { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod' },
+          { accountId: 'u-2', email: 'second@example.com', basis: 'platform-declaration:immo-prod' },
+        ],
+      },
+    };
+    const result = await runOpsNotificationSweep(deps);
+    expect(result.sent).toBe(1);
+    expect(w.sent).toEqual([{ to: 'second@example.com' }]);
+    expect(w.deliveries.get('d-1')!.recipients).toHaveLength(2);
+  });
+
+  it('fails closed with a config alert when the target has no usable recipient', async () => {
     const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
     w.deliveries.set('d-1', delivery());
     const deps = { ...fakeDeps(w), recipients: { listRecipientsForTarget: async () => [] as const } };
@@ -215,5 +277,9 @@ describe('runOpsNotificationSweep', () => {
     expect(result.failed).toBe(1);
     expect(w.deliveries.get('d-1')!.lastError).toContain('no usable recipient');
     expect(w.sent).toHaveLength(0);
+    const config = [...w.deliveries.values()].find((row) => row.kind === 'config');
+    expect(config).toBeDefined();
+    expect(config).toMatchObject({ status: 'pending', targetKey: 'immo-prod' });
+    expect(result.configAlerts).toBe(1);
   });
 });
