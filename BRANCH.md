@@ -163,7 +163,9 @@
   - [x] M4 new tests (bin, repeatable N, perms, bad key, secret body, codex refusal).
   - [x] m1 maxAttempts forwarded, effort documented; m2 unknown provider/flag handling; m4 exports plus changelog.
   - [x] Bump llm-mesh to 0.35.0 (> main 0.34.0 and > npm 0.34.0), CHANGELOG (locks plus mesh ranges follow).
-  - [ ] m5 fixture plus report; mesh range widening to admit 0.35.0; lockfiles via make.
+  - [x] m5 mesh range widening to admit 0.35.0; root lock regenerated via make.
+  - [x] Selected fixture stays at published 0.34.0 (packaging installs from the registry; 0.35.0 unpublished).
+  - [ ] French report at `.tmp/rv/llm-mesh-enroll-cli.md` with the exact commands.
   - [ ] Lot gate:
     - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-enroll` green.
     - [ ] Scoped `make test-llm-mesh SCOPE=tests/node/enroll-cli-enroll.test.ts ENV=test-llm-mesh-enroll` green.
