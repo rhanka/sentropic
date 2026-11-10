@@ -97,6 +97,7 @@ export function applyOpsJobFailureEvent(
           occurrenceCount: state.occurrenceCount + 1, consecutiveFailures: state.consecutiveFailures + 1,
           lastReason: event.reason ?? state.lastReason, lastSeverity: event.severity ?? state.lastSeverity,
           lastRunId: event.runId, lastEventId: event.eventId, lastLinks: event.links ?? state.lastLinks,
+          lastDetail: event.detail ?? state.lastDetail,
           escalationLevel: 0, lastEscalationAt: null, resolvedAt: null,
           lastOccurredAt: event.occurredAt,
         },
@@ -118,6 +119,7 @@ export function applyOpsJobFailureEvent(
     occurrenceCount: state.occurrenceCount + 1, consecutiveFailures,
     lastReason: event.reason ?? state.lastReason, lastSeverity: event.severity ?? state.lastSeverity,
     lastRunId: event.runId, lastEventId: event.eventId, lastLinks: event.links ?? state.lastLinks,
+    lastDetail: event.detail ?? state.lastDetail,
     lastOccurredAt: event.occurredAt,
   };
   if (state.escalationLevel === 0

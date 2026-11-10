@@ -27,6 +27,8 @@ export interface OpsIncidentStateV1 {
   readonly lastRunId: string | null;
   readonly lastEventId: string;
   readonly lastLinks: { readonly logs?: string; readonly run?: string } | null;
+  /** Capped 1 KiB emitter detail, persisted for debugging, never mailed. */
+  readonly lastDetail: string | null;
   /** Any alert mail (firing/escalation/digest/recovery) resets the digest clock. */
   readonly lastMailAt: string | null;
   readonly escalationLevel: 0 | 1;
@@ -82,7 +84,7 @@ function baseIncident(
     status, firstSeenAt: nowIso, lastSeenAt: nowIso,
     occurrenceCount: 0, consecutiveFailures: 0,
     lastReason: null, lastSeverity: null, lastRunId: null, lastEventId: event.eventId,
-    lastLinks: null, lastMailAt: null,
+    lastLinks: null, lastDetail: null, lastMailAt: null,
     escalationLevel: 0, lastEscalationAt: null, resolvedAt: null,
     lastHeartbeatAt: null, lastOccurredAt: event.occurredAt,
   };
@@ -94,7 +96,8 @@ export function openIncident(event: OpsJobFailureV1, nowIso: string): OpsInciden
     ...baseIncident(event, nowIso, 'firing'),
     occurrenceCount: 1, consecutiveFailures: 1,
     lastReason: event.reason ?? null, lastSeverity: event.severity ?? null,
-    lastRunId: event.runId, lastLinks: event.links ?? null, lastMailAt: nowIso,
+    lastRunId: event.runId, lastLinks: event.links ?? null, lastDetail: event.detail ?? null,
+    lastMailAt: nowIso,
   };
 }
 

@@ -1193,11 +1193,15 @@ export const opsIncidents = controlSchema.table(
     lastRunId: text('last_run_id'),
     lastEventId: text('last_event_id').notNull(),
     lastLinks: jsonb('last_links'),
+    // Capped 1 KiB free detail, persisted for operator debugging, never mailed.
+    lastDetail: text('last_detail'),
     lastMailAt: timestamp('last_mail_at', { withTimezone: true }),
     escalationLevel: integer('escalation_level').notNull().default(0),
     lastEscalationAt: timestamp('last_escalation_at', { withTimezone: true }),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     lastHeartbeatAt: timestamp('last_heartbeat_at', { withTimezone: true }),
+    // Newest applied emitter clock: older events are stale replays.
+    lastOccurredAt: timestamp('last_occurred_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
@@ -1260,6 +1264,8 @@ export const opsNotificationDeliveries = controlSchema.table(
     lastError: text('last_error'),
     messageId: text('message_id'),
     sentAt: timestamp('sent_at', { withTimezone: true }),
+    // Requeue marker: the claim only takes rows whose next attempt is due.
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
@@ -1269,7 +1275,7 @@ export const opsNotificationDeliveries = controlSchema.table(
     targetSentIdx: index('ops_deliveries_target_sent_idx').on(table.targetKey, table.status, table.sentAt),
     kindCheck: check(
       'ops_deliveries_kind_check',
-      sql`${table.kind} IN ('firing', 'digest', 'escalation', 'recovery')`,
+      sql`${table.kind} IN ('firing', 'digest', 'escalation', 'recovery', 'config')`,
     ),
     statusCheck: check(
       'ops_deliveries_status_check',
@@ -1296,6 +1302,10 @@ export const opsSeenEvents = controlSchema.table(
   {
     eventId: text('event_id').primaryKey(),
     incidentId: text('incident_id').notNull(),
+    // sha256 of the canonical event payload: same id + different bytes = 409.
+    payloadSha256: text('payload_sha256').notNull(),
+    // Cross-source run key (no source prefix): same run via k8s and app.
+    canonicalKey: text('canonical_key').notNull(),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
 );

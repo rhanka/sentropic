@@ -169,6 +169,14 @@ describe('ops incident state machine', () => {
     expect(oldBeat.state?.lastHeartbeatAt).toBe(at(30 * MIN));
   });
 
+  it('carries the capped detail forward on firing events and never mails it', () => {
+    const withDetail = failed('k8s:run-1:failed', { detail: 'disk full on node-3' });
+    const first = applyOpsJobFailureEvent(null, withDetail, T0);
+    expect(first.state?.lastDetail).toBe('disk full on node-3');
+    const second = applyOpsJobFailureEvent(first.state, failed('k8s:run-2:failed'), at(5 * MIN));
+    expect(second.state?.lastDetail).toBe('disk full on node-3');
+  });
+
   it('caps sends at 10 mails per hour per target', () => {
     expect(DEFAULT_OPS_NOTIFICATION_POLICY_V1.maxMailsPerHourPerTarget).toBe(10);
     const sent = Array.from({ length: 10 }, (_, index) => at(index * MIN));
