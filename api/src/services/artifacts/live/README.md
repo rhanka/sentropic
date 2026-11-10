@@ -152,8 +152,8 @@ node:http so no undici 300 s headers timeout cuts a command; each command is bou
   `ARTIFACT_BUILDER_HOST_BINDINGS_JSON` = `[{clientId, hostId, storageScopeId}]`
   (owner sentropic). An absent or invalid value binds nothing (default deny).
   The ui nginx keeps this path out of its access and error logs.
-- A host build run is presumed dead after its heavy-gate wait plus the four
-  bounded build-only phases (`runStaleMs`), then it can be re-admitted.
+- A host build run is presumed dead after two heavy-gate waits plus two bounded
+  build-only passes (`runStaleMs`, covering the one transport retry), then it can be re-admitted.
 - `builderPlacement(process.env)` supplies the per-environment worker namespace
   and service domain; there is no namespace constant.
 - The content host supplies separate live authorization/currentness and the
