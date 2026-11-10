@@ -146,6 +146,7 @@ const fakeDeps = (world: FakeWorld) => {
         (row) => row.targetKey === targetKey && (row.status === 'pending' || row.status === 'sending'),
       ).length,
     reclaimStaleSending: async () => 0,
+    purgeExpiredOpsData: async () => ({ deliveries: 0, seenEvents: 0 }),
     loadSeenEvent: async () => null,
     findSeenCanonical: async () => null,
     recordSeenEvent: async () => {},
@@ -292,6 +293,25 @@ describe('runOpsNotificationSweep', () => {
     expect(result.timeDriven).toBe(1);
     expect(atomic).toHaveBeenCalledTimes(1);
     expect(direct).not.toHaveBeenCalled();
+  });
+
+  it('purges 90-day audit trail best-effort without blocking sends', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery());
+    const deps = fakeDeps(w);
+    const purge = vi.spyOn(deps.store, 'purgeExpiredOpsData');
+    const result = await runOpsNotificationSweep(deps);
+    expect(result.sent).toBe(1);
+    expect(purge).toHaveBeenCalledTimes(1);
+    const cutoff = Date.parse(purge.mock.calls[0]![0]!);
+    expect(new Date(w.clock).getTime() - cutoff).toBe(90 * 24 * 60 * 60 * 1000);
+
+    const w2 = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w2.deliveries.set('d-1', delivery());
+    const failing = fakeDeps(w2);
+    failing.store.purgeExpiredOpsData = async () => { throw new Error('db down'); };
+    const resumed = await runOpsNotificationSweep(failing);
+    expect(resumed.sent).toBe(1);
   });
 
   it('retries transient TEM errors with a backoff and fails permanent ones', async () => {
