@@ -51,6 +51,7 @@ PR #983 (OPEN, base `main`). Tête poussée : `8a9a54576`.
   de l'image node, aucun code de branche exécuté, 18 s). Transitoire, couvert
   par le push frais, aucun rerun.
 - Tête poussée : `846126952`, run 42722166769.
+- Tête finale : `cc179daed` (rebase sur `00d160d79`), run 42725904700 : SUCCESS.
 
 ## Suivi du run 42722166769 (2 échecs : 4 → 2)
 
