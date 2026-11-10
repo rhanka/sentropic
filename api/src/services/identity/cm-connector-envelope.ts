@@ -31,12 +31,14 @@ const decode = (text: string, length?: number): Buffer => {
   return bytes;
 };
 
-export function sealConnectorCapability(tuple: ConnectorCustodyTuple, capability: Uint8Array, createdAt: string): ConnectorCustodyEnvelope {
+type WithKey = <T>(operation: (key: Buffer) => T) => T;
+
+const sealWith = (tuple: ConnectorCustodyTuple, capability: Uint8Array, createdAt: string, withKey: WithKey): ConnectorCustodyEnvelope => {
   const nonce = randomBytes(12), associated = aad(tuple);
   let first: Buffer | undefined, last: Buffer | undefined, ciphertext: Buffer | undefined, tag: Buffer | undefined;
   try {
     if (!capability.length || capability.length > 16384) return invalid();
-    return borrowKey(tuple.keyRef, key => {
+    return withKey(key => {
       const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 });
       cipher.setAAD(associated);
       first = cipher.update(capability); last = cipher.final();
@@ -45,17 +47,16 @@ export function sealConnectorCapability(tuple: ConnectorCustodyTuple, capability
         ciphertext: ciphertext.toString('base64url'), authTag: tag.toString('base64url'), createdAt };
     });
   } finally { nonce.fill(0); associated.fill(0); first?.fill(0); last?.fill(0); ciphertext?.fill(0); tag?.fill(0); }
-}
+};
 
-/** The borrowed plaintext exists only during this synchronous callback. */
-export function readConnectorCapability<T>(envelope: ConnectorCustodyEnvelope, operation: (bytes: Buffer) => T): T {
+const openWith = <T>(envelope: ConnectorCustodyEnvelope, withKey: WithKey, operation: (bytes: Buffer) => T): T => {
   const owned: Buffer[] = [];
   const take = (bytes: Buffer) => { owned.push(bytes); return bytes; };
   try {
     if (envelope.envelopeVersion !== '1') return invalid();
     const nonce = take(decode(envelope.nonce, 12)), tag = take(decode(envelope.authTag, 16));
     const ciphertext = take(decode(envelope.ciphertext)), associated = take(aad(envelope));
-    return borrowKey(envelope.keyRef, key => {
+    return withKey(key => {
       const decipher = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 });
       decipher.setAAD(associated); decipher.setAuthTag(tag);
       const first = take(decipher.update(ciphertext)), last = take(decipher.final());
@@ -65,4 +66,25 @@ export function readConnectorCapability<T>(envelope: ConnectorCustodyEnvelope, o
     if (error instanceof IdentityCustodyErrorV1) throw error;
     return invalid();
   } finally { for (const buffer of owned) buffer.fill(0); }
+};
+
+export function sealConnectorCapability(tuple: ConnectorCustodyTuple, capability: Uint8Array, createdAt: string): ConnectorCustodyEnvelope {
+  return sealWith(tuple, capability, createdAt, operation => borrowKey(tuple.keyRef, operation));
+}
+
+/** The borrowed plaintext exists only during this synchronous callback. */
+export function readConnectorCapability<T>(envelope: ConnectorCustodyEnvelope, operation: (bytes: Buffer) => T): T {
+  return openWith(envelope, inner => borrowKey(envelope.keyRef, inner), operation);
+}
+
+/**
+ * Re-encryption tool only: the envelope opened under custody key `from` and re-sealed under `to` (fresh
+ * nonce, same tuple and AAD), or null when `from` does not open it.
+ */
+export function resealConnectorEnvelope(envelope: ConnectorCustodyEnvelope, from: Buffer, to: Buffer): ConnectorCustodyEnvelope | null {
+  const { custodyRef, deliveryId, connectorAccountId, provider, keyRef } = envelope;
+  try {
+    return openWith(envelope, operation => operation(from), bytes =>
+      sealWith({ custodyRef, deliveryId, connectorAccountId, provider, keyRef }, bytes, envelope.createdAt, operation => operation(to)));
+  } catch { return null; }
 }

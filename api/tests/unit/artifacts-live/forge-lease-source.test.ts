@@ -7,7 +7,7 @@ describe('lease forge reads: source() re-verification (contract §4)', () => {
   it('should re-download and refuse unstable_tree when one byte differs from the manifest', async () => {
     const s = await setup(); const snap = await s.reads.snapshot(key, HEAD);
     s.state.archive = tarball(REPO.map(e => (e.path === 'src/main.ts' ? { ...e, data: 'export {}!' } : e)));
-    expect(await failure(s.reads.source(snap.stagingRef))).toMatchObject({ code: 'unstable_tree' });
+    expect(await failure(s.reads.source(snap.stagingRef))).toMatchObject({ code: 'unstable_tree', reason: 'source_changed' });
   });
   it('should refuse an unknown, evicted or expired stagingRef as builder_unavailable', async () => {
     const s = await setup(); const first = await s.reads.snapshot(key, HEAD);

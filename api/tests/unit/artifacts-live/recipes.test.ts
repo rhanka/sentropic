@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, NODE_BUILD_HEAP_OPTIONS, NODE_HEAP_OPTIONS,
-  PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment, liveViteConfig,
+  INSTALL_HEAP_MB_DEFAULT, INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, NODE_BUILD_HEAP_OPTIONS,
+  NODE_HEAP_OPTIONS, NODE_INSTALL_HEAP_OPTIONS, PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment, installEnvironment,
+  liveViteConfig, readInstallHeapMb,
 } from '../../../src/services/artifacts/live/recipes';
 import { placement } from './fixture';
 
@@ -23,14 +24,29 @@ describe('offline pod recipes (W2 static deny)', () => {
   });
 
   it('should cap glibc arenas and the esbuild Go heap in every phase, the clean build included', () => {
-    for (const env of [artifactEnvironment(), buildEnvironment()]) {
+    for (const env of [artifactEnvironment(), buildEnvironment(), installEnvironment()]) {
       expect(env.MALLOC_ARENA_MAX).toBe('2');
       expect(env.GOMEMLIMIT).toBe('256MiB');
     }
   });
 
+  it('should run npm ci with its own heap, 1024 by default and validated from the environment', () => {
+    expect(INSTALL_HEAP_MB_DEFAULT).toBe(1024);
+    expect(NODE_INSTALL_HEAP_OPTIONS).toBe('--max-old-space-size=1024');
+    expect(installEnvironment()).toEqual({ ...artifactEnvironment(), NODE_OPTIONS: '--max-old-space-size=1024' });
+    expect(installEnvironment(512).NODE_OPTIONS).toBe('--max-old-space-size=512');
+    expect(readInstallHeapMb({})).toBe(1024);
+    expect(readInstallHeapMb({ ARTIFACT_INSTALL_HEAP_MB: '768' })).toBe(768);
+    for (const env of [{ ARTIFACT_INSTALL_HEAP_MB: 'nope' }, { ARTIFACT_INSTALL_HEAP_MB: '-5' },
+      { ARTIFACT_INSTALL_HEAP_MB: '0' }, { ARTIFACT_INSTALL_HEAP_MB: '255' }, { ARTIFACT_INSTALL_HEAP_MB: '4096' },
+      { ARTIFACT_INSTALL_HEAP_MB: '' }]) {
+      expect(readInstallHeapMb(env)).toBe(1024);
+    }
+    expect(installEnvironment(100).NODE_OPTIONS).toBe('--max-old-space-size=1024');
+  });
+
   it('should leave the basemap tile URL to the repository build wrapper and never name the relay in the pod env', () => {
-    for (const env of [artifactEnvironment(), buildEnvironment()]) {
+    for (const env of [artifactEnvironment(), buildEnvironment(), installEnvironment()]) {
       expect(env).not.toHaveProperty('VITE_BASEMAP_TILE_URL');
       expect(env).not.toHaveProperty('npm_config_registry');
       expect(env.npm_config_offline).toBe('true');

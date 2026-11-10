@@ -7,17 +7,17 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1152.0",
-    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.26.0-dev.18.tgz",
+    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.26.0-dev.20.tgz",
     "@sentropic/comments": "0.3.1",
-    "@sentropic/llm-gateway": "0.22.4",
-    "@sentropic/llm-mesh": "0.33.0",
+    "@sentropic/llm-gateway": "0.22.5",
+    "@sentropic/llm-mesh": "0.34.0",
     "@sentropic/mcp-auth": "0.2.1",
-    "@sentropic/artifacts": "0.2.23",
+    "@sentropic/artifacts": "0.2.25",
     "@sentropic/auth-hono": "0.18.1",
     "@sentropic/mcp-platform": "0.4.2",
     "hono": "4.13.17",
     "jose": "5.10.0",
     "pg": "8.23.1",
-    "@sentropic/auth-ui": "0.9.0"
+    "@sentropic/auth-ui": "0.9.1"
   }
 }

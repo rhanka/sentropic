@@ -9,7 +9,7 @@ import { SERVER_SOURCE } from './bootstrap-server';
 import { LiveError } from './records';
 import {
   BUILD_RECIPE, INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, LIVE_UPSTREAM_PORT, PREBUNDLE_RECIPE, artifactEnvironment,
-  buildEnvironment,
+  buildEnvironment, installEnvironment,
 } from './recipes';
 
 /** DER SPKI of an Ed25519 key: the fixed 12-byte prefix, then the 32-byte key, base64-encoded. */
@@ -17,15 +17,15 @@ const ED25519_SPKI = /^MCowBQYDK2VwAyEA[A-Za-z0-9+/]{43}=$/;
 /** Linux MAX_ARG_STRLEN (128 KiB) bounds one argv string; keep a margin. */
 export const MAX_BOOTSTRAP_BYTES = 120 * 1024;
 
-export function bootstrapConfig(publicKey: string) {
-  if (!ED25519_SPKI.test(publicKey)) throw new LiveError('builder_unavailable');
+export function bootstrapConfig(publicKey: string, installEnv: Record<string, string> = installEnvironment()) {
+  if (!ED25519_SPKI.test(publicKey)) throw new LiveError('builder_unavailable', 'supervisor_key_invalid');
   return { PUBLIC_KEY: publicKey, CONTROL_PORT: 5173, UPSTREAM_PORT: LIVE_UPSTREAM_PORT,
-    ENV: artifactEnvironment(), BUILD_ENV: buildEnvironment(),
+    ENV: artifactEnvironment(), BUILD_ENV: buildEnvironment(), INSTALL_ENV: installEnv,
     RECIPES: { install: INSTALL_RECIPE, prebundle: PREBUNDLE_RECIPE, prebundleScript: LIVE_PREBUNDLE_SCRIPT,
       live: LIVE_RECIPE, build: BUILD_RECIPE } };
 }
-export function createBootstrapSource(publicKey: string) {
-  const source = `${AGENT_SOURCE}${SERVER_SOURCE}\nawait startBootstrap(${JSON.stringify(bootstrapConfig(publicKey))});\n`;
-  if (Buffer.byteLength(source) > MAX_BOOTSTRAP_BYTES) throw new LiveError('builder_unavailable');
+export function createBootstrapSource(publicKey: string, installEnv?: Record<string, string>) {
+  const source = `${AGENT_SOURCE}${SERVER_SOURCE}\nawait startBootstrap(${JSON.stringify(bootstrapConfig(publicKey, installEnv))});\n`;
+  if (Buffer.byteLength(source) > MAX_BOOTSTRAP_BYTES) throw new LiveError('builder_unavailable', 'bootstrap_too_large');
   return source;
 }

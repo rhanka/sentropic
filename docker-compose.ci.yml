@@ -29,7 +29,9 @@ services:
     environment:
       - NODE_ENV=production
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT-true}
-      - JWT_SECRET=dev-secret-key-change-in-production-please
+      # BRSK-EX1: a rate-limited SUT is a deployed runtime and refuses the seeds; the limit job passes disposable keys.
+      - JWT_SECRET=${CI_SUT_JWT_SECRET:-dev-secret-key-change-in-production-please}
+      - SECRET_ENCRYPTION_KEY=${CI_SUT_SECRET_ENCRYPTION_KEY:-}
       - OAUTH_SIGNING_KEK=ci-disposable-signing-kek-never-production
       - OUTBOX_DISPATCHER_AUTOSTART=false
       - ADMIN_EMAIL=e2e-admin@example.com
@@ -63,6 +65,8 @@ services:
       - AUTH_CALLBACK_BASE_URL=http://auth-idp:8787
       - UI_BASE_URL=http://auth-idp:8787
       - DISABLE_RATE_LIMIT=true
+      # BRSK-EX1: the e2e production-image runtime, like api-sut; it shares the seeds with the CI seed scripts.
+      - ADMIN_EMAIL=e2e-admin@example.com
       - SCW_TEM_SECRET_KEY=ci-inert-email-key
       - SCW_TEM_API_BASE_URL=http://127.0.0.1:7700
       # A4 cutover (BRxx-EX12): synthetic CM email-code policy for the standalone IdP SUT (same values as the Makefile seed targets; test-only, never production).

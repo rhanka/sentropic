@@ -13,13 +13,44 @@ const labels = (key: LiveKey, runtime: LiveRuntime) => ({
   'sentropic.dev/artifact-generation': String(runtime.generation),
   'sentropic.dev/artifact-lease': String(runtime.leaseEpoch),
 });
-/** emptyDir sizes (s-archi 2026-11-07 21:15; sizes per the owner quota push 2026-11-08): source, scratch /tmp (npm cache, Vite
- * cache, build output), installed tree; each a disk role cap (never medium: Memory), with their total bounded by the 2560Mi
- * container ephemeral limit. Measured maxima (build-1280): source 105, scratch 1241 during the install, dependencies 958 MiB. */
-export const VOLUME_LIMITS = Object.freeze({ source: '384Mi', scratch: '1536Mi', dependencies: '1152Mi' });
+/** Worker disk sizing in MiB: source (the staged tree), scratch /tmp (npm cache, the install working copy, Vite
+ * cache, build output) and dependencies (the materialized sealed tree). Each is a disk role cap (never medium:
+ * Memory); their achievable total stays bounded by the container ephemeral limit (WORKER_EPHEMERAL_LIMIT_MIB), which is quota-bound and
+ * never raised here. Measured install of a ~1 GiB unpacked tree (preprod 2026-11-09, 745 paths, ~854 MiB unpacked):
+ * source ~105, scratch ~1530 peak (tarballs + working copy + npm tmp), dependencies ~854. Defaults hold a ~1 GiB
+ * tree with margin within the 3400Mi pod total: dependencies +50%, scratch +9%, source kept at 384 (forge snapshot up to 192 MiB plus build output). */
+export interface WorkerSizing { sourceMiB: number; scratchMiB: number; dependenciesMiB: number }
+/** Env overrides of the volume caps in MiB; unset or out of range falls back to the safe default (names only).
+ * The container limits are quota-bound constants, so no env sizing can break the tenant ResourceQuota fit. */
+export const VOLUME_SOURCE_MB_ENV = 'ARTIFACT_VOLUME_SOURCE_MB';
+export const VOLUME_SCRATCH_MB_ENV = 'ARTIFACT_VOLUME_SCRATCH_MB';
+export const VOLUME_DEPENDENCIES_MB_ENV = 'ARTIFACT_VOLUME_DEPENDENCIES_MB';
+export const DEFAULT_WORKER_SIZING = Object.freeze({ sourceMiB: 384, scratchMiB: 1664, dependenciesMiB: 1280 });
+/** Container ephemeral limit: the pod is evicted when source+scratch+dependencies (+ logs) pass it, so it bounds the volume
+ * total. 3 x 3400Mi = 10200Mi fits the builder namespace quota limits.ephemeral-storage 10Gi: three concurrent builder
+ * pods instead of four, so that a ~1 GiB unpacked install (peak ~2.5 GiB on disk, measured 2026-11-09) is not evicted. */
+export const WORKER_EPHEMERAL_LIMIT_MIB = 3400;
+const volumeMb = (value: string | undefined, fallback: number, min: number, max: number) => {
+  const parsed = Number(value?.trim());
+  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+};
+/** Volume total kept under the container ephemeral limit, leaving room for container logs. */
+const EPHEMERAL_HEADROOM_MIB = 64;
+export function readWorkerSizing(env: Readonly<Record<string, string | undefined>>): WorkerSizing {
+  const sizing = {
+    sourceMiB: volumeMb(env[VOLUME_SOURCE_MB_ENV], DEFAULT_WORKER_SIZING.sourceMiB, 128, 1024),
+    scratchMiB: volumeMb(env[VOLUME_SCRATCH_MB_ENV], DEFAULT_WORKER_SIZING.scratchMiB, 512, 4096),
+    dependenciesMiB: volumeMb(env[VOLUME_DEPENDENCIES_MB_ENV], DEFAULT_WORKER_SIZING.dependenciesMiB, 512, 4096),
+  };
+  // Caps whose total passes the pod ephemeral limit would only move the eviction point: refuse them as a whole.
+  const total = sizing.sourceMiB + sizing.scratchMiB + sizing.dependenciesMiB;
+  return total <= WORKER_EPHEMERAL_LIMIT_MIB - EPHEMERAL_HEADROOM_MIB ? sizing : defaultWorkerSizing();
+}
+export const defaultWorkerSizing = (): WorkerSizing => ({ ...DEFAULT_WORKER_SIZING });
 /** Bootstrap is trusted host code, not repository content or a caller-supplied command. */
-export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string, placement: BuilderPlacement) {
-  if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable');
+export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string, placement: BuilderPlacement,
+  sizing: WorkerSizing = defaultWorkerSizing()) {
+  if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable', 'pod_descriptor_invalid');
   return { apiVersion: 'v1', kind: 'Pod', metadata: {
     name: runtime.podName, namespace: placement.namespace, labels: labels(key, runtime),
   }, spec: {
@@ -38,15 +69,17 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
       // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f): LimitRange tenant-defaults cpu <= 1 per container;
       // ResourceQuota tenant-quota requests.cpu 1, limits.memory 6Gi, limits.ephemeral-storage 10Gi, pods 5; four requests
-      // fit the d2-4 node (4 x 420 = 1680 <= 1706 MiB) and four limits fit the quota (4 CPU, 4 x 1536Mi = 6Gi, 4 x 2560Mi = 10Gi).
+      // fit the d2-4 node (4 x 420 = 1680 <= 1706 MiB); the ephemeral limit admits three pods (3 x 3400Mi = 10200Mi <= 10Gi).
       // Only the limits overcommit.
       resources: { requests: { cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' },
-        limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': '2560Mi' } },
+        limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
         { name: 'dependencies', mountPath: '/dependencies' }],
     }],
-    volumes: Object.entries(VOLUME_LIMITS).map(([name, sizeLimit]) => ({ name, emptyDir: { sizeLimit } })),
+    volumes: [{ name: 'source', emptyDir: { sizeLimit: `${sizing.sourceMiB}Mi` } },
+      { name: 'scratch', emptyDir: { sizeLimit: `${sizing.scratchMiB}Mi` } },
+      { name: 'dependencies', emptyDir: { sizeLimit: `${sizing.dependenciesMiB}Mi` } }],
   } };
 }
 /** A ResourceQuota refusal of a pod creation (Kubernetes 403 « exceeded quota »): backpressure, never a failure. */
@@ -65,7 +98,10 @@ export interface KubernetesCore {
   /** Must confirm 404, not merely accept a DELETE request or a terminating phase. */
   waitDeleted(resource: 'pods' | 'services', name: string, uid?: string): Promise<void>;
 }
-export function createBuilderPods(core: KubernetesCore, bootstrap: string, placement: BuilderPlacement) {
+/** Pod liveness for teardown: a gone, terminal or terminating pod never needs a supervisor quiesce. */
+export type PodProbe = 'active' | 'absent' | 'terminating' | 'terminal';
+export function createBuilderPods(core: KubernetesCore, bootstrap: string, placement: BuilderPlacement,
+  sizing: WorkerSizing = defaultWorkerSizing()) {
   return {
     async ensure(key: LiveKey, runtime: LiveRuntime) {
       const expected = labels(key, runtime);
@@ -79,8 +115,8 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
         pod = undefined;
       }
       if (!pod) {
-        if (runtime.podUid !== null) throw new LiveError('builder_unavailable');
-        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement)); }
+        if (runtime.podUid !== null) throw new LiveError('builder_unavailable', 'pod_missing');
+        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement, sizing)); }
         catch (error) {
           // Creation may have committed before a timeout/response loss. Discover before retrying.
           pod = await core.get<Pod>('pods', runtime.podName);
@@ -90,22 +126,53 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       if (!pod.metadata.uid || Object.entries(expected).some(([k, v]) => pod!.metadata.labels[k] !== v)
         || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
       if (pod.metadata.deletionTimestamp || ['Failed', 'Succeeded'].includes(pod.status?.phase ?? '')) {
-        throw new LiveError('builder_unavailable');
+        throw new LiveError('builder_unavailable', 'pod_unavailable');
       }
       const service = { apiVersion: 'v1', kind: 'Service', metadata: {
         name: runtime.podName, namespace: placement.namespace, labels: expected,
       }, spec: { type: 'ClusterIP', selector: expected, ports: [{ name: 'live', port: 5173, targetPort: 5173 }] } };
-      const existing = await core.get<{ spec: { selector: Record<string, string> } }>('services', runtime.podName);
-      if (existing && Object.entries(expected).some(([k, v]) => existing.spec.selector[k] !== v)) conflict('stale_fence');
-      if (!existing) await core.create('services', service);
+      const existing = await core.get<{ metadata: Pod['metadata']; spec: { selector: Record<string, string> } }>(
+        'services', runtime.podName);
+      if (existing && (Object.entries(expected).some(([k, v]) => existing.spec.selector[k] !== v)
+        || Object.entries(expected).some(([k, v]) => existing.metadata.labels[k] !== v))) {
+        // A stale ensure of an older lease must never delete the service of a newer lease (concurrent revive):
+        // replace only on a fresh creation when the existing service belongs to a strictly older lease of the
+        // same binding (the service name derives from the binding hash); any other divergence is a fence
+        // conflict with no delete.
+        const sameBinding = existing.metadata.labels['sentropic.dev/artifact-binding']
+            === expected['sentropic.dev/artifact-binding']
+          && existing.spec.selector['sentropic.dev/artifact-binding'] === expected['sentropic.dev/artifact-binding'];
+        const leaseLabel = Number(existing.metadata.labels['sentropic.dev/artifact-lease']);
+        const leaseSelector = Number(existing.spec.selector['sentropic.dev/artifact-lease']);
+        const olderLease = sameBinding && Number.isFinite(leaseLabel) && Number.isFinite(leaseSelector)
+          && leaseLabel < runtime.leaseEpoch && leaseSelector < runtime.leaseEpoch;
+        if (runtime.podUid !== null || !olderLease) conflict('stale_fence');
+        await core.delete('services', runtime.podName, existing.metadata.uid);
+        await core.waitDeleted('services', runtime.podName, existing.metadata.uid);
+        await core.create('services', service);
+      } else if (!existing) await core.create('services', service);
       return { uid: pod.metadata.uid };
+    },
+    async probe(key: LiveKey, runtime: LiveRuntime): Promise<PodProbe> {
+      const pod = await core.get<Pod>('pods', runtime.podName);
+      if (!pod) return 'absent';
+      if (Object.entries(labels(key, runtime)).some(([k, v]) => pod.metadata.labels[k] !== v)
+        || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
+      if (pod.status?.phase === 'Failed' || pod.status?.phase === 'Succeeded') return 'terminal';
+      if (pod.metadata.deletionTimestamp) return 'terminating';
+      return 'active';
     },
     async remove(key: LiveKey, runtime: LiveRuntime) {
       const pod = await core.get<Pod>('pods', runtime.podName);
       if (pod && (Object.entries(labels(key, runtime)).some(([k, v]) => pod.metadata.labels[k] !== v)
         || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid))) conflict('stale_fence');
-      await core.delete('pods', runtime.podName, pod?.metadata.uid ?? runtime.podUid ?? undefined);
-      await core.waitDeleted('pods', runtime.podName, pod?.metadata.uid ?? runtime.podUid ?? undefined);
+      // A pod the apiserver already reports as gone needs no DELETE; without a known uid a delete by bare
+      // name could race a concurrent session recreating this deterministic name.
+      const uid = pod?.metadata.uid ?? runtime.podUid ?? undefined;
+      if (uid !== undefined) {
+        await core.delete('pods', runtime.podName, uid);
+        await core.waitDeleted('pods', runtime.podName, uid);
+      }
       // Never remove a replacement service from a stale callback.
       const service = await core.get<{ metadata: Pod['metadata'] }>('services', runtime.podName);
       if (service && Object.entries(labels(key, runtime)).some(([k, v]) => service.metadata.labels[k] !== v)) conflict('stale_fence');

@@ -120,6 +120,13 @@
       "when": 1793664000000,
       "tag": "0021_github_app_enrollments",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793750400000,
+      "tag": "0022_oauth_consent_optional_tenant",
+      "breakpoints": true
     }
   ]
 }

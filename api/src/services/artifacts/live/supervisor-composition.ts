@@ -5,8 +5,9 @@ import { supervisorPublicKey } from './supervisor-frame';
 
 /** FIX5 (s-archi 16:40): one supervisor key (`supervisorKey(process.env)`) both signs every frame and yields the only
  * public key the pod bootstrap embeds, so a pod accepts frames from this API and from no other key. */
-export function composeSupervisor(options: Omit<SupervisorOptions, 'signingKey'> & { key: SigningKey }) {
-  const { key, ...transport } = options;
-  return { bootstrap: createBootstrapSource(supervisorPublicKey(key.key)),
+export function composeSupervisor(options: Omit<SupervisorOptions, 'signingKey'> & { key: SigningKey;
+  installEnv?: Record<string, string> }) {
+  const { key, installEnv, ...transport } = options;
+  return { bootstrap: createBootstrapSource(supervisorPublicKey(key.key), installEnv),
     supervisor: createSupervisorTransport({ ...transport, signingKey: () => key.key }) };
 }

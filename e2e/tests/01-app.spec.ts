@@ -12,8 +12,8 @@ test.describe('Application principale', () => {
     // Attendre que la page se charge
     await page.waitForLoadState('domcontentloaded');
     
-    // Prendre une capture d'écran pour debug
-    await page.screenshot({ path: 'debug-homepage.png' });
+    // Prendre une capture d'écran pour debug (bind monté, propriété hôte conservée)
+    await page.screenshot({ path: 'test-results/debug-homepage.png' });
     
     // Vérifier que la page répond (peut être 200, 304, ou 403 en dev)
     const response = await page.goto('/');

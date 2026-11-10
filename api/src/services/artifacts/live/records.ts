@@ -38,7 +38,9 @@ export const LEASE_FRAME_INTERVAL_MS = 60_000;
  * (`MAX_SOURCE_REVISION_LENGTH` in `@sentropic/artifacts/live-host`). */
 export const LIVE_REVISION_MAX_LENGTH = 256;
 export class LiveError extends Error {
-  constructor(readonly code: string, readonly reason?: string) { super(code); }
+  /** `detail` is log-only diagnostics (a scrubbed bounded recipe tail): it rides the `artifact_live_phase` line,
+   * never the job ledger or `stateDetail`, which carry the closed `code:reason` only. */
+  constructor(readonly code: string, readonly reason?: string, readonly detail?: string) { super(code); }
 }
 export function conflict(reason: string): never { throw new LiveError('git_live_conflict', reason); }
 export function liveRevision(value: unknown): string {

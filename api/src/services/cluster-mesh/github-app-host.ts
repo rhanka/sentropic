@@ -11,7 +11,8 @@ import {
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { env } from '../../config/env';
-import { isProvisionedSecretEncryptionKey, withConnectorRevocationKey } from '../secret-crypto';
+import { isProvisionedDeploymentSecret } from '../../config/deployment-secrets';
+import { withConnectorRevocationKey } from '../secret-crypto';
 
 /**
  * A-LIVE W1 (plan lot M2-S, G0 v3 §2.7) — SG0-app host composition.
@@ -233,7 +234,7 @@ export const resolveGitHubAppHostConfig = (
   if (!publicBaseUrl || !targetsJson) return { enabled: false, disabledReason: 'not_configured' };
   // The App PEM, webhook secret and tokens are never sealed under the
   // committed development seed: no provisioned key, no mount.
-  if (!isProvisionedSecretEncryptionKey(source.SECRET_ENCRYPTION_KEY)) {
+  if (!isProvisionedDeploymentSecret(source.SECRET_ENCRYPTION_KEY)) {
     return { enabled: false, disabledReason: 'custody_key_unavailable' };
   }
 
@@ -299,7 +300,7 @@ export const createGitHubAppHostService = (
   deps: Pick<GitHubAppHostRouterDeps, 'config' | 'store' | 'github' | 'onCredentialsChanged' | 'now'>,
 ) => {
   // Defence in depth for direct callers: the mount gate already refused.
-  if (!isProvisionedSecretEncryptionKey(env.SECRET_ENCRYPTION_KEY)) throw new GitAppError('capability_unavailable');
+  if (!isProvisionedDeploymentSecret(env.SECRET_ENCRYPTION_KEY)) throw new GitAppError('capability_unavailable');
   const custody = withConnectorRevocationKey(GIT_APP_CUSTODY_KEY_REF, (key) =>
     createEncryptedGitAppCustodian({ store: deps.store, key }));
   return createGitHubAppEnrollment({

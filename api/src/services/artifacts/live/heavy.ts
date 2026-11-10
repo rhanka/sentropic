@@ -13,9 +13,10 @@ export type LiveHeavyPhase = HeavyPhaseKind;
 export interface LiveHeavyGate {
   /** Waits in strict FIFO (renewing its ticket) until the node budget admits the phase, runs `work`, then frees the
    * ticket; a finished `dev` with `live` becomes the pod's live reservation. Past the wait bound it throws
-   * `builder_unavailable`/`queued` and leaves the queue, unless `keep` (a durable waiter re-requesting every pass). */
+   * `builder_unavailable`/`queued` and leaves the queue, unless `keep` (a durable waiter re-requesting every pass).
+   * An aborted `signal` stops the wait at the next poll so a cut install leaves the queue instead of re-enqueuing. */
   run<T>(subject: string, phase: LiveHeavyPhase, work: () => Promise<T>,
-    options?: { waitMs?: number; keep?: boolean; live?: boolean }): Promise<T>;
+    options?: { waitMs?: number; keep?: boolean; live?: boolean; signal?: AbortSignal }): Promise<T>;
   /** Every pod creation first takes a pod slot in the same FIFO (at most `maxPods` pods; `blockedBy: 'pods'`), then runs
    * `create`. A ResourceQuota refusal is backpressure: the slot is given back, the ticket requeues at the tail and the
    * creation retries. Past the wait bound it throws `builder_unavailable`/`queued`, like any waiter. */
@@ -73,8 +74,13 @@ export function createQueuedHeavyGate(options: { queue: HeavyPhaseQueue; node: s
     },
   };
   async function admitted<T>(ticket: { subject: string; kind: LiveHeavyPhase }, work: () => Promise<T>,
-    run: { waitMs?: number; keep?: boolean; live?: boolean }) {
+    run: { waitMs?: number; keep?: boolean; live?: boolean; signal?: AbortSignal }) {
     for (let waited = 0; (await queue.request(node, ticket)).state !== 'admitted'; waited += options.pollMs) {
+      if (run.signal?.aborted) {
+        // A cut install leaves the queue like a timed-out waiter, so the teardown cancel never races a renewal.
+        if (!run.keep) await queue.finish(node, ticket);
+        run.signal.throwIfAborted();
+      }
       if (waited >= (run.waitMs ?? options.maxWaitMs)) {
         if (!run.keep) await queue.finish(node, ticket);
         throw new LiveError('builder_unavailable', 'queued');
@@ -98,9 +104,12 @@ export async function liveHolds(store: Pick<LiveStore, 'active'>) {
   const active = await store.active();
   return { pods: active.map(({ key }) => podName(key)), lives: active.filter(({ phase }) => phase === 'LIVE').map(({ key }) => podName(key)) };
 }
-/** The in-pod clean install is the `install` heavy phase; an install outside a pod is not a node phase. */
+/** The in-pod clean install is the `install` heavy phase; an install outside a pod is not a node phase. The
+ * watchdog abort crosses the queue wait, so a cut install stops re-enqueuing its ticket. */
 export const gatedInstall = (heavy: LiveHeavyGate, install: CachePorts['cleanInstall']): CachePorts['cleanInstall'] =>
-  input => input.runtime ? heavy.run(input.runtime.podName, 'install', () => install(input)) : install(input);
+  input => input.runtime
+    ? heavy.run(input.runtime.podName, 'install', () => install(input), { signal: input.signal })
+    : install(input);
 
 const QUEUE_NAMESPACE = 'artifact-live-heavy-queue/v1';
 /** Durable queue state of one node in the existing host KV migration, serialized by a node lock across replicas. */

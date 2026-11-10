@@ -27,7 +27,7 @@ export type ReplyCode = 'fenced' | 'limit' | 'integrity' | 'failed';
 
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
-function unavailable(): never { throw new LiveError('builder_unavailable'); }
+function unavailable(): never { throw new LiveError('builder_unavailable', 'supervisor_frame_invalid'); }
 
 /** Wire frame: the 64-byte Ed25519 signature, then the exact UTF-8 JSON body it signs. */
 export function sealFrame(key: KeyObject, body: FrameBody): Uint8Array {

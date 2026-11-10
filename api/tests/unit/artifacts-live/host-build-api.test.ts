@@ -93,7 +93,7 @@ describe('host build API (M3-B)', () => {
     s.build.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding });
     const again = await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding });
-    expect(again.status).toBe(202); expect(await again.json()).toMatchObject({ state: 'accepted' });
+    expect(again.status).toBe(202); expect(await again.json()).toMatchObject({ state: 'build_pending' });
     expect(s.build).toHaveBeenCalledTimes(1);
     await s.jobs.record({ storageScopeId: 'scope-immo', artifactId: 'artifact-a' }, { ...receipt, jobId: 'job-1' });
     finish(); await s.settle();
@@ -104,7 +104,7 @@ describe('host build API (M3-B)', () => {
   it('reports a closed failure code on the job, and a failed or stale run can be re-admitted', async () => {
     const s = setup(vi.fn(async () => { throw new LiveError('git_head_moved'); }));
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); await s.settle();
-    expect(await (await s.status('job-1')).json()).toMatchObject({ state: 'failed', code: 'git_head_moved' });
+    expect(await (await s.status('job-1')).json()).toMatchObject({ state: 'build_failed', code: 'git_head_moved' });
     s.build.mockImplementationOnce(() => new Promise<void>(() => {}));
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); expect(s.build).toHaveBeenCalledTimes(2);
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); expect(s.build).toHaveBeenCalledTimes(2);
@@ -113,7 +113,9 @@ describe('host build API (M3-B)', () => {
   it('presumes a run dead after its heavy-gate wait and its bounded phases, never after a pod lifetime', async () => {
     expect(BUILD_ONLY_PHASES).toEqual(['install', 'prepare', 'build', 'verify']);
     expect(PHASE_DEADLINE_MS).toBe(300_000);
-    expect(runStaleMs(0)).toBe(1_200_000); expect(STALE).toBe(HEAVY_WAIT_MS + 1_200_000);
+    expect(runStaleMs(0, 300_000)).toBe(1_200_000);
+    expect(runStaleMs(0)).toBe(1_200_000 + 3 * PHASE_DEADLINE_MS);
+    expect(STALE).toBe(HEAVY_WAIT_MS + 1_200_000 + 3 * PHASE_DEADLINE_MS);
     const s = setup(); await s.jobs.admit(k, 'job-1', binding);
     s.advance(STALE - 1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(false);
     s.advance(1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(true);
@@ -133,7 +135,7 @@ describe('host build API (M3-B)', () => {
   });
   it('fails a run that ended without publication, so the host can re-admit it', async () => {
     const s = setup(); await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); await s.settle();
-    expect(await (await s.status('job-1')).json()).toMatchObject({ state: 'failed', code: 'git_live_conflict', reason: 'superseded' });
+    expect(await (await s.status('job-1')).json()).toMatchObject({ state: 'build_failed', code: 'git_live_conflict', reason: 'superseded' });
   });
   it('keeps the durable handoff intent and the first receipt of a job', async () => {
     const s = setup(); await s.jobs.admit(k, 'job-1', binding);

@@ -9,7 +9,7 @@ import { createDependencyCache } from './cache';
 import { createPostgresBuildJobStore, createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
 import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, liveHolds } from './heavy';
 import { createFairAdmission } from './admission';
-import { createBuilderPods, type KubernetesCore } from './pods';
+import { createBuilderPods, type KubernetesCore, type WorkerSizing } from './pods';
 import { createLiveWorker } from './worker';
 import { createLiveController } from './controller';
 import { fetchLockedTarball } from './npm-relay';
@@ -21,6 +21,7 @@ import { composeSupervisor } from './supervisor-composition';
 import type { SupervisorSources } from './supervisor';
 import { createRelaySupervisorChannel, SUPERVISOR_COMMAND_TIMEOUT_MS } from './supervisor-relay';
 import { createBuildJobs, jobForgeBinding, runStaleMs } from './build-jobs';
+import { defaultInstallBudget, type InstallBudget } from './deadline';
 import { createHostBuildApi, type HostBuildEnv, type HostIdentity } from './host-build-api';
 import { createHostLiveApi } from './host-live-api';
 import { createRemoteLive } from './remote-live';
@@ -31,7 +32,7 @@ import type { ForgeBindings } from './forge-binding';
 export const LIVE_NODE_CAPACITY = 4;
 /** Builder pods present at once per environment (tenant ResourceQuota pods 5, s-archi 07/11 21:15): every creation
  * takes one of these pod slots in the heavy-phase queue first. */
-export const MAX_BUILDER_PODS = 4;
+export const MAX_BUILDER_PODS = 3;
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
  * AL-T supplies authenticated owner operations; AL-D supplies the encrypted draft port;
  * SG4 supplies transactional publication. Every supervisor frame rides the artifact-content relay (A-LIVE §8.1):
@@ -55,6 +56,11 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     /** Live pod slots of this environment from per-environment configuration; the owner decision is 4 on one d2-4. */
     admission: { capacity?: number; waiterTtlMs: number };
     cache: Pick<CachePorts, 'signingKey'>;
+    /** Progress-based bound of the dependency install phase (stall watchdog plus absolute ceiling). */
+    installBudget?: InstallBudget;
+    /** Worker disk caps (env sizing, safe defaults) and the npm install heap environment. */
+    sizing?: WorkerSizing;
+    installEnv?: Record<string, string>;
   }) {
   const channel = createRelaySupervisorChannel({ baseUrl: options.relayUrl });
   const store = createPostgresLiveStore(options.pool);
@@ -63,14 +69,16 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     queue: createHeavyPhaseQueue({ store: createPostgresHeavyQueueStore(options.pool), budget, now: options.now,
       maxPods: options.heavy.maxPods ?? MAX_BUILDER_PODS }) });
   const { bootstrap, supervisor } = composeSupervisor({ key: options.supervisorKey, channel, now: options.now,
-    id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS,
+    id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS, installEnv: options.installEnv,
     sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
-    fetch: fetchLockedTarball, storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) });
+    fetch: (pin, relay, signal) => fetchLockedTarball(pin, relay, undefined, signal),
+    storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) },
+  options.installBudget ?? defaultInstallBudget());
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
     waiterTtlMs: options.admission.waiterTtlMs, now: options.now, holders: () => store.active() });
   return createLiveController({ ...options, cache, store, admission, heavy,
-    pods: createBuilderPods(options.kubernetes, bootstrap, options.placement),
+    pods: createBuilderPods(options.kubernetes, bootstrap, options.placement, options.sizing),
     worker: createLiveWorker(supervisor, options.placement) });
 }
 /** M3-B builder service: the live controller composed with the SG4b handoff publication, the Postgres job ledger,
@@ -89,7 +97,7 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
   forgeBindings: Pick<ForgeBindings, 'admit' | 'validate'>;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
-    runStaleMs(options.heavy.maxWaitMs));
+    runStaleMs(options.heavy.maxWaitMs, options.installBudget?.ceilingMs));
   const candidates = createCandidateStore();
   const publication = createHandoffPublication({ host: options.host, candidates, outcomes: jobs,
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });

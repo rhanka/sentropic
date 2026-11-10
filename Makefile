@@ -6,6 +6,13 @@ export REGISTRY := $(if $(filter local ghcr.io/rhanka,$(REGISTRY)),$(REGISTRY),g
 
 ENV ?= dev
 export COMPOSE_PROJECT_NAME ?= $(ENV)
+# BRCHU-EX1: run bind-mount writer services as the host user so container
+# outputs are host-owned (no sudo cleanup). Compose interpolates these.
+export UID ?= $(shell id -u)
+export GID ?= $(shell id -g)
+# BRCBO-EX1: single host-user flag set for every workspace-writing `docker run`
+# (follow-up of BRCHU-EX1 for raw docker runs and backup writers).
+DOCKER_RUN_USER = -u $(UID):$(GID) -e HOME=/tmp
 DOCKER_COMPOSE  ?= docker compose
 # BR06-EX1: opt in with DISK_HYGIENE_THRESHOLD=90 (empty disables the guard).
 export DISK_HYGIENE_THRESHOLD ?=
@@ -348,7 +355,7 @@ build-ui: ## Build the SvelteKit UI (static)
 build-ext-chrome: ## Build Chrome extension to ui/chrome-ext/dist
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npx --no-install svelte-kit sync && npm run build:ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/chrome-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/chrome-ext/dist'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/chrome-ext/dist/manifest.json && test -f /workspace/ui/chrome-ext/dist/content.js && test -f /workspace/ui/chrome-ext/dist/chrome-ext/popup.html && test -f /workspace/ui/chrome-ext/dist/chrome-ext/sidepanel.html'
 	@echo "✅ Extension built in ui/chrome-ext/dist"
 
@@ -361,7 +368,7 @@ dev-ext: up-ui ## Watch build Chrome extension
 build-ext-vscode: ## Build VSCode extension package to ui/static/vscode-extension
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npx --no-install svelte-kit sync && npm run build:vscode-ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/static/vscode-extension/sentropic-vscode-extension.vsix && test -f /workspace/ui/vscode-ext/dist/extension.cjs'
 	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
 
@@ -1252,7 +1259,7 @@ typecheck-api: prepare-node-workspace ## Run API type checks
 
 .PHONY: typecheck-llm-mesh
 typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: lint-llm-mesh lint-llm-gateway lint-cluster-mesh
 lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned mesh/gateway package
@@ -1453,7 +1460,7 @@ refresh-llm-model-equivalences: ## Regenerate the pinned model-equivalence counc
 
 .PHONY: check-llm-model-equivalences
 check-llm-model-equivalences: ## Check model-equivalence generation and freshness
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/llm-model-equivalences/refresh.mjs --check
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/llm-model-equivalences/refresh.mjs --check
 
 # BR75-EX1 — make-only entrypoint for the recurring LLM model-update scaffold.
 .PHONY: llm-mesh-add-model
@@ -1466,11 +1473,11 @@ llm-mesh-add-model: ## Scaffold a model from BASE (set DRY_RUN=1 to preview)
 
 .PHONY: audit-llm-routing-package-versions
 audit-llm-routing-package-versions: ## Compare local LLM routing package versions with npm latest
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for package_dir in llm-mesh llm-gateway; do package="$$(node -p "require(\"./packages/$$package_dir/package.json\").name")"; local_version="$$(node -p "require(\"./packages/$$package_dir/package.json\").version")"; registry_version="$$(npm view "$$package" version)"; printf "%s local=%s registry=%s\n" "$$package" "$$local_version" "$$registry_version"; done'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for package_dir in llm-mesh llm-gateway; do package="$$(node -p "require(\"./packages/$$package_dir/package.json\").name")"; local_version="$$(node -p "require(\"./packages/$$package_dir/package.json\").version")"; registry_version="$$(npm view "$$package" version)"; printf "%s local=%s registry=%s\n" "$$package" "$$local_version" "$$registry_version"; done'
 
 .PHONY: typecheck-skills
 typecheck-skills: ## Run @sentropic/skills type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: build-skills pack-skills
 build-skills: ## Build @sentropic/skills in an isolated Compose tool directory
@@ -1586,7 +1593,7 @@ publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway u
 
 .PHONY: typecheck-flow
 typecheck-flow: install-internal-packages ## Run @sentropic/flow type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
 .PHONY: build-flow
 build-flow: install-internal-packages ## Build @sentropic/flow dist package
@@ -1687,6 +1694,9 @@ oauth-register-service-client-job: ## Provision one client_credentials service_c
 # Impact: one additive target; no existing target touched. Rollback: delete this target; the
 # versioned Job yaml stays valid for a direct kubectl apply. The SECRET_FILE (0600) holds exactly
 # the four CM_ACCOUNT_APPROVE_* lines; the image defaults to the namespace's api Deployment image.
+# BRCMAL-EX1 (fix/cm-account-approve-launcher): read-only preflight; the Job starts through the
+# namespace A4 launcher, and an older launcher would boot a second api instead of the script, so a
+# direct kubectl apply of the Job yaml (which skips this preflight) needs the same check by hand.
 # Usage: make cm-account-approve-job SECRET_FILE=<0600 env file> [CM_ACCOUNT_APPROVE_JOB_NAMESPACE=sentropic] [CM_ACCOUNT_APPROVE_JOB_IMAGE=<image>] [KUBECONFIG=<file>] ENV=<env>
 CM_ACCOUNT_APPROVE_JOB_NAMESPACE ?= sentropic
 CM_ACCOUNT_APPROVE_JOB_IMAGE ?=
@@ -1702,6 +1712,8 @@ cm-account-approve-job: ## Approve one cm_identity account role via the versione
 	test -n "$$IMG" || IMG="$$(kubectl -n "$$NS" get deployment/api -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].image}')"; \
 	test -n "$$IMG" || { echo "ERROR: cannot resolve the api image in $$NS; set CM_ACCOUNT_APPROVE_JOB_IMAGE"; exit 1; }; \
 	echo "Approving in namespace $$NS with image $$IMG"; \
+	kubectl -n "$$NS" get configmap sentropic-a4-runtime -o jsonpath='{.data.launch\.mjs}' | grep -qF "args[0] === '--script'" \
+		|| { echo "ERROR: $$NS serves no A4 launcher with the --script mode (ConfigMap sentropic-a4-runtime); deploy it first"; exit 1; }; \
 	trap 'kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true' EXIT; \
 	kubectl -n "$$NS" delete job/cm-account-approve --ignore-not-found >/dev/null 2>&1 || true; \
 	kubectl -n "$$NS" delete secret/cm-account-approval --ignore-not-found >/dev/null 2>&1 || true; \
@@ -2391,6 +2403,7 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
 include deploy/ci/artifact-content/tests.mk
 include deploy/ci/preprod-a4/targets.mk
+include deploy/ci/artifact-data-guard/targets.mk
 
 .PHONY: test-artifact-content
 test-artifact-content: ## Qualify content process behavior, types and lint on the API test executor
@@ -2868,7 +2881,7 @@ test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-llm-mesh
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
-	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@$(ARTIFACTS_RUN) $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
 # BR04-EX1 — @sentropic/live-speech bench (r3 L3 bench lane; P1-5/P2-1).
 # Compiles the session to a scratch dist (never committed), installs the pinned
@@ -2880,7 +2893,7 @@ test-llm-mesh: ## Run @sentropic/llm-mesh tests
 # outside the repo, so manual runs never dirty the tree).
 .PHONY: bench-live-speech
 bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
+	@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
 
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
@@ -2976,7 +2989,7 @@ test-pkg-chat-core: build-chat-core ## Run core and client runtime unit tests wi
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh scripts/test.sh
 .PHONY: test-skills
 test-skills: ## Run @sentropic/skills tests
-		@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+		@docker run --rm $(DOCKER_RUN_USER) -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-ui
 test-ui: build-chat-core up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
@@ -3123,7 +3136,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	    receipt="test-results/browser-$${E2E_SHARD:-scoped}"; \
 	    rm -f "$$receipt.expected.json" "$$receipt.actual.json"; \
 	    status=0; CI_BROWSER_EXPECTED_FILE="$$receipt.expected.json" PLAYWRIGHT_JSON_OUTPUT_FILE="$$receipt.actual.json" npx --no-install playwright test "$$@" \
-	      --project=chromium --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	      --project=chromium --output="test-results/out-$${E2E_SHARD:-scoped}" --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
 	    node /app/browser-shards.mjs reconcile "$$receipt.expected.json" "$$receipt.actual.json" || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping services..."
@@ -3149,7 +3162,7 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
 	    rm -f test-results/vscode.expected.json test-results/vscode.actual.json; \
 	    status=0; CI_BROWSER_EXPECTED_FILE=test-results/vscode.expected.json PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/vscode.actual.json npx --no-install playwright test "$$spec_path" \
-	      --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
+	      --output="test-results/out-vscode" --workers="$$workers" --retries="$$retries" --reporter=list,json,/app/browser-shards.mjs $$extra || status=$$?; \
 	    node /app/browser-shards.mjs reconcile test-results/vscode.expected.json test-results/vscode.actual.json || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping VSCode E2E services..."
@@ -3157,7 +3170,7 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 
 .PHONY: test-smoke
 test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx --no-install playwright test --grep "devrait charger"
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx --no-install playwright test --output="test-results/out-smoke" --grep "devrait charger"
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
 
@@ -3212,9 +3225,10 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
 prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+	@mkdir -p data/backup e2e/.auth e2e/test-results
 	@$(DISK_HYGIENE_GUARD)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
 
 .PHONY: dev
@@ -3290,7 +3304,7 @@ latest-prod-backup: ## Print the latest production dump basename for the restore
 	@find data/backup -maxdepth 1 -name 'prod-*.dump' -printf '%T@ %f\n' | sort -nr | head -n 1 | cut -d' ' -f2-
 ci-test-env:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
-	@mkdir -p .tmp/live-provider && chmod 777 .tmp/live-provider
+	@mkdir -p .tmp/live-provider e2e/.auth e2e/test-results && chmod 777 .tmp/live-provider
 
 CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,data) ORDER BY id)::text,'[]')) FROM initiatives
 CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
@@ -3299,9 +3313,11 @@ restore-api-sut: ci-test-env ## Restore a dump before the first production boot;
 	$(CI_COMPOSE) stop api api-sut auth-idp
 	$(CI_COMPOSE) up -d --wait postgres
 	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
+# Restore SUT is single-RP by construction (api-sut only, rehearsal checkpoint): declare the IdP RP so the A4 import provenance guard accepts the carried prod credentials.
 	@set -eu; overlay="$$(mktemp)"; genoverlay="$$(mktemp)"; trap 'rm -f "$$overlay" "$$genoverlay"' EXIT; \
 	printf '%s\n' 'services:' '  api-sut:' '    environment:' \
 		'      CM_IDENTITY_CUTOVER_CHECKPOINT_FILE: /run/cm-checkpoint/checkpoint.json' \
+		'      CM_IDENTITY_CUTOVER_IDP_RP_ID: localhost' \
 		'      WEBAUTHN_RP_ID: localhost' \
 		'      WEBAUTHN_ORIGIN: http://localhost:$(or $(UI_PORT),5173)' > "$$overlay"; \
 	printf '%s\n' 'services:' '  api-sut:' '    volumes:' \
@@ -3660,6 +3676,7 @@ db-backup: backup-dir up ## Backup local database to file
 			export PGPASSWORD=\"app\"; \
 			pg_dump -h localhost -U app -d app -F c -f /backups/app-$${TIMESTAMP}.dump; \
 		fi" && \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "0:0" -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) -e DUMP_FILE=app-$${TIMESTAMP}.dump postgres sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /backups/$$DUMP_FILE' && \
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-backup-prod
@@ -3926,7 +3943,7 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 	@mkdir -p .security
 	@echo "  📋 Step 1: Executing SCA scan..."
 	@if [ "$*" = "api" ] || [ "$*" = "ui" ]; then \
-		docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf sh -lc "npm audit --json --workspace sentropic-$* || true" > .security/sca-$*.json; \
+		docker run --rm $(DOCKER_RUN_USER) -v "${PWD}:/workspace" -w /workspace node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf sh -lc "npm audit --json --workspace sentropic-$* || true" > .security/sca-$*.json; \
 	else \
 		docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true; \
 	fi
@@ -4145,14 +4162,10 @@ k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui       --timeout=300s
 
-k8s-deploy-preprod: ## BR-55c: deploy main->preprod (ns sentropic-preprod) with the immutable content-hash image pin. NEVER touches the prod (sentropic) ns.
-	# BR-55c (D-c1/D-c4): pin the immutable per-content image tags (API_VERSION/UI_VERSION
-	# = content sha1 — the SAME tags publish-{api,ui}-image push) into the preprod overlay,
-	# then apply. This kills the floating :main staleness. The preprod-scoped KUBECONFIG
-	# (poc-k8s, namespace-scoped to sentropic-preprod) can ONLY write this ns — the prod
-	# `sentropic` ns is unreachable. The auth-idp shares the api image, so pinning the api
-	# image covers it. Idempotent: the images: block is appended once per checkout.
-	@grep -q '^images:' deploy/k8s/overlays/preprod/kustomization.yaml || printf '\nimages:\n  - name: %s/%s\n    newTag: "%s"\n  - name: %s/%s\n    newTag: "%s"\n' "$(REGISTRY)" "$(API_IMAGE_NAME)" "$(API_VERSION)" "$(REGISTRY)" "$(UI_IMAGE_NAME)" "$(UI_VERSION)" >> deploy/k8s/overlays/preprod/kustomization.yaml
+k8s-deploy-preprod: ## BR-55c: apply overlays/preprod-a4 (ns sentropic-preprod) with the digests pinned in overlays/preprod. NEVER touches the prod (sentropic) ns.
+	# The preprod-scoped KUBECONFIG (poc-k8s, namespace-scoped to sentropic-preprod) can ONLY
+	# write this ns — the prod `sentropic` ns is unreachable. The auth-idp shares the api
+	# image. deploy-preprod runs `make preprod-repin` first (BRREPIN-EX1).
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/preprod-a4
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
@@ -4181,8 +4194,11 @@ k8s-db-restore-preprod: ## Seed the preprod DB from a prod dump [BACKUP_FILE=pro
 	@set -eu ; \
 	POD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres -o jsonpath='{.items[0].metadata.name}'); \
 	test -n "$$POD" || { echo "❌ Error: no postgres pod found in namespace $(K8S_PREPROD_NAMESPACE)"; exit 1; }; \
-	echo "▶ Restoring data/backup/$(BACKUP_FILE) into $(K8S_PREPROD_NAMESPACE)/$$POD..."; \
 	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
+		psql -q -h 127.0.0.1 -U app -d app < deploy/ci/artifact-data-guard/refuse-artifact-data.sql \
+		|| { echo "❌ Refusing: $(K8S_PREPROD_NAMESPACE) holds artifact data that this restore would delete (BRREPIN-EX1)"; exit 1; }; \
+	echo "▶ Restoring data/backup/$(BACKUP_FILE) into $(K8S_PREPROD_NAMESPACE)/$$POD..."; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
 		pg_restore -h 127.0.0.1 -U app -d app --clean --if-exists --no-owner --no-privileges < "data/backup/$(BACKUP_FILE)"; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
@@ -5031,12 +5047,18 @@ include .security/ci-lockfile-installs.mk
 check-image-registry: ## Reject the retired registry anywhere in tracked files
 	@node scripts/ci/check-image-registry.mjs
 
-.PHONY: check-preprod-images test-ghcr-images
-check-preprod-images: ## Check the actual rendered recovery pins by anonymous digest
+.PHONY: check-preprod-images preprod-repin test-ghcr-images
+check-preprod-images: ## Check the actual rendered preprod pins by anonymous digest
 	@node scripts/ci/check-preprod-images.mjs
 
+# BRREPIN-EX1: deploy-preprod pins this commit's images (same-run publications first) unless a hold is committed.
+PREPROD_PUBLICATIONS_DIR ?= tmp/preprod-publications
+PREPROD_PUBLISHED_KINDS ?=
+preprod-repin: ## Repin overlays/preprod to the deployed commit's API/UI digests; keeps a committed preprod-image-hold
+	@PREPROD_PUBLISHED_KINDS="$(PREPROD_PUBLISHED_KINDS)" node scripts/ci/preprod-repin.mjs deploy/k8s/overlays/preprod/kustomization.yaml "$(PREPROD_PUBLICATIONS_DIR)"
+
 test-ghcr-images: ci-test-env test-ghcr-login test-ui-image-version ## Reject registry collisions and private or altered manifests
-	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs
+	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs scripts/ci/preprod-repin.test.mjs
 
 .PHONY: test-ghcr-login
 test-ghcr-login: ci-test-env ## Exercise the real Make login recipe with fixture credentials

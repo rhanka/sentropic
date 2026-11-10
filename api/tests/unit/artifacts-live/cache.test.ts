@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDependencyCache, type CacheIdentity, type CacheObject, type CachePorts, type CacheReceipt,
   type DependencyFile } from '../../../src/services/artifacts/live/cache';
 import { sha256 } from '../../../src/services/artifacts/live/integrity';
+import type { IntegrityPin } from '../../../src/services/artifacts/live/integrity';
 import { GB1_QUALIFICATION_PATH } from '../../../src/services/artifacts/live/gb1-qualification';
 import { artifactEnvironment, BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
+import type { InstallBudget } from '../../../src/services/artifacts/live/deadline';
 
-function cacheFixture() {
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function cacheFixture(budget?: InstallBudget) {
   const bytes = Buffer.from('qualified tarball');
   const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
   const entry = { version: '1.0.0', resolved: 'https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz', integrity };
@@ -36,10 +40,10 @@ function cacheFixture() {
       'package-lock.json': lockText, [GB1_QUALIFICATION_PATH]: qualification } };
     const cacheIdentity: CacheIdentity = { storageScopeId: 'scope', repoId: 'repo', lockSha256: sha256(lockfile),
       image: BUILDER_IMAGE, platform: 'linux/amd64', nodeVersion: '24', npmVersion: '11', policyRevision: 'p1',
-      workspaceTopology: 'root', integrityDigest: sha256(qualification) };
+      workspaceTopology: 'root', integrityDigest: sha256(qualification), installWorkspaces: [] };
     return { lockfile, cacheIdentity, stagingRef: 'verified-clean-checkout', gb1 };
   };
-  return { lock, rows, ports, source, files, installed, cache: createDependencyCache(ports), stored: () => stored! };
+  return { lock, rows, ports, source, files, installed, cache: createDependencyCache(ports, budget), stored: () => stored! };
 }
 async function collect(cache: ReturnType<typeof createDependencyCache>, receipt: CacheReceipt) {
   const out: DependencyFile[] = [];
@@ -62,7 +66,8 @@ describe('locked dependency cache', () => {
   });
   it('should admit only a clean verified install and rehash every warm mount file by file', async () => {
     const f = cacheFixture(); const receipt = await f.cache.acquire(f.source());
-    expect(f.ports.fetch).toHaveBeenCalledWith(expect.objectContaining({ path: 'node_modules/pkg' }), NPM_RELAY);
+    expect(f.ports.fetch).toHaveBeenCalledWith(expect.objectContaining({ path: 'node_modules/pkg' }), NPM_RELAY,
+      expect.any(AbortSignal));
     expect(f.ports.cleanInstall).toHaveBeenCalledWith(expect.objectContaining({ recipe: INSTALL_RECIPE }));
     expect(await f.cache.acquire(f.source())).toEqual(receipt); expect(f.ports.cleanInstall).toHaveBeenCalledOnce();
     expect(await collect(f.cache, receipt)).toEqual([f.installed]);
@@ -79,6 +84,75 @@ describe('locked dependency cache', () => {
     const f = cacheFixture(); f.ports.fetch = vi.fn(async () => Buffer.from('different bytes'));
     await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'dependency_integrity_mismatch' });
     expect(f.ports.storage.putFile).not.toHaveBeenCalled(); expect(f.ports.storage.admit).not.toHaveBeenCalled();
+  });
+  it('should keep a progressing cold install alive past one stall window', async () => {
+    const f = cacheFixture({ stallMs: 100, ceilingMs: 5_000 });
+    const extra = f.lock.packages['node_modules/pkg'] as Record<string, unknown>;
+    f.lock.packages = { '': f.lock.packages[''], 'node_modules/pkg': { ...extra }, 'node_modules/a': { ...extra },
+      'node_modules/b': { ...extra }, 'node_modules/c': { ...extra } };
+    const fetch = f.ports.fetch;
+    f.ports.fetch = vi.fn(async (pin: IntegrityPin, relay: typeof NPM_RELAY) => { await delay(25); return fetch(pin, relay); });
+    const receipt = await f.cache.acquire(f.source());
+    expect(receipt.inventory).toHaveLength(4);
+    expect(f.ports.fetch).toHaveBeenCalledTimes(4);
+    expect(f.stored().manifest).toHaveLength(1);
+  });
+  it('should not cut a slow-start cold install before the first progress', async () => {
+    // Heavy-queue admission, the forge re-download and the source transfer show no progress for longer than one
+    // stall window on a healthy cold start; the stall arms only on the first tarball, so the start survives.
+    const f = cacheFixture({ stallMs: 50, ceilingMs: 5_000 });
+    f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
+      await delay(150);
+      for await (const tarball of input.tarballs) expect(tarball.bytes).toEqual(expect.any(Uint8Array));
+      await input.sink(f.installed);
+      return { runId: 'slow-start' };
+    });
+    const receipt = await f.cache.acquire(f.source());
+    expect(receipt.runId).toBe('slow-start');
+    expect(f.ports.storage.admit).toHaveBeenCalledOnce();
+  });
+  it('should hand the watchdog abort signal to fetch and cleanInstall', async () => {
+    const f = cacheFixture();
+    await f.cache.acquire(f.source());
+    expect(f.ports.cleanInstall).toHaveBeenCalledWith(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    const signal = vi.mocked(f.ports.cleanInstall).mock.calls[0][0].signal;
+    const fetchCalls = vi.mocked(f.ports.fetch).mock.calls;
+    expect(fetchCalls.length).toBeGreaterThan(0);
+    for (const call of fetchCalls) expect(call[2]).toBe(signal);
+  });
+  it('should fail a stalled cold install with the phase in the reason and admit nothing', async () => {
+    // One fetched tarball arms the stall; the hang after it trips the watchdog instead of waiting for the ceiling.
+    const f = cacheFixture({ stallMs: 50, ceilingMs: 5_000 });
+    f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
+      for await (const tarball of input.tarballs) { expect(tarball.bytes).toBeInstanceOf(Uint8Array); break; }
+      await new Promise<never>(() => {});
+    });
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install' });
+    expect(f.ports.storage.admit).not.toHaveBeenCalled();
+    expect(f.ports.storage.putFile).not.toHaveBeenCalled();
+    expect(f.ports.storage.quarantine).not.toHaveBeenCalled();
+  });
+  it('should abort the watchdog signal on a cut install so nothing runs on', async () => {
+    const f = cacheFixture({ stallMs: 50, ceilingMs: 5_000 });
+    let observed: AbortSignal | undefined;
+    f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
+      observed = input.signal;
+      for await (const tarball of input.tarballs) { expect(tarball.bytes).toBeInstanceOf(Uint8Array); break; }
+      await new Promise<never>(() => {});
+    });
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install' });
+    expect(observed?.aborted).toBe(true);
+    expect(f.ports.storage.admit).not.toHaveBeenCalled();
+  });
+  it('should fail a suspended-but-hung install at the ceiling without poisoning the cache', async () => {
+    const f = cacheFixture({ stallMs: 10_000, ceilingMs: 60 });
+    f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
+      for await (const tarball of input.tarballs) expect(tarball.bytes).toBeInstanceOf(Uint8Array);
+      input.progress?.suspendStall(true);
+      await new Promise<never>(() => {});
+    });
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install' });
+    expect(f.ports.storage.admit).not.toHaveBeenCalled();
   });
   it('should install a qualified script package with its hook disabled and refuse an unqualified one', async () => {
     const f = cacheFixture(); const entry = f.lock.packages['node_modules/pkg']; entry.hasInstallScript = true;

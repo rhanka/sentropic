@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { AGENT_SOURCE } from '../../../src/services/artifacts/live/bootstrap-agent';
 import {
   BUILD_RECIPE, INSTALL_RECIPE, LIVE_PREBUNDLE_SCRIPT, LIVE_RECIPE, PREBUNDLE_RECIPE, artifactEnvironment, buildEnvironment,
+  installEnvironment,
 } from '../../../src/services/artifacts/live/recipes';
 
 /** Loads the pod agent exactly as the bootstrap embeds it (a plain JavaScript module string). */
@@ -31,12 +32,23 @@ export const treeDigest = (files: readonly TreeFile[]) => sha256(JSON.stringify(
   .map(f => [f.path, f.mode, f.bytes.length, sha256(f.bytes)]).sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1))));
 
 export interface Spawned { executable: string; args: string[]; options: any }
-/** A fake child that exits with `code` after running `effect` (for example, writing install output). */
-export function fakeSpawn(calls: Spawned[], effect: (call: Spawned) => Promise<number | void> = async () => 0) {
+/** A fake child that exits with `code` after running `effect` (for example, writing install output). The effect
+ * may return piped stdio too, emitted as `data` before the exit, the way a real recipe writes while it runs. */
+export function fakeSpawn(calls: Spawned[],
+  effect: (call: Spawned) => Promise<number | void | { code: number; stdout?: string; stderr?: string }> = async () => 0) {
   return (executable: string, args: string[], options: any) => {
     const call = { executable, args, options }; calls.push(call);
     const child: any = new EventEmitter(); child.pid = 4000 + calls.length;
-    setImmediate(async () => { const code = await effect(call); child.emit('exit', typeof code === 'number' ? code : 0, null); });
+    child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+    setImmediate(async () => {
+      const out = await effect(call);
+      const code = typeof out === 'number' ? out : out?.code ?? 0;
+      if (typeof out === 'object' && out) {
+        if (out.stdout !== undefined) child.stdout.emit('data', Buffer.from(out.stdout));
+        if (out.stderr !== undefined) child.stderr.emit('data', Buffer.from(out.stderr));
+      }
+      child.emit('exit', code, null);
+    });
     return child;
   };
 }
@@ -48,7 +60,8 @@ export async function harness(options: Record<string, unknown> = {}) {
   const clock = { now: 1_000_000 };
   const killed: number[] = []; const groups: number[] = []; const exits: number[] = [];
   const { createAgent } = await agentModule();
-  const agent = createAgent({ root, recipes, env: artifactEnvironment(), buildEnv: buildEnvironment(), settleMs: 1,
+  const agent = createAgent({ root, recipes, env: artifactEnvironment(), buildEnv: buildEnvironment(),
+    installEnv: installEnvironment(), settleMs: 1,
     publicKey: keys.publicKey, identity: POD,
     now: () => clock.now, exit: (code: number) => { exits.push(code); },
     spawn: () => { throw new Error('spawn not expected'); },

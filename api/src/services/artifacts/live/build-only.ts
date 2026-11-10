@@ -3,7 +3,7 @@ import { releaseIfDormant } from './admission';
 import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey } from './records';
 import { podName } from './pods';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
-import { withinPhase } from './deadline';
+import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 
 /** Explicit historical publication uses one clean pod; dormant drafts never enter this worker. */
@@ -44,7 +44,8 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
     if (!await ports.forge.reachable(key, job.headSha)) throw new LiveError('git_head_moved');
   } catch (error) {
     await transition(ports, key, runtime, state => {
-      state.runtime.phase = 'DORMANT'; state.runtime.stateDetail = error instanceof LiveError ? error.code : 'builder_unavailable';
+      state.runtime.phase = 'DORMANT'; state.runtime.stateDetail = error instanceof LiveError
+        ? (error.reason ? `${error.code}:${error.reason}` : error.code) : 'builder_unavailable';
     });
     throw error;
   }
@@ -63,16 +64,17 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
         baselineSeq: state.progress.publicationBaselineSeq, initial: false };
     });
     await ports.worker.clean(runtime);
-    const cache = await withinPhase(ports.cache.acquire(source, runtime));
-    await ports.worker.prepare(runtime, source, cache);
+    const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, runtime));
+    await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
     const building = runtime;
-    const candidate = await ports.heavy.run(building.podName, 'build', () => withinPhase(ports.worker.build(building, building.attempt!)));
+    const candidate = await ports.heavy.run(building.podName, 'build', () => runPhase(key, 'build',
+      () => withinPhase(ports.worker.build(building, building.attempt!))));
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.phase !== 'BUILDING' || state.runtime.pendingWake) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt!.candidateDigest = candidate.candidateDigest;
       state.runtime.attempt!.evidence = buildEvidence(source, cache);
     });
-    await ports.worker.verify(runtime, runtime.attempt!);
+    await runPhase(key, 'verify', () => ports.worker.verify(runtime, runtime.attempt!));
     await observeHead(ports, key, runtime);
     runtime = await ports.store.transaction(key, async unit => {
       assertFence(unit.state, runtime);
