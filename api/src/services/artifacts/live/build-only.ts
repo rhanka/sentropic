@@ -18,6 +18,7 @@ export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
   try { return await buildPod(ports, key, jobId, binding, draft); }
   catch (error) { await releaseIfDormant(ports, key); throw error; }
 }
+
 async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding, draft: DraftSnapshot) {
   const first = await createBuildRuntime(ports, key, binding, draft);
   const firstJob = await resolveAttemptJob(ports, key, jobId, binding, first);
@@ -27,9 +28,20 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
     if (!isTransportLoss(loss)) throw loss;
     const after = await ports.store.read(key).catch(() => undefined);
     if (after?.runtime.phase !== 'DORMANT' || after.runtime.sessionId !== first.sessionId) throw loss;
+    // The first teardown released the admission slot: re-acquire it so the second attempt holds one too.
+    // When the retry cannot be admitted, or a concurrent revive won the fence, the pod cause is preserved.
+    try { await ports.admission.acquire(key, binding.ownerId); }
+    catch { throw loss; }
+    let second;
+    try { second = await createBuildRuntime(ports, key, binding, draft); }
+    catch (error) {
+      await releaseIfDormant(ports, key);
+      throw (error instanceof LiveError && error.reason === 'pending_publication' ? loss : error);
+    }
+    let secondJob: HostJob;
+    try { secondJob = await resolveAttemptJob(ports, key, jobId, binding, second); }
+    catch (error) { await releaseIfDormant(ports, key); throw error; }
     // Same job, new attempt fence: the host re-resolves its pending job for the fresh runtime.
-    const second = await createBuildRuntime(ports, key, binding, draft);
-    const secondJob = await resolveAttemptJob(ports, key, jobId, binding, second);
     return runAttempt(ports, key, second, secondJob);
   }
 }
@@ -77,7 +89,10 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
   try {
     await checkpoint(ports, key, runtime);
     const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
-    runtime = await transition(ports, key, runtime, state => { state.runtime.podUid = pod.uid; });
+    runtime = await transition(ports, key, runtime, state => {
+      state.runtime.podUid = pod.uid;
+      if (pod.replaced) state.runtime.routeEpoch++;
+    });
     const source = await ports.forge.snapshot(key, job.headSha);
     if (source.headSha !== job.headSha) throw new LiveError('git_head_moved');
     runtime = await transition(ports, key, runtime, state => {

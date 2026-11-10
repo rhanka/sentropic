@@ -28,8 +28,9 @@ import { createRemoteLive } from './remote-live';
 import { createRemoteDrafts } from './remote-drafts';
 import type { ForgeBindings } from './forge-binding';
 
-/** Live pods admitted on one d2-4 node (owner decision 07/11); memory admission is the heavy-phase queue's. */
-export const LIVE_NODE_CAPACITY = 4;
+/** Live sessions admitted per environment (two builder pod slots shared by live and build pods, one per
+ * builder node; a 3rd admitted session would only wait for a pod slot before a `queued` failure). */
+export const LIVE_NODE_CAPACITY = 2;
 /** Builder pods present at once per environment (tenant ResourceQuota pods 5, s-archi 07/11 21:15): every creation
  * takes one of these pod slots in the heavy-phase queue first. */
 export const MAX_BUILDER_PODS = 2;
