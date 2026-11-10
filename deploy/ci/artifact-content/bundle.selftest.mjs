@@ -377,12 +377,13 @@ check('preprod: relay key and builder values pass the runtime parsers', () => {
   assert.deepEqual(Object.keys(binding).sort(), ['clientId', 'hostId', 'storageScopeId']);
   assert.equal(binding.clientId, broker.clientId); assert.equal(binding.storageScopeId, broker.storageScopeId);
   assert.deepEqual([target.storageScopeId, target.repoId], [broker.storageScopeId, broker.repoId]);
-  // forge-binding.ts forgeConfig: closed five keys, SG0-app enrollment ref (never a numeric installation id),
+  // forge-binding.ts forgeConfig: closed keys (KEYS_WS with installWorkspaces), SG0-app enrollment ref (never a numeric installation id),
   // the entry of the GitHub App target, root-only subPath until the pod bootstrap is subPath-aware.
   const repositories = JSON.parse(preprodBuilder.ARTIFACT_BUILDER_REPOSITORIES_JSON);
   assert.equal(repositories.length, 1);
   const [repository] = repositories;
-  assert.deepEqual(Object.keys(repository).sort(), ['allowedSubPaths', 'installationRef', 'locator', 'repoId', 'storageScopeId']);
+  assert.deepEqual(Object.keys(repository).sort(), ['allowedSubPaths', 'installWorkspaces', 'installationRef', 'locator', 'repoId', 'storageScopeId']);
+  assert.deepEqual(repository.installWorkspaces, ['ui', 'packages/radar-domain', 'packages/radar-scoring', 'packages/radar-sources']);
   assert.match(repository.installationRef, /^enroll_[0-9a-fA-F-]{36}$/, 'installationRef is the SG0-app enrollment ref');
   assert.deepEqual([repository.locator, repository.storageScopeId, repository.repoId], [target.locator, target.storageScopeId, target.repoId]);
   assert.deepEqual(repository.allowedSubPaths, ['']);
