@@ -48,17 +48,45 @@ export interface ParsedArgs {
   maxAttempts?: number;
 }
 
+const KNOWN_FLAGS = new Set([
+  'provider',
+  'keyring-dir',
+  'keyring-key-env',
+  'owner-scope',
+  'label',
+  'account',
+  'model',
+  'effort',
+  'max-attempts',
+  'help',
+]);
+
 const flagValue = (argv: string[], name: string): string | undefined => {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === `--${name}`) return argv[i + 1];
-    if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3);
+    if (arg === `--${name}`) {
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith('--')) return undefined;
+      return next;
+    }
+    if (arg.startsWith(`--${name}=`)) {
+      const value = arg.slice(name.length + 3);
+      return value.length > 0 ? value : undefined;
+    }
   }
   return undefined;
 };
 
 const hasFlag = (argv: string[], name: string): boolean =>
   argv.includes(`--${name}`) || argv.some((arg) => arg.startsWith(`--${name}=`));
+
+const rejectUnknownFlags = (argv: string[]): void => {
+  for (const arg of argv) {
+    if (!arg.startsWith('--')) continue;
+    const name = arg.slice(2).split('=', 1)[0];
+    if (!KNOWN_FLAGS.has(name)) throw new Error(`unknown flag '--${name}'`);
+  }
+};
 
 export const parseArgs = (argv: string[]): ParsedArgs => {
   const [command, ...rest] = argv;
@@ -68,6 +96,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   if (command !== 'enroll' && command !== 'probe') {
     throw new Error(`unknown command '${command}'; expected 'enroll' or 'probe'`);
   }
+  rejectUnknownFlags(rest);
   const maxAttemptsRaw = flagValue(rest, 'max-attempts');
   return {
     command,
@@ -114,7 +143,11 @@ export const resolveMasterKey = (
   if (typeof raw !== 'string' || raw.length === 0) {
     return { error: `keyring key env var '${keyringKeyEnv}' is missing or empty` };
   }
-  return { key: deriveKeyringMasterKey(raw) };
+  try {
+    return { key: deriveKeyringMasterKey(raw) };
+  } catch {
+    return { error: `keyring key env var '${keyringKeyEnv}' must hold 32 bytes as 64 hex chars or 44/43-char base64` };
+  }
 };
 
 const buildProviders = (fetchFn: typeof fetch): Map<string, EnrollmentProvider> =>
