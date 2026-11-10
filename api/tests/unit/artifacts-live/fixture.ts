@@ -37,12 +37,17 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     return drafts.get(idOf(k))!;
   };
   const objects = new Map<string, { metadata: { name: string; uid: string; labels: Record<string, string>;
-    deletionTimestamp?: string }; spec: unknown; status?: { phase?: string } }>();
+    deletionTimestamp?: string; creationTimestamp?: string }; spec: unknown;
+    status?: { phase?: string; reason?: string; message?: string; containerStatuses?: Array<{ state?: { terminated?: { reason?: string } };
+      lastState?: { terminated?: { reason?: string } } }> } }>();
   const core: KubernetesCore = {
     get: vi.fn(async (kind, name) => objects.get(kind + name) as never),
     create: vi.fn(async (kind, value) => {
-      const object = structuredClone(value) as { metadata: { name: string; uid: string; labels: Record<string, string> }; spec: unknown };
-      object.metadata.uid = `uid-${++sequence}`; objects.set(kind + object.metadata.name, object); return object as never;
+      const object = structuredClone(value) as { metadata: { name: string; uid: string; labels: Record<string, string>;
+        creationTimestamp?: string }; spec: unknown; status?: { phase?: string } };
+      object.metadata.uid = `uid-${++sequence}`;
+      object.metadata.creationTimestamp = new Date(now).toISOString(); object.status = { phase: 'Pending' };
+      objects.set(kind + object.metadata.name, object); return object as never;
     }),
     delete: vi.fn(async (kind, name, uid) => {
       if (!objects.has(kind + name)) return;

@@ -66,39 +66,40 @@ Stop the recurring builder-pod loss loop (preprod 09/11: evicted worker pod re-a
   - [x] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-builder-resilience` with `ENV` last, FOREGROUND only.
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (Allowed/Forbidden/Conditional); no `BRxx-EXn` needed.
-- [ ] **Lot 1 — Never adopt a dead or silent pod**
-  - [ ] `pods.ts`: widen `Pod` status (phase, reason Evicted, message, containerStatuses terminated OOMKilled) and `metadata.creationTimestamp`.
-  - [ ] `pods.ts`: `classifyPodLoss` (pod_evicted, pod_oomkilled, pod_gone, pod_unavailable, supervisor_unresponsive) with bounded scrubbed k8s detail.
-  - [ ] `pods.ts`: `ensure` returns `{uid, adopted, phase, creationTimestamp}`; fresh intent on a Failed/Succeeded/terminating matching pod deletes it and recreates (fenced by uid + waitDeleted); fenced own-pod path throws the classified cause.
-  - [ ] `pods.ts`: `ensureResponsivePod` (bounded renew probe on adopted Running pods older than the boot grace; on transport failure delete + recreate once inside the heavy pod slot).
-  - [ ] `ports.ts`: `pods.ensure` new return shape + new `pods.describe`.
-  - [ ] `prepare-live.ts` + `build-only.ts`: adopt via `ensureResponsivePod`.
-  - [ ] `fixture.ts`: fake create sets `creationTimestamp` + `Pending` phase.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-builder-resilience` (via docker-slot.sh)
-    - [ ] **API tests**
-      - [ ] Existing: `api/tests/unit/artifacts-live/pods.test.ts`, `oom.test.ts`, `controller.test.ts`, `reaper.test.ts` unchanged and green.
-      - [ ] New: `api/tests/unit/artifacts-live/builder-pod-resilience.test.ts` case (a): adopted silent pod deleted + recreated, job succeeds.
-      - [ ] Scoped runs: `make test-api SCOPE=tests/unit/artifacts-live/builder-pod-resilience.test.ts ENV=test-builder-resilience`.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] None: no UI change.
-    - [ ] **E2E tests**
-      - [ ] None in branch: GitHub CI runs the rest.
-- [ ] **Lot 2 — One retry on transport loss with pod cause**
-  - [ ] `pods.ts`: `isTransportLoss` (retryable: pod_evicted, pod_gone, pod_unavailable, supervisor_unresponsive, supervisor_relay_5xx, supervisor_relay_unreachable, supervisor_channel_aborted, k8s_unreachable, k8s_timeout); deterministic failures (install_failed:*, build_failed:*, verify*, publication_*, git_*) never retry; pod_oomkilled never retries.
-  - [ ] `pods.ts`: `enrichPodLoss` (relay/channel failure + readable pod status becomes the pod cause; keeps relay reason when k8s is unreadable).
-  - [ ] `build-only.ts`: extract create/resolve/attempt; transport loss enriches, emits one `artifact_live_phase` `pod` fail line (reason + k8s detail), tears down, re-resolves the same jobId with a new attempt fence, retries once; second failure is reported.
-  - [ ] `controller.ts`: no change expected (reconcile already tears down + crash-restores on the classified cause).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-builder-resilience` (via docker-slot.sh)
-    - [ ] **API tests**
-      - [ ] New cases (b): eviction mid-build retries once on a fresh pod and succeeds; (c): deterministic install_failed does not retry and tears down; (d): reasons carry pod_evicted / pod_oomkilled; (e): tick converges RECOVERING with gone/evicted pod to DORMANT.
-      - [ ] Full scoped file green: `make test-api SCOPE=tests/unit/artifacts-live/builder-pod-resilience.test.ts ENV=test-builder-resilience`.
-      - [ ] Regression file green: `make test-api SCOPE=tests/unit/artifacts-live/pods.test.ts ENV=test-builder-resilience` and `oom.test.ts`, `controller.test.ts`, `reaper.test.ts`.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] None: no UI change.
-    - [ ] **E2E tests**
-      - [ ] None in branch: GitHub CI runs the rest.
+- [x] **Lot 1 — Never adopt a dead or silent pod**
+  - [x] `pods.ts`: widen `Pod` status (phase, reason Evicted, message, containerStatuses terminated OOMKilled) and `metadata.creationTimestamp`.
+  - [x] `pods.ts`: `classifyPodLoss` (pod_evicted, pod_oomkilled, pod_gone, pod_unavailable, supervisor_unresponsive) with bounded scrubbed k8s detail.
+  - [x] `pods.ts`: `ensure` returns `{uid, adopted, phase, creationTimestamp}`; fresh intent on a Failed/Succeeded/terminating matching pod deletes it and recreates (fenced by uid + waitDeleted); fenced own-pod path throws the classified cause.
+  - [x] `pods.ts`: `ensureResponsivePod` (bounded renew probe on adopted Running pods older than the boot grace; on transport failure delete + recreate once inside the heavy pod slot).
+  - [x] `ports.ts`: `pods.ensure` new return shape + new `pods.describe`.
+  - [x] `prepare-live.ts` + `build-only.ts`: adopt via `ensureResponsivePod`.
+  - [x] `fixture.ts`: fake create sets `creationTimestamp` + `Pending` phase.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-builder-resilience` (via docker-slot.sh) green.
+    - [x] `make lint-api ENV=test-builder-resilience` green.
+    - [x] **API tests**
+      - [x] Existing: `api/tests/unit/artifacts-live/pods.test.ts`, `oom.test.ts`, `controller.test.ts`, `reaper.test.ts` unchanged and green (57 tests, 5 files with the new file).
+      - [x] New: `api/tests/unit/artifacts-live/builder-pod-resilience.test.ts` case (a): adopted silent pod deleted + recreated, job succeeds.
+      - [x] Scoped runs: `make test-api SCOPE=tests/unit/artifacts-live/builder-pod-resilience.test.ts API_PORT=8933 UI_PORT=5333 MAILDEV_UI_PORT=1233 ENV=test-builder-resilience` (10/10 green).
+    - [x] **UI tests (TypeScript only)**
+      - [x] None: no UI change.
+    - [x] **E2E tests**
+      - [x] None in branch: GitHub CI runs the rest.
+- [x] **Lot 2 — One retry on transport loss with pod cause**
+  - [x] `pods.ts`: `isTransportLoss` (retryable: pod_evicted, pod_gone, pod_unavailable, supervisor_unresponsive, supervisor_relay_5xx, supervisor_relay_unreachable, supervisor_channel_aborted, k8s_unreachable, k8s_timeout); deterministic failures (install_failed:*, build_failed:*, verify*, publication_*, git_*) never retry; pod_oomkilled never retries.
+  - [x] `pods.ts`: `enrichPodLoss` (relay/channel failure + readable pod status becomes the pod cause; keeps relay reason when k8s is unreadable or the pod never started).
+  - [x] `build-only.ts`: extract create/resolve/attempt; transport loss enriches, emits one `artifact_live_phase` `pod` fail line (reason + k8s detail), tears down, re-resolves the same jobId with a new attempt fence, retries once; second failure is reported.
+  - [x] `controller.ts`: LIVE reconcile enriches the ensure failure (Pending boot race keeps `supervisor_relay_502`); teardown + crash-restore unchanged.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-builder-resilience` (via docker-slot.sh) green.
+    - [x] `make lint-api ENV=test-builder-resilience` green.
+    - [x] **API tests**
+      - [x] New cases (b): eviction mid-build retries once on a fresh pod and succeeds; (c): deterministic build_failed does not retry and tears down; (d): reasons carry pod_evicted / pod_oomkilled; (e): tick converges RECOVERING with gone/evicted pod to DORMANT.
+      - [x] Full scoped file green (10/10) + neighbours (57/57 across 5 files).
+    - [x] **UI tests (TypeScript only)**
+      - [x] None: no UI change.
+    - [x] **E2E tests**
+      - [x] None in branch: GitHub CI runs the rest.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest API (Lot 1 + Lot 2 scoped files + neighbours)

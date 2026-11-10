@@ -161,6 +161,10 @@ export async function enrichPodLoss(deps: { describe(key: LiveKey, runtime: Live
   let report: PodReport | undefined;
   try { report = await deps.describe(key, runtime); } catch { return error; }
   const loss = classifyPodLoss(report);
+  // A present pod that never started (Pending) names no pod-level cause: a relay failure there is a boot race,
+  // so the `supervisor_relay_*` reason is kept. Every dead, evicted, OOM-killed, gone or Running-but-silent pod
+  // is rewritten with its Kubernetes cause.
+  if (loss.reason === 'supervisor_unresponsive' && report?.phase !== 'Running') return error;
   return new LiveError('builder_unavailable', loss.reason, loss.detail);
 }
 /** One `artifact_live_phase` fail line for a classified pod loss (reason + k8s detail); the job ledger and
