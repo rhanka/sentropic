@@ -171,3 +171,48 @@ git -C tmp/worktrees/llm-mesh-enroll-cli push --force-with-lease origin feat/llm
   pas de boucle d'attente CI ; push, rapport, sortie. Le conducteur
   relance à la complétion du run.
 - Non fusionné, comme demandé. Pas de revue externe (conducteur).
+
+## Addendum — rebase post-#981 (10/11, tête `da043c74c`)
+
+`origin/main` (`83f2bcc27`, merge #981 seat runner → mesh 0.34.1) rendait la
+tête `97abcf5fe` CONFLICTING (CI verte, run 42749024501). Rebase
+`origin/main` : 33 commits rejoués, `BRANCH.md` branche conservée à chaque
+conflit, aucun `-X theirs` global. Comportement CLI inchangé (Wonder r2
+APPROVE intact) : aucune modification de `src/` dans ce tour.
+
+Conflits résolus en gardant les DEUX côtés :
+`package.json` 0.35.0 (`bin` conservé), CHANGELOG 0.35.0 au-dessus de 0.34.1,
+`node/index.ts` en union (helpers keyring + seat runner, sans conflit),
+surface-test 0.35.0, `train.ts` 0.35.0/0.22.6/`<0.36.0`, fixture selected
+0.35.0/0.22.6/dev.21. Verrous via make uniquement : `make lock-root`
+idempotent (aucun diff) ; `refresh-lazy-package-lock` puis forme
+registry-URL selon `check-lock-integrity.mjs refresh` — seule l'intégrité
+mesh change (`ap4o` → `ui7/`, packé post-rebase incluant le seat runner).
+
+Porte : mesh 0.35.0 > npm 0.34.0 et > main 0.34.1 ; gateway 0.22.6 > npm
+0.22.5 ; cluster-mesh dev.21 ; `scope-check` PASS C2 ; BRLOCK-EX1 intact.
+
+Vérification (ENV=test-llm-mesh-enroll, premier plan) : `typecheck-llm-mesh`
+vert ; `test-llm-mesh` vert (108 fichiers, 1855 passés) ;
+`typecheck-cluster-mesh` vert ; registry 51, topology-ranges 22, tuple-skew
+22 (+2 skipped), speech-peer 22, skew-invariants 5, artifacts-tuple 5
+(+3 skipped).
+
+Nouvelle tête : `9a96b3ac4` (commit verrou ci-dessus + rebase `da043c74c`),
+34 commits d'avance sur `origin/main`, 0 de retard. Push
+`--force-with-lease` (branche PR uniquement). CI à suivre par le
+conducteur ; non fusionné.
+
+```
+git -C tmp/worktrees/llm-mesh-enroll-cli stash push -- .tmp/rv/llm-mesh-enroll-cli.md
+git -C tmp/worktrees/llm-mesh-enroll-cli fetch origin main
+git -C tmp/worktrees/llm-mesh-enroll-cli rebase origin/main
+git -C tmp/worktrees/llm-mesh-enroll-cli stash pop
+cd tmp/worktrees/llm-mesh-enroll-cli && /home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make lock-root API_PORT=8925 UI_PORT=5325 MAILDEV_UI_PORT=1225 ENV=test-llm-mesh-enroll
+cd tmp/worktrees/llm-mesh-enroll-cli && /home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock API_PORT=8925 UI_PORT=5325 MAILDEV_UI_PORT=1225 ENV=test-llm-mesh-enroll
+cd tmp/worktrees/llm-mesh-enroll-cli && /home/antoinefa/src/sentropic/.tmp/packets/docker-slot.sh make test-llm-mesh API_PORT=8925 UI_PORT=5325 MAILDEV_UI_PORT=1225 ENV=test-llm-mesh-enroll
+gh pr view 983 --json state,mergeable,mergeStateStatus,headRefOid
+gh pr checks 983
+```
+
+Commandes immo inchangées (section README) : voir tête du rapport.
