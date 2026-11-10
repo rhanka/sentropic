@@ -166,10 +166,13 @@
   - [x] m5 mesh range widening to admit 0.35.0; root lock regenerated via make.
   - [x] Selected fixture stays at published 0.34.0 (packaging installs from the registry; 0.35.0 unpublished).
   - [ ] French report at `.tmp/rv/llm-mesh-enroll-cli.md` with the exact commands.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-enroll` green.
-    - [ ] Scoped `make test-llm-mesh SCOPE=tests/node/enroll-cli-enroll.test.ts ENV=test-llm-mesh-enroll` green.
-    - [ ] Scoped `make test-llm-mesh SCOPE=tests/node/enroll-cli-probe.test.ts ENV=test-llm-mesh-enroll` green.
+  - [x] Lot gate:
+    - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-enroll` green.
+    - [x] Full `make test-llm-mesh ENV=test-llm-mesh-enroll` green (107 files, 1815 passed).
+    - [x] Scoped cluster-mesh green: registry 51, topology-ranges 22, tuple-skew 22, speech-peer 22, skew-invariants 5.
+    - [x] `make typecheck-cluster-mesh ENV=test-llm-mesh-enroll` green.
+    - [x] Full `make test-llm-gateway ENV=test-llm-mesh-enroll` green (78 files, 1370 passed).
+  - [ ] FLAKY-NOTE topology-ranges `should refuse prerelease versions` timed out once at 5s under parallel Docker load (19s suite), passed on rerun in 1.18s (22/22). Untouched test, no logic change.
 - [x] **Lot N — Final validation**
   - [x] Typecheck and lint (typecheck-cluster-mesh green at Lots 4–6).
   - [x] Retest llm-mesh scoped plus cluster-mesh scoped (all green, see Lots 4–6).
