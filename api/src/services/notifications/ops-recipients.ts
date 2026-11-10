@@ -193,8 +193,8 @@ export function createOpsRecipientsPort(deps: OpsRecipientsBindingDeps = {}): Op
     fetch(url, {
       signal: init.signal,
       ...(bearer ? { headers: { authorization: `Bearer ${bearer}` } } : {}),
-    }),
-  );
+    }));
+
   const byTarget = new Map<string, OpsAlertRecipientsPortV1>();
   const pullFor = (targetKey: string): OpsAlertRecipientsPortV1 => {
     const cached = byTarget.get(targetKey);
