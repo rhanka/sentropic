@@ -19,7 +19,7 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.nodeSelector).toEqual({ nodepool: 'artifact-builders' });
     expect(pod.spec.tolerations).toEqual([{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }]);
     const res = pod.spec.containers[0].resources;
-    expect(res.requests).toEqual({ cpu: '250m', memory: '1280Mi', 'ephemeral-storage': '0' });
+    expect(res.requests).toEqual({ cpu: '250m', memory: '1536Mi', 'ephemeral-storage': '0' });
     expect(res.limits).toEqual({ cpu: '1', memory: '1536Mi', 'ephemeral-storage': '3400Mi' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'NODE_OPTIONS', value: '--max-old-space-size=384' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } });
@@ -44,7 +44,6 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.volumes.reduce((sum: number, volume: { emptyDir: { sizeLimit: string } }) => sum + mebibytes(volume.emptyDir.sizeLimit), 0)).toBeLessThanOrEqual(3400 - 64);
     // k8s measured the d2-4 node: 1458m CPU free after system pods; only memory limits overcommit.
     expect(4 * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1458);
-    expect(mebibytes(limits.memory)).toBeGreaterThan(mebibytes(requests.memory));
     // Tenant LimitRange (cpu <= 1 per container) and ResourceQuota (requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi,
     // limits.ephemeral-storage 10Gi) admit MAX_BUILDER_PODS = 2 pods: the memory request is the measured build peak, so the
     // scheduler never overcommits a builder node into a kubelet eviction (k8s 09/11).
@@ -54,7 +53,7 @@ describe('builder pod admission and recovery', () => {
     expect(4 * mebibytes(limits.memory)).toBeLessThanOrEqual(6 * 1024);
     expect(MAX_BUILDER_PODS * mebibytes(limits['ephemeral-storage'])).toBeLessThanOrEqual(10 * 1024);
     expect(MAX_BUILDER_PODS).toBe(2);
-    expect(mebibytes(requests.memory)).toBeGreaterThanOrEqual(1280);
+    expect(mebibytes(requests.memory)).toBe(mebibytes(limits.memory));
     expect(MAX_BUILDER_PODS * mebibytes(requests.memory)).toBeLessThanOrEqual(3 * 1024);
     expect(PRODUCT_HEAVY.maxPods).toBe(MAX_BUILDER_PODS);
   });

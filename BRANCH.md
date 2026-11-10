@@ -1,7 +1,7 @@
 # Fix: artifact builder worker memory request matches the measured build peak
 
 ## Objective
-Stop kubelet evictions of artifact builder pods under node memory pressure (preprod 09/11 22:14, k8s facts: pod artifact-d40ef328… evicted at 116 Mi available, container at ~1.23 GiB against a 420Mi request; the supervisor died with it, `supervisor_relay_502`): set the worker memory request to the measured build peak (1280Mi) and cap concurrent builder pods at 2 so the requests fit the tenant `requests.memory` 3Gi quota.
+Stop kubelet evictions of artifact builder pods under node memory pressure (preprod 09/11 22:14, k8s facts: pod artifact-d40ef328… evicted at 116 Mi available, container at ~1.23 GiB against a 420Mi request; the supervisor died with it, `supervisor_relay_502`): set the worker memory request equal to its limit (1536Mi, above the measured ~1.23 GiB peak) and cap concurrent builder pods at 2 so the requests fit the tenant `requests.memory` 3Gi quota.
 
 ## Scope / Guardrails
 - api only: `api/src/services/artifacts/live/pods.ts`, `service.ts`, `product-builder.ts` and `api/tests/unit/artifacts-live/pods.test.ts`.
@@ -36,5 +36,5 @@ Stop kubelet evictions of artifact builder pods under node memory pressure (prep
 - [ ] Preprod: next artifact build runs without eviction; pod requests 1280Mi.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 1 — Worker memory request 1280Mi (measured peak), MAX_BUILDER_PODS and PRODUCT_HEAVY.maxPods 2 (2 x 1280Mi <= requests.memory 3Gi); quota tests.
+- [x] Lot 1 — Worker memory request = limit = 1536Mi (k8s recommendation), MAX_BUILDER_PODS and PRODUCT_HEAVY.maxPods 2 (2 x 1536Mi = requests.memory 3Gi); quota tests.
 - [ ] Lot 2 — CI green, review, merge, deploy-preprod.

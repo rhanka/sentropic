@@ -71,8 +71,9 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
       // ResourceQuota tenant-quota requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi, limits.ephemeral-storage 10Gi.
       // The memory request is the measured build peak (k8s 09/11: ~1.23 GiB RSS at build end): a 420Mi request let the
       // scheduler overcommit a 2 GiB-class builder node and the kubelet evicted the pod under memory pressure
-      // (supervisor_relay_502). 2 x 1280Mi fits requests.memory 3Gi (MAX_BUILDER_PODS = 2); only CPU still overcommits.
-      resources: { requests: { cpu: '250m', memory: '1280Mi', 'ephemeral-storage': '0' },
+      // (supervisor_relay_502). Memory request = limit (1536Mi): the pod is ranked last for eviction and the scheduler books
+      // what it uses; 2 x 1536Mi = requests.memory 3Gi (MAX_BUILDER_PODS = 2, one build per builder node). Only CPU overcommits.
+      resources: { requests: { cpu: '250m', memory: '1536Mi', 'ephemeral-storage': '0' },
         limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
