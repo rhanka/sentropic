@@ -92,8 +92,8 @@ test.describe('Chat', () => {
             res = await page.request.get(
               `${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`,
             );
-          } catch {
-            return 'network-error';
+          } catch (error) {
+            return `network-error:${error instanceof Error ? error.message : String(error)}`;
           }
           if (!res.ok()) return `http-${res.status()}`;
           const data = await res.json().catch(() => null);

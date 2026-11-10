@@ -76,8 +76,8 @@ Fix three non-AI UI e2e flakes and one low-priority chat flake with deterministi
   - [x] Validate scope boundaries and declare exceptions if needed (none planned).
 - [x] **Lot 1 — Fix matrix export cover (app) + org viewer selector (test)**
   - [x] Fix `ui/src/lib/components/MenuPopover.svelte`: absolute menu `z-20` to `z-50` so Actions menu stays above lock badge tooltip.
-  - [x] Fix `e2e/tests/07-matrix.spec.ts` Export: scope Export button to open menu, hover `h1` to close badge tooltip before click, keep download wait.
-  - [x] Fix `e2e/tests/02-organizations.spec.ts:391`: select seeded `Org Readonly E2E` by name, wait for list GET 200 before click, wait for detail GET 200 after click.
+  - [x] Fix `e2e/tests/07-matrix.spec.ts` Export: scope Export button to the open `z-50` menu, no tooltip wait (hidden tooltip is always rendered), keep download wait.
+  - [x] Fix `e2e/tests/02-organizations.spec.ts:391`: select seeded `Org Readonly E2E` by name, wait for list text visible before click, wait for detail GET 200 tied to the navigated id after click.
   - [x] Lot gate:
     - [x] `make typecheck-ui ENV=e2e-fix-flaky` + `make lint-ui ENV=e2e-fix-flaky`
     - [x] **E2E tests**
@@ -85,8 +85,8 @@ Fix three non-AI UI e2e flakes and one low-priority chat flake with deterministi
       - [x] Scoped runs: `make test-e2e E2E_SPEC=tests/02-organizations.spec.ts API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`
       - [x] Scoped runs: `make test-e2e E2E_SPEC=tests/07-matrix.spec.ts API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`
 - [x] **Lot 2 — Fix matrix lock leave (test) + chat queue poll (test)**
-  - [x] Fix `e2e/tests/07-matrix.spec.ts:477`: use isolated members, ensure workspace scope, wait for lock POST 201 for User A and User B, use `waitForNoLocker` helper instead of 2s poll.
-  - [x] Fix `e2e/tests/03-chat.spec.ts` `waitForQueueJobSettled`: catch network errors and return retryable string so poll retries on socket hang up.
+  - [x] Fix `e2e/tests/07-matrix.spec.ts:477`: use isolated members, ensure workspace scope, wait for lock POST 201 for User A and User B (15s aligned with neighboring lock test, 201 only when acquired), assert DELETE `res.ok()`, use `waitForNoLocker` helper instead of 2s poll.
+  - [x] Fix `e2e/tests/03-chat.spec.ts` `waitForQueueJobSettled`: catch errors with message in retryable string so poll retries on socket hang up.
   - [x] Lot gate:
     - [x] `make typecheck-ui ENV=e2e-fix-flaky` + `make lint-ui ENV=e2e-fix-flaky`
     - [x] Scoped runs: `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=8929 UI_PORT=5329 MAILDEV_UI_PORT=1229 ENV=e2e-fix-flaky`

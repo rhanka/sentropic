@@ -182,13 +182,11 @@ test.describe('Configuration de la matrice', () => {
       await actionsButton.click();
 
       const exportAction = page
-        .locator('div.absolute.z-50 button, div.fixed.z-50 button, div.relative div.absolute button')
+        .locator('div.absolute.z-50 button, div.fixed.z-50 button')
         .filter({ hasText: /Exporter|Export/i })
         .first();
       await expect(exportAction).toBeVisible();
       await expect(exportAction).toBeEnabled({ timeout: 2_000 });
-      await page.locator('h1').hover();
-      await expect(page.locator('[role="tooltip"]')).toBeHidden({ timeout: 2_000 }).catch(() => {});
       await exportAction.click();
 
       const exportDialog = page.locator('h3').filter({ hasText: /Exporter la matrice|Export matrix/i });
@@ -490,6 +488,7 @@ test.describe('Configuration de la matrice', () => {
       const userAContext = await browser.newContext({ storageState: memberA.storageState });
       const pageA = await userAContext.newPage();
 
+      // 15s aligned with the neighboring lock test; 201 only when acquired.
       const lockAcquiredA = pageA.waitForResponse(
         (res) =>
           res.url().includes('/api/v1/locks') &&
@@ -513,9 +512,10 @@ test.describe('Configuration de la matrice', () => {
         baseURL: API_BASE_URL,
         storageState: memberA.storageState,
       });
-      await memberAApi.delete(
+      const deleteRes = await memberAApi.delete(
         `/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}&workspace_id=${encodeURIComponent(workspaceAId)}`,
-      ).catch(() => {});
+      );
+      expect(deleteRes.ok()).toBe(true);
       await memberAApi.dispose();
 
       await userAContext.close();
@@ -524,6 +524,7 @@ test.describe('Configuration de la matrice', () => {
       const userBContext = await browser.newContext({ storageState: memberB.storageState });
       const pageB = await userBContext.newPage();
 
+      // 15s aligned with the neighboring lock test; 201 only when acquired.
       const lockAcquiredB = pageB.waitForResponse(
         (res) =>
           res.url().includes('/api/v1/locks') &&
