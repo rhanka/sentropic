@@ -1,11 +1,24 @@
 import type { LivePorts } from './ports';
 import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
+import { ensureResponsivePod, enrichPodLoss, isPodCause, notePodLoss } from './pods';
 import { checkpoint, currentBinding, observeHead, transition } from './transitions';
 import { runPhase, withinPhase } from './deadline';
 
+/** Cold revive, crash restore or wake: adopts only a responsive pod, and reports a lost pod with its Kubernetes
+ * cause. Callers (`revive`, `wake`) tear the runtime down on the enriched error. */
+export async function prepareLive(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) {
+  try {
+    return await preparePod(ports, key, runtime);
+  } catch (error) {
+    if (error instanceof LiveError && error.reason === 'stale_fence') throw error;
+    const loss = await enrichPodLoss(ports.pods, key, runtime, error);
+    if (loss instanceof LiveError && isPodCause(loss)) await notePodLoss(key, loss);
+    throw loss;
+  }
+}
 /** Used by cold revive, crash restore and wake after the older build process tree has terminated. Each heavy phase
  * waits its own turn in the node queue, so a pre-bundle never overlaps another pre-bundle or a build. */
-export async function prepareLive(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) {
+async function preparePod(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) {
   const head = await observeHead(ports, key, runtime);
   let draft = await checkpoint(ports, key, runtime);
   if (draft.baseHeadSha !== head) {
@@ -17,7 +30,7 @@ export async function prepareLive(ports: LivePorts, key: LiveKey, runtime: LiveR
     state.runtime.sourceRevision = draft.revision; state.runtime.baseHeadSha = draft.baseHeadSha;
     state.runtime.liveTreeSha = draft.treeSha;
   });
-  const pod = await ports.heavy.pod(runtime.podName, () => ports.pods.ensure(key, runtime));
+  const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
   runtime = await transition(ports, key, runtime, state => { state.runtime.podUid = pod.uid; });
   const source = await ports.forge.snapshot(key, head);
   if (source.headSha !== head) throw new LiveError('git_head_moved');
