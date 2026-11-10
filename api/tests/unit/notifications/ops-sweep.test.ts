@@ -269,6 +269,20 @@ describe('runOpsNotificationSweep', () => {
     expect(w.deliveries.get('d-1')!.recipients).toHaveLength(2);
   });
 
+  it('requeues the original when the config port itself fails', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery());
+    const deps = {
+      ...fakeDeps(w),
+      recipients: { listRecipientsForTarget: async () => [] as const },
+      configRecipients: { listRecipientsForTarget: async () => { throw new Error('idp down'); } },
+    };
+    const result = await runOpsNotificationSweep(deps);
+    expect(result.failed).toBe(1);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
+    expect([...w.deliveries.values()].filter((row) => row.kind === 'config')).toHaveLength(0);
+  });
+
   it('fails closed with a config alert when the target has no usable recipient', async () => {
     const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
     w.deliveries.set('d-1', delivery());
