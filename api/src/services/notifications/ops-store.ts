@@ -281,12 +281,25 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     return { deliveries: countOf(deletedDeliveries), seenEvents: countOf(deletedSeen) };
   }
 
-  /** Recipient-weighted sent mail counts per target (one delivery = N mails). */
+  /**
+   * Recipient-weighted sent mail counts per target (one delivery = N mails).
+   *
+   * Counts closed sends (`sent`, windowed by `sent_at`) AND already-served
+   * recipients on open or failed rows (windowed by `updated_at`, which every
+   * serve/fail/retry bumps): a partial batch persisted by
+   * `markDeliveryRecipientSent` and requeued by the cap path must still
+   * consume the hourly budget, otherwise a second delivery in the same sweep
+   * or the retry after the cap backoff would send a fresh tranche.
+   */
   async listRecentSentMailCounts(sinceIso: string): Promise<readonly { readonly targetKey: string; readonly mails: number }[]> {
     const result = await this.handle.execute(sql`
       SELECT target_key, COALESCE(SUM(jsonb_array_length(recipients)), 0)::int AS mails
       FROM control.ops_notification_deliveries
-      WHERE status = 'sent' AND sent_at > ${sinceIso}::timestamptz
+      WHERE jsonb_array_length(recipients) > 0
+        AND (
+          (status = 'sent' AND sent_at > ${sinceIso}::timestamptz)
+          OR (status IN ('pending', 'sending', 'failed') AND updated_at > ${sinceIso}::timestamptz)
+        )
       GROUP BY target_key
     `);
     const rows = (Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? []) as Array<{
@@ -305,12 +318,22 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     return rows.length;
   }
 
+  /**
+   * Recipient-weighted sends to one address: closed sends windowed by
+   * `sent_at`, plus already-served entries on open or failed rows windowed
+   * by `updated_at` (same partial-progress ledger as
+   * `listRecentSentMailCounts`, so the per-address ceiling holds across
+   * sweeps and across deliveries of one sweep).
+   */
   async countRecentSentTo(email: string, sinceIso: string): Promise<number> {
     const result = await this.handle.execute(sql`
       SELECT COUNT(*)::int AS count
       FROM control.ops_notification_deliveries
-      WHERE status = 'sent' AND sent_at > ${sinceIso}::timestamptz
-        AND recipients @> jsonb_build_array(jsonb_build_object('email', ${email}))
+      WHERE recipients @> jsonb_build_array(jsonb_build_object('email', ${email}))
+        AND (
+          (status = 'sent' AND sent_at > ${sinceIso}::timestamptz)
+          OR (status IN ('pending', 'sending', 'failed') AND updated_at > ${sinceIso}::timestamptz)
+        )
     `);
     const rows = (Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? []) as Array<{
       count: string | number;

@@ -129,17 +129,22 @@ const fakeDeps = (world: FakeWorld) => {
       row.nextAttemptAt = nextAttemptAt;
       row.attempts = Math.max(0, row.attempts - 1);
     },
+    // Mirrors the production ledger: closed sends plus already-served
+    // recipients on open or failed rows (partial progress). The fake has no
+    // timestamps, and every row it holds was written within the test hour.
     listRecentSentMailCounts: async () => {
       const counts = new Map<string, number>();
       for (const row of world.deliveries.values()) {
-        if (row.status !== 'sent') continue;
+        if (row.status !== 'sent' && row.status !== 'pending' && row.status !== 'sending' && row.status !== 'failed') continue;
+        if (row.recipients.length === 0) continue;
         counts.set(row.targetKey, (counts.get(row.targetKey) ?? 0) + row.recipients.length);
       }
       return [...counts.entries()].map(([targetKey, mails]) => ({ targetKey, mails }));
     },
     countRecentSentTo: async (email) =>
       [...world.deliveries.values()].filter(
-        (row) => row.status === 'sent' && row.recipients.some((entry) => entry.email === email),
+        (row) => (row.status === 'sent' || row.status === 'pending' || row.status === 'sending' || row.status === 'failed')
+          && row.recipients.some((entry) => entry.email === email),
       ).length,
     countPendingForTarget: async (targetKey) =>
       [...world.deliveries.values()].filter(
@@ -264,6 +269,48 @@ describe('runOpsNotificationSweep', () => {
     expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
     expect(w.deliveries.get('d-1')!.recipients).toHaveLength(10);
     expect(w.deliveries.get('d-1')!.nextAttemptAt).not.toBeNull();
+  });
+
+  it('holds the hourly budget on the next sweep after a partial send', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({ attempts: 1 }));
+    const many = Array.from({ length: 100 }, (_, index) => ({
+      accountId: `u-${index}`, email: `next-sweep-${index}@example.com`, basis: 'platform-declaration:immo-prod',
+    }));
+    const targets = { listRecipientsForTarget: async () => many };
+    const first = await runOpsNotificationSweep({ ...fakeDeps(w), recipients: targets });
+    expect(first.suppressed).toBe(1);
+    expect(w.sent).toHaveLength(10);
+    // 16 min later the cap backoff (15 min) is due but the hour is not over:
+    // the 10 already-served recipients still consume the budget, so nothing
+    // more may go out.
+    w.clock = iso(16 * 60 * 1000);
+    const again = await runOpsNotificationSweep({ ...fakeDeps(w), recipients: targets });
+    expect(again.sent).toBe(0);
+    expect(again.suppressed).toBe(1);
+    expect(w.sent).toHaveLength(10);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
+    expect(w.deliveries.get('d-1')!.recipients).toHaveLength(10);
+    expect(w.deliveries.get('d-1')!.nextAttemptAt).not.toBeNull();
+  });
+
+  it('shares one hourly budget across deliveries of the same sweep', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({ id: 'd-1', attempts: 1 }));
+    w.deliveries.set('d-2', delivery({ id: 'd-2', attempts: 1 }));
+    const targets = Array.from({ length: 15 }, (_, index) => ({
+      accountId: `u-${index}`, email: `shared-${index}@example.com`, basis: 'platform-declaration:immo-prod',
+    }));
+    const result = await runOpsNotificationSweep({
+      ...fakeDeps(w),
+      recipients: { listRecipientsForTarget: async () => targets },
+    });
+    expect(result.sent).toBe(0);
+    expect(result.suppressed).toBe(2);
+    expect(w.sent).toHaveLength(10);
+    expect(w.deliveries.get('d-1')!.recipients).toHaveLength(10);
+    expect(w.deliveries.get('d-2')!.recipients).toHaveLength(0);
+    expect(w.deliveries.get('d-2')).toMatchObject({ status: 'pending' });
   });
 
   it('does not consume the retry budget on a cap deferral', async () => {

@@ -158,11 +158,13 @@ async function failOrRetry(
 /**
  * Hard recipient-weighted caps enforced on the batch itself (target, global,
  * per-address, trailing hour). Counts are already windowed by the store
- * (`sent_at` strictly inside the trailing hour), so a plain threshold
- * comparison is exact. Returns the outcome after persisting progress:
- * `sent` when every pending recipient was served (delivery marked sent),
- * `deferred` when the budget ran out first (served recipients persisted,
- * the caller requeues the remainder without consuming the retry budget).
+ * (closed sends by `sent_at`, already-served recipients on open or failed
+ * rows by `updated_at`), so a plain threshold comparison is exact across
+ * sweeps and across deliveries of one sweep. Returns the outcome after
+ * persisting progress: `sent` when every pending recipient was served
+ * (delivery marked sent), `deferred` when the budget ran out first (served
+ * recipients persisted, the caller requeues the remainder without consuming
+ * the retry budget).
  */
 async function sendToAllCapped(
   store: SweepStore,
