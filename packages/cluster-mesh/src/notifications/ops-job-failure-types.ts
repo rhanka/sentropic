@@ -9,6 +9,8 @@
 // `tenantSlug`; the wire name is `targetKey` and no identity tenant is
 // assumed on the platform side. `prod` and `preprod` are distinct keys.
 
+import { createHash } from 'node:crypto';
+
 /** Frozen contract version carried on every event. */
 export const OPS_JOB_FAILURE_CONTRACT_V1 = 1 as const;
 
@@ -84,6 +86,23 @@ export const OPS_JOB_FAILURE_OCCURRED_AT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 export const OPS_JOB_FAILURE_MAX_BODY_BYTES = 32 * 1024;
 /** Allowed `basis` values in product recipients answers (conductor contract v1). */
 export const OPS_JOB_FAILURE_RECIPIENT_BASES_V1 = ['workspace:manage_members', 'app:is_admin'] as const;
+
+/**
+ * sha256 over the canonical event projection (fixed key order). Two ingests
+ * with the same `eventId` but different bytes are a 409 conflict, never a
+ * silent dedup.
+ */
+export function fingerprintOpsJobFailureEvent(event: OpsJobFailureV1): string {
+  const canonical = JSON.stringify({
+    v: event.v, eventId: event.eventId, source: event.source, targetKey: event.targetKey,
+    jobRef: { kind: event.jobRef.kind, name: event.jobRef.name, namespace: event.jobRef.namespace ?? null },
+    runId: event.runId, outcome: event.outcome,
+    reason: event.reason ?? null, severity: event.severity ?? null,
+    occurredAt: event.occurredAt, detail: event.detail ?? null,
+    links: event.links ? { logs: event.links.logs ?? null, run: event.links.run ?? null } : null,
+  });
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
 
 /** Byte-safe truncation of the untrusted free detail (never splits UTF-8). */
 export function truncateOpsDetail(detail: string): string {
