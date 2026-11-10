@@ -110,12 +110,12 @@ describe('host build API (M3-B)', () => {
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); expect(s.build).toHaveBeenCalledTimes(2);
     s.advance(STALE); await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); expect(s.build).toHaveBeenCalledTimes(3);
   });
-  it('presumes a run dead after its heavy-gate wait and its bounded phases, never after a pod lifetime', async () => {
+  it('presumes a run dead after two heavy-gate waits and two bounded passes, never after a pod lifetime', async () => {
     expect(BUILD_ONLY_PHASES).toEqual(['install', 'prepare', 'build', 'verify']);
     expect(PHASE_DEADLINE_MS).toBe(300_000);
-    expect(runStaleMs(0, 300_000)).toBe(1_200_000);
-    expect(runStaleMs(0)).toBe(1_200_000 + 3 * PHASE_DEADLINE_MS);
-    expect(STALE).toBe(HEAVY_WAIT_MS + 1_200_000 + 3 * PHASE_DEADLINE_MS);
+    expect(runStaleMs(0, 300_000)).toBe(2_400_000);
+    expect(runStaleMs(0)).toBe(2 * (1_200_000 + 3 * PHASE_DEADLINE_MS));
+    expect(STALE).toBe(2 * (HEAVY_WAIT_MS + 1_200_000 + 3 * PHASE_DEADLINE_MS));
     const s = setup(); await s.jobs.admit(k, 'job-1', binding);
     s.advance(STALE - 1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(false);
     s.advance(1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(true);
