@@ -116,6 +116,12 @@ Ship a concrete Node ClaudeCodeCliRunner in @sentropic/llm-mesh so a Claude seat
   - [x] Note Lot 7 (`22a36aaa5`, push OK, sans run `pull_request` plateforme) → dispatch `42732350591` : **completed/success, 0 échec, 6/6 e2e verts** (shards 2+4 verts — flake avéré).
 - [x] **Lot 8 — Merge main d03ca3e27 (PR #988 e2e-ui-flaky + #990) + run PR vert**
   - [x] Main a avancé (fix e2e `02-organizations`/`03-chat`/`07-matrix` + `MenuPopover`, forge artifacts-live — corroborre le classement flake, aucun recouvrement avec le lane hors `BRANCH.md` résolu `--ours`) → `324c95640`, `scope-check` PASS C2, push OK. Run PR `42734918470` : **completed/success**, 0 échec (6/6 e2e verts **avec** le fix #988 dans l'arbre). PR OPEN, MERGEABLE, non mergée.
+- [ ] **Lot 9 — FIX lane Wonder r3 (10/11, PR #981 REQUEST_CHANGES)**
+  - [x] Merge `origin/main` (`84263c6fd`, PR #976 custodian-refresh — 42 commits de retard) → `25b9e8fe7` : conflits version résolus vers `0.34.1` (`package.json`, `CHANGELOG` entrée `0.34.1` au-dessus de `0.34.0`, pin `decision-public-surface`, `train.ts` + fixture `selected`), `BRANCH.md` résolu `--ours` (ligne BRLOCK-EX1 intacte), lock racine régénéré via `make lock-root`.
+  - [x] BLOCKER version : `0.34.1` > npm latest (`0.34.0`) et > `origin/main` (`0.34.0`) ; ranges main (`gateway ^0.34.0`, cluster-mesh `<0.35.0`) admis ; integrity fixture = tarball packé local (`pack-llm-mesh`, `sha512-UHXCK…`, garde `pack-publishable-manifest` PASS).
+  - [x] MAJOR probe : spawn détaché + repli `child.kill` dans `killTree`, résolution sur `close` drainé, contrôles `stream-json` + `-p` ; tests timeout-oracle-mort, oversize, helps sans valeur/switch.
+  - [x] MAJOR confinement : commentaire `--safe-mode` corrigé (confinement réel documenté), refus fail-fast dès `init` sans événement émis, succès exige `init`, requêtes avec `tools` refusées avant spawn ; stub `global.d.ts` `close` aligné sur Node (code porté).
+  - [x] Gates ciblés : runner 36/36, runtime-client 117/117, decision-surface 4/4, prepare-artifacts 20/20, llm/gateway-surface verts, typecheck + lint verts, `scope-check` PASS C2.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest llm-mesh suite (cf Lot1, copy checklist)
