@@ -34,6 +34,7 @@ const incident = (extra: Partial<OpsIncidentStateV1> = {}): OpsIncidentStateV1 =
   lastEscalationAt: null,
   resolvedAt: null,
   lastHeartbeatAt: null,
+  lastOccurredAt: iso(0),
   ...extra,
 });
 

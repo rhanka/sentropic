@@ -16,7 +16,8 @@ export {
   type OpsJobFailureValidation, type OpsJobFailureValidationCode, type OpsJobFailureValidationOptions,
 } from './ops-job-failure-contract.js';
 export {
-  DEFAULT_OPS_NOTIFICATION_POLICY_V1, openIncident, openDormantWatch, openOpsStaleIncident,
+  DEFAULT_OPS_NOTIFICATION_POLICY_V1, isOpsStaleEvent, lastKnownOccurredAt,
+  openIncident, openDormantWatch, openOpsStaleIncident,
   type OpsIncidentMailV1, type OpsIncidentStateV1, type OpsIncidentStatusV1,
   type OpsIncidentTransitionV1, type OpsNotificationPolicyV1,
 } from './incident-state.js';
