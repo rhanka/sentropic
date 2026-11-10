@@ -87,9 +87,14 @@ test.describe('Chat', () => {
     await expect
       .poll(
         async () => {
-          const res = await page.request.get(
-            `${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`,
-          );
+          let res;
+          try {
+            res = await page.request.get(
+              `${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`,
+            );
+          } catch (error) {
+            return `network-error:${error instanceof Error ? error.message : String(error)}`;
+          }
           if (!res.ok()) return `http-${res.status()}`;
           const data = await res.json().catch(() => null);
           return String(data?.status ?? '');

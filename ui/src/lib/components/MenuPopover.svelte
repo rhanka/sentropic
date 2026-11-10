@@ -96,7 +96,7 @@
     <slot name="trigger" {toggle} {open} {disabled} />
     {#if open}
       <div
-        class={`absolute ${positionClass} ${alignClass} ${widthClass} rounded-lg border border-slate-200 bg-white shadow-lg z-20 ${menuPaddingClass} ${menuClass}`}
+        class={`absolute ${positionClass} ${alignClass} ${widthClass} rounded-lg border border-slate-200 bg-white shadow-lg z-50 ${menuPaddingClass} ${menuClass}`}
         style={menuStyle}
         bind:this={menuRef}
       >

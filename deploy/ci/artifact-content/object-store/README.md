@@ -54,6 +54,8 @@ psql STDIN inside `postgres-0` (`psql -U "$POSTGRES_USER" -d app -v ON_ERROR_STO
 an open architecture item (see the SQL header).
 
 ## Rollback
-Remove `artifact-object-store` from `deploy/k8s/overlays/preprod/kustomization.yaml`, delete the StatefulSet, PVC
-`data-artifact-object-store-0`, Service, NetworkPolicy and Secret `artifact-object-store`.
-Content serving must be closed first (it refuses startup without its store).
+Never delete artifact data (owner rule 2026-11-08). Close content serving first (it refuses startup
+without its store), then scale the StatefulSet `artifact-object-store` to 0. Keep the PVC
+`data-artifact-object-store-0`, its bucket contents and the Secret `artifact-object-store`; the
+StatefulSet stays in the overlay. The guard `test-artifact-data-guard` (every CI run) fails any change
+that removes the store, its volume or a bucket. Deleting the data needs a separate owner decision.

@@ -5,6 +5,7 @@ import {
 import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
 import { Hono } from 'hono';
 
+import { env } from '../../config/env';
 import { requireCmAccountAuth } from '../../services/identity/cm-self-deletion';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { getSentropicOAuthPorts } from '../auth/oauth';
@@ -27,7 +28,16 @@ export interface AuthPathProjection {
 export interface CreateAuthNamespaceModuleOptions {
   readonly compositionRoot: AuthCompositionRoot;
   readonly projection: AuthPathProjection;
+  /** 'disabled' refuses both registration ceremonies (default 'enabled'). */
+  readonly passkeyRegistration?: 'enabled' | 'disabled';
 }
+
+const PASSKEY_REGISTRATION_PATHS = ['/register/options', '/register/verify'] as const;
+
+// A tier whose IdP shares the parent RP ID with prod must not enrol: the authenticator could
+// replace the user's prod passkey (same RP ID and user handle). Credentials arrive by sync only.
+const refusePasskeyRegistration = () => Response.json({ error: { code: 'passkey_registration_disabled',
+  message: 'Passkey registration is disabled on this identity provider.' } }, { status: 403 });
 
 const AUTH_RELATIVE_PATHS = [
   '/health',
@@ -70,6 +80,10 @@ export const createAuthNamespaceModule = (
     const authPaths = AUTH_RELATIVE_PATHS.map((path) => joinPath(authPath, path));
     const accountPaths = [accountPath, joinPath(accountPath, '/deactivate')];
 
+    if (options.passkeyRegistration === 'disabled') {
+      // Refused before the author fence, so a refused ceremony writes no cutover state.
+      for (const path of PASSKEY_REGISTRATION_PATHS) router.post(joinPath(authPath, path), refusePasskeyRegistration);
+    }
     // Only enumerated identity routes are fenced. `/oauth` and `/session` are never prefix-caught.
     applyAuthAuthorFence(router, options.compositionRoot, [...authPaths, ...accountPaths]);
     for (const path of accountPaths) router.use(path, requireCmAccountAuth);
@@ -92,6 +106,7 @@ const runtime = clusterMeshAdapter.sessionControl!.runtime;
 export const productAuthPlugin = () => ({
   module: createAuthNamespaceModule({
     compositionRoot: 'product',
+    passkeyRegistration: env.WEBAUTHN_REGISTRATION ?? 'enabled',
     projection: {
       accountPath: '/me',
       authPath: '/auth',
@@ -105,6 +120,7 @@ export const productAuthPlugin = () => ({
 export const idpAuthPlugin = () => ({
   module: createAuthNamespaceModule({
     compositionRoot: 'auth-idp',
+    passkeyRegistration: env.WEBAUTHN_REGISTRATION ?? 'enabled',
     projection: {
       accountPath: '/me',
       authPath: '',

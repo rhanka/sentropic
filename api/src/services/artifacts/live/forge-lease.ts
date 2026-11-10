@@ -3,11 +3,12 @@ import type { ForgeReads } from './forge';
 import { admitBinding, unconfigured, type BuilderRepository, type ForgeBinding, type ForgeBindings, type ForgeConfig } from './forge-binding';
 import { readForgeTarball, unstable, type ForgeTree } from './forge-tar';
 import { GB1_QUALIFICATION_PATH } from './gb1-qualification';
+import { validateWorkspaces } from './workspace-subset';
 import { sha256 } from './integrity';
 import type { LiveStore, SourceSnapshot } from './ports';
 import { LiveError, type LiveKey } from './records';
 import { CODELOAD, createLeasedGitHub, discard, field, FORGE_TIMEOUTS, json, unavailable, USER_AGENT } from './forge-github';
-import { BUILDER_IMAGE, BUILDER_TOOLCHAIN, INSTALL_RECIPE, NPM_RELAY } from './recipes';
+import { BUILDER_IMAGE, BUILDER_TOOLCHAIN, NPM_RELAY, installRecipeFor } from './recipes';
 
 /** Staged manifests: bounded in-memory map, 30 min TTL, least recently used 8 entries. */
 export const STAGING = Object.freeze({ ttlMs: 30 * 60_000, entries: 8 });
@@ -106,12 +107,21 @@ export function createLeaseForgeReads(options: {
       if (!lock) throw new LiveError('lock_missing');
       const stagingRef = stage({ target: t, sha, manifest: rowsOf(files), expiresAt: now() + STAGING.ttlMs });
       const topology = files.files.filter(f => f.path === 'package.json' || f.path.endsWith('/package.json')).map(f => f.path).sort();
+      const rawSelection = [...(t.repository.installWorkspaces ?? [])].sort();
+      let installWorkspaces: readonly string[] = rawSelection;
+      if (rawSelection.length > 0) {
+        const rootManifest = files.gb1['package.json'];
+        if (typeof rootManifest !== 'string') throw new LiveError('build_descriptor_invalid', 'unknown_workspace');
+        installWorkspaces = validateWorkspaces(rawSelection, rootManifest,
+          Object.keys(files.gb1).filter(path => path === 'package.json' || path.endsWith('/package.json')));
+      }
       return { headSha: sha, treeSha, lockfile: lock.bytes, stagingRef, gb1: { subPath: t.binding.subPath, files: files.gb1 },
         cacheIdentity: { storageScopeId: key.storageScopeId, repoId: t.binding.repoId, lockSha256: sha256(lock.bytes),
           platform: BUILDER_TOOLCHAIN.platform, nodeVersion: BUILDER_TOOLCHAIN.nodeVersion,
           npmVersion: BUILDER_TOOLCHAIN.npmVersion, image: BUILDER_IMAGE,
-          policyRevision: sha256(JSON.stringify([INSTALL_RECIPE, NPM_RELAY])), workspaceTopology: sha256(JSON.stringify(topology)),
-          integrityDigest: sha256(files.gb1[GB1_QUALIFICATION_PATH] ?? '') } };
+          policyRevision: sha256(JSON.stringify([installRecipeFor(installWorkspaces), NPM_RELAY])),
+          workspaceTopology: sha256(JSON.stringify(topology)), integrityDigest: sha256(files.gb1[GB1_QUALIFICATION_PATH] ?? ''),
+          installWorkspaces } };
     },
     /** Re-downloads the recorded commit and returns its files only when every row equals the staged manifest. */
     async source(stagingRef) {
@@ -120,7 +130,7 @@ export function createLeaseForgeReads(options: {
       if (rows.length !== entry.manifest.length || rows.some((row, i) => {
         const m = entry.manifest[i]!;
         return row.path !== m.path || row.mode !== m.mode || row.size !== m.size || row.sha256 !== m.sha256;
-      })) return unstable();
+      })) return unstable('source_changed');
       return again.files;
     },
   };
