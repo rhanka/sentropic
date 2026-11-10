@@ -265,6 +265,22 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     return typeof count === 'number' ? count : 0;
   }
 
+    /** 90-day retention purge: terminal deliveries and seen events only, never pending work. */
+  async purgeExpiredOpsData(cutoffIso: string): Promise<{ readonly deliveries: number; readonly seenEvents: number }> {
+    const countOf = (result: unknown): number => {
+      const rowCount = (result as { rowCount?: unknown }).rowCount;
+      return typeof rowCount === 'number' ? rowCount : 0;
+    };
+    const deletedDeliveries = await this.handle.execute(sql`
+      DELETE FROM control.ops_notification_deliveries
+      WHERE created_at < ${cutoffIso}::timestamptz AND status IN ('sent', 'failed')
+    `);
+    const deletedSeen = await this.handle.execute(sql`
+      DELETE FROM control.ops_seen_events WHERE received_at < ${cutoffIso}::timestamptz
+    `);
+    return { deliveries: countOf(deletedDeliveries), seenEvents: countOf(deletedSeen) };
+  }
+
   /** Recipient-weighted sent mail counts per target (one delivery = N mails). */
   async listRecentSentMailCounts(sinceIso: string): Promise<readonly { readonly targetKey: string; readonly mails: number }[]> {
     const result = await this.handle.execute(sql`

@@ -94,6 +94,8 @@ export interface OpsNotificationStorePort {
   countRecentSentTo(email: string, sinceIso: string): Promise<number>;
   /** Pending + sending deliveries for one target (ingestion queue bound). */
   countPendingForTarget(targetKey: string): Promise<number>;
+  /** Deletes terminal deliveries and seen events older than the cutoff (90 d retention). */
+  purgeExpiredOpsData(cutoffIso: string): Promise<{ readonly deliveries: number; readonly seenEvents: number }>;
   loadSeenEvent(eventId: string): Promise<OpsSeenEventV1 | null>;
   findSeenCanonical(canonicalKey: string): Promise<OpsSeenEventV1 | null>;
   /** True when a pending or sending delivery of this kind already exists. */
