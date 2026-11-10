@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createOpsPlatformAdminsPort,
   createOpsRecipientsPort,
   parseOpsTargetsDeclaration,
+  parseOpsTargetsDeclarationStrict,
 } from '../../../src/services/notifications/ops-recipients';
 
 const accounts = (records: Record<string, { status: 'active' | 'disabled'; email: string }>) => ({
@@ -42,13 +44,13 @@ describe('createOpsRecipientsPort', () => {
     ]);
   });
 
-  it('falls back to platform admins when the target has no usable admin', async () => {
+  it('fails closed with an empty list when the target has no usable admin', async () => {
     const port = createOpsRecipientsPort({
       declaration: {},
       accounts: accounts({}),
       platformAdmins: async () => platformAdmins,
     });
-    expect(await port.listRecipientsForTarget('unknown-target')).toEqual(platformAdmins);
+    expect(await port.listRecipientsForTarget('unknown-target')).toEqual([]);
   });
 
   it('skips declared ids that are missing or inactive', async () => {
@@ -78,5 +80,31 @@ describe('createOpsRecipientsPort', () => {
       { accountId: 'u-1', email: 'live@example.com', basis: 'platform-declaration:immo-prod' },
     ]);
     expect(lookup.findAccount).toHaveBeenCalledWith('u-1');
+  });
+});
+
+describe('parseOpsTargetsDeclarationStrict', () => {
+  it('rejects malformed declarations at startup instead of degrading silently', () => {
+    expect(() => parseOpsTargetsDeclarationStrict('not-json')).toThrow(/valid JSON/);
+    expect(() => parseOpsTargetsDeclarationStrict('["immo-prod"]')).toThrow(/must be an object/);
+    expect(() => parseOpsTargetsDeclarationStrict('{"immo-prod":"u-1"}')).toThrow(/must be an array/);
+    expect(parseOpsTargetsDeclarationStrict('{"immo-prod":["u-1"]}')).toEqual({ 'immo-prod': ['u-1'] });
+    expect(parseOpsTargetsDeclarationStrict(undefined)).toEqual({});
+  });
+});
+
+describe('createOpsPlatformAdminsPort', () => {
+  it('resolves only active admin_app accounts with sendable addresses', async () => {
+    const port = createOpsPlatformAdminsPort({
+      platformAdmins: async () => platformAdmins,
+    });
+    expect(await port.listRecipientsForTarget('immo-prod')).toEqual(platformAdmins);
+  });
+
+  it('propagates lookup failures so the sweep retries instead of alerting wrongly', async () => {
+    const port = createOpsPlatformAdminsPort({
+      platformAdmins: async () => { throw new Error('idp down'); },
+    });
+    await expect(port.listRecipientsForTarget('immo-prod')).rejects.toThrow('idp down');
   });
 });
