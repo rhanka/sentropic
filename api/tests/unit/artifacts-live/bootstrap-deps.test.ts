@@ -32,10 +32,10 @@ async function npmCi(call: Spawned) {
   await symlink('../vite/bin/vite.js', at('node_modules/.bin/vite')); await symlink('../ui', at('node_modules/ui'));
 }
 /** Installs the way the W3 clean installer drives the pod: install + npm-cache transfers, then the install op. */
-async function install(pod: Pod, files = source, staged = tarballs) {
+async function install(pod: Pod, files = source, staged = tarballs, workspaces: string[] = []) {
   const sent = await pod.transfer('install', files);
   const cache = await pod.transfer('npm-cache', staged.map(t => t.file));
-  return pod.send('install', { recipe: 'install', runId: 'run-1', source: sent, cache,
+  return pod.send('install', { recipe: 'install', runId: 'run-1', source: sent, cache, workspaces,
     tarballs: staged.map(t => ({ path: t.file.path, integrity: t.integrity })) });
 }
 /** W3 `readSnapshot` reassembly of contiguous slices (links skipped by the pod). */
@@ -109,7 +109,7 @@ describe('pod bootstrap agent: offline install and dependency materialization', 
         quarantine: async () => undefined, putFile: async (digest, bytes) => { blobs.set(digest, bytes); },
         getFile: async digest => blobs.get(digest) } });
     const identity = { storageScopeId: 's', repoId: 'r', lockSha256: createHash('sha256').update(lock).digest('hex'), platform: 'linux-x64',
-      nodeVersion: '24', npmVersion: '11', image: BUILDER_IMAGE, policyRevision: 'p1', workspaceTopology: 'ui', integrityDigest: createHash('sha256').digest('hex') };
+      nodeVersion: '24', npmVersion: '11', image: BUILDER_IMAGE, policyRevision: 'p1', workspaceTopology: 'ui', integrityDigest: createHash('sha256').digest('hex'), installWorkspaces: [] };
     // GB1 at the pinned commit: no script entry in the lock, so no qualification file (digest of zero bytes).
     const gb1 = { subPath: '', files: { 'sentropic.artifact.json': gb1Descriptor, 'package-lock.json': lock.toString(),
       'ui/package.json': '{"name":"ui"}',
@@ -144,5 +144,54 @@ describe('pod bootstrap agent: offline install and dependency materialization', 
     await pod.send('stage', { ...await pod.transfer('workspace', [file('package-lock.json', bad)]), headSha: HEAD, treeSha: HEAD });
     await expect(pod.send('dependencies', { ...await pod.transfer('dependencies', []), cacheKey: 'k', cacheTree: 'c'.repeat(64),
       readOnly: true })).rejects.toThrow('failed:invalid_path');
+  });
+});
+
+describe('pod bootstrap agent: workspace-scoped installs', () => {
+  const viteBytes = Buffer.from('scoped-vite-tarball');
+  const xNestedBytes = Buffer.from('scoped-x-nested-tarball');
+  const xHoistedBytes = Buffer.from('scoped-x-hoisted-tarball');
+  const sriOf = (bytes: Buffer) => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+  const urlOf = (name: string) => `https://registry.npmjs.org/${name}/-/${name}-1.0.0.tgz`;
+  const scopedLock = Buffer.from(JSON.stringify({ lockfileVersion: 3, packages: {
+    '': { name: 'root', workspaces: ['ui'] },
+    ui: { name: 'ui', version: '1.0.0', dependencies: { vite: '^1.0.0', x: '^1.0.0' } },
+    'node_modules/ui': { resolved: 'ui', link: true },
+    'node_modules/vite': { version: '1.0.0', resolved: urlOf('vite'), integrity: sriOf(viteBytes) },
+    'ui/node_modules/x': { version: '1.0.0', resolved: urlOf('x-nested'), integrity: sriOf(xNestedBytes) },
+    'node_modules/x': { version: '9.9.9', resolved: urlOf('x-hoisted'), integrity: sriOf(xHoistedBytes) },
+  } }));
+  const scopedSource = [file('package.json', '{"workspaces":["ui"]}'), file('package-lock.json', scopedLock),
+    file('ui/package.json', '{"name":"ui","dependencies":{"vite":"^1.0.0","x":"^1.0.0"}}')];
+  const scopedTarballs = [
+    { file: file('0.tgz', viteBytes, 0o444), integrity: sriOf(viteBytes) },
+    { file: file('1.tgz', xNestedBytes, 0o444), integrity: sriOf(xNestedBytes) },
+  ];
+
+  it('should run npm ci with sorted workspace flags and prefer the nested lock entry', async () => {
+    const calls: Spawned[] = [];
+    const pod = await harness({ spawn: fakeSpawn(calls, async () => 0) });
+    await expect(install(pod, scopedSource, scopedTarballs, ['ui'])).resolves.toEqual({ exitCode: 0, signal: null, output: '' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ executable: INSTALL_RECIPE.executable,
+      args: [...INSTALL_RECIPE.args, '--workspace=ui'] });
+  });
+
+  it('should refuse before npm when an expected scoped tarball is not staged', async () => {
+    const calls: Spawned[] = [];
+    const pod = await harness({ spawn: fakeSpawn(calls, async () => 0) });
+    await expect(install(pod, scopedSource, scopedTarballs.slice(0, 1), ['ui']))
+      .rejects.toThrow('integrity:integrity_missing');
+    expect(calls).toEqual([]);
+  });
+
+  it('should refuse an unknown workspace and an invalid workspace shape before npm', async () => {
+    const calls: Spawned[] = [];
+    const spawn = fakeSpawn(calls, async () => 0);
+    await expect(install(await harness({ spawn }), scopedSource, scopedTarballs, ['missing']))
+      .rejects.toThrow('failed:unknown_workspace');
+    await expect(install(await harness({ spawn }), scopedSource, scopedTarballs, ['../x']))
+      .rejects.toThrow('failed:invalid_args');
+    expect(calls).toEqual([]);
   });
 });
