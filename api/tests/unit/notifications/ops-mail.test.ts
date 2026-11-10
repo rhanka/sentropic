@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { renderOpsMail, sendOpsAlertMail } from '../../../src/services/notifications/ops-mail';
+import {
+  isOpsMailRetryableError,
+  OpsMailError,
+  opsSendBackoffMs,
+  renderOpsConfigMail,
+  renderOpsMail,
+  sanitizeOpsSubject,
+  sendOpsAlertMail,
+} from '../../../src/services/notifications/ops-mail';
 import type { OpsIncidentStateV1 } from '@sentropic/cluster-mesh/notifications';
 
 vi.mock('../../../src/services/scw-tem-client', () => ({
@@ -22,6 +30,7 @@ const state = (extra: Partial<OpsIncidentStateV1> = {}): OpsIncidentStateV1 => (
   lastRunId: 'job-abc123',
   lastEventId: 'k8s:job-abc123:failed',
   lastLinks: { logs: 'https://logs.example.com/run-1' },
+  lastDetail: null,
   lastMailAt: null,
   escalationLevel: 0,
   lastEscalationAt: null,
@@ -61,13 +70,47 @@ describe('renderOpsMail', () => {
 });
 
 describe('sendOpsAlertMail', () => {
-  it('delegates to TEM and maps provider errors', async () => {
+  it('delegates to TEM and keeps retryability on provider errors', async () => {
     const { sendTransactionalEmail } = await import('../../../src/services/scw-tem-client');
     vi.mocked(sendTransactionalEmail).mockResolvedValue({ messageId: 'mid-1' });
     const messageId = await sendOpsAlertMail({ to: 'a@example.com', subject: 's', text: 't', html: '<p>t</p>' });
     expect(messageId).toBe('mid-1');
-    vi.mocked(sendTransactionalEmail).mockRejectedValue(new Error('HTTP 500'));
-    await expect(sendOpsAlertMail({ to: 'a@example.com', subject: 's', text: 't', html: 'h' }))
-      .rejects.toThrow('ops_mail_delivery_failed');
+    vi.mocked(sendTransactionalEmail).mockRejectedValue(new Error('Scaleway TEM send failed: HTTP 500 boom'));
+    const transient = await sendOpsAlertMail({ to: 'a@example.com', subject: 's', text: 't', html: 'h' })
+      .catch((error: unknown) => error);
+    expect(transient).toBeInstanceOf(OpsMailError);
+    expect((transient as OpsMailError).retryable).toBe(true);
+    vi.mocked(sendTransactionalEmail).mockRejectedValue(new Error('Scaleway TEM send failed: HTTP 400 bad'));
+    const permanent = await sendOpsAlertMail({ to: 'a@example.com', subject: 's', text: 't', html: 'h' })
+      .catch((error: unknown) => error);
+    expect((permanent as OpsMailError).retryable).toBe(false);
+  });
+});
+
+describe('ops mail hardening', () => {
+  it('reduces subjects to one sanitized line', () => {
+    expect(sanitizeOpsSubject('[job-failure] a/b\nBcc: evil@example.com')).toBe('[job-failure] a/b Bcc: evil@example.com');
+    expect(sanitizeOpsSubject('  spaced   out  ')).toBe('spaced out');
+    expect(sanitizeOpsSubject('x'.repeat(300))).toHaveLength(200);
+    const evil = state({ targetKey: 'immo-prod', jobName: 'a\nBcc: evil@example.com' });
+    expect(renderOpsMail('firing', evil).subject).not.toContain('\n');
+  });
+
+  it('classifies retryable faults and backs off bounded', () => {
+    expect(isOpsMailRetryableError(new OpsMailError('x', true, 500))).toBe(true);
+    expect(isOpsMailRetryableError(new OpsMailError('x', false, 400))).toBe(false);
+    expect(isOpsMailRetryableError(new Error('Scaleway TEM send failed: HTTP 503 x'))).toBe(true);
+    expect(isOpsMailRetryableError(new Error('Scaleway TEM send failed: HTTP 400 x'))).toBe(false);
+    expect(isOpsMailRetryableError(new Error('socket hang up'))).toBe(true);
+    expect(opsSendBackoffMs(1)).toBe(2 * 60 * 1000);
+    expect(opsSendBackoffMs(99)).toBe(60 * 60 * 1000);
+  });
+
+  it('renders a config alert without job detail', () => {
+    const rendered = renderOpsConfigMail('immo-prod', 'immo-prod/immo/radar', 'no usable recipient');
+    expect(rendered.subject).toContain('misconfigured');
+    expect(rendered.text).toContain('immo-prod');
+    expect(rendered.text).toContain('OPS_JOB_FAILURE_TARGETS_JSON');
+    expect(rendered.text).not.toContain('radar-refresh');
   });
 });
