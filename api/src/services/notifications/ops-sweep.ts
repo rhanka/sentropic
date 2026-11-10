@@ -103,7 +103,7 @@ export async function runOpsNotificationSweep(deps: OpsSweepDeps = {}): Promise<
     });
   }
 
-  const pending = await store.claimPendingDeliveries(OPS_SWEEP_CLAIM_LIMIT);
+  const pending = await store.claimPendingDeliveries(OPS_SWEEP_CLAIM_LIMIT, nowIso);
   for (const delivery of pending) {
     try {
       if (delivery.attempts > OPS_SWEEP_MAX_SEND_ATTEMPTS) {

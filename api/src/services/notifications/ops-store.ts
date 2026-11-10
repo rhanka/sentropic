@@ -20,7 +20,7 @@ import {
   type OpsNotificationDeliveryRow,
 } from '../../db/control-schema';
 import { createId } from '../../utils/id';
-import type { OpsDeliveryRecordV1, OpsNotificationStorePort } from './ops-types';
+import type { OpsDeliveryKindV1, OpsDeliveryRecordV1, OpsNotificationStorePort, OpsSeenEventV1 } from './ops-types';
 
 /** Query-builder surface the store needs; both `db` and a tx satisfy it. */
 export type OpsDrizzleHandle = Pick<NodePgDatabase, 'select' | 'insert' | 'update' | 'delete' | 'execute'>;
@@ -41,11 +41,13 @@ const toState = (row: OpsIncidentRow): OpsIncidentStateV1 => ({
   lastRunId: row.lastRunId,
   lastEventId: row.lastEventId,
   lastLinks: (row.lastLinks ?? null) as OpsIncidentStateV1['lastLinks'],
+  lastDetail: row.lastDetail,
   lastMailAt: row.lastMailAt?.toISOString() ?? null,
   escalationLevel: row.escalationLevel === 1 ? 1 : 0,
   lastEscalationAt: row.lastEscalationAt?.toISOString() ?? null,
   resolvedAt: row.resolvedAt?.toISOString() ?? null,
   lastHeartbeatAt: row.lastHeartbeatAt?.toISOString() ?? null,
+  lastOccurredAt: row.lastOccurredAt?.toISOString() ?? null,
 });
 
 const toDelivery = (row: OpsNotificationDeliveryRow): OpsDeliveryRecordV1 => ({
@@ -63,6 +65,7 @@ const toDelivery = (row: OpsNotificationDeliveryRow): OpsDeliveryRecordV1 => ({
   lastError: row.lastError,
   messageId: row.messageId,
   sentAt: row.sentAt?.toISOString() ?? null,
+  nextAttemptAt: row.nextAttemptAt?.toISOString() ?? null,
 });
 
 export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
@@ -90,11 +93,13 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
       lastRunId: state.lastRunId,
       lastEventId: state.lastEventId,
       lastLinks: state.lastLinks,
+      lastDetail: state.lastDetail,
       lastMailAt: state.lastMailAt ? new Date(state.lastMailAt) : null,
       escalationLevel: state.escalationLevel,
       lastEscalationAt: state.lastEscalationAt ? new Date(state.lastEscalationAt) : null,
       resolvedAt: state.resolvedAt ? new Date(state.resolvedAt) : null,
       lastHeartbeatAt: state.lastHeartbeatAt ? new Date(state.lastHeartbeatAt) : null,
+      lastOccurredAt: state.lastOccurredAt ? new Date(state.lastOccurredAt) : null,
       updatedAt: new Date(),
     };
     const { id: _id, ...updatable } = values;
@@ -102,6 +107,12 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
       target: opsIncidents.id,
       set: updatable,
     });
+  }
+
+  async touchIncidentMailAt(incidentKey: string, sentAtIso: string): Promise<void> {
+    await this.handle.update(opsIncidents).set({
+      lastMailAt: new Date(sentAtIso), updatedAt: new Date(),
+    }).where(eq(opsIncidents.id, incidentKey));
   }
 
   async listFiringIncidents(): Promise<readonly OpsIncidentStateV1[]> {
@@ -119,7 +130,7 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
   async insertDelivery(input: {
     readonly incidentId: string;
     readonly targetKey: string;
-    readonly kind: OpsDeliveryRecordV1['kind'];
+    readonly kind: OpsDeliveryKindV1;
     readonly subject: string;
     readonly textBody: string;
     readonly htmlBody: string;
@@ -140,22 +151,25 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     return toDelivery(rows[0]!);
   }
 
-  async claimPendingDeliveries(limit: number): Promise<readonly OpsDeliveryRecordV1[]> {
+  async claimPendingDeliveries(limit: number, nowIso: string): Promise<readonly OpsDeliveryRecordV1[]> {
     const result = await this.handle.execute(sql`
       UPDATE control.ops_notification_deliveries AS d
       SET status = 'sending', attempts = d.attempts + 1, updated_at = now()
       WHERE d.id IN (
         SELECT id FROM control.ops_notification_deliveries
-        WHERE status = 'pending' ORDER BY created_at ASC LIMIT ${limit} FOR UPDATE SKIP LOCKED
+        WHERE status = 'pending'
+          AND (next_attempt_at IS NULL OR next_attempt_at <= ${nowIso}::timestamptz)
+        ORDER BY created_at ASC LIMIT ${limit} FOR UPDATE SKIP LOCKED
       )
       RETURNING id, incident_id, target_key, kind, status, subject, text_body, html_body,
-        recipients, event_id, attempts, last_error, message_id, sent_at
+        recipients, event_id, attempts, last_error, message_id, sent_at, next_attempt_at
     `);
     const rows = (Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? []) as Array<{
       id: string; incident_id: string; target_key: string; kind: string; status: string;
       subject: string; text_body: string; html_body: string; recipients: unknown;
       event_id: string | null; attempts: number; last_error: string | null;
       message_id: string | null; sent_at: Date | string | null;
+      next_attempt_at: Date | string | null;
     }>;
     return rows.map((row) => ({
       id: row.id, incidentId: row.incident_id, targetKey: row.target_key,
@@ -165,6 +179,7 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
       eventId: row.event_id, attempts: row.attempts, lastError: row.last_error,
       messageId: row.message_id,
       sentAt: row.sent_at ? new Date(row.sent_at).toISOString() : null,
+      nextAttemptAt: row.next_attempt_at ? new Date(row.next_attempt_at).toISOString() : null,
     }));
   }
 
@@ -175,19 +190,53 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     sentAt: string,
   ): Promise<void> {
     await this.handle.update(opsNotificationDeliveries).set({
-      status: 'sent', messageId, recipients, sentAt: new Date(sentAt), lastError: null, updatedAt: new Date(),
+      status: 'sent', messageId, recipients, sentAt: new Date(sentAt),
+      lastError: null, nextAttemptAt: null, updatedAt: new Date(),
+    }).where(eq(opsNotificationDeliveries.id, id));
+  }
+
+  async markDeliveryRecipientSent(
+    id: string,
+    recipient: { readonly accountId: string; readonly email: string; readonly basis: string; readonly messageId: string },
+  ): Promise<void> {
+    const rows = await this.handle.select({ recipients: opsNotificationDeliveries.recipients })
+      .from(opsNotificationDeliveries).where(eq(opsNotificationDeliveries.id, id)).limit(1);
+    const current = (rows[0]?.recipients ?? []) as OpsDeliveryRecordV1['recipients'];
+    if (current.some((entry) => entry.email === recipient.email)) return;
+    await this.handle.update(opsNotificationDeliveries).set({
+      recipients: [...current, recipient], updatedAt: new Date(),
     }).where(eq(opsNotificationDeliveries.id, id));
   }
 
   async markDeliveryFailed(id: string, error: string): Promise<void> {
     await this.handle.update(opsNotificationDeliveries).set({
-      status: 'failed', lastError: error, updatedAt: new Date(),
+      status: 'failed', lastError: error, nextAttemptAt: null, updatedAt: new Date(),
     }).where(eq(opsNotificationDeliveries.id, id));
   }
 
+  /** @deprecated Kept for the old sweep until the retry rewrite lands. */
   async markDeliverySuppressed(id: string): Promise<void> {
     await this.handle.update(opsNotificationDeliveries).set({
       status: 'suppressed', updatedAt: new Date(),
+    }).where(eq(opsNotificationDeliveries.id, id));
+  }
+
+  /** @deprecated Kept for the old sweep until the retry rewrite lands. */
+  async listRecentSentAt(targetKey: string, sinceIso: string): Promise<readonly string[]> {
+    const rows = await this.handle.select({ sentAt: opsNotificationDeliveries.sentAt })
+      .from(opsNotificationDeliveries)
+      .where(and(
+        eq(opsNotificationDeliveries.targetKey, targetKey),
+        eq(opsNotificationDeliveries.status, 'sent'),
+        gt(opsNotificationDeliveries.sentAt, new Date(sinceIso)),
+      ));
+    return rows.map((row) => row.sentAt!.toISOString());
+  }
+
+  async markDeliveryRetryable(id: string, error: string, nextAttemptAtIso: string): Promise<void> {
+    await this.handle.update(opsNotificationDeliveries).set({
+      status: 'pending', lastError: error,
+      nextAttemptAt: new Date(nextAttemptAtIso), updatedAt: new Date(),
     }).where(eq(opsNotificationDeliveries.id, id));
   }
 
@@ -202,24 +251,65 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     return typeof count === 'number' ? count : 0;
   }
 
-  async listRecentSentAt(targetKey: string, sinceIso: string): Promise<readonly string[]> {
-    const rows = await this.handle.select({ sentAt: opsNotificationDeliveries.sentAt })
-      .from(opsNotificationDeliveries)
-      .where(and(
-        eq(opsNotificationDeliveries.targetKey, targetKey),
-        eq(opsNotificationDeliveries.status, 'sent'),
-        gt(opsNotificationDeliveries.sentAt, new Date(sinceIso)),
-      ));
-    return rows.map((row) => row.sentAt!.toISOString());
+  /** Recipient-weighted sent mail counts per target (one delivery = N mails). */
+  async listRecentSentMailCounts(sinceIso: string): Promise<readonly { readonly targetKey: string; readonly mails: number }[]> {
+    const result = await this.handle.execute(sql`
+      SELECT target_key, COALESCE(SUM(jsonb_array_length(recipients)), 0)::int AS mails
+      FROM control.ops_notification_deliveries
+      WHERE status = 'sent' AND sent_at > ${sinceIso}::timestamptz
+      GROUP BY target_key
+    `);
+    const rows = (Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? []) as Array<{
+      target_key: string; mails: string | number;
+    }>;
+    return rows.map((row) => ({ targetKey: row.target_key, mails: Number(row.mails) }));
   }
 
-  async hasSeenEvent(eventId: string): Promise<boolean> {
-    const rows = await this.handle.select({ eventId: opsSeenEvents.eventId })
-      .from(opsSeenEvents).where(eq(opsSeenEvents.eventId, eventId)).limit(1);
-    return rows.length > 0;
+  async countRecentSentTo(email: string, sinceIso: string): Promise<number> {
+    const result = await this.handle.execute(sql`
+      SELECT COUNT(*)::int AS count
+      FROM control.ops_notification_deliveries
+      WHERE status = 'sent' AND sent_at > ${sinceIso}::timestamptz
+        AND recipients @> jsonb_build_array(jsonb_build_object('email', ${email}))
+    `);
+    const rows = (Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? []) as Array<{
+      count: string | number;
+    }>;
+    return rows.length > 0 ? Number(rows[0]!.count) : 0;
   }
 
-  async recordSeenEvent(eventId: string, incidentId: string): Promise<void> {
-    await this.handle.insert(opsSeenEvents).values({ eventId, incidentId }).onConflictDoNothing();
+  async loadSeenEvent(eventId: string): Promise<OpsSeenEventV1 | null> {
+    const rows = await this.handle.select().from(opsSeenEvents).where(eq(opsSeenEvents.eventId, eventId)).limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      eventId: row.eventId, incidentId: row.incidentId,
+      payloadSha256: row.payloadSha256, canonicalKey: row.canonicalKey,
+    };
+  }
+
+  async findSeenCanonical(canonicalKey: string): Promise<OpsSeenEventV1 | null> {
+    const rows = await this.handle.select().from(opsSeenEvents)
+      .where(eq(opsSeenEvents.canonicalKey, canonicalKey)).limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      eventId: row.eventId, incidentId: row.incidentId,
+      payloadSha256: row.payloadSha256, canonicalKey: row.canonicalKey,
+    };
+  }
+
+  async recordSeenEvent(input: {
+    readonly eventId: string;
+    readonly incidentId: string;
+    readonly payloadSha256: string;
+    readonly canonicalKey: string;
+  }): Promise<void> {
+    await this.handle.insert(opsSeenEvents).values({
+      eventId: input.eventId,
+      incidentId: input.incidentId,
+      payloadSha256: input.payloadSha256,
+      canonicalKey: input.canonicalKey,
+    }).onConflictDoNothing();
   }
 }
