@@ -144,14 +144,24 @@ describe('product builder composition (ARTIFACT_BUILDER_ENABLED)', () => {
 });
 
 describe('remote-host forge port (D0)', () => {
-  it('should refuse a fast-forward: git_commit runs in the host LiveService, never in this controller', async () => {
-    const reads = { head: vi.fn(async () => 'a'.repeat(40)), reachable: vi.fn(async () => true), snapshot: vi.fn(), source: vi.fn() };
+  it('should accept, read-only, a fast-forward the host already made: the branch head is the new head and the old one its ancestor', async () => {
+    const before = 'a'.repeat(40); const after = 'b'.repeat(40);
+    const reads = { head: vi.fn(async () => after), reachable: vi.fn(async () => true), snapshot: vi.fn(), source: vi.fn() };
     const forge = remoteHostForge(reads as never);
-    await expect(forge.fastForward(key, 'a'.repeat(40), 'b'.repeat(40)))
-      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'fast_forward_remote_host' });
-    await expect(forge.head(key)).resolves.toBe('a'.repeat(40));
-    await expect(forge.reachable(key, 'a'.repeat(40))).resolves.toBe(true);
+    await expect(forge.fastForward(key, before, after)).resolves.toBe(true);
+    expect(reads.reachable).toHaveBeenCalledWith(key, before);
+    await expect(forge.head(key)).resolves.toBe(after);
     expect(reads.head).toHaveBeenCalledWith(key);
+  });
+
+  it('should report a divergence when the branch head is not the new head or the old head is not its ancestor', async () => {
+    const before = 'a'.repeat(40); const after = 'b'.repeat(40);
+    const moved = remoteHostForge({ head: vi.fn(async () => 'c'.repeat(40)), reachable: vi.fn(async () => true),
+      snapshot: vi.fn(), source: vi.fn() } as never);
+    await expect(moved.fastForward(key, before, after)).resolves.toBe(false);
+    const rewritten = remoteHostForge({ head: vi.fn(async () => after), reachable: vi.fn(async () => false),
+      snapshot: vi.fn(), source: vi.fn() } as never);
+    await expect(rewritten.fastForward(key, before, after)).resolves.toBe(false);
   });
 
   it('should refuse a git binding as forge_unconfigured while the GitHub App host or the repositories are absent', async () => {
