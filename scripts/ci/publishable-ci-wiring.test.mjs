@@ -141,7 +141,7 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   assert.equal(out.manifest_guard, '${{ steps.filter.outputs.manifest_guard }}');
 });
 
-test('dedicated manifest_guard filter: only exact image and consumer-policy guards select global qualification', () => {
+test('dedicated manifest_guard filter: only exact image, consumer-policy and lockfile guards select global qualification', () => {
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
   const globalGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs',
@@ -150,6 +150,7 @@ test('dedicated manifest_guard filter: only exact image and consumer-policy guar
     'scripts/ci/live-provider-receipt.mjs', 'scripts/ci/live-provider-receipt.test.mjs',
     'scripts/ci/consumer-contracts.mjs', 'scripts/ci/consumer-contracts.test.mjs',
     'scripts/ci/consumer-boundaries.json',
+    'scripts/ci/ci-lockfile-installs.mjs', 'scripts/ci/ci-lockfile-installs.test.mjs',
     'scripts/ci/resolve-ui-image.mjs', 'scripts/ci/resolve-ui-image.test.mjs',
     'scripts/ci/ui-image-version.sh', 'scripts/ci/ui-image-version.test.sh'];
   const apiLockInputs = ['scripts/ci/locked-tools.mjs', 'scripts/ci/tool-locks.json'];
