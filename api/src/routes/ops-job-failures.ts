@@ -26,11 +26,45 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 /**
- * Client allowlist: service-client id -> ingestible targets (`'*'` = every
- * target, for the transverse k8s watcher). `null` when unconfigured: any
- * scope-holder may ingest (legacy single-watcher shape, logged once).
+ * Client allowlist: service-client id -> ingestible targets and sources.
+ * Accepted shapes per client: `["target", "*"]` (any source, legacy) or
+ * `{ "targets": [...], "sources": ["k8s", "app"] }` (source-bound).
+ * `'*'` as a target means every target (transverse k8s watcher).
+ * `null` when unconfigured: the route denies every ingestion (fail-closed).
  */
-export function parseOpsIngestAllowlist(raw: string | undefined): Record<string, string[]> | null {
+export interface OpsIngestClientBinding {
+  readonly targets: string[];
+  readonly sources: string[];
+}
+
+export type OpsIngestAllowlist = Record<string, OpsIngestClientBinding>;
+
+const OPS_INGEST_SOURCES = new Set(['k8s', 'app']);
+
+const normalizeBinding = (clientId: string, value: unknown): OpsIngestClientBinding | null => {
+  if (Array.isArray(value)) {
+    const targets = value.filter((t): t is string => typeof t === 'string' && t.length > 0);
+    if (targets.length === 0) return null;
+    return { targets, sources: ['k8s', 'app'] };
+  }
+  if (isRecord(value)) {
+    const targetsRaw = value['targets'];
+    if (!Array.isArray(targetsRaw)) throw new Error(`ops ingest allowlist entry ${JSON.stringify(clientId)} must be an array or { targets, sources }`);
+    const targets = targetsRaw.filter((t): t is string => typeof t === 'string' && t.length > 0);
+    if (targets.length === 0) return null;
+    const sourcesRaw = value['sources'];
+    const sources = sourcesRaw === undefined
+      ? ['k8s', 'app']
+      : (Array.isArray(sourcesRaw) ? sourcesRaw.filter((s): s is string => typeof s === 'string' && OPS_INGEST_SOURCES.has(s)) : null);
+    if (sources === null || sources.length === 0) {
+      throw new Error(`ops ingest allowlist entry ${JSON.stringify(clientId)} has no valid source (k8s|app)`);
+    }
+    return { targets, sources };
+  }
+  throw new Error(`ops ingest allowlist entry ${JSON.stringify(clientId)} must be an array or { targets, sources }`);
+};
+
+export function parseOpsIngestAllowlist(raw: string | undefined): OpsIngestAllowlist | null {
   if (!raw || raw.trim().length === 0) return null;
   let parsed: unknown;
   try {
@@ -39,17 +73,16 @@ export function parseOpsIngestAllowlist(raw: string | undefined): Record<string,
     throw new Error('ops ingest allowlist is not valid JSON');
   }
   if (!isRecord(parsed)) throw new Error('ops ingest allowlist must be an object');
-  const allowlist: Record<string, string[]> = {};
-  for (const [clientId, targets] of Object.entries(parsed)) {
-    if (!Array.isArray(targets)) throw new Error(`ops ingest allowlist entry ${JSON.stringify(clientId)} must be an array`);
-    const kept = targets.filter((t): t is string => typeof t === 'string' && t.length > 0);
-    if (kept.length > 0) allowlist[clientId] = kept;
+  const allowlist: OpsIngestAllowlist = {};
+  for (const [clientId, value] of Object.entries(parsed)) {
+    const binding = normalizeBinding(clientId, value);
+    if (binding) allowlist[clientId] = binding;
   }
   return allowlist;
 }
 
 /** Strict variant for boot validation: malformed = startup failure. */
-export function parseOpsIngestAllowlistStrict(raw: string | undefined): Record<string, string[]> | null {
+export function parseOpsIngestAllowlistStrict(raw: string | undefined): OpsIngestAllowlist | null {
   return parseOpsIngestAllowlist(raw);
 }
 
@@ -73,9 +106,16 @@ export const requireOpsJobFailureIngest: MiddlewareHandler = (c: Context, next: 
 export interface OpsJobFailuresRouterOptions {
   readonly ingest?: (event: OpsJobFailureV1, options?: { ingestedBy?: string }) => Promise<OpsIngestResult>;
   readonly guard?: MiddlewareHandler;
-  readonly allowlist?: Record<string, string[]> | null;
+  readonly allowlist?: OpsIngestAllowlist | Record<string, string[]> | null;
   readonly clock?: () => string;
 }
+
+const bindingFor = (allowlist: OpsIngestAllowlist | Record<string, string[]>, clientId: string): OpsIngestClientBinding | undefined => {
+  const raw = (allowlist as Record<string, unknown>)[clientId] as OpsIngestClientBinding | string[] | undefined;
+  if (!raw) return undefined;
+  if (Array.isArray(raw)) return { targets: raw, sources: ['k8s', 'app'] };
+  return raw as OpsIngestClientBinding;
+};
 
 const readLimitedBody = async (c: Context): Promise<{ text: string } | { limited: true }> => {
   const declared = c.req.header('content-length');
@@ -90,7 +130,6 @@ export const createOpsJobFailuresRouter = (options: OpsJobFailuresRouterOptions 
   const ingest = options.ingest ?? ingestOpsJobFailureEventTx;
   const guard = options.guard ?? requireOpsJobFailureIngest;
   const clock = options.clock ?? (() => new Date().toISOString());
-  let warnedUnconfigured = false;
   return new Hono().post('/ingest', guard, async (c) => {
     const raw = await readLimitedBody(c);
     if ('limited' in raw) return c.json({ error: 'body_too_large', message: 'ingestion body exceeds the limit' }, 413);
@@ -104,17 +143,22 @@ export const createOpsJobFailuresRouter = (options: OpsJobFailuresRouterOptions 
     if (!validated.ok) {
       return c.json({ error: validated.code, message: validated.message }, 400);
     }
-    const allowlist = options.allowlist ?? parseOpsIngestAllowlist(env.OPS_JOB_FAILURE_INGEST_CLIENTS_JSON);
+    const allowlist = options.allowlist !== undefined
+      ? (options.allowlist as OpsIngestAllowlist | Record<string, string[]> | null)
+      : parseOpsIngestAllowlist(env.OPS_JOB_FAILURE_INGEST_CLIENTS_JSON);
     const client = c.get('serviceClient') as { clientId?: string } | undefined;
     const clientId = typeof client?.clientId === 'string' ? client.clientId : undefined;
-    if (allowlist) {
-      const allowed = clientId ? allowlist[clientId] : undefined;
-      if (!allowed || (!allowed.includes('*') && !allowed.includes(validated.event.targetKey))) {
-        return c.json({ error: 'forbidden_target', message: 'service client may not ingest for this target' }, 403);
-      }
-    } else if (!warnedUnconfigured) {
-      warnedUnconfigured = true;
-      logger.warn('ops ingest client allowlist unconfigured; any scope-holder may ingest for any target');
+    // Fail-closed: no allowlist (production default) denies every ingestion;
+    // a configured client is bound to both its targets and its sources.
+    if (!allowlist) {
+      logger.error('ops ingest client allowlist unconfigured; denying ingestion');
+      return c.json({ error: 'forbidden_target', message: 'ingestion is not configured for any service client' }, 403);
+    }
+    const binding = clientId ? bindingFor(allowlist, clientId) : undefined;
+    if (!binding
+      || (!binding.targets.includes('*') && !binding.targets.includes(validated.event.targetKey))
+      || !binding.sources.includes(validated.event.source)) {
+      return c.json({ error: 'forbidden_target', message: 'service client may not ingest for this target' }, 403);
     }
     const result = await ingest(validated.event, clientId ? { ingestedBy: clientId } : undefined);
     if (result.conflict) {
