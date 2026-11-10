@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_OPS_NOTIFICATION_POLICY_V1,
   type OpsIncidentStateV1,
@@ -111,6 +111,24 @@ const fakeDeps = (world: FakeWorld) => {
       row.lastError = error;
       row.nextAttemptAt = nextAttemptAt;
     },
+    saveIncidentWithDeliveries: async (state, deliveries) => {
+      world.incidents.set(state.key, state);
+      for (const input of deliveries) {
+        const record = delivery({
+          id: `d-${world.deliveries.size + 1}`, incidentId: input.incidentId,
+          targetKey: input.targetKey, kind: input.kind, subject: input.subject,
+          textBody: input.textBody, htmlBody: input.htmlBody, eventId: null,
+        });
+        world.deliveries.set(record.id, record);
+      }
+    },
+    markDeliveryCapDelayed: async (id, error, nextAttemptAt) => {
+      const row = world.deliveries.get(id)!;
+      row.status = 'pending';
+      row.lastError = error;
+      row.nextAttemptAt = nextAttemptAt;
+      row.attempts = Math.max(0, row.attempts - 1);
+    },
     listRecentSentMailCounts: async () => {
       const counts = new Map<string, number>();
       for (const row of world.deliveries.values()) {
@@ -163,6 +181,7 @@ const fakeDeps = (world: FakeWorld) => {
     policy: DEFAULT_OPS_NOTIFICATION_POLICY_V1,
     withIncidentLock: async <T>(_: string, work: () => Promise<T>): Promise<T> => work(),
     withTargetLock: async <T>(_: string, work: () => Promise<T>): Promise<T> => work(),
+    withGlobalLock: async <T>(_: string, work: () => Promise<T>): Promise<T> => work(),
   };
 };
 
@@ -224,6 +243,54 @@ describe('runOpsNotificationSweep', () => {
     expect(capped.sent).toBe(0);
     expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
     expect(w.deliveries.get('d-1')!.nextAttemptAt).not.toBeNull();
+  });
+
+  it('caps the batch itself: 100 recipients from zero send 10 and defer the rest', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({ attempts: 1 }));
+    const many = Array.from({ length: 100 }, (_, index) => ({
+      accountId: `u-${index}`, email: `admin-${index}@example.com`, basis: 'platform-declaration:immo-prod',
+    }));
+    const deps = {
+      ...fakeDeps(w),
+      recipients: { listRecipientsForTarget: async () => many },
+    };
+    const result = await runOpsNotificationSweep(deps);
+    expect(result.suppressed).toBe(1);
+    expect(result.sent).toBe(0);
+    expect(w.sent).toHaveLength(10);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
+    expect(w.deliveries.get('d-1')!.recipients).toHaveLength(10);
+    expect(w.deliveries.get('d-1')!.nextAttemptAt).not.toBeNull();
+  });
+
+  it('does not consume the retry budget on a cap deferral', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({ attempts: 1 }));
+    const many = Array.from({ length: 100 }, (_, index) => ({
+      accountId: `u-${index}`, email: `cap-${index}@example.com`, basis: 'platform-declaration:immo-prod',
+    }));
+    const deps = {
+      ...fakeDeps(w),
+      recipients: { listRecipientsForTarget: async () => many },
+    };
+    await runOpsNotificationSweep(deps);
+    expect(w.deliveries.get('d-1')!.attempts).toBe(1);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
+  });
+
+  it('persists time-driven state and mails in one atomic store call', async () => {
+    const w = world({
+      incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]),
+      clock: iso(24 * HOUR + 1000),
+    });
+    const deps = fakeDeps(w);
+    const atomic = vi.spyOn(deps.store, 'saveIncidentWithDeliveries');
+    const direct = vi.spyOn(deps.store, 'saveIncident');
+    const result = await runOpsNotificationSweep(deps);
+    expect(result.timeDriven).toBe(1);
+    expect(atomic).toHaveBeenCalledTimes(1);
+    expect(direct).not.toHaveBeenCalled();
   });
 
   it('retries transient TEM errors with a backoff and fails permanent ones', async () => {
