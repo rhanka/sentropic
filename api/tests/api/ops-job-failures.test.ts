@@ -162,6 +162,16 @@ describe('POST /api/v1/ops/ingest', () => {
     expect(deliveries.filter((d) => d.kind === 'firing')).toHaveLength(1);
   });
 
+  it('rejects unauthenticated ingestion with the service guard', async () => {
+    const guarded = createOpsJobFailuresRouter({ ingest: ingestOpsJobFailureEventTx });
+    const response = await guarded.request('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(failedBody('guarded', 'k8s:guarded-run:failed')),
+    });
+    expect(response.status).toBe(401);
+  });
+
   it('binds the authenticated client to its targets', async () => {
     const withClient = (clientId: string) =>
       createOpsJobFailuresRouter({

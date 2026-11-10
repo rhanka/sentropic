@@ -59,6 +59,7 @@ const fakeStore = (): OpsNotificationStorePort & {
     listRecentSentMailCounts: async () => [],
     countRecentSentTo: async () => 0,
     loadSeenEvent: async (eventId) => seen.get(eventId) ?? null,
+    hasUnsentDelivery: async () => false,
     findSeenCanonical: async (canonicalKey) =>
       [...seen.values()].find((row) => row.canonicalKey === canonicalKey) ?? null,
     recordSeenEvent: async (input) => {
