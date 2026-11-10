@@ -227,6 +227,34 @@ export async function runOpsNotificationSweep(deps: OpsSweepDeps = {}): Promise<
       }
       await withTargetLock(delivery.targetKey, async () => {
         const atIso = clock();
+        if (delivery.kind === 'config') {
+          let targets: readonly { accountId: string; email: string; basis: string }[];
+          try {
+            targets = await configRecipients.listRecipientsForTarget(delivery.targetKey);
+          } catch (error) {
+            const message = error instanceof Error ? error.message.slice(0, 500) : 'ops config recipients failed';
+            await failOrRetry(store, delivery, message, atIso);
+            result.failed += 1;
+            return;
+          }
+          if (targets.length === 0) {
+            logger.error({ targetKey: delivery.targetKey }, 'ops config alert has no platform admin either; incident mail dropped loudly');
+            await store.markDeliveryFailed(delivery.id, 'ops config alert has no platform admin either');
+            result.failed += 1;
+            return;
+          }
+          if (await capBlocked(store, delivery, targets, atIso, policy)) {
+            await store.markDeliveryRetryable(
+              delivery.id, 'ops send cap exceeded',
+              new Date(Date.parse(atIso) + OPS_SWEEP_CAP_RETRY_MS).toISOString(),
+            );
+            result.suppressed += 1;
+            return;
+          }
+          await sendToAll(store, mailer, delivery, targets, clock);
+          result.sent += 1;
+          return;
+        }
         const targets = await resolveRecipients(store, delivery, recipients, configRecipients, atIso, result);
         if (!targets) return;
         if (await capBlocked(store, delivery, targets, atIso, policy)) {

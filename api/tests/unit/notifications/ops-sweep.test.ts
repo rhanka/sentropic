@@ -296,4 +296,18 @@ describe('runOpsNotificationSweep', () => {
     expect(config).toMatchObject({ status: 'pending', targetKey: 'immo-prod' });
     expect(result.configAlerts).toBe(1);
   });
+
+  it('delivers the config alert to the platform admins on the next sweep', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({ id: 'd-1', kind: 'config', subject: 'config' }));
+    const deps = { ...fakeDeps(w), recipients: { listRecipientsForTarget: async () => [] as const } };
+    const result = await runOpsNotificationSweep(deps);
+    expect(result.sent).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(w.sent).toEqual([{ to: 'platform@example.com' }]);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'sent' });
+    expect(w.deliveries.get('d-1')!.recipients).toEqual([
+      { accountId: 'u-platform', email: 'platform@example.com', basis: 'platform-admin-fallback', messageId: 'mid-1' },
+    ]);
+  });
 });
