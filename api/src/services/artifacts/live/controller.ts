@@ -1,5 +1,6 @@
 import type { LivePorts } from './ports';
-import { assertFence, conflict, type LiveKey, type LiveRuntime } from './records';
+import { assertFence, conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
+import { enrichPodLoss, isPodCause, notePodLoss } from './pods';
 import { crashRestore, revive } from './revive';
 import { prepareLive } from './prepare-live';
 import { idleBuild, queuedBuild } from './idle';
@@ -40,7 +41,12 @@ export function createLiveController(ports: LivePorts) {
       }
       if (runtime.phase === 'LIVE') {
         try { await ports.pods.ensure(key, runtime); }
-        catch (error) { await failed(ports, key, runtime, error); return crashRestore(ports, key, error); }
+        catch (error) {
+          if (error instanceof LiveError && error.reason === 'stale_fence') { await failed(ports, key, runtime, error); return; }
+          const loss = await enrichPodLoss(ports.pods, key, runtime, error);
+          if (loss instanceof LiveError && isPodCause(loss)) await notePodLoss(key, loss);
+          await failed(ports, key, runtime, loss); return crashRestore(ports, key, loss);
+        }
         if (!await fenceInvitations(ports, key)) return;
         return idleBuild(ports, key);
       }

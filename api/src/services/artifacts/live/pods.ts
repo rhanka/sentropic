@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { LiveKey, LiveRuntime } from './records';
 import { conflict, LiveError } from './records';
+import type { LivePorts } from './ports';
+import { runPhase, withinPhase } from './deadline';
+import { scrubRecipeOutput, truncateRecipeTail } from './recipe-diagnostics';
 import { BUILDER_IMAGE, artifactEnvironment } from './recipes';
 
 import type { BuilderPlacement } from './placement';
@@ -87,9 +90,109 @@ export const QUOTA_EXCEEDED = 'quota_exceeded';
 export const quotaExceeded = (error: unknown) => error instanceof LiveError && error.reason === QUOTA_EXCEEDED;
 export const quotaRefusal = (statusCode: number, body: string) => statusCode === 403 && /\bexceeded quota\b/.test(body);
 const leaseOf = (pod: Pod) => Number(pod.metadata.labels['sentropic.dev/artifact-lease']);
+interface PodTerminated { reason?: string }
+interface PodContainerStatus { state?: { terminated?: PodTerminated }; lastState?: { terminated?: PodTerminated } }
 interface Pod {
-  metadata: { uid: string; labels: Record<string, string>; deletionTimestamp?: string };
-  status?: { phase?: string };
+  metadata: { uid: string; labels: Record<string, string>; deletionTimestamp?: string; creationTimestamp?: string };
+  status?: { phase?: string; reason?: string; message?: string; containerStatuses?: PodContainerStatus[] };
+}
+/** The pod is unusable as a worker: evicted, failed, succeeded or already terminating. An evicted pod keeps
+ * its Failed object, so a phase check alone replays the 09/11 second failure. */
+const podDead = (pod: Pod) => pod.metadata.deletionTimestamp !== undefined
+  || pod.status?.phase === 'Failed' || pod.status?.phase === 'Succeeded';
+/** Closed Kubernetes status of the runtime's pod, for loss classification and the phase log line. */
+export interface PodReport {
+  phase?: string; reason?: string; message?: string; deletionTimestamp?: string;
+  oomkilled: boolean; creationTimestamp?: string;
+}
+const reportOf = (pod: Pod): PodReport => ({
+  phase: pod.status?.phase, reason: pod.status?.reason, message: pod.status?.message,
+  deletionTimestamp: pod.metadata.deletionTimestamp,
+  oomkilled: (pod.status?.containerStatuses ?? []).some(entry =>
+    entry.state?.terminated?.reason === 'OOMKilled' || entry.lastState?.terminated?.reason === 'OOMKilled'),
+  creationTimestamp: pod.metadata.creationTimestamp,
+});
+/** Closed pod-loss causes carried in the job reason and the `artifact_live_phase` line. `pod_unavailable` is the
+ * generic fallback (a dead pod the apiserver names no finer cause for); `supervisor_unresponsive` is a present
+ * pod whose supervisor does not answer. */
+export interface PodLoss { reason: string; detail: string }
+/** Log-only k8s detail: bounded and scrubbed like a recipe tail, never ledger material. */
+const K8S_DETAIL_MAX_CHARS = 512;
+const k8sDetail = (value: string) => truncateRecipeTail(scrubRecipeOutput(value), K8S_DETAIL_MAX_CHARS);
+export function classifyPodLoss(report: PodReport | undefined): PodLoss {
+  if (!report) return { reason: 'pod_gone', detail: 'NotFound' };
+  if (report.reason === 'Evicted') {
+    return { reason: 'pod_evicted', detail: k8sDetail(`Evicted${report.message ? `: ${report.message}` : ''}`) };
+  }
+  if (report.oomkilled) return { reason: 'pod_oomkilled', detail: 'OOMKilled' };
+  if (report.phase === 'Failed' || report.phase === 'Succeeded' || report.deletionTimestamp) {
+    return { reason: 'pod_unavailable',
+      detail: k8sDetail(`${report.phase ?? 'Terminating'}${report.reason ? `: ${report.reason}` : ''}`) };
+  }
+  return { reason: 'supervisor_unresponsive', detail: k8sDetail(report.phase ?? 'Unknown') };
+}
+/** Closed pod-loss causes, for the `artifact_live_phase` `pod` observation line. */
+const POD_CAUSES = new Set(['pod_evicted', 'pod_oomkilled', 'pod_gone', 'pod_unavailable', 'supervisor_unresponsive']);
+export function isPodCause(error: unknown): error is LiveError {
+  return error instanceof LiveError && error.code === 'builder_unavailable' && POD_CAUSES.has(error.reason ?? '');
+}
+/** Transport-class `builder_unavailable` reasons: the pod or the path to it is lost, so one retry on a fresh
+ * pod is safe. Deterministic failures (`install_failed:*`, `build_failed:*`, `verify*`, `publication_*`,
+ * `git_*`), `pod_oomkilled` (the container exceeded its own limit; a fresh identical pod dies the same way)
+ * and `phase_timeout*` (too slow, not lost) never retry. */
+const RETRYABLE_REASONS = new Set(['pod_evicted', 'pod_gone', 'pod_unavailable', 'supervisor_unresponsive',
+  'supervisor_relay_unreachable', 'supervisor_channel_aborted', 'k8s_unreachable', 'k8s_timeout']);
+const RETRYABLE_RELAY = /^supervisor_relay_[0-9]+$/;
+export function isTransportLoss(error: unknown): error is LiveError {
+  return error instanceof LiveError && error.code === 'builder_unavailable'
+    && (RETRYABLE_REASONS.has(error.reason ?? '') || RETRYABLE_RELAY.test(error.reason ?? ''));
+}
+/** Relay or channel failures whose pod-level cause can still be read from the apiserver. */
+const ENRICHABLE_RELAY = /^supervisor_relay_[0-9]+$/;
+const ENRICHABLE_REASONS = new Set(['supervisor_relay_unreachable', 'supervisor_channel_aborted']);
+/** Rewrites a transport failure with the Kubernetes pod cause when the apiserver names one (eviction, OOM kill,
+ * gone pod, silent supervisor). Passes everything else through, including an unreadable apiserver, so a
+ * `supervisor_relay_*` reason is kept exactly when no pod-level cause is known. */
+export async function enrichPodLoss(deps: { describe(key: LiveKey, runtime: LiveRuntime): Promise<PodReport | undefined> },
+  key: LiveKey, runtime: LiveRuntime, error: unknown): Promise<unknown> {
+  if (!(error instanceof LiveError) || error.code !== 'builder_unavailable') return error;
+  const reason = error.reason ?? '';
+  if (!ENRICHABLE_RELAY.test(reason) && !ENRICHABLE_REASONS.has(reason)) return error;
+  let report: PodReport | undefined;
+  try { report = await deps.describe(key, runtime); } catch { return error; }
+  const loss = classifyPodLoss(report);
+  return new LiveError('builder_unavailable', loss.reason, loss.detail);
+}
+/** One `artifact_live_phase` fail line for a classified pod loss (reason + k8s detail); the job ledger and
+ * `stateDetail` still carry the closed `code:reason` only. */
+export async function notePodLoss(key: LiveKey, loss: LiveError): Promise<void> {
+  await runPhase(key, 'pod', async () => { throw loss; }).catch(() => undefined);
+}
+/** An adopted pod whose supervisor answers nothing after its boot grace is never used: the pod may be lost
+ * (an eviction keeps the Failed object, a wedged bootstrap keeps a Running one). */
+export const ADOPTED_POD_BOOT_GRACE_MS = 60_000;
+export const SUPERVISOR_PROBE_TIMEOUT_MS = 15_000;
+const probeDue = (pod: { phase?: string; creationTimestamp?: string }, now: number) => {
+  if (pod.phase === 'Pending') return false;
+  if (!pod.creationTimestamp) return true;
+  const created = Date.parse(pod.creationTimestamp);
+  return !Number.isFinite(created) || now - created > ADOPTED_POD_BOOT_GRACE_MS;
+};
+/** `ensure` plus, for an adopted pod old enough to answer, one bounded supervisor probe (`renew`: fenced and
+ * side-effect free). A silent supervisor deletes the adopted pod and recreates it inside the heavy pod slot.
+ * A fence error never triggers a replacement. */
+export async function ensureResponsivePod(deps: Pick<LivePorts, 'pods' | 'worker' | 'now'>, key: LiveKey,
+  runtime: LiveRuntime): Promise<{ uid: string }> {
+  const first = await deps.pods.ensure(key, runtime);
+  if (!first.adopted || !probeDue(first, deps.now())) return { uid: first.uid };
+  const probed = { ...runtime, podUid: first.uid };
+  try { await withinPhase(deps.worker.renew(probed), SUPERVISOR_PROBE_TIMEOUT_MS); }
+  catch (error) {
+    if (!(error instanceof LiveError) || error.code !== 'builder_unavailable') throw error;
+    await deps.pods.remove(key, probed);
+    return { uid: (await deps.pods.ensure(key, runtime)).uid };
+  }
+  return { uid: first.uid };
 }
 export interface KubernetesCore {
   get<T>(resource: 'pods' | 'services', name: string): Promise<T | undefined>;
@@ -106,6 +209,7 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
     async ensure(key: LiveKey, runtime: LiveRuntime) {
       const expected = labels(key, runtime);
       let pod = await core.get<Pod>('pods', runtime.podName);
+      let created = false;
       // No surge: a pod of an older lease of this binding (or a terminating one) still counts against the tenant quota.
       // A fresh intent deletes it and waits for its 404 (bounded by waitDeleted) before creating the replacement.
       if (pod && runtime.podUid === null && (leaseOf(pod) < runtime.leaseEpoch
@@ -116,7 +220,7 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       }
       if (!pod) {
         if (runtime.podUid !== null) throw new LiveError('builder_unavailable', 'pod_missing');
-        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement, sizing)); }
+        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement, sizing)); created = true; }
         catch (error) {
           // Creation may have committed before a timeout/response loss. Discover before retrying.
           pod = await core.get<Pod>('pods', runtime.podName);
@@ -125,8 +229,21 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       }
       if (!pod.metadata.uid || Object.entries(expected).some(([k, v]) => pod!.metadata.labels[k] !== v)
         || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
-      if (pod.metadata.deletionTimestamp || ['Failed', 'Succeeded'].includes(pod.status?.phase ?? '')) {
-        throw new LiveError('builder_unavailable', 'pod_unavailable');
+      // A fresh intent never adopts a dead pod: the Failed object of an evicted pod stays, and adopting it replays
+      // the 09/11 second failure. The replacement carries the same lease labels under a new uid. A fenced runtime
+      // never replaces its own pod here: teardown owns that deletion, with the classified cause.
+      if (podDead(pod)) {
+        if (runtime.podUid !== null) { const loss = classifyPodLoss(reportOf(pod)); throw new LiveError('builder_unavailable', loss.reason, loss.detail); }
+        if (!pod.metadata.deletionTimestamp) await core.delete('pods', runtime.podName, pod.metadata.uid);
+        await core.waitDeleted('pods', runtime.podName, pod.metadata.uid);
+        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement, sizing)); created = true; }
+        catch (error) {
+          pod = await core.get<Pod>('pods', runtime.podName);
+          if (!pod) throw error;
+        }
+        if (!pod.metadata.uid || Object.entries(expected).some(([k, v]) => pod!.metadata.labels[k] !== v)
+          || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
+        if (podDead(pod) && !created) { const loss = classifyPodLoss(reportOf(pod)); throw new LiveError('builder_unavailable', loss.reason, loss.detail); }
       }
       const service = { apiVersion: 'v1', kind: 'Service', metadata: {
         name: runtime.podName, namespace: placement.namespace, labels: expected,
@@ -151,7 +268,15 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
         await core.waitDeleted('services', runtime.podName, existing.metadata.uid);
         await core.create('services', service);
       } else if (!existing) await core.create('services', service);
-      return { uid: pod.metadata.uid };
+      return { uid: pod.metadata.uid, adopted: !created, phase: pod.status?.phase,
+        creationTimestamp: pod.metadata.creationTimestamp };
+    },
+    async describe(key: LiveKey, runtime: LiveRuntime): Promise<PodReport | undefined> {
+      const pod = await core.get<Pod>('pods', runtime.podName);
+      if (!pod) return undefined;
+      if (Object.entries(labels(key, runtime)).some(([k, v]) => pod.metadata.labels[k] !== v)
+        || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
+      return reportOf(pod);
     },
     async probe(key: LiveKey, runtime: LiveRuntime): Promise<PodProbe> {
       const pod = await core.get<Pod>('pods', runtime.podName);
