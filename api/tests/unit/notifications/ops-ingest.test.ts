@@ -56,6 +56,19 @@ const fakeStore = (): OpsNotificationStorePort & {
     markDeliveryRecipientSent: async () => {},
     markDeliveryFailed: async () => {},
     markDeliveryRetryable: async () => {},
+    saveIncidentWithDeliveries: async (state, inputs) => {
+      incidents.set(state.key, state);
+      for (const input of inputs) {
+        seq += 1;
+        deliveries.push({
+          id: `d-${seq}`, incidentId: input.incidentId, targetKey: input.targetKey, kind: input.kind,
+          status: 'pending', subject: input.subject, textBody: input.textBody, htmlBody: input.htmlBody,
+          recipients: [], eventId: null, attempts: 0, lastError: null,
+          messageId: null, sentAt: null, nextAttemptAt: null,
+        });
+      }
+    },
+    markDeliveryCapDelayed: async () => {},
     listRecentSentMailCounts: async () => [],
     countRecentSentTo: async () => 0,
     loadSeenEvent: async (eventId) => seen.get(eventId) ?? null,

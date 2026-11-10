@@ -115,6 +115,39 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     }).where(eq(opsIncidents.id, incidentKey));
   }
 
+  async saveIncidentWithDeliveries(
+    state: OpsIncidentStateV1,
+    deliveries: readonly {
+      readonly incidentId: string;
+      readonly targetKey: string;
+      readonly kind: OpsDeliveryKindV1;
+      readonly subject: string;
+      readonly textBody: string;
+      readonly htmlBody: string;
+    }[],
+  ): Promise<void> {
+    const run = async (handle: OpsDrizzleHandle): Promise<void> => {
+      const scoped = new DrizzleOpsNotificationStore(handle);
+      await scoped.saveIncident(state);
+      for (const delivery of deliveries) {
+        await scoped.insertDelivery(delivery);
+      }
+    };
+    if (this.handle === db) {
+      await db.transaction(async (tx) => run(tx));
+      return;
+    }
+    await run(this.handle);
+  }
+
+  async markDeliveryCapDelayed(id: string, error: string, nextAttemptAtIso: string): Promise<void> {
+    await this.handle.update(opsNotificationDeliveries).set({
+      status: 'pending', lastError: error,
+      nextAttemptAt: new Date(nextAttemptAtIso), updatedAt: new Date(),
+      attempts: sql`GREATEST(${opsNotificationDeliveries.attempts} - 1, 0)`,
+    }).where(eq(opsNotificationDeliveries.id, id));
+  }
+
   async listFiringIncidents(): Promise<readonly OpsIncidentStateV1[]> {
     const rows = await this.handle.select().from(opsIncidents).where(eq(opsIncidents.status, 'firing'));
     return rows.map(toState);
