@@ -31,6 +31,7 @@ import { DrizzleOpsNotificationStore } from './ops-store';
 import type { OpsClockPort, OpsDeliveryRecordV1, OpsMailerPort, OpsNotificationStorePort } from './ops-types';
 
 export const OPS_SWEEP_INTERVAL_MS = 60_000;
+export const OPS_SWEEP_RETENTION_DAYS = 90;
 export const OPS_SWEEP_CLAIM_LIMIT = 25;
 export const OPS_SWEEP_MAX_SEND_ATTEMPTS = 5;
 export const OPS_SWEEP_STALE_SENDING_MIN = 10;
@@ -248,6 +249,16 @@ export async function runOpsNotificationSweep(deps: OpsSweepDeps = {}): Promise<
   result.reclaimed = await store.reclaimStaleSending(
     new Date(Date.parse(nowIso) - OPS_SWEEP_STALE_SENDING_MIN * 60 * 1000).toISOString(),
   );
+
+  // 90-day retention: terminal deliveries and seen events are audit trail,
+  // not live state. Best-effort: a purge failure never blocks alert sends.
+  try {
+    await store.purgeExpiredOpsData(
+      new Date(Date.parse(nowIso) - OPS_SWEEP_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+    );
+  } catch (error) {
+    logger.warn({ err: error instanceof Error ? error.message : 'unknown' }, 'ops retention purge failed; continuing sweep');
+  }
 
   for (const firing of await store.listFiringIncidents()) {
     await withIncidentLock(firing.key, async () => {

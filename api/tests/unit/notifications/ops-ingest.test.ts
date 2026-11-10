@@ -72,6 +72,7 @@ const fakeStore = (): OpsNotificationStorePort & {
     listRecentSentMailCounts: async () => [],
     countRecentSentTo: async () => 0,
     countPendingForTarget: async () => 0,
+    purgeExpiredOpsData: async () => ({ deliveries: 0, seenEvents: 0 }),
     loadSeenEvent: async (eventId) => seen.get(eventId) ?? null,
     hasUnsentDelivery: async () => false,
     findSeenCanonical: async (canonicalKey) =>
