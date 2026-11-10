@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  assertOpsRecipientsBearerConfigured,
   createOpsPlatformAdminsPort,
   createOpsRecipientsPort,
   isAllowedOpsRecipientsUrl,
@@ -162,6 +163,19 @@ describe('product pull recipientsUrls', () => {
       a: 'https://immo.example.com/r',
     });
     expect(parseOpsRecipientsUrlsStrict(undefined)).toEqual({});
+  });
+
+  it('requires the bearer when a target configures a recipientsUrl (fail closed)', () => {
+    expect(() =>
+      assertOpsRecipientsBearerConfigured({ 'immo-prod': 'https://immo.example.com/r' }, undefined),
+    ).toThrow(/missing OPS_JOB_FAILURE_RECIPIENTS_BEARER/);
+    expect(() =>
+      assertOpsRecipientsBearerConfigured({ 'immo-prod': 'https://immo.example.com/r' }, '   '),
+    ).toThrow(/missing OPS_JOB_FAILURE_RECIPIENTS_BEARER/);
+    expect(() =>
+      assertOpsRecipientsBearerConfigured({ 'immo-prod': 'https://immo.example.com/r' }, 'svc-bearer'),
+    ).not.toThrow();
+    expect(() => assertOpsRecipientsBearerConfigured({}, undefined)).not.toThrow();
   });
 });
 

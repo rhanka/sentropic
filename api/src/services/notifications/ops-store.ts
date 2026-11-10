@@ -222,15 +222,22 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     recipients: OpsDeliveryRecordV1['recipients'],
     sentAt: string,
   ): Promise<void> {
+    const stamped = recipients.map((entry) => (entry.servedAt ? entry : { ...entry, servedAt: sentAt }));
     await this.handle.update(opsNotificationDeliveries).set({
-      status: 'sent', messageId, recipients, sentAt: new Date(sentAt),
+      status: 'sent', messageId, recipients: stamped, sentAt: new Date(sentAt),
       lastError: null, nextAttemptAt: null, updatedAt: new Date(),
     }).where(eq(opsNotificationDeliveries.id, id));
   }
 
   async markDeliveryRecipientSent(
     id: string,
-    recipient: { readonly accountId: string; readonly email: string; readonly basis: string; readonly messageId: string },
+    recipient: {
+      readonly accountId: string;
+      readonly email: string;
+      readonly basis: string;
+      readonly messageId: string;
+      readonly servedAt: string;
+    },
   ): Promise<void> {
     const rows = await this.handle.select({ recipients: opsNotificationDeliveries.recipients })
       .from(opsNotificationDeliveries).where(eq(opsNotificationDeliveries.id, id)).limit(1);
@@ -284,21 +291,22 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
   /**
    * Recipient-weighted sent mail counts per target (one delivery = N mails).
    *
-   * Counts closed sends (`sent`, windowed by `sent_at`) AND already-served
-   * recipients on open or failed rows (windowed by `updated_at`, which every
-   * serve/fail/retry bumps): a partial batch persisted by
-   * `markDeliveryRecipientSent` and requeued by the cap path must still
-   * consume the hourly budget, otherwise a second delivery in the same sweep
-   * or the retry after the cap backoff would send a fresh tranche.
+   * Counts per-recipient `servedAt` entries (never row `updated_at`: the
+   * claim sets `updated_at = now()` before the budget check, so windowing
+   * on it would recount a partial batch forever and wedge the alert after
+   * a cap). Legacy entries without `servedAt` fall back to `sent_at` for
+   * closed sends and to `updated_at` for open or failed rows.
    */
   async listRecentSentMailCounts(sinceIso: string): Promise<readonly { readonly targetKey: string; readonly mails: number }[]> {
     const result = await this.handle.execute(sql`
-      SELECT target_key, COALESCE(SUM(jsonb_array_length(recipients)), 0)::int AS mails
-      FROM control.ops_notification_deliveries
+      SELECT target_key, COUNT(*)::int AS mails
+      FROM control.ops_notification_deliveries,
+        LATERAL jsonb_array_elements(recipients) AS entry
       WHERE jsonb_array_length(recipients) > 0
         AND (
-          (status = 'sent' AND sent_at > ${sinceIso}::timestamptz)
-          OR (status IN ('pending', 'sending', 'failed') AND updated_at > ${sinceIso}::timestamptz)
+          (entry ->> 'servedAt' IS NOT NULL AND (entry ->> 'servedAt')::timestamptz > ${sinceIso}::timestamptz)
+          OR (entry ->> 'servedAt' IS NULL AND status = 'sent' AND sent_at > ${sinceIso}::timestamptz)
+          OR (entry ->> 'servedAt' IS NULL AND status IN ('pending', 'sending', 'failed') AND updated_at > ${sinceIso}::timestamptz)
         )
       GROUP BY target_key
     `);
@@ -319,20 +327,21 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
   }
 
   /**
-   * Recipient-weighted sends to one address: closed sends windowed by
-   * `sent_at`, plus already-served entries on open or failed rows windowed
-   * by `updated_at` (same partial-progress ledger as
-   * `listRecentSentMailCounts`, so the per-address ceiling holds across
-   * sweeps and across deliveries of one sweep).
+   * Recipient-weighted sends to one address: per-entry `servedAt` window
+   * (same partial-progress ledger as `listRecentSentMailCounts`, so the
+   * per-address ceiling holds across sweeps and across deliveries of one
+   * sweep without wedging on the claim's `updated_at` bump).
    */
   async countRecentSentTo(email: string, sinceIso: string): Promise<number> {
     const result = await this.handle.execute(sql`
       SELECT COUNT(*)::int AS count
-      FROM control.ops_notification_deliveries
-      WHERE recipients @> jsonb_build_array(jsonb_build_object('email', ${email}))
+      FROM control.ops_notification_deliveries,
+        LATERAL jsonb_array_elements(recipients) AS entry
+      WHERE entry ->> 'email' = ${email}
         AND (
-          (status = 'sent' AND sent_at > ${sinceIso}::timestamptz)
-          OR (status IN ('pending', 'sending', 'failed') AND updated_at > ${sinceIso}::timestamptz)
+          (entry ->> 'servedAt' IS NOT NULL AND (entry ->> 'servedAt')::timestamptz > ${sinceIso}::timestamptz)
+          OR (entry ->> 'servedAt' IS NULL AND status = 'sent' AND sent_at > ${sinceIso}::timestamptz)
+          OR (entry ->> 'servedAt' IS NULL AND status IN ('pending', 'sending', 'failed') AND updated_at > ${sinceIso}::timestamptz)
         )
     `);
     const rows = (Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? []) as Array<{

@@ -21,7 +21,14 @@ export interface OpsDeliveryRecordV1 {
   readonly subject: string;
   readonly textBody: string;
   readonly htmlBody: string;
-  readonly recipients: readonly { readonly accountId: string; readonly email: string; readonly basis: string; readonly messageId?: string }[];
+  readonly recipients: readonly {
+    readonly accountId: string;
+    readonly email: string;
+    readonly basis: string;
+    readonly messageId?: string;
+    /** Per-recipient serve time (ISO): the hourly ledger windows on this, never on row `updated_at`. */
+    readonly servedAt?: string;
+  }[];
   readonly eventId: string | null;
   readonly attempts: number;
   readonly lastError: string | null;
@@ -82,7 +89,13 @@ export interface OpsNotificationStorePort {
   /** One recipient served: persisted immediately so a crash cannot resend it. */
   markDeliveryRecipientSent(
     id: string,
-    recipient: { readonly accountId: string; readonly email: string; readonly basis: string; readonly messageId: string },
+    recipient: {
+      readonly accountId: string;
+      readonly email: string;
+      readonly basis: string;
+      readonly messageId: string;
+      readonly servedAt: string;
+    },
   ): Promise<void>;
   /** Terminal failure: retried attempts exhausted or permanent provider error. */
   markDeliveryFailed(id: string, error: string): Promise<void>;
@@ -90,14 +103,14 @@ export interface OpsNotificationStorePort {
   markDeliveryRetryable(id: string, error: string, nextAttemptAtIso: string): Promise<void>;
   /**
    * Recipient-weighted sent mail counts per target since `sinceIso`:
-   * closed sends plus already-served recipients on open or failed rows
-   * (partial progress, windowed by row `updated_at`), so the hourly budget
-   * holds across sweeps and across deliveries of one sweep.
+   * per-recipient `servedAt` entries (never row `updated_at`, which the
+   * claim bumps before the budget check), so the hourly budget holds across
+   * sweeps and across deliveries of one sweep without wedging after a cap.
    */
   listRecentSentMailCounts(sinceIso: string): Promise<readonly { readonly targetKey: string; readonly mails: number }[]>;
   /**
    * Recipient-weighted sent mails to one address since `sinceIso`:
-   * same closed-plus-partial ledger as `listRecentSentMailCounts`.
+   * same per-entry `servedAt` ledger as `listRecentSentMailCounts`.
    */
   countRecentSentTo(email: string, sinceIso: string): Promise<number>;
   /** Pending + sending deliveries for one target (ingestion queue bound). */

@@ -91,7 +91,9 @@ const fakeDeps = (world: FakeWorld) => {
       const row = world.deliveries.get(id)!;
       row.status = 'sent';
       row.messageId = messageId;
-      row.recipients = [...recipients];
+      row.recipients = [...recipients].map((entry) =>
+        entry.servedAt ? entry : { ...entry, servedAt: sentAt },
+      );
       row.sentAt = sentAt;
       row.nextAttemptAt = null;
     },
@@ -129,22 +131,38 @@ const fakeDeps = (world: FakeWorld) => {
       row.nextAttemptAt = nextAttemptAt;
       row.attempts = Math.max(0, row.attempts - 1);
     },
-    // Mirrors the production ledger: closed sends plus already-served
-    // recipients on open or failed rows (partial progress). The fake has no
-    // timestamps, and every row it holds was written within the test hour.
-    listRecentSentMailCounts: async () => {
+    // Mirrors the production ledger: per-recipient `servedAt` entries,
+    // never row `updated_at` (the claim bumps it before the budget check).
+    // Legacy entries without `servedAt` fall back to `sent_at` for closed
+    // sends and count as in-window for open rows (conservative).
+    listRecentSentMailCounts: async (sinceIso) => {
       const counts = new Map<string, number>();
       for (const row of world.deliveries.values()) {
         if (row.status !== 'sent' && row.status !== 'pending' && row.status !== 'sending' && row.status !== 'failed') continue;
         if (row.recipients.length === 0) continue;
-        counts.set(row.targetKey, (counts.get(row.targetKey) ?? 0) + row.recipients.length);
+        let mails = 0;
+        for (const entry of row.recipients) {
+          if (entry.servedAt) {
+            if (entry.servedAt > sinceIso) mails += 1;
+          } else if (row.status === 'sent') {
+            if (row.sentAt !== null && row.sentAt > sinceIso) mails += 1;
+          } else {
+            mails += 1;
+          }
+        }
+        if (mails > 0) counts.set(row.targetKey, (counts.get(row.targetKey) ?? 0) + mails);
       }
       return [...counts.entries()].map(([targetKey, mails]) => ({ targetKey, mails }));
     },
-    countRecentSentTo: async (email) =>
+    countRecentSentTo: async (email, sinceIso) =>
       [...world.deliveries.values()].filter(
         (row) => (row.status === 'sent' || row.status === 'pending' || row.status === 'sending' || row.status === 'failed')
-          && row.recipients.some((entry) => entry.email === email),
+          && row.recipients.some((entry) => {
+            if (entry.email !== email) return false;
+            if (entry.servedAt) return entry.servedAt > (sinceIso as string);
+            if (row.status === 'sent') return row.sentAt !== null && row.sentAt > (sinceIso as string);
+            return true;
+          }),
       ).length,
     countPendingForTarget: async (targetKey) =>
       [...world.deliveries.values()].filter(
@@ -206,7 +224,7 @@ describe('runOpsNotificationSweep', () => {
     expect(w.sent).toEqual([{ to: 'admin@example.com' }]);
     expect(w.deliveries.get('d-1')).toMatchObject({ status: 'sent', messageId: 'mid-1' });
     expect(w.deliveries.get('d-1')!.recipients).toEqual([
-      { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod', messageId: 'mid-1' },
+      { accountId: 'u-1', email: 'admin@example.com', basis: 'platform-declaration:immo-prod', messageId: 'mid-1', servedAt: iso(0) },
     ]);
     expect(w.incidents.get('immo-prod/immo/radar-refresh-pv')!.lastMailAt).toBe(w.clock);
   });
@@ -292,6 +310,36 @@ describe('runOpsNotificationSweep', () => {
     expect(w.deliveries.get('d-1')).toMatchObject({ status: 'pending' });
     expect(w.deliveries.get('d-1')!.recipients).toHaveLength(10);
     expect(w.deliveries.get('d-1')!.nextAttemptAt).not.toBeNull();
+  });
+
+  it('completes a partial send after the hourly window slides (no permanent block)', async () => {
+    const w = world({ incidents: new Map([['immo-prod/immo/radar-refresh-pv', incident()]]) });
+    w.deliveries.set('d-1', delivery({ attempts: 1 }));
+    const targetsList = Array.from({ length: 15 }, (_, index) => ({
+      accountId: `u-${index}`, email: `window-${index}@example.com`, basis: 'platform-declaration:immo-prod',
+    }));
+    const targets = { listRecipientsForTarget: async () => targetsList };
+    const first = await runOpsNotificationSweep({ ...fakeDeps(w), recipients: targets });
+    expect(first.suppressed).toBe(1);
+    expect(w.sent).toHaveLength(10);
+    expect(w.deliveries.get('d-1')!.recipients).toHaveLength(10);
+    // The claim requeues with `updated_at = now()`, but the ledger windows
+    // on per-recipient `servedAt`: 16 min later the 10 serves still count.
+    w.clock = iso(16 * 60 * 1000);
+    const blocked = await runOpsNotificationSweep({ ...fakeDeps(w), recipients: targets });
+    expect(blocked.sent).toBe(0);
+    expect(blocked.suppressed).toBe(1);
+    expect(w.sent).toHaveLength(10);
+    // 61 min after the first serves the window has slid: the 10 `servedAt`
+    // entries are out of scope even though the claim refreshed `updated_at`,
+    // so the remaining 5 go out and the delivery completes.
+    w.clock = iso(61 * 60 * 1000);
+    const resumed = await runOpsNotificationSweep({ ...fakeDeps(w), recipients: targets });
+    expect(resumed.sent).toBe(1);
+    expect(w.sent).toHaveLength(15);
+    expect(w.deliveries.get('d-1')).toMatchObject({ status: 'sent' });
+    expect(w.deliveries.get('d-1')!.recipients).toHaveLength(15);
+    expect(w.deliveries.get('d-1')!.recipients.every((entry) => typeof entry.servedAt === 'string')).toBe(true);
   });
 
   it('shares one hourly budget across deliveries of the same sweep', async () => {
@@ -442,7 +490,7 @@ describe('runOpsNotificationSweep', () => {
     expect(w.sent).toEqual([{ to: 'platform@example.com' }]);
     expect(w.deliveries.get('d-1')).toMatchObject({ status: 'sent' });
     expect(w.deliveries.get('d-1')!.recipients).toEqual([
-      { accountId: 'u-platform', email: 'platform@example.com', basis: 'platform-admin-fallback', messageId: 'mid-1' },
+      { accountId: 'u-platform', email: 'platform@example.com', basis: 'platform-admin-fallback', messageId: 'mid-1', servedAt: iso(0) },
     ]);
   });
 });
