@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createOpsPlatformAdminsPort,
   createOpsRecipientsPort,
+  isAllowedOpsRecipientsUrl,
   parseOpsRecipientsUrls,
+  parseOpsRecipientsUrlsStrict,
   parseOpsTargetsDeclaration,
   parseOpsTargetsDeclarationStrict,
 } from '../../../src/services/notifications/ops-recipients';
@@ -139,6 +141,27 @@ describe('product pull recipientsUrls', () => {
     expect(parseOpsRecipientsUrls('{"immo-prod":"https://immo.example.com/r","bad":"ftp://x"}')).toEqual({
       'immo-prod': 'https://immo.example.com/r',
     });
+  });
+
+  it('rejects localhost lookalikes and credentialed urls by hostname', () => {
+    expect(isAllowedOpsRecipientsUrl('http://localhost:3000/r')).toBe(true);
+    expect(isAllowedOpsRecipientsUrl('http://127.0.0.1:3000/r')).toBe(true);
+    expect(isAllowedOpsRecipientsUrl('https://immo.example.com/r')).toBe(true);
+    expect(isAllowedOpsRecipientsUrl('http://localhost.evil/r')).toBe(false);
+    expect(isAllowedOpsRecipientsUrl('http://localhost@evil/r')).toBe(false);
+    expect(isAllowedOpsRecipientsUrl('https://user:pass@immo.example.com/r')).toBe(false);
+    expect(parseOpsRecipientsUrls('{"a":"http://localhost.evil/r","b":"http://localhost:3000/r"}')).toEqual({
+      b: 'http://localhost:3000/r',
+    });
+  });
+
+  it('fails closed at boot on a typoed recipients url', () => {
+    expect(() => parseOpsRecipientsUrlsStrict('{"a":"http://localhost.evil/r"}')).toThrow(/allowed https\/loopback/);
+    expect(() => parseOpsRecipientsUrlsStrict('not-json')).toThrow(/valid JSON/);
+    expect(parseOpsRecipientsUrlsStrict('{"a":"https://immo.example.com/r"}')).toEqual({
+      a: 'https://immo.example.com/r',
+    });
+    expect(parseOpsRecipientsUrlsStrict(undefined)).toEqual({});
   });
 });
 

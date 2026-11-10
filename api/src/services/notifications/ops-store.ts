@@ -5,7 +5,7 @@
 // deliveries + outbox commit atomically; the sweep uses plain `db` with an
 // advisory lock per incident (concurrent replicas serialize per key).
 
-import { and, eq, gt, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
   type OpsIncidentStateV1,
@@ -245,25 +245,6 @@ export class DrizzleOpsNotificationStore implements OpsNotificationStorePort {
     await this.handle.update(opsNotificationDeliveries).set({
       status: 'failed', lastError: error, nextAttemptAt: null, updatedAt: new Date(),
     }).where(eq(opsNotificationDeliveries.id, id));
-  }
-
-  /** @deprecated Kept for the old sweep until the retry rewrite lands. */
-  async markDeliverySuppressed(id: string): Promise<void> {
-    await this.handle.update(opsNotificationDeliveries).set({
-      status: 'suppressed', updatedAt: new Date(),
-    }).where(eq(opsNotificationDeliveries.id, id));
-  }
-
-  /** @deprecated Kept for the old sweep until the retry rewrite lands. */
-  async listRecentSentAt(targetKey: string, sinceIso: string): Promise<readonly string[]> {
-    const rows = await this.handle.select({ sentAt: opsNotificationDeliveries.sentAt })
-      .from(opsNotificationDeliveries)
-      .where(and(
-        eq(opsNotificationDeliveries.targetKey, targetKey),
-        eq(opsNotificationDeliveries.status, 'sent'),
-        gt(opsNotificationDeliveries.sentAt, new Date(sinceIso)),
-      ));
-    return rows.map((row) => row.sentAt!.toISOString());
   }
 
   async markDeliveryRetryable(id: string, error: string, nextAttemptAtIso: string): Promise<void> {

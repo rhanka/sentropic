@@ -153,9 +153,6 @@ const fakeDeps = (world: FakeWorld) => {
       [...world.deliveries.values()].some(
         (row) => row.incidentId === incidentId && row.kind === kind && (row.status === 'pending' || row.status === 'sending'),
       ),
-    markDeliverySuppressed: async (id) => { world.deliveries.get(id)!.status = 'suppressed'; },
-    listRecentSentAt: async () =>
-      [...world.deliveries.values()].filter((d) => d.status === 'sent').map((d) => d.sentAt ?? iso(0)),
   };
   return {
     store,
