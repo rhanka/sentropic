@@ -67,6 +67,7 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BRENROLL-EX5: bump `@sentropic/llm-gateway` 0.22.5 to 0.22.6 (patch, precedent 143392cea — CI run 42746000138 `package-candidates` fails `bump required` on published 0.22.5 whose mesh range widened to `|| ^0.35.0`), update the `0.22.5` pin in `api/tests/unit/gateway-package-version.test.ts` (one literal; `api/**` otherwise forbidden), `TRAIN_LLM_GATEWAY_VERSION` to 0.22.6, plus root `package-lock.json` via `make lock-root`. Impact: version strings only. Rollback: revert with the bump.
 - [x] BRENROLL-EX1: root lockfile follows the `@sentropic/llm-mesh` 0.33.0 to 0.34.0 bump (version strings only, regenerated via make). Impact: lockfile only. Rollback: revert with the bump.
 - [x] BRENROLL-EX2: admit the 0.34 line in `packages/llm-gateway/package.json` (`|| ^0.34.0`) and `packages/cluster-mesh/package.json` (`<0.35.0`), range strings only (follows 3b9626d35). The sibling lane `feat/llm-mesh-lot1-custodian-refresh` carries the identical cluster-mesh range value with its own dev.20 release; rebase takes either side. Impact: range strings only. Rollback: revert with the bump.
 - [x] BRENROLL-EX4: update the `0.22.4` pin to `0.22.5` in `api/tests/unit/gateway-package-version.test.ts` (one literal following the EX3 gateway bump; `api/**` is otherwise forbidden). Impact: version evidence only. Rollback: revert with the bump.
