@@ -251,9 +251,10 @@ async function sendToAll(
   clock: OpsClockPort,
 ): Promise<void> {
   const sentEmails = new Set(delivery.recipients.map((entry) => entry.email));
-  const entries: { accountId: string; email: string; basis: string; messageId: string }[] = [
-    ...delivery.recipients,
-  ];
+  const entries: { accountId: string; email: string; basis: string; messageId: string }[] =
+    delivery.recipients.map((entry) => ({
+      accountId: entry.accountId, email: entry.email, basis: entry.basis, messageId: entry.messageId ?? '',
+    }));
   let firstMessageId = delivery.messageId;
   for (const recipient of targets) {
     if (sentEmails.has(recipient.email)) continue;
