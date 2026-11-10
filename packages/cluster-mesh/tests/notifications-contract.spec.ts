@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   OPS_JOB_FAILURE_CONTRACT_V1,
   OPS_JOB_FAILURE_DETAIL_MAX_BYTES,
+  fingerprintOpsJobFailureEvent,
   opsCanonicalRunKey,
   opsIncidentKey,
   truncateOpsDetail,
@@ -165,6 +166,15 @@ describe('OpsJobFailureV1 contract', () => {
     expect(opsIncidentKey('immo-prod', undefined, 'radar-refresh-pv')).not.toBe(
       opsIncidentKey('immo-preprod', undefined, 'radar-refresh-pv'),
     );
+  });
+
+  it('fingerprints the canonical payload so id reuse with new bytes conflicts', () => {
+    const left = fingerprintOpsJobFailureEvent({ ...base, occurredAt: '2026-11-09T10:00:00.000Z' });
+    const same = fingerprintOpsJobFailureEvent({ ...base, occurredAt: '2026-11-09T10:00:00.000Z' });
+    const changed = fingerprintOpsJobFailureEvent({ ...base, reason: 'quota', occurredAt: '2026-11-09T10:00:00.000Z' });
+    expect(left).toMatch(/^[0-9a-f]{64}$/);
+    expect(same).toBe(left);
+    expect(changed).not.toBe(left);
   });
 
   it('escapes slashes in incident keys so distinct jobs never collide', () => {

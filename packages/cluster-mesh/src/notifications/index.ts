@@ -6,7 +6,7 @@ export {
   OPS_JOB_FAILURE_OCCURRED_AT_MAX_AGE_MS, OPS_JOB_FAILURE_OCCURRED_AT_MAX_SKEW_MS,
   OPS_JOB_FAILURE_OCCURRED_AT_PATTERN, OPS_JOB_FAILURE_RECIPIENT_BASES_V1,
   OPS_JOB_FAILURE_TARGET_KEY_MAX_LENGTH,
-  opsCanonicalRunKey, opsIncidentKey, truncateOpsDetail,
+  fingerprintOpsJobFailureEvent, opsCanonicalRunKey, opsIncidentKey, truncateOpsDetail,
   type OpsJobFailureLinksV1, type OpsJobFailureOutcomeV1, type OpsJobFailureReasonV1,
   type OpsJobFailureSeverityV1, type OpsJobFailureSourceV1, type OpsJobFailureV1,
   type OpsJobKindV1, type OpsJobRefV1,
