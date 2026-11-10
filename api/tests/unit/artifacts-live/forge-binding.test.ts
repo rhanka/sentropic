@@ -59,6 +59,13 @@ describe('forge configuration (contract §2, fail-closed)', () => {
       reposEnv([{ ...repository, allowedSubPaths: [] }]), reposEnv([{ ...repository, allowedSubPaths: ['../x'] }]),
       reposEnv([repository, repository])];
     for (const env of invalid) expect(forgeConfig(env, host)).toBeNull();
+    for (const workspaces of [[], [''], ['.'], ['..'], ['../x'], ['ui/../api'], ['/abs'], ['ui/'], ['ui', 'ui'], 'ui', [1]]) {
+      expect(forgeConfig(reposEnv([{ ...repository, installWorkspaces: workspaces }]), host)).toBeNull();
+    }
+    expect(forgeConfig(reposEnv([{ ...repository, installWorkspaces: ['ui'] }]), host)?.repositories[0])
+      .toMatchObject({ installWorkspaces: ['ui'] });
+    expect(forgeConfig(reposEnv([{ ...repository, installWorkspaces: ['ui', 'packages/domain'] }]), host)?.repositories[0])
+      .toMatchObject({ installWorkspaces: ['ui', 'packages/domain'] });
     expect(forgeConfig(reposEnv(), null)).toBeNull();
     refused(() => admitBinding(null, key.storageScopeId, binding), 'builder_unavailable');
     const bindings = createForgeBindings(memoryRows(), null);
