@@ -28,8 +28,8 @@ export const VOLUME_SCRATCH_MB_ENV = 'ARTIFACT_VOLUME_SCRATCH_MB';
 export const VOLUME_DEPENDENCIES_MB_ENV = 'ARTIFACT_VOLUME_DEPENDENCIES_MB';
 export const DEFAULT_WORKER_SIZING = Object.freeze({ sourceMiB: 384, scratchMiB: 1664, dependenciesMiB: 1280 });
 /** Container ephemeral limit: the pod is evicted when source+scratch+dependencies (+ logs) pass it, so it bounds the volume
- * total. 3 x 3400Mi = 10200Mi fits the builder namespace quota limits.ephemeral-storage 10Gi: three concurrent builder
- * pods instead of four, so that a ~1 GiB unpacked install (peak ~2.5 GiB on disk, measured 2026-11-09) is not evicted. */
+ * total. MAX_BUILDER_PODS x 3400Mi (2 x 3400 = 6800Mi) fits the builder namespace quota limits.ephemeral-storage 10Gi,
+ * so that a ~1 GiB unpacked install (peak ~2.5 GiB on disk, measured 2026-11-09) is not evicted. */
 export const WORKER_EPHEMERAL_LIMIT_MIB = 3400;
 const volumeMb = (value: string | undefined, fallback: number, min: number, max: number) => {
   const parsed = Number(value?.trim());
@@ -69,10 +69,12 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
       // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f): LimitRange tenant-defaults cpu <= 1 per container;
-      // ResourceQuota tenant-quota requests.cpu 1, limits.memory 6Gi, limits.ephemeral-storage 10Gi, pods 5; four requests
-      // fit the d2-4 node (4 x 420 = 1680 <= 1706 MiB); the ephemeral limit admits three pods (3 x 3400Mi = 10200Mi <= 10Gi).
-      // Only the limits overcommit.
-      resources: { requests: { cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' },
+      // ResourceQuota tenant-quota requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi, limits.ephemeral-storage 10Gi.
+      // Memory request = limit = 1536Mi (k8s 09/11: a 420Mi request for a ~1.23 GiB build let the scheduler overcommit a
+      // builder node and the kubelet evicted the pod): the scheduler books what a build uses and the pod is never above
+      // its request. 2 x 1536Mi = requests.memory 3Gi, so MAX_BUILDER_PODS = 2, shared by live and build pods (one per
+      // builder node; the pool autoscales). Only CPU overcommits.
+      resources: { requests: { cpu: '250m', memory: '1536Mi', 'ephemeral-storage': '0' },
         limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
