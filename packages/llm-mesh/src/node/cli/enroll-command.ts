@@ -15,17 +15,22 @@ import {
   type ParsedArgs,
 } from './enroll-args.js';
 
+const sanitizeStatus = (error: unknown): string | null => {
+  const status = (error as { status?: unknown }).status;
+  return typeof status === 'number' ? ` (status ${status})` : null;
+};
+
 const relabelAccount = async (
   keyringDir: string,
   masterKey: Buffer,
   accountId: string,
   label: string,
 ): Promise<string> => {
-  const keyring = new EncryptedFileKeyring(keyringDir, masterKey);
-  const key = `sentropic-llm-mesh:${accountId}:public`;
-  const raw = await keyring.getSecret(key);
-  if (!raw) return label;
   try {
+    const keyring = new EncryptedFileKeyring(keyringDir, masterKey);
+    const key = `sentropic-llm-mesh:${accountId}:public`;
+    const raw = await keyring.getSecret(key);
+    if (!raw) return label;
     const record = JSON.parse(raw) as Record<string, unknown>;
     await keyring.setSecret(key, JSON.stringify({ ...record, accountLabel: label }));
   } catch {
@@ -41,6 +46,9 @@ export const runEnroll = async (
   const writers = deps.writers ?? defaultWriters();
   const env = deps.env ?? process.env;
   const fetchFn = deps.fetchFn ?? fetch;
+  if (args.provider !== 'muse-code' && args.provider !== 'codex') {
+    return fail(writers, EXIT_CODES.usage, `unknown provider '${args.provider}'; expected 'muse-code' or 'codex'`);
+  }
   if (!args.keyringDir) return fail(writers, EXIT_CODES.usage, 'missing --keyring-dir <dir>');
   if (!args.ownerScope) return fail(writers, EXIT_CODES.usage, 'missing --owner-scope <ref>');
   const maxAttempts = args.maxAttempts ?? 60;
@@ -59,8 +67,9 @@ export const runEnroll = async (
       ownerScope: args.ownerScope,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'enroll failed';
-    return fail(writers, EXIT_CODES.enrollmentFailed, message);
+    // Upstream bodies can echo tokens; relay only the status, never the body.
+    const suffix = sanitizeStatus(error) ?? '';
+    return fail(writers, EXIT_CODES.enrollmentFailed, `enrollment failed${suffix}`);
   }
   if (session.kind !== 'device-code') {
     return fail(writers, EXIT_CODES.usage, `provider '${args.provider}' has no device flow`);
@@ -84,7 +93,7 @@ export const runEnroll = async (
     writers.out(JSON.stringify({ accountId: completed.accountId, label }));
     return EXIT_CODES.ok;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'poll failed';
-    return fail(writers, EXIT_CODES.enrollmentFailed, message);
+    const suffix = sanitizeStatus(error) ?? '';
+    return fail(writers, EXIT_CODES.enrollmentFailed, `enrollment poll failed${suffix}`);
   }
 };
