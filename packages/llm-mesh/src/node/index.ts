@@ -126,3 +126,26 @@ export {
   projectMuseTrust,
   renderCodexSeatConfig,
 } from '../enrollment/seat-onboarding-projections.js';
+export type {
+  ClaudeCodeCliProbeOptions,
+  ClaudeSeatAnthropicClientOptions,
+  NodeClaudeCodeCliRunnerOptions,
+} from './claude-code-cli-runner.js';
+export {
+  CLAUDE_CODE_OAUTH_ENV_VAR,
+  CLAUDE_CODE_RESULT_TIMEOUT_MS,
+  CLAUDE_CODE_STREAM_PROTOCOL,
+  DEFAULT_CLAUDE_CODE_CLI_PATH,
+  DEFAULT_CLAUDE_CODE_EFFORT,
+  DEFAULT_CLAUDE_CODE_TIMEOUT_MS,
+  NodeClaudeCodeCliRunner,
+  createClaudeSeatAnthropicClient,
+  probeClaudeCodeCliCapabilities,
+} from './claude-code-cli-runner.js';
+export { ClaudeCliQuotaError } from '../transport/claude-code-runtime-client.js';
+export type { ClaudeCodeLineOutcome, QuotaDiagnosis } from './claude-code-cli-wire.js';
+export {
+  diagnoseClaudeCodeQuota,
+  parseClaudeCodeLine,
+  renderClaudeCodeCliPrompt,
+} from './claude-code-cli-wire.js';
