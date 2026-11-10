@@ -198,8 +198,8 @@ vert ; `test-llm-mesh` vert (108 fichiers, 1855 passés) ;
 22 (+2 skipped), speech-peer 22, skew-invariants 5, artifacts-tuple 5
 (+3 skipped).
 
-Nouvelle tête : `9a96b3ac4` (commit verrou ci-dessus + rebase `da043c74c`),
-34 commits d'avance sur `origin/main`, 0 de retard. Push
+Nouvelle tête : rebase `da043c74c` + verrou `9a96b3ac4` + présent
+rapport, 0 de retard sur `origin/main`. Push
 `--force-with-lease` (branche PR uniquement). CI à suivre par le
 conducteur ; non fusionné.
 
