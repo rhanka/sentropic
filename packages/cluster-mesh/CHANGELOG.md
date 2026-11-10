@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.26.0-dev.20
+## 0.26.0-dev.21
 
 - Ops job-failure notifications (`notifications` module): frozen `OpsJobFailureV1` event
   contract (product `targetKey`, closed reason taxonomy, 1 KiB detail cap), pure incident
