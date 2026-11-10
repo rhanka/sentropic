@@ -1,78 +1,43 @@
-# Feature: llm-mesh enroll CLI (muse-code device flow)
+# Feature: Builder pod resilience (never re-adopt a dead pod, one retry, pod-cause reasons, pod TTL)
 
 ## Objective
-- [ ] Ship a generic Node CLI entry point in `@sentropic/llm-mesh` (`llm-mesh-enroll`) with `enroll` and `probe` for device-flow providers (muse-code first).
+Stop the recurring builder-pod loss loop (preprod 09/11: evicted worker pod re-adopted, supervisor_relay_502 twice): never adopt a dead or silent pod, retry a build-only transport loss once on a fresh pod, report the Kubernetes pod cause, and converge RECOVERING runtimes to DORMANT.
 
 ## Scope / Guardrails
-- [ ] Scope limited to the enroll CLI, env-key keyring support, its tests, version bump and README section.
-- [ ] No migration in `api/drizzle/*.sql`.
-- [ ] Make-only workflow, Docker via `.tmp/packets/docker-slot.sh make ...` in the foreground only, `ENV` always last.
-- [ ] Branch work in `tmp/worktrees/llm-mesh-enroll-cli`, never on root.
-- [ ] Test env `ENV=test-llm-mesh-enroll`, ports `API_PORT=8925 UI_PORT=5325 MAILDEV_UI_PORT=1225`.
-- [ ] Never `ENV=dev`, never `make clean-all`, no Python.
-- [ ] Commits via `make commit MSG="..."` single line English, no attribution trailer, stage specific files only, max 150 lines per commit.
-- [ ] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- [ ] Do NOT merge: PR stays open for s-conductor.
+- Scope limited to `api/src/services/artifacts/live/` (pods, build-only, prepare-live, controller, ports) and `api/tests/unit/artifacts-live/`.
+- One migration max in `api/drizzle/*.sql` (none planned).
+- Make-only workflow, no direct Docker commands; Docker via `.tmp/packets/docker-slot.sh make ...` in the FOREGROUND, one slot per command, never nested.
+- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/worktrees/builder-pod-resilience` (even for one active branch).
+- Automated test campaigns run on dedicated environments (`ENV=test-builder-resilience`), never on root `dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
-  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `api/tests/unit/gateway-package-version.test.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `packages/llm-mesh/src/node/cli/enroll-cli.ts`
-  - `packages/llm-mesh/src/node/cli/enroll-args.ts`
-  - `packages/llm-mesh/src/node/cli/enroll-command.ts`
-  - `packages/llm-mesh/src/node/cli/node-process.d.ts`
-  - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`
-  - `packages/llm-mesh/tests/node/enroll-cli-testkit.ts`
-  - `packages/llm-mesh/tests/node/enroll-cli-enroll.test.ts`
-  - `packages/llm-mesh/tests/node/enroll-cli-probe.test.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/CHANGELOG.md`
-  - `packages/llm-mesh/README.md`
-  - `packages/llm-gateway/package.json`
-  - `packages/cluster-mesh/package.json`
-  - `BRANCH.md`
-  - `.tmp/rv/llm-mesh-enroll-cli.md`
+  - `api/src/services/artifacts/live/pods.ts`
+  - `api/src/services/artifacts/live/ports.ts`
+  - `api/src/services/artifacts/live/build-only.ts`
+  - `api/src/services/artifacts/live/prepare-live.ts`
+  - `api/src/services/artifacts/live/controller.ts`
+  - `api/tests/unit/artifacts-live/fixture.ts`
+  - `api/tests/unit/artifacts-live/builder-pod-resilience.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
-  - `docker-compose.dev.yml` (only if verification forces a compose change; untouched so far)
-  - `.tmp/rv/compose-backup-owner.md` (French verification report, untracked)
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile` (covered by BRCBO-EX1 below)
-  - `docker-compose*.yml` (covered by BRCBO-EX1 below)
+  - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `ui/**`
-  - `api/**`
-  - `deploy/**`
-  - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `package-lock.json`
-  - `packages/llm-mesh/package-lock.json`
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] BRENROLL-EX5: bump `@sentropic/llm-gateway` 0.22.5 to 0.22.6 (patch, precedent 143392cea — CI run 42746000138 `package-candidates` fails `bump required` on published 0.22.5 whose mesh range widened to `|| ^0.35.0`), update the `0.22.5` pin in `api/tests/unit/gateway-package-version.test.ts` (one literal; `api/**` otherwise forbidden), `TRAIN_LLM_GATEWAY_VERSION` to 0.22.6, plus root `package-lock.json` via `make lock-root`. Impact: version strings only. Rollback: revert with the bump.
-- [x] BRENROLL-EX6: selected fixture follows the 0.35.0/0.22.6 train (pins plus lock via `refresh-lazy-package-lock`, registry URLs with CI sibling hashes `ap4o`/`PAb3` for the unpublished pair, one stale `file:`-seed metadata line corrected to the packed tarball truth `<0.36.0` — npm keeps lock metadata for an unchanged `file:` spec). Impact: fixture only. Rollback: revert with the fixture.
-- [x] BRENROLL-EX1: root lockfile follows the `@sentropic/llm-mesh` 0.33.0 to 0.34.0 bump (version strings only, regenerated via make). Impact: lockfile only. Rollback: revert with the bump.
-- [x] BRENROLL-EX2: admit the 0.34 line in `packages/llm-gateway/package.json` (`|| ^0.34.0`) and `packages/cluster-mesh/package.json` (`<0.35.0`), range strings only (follows 3b9626d35). The sibling lane `feat/llm-mesh-lot1-custodian-refresh` carries the identical cluster-mesh range value with its own dev.20 release; rebase takes either side. Impact: range strings only. Rollback: revert with the bump.
-- [x] BRENROLL-EX4: update the `0.22.4` pin to `0.22.5` in `api/tests/unit/gateway-package-version.test.ts` (one literal following the EX3 gateway bump; `api/**` is otherwise forbidden). Impact: version evidence only. Rollback: revert with the bump.
-- [x] BRENROLL-EX3: align the hardcoded `LLM_MESH_RANGE` in `packages/cluster-mesh/src/modules/catalog.ts` (`<0.34.0` to `<0.35.0`, one line) with the admitted peer range, bump `@sentropic/llm-gateway` 0.22.4 to 0.22.5 (patch, precedent 143392cea) and `@sentropic/cluster-mesh` 0.26.0-dev.19 to 0.26.0-dev.21 (sibling lane owns dev.20), and update the six cluster-mesh specs asserting the old boundary (admit 0.34.0, refuse 0.35.0), and sync the `selected` fixture tuple (precedents 6cc8c7a5e, 8c2e210d4), plus root `package-lock.json` regenerated via `make lock-root` (workspace version strings only, BRENROLL-EX1 pattern). Reason: CI evidence on head dc09c4c28 (run 42662913703) — every api-sut container exits 1 with `ClusterMeshTopologyError` (installed mesh 0.34.0 vs required `<0.34.0`), and package-candidates demands a gateway bump for the widened range (143392cea proves the bumpGate requires it; EX2's no-bump reading was wrong). Impact: mesh coherence restored, no API change. Rollback: revert with the range.
+- `attention`: PR #991 (`fix/artifacts-worker-memory-request`, worker request=limit=1536Mi, 2 pods) is separate and still open; this branch builds on origin/main and stays compatible with either sizing (no memory value is hardcoded here).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -81,110 +46,67 @@
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-- [ ] FLAKY-CANDIDATE 07-matrix lock/presence (run 42722166769, shard 1, NOT accepted — no sign-off):
-  - Command: `test-e2e (1)` shard 1 job of run 42722166769.
-  - File: `e2e/tests/07-matrix.spec.ts:572` (« User A leaves → lock released → User B can lock »).
-  - Signature: `expect(received).toBe(expected)` Expected true Received false, `Timeout 2000ms exceeded while waiting on the predicate` (`canEdit && !needsUnlockRequest`).
-  - Evidence for timing flake: same functional tree passed shard 1 in run 42718308820 (head e2214c6ba; head 846126952 differs only by a cluster-mesh spec literal plus docs); shard 2 (i18n, 1 fail in 42710018359) passed in 42722166769. Untouched surface (`ui/**`, realtime lock path; branch ships a CLI bin plus version strings only).
-  - Action: retrigger via the pending report push; conductor/owner sign-off still required before any merge.
-- [ ] FLAKY-CANDIDATE 02-organizations read-only detail (run 42731023179, shard 4, NOT accepted — no sign-off):
-  - Command: `test-e2e (4)` shard 4 job of run 42731023179.
-  - File: `e2e/tests/02-organizations.spec.ts:399` (« Read-only (viewer) › détail: champs non éditables »).
-  - Signature: `page.waitForURL: Timeout 10000ms exceeded` — navigation bounced `/organizations/new?draft=…` → `/organizations`, never landed on `/organizations/[id]`; 45 passed in the shard.
-  - Evidence for timing flake: shard 4 passed in runs 42725904700 and 42722166769; shard 1 (matrix, failed in 42722166769) passed in 42731023179; deterministic lanes all green in 42731023179. Untouched surface (org UI/detail navigation; branch ships a CLI bin plus version strings only).
-  - Stop rule: no further chase pushes after this dossier push — next single-flake failure escalates to conductor/owner instead of another retrigger.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**
-- Rationale: one small generic CLI addition, one CI run.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: one capability, one PR, orthogonal to other lanes; single final CI run.
 
 ## UAT Management (in orchestration context)
-- [x] **Mono-branch**: no UI change, no UAT surface.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI changes in this branch; no UAT checkpoints.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Confirm worktree `tmp/worktrees/llm-mesh-enroll-cli` on branch `feat/llm-mesh-enroll-cli` from `origin/main`.
-  - [x] Confirm `muse-code.ts`, `muse-runtime-client.ts`, `facade.ts`, `encrypted-file-keyring.ts` contracts on `origin/main`.
-  - [x] Lot gate:
-    - [ ] `make typecheck-llm-mesh` + `make lint-llm-mesh` baseline on the untouched tree.
-- [x] **Lot 1 — Enroll CLI plus env-key keyring**
-  - [x] Extend `EncryptedFileKeyring` with an explicit master-key override (backward compatible, no behavior change by default).
-  - [x] Add `src/node/cli/enroll-cli.ts` (`enroll` prints only verification URL plus user code plus expiry, then persists; `probe` prints status plus latency plus usage only; secrets never printed; typed exit codes).
-  - [x] Add `bin` entry `llm-mesh-enroll` in `packages/llm-mesh/package.json`.
-  - [x] Support `muse-code` first, generic device-flow shape for other providers.
-  - [x] Lot gate:
-    - [x] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
-- [x] **Lot 2 — Tests with stubbed fetch**
-  - [x] Add `packages/llm-mesh/tests/node/enroll-cli-testkit.ts`, `enroll-cli-enroll.test.ts`, `enroll-cli-probe.test.ts`: device happy path, user-code-only output, key-by-env-name, no secret in stdout/stderr, probe error mapping (402 `billing_not_configured` flagged as the non-seat `muse.ts` path).
-  - [x] Lot gate:
-    - [x] Scoped run `make test-llm-mesh SCOPE=tests/node/enroll-cli-enroll.test.ts ENV=test-llm-mesh-enroll` plus probe file (3 plus 3 green).
-- [x] **Lot 3 — Version, README, changelog**
-  - [x] Bump `@sentropic/llm-mesh` minor (new public `bin` surface) above npm latest, update `CHANGELOG.md`.
-  - [x] Add a short English README section with the exact immo detection keyring commands.
-  - [x] Regenerate lockfiles via make.
-  - [x] Lot gate:
-    - [x] `make typecheck-llm-mesh` + `make lint-llm-mesh` green.
-- [x] **Lot 4 — CI coherence fix (run 42662913703 evidence)**
-  - [x] Align hardcoded `LLM_MESH_RANGE` in `packages/cluster-mesh/src/modules/catalog.ts` with the admitted peer range.
-  - [x] Bump `packages/llm-gateway/package.json` 0.22.4 to 0.22.5 and `packages/cluster-mesh/package.json` 0.26.0-dev.19 to 0.26.0-dev.21.
-  - [x] Update the five cluster-mesh specs asserting the old literal (admit 0.34.0, refuse 0.35.0).
-  - [x] Declare BRENROLL-EX3 with CI log evidence and precedent correction.
-  - [x] Sync the `selected` fixture tuple (package.json plus lock) to mesh 0.34.0, gateway 0.22.5, dev.21 (registry tarball integrity stays for the train refresh post-publish; no spec asserts it).
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh` green.
-    - [x] Scoped `make test-cluster-mesh SCOPE=tests/packaging/tuple-skew.spec.ts ENV=test-llm-mesh-enroll` green (21 passed, 2 skipped).
-    - [x] `make test-cluster-mesh SCOPE=tests/packaging/prepare-artifacts.spec.ts ENV=test-llm-mesh-enroll` green (20 passed).
-    - [x] `make test-cluster-mesh SCOPE=tests/packaging/artifacts-tuple.spec.ts ENV=test-llm-mesh-enroll` green (5 passed, 3 skipped).
-    - [x] `make test-cluster-mesh SCOPE=tests/modules/registry.spec.ts ENV=test-llm-mesh-enroll` green (51 passed).
-    - [x] Scoped topology-ranges (20 passed) plus speech-peer (18 passed) green.
-    - [x] Regenerated lockfiles via `make lock-root`.
-- [x] **Lot 5 — Run 42710018359 follow-up (version pins plus fixture integrity)**
-  - [x] Widen `LLM_MESH_SPEECH_RANGE` to `<0.35.0` (llm-mesh 0.34.0 exports `./speech`; the source lane loads it).
-  - [x] Move 0.34.0 refuse to admit in `speech-peer.spec.ts`.
-  - [x] Bump `TRAIN_LLM_MESH_VERSION` to 0.34.0 and `TRAIN_LLM_GATEWAY_VERSION` to 0.22.5 in `tests/fixtures/train.ts`.
-  - [x] Fix the `<0.34.0` regex in `skew-invariants.ts`.
-  - [x] Update the api `0.22.4` pin to `0.22.5` (BRENROLL-EX4).
-  - [x] Regenerate the `selected` fixture lock via `refresh-lazy-package-lock` (plus registry-URL form for the unpublished mesh/gateway entries, as CI's receipt path demands; sibling hashes qSVv/vNA1 match CI's own log lines).
-  - [x] Correct the stale artifacts 0.2.25 integrity 4NL6 to jc0f (registry metadata plus local build agree).
-- [x] **Lot 6 — Run 42718308820 follow-up (artifacts pin plus infra flake)**
-  - [x] Move the 4NL6 pin to jc0f in `artifacts-tuple.spec.ts` (same stale-data correction).
-  - [x] `validate-cowork-bridge` failed on a Docker Hub 502 while pulling the node image (runner infra, no branch code executed) — proven transient, covered by the fresh push; no rerun used.
-  - [x] Lot gate:
-    - [x] Scoped `artifacts-tuple` green locally (5 passed, 3 skipped).
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh` green.
-    - [x] Scoped cluster-mesh specs green (speech-peer 20, skew-invariants 5, tuple-skew 21, registry 51, topology-ranges 20).
-    - [x] `refresh-lazy-package-lock` output committed.
-- [ ] **Lot 7 — PR #983 review fixes (VERDICT REQUEST_CHANGES)**
-  - [x] B1 dedicated `src/node/cli/bin.ts` (no suffix guard), bin points to `bin.js`.
-  - [x] B2 probe refuses non-`muse-code` provider and verifies the stored `:public` provider before any token send.
-  - [x] M1 upstream error bodies never relayed (status-only messages).
-  - [x] M2 key derivation requires 32-byte hex/base64, passphrase fallback refused.
-  - [x] M3 keyring reads inside try mapped to exit 5, corrupt envelope to exit 6, final handler JSON-only.
-  - [x] M4 new tests (bin, repeatable N, perms, bad key, secret body, codex refusal).
-  - [x] m1 maxAttempts forwarded, effort documented; m2 unknown provider/flag handling; m4 exports plus changelog.
-  - [x] Bump llm-mesh to 0.35.0 (> main 0.34.0 and > npm 0.34.0), CHANGELOG (locks plus mesh ranges follow).
-  - [x] m5 mesh range widening to admit 0.35.0; root lock regenerated via make.
-  - [x] Selected fixture stays at published 0.34.0 (packaging installs from the registry; 0.35.0 unpublished).
-  - [ ] French report at `.tmp/rv/llm-mesh-enroll-cli.md` with the exact commands.
-  - [x] Lot gate:
-    - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-enroll` green.
-    - [x] Full `make test-llm-mesh ENV=test-llm-mesh-enroll` green (107 files, 1815 passed).
-    - [x] Scoped cluster-mesh green: registry 51, topology-ranges 22, tuple-skew 22, speech-peer 22, skew-invariants 5.
-    - [x] `make typecheck-cluster-mesh ENV=test-llm-mesh-enroll` green.
-    - [x] Full `make test-llm-gateway ENV=test-llm-mesh-enroll` green (78 files, 1370 passed).
-  - [ ] FLAKY-NOTE topology-ranges `should refuse prerelease versions` timed out once at 5s under parallel Docker load (19s suite), passed on rerun in 1.18s (22/22). Untouched test, no logic change.
-- [x] **Lot N — Final validation**
-  - [x] Typecheck and lint (typecheck-cluster-mesh green at Lots 4–6).
-  - [x] Retest llm-mesh scoped plus cluster-mesh scoped (all green, see Lots 4–6).
-  - [x] Bumped `packages/llm-mesh/package.json` version above npm latest (0.34.0 > 0.33.0; gateway 0.22.5 > 0.22.4).
-  - [x] Final gate step 1: PR #983 open with `BRANCH.md` text as PR body (pre-existing).
-  - [x] Final gate step 2: branch CI green on run 42725904700 without rerun or skip.
-  - [x] French report at `.tmp/rv/llm-mesh-enroll-cli.md` with the exact commands.
-  - [x] Typecheck and lint.
-  - [x] Retest llm-mesh scoped plus full `make test-llm-mesh ENV=test-llm-mesh-enroll`.
-  - [x] Bumped `packages/llm-mesh/package.json` version above npm latest.
-  - [ ] Final gate step 1: create PR with `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run and verify branch CI on that PR, keep it green without rerun or skip.
-  - [ ] Write the French report to `.tmp/rv/llm-mesh-enroll-cli.md` with the exact commands.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULE.md`.
+  - [x] Create isolated worktree `tmp/worktrees/builder-pod-resilience` on `fix/artifacts-builder-pod-resilience` from `origin/main` (HEAD `84263c6f`).
+  - [x] Verify branch: `fix/artifacts-builder-pod-resilience`.
+  - [x] Capture Makefile targets for debug/testing (`make test-api`, `make typecheck-api`, `docker-slot.sh`).
+  - [x] Define environment mapping: `ENV=test-builder-resilience`, `API_PORT=8933`, `UI_PORT=5333`, `MAILDEV_UI_PORT=1233`.
+  - [x] Confirm command style: `.tmp/packets/docker-slot.sh make ... ENV=test-builder-resilience` with `ENV` last, FOREGROUND only.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (Allowed/Forbidden/Conditional); no `BRxx-EXn` needed.
+- [ ] **Lot 1 — Never adopt a dead or silent pod**
+  - [ ] `pods.ts`: widen `Pod` status (phase, reason Evicted, message, containerStatuses terminated OOMKilled) and `metadata.creationTimestamp`.
+  - [ ] `pods.ts`: `classifyPodLoss` (pod_evicted, pod_oomkilled, pod_gone, pod_unavailable, supervisor_unresponsive) with bounded scrubbed k8s detail.
+  - [ ] `pods.ts`: `ensure` returns `{uid, adopted, phase, creationTimestamp}`; fresh intent on a Failed/Succeeded/terminating matching pod deletes it and recreates (fenced by uid + waitDeleted); fenced own-pod path throws the classified cause.
+  - [ ] `pods.ts`: `ensureResponsivePod` (bounded renew probe on adopted Running pods older than the boot grace; on transport failure delete + recreate once inside the heavy pod slot).
+  - [ ] `ports.ts`: `pods.ensure` new return shape + new `pods.describe`.
+  - [ ] `prepare-live.ts` + `build-only.ts`: adopt via `ensureResponsivePod`.
+  - [ ] `fixture.ts`: fake create sets `creationTimestamp` + `Pending` phase.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-builder-resilience` (via docker-slot.sh)
+    - [ ] **API tests**
+      - [ ] Existing: `api/tests/unit/artifacts-live/pods.test.ts`, `oom.test.ts`, `controller.test.ts`, `reaper.test.ts` unchanged and green.
+      - [ ] New: `api/tests/unit/artifacts-live/builder-pod-resilience.test.ts` case (a): adopted silent pod deleted + recreated, job succeeds.
+      - [ ] Scoped runs: `make test-api SCOPE=tests/unit/artifacts-live/builder-pod-resilience.test.ts ENV=test-builder-resilience`.
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None: no UI change.
+    - [ ] **E2E tests**
+      - [ ] None in branch: GitHub CI runs the rest.
+- [ ] **Lot 2 — One retry on transport loss with pod cause**
+  - [ ] `pods.ts`: `isTransportLoss` (retryable: pod_evicted, pod_gone, pod_unavailable, supervisor_unresponsive, supervisor_relay_5xx, supervisor_relay_unreachable, supervisor_channel_aborted, k8s_unreachable, k8s_timeout); deterministic failures (install_failed:*, build_failed:*, verify*, publication_*, git_*) never retry; pod_oomkilled never retries.
+  - [ ] `pods.ts`: `enrichPodLoss` (relay/channel failure + readable pod status becomes the pod cause; keeps relay reason when k8s is unreadable).
+  - [ ] `build-only.ts`: extract create/resolve/attempt; transport loss enriches, emits one `artifact_live_phase` `pod` fail line (reason + k8s detail), tears down, re-resolves the same jobId with a new attempt fence, retries once; second failure is reported.
+  - [ ] `controller.ts`: no change expected (reconcile already tears down + crash-restores on the classified cause).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-builder-resilience` (via docker-slot.sh)
+    - [ ] **API tests**
+      - [ ] New cases (b): eviction mid-build retries once on a fresh pod and succeeds; (c): deterministic install_failed does not retry and tears down; (d): reasons carry pod_evicted / pod_oomkilled; (e): tick converges RECOVERING with gone/evicted pod to DORMANT.
+      - [ ] Full scoped file green: `make test-api SCOPE=tests/unit/artifacts-live/builder-pod-resilience.test.ts ENV=test-builder-resilience`.
+      - [ ] Regression file green: `make test-api SCOPE=tests/unit/artifacts-live/pods.test.ts ENV=test-builder-resilience` and `oom.test.ts`, `controller.test.ts`, `reaper.test.ts`.
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None: no UI change.
+    - [ ] **E2E tests**
+      - [ ] None in branch: GitHub CI runs the rest.
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest API (Lot 1 + Lot 2 scoped files + neighbours)
+  - [ ] Retest UI: none (no UI change)
+  - [ ] Retest e2e: none in branch (CI)
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Bumped affected `packages/<pkg>/package.json` version: none (no `packages/<pkg>/src/**` change)
+  - [ ] Final gate step 1: create/update PR with `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers (unrelated UI e2e failure recorded below with fresh head).
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
