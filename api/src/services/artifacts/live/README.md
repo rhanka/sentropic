@@ -370,8 +370,10 @@ frames and reconciles every 30 s); the API stops it on exit.
 
 - Binding (D0): generation and owner of the host's last reconcile; publication
   stays explicit (`autoPublish` false, R4).
-- Forge: `fastForward` is refused (`fast_forward_remote_host`), because
-  `git_commit` runs in the host LiveService. Reads go through the SG0-app lease
+- Forge: the controller never moves a ref, because `git_commit` runs in the host
+  LiveService; `fastForward` only confirms, read-only, a fast-forward the host
+  already made (branch head = the new head, the old head its ancestor), else
+  `git_diverged`. Reads go through the SG0-app lease
   reader (`forge-lease.ts`, `forge-github.ts`, `forge-tar.ts`): the in-process
   `acquire` of the GitHub App lifecycle service (`createProductGitHubAppLease`),
   cached until expiry − 60 s and dropped on invalidation events and 401/403;
