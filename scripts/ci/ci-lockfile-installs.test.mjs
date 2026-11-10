@@ -170,8 +170,13 @@ test('should keep reviewed exemptions and the catalog SCA gap owned and unexpire
   }
   assert.equal(policy['catalog-sca'].status, 'open');
   assert.equal(policy['catalog-sca'].target_scanner, 'npm audit --package-lock-only --audit-level=high');
-  const plan = fs.readFileSync(new URL('BRANCH.md', root), 'utf8');
-  assert.ok(plan.includes(`review_by=${policy['BRLOCK-EX1'].review_by}`));
+  // BRLOCK-EX1 lives in the committed policy file, never in BRANCH.md.
+  // BRANCH.md is deleted before merge, so it cannot carry merge-time guarantees.
+  const brlock = policy['BRLOCK-EX1'];
+  assert.equal(brlock.owner, 'CI maintainers', 'BRLOCK-EX1 owner');
+  assert.equal(brlock.review_by, '2026-11-30T00:00:00Z', 'BRLOCK-EX1 UTC expiry');
+  assert.ok(brlock.scope.includes('Makefile'), 'BRLOCK-EX1 bounded scope');
+  assert.ok(brlock.removal_trigger.includes('PR 846'), 'BRLOCK-EX1 removal trigger');
 });
 
 test('should digest-pin the lock guard runtime and mock container base', () => {
