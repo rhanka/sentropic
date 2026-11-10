@@ -85,6 +85,12 @@
   - Signature: `expect(received).toBe(expected)` Expected true Received false, `Timeout 2000ms exceeded while waiting on the predicate` (`canEdit && !needsUnlockRequest`).
   - Evidence for timing flake: same functional tree passed shard 1 in run 42718308820 (head e2214c6ba; head 846126952 differs only by a cluster-mesh spec literal plus docs); shard 2 (i18n, 1 fail in 42710018359) passed in 42722166769. Untouched surface (`ui/**`, realtime lock path; branch ships a CLI bin plus version strings only).
   - Action: retrigger via the pending report push; conductor/owner sign-off still required before any merge.
+- [ ] FLAKY-CANDIDATE 02-organizations read-only detail (run 42731023179, shard 4, NOT accepted — no sign-off):
+  - Command: `test-e2e (4)` shard 4 job of run 42731023179.
+  - File: `e2e/tests/02-organizations.spec.ts:399` (« Read-only (viewer) › détail: champs non éditables »).
+  - Signature: `page.waitForURL: Timeout 10000ms exceeded` — navigation bounced `/organizations/new?draft=…` → `/organizations`, never landed on `/organizations/[id]`; 45 passed in the shard.
+  - Evidence for timing flake: shard 4 passed in runs 42725904700 and 42722166769; shard 1 (matrix, failed in 42722166769) passed in 42731023179; deterministic lanes all green in 42731023179. Untouched surface (org UI/detail navigation; branch ships a CLI bin plus version strings only).
+  - Stop rule: no further chase pushes after this dossier push — next single-flake failure escalates to conductor/owner instead of another retrigger.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**

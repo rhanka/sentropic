@@ -58,6 +58,25 @@ PR #983 (OPEN, base `main`). Tête poussée : `8a9a54576`.
   et `9adb0fe91`) ; le workflow n'a aucun filtre `paths`, et les autres
   branches déclenchent normalement. Le présent push sert aussi de
   re-déclencheur sanctionné (pas de `gh run rerun`).
+- Rebase sur `303f5557a` (#987) : tête `de180fe6a`, run 42731023179 —
+  déclenché normalement (les force-push de rebase déclenchent à chaque fois,
+  les pushes fast-forward sont perdus 4 fois sur 4).
+
+## Suivi du run 42731023179 (2 échecs : 4 → 2, lanes déterministes vertes)
+
+- `validate-cluster-mesh`, `test-api-unit-integration`, `validate-cowork-bridge`,
+  `test-e2e (1, 2, 3, 5, 6)` : VERTS. Le flake matrice du run précédent ne
+  se reproduit pas.
+- `test-e2e (4)` : 45 passés, 1 échec — `02-organizations.spec.ts:399`
+  (`waitForURL` 10 s, navigation draft → liste au lieu du détail).
+  Shard vert aux deux runs précédents ; surface non touchée. Second candidat
+  flake enregistré dans `BRANCH.md` (sans acceptation).
+- Pas de sonde Playwright locale : prouver un timeout de navigation
+  demanderait toute la stack e2e sur un hôte saturé, pour une information
+  nulle (un passage local ne prouve rien sur un flake temporel) ; la matrice
+  sur 3 runs + surface intacte + lanes vertes constitue la preuve.
+- `ci-gate` : conséquence. Règle d'arrêt : plus de push de rattrapage après
+  celui-ci — un nouveau flake isolé sera escaladé, pas repoussé.
 
 ## Suivi du run 42722166769 (2 échecs : 4 → 2)
 
