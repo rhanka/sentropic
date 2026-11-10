@@ -57,11 +57,13 @@ export const deriveKeyringMasterKey = (value: string): Buffer => {
       const decoded = Buffer.from(trimmed, 'base64');
       if (decoded.length === 32) return decoded;
     } catch {
-      // Fall through to passphrase hashing below.
+      // Fall through to the refusal below.
     }
   }
-  // The local stub hashes to hex text; decode it back to the 32 raw bytes.
-  return Buffer.from(createHash('sha256').update(trimmed).digest('hex'), 'hex');
+  // No passphrase fallback: a human passphrase through one SHA-256 is
+  // offline-brute-forceable and protects long-lived refresh tokens.
+  // The key must be 32 bytes as 64 hex chars or 44/43-char base64.
+  throw new Error('keyring key must be 32 bytes as 64 hex chars or 44/43-char base64');
 };
 
 export const resolveKeyringMasterKey = (envVarName: string): Buffer => {

@@ -12,7 +12,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "llm-mesh-enroll": "./dist/node/cli/enroll-cli.js"
+    "llm-mesh-enroll": "./dist/node/cli/bin.js"
   },
   "exports": {
     "./speech": {

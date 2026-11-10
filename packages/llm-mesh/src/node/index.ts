@@ -47,8 +47,10 @@ export {
   readExternalSeatAuthority,
 } from '../service/external-seat-authority.js';
 export {
+  deriveKeyringMasterKey,
   EncryptedFileKeyring,
   KeyringInsecurePermissionsError,
+  resolveKeyringMasterKey,
 } from './keyring/encrypted-file-keyring.js';
 export { EnvKeyring } from './keyring/env-keyring.js';
 export { InMemoryKeyring } from './keyring/in-memory-keyring.js';
