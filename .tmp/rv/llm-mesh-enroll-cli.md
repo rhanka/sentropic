@@ -216,3 +216,29 @@ gh pr checks 983
 ```
 
 Commandes immo inchangées (section README) : voir tête du rapport.
+
+## Addendum 2 — rebase sur `1160c5f37` + fix lazy (tête `79c4eaabc`)
+
+`origin/main` a avancé pendant le tour (`1160c5f37`, #992
+ci-brlock-policy-source : `BRANCH.md` supprimée sur `main`, `ci.yml` +
+2 tests `scripts/ci`). Nouveau rebase : 37 commits rejoués, 1 seul
+conflit (`BRANCH.md` modify/delete → version branche gardée, ligne
+BRLOCK-EX1 conservée selon la consigne). `packages/` strictement
+inchangé vs la tête testée `884631ea2` (diff : 3 fichiers CI uniquement)
+→ tous les scoped verts du tour restent valables, CLI toujours inchangé.
+
+Post-mortem run 42825304564 (`validate-cluster-mesh (lazy)`) :
+`lock integrity sha512-ui7/... != sibling sha512-rBIx/...`. Cause
+prouvée : mon premier refresh a empaqueté un `dist/` périmé (build
+pré-rebase + emit TS de l'env de test), alors que le CI packe le dist de
+`make build-llm-mesh` (typescript@5.4.5). Preuve : rebuild sanctionné
+(`rm -rf dist` + `make build-llm-mesh`) puis repack local = `rBIx`
+exactement, à l'octet près. Fix : rebuild + nouveau
+`refresh-lazy-package-lock` → intégrité `rBIx`, forme registry-URL
+conservée (contrat `check-lock-integrity.mjs refresh`), gateway `PAb3`
+inchangée (source non touchée par le rebase). Re-vérifié : tuple-skew 22
+et artifacts-tuple 5 verts. Régression couverte par la gate CI
+`siblings` elle-même (c'est elle qui a détecté l'écart).
+
+Push `--force-with-lease` (branche PR uniquement). CI à suivre jusqu'au
+vert sur la tête finale ; non fusionné.
