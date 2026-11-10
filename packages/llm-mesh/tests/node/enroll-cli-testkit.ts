@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import type { CliWriters } from '../../src/node/cli/enroll-args.js';
 
 export const KEY_ENV = 'TEST_LLM_MESH_ENROLL_KEY';
-export const PASSPHRASE = 'test-only-keyring-passphrase-1';
+// 32-byte test key as 64 hex chars (the CLI refuses passphrase fallback).
+export const PASSPHRASE = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 export const DCA_TOKEN = 'dca-test-token-abc';
 export const MINTED_KEY = 'minted-test-api-key-xyz';
 export const REFRESH_TOKEN = 'refresh-test-token-xyz';

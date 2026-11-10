@@ -565,7 +565,7 @@ export class LocalAccountTransportService {
     if (typeof provider.pollForCompletion !== 'function') {
       throw new Error("Muse enrollment provider does not support device-flow polling");
     }
-    const res = await provider.pollForCompletion(enrollmentId);
+    const res = await provider.pollForCompletion(enrollmentId, maxAttempts);
     if (!res.credential) {
       throw new Error(`Enrollment session ${enrollmentId} did not resolve a credential`);
     }
