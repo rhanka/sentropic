@@ -4,6 +4,7 @@
 // transitions live in `incident-policy.ts`; time-driven sweep helpers in
 // `incident-schedule.ts`.
 
+import { opsIncidentKey } from './ops-job-failure-types.js';
 import type { OpsJobFailureReasonV1, OpsJobFailureSeverityV1, OpsJobFailureV1, OpsJobKindV1 } from './ops-job-failure-types.js';
 
 export type OpsIncidentStatusV1 = 'firing' | 'resolved';
@@ -79,7 +80,7 @@ function baseIncident(
 ): OpsIncidentStateV1 {
   const namespace = event.jobRef.namespace ?? null;
   return {
-    key: `${event.targetKey}/${namespace ?? ''}/${event.jobRef.name}`,
+    key: opsIncidentKey(event.targetKey, event.jobRef.namespace, event.jobRef.name),
     targetKey: event.targetKey, jobNamespace: namespace, jobName: event.jobRef.name, jobKind: event.jobRef.kind,
     status, firstSeenAt: nowIso, lastSeenAt: nowIso,
     occurrenceCount: 0, consecutiveFailures: 0,
@@ -132,7 +133,7 @@ export function openOpsStaleIncident(
   nowIso: string,
 ): OpsIncidentStateV1 {
   return {
-    key: `${targetKey}/${jobNamespace ?? ''}/${jobName}`,
+    key: opsIncidentKey(targetKey, jobNamespace ?? undefined, jobName),
     targetKey, jobNamespace, jobName, jobKind,
     status: 'firing', firstSeenAt: nowIso, lastSeenAt: nowIso,
     occurrenceCount: 1, consecutiveFailures: 0,
