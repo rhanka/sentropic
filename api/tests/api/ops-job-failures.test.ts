@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { db } from '../../src/db/client';
 import {
@@ -45,7 +45,8 @@ afterEach(async () => {
     .where(eq(opsIncidents.targetKey, TARGET_KEY));
   const ids = incidents.map((row) => row.id);
   await db.delete(opsNotificationDeliveries).where(eq(opsNotificationDeliveries.targetKey, TARGET_KEY));
-  await db.delete(opsSeenEvents);
+  if (ids.length === 0) return;
+  await db.delete(opsSeenEvents).where(inArray(opsSeenEvents.incidentId, ids));
   await db.delete(opsIncidents).where(eq(opsIncidents.targetKey, TARGET_KEY));
   for (const id of ids) {
     await db.delete(eventOutbox).where(eq(eventOutbox.aggregateId, id));
@@ -85,6 +86,14 @@ describe('POST /api/v1/ops/ingest', () => {
     expect(deliveries).toHaveLength(1);
   });
 
+  it('rejects the same eventId with a different payload as a conflict', async () => {
+    const name = jobName('conflict');
+    await postIngest(failedBody('conflict', `k8s:${name}-run-1:failed`));
+    const replay = await postIngest({ ...failedBody('conflict', `k8s:${name}-run-1:failed`), reason: 'quota' });
+    expect(replay.status).toBe(409);
+    expect(await replay.json()).toMatchObject({ error: 'event_id_conflict' });
+  });
+
   it('resolves the incident on succeeded with a recovery delivery', async () => {
     const name = jobName('recover');
     const failed = failedBody('recover', `k8s:${name}-run-1:failed`);
@@ -106,5 +115,61 @@ describe('POST /api/v1/ops/ingest', () => {
     expect(await response.json()).toMatchObject({ error: 'bad_reason' });
     const incidents = await db.select().from(opsIncidents).where(eq(opsIncidents.targetKey, TARGET_KEY));
     expect(incidents).toHaveLength(0);
+  });
+
+  it('rejects unknown fields and non-https links', async () => {
+    const unknown = await postIngest({ ...failedBody('bad', 'k8s:bad-run:failed'), extra: 'nope' });
+    expect(unknown.status).toBe(400);
+    expect(await unknown.json()).toMatchObject({ error: 'unknown_field' });
+    const link = await postIngest({
+      ...failedBody('bad', 'k8s:bad-run:failed'),
+      links: { logs: 'http://logs.example.com/run' },
+    });
+    expect(link.status).toBe(400);
+    expect(await link.json()).toMatchObject({ error: 'bad_links' });
+  });
+
+  it('rejects future timestamps against the server clock', async () => {
+    const response = await postIngest({
+      ...failedBody('future', 'k8s:future-run:failed'),
+      occurredAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'bad_occurred_at' });
+  });
+
+  it('rejects oversized bodies before parsing', async () => {
+    const big = await router.request('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...failedBody('big', 'k8s:big-run:failed'), detail: 'x'.repeat(40 * 1024) }),
+    });
+    expect(big.status).toBe(413);
+    expect(await big.json()).toMatchObject({ error: 'body_too_large' });
+  });
+
+  it('binds the authenticated client to its targets', async () => {
+    const withClient = (clientId: string) =>
+      createOpsJobFailuresRouter({
+        ingest: ingestOpsJobFailureEventTx,
+        guard: async (c, next) => {
+          c.set('serviceClient', { clientId, scopes: ['service:ops-job-failure-ingest'], jkt: null });
+          await next();
+        },
+        allowlist: { 'svc-watcher': [TARGET_KEY] },
+      });
+    const ok = await withClient('svc-watcher').request('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(failedBody('bound', `k8s:${jobName('bound')}-run-1:failed`)),
+    });
+    expect(ok.status).toBe(200);
+    const foreign = await withClient('svc-other').request('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(failedBody('bound', `k8s:${jobName('bound')}-run-2:failed`)),
+    });
+    expect(foreign.status).toBe(403);
+    expect(await foreign.json()).toMatchObject({ error: 'forbidden_target' });
   });
 });

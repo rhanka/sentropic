@@ -127,9 +127,14 @@ const envSchema = z.object({
   SCW_TEM_FROM_NAME: z.string().default('Sentropic'),
   // Ops job-failure alerts (notify L1): platform declaration of product
   // target -> owning account ids, as JSON. Unset/empty means every target
-  // falls back to the platform admins. Never emails: ids are validated live
-  // against the identity store and emails are read from account records.
+  // resolves empty and the sweep raises a configuration alert. Never emails:
+  // ids are validated live against the identity store and emails are read
+  // from account records.
   OPS_JOB_FAILURE_TARGETS_JSON: z.string().optional(),
+  // Ops ingestion client binding (notify L1): service-client id ->
+  // ingestible targets, as JSON (ex. {"svc-k8s-watcher":["*"]}). Unset =
+  // any scope-holder may ingest (legacy single-watcher shape, logged once).
+  OPS_JOB_FAILURE_INGEST_CLIENTS_JSON: z.string().optional(),
   // Autostart of the ops notification sweep; 'false' disables it (tests).
   OPS_NOTIFY_SWEEP_AUTOSTART: z.string().optional(),
   // WebAuthn Configuration
