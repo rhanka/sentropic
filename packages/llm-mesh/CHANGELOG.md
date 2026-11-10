@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.35.0
+
+- New `llm-mesh-enroll` bin (`./dist/node/cli/bin.js`, dedicated entry
+  without a filename guard): device-flow enrollment CLI (muse-code and
+  codex) with `enroll` (prints only the verification URL plus user code
+  plus expiry, polls, then persists into `EncryptedFileKeyring`) and
+  `probe` (one minimal generate through `MuseAdapter`/`MuseRuntimeClient`
+  for muse-code seat accounts, prints status plus latency plus usage only).
+  `probe` refuses any non-`muse-code` provider flag and verifies the stored
+  `:public` provider before any token leaves the keyring. The keyring key
+  is read from the env var named by `--keyring-key-env` (never from argv)
+  and must hold 32 bytes as 64 hex chars or 44/43-char base64; a human
+  passphrase is refused. Upstream error bodies are never relayed (status
+  only); keyring read failures map to exit 5, a corrupt credential record
+  to exit 6. A probe 402 maps to `billing_not_configured` on the non-seat
+  `muse.ts` direct-key path.
+- `EncryptedFileKeyring` accepts an explicit 32-byte master key (second
+  constructor argument, re-exported `deriveKeyringMasterKey` /
+  `resolveKeyringMasterKey` helpers from `@sentropic/llm-mesh/node`), so
+  CLI keyrings stay unlockable by an env-held key without changing the
+  default `.key`-file behavior. `completeMuseDeviceImport` forwards
+  `maxAttempts` to the provider poll.
+
 ## 0.34.1
 
 - Patch on the 0.34 line (consumer ranges `llm-gateway ^0.34.0`, cluster-mesh `<0.35.0` admit 0.34.x): concrete Node Claude seat host (`@sentropic/llm-mesh/node`).
@@ -30,19 +53,6 @@
   expiry for a planned re-enrollment. A CLI-imported Muse credential carries
   no refresh grant yet refreshes through the cycle (CLI store re-read),
   unlike direct-billed Muse keys (`auth_type: 'api_key'`).
-- New `llm-mesh-enroll` bin (`./dist/node/cli/enroll-cli.js`): generic
-  device-flow enrollment CLI (muse-code first) with `enroll` (prints only
-  the verification URL plus user code plus expiry, polls, then persists
-  into `EncryptedFileKeyring`) and `probe` (one minimal generate through
-  `MuseAdapter`/`MuseRuntimeClient`, prints status plus latency plus usage
-  only). The keyring passphrase is read from the env var named by
-  `--keyring-key-env`, never from argv; no token or key reaches stdout,
-  stderr, or error messages. A probe 402 maps to `billing_not_configured`
-  on the non-seat `muse.ts` direct-key path.
-- `EncryptedFileKeyring` accepts an explicit 32-byte master key (second
-  constructor argument or `deriveKeyringMasterKey`/`resolveKeyringMasterKey`
-  helpers), so CLI keyrings stay unlockable by env-held passphrase without
-  changing the default `.key`-file behavior.
 
 ## 0.33.0
 
