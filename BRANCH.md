@@ -154,6 +154,19 @@
     - [x] `make typecheck-cluster-mesh` green.
     - [x] Scoped cluster-mesh specs green (speech-peer 20, skew-invariants 5, tuple-skew 21, registry 51, topology-ranges 20).
     - [x] `refresh-lazy-package-lock` output committed.
+- [ ] **Lot 7 — PR #983 review fixes (VERDICT REQUEST_CHANGES)**
+  - [x] B1 dedicated `src/node/cli/bin.ts` (no suffix guard), bin points to `bin.js`.
+  - [x] B2 probe refuses non-`muse-code` provider and verifies the stored `:public` provider before any token send.
+  - [x] M1 upstream error bodies never relayed (status-only messages).
+  - [x] M2 key derivation requires 32-byte hex/base64, passphrase fallback refused.
+  - [x] M3 keyring reads inside try mapped to exit 5, corrupt envelope to exit 6, final handler JSON-only.
+  - [ ] M4 new tests (bin, repeatable N, perms, bad key, secret body, codex refusal).
+  - [ ] m1 maxAttempts forwarded, effort documented; m2 unknown provider/flag handling; m4 exports plus changelog; m5 fixture plus report.
+  - [ ] Bump llm-mesh to 0.35.0 (> main 0.34.0 and > npm 0.34.0), CHANGELOG, lockfiles.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-enroll` green.
+    - [ ] Scoped `make test-llm-mesh SCOPE=tests/node/enroll-cli-enroll.test.ts ENV=test-llm-mesh-enroll` green.
+    - [ ] Scoped `make test-llm-mesh SCOPE=tests/node/enroll-cli-probe.test.ts ENV=test-llm-mesh-enroll` green.
 - [x] **Lot N — Final validation**
   - [x] Typecheck and lint (typecheck-cluster-mesh green at Lots 4–6).
   - [x] Retest llm-mesh scoped plus cluster-mesh scoped (all green, see Lots 4–6).
