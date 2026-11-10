@@ -1,6 +1,7 @@
 import type { LivePorts } from './ports';
 import { assertFence, conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
-import { enrichPodLoss, isPodCause, notePodLoss } from './pods';
+import { enrichPodLoss, isPodCause } from './pods';
+import { notePodLoss } from './pod-probe';
 import { crashRestore, revive } from './revive';
 import { prepareLive } from './prepare-live';
 import { idleBuild, queuedBuild } from './idle';

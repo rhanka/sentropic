@@ -1,7 +1,8 @@
 import type { DraftSnapshot, LiveBinding, LivePorts } from './ports';
 import { releaseIfDormant } from './admission';
 import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey, type LiveRuntime } from './records';
-import { ensureResponsivePod, enrichPodLoss, isPodCause, isTransportLoss, notePodLoss, podName } from './pods';
+import { enrichPodLoss, isPodCause, isTransportLoss, podName } from './pods';
+import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
