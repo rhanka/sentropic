@@ -28,9 +28,18 @@ const failedBody = (name: string, eventId: string) => ({
   occurredAt: new Date().toISOString(),
 });
 
+const TEST_CLIENT = 'svc-test';
+const TEST_ALLOWLIST = { [TEST_CLIENT]: { targets: [TARGET_KEY], sources: ['k8s', 'app'] } };
+
+const testGuard = async (c: { set: (k: string, v: unknown) => void }, next: () => Promise<void>): Promise<void> => {
+  c.set('serviceClient', { clientId: TEST_CLIENT, scopes: ['service:ops-job-failure-ingest'], jkt: null });
+  await next();
+};
+
 const router = createOpsJobFailuresRouter({
   ingest: ingestOpsJobFailureEventTx,
-  guard: async (_c, next) => next(),
+  guard: testGuard as never,
+  allowlist: TEST_ALLOWLIST,
 });
 
 const postIngest = (body: unknown): Promise<Response> =>
@@ -180,7 +189,7 @@ describe('POST /api/v1/ops/ingest', () => {
           c.set('serviceClient', { clientId, scopes: ['service:ops-job-failure-ingest'], jkt: null });
           await next();
         },
-        allowlist: { 'svc-watcher': [TARGET_KEY] },
+        allowlist: { 'svc-watcher': { targets: [TARGET_KEY], sources: ['k8s', 'app'] } },
       });
     const ok = await withClient('svc-watcher').request('/ingest', {
       method: 'POST',
@@ -195,5 +204,53 @@ describe('POST /api/v1/ops/ingest', () => {
     });
     expect(foreign.status).toBe(403);
     expect(await foreign.json()).toMatchObject({ error: 'forbidden_target' });
+  });
+
+  it('denies every ingestion when the allowlist is unconfigured (production default)', async () => {
+    const denied = createOpsJobFailuresRouter({
+      ingest: ingestOpsJobFailureEventTx,
+      guard: async (c, next) => {
+        c.set('serviceClient', { clientId: 'svc-watcher', scopes: ['service:ops-job-failure-ingest'], jkt: null });
+        await next();
+      },
+      allowlist: null,
+    });
+    const response = await denied.request('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(failedBody('denied', `k8s:${jobName('denied')}-run-1:failed`)),
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: 'forbidden_target' });
+  });
+
+  it('binds the authenticated client to its sources', async () => {
+    const k8sOnly = createOpsJobFailuresRouter({
+      ingest: ingestOpsJobFailureEventTx,
+      guard: async (c, next) => {
+        c.set('serviceClient', { clientId: 'svc-k8s', scopes: ['service:ops-job-failure-ingest'], jkt: null });
+        await next();
+      },
+      allowlist: { 'svc-k8s': { targets: [TARGET_KEY], sources: ['k8s'] } },
+    });
+    const appEvent = {
+      v: 1,
+      eventId: `app:${jobName('src')}-run-1:failed`,
+      source: 'app',
+      targetKey: TARGET_KEY,
+      jobRef: { namespace: 'immo', kind: 'app-job', name: jobName('src') },
+      runId: `app:${jobName('src')}-run-1`,
+      outcome: 'failed',
+      reason: 'job-failed',
+      severity: 'warning',
+      occurredAt: new Date().toISOString(),
+    };
+    const response = await k8sOnly.request('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appEvent),
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: 'forbidden_target' });
   });
 });
