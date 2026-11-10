@@ -52,6 +52,12 @@ PR #983 (OPEN, base `main`). Tête poussée : `8a9a54576`.
   par le push frais, aucun rerun.
 - Tête poussée : `846126952`, run 42722166769.
 - Tête finale : `cc179daed` (rebase sur `00d160d79`), run 42725904700 : SUCCESS.
+- Tête docs `dbd6e1441` (= `cc179daed` + docs uniquement, preuve `git diff
+  cc179daed dbd6e1441 --stat` : 2 fichiers docs) : AUCUN run déclenché —
+  3e événement `pull_request/synchronize` perdu par GitHub (après `d58d6993e`
+  et `9adb0fe91`) ; le workflow n'a aucun filtre `paths`, et les autres
+  branches déclenchent normalement. Le présent push sert aussi de
+  re-déclencheur sanctionné (pas de `gh run rerun`).
 
 ## Suivi du run 42722166769 (2 échecs : 4 → 2)
 
