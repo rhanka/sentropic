@@ -79,6 +79,12 @@
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- [ ] FLAKY-CANDIDATE 07-matrix lock/presence (run 42722166769, shard 1, NOT accepted — no sign-off):
+  - Command: `test-e2e (1)` shard 1 job of run 42722166769.
+  - File: `e2e/tests/07-matrix.spec.ts:572` (« User A leaves → lock released → User B can lock »).
+  - Signature: `expect(received).toBe(expected)` Expected true Received false, `Timeout 2000ms exceeded while waiting on the predicate` (`canEdit && !needsUnlockRequest`).
+  - Evidence for timing flake: same functional tree passed shard 1 in run 42718308820 (head e2214c6ba; head 846126952 differs only by a cluster-mesh spec literal plus docs); shard 2 (i18n, 1 fail in 42710018359) passed in 42722166769. Untouched surface (`ui/**`, realtime lock path; branch ships a CLI bin plus version strings only).
+  - Action: retrigger via the pending report push; conductor/owner sign-off still required before any merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
