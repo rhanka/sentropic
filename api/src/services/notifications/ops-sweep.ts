@@ -97,22 +97,31 @@ async function resolveRecipients(
   if (targets.length > 0) return targets;
   // Fail-closed: the incident mail is never rerouted. A configuration alert
   // goes to the platform admins instead; the original delivery is terminal
-  // so one bad target cannot wedge the queue with infinite retries.
-  await store.markDeliveryFailed(delivery.id, 'ops no usable recipient for target');
-  result.failed += 1;
-  if (await store.hasUnsentDelivery(delivery.incidentId, 'config')) return null;
-  const admins = await configRecipients.listRecipientsForTarget(delivery.targetKey);
-  if (admins.length === 0) {
-    logger.error({ targetKey: delivery.targetKey }, 'ops config alert has no platform admin either; incident mail dropped loudly');
+  // so one bad target cannot wedge the queue with infinite retries. A
+  // transient config-port fault requeues the original instead (retry later).
+  try {
+    if (!(await store.hasUnsentDelivery(delivery.incidentId, 'config'))) {
+      const admins = await configRecipients.listRecipientsForTarget(delivery.targetKey);
+      if (admins.length === 0) {
+        logger.error({ targetKey: delivery.targetKey }, 'ops config alert has no platform admin either; incident mail dropped loudly');
+      } else {
+        const rendered = renderOpsConfigMail(delivery.targetKey, delivery.incidentId, 'no usable recipient for target');
+        await store.insertDelivery({
+          incidentId: delivery.incidentId, targetKey: delivery.targetKey, kind: 'config',
+          subject: rendered.subject, textBody: rendered.text, htmlBody: rendered.html,
+          eventId: delivery.eventId ?? undefined,
+        });
+        result.configAlerts += 1;
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 500) : 'ops config recipients failed';
+    await failOrRetry(store, delivery, message, nowIso);
+    result.failed += 1;
     return null;
   }
-  const rendered = renderOpsConfigMail(delivery.targetKey, delivery.incidentId, 'no usable recipient for target');
-  await store.insertDelivery({
-    incidentId: delivery.incidentId, targetKey: delivery.targetKey, kind: 'config',
-    subject: rendered.subject, textBody: rendered.text, htmlBody: rendered.html,
-    eventId: delivery.eventId ?? undefined,
-  });
-  result.configAlerts += 1;
+  await store.markDeliveryFailed(delivery.id, 'ops no usable recipient for target');
+  result.failed += 1;
   return null;
 }
 
