@@ -132,8 +132,9 @@ const envSchema = z.object({
   // from account records.
   OPS_JOB_FAILURE_TARGETS_JSON: z.string().optional(),
   // Ops ingestion client binding (notify L1): service-client id ->
-  // ingestible targets, as JSON (ex. {"svc-k8s-watcher":["*"]}). Unset =
-  // any scope-holder may ingest (legacy single-watcher shape, logged once).
+  // ingestible targets and sources, as JSON (ex. {"svc-k8s-watcher":{"targets":["*"],"sources":["k8s"]}}).
+  // Array shape ["target"] means any source (legacy). Unset = deny every
+  // ingestion (fail-closed).
   OPS_JOB_FAILURE_INGEST_CLIENTS_JSON: z.string().optional(),
   // Ops product pull (notify L1, optional): product target -> recipientsUrl
   // answering `GET ?target=<productKey>` with `{v:1,target,asOf,admins}`.
