@@ -67,11 +67,14 @@ export function applyOpsJobFailureEvent(
   if (event.outcome === 'succeeded') {
     if (state === null) return noChange(state);
     if (state.status === 'resolved') {
-      // A success proves liveness: refresh the dormant watch so the dead-man
-      // sweep cannot false-positive on a heartbeat that predates the run.
+      // A success proves liveness: refresh an already-existing dormant watch
+      // so the dead-man sweep cannot false-positive on a stale heartbeat.
+      // Never create a watch where none existed: an app-job without
+      // heartbeats must not become falsely `stale` after recovery.
       return {
         state: {
-          ...state, lastSeenAt: nowIso, lastHeartbeatAt: nowIso,
+          ...state, lastSeenAt: nowIso,
+          lastHeartbeatAt: state.lastHeartbeatAt === null ? null : nowIso,
           lastRunId: event.runId, lastEventId: event.eventId, lastOccurredAt: event.occurredAt,
         },
         mails: [], opened: false, reopened: false, stale: false,
@@ -81,7 +84,8 @@ export function applyOpsJobFailureEvent(
       state: {
         ...state, status: 'resolved', resolvedAt: nowIso, consecutiveFailures: 0,
         lastRunId: event.runId, lastEventId: event.eventId, lastMailAt: nowIso,
-        lastHeartbeatAt: nowIso, lastOccurredAt: event.occurredAt,
+        lastHeartbeatAt: state.lastHeartbeatAt === null ? null : nowIso,
+        lastOccurredAt: event.occurredAt,
       },
       mails: ['recovery'], opened: false, reopened: false, stale: false,
     };

@@ -183,4 +183,27 @@ describe('ops incident state machine', () => {
     expect(isOpsMailCapExceeded(sent, at(10 * MIN))).toBe(true);
     expect(isOpsMailCapExceeded(sent, at(2 * HOUR))).toBe(false);
   });
+
+  it('does not create a heartbeat watch on succeeded when none existed', async () => {
+    const { opsIncidentKey } = await import('../src/notifications/index.js');
+    const first = applyOpsJobFailureEvent(null, failed('k8s:run-1:failed'), T0);
+    const resolved = applyOpsJobFailureEvent(first.state, succeeded('k8s:run-1:succeeded'), at(HOUR));
+    expect(resolved.state?.status).toBe('resolved');
+    expect(resolved.state?.lastHeartbeatAt).toBeNull();
+    expect(isOpsHeartbeatOverdue(resolved.state?.lastHeartbeatAt ?? null, at(2 * HOUR))).toBe(false);
+    const key = resolved.state?.key ?? '';
+    expect(key).toBe(opsIncidentKey('immo-prod', 'immo', 'radar-refresh-pv'));
+  });
+
+  it('escapes incident keys so spaced names never collide', async () => {
+    const { opsIncidentKey } = await import('../src/notifications/index.js');
+    const spaced = failed('k8s:run-1:failed', {
+      jobRef: { namespace: 'im mo', kind: 'CronJob', name: 'my job%name' },
+    });
+    const first = applyOpsJobFailureEvent(null, spaced, T0);
+    expect(first.state?.key).toBe(opsIncidentKey('immo-prod', 'im mo', 'my job%name'));
+    expect(first.state?.key).toContain('%20');
+    expect(first.state?.key).toContain('%25');
+    expect(first.state?.key).not.toContain(' ');
+  });
 });
