@@ -42,6 +42,7 @@ const delivery = (extra: Partial<OpsDeliveryRecordV1> = {}): OpsDeliveryRecordV1
   id: 'd-1', incidentId: 'immo-prod/immo/radar-refresh-pv', targetKey: 'immo-prod',
   kind: 'firing', status: 'pending', subject: 's', textBody: 't', htmlBody: '<p>t</p>',
   recipients: [], eventId: null, attempts: 1, lastError: null, messageId: null, sentAt: null,
+  nextAttemptAt: null,
   ...extra,
 });
 
@@ -60,6 +61,10 @@ const fakeDeps = (world: FakeWorld) => {
     listFiringIncidents: async () => [...world.incidents.values()].filter((i) => i.status === 'firing'),
     listHeartbeatWatches: async () =>
       [...world.incidents.values()].filter((i) => i.status === 'resolved' && i.lastHeartbeatAt !== null),
+    touchIncidentMailAt: async (key, sentAt) => {
+      const incident = world.incidents.get(key);
+      if (incident) world.incidents.set(key, { ...incident, lastMailAt: sentAt });
+    },
     insertDelivery: async (input) => {
       const record = delivery({
         id: `d-${world.deliveries.size + 1}`, incidentId: input.incidentId,
@@ -83,17 +88,43 @@ const fakeDeps = (world: FakeWorld) => {
       row.messageId = messageId;
       row.recipients = [...recipients];
       row.sentAt = sentAt;
+      row.nextAttemptAt = null;
+    },
+    markDeliveryRecipientSent: async (id, recipient) => {
+      const row = world.deliveries.get(id)!;
+      if (!row.recipients.some((entry) => entry.email === recipient.email)) {
+        row.recipients = [...row.recipients, recipient];
+      }
     },
     markDeliveryFailed: async (id, error) => {
       world.deliveries.get(id)!.status = 'failed';
       world.deliveries.get(id)!.lastError = error;
     },
+    markDeliveryRetryable: async (id, error, nextAttemptAt) => {
+      const row = world.deliveries.get(id)!;
+      row.status = 'pending';
+      row.lastError = error;
+      row.nextAttemptAt = nextAttemptAt;
+    },
+    listRecentSentMailCounts: async () => {
+      const counts = new Map<string, number>();
+      for (const row of world.deliveries.values()) {
+        if (row.status !== 'sent') continue;
+        counts.set(row.targetKey, (counts.get(row.targetKey) ?? 0) + row.recipients.length);
+      }
+      return [...counts.entries()].map(([targetKey, mails]) => ({ targetKey, mails }));
+    },
+    countRecentSentTo: async (email) =>
+      [...world.deliveries.values()].filter(
+        (row) => row.status === 'sent' && row.recipients.some((entry) => entry.email === email),
+      ).length,
+    reclaimStaleSending: async () => 0,
+    loadSeenEvent: async () => null,
+    findSeenCanonical: async () => null,
+    recordSeenEvent: async () => {},
     markDeliverySuppressed: async (id) => { world.deliveries.get(id)!.status = 'suppressed'; },
     listRecentSentAt: async () =>
       [...world.deliveries.values()].filter((d) => d.status === 'sent').map((d) => d.sentAt ?? iso(0)),
-    reclaimStaleSending: async () => 0,
-    hasSeenEvent: async () => false,
-    recordSeenEvent: async () => {},
   };
   return {
     store,
