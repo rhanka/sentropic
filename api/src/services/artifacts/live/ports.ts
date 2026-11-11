@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import type { LiveAttempt, LiveKey, LivePhase, LiveRuntime, LiveState } from './records';
 import type { PodReport } from './pods';
+import type { PackageFences, RemoteSession } from './remote-live';
 import type { LiveAdmission } from './admission';
 import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
@@ -49,6 +50,10 @@ export interface LivePorts {
   jobBinding(key: LiveKey, jobId: string, generation: number): Promise<void>;
   /** Rechecks binding policy, owner/code rights, generation and sandbox qualification. */
   binding(key: LiveKey): Promise<LiveBinding>;
+  /** Records the admitted job's (generation, owner) as the binding view when the host never reconciled
+   * (first-write through the reconciled monotonicity rules, so a later live reconcile at the same
+   * generation with a different owner stays stale). */
+  seedBinding(key: LiveKey, seed: RemoteSession): Promise<PackageFences>;
   forge: {
     head(key: LiveKey): Promise<string>;
     fastForward(key: LiveKey, before: string, after: string): Promise<boolean>;
