@@ -68,6 +68,9 @@ export interface CachePorts {
     /** Sealed-unit archive of one entry (`sealedArchiveRef`); `getArchive` returns bytes the cache re-verifies. */
     putArchive(ref: string, bytes: Uint8Array): Promise<void>;
     getArchive(ref: string): Promise<Uint8Array | undefined>;
+    /** Source unit of one commit (`sourceUnitRef`); the forge reader's repacked snapshot (§7.2.2). */
+    putSource(ref: string, bytes: Uint8Array): Promise<void>;
+    getSource(ref: string): Promise<Uint8Array | undefined>;
   };
 }
 function invalid(): never { throw new LiveError('dependency_cache_invalid'); }
