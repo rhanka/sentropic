@@ -107,3 +107,16 @@ it('should list only the runtimes of the scope that wait for the worker', async 
   expect((await store.pending!('scope-a', 1)).map(identity => identity.artifactId)).toEqual(['quiescing']);
   expect(liveWorkerPending(undefined)).toBeNull();
 });
+
+it('should admit live writers on a build_failed binding and still refuse a pending build', async () => {
+  const w = liveWitness();
+  Object.assign(w.binding, { state: 'build_failed', pendingJobId: '99999999-9999-4999-8999-999999999999' });
+  const written = await w.write({ files: [{ path: 'ui/a.ts', text: 'repair' }] });
+  expect(written).toMatchObject({ state: 'REVIVING' });
+  const committed = await w.call('git_commit', { expectedHeadSha: written.currentHeadSha, message: 'Repair', idempotencyKey: 'repair',
+    files: [{ path: 'ui/a.ts', text: 'repair' }] });
+  expect(committed.commitSha).toBe('c'.repeat(40));
+  w.binding.state = 'build_pending';
+  await expect(w.write({ files: [{ path: 'ui/b.ts', text: 'later' }] }))
+    .rejects.toMatchObject({ kind: 'git_live_conflict', details: { publicDetails: { reason: 'pending_publication' } } });
+});
