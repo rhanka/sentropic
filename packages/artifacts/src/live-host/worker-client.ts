@@ -52,6 +52,23 @@ function builderBase(raw: string): URL {
   if (base.protocol !== 'https:' || base.search || base.hash) throw new ArtifactOperationError('builder_unavailable');
   return new URL(base.pathname.endsWith('/') ? base.href : `${base.href}/`);
 }
+/** Structured builder refusals the package maps instead of collapsing to `provider_unavailable` (§7.1.4).
+ * Today only the sealed-cache miss: a 409 carrying the lock (and the cache state when known), retriable
+ * once the prewarm seals. Anything else stays an opaque provider failure. */
+function mappedRefusal(answer: { status: number; payload: unknown }): ArtifactOperationError {
+  const body = (answer.payload ?? {}) as Record<string, unknown>;
+  if (answer.status === 409 && body.error === 'cache_not_prewarmed') {
+    const details: Record<string, unknown> = {};
+    if (typeof body.lockSha256 === 'string') details.lockSha256 = body.lockSha256;
+    if (typeof body.cacheState === 'string') details.cacheState = body.cacheState;
+    return new ArtifactOperationError('cache_not_prewarmed', {
+      refusal: { allowed: false, reason: 'unavailable', status: 409, publicCode: 'cache_not_prewarmed',
+        retriable: true },
+      ...(Object.keys(details).length > 0 ? { publicDetails: details } : {}),
+    });
+  }
+  return new ArtifactOperationError('provider_unavailable');
+}
 /** Reads the answer to completion and parses at most MAX_ANSWER_BYTES of JSON; anything else is undefined. */
 async function boundedJson(response: Response): Promise<unknown> {
   if (!response.body) return undefined;
@@ -135,7 +152,7 @@ export function createLiveWorkerClient(options: LiveWorkerClientOptions): LiveWo
       leaseEpoch: fences.leaseEpoch, routeEpoch: fences.routeEpoch,
       binding: { repoId: record.repoId, branch: record.branch, subPath: record.subPath },
       invitation: { epoch: floor(identity, session.epoch), expiresAt: session.expiresAt } }, options.reconcileTimeoutMs ?? 30_000);
-    if (answer.status !== 200) throw new ArtifactOperationError('provider_unavailable');
+    if (answer.status !== 200) throw mappedRefusal(answer);
     return parseAck(answer.payload);
   }
   return {

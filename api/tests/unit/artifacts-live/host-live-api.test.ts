@@ -106,3 +106,17 @@ describe('host live API (remote host D0)', () => {
     expect(overlap.status).toBe(400); expect(await overlap.json()).toEqual({ error: 'invalid_request', reason: 'duplicate_path' });
   });
 });
+
+describe('host live API typed refusals (§7.1.4)', () => {
+  it('should answer an unsealed live start with cache_not_prewarmed, the lock and retriable true', async () => {
+    const { Hono } = await import('hono');
+    const { refusal } = await import('../../../src/services/artifacts/live/host-live-body');
+    const app = new Hono().get('/refuse', c => refusal(c, new LiveError('cache_not_prewarmed', 'a'.repeat(64))));
+    const refused = await app.request('/refuse');
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: 'cache_not_prewarmed', reason: 'a'.repeat(64),
+      lockSha256: 'a'.repeat(64), retriable: true });
+    const app500 = new Hono().get('/refuse', c => refusal(c, new LiveError('sealed_unit_invalid')));
+    expect((await app500.request('/refuse')).status).toBe(500);
+  });
+});

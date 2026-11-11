@@ -177,6 +177,11 @@ function operationProjection(error: ArtifactOperationError): Projection {
     const details = error.details.publicDetails;
     if (kind === 'git_live_conflict' && !['invalid_phase', 'active_session', 'pending_publication',
       'commit_indeterminate', 'stale_session', 'stale_fence', 'transition_busy'].includes(String(details?.reason))) return internal();
+    // Sealed-cache miss (§7.1.4): retriable after the prewarm seals, unlike every other 409 conflict.
+    if (kind === 'cache_not_prewarmed') {
+      return { kind: 'operational', category: 'conflict', variant: kind, httpStatus: status, publicCode: kind,
+        retriable: true, details };
+    }
     if (status === 409) return { ...conflict(kind), publicCode: kind, details };
     if (status === 503) return { kind: 'operational', category: 'provider_unavailable',
       httpStatus: status, publicCode: kind, retriable: true, details };
