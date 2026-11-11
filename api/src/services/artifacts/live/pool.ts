@@ -11,6 +11,8 @@ export const POOL_MAX_AGE_MS = 24 * 3600_000;
 /** Env name of the pool minimum per hot key (default 1, §7.3.1, D3/Q4). */
 export const ARTIFACT_POOL_MIN_ENV = 'ARTIFACT_POOL_MIN_PER_HOT_KEY';
 export const POOL_MIN_DEFAULT = 1;
+/** Env name of the pool admin flag (`1` enables `POST /v1/pool/drain`; preprod only by configuration). */
+export const ARTIFACT_POOL_ADMIN_ENV = 'ARTIFACT_POOL_ADMIN';
 
 /** Tombstone: `KvStore.update` with `next: undefined` is a no-op (memory and Postgres alike keep the row),
  * so absence is written explicitly. Absent rows are invisible to occupancy/claims/drain/adopt/renew; `beginFill`
