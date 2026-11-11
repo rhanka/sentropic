@@ -147,7 +147,7 @@ const normalizeConcurrency = (value: unknown): number => {
 const normalizeItemTimeout = (value: unknown): number => {
   const n = Math.trunc(Number(value));
   if (!Number.isFinite(n) || n <= 0) return REDRIVE_ITEM_TIMEOUT_MS_DEFAULT;
-  return Math.min(120_000, Math.max(1_000, n));
+  return Math.min(120_000, n);
 };
 
 /**
