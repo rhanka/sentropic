@@ -116,4 +116,14 @@ describe('blob bridge guards', () => {
     expect(first.keys).toHaveLength(1);
     expect(first.continuation).toBeDefined();
   });
+
+  it('refuses a cursor forged without the process HMAC secret', async () => {
+    const upstream = createMemoryBlobStore();
+    const prefix = 'artifacts/scope-a/blobs/sha256/';
+    const forgedTag = createHash('sha256').update(`blob-page/v1:${prefix}:1`).digest('hex');
+    const forged = Buffer.from(JSON.stringify({ v: 1, prefix, offset: 1, tag: forgedTag }), 'utf8').toString('base64url');
+    await expect(listBlobKeysPaged(upstream, prefix, {
+      maxItems: 10, maxEncodedBytes: 1_000_000, continuation: forged,
+    })).rejects.toThrow(/invalid blob page continuation/);
+  });
 });
