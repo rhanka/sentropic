@@ -3,6 +3,7 @@ import {
   type TargetMapping,
   createCanonicalTargetCandidatesResolver,
   createCanonicalTargetResolver,
+  MUSE_ROUTE_MODEL,
   STANDARD_ROUTE_DEFINITIONS,
   CANONICAL_TARGET_MAPPINGS,
   describeCanonicalTargetRoutes,
@@ -136,9 +137,18 @@ describe('explicitly selected canonical mapping tables', () => {
       transportProviderId: 'cloud-code',
       model: 'gemini-4-argon',
     });
+    expect(resolve('gemini-4-carbon')).toEqual({
+      providerId: 'gemini',
+      transportProviderId: 'cloud-code',
+      model: 'gemini-4-carbon',
+    });
     expect(resolve('claude-fable-5-1')).toEqual({
       providerId: 'anthropic', transportProviderId: 'claude-code',
       model: 'claude-fable-5-1',
+    });
+    expect(resolve('claude-fable-5-2')).toEqual({
+      providerId: 'anthropic', transportProviderId: 'claude-code',
+      model: 'claude-fable-5-2',
     });
     expect(resolve('gpt-6-astra')).toEqual({
       providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
@@ -174,6 +184,12 @@ describe('explicitly selected canonical mapping tables', () => {
       providerId: 'anthropic',
       transportProviderId: 'claude-code',
       model: 'claude-fable-5-1',
+      effort: 'low',
+    });
+    expect(resolve('claude-fable-5-2-low')).toEqual({
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-fable-5-2',
       effort: 'low',
     });
   });
@@ -282,6 +298,8 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
       'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
       'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
+      'claude-fable-5-2', 'claude-fable-5-2-high', 'claude-fable-5-2-xhigh',
+      'claude-fable-5-2-max', 'claude-fable-5-2-medium', 'claude-fable-5-2-low',
       'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
       'claude-opus-5-5-max', 'claude-opus-5-5-medium', 'claude-opus-5-5-low',
       'claude-sonnet-5-5', 'claude-sonnet-5-5-high', 'claude-sonnet-5-5-xhigh',
@@ -336,10 +354,21 @@ describe('explicitly selected canonical mapping tables', () => {
   });
 
   it('serves every launch alias from any single enrolled transport', () => {
+    // Owner mapping 2026-11-10: the Fable 5.2 base/high/xhigh aliases map to
+    // Gemini 4 Carbon in MUSE_ROUTE_MODEL, which is not a Muse model, so
+    // those aliases carry no muse candidate (filtered by the catalog profile
+    // guard). The max/medium/low aliases keep the default contributor muse
+    // candidate like every other unlisted alias. Every other alias keeps a
+    // muse candidate.
+    const carbonMapped = new Set([
+      'claude-fable-5-2', 'claude-fable-5-2-high', 'claude-fable-5-2-xhigh',
+    ]);
     for (const definition of STANDARD_ROUTE_DEFINITIONS) {
       const transports = resolveCandidates(definition.requestedId)
         .map((candidate) => candidate.transportProviderId);
-      expect(transports).toContain('muse');
+      if (!carbonMapped.has(definition.requestedId)) {
+        expect(transports).toContain('muse');
+      }
       expect(transports).toContain('codex');
       expect(transports).toContain('cloud-code');
     }
@@ -374,6 +403,52 @@ describe('explicitly selected canonical mapping tables', () => {
         model: 'gemini-4-argon', effort: 'high',
       });
     }
+  });
+
+  it('routes every Fable 5.2 fallback through Astra and Carbon', () => {
+    // Owner mapping 2026-11-10: Fable 5.2 requests are served by Gemini 4
+    // Carbon on the cloud slot. The mapped base/high/xhigh aliases carry no
+    // muse candidate (MUSE_ROUTE_MODEL pins them to gemini-4-carbon, which
+    // the muse-candidate profile guard filters out); max/medium/low keep the
+    // default contributor muse candidate like every other unlisted alias.
+    const museEffort: Readonly<Record<string, string>> = {
+      max: 'max', medium: 'high', low: 'medium',
+    };
+    for (const suffix of ['base', 'high', 'xhigh', 'max', 'medium', 'low'] as const) {
+      const alias = suffix === 'base' ? 'claude-fable-5-2' : `claude-fable-5-2-${suffix}`;
+      const candidates = resolveCandidates(alias);
+      expect(candidates[0]).toEqual({
+        providerId: 'anthropic', transportProviderId: 'claude-code',
+        model: 'claude-fable-5-2', ...(suffix === 'base' ? {} : { effort: suffix }),
+      });
+      const codexIndex = suffix in museEffort ? 2 : 1;
+      if (suffix in museEffort) {
+        expect(candidates[1]).toEqual({
+          providerId: 'muse', transportProviderId: 'muse',
+          model: 'muse-spark-1.3-contributor', effort: museEffort[suffix],
+        });
+      } else {
+        expect(candidates.some((target) => target.transportProviderId === 'muse'), alias).toBe(false);
+      }
+      expect(candidates[codexIndex]).toEqual({
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-6-astra', ...(suffix === 'base' ? {} : { effort: suffix }),
+      });
+      expect(candidates[codexIndex + 1]).toEqual({
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-4-carbon', effort: 'high',
+      });
+      expect(candidates.at(-1)).toMatchObject({
+        providerId: 'mistral', transportProviderId: 'mistral-vibe',
+        model: 'zai-glm-5-3',
+      });
+    }
+  });
+
+  it('pins the Fable 5.2 gateway aliases to Gemini 4 Carbon', () => {
+    expect(MUSE_ROUTE_MODEL['claude-fable-5-2']).toBe('gemini-4-carbon');
+    expect(MUSE_ROUTE_MODEL['claude-fable-5-2-high']).toBe('gemini-4-carbon');
+    expect(MUSE_ROUTE_MODEL['claude-fable-5-2-xhigh']).toBe('gemini-4-carbon');
   });
 
   it('routes every Fable 5 fallback through Sol 6.1 at +1 effort', () => {
@@ -457,6 +532,8 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-sonnet-5-5-high': 'max', 'claude-sonnet-5-5-xhigh': 'max', 'claude-sonnet-5-5-max': 'max',
       'claude-fable-5-1': 'high', 'claude-fable-5-1-low': 'high', 'claude-fable-5-1-medium': 'high',
       'claude-fable-5-1-high': 'max', 'claude-fable-5-1-xhigh': 'max', 'claude-fable-5-1-max': 'max',
+      'claude-fable-5-2': 'high', 'claude-fable-5-2-low': 'high', 'claude-fable-5-2-medium': 'high',
+      'claude-fable-5-2-high': 'max', 'claude-fable-5-2-xhigh': 'max', 'claude-fable-5-2-max': 'max',
     };
     for (const [alias, effort] of Object.entries(glmEffort)) {
       const glm = resolveCandidates(alias)
@@ -549,14 +626,19 @@ describe('explicitly selected canonical mapping tables', () => {
   it('routes every Claude tier to its mapped Cloud Code model', () => {
     // Argon rows (owner request 2026-10-15): Opus 5.5 base/medium/high/xhigh/max,
     // Sonnet 5.5 high/xhigh/max and every Fable 5.1 row serve Gemini 4 Argon at
-    // high effort; Sonnet 5.5 low keeps 3.8 Flash at medium effort; every other
-    // row keeps 3.8 Flash at high effort.
+    // high effort; Carbon rows (owner mapping 2026-11-10): every Fable 5.2 row
+    // serves Gemini 4 Carbon at high effort; Sonnet 5.5 low keeps 3.8 Flash at
+    // medium effort; every other row keeps 3.8 Flash at high effort.
     const argonHigh = new Set([
       'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
       'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
       'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
       'claude-opus-5-5-max', 'claude-opus-5-5-medium',
       'claude-sonnet-5-5-high', 'claude-sonnet-5-5-xhigh', 'claude-sonnet-5-5-max',
+    ]);
+    const carbonHigh = new Set([
+      'claude-fable-5-2', 'claude-fable-5-2-high', 'claude-fable-5-2-xhigh',
+      'claude-fable-5-2-max', 'claude-fable-5-2-medium', 'claude-fable-5-2-low',
     ]);
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
@@ -568,6 +650,7 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
       ...argonHigh,
+      ...carbonHigh,
       'claude-opus-5-5-low',
       'claude-sonnet-5-5', 'claude-sonnet-5-5-medium', 'claude-sonnet-5-5-low',
     ];
@@ -575,7 +658,9 @@ describe('explicitly selected canonical mapping tables', () => {
     for (const alias of aliases) {
       const expected = argonHigh.has(alias)
         ? { model: 'gemini-4-argon', effort: 'high' }
-        : alias === 'claude-sonnet-5-5-low'
+        : carbonHigh.has(alias)
+          ? { model: 'gemini-4-carbon', effort: 'high' }
+          : alias === 'claude-sonnet-5-5-low'
           ? { model: 'gemini-3.8-flash', effort: 'medium' }
           : { model: 'gemini-3.8-flash', effort: 'high' };
       const candidates = resolveCandidates(alias);

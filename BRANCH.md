@@ -121,10 +121,10 @@
     - [ ] `make typecheck-llm-mesh typecheck-llm-gateway ENV=test-models-carbon`
     - [ ] **API tests**
       - [ ] Sub-lot gate: CI green on PR
-- [ ] **Lot 3 — Tests**
-  - [ ] Mesh routing/catalog/providers/count assertions updated
-  - [ ] Gateway resolution test: fable-5-2 variants resolve to gemini-4-carbon
-  - [ ] Selectability tests for both models
+- [x] **Lot 3 — Tests**
+  - [x] Mesh routing/catalog/providers/count assertions updated
+  - [x] Gateway resolution test: fable-5-2 variants resolve to gemini-4-carbon
+  - [x] Selectability tests for both models
   - [ ] Lot gate:
     - [ ] `make test-llm-mesh ENV=test-models-carbon`
     - [ ] `make test-llm-gateway ENV=test-models-carbon`
