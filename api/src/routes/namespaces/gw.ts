@@ -27,6 +27,9 @@ import {
 } from '../../services/llm-metering';
 import { createApplicationGatewayRoutePlane } from '../../services/llm-runtime/gateway-route-plane';
 import { gatewayNativeMessagesEnabled } from '../../services/llm-runtime/gateway-native-config';
+import {
+  createCmAuthResolver, createCmDispatchPort, createCmPoolPort,
+} from '../../services/llm-runtime/gateway-cm-ports';
 import { gatewayStartupRecord, resolveGatewayPackageVersion } from '../../services/llm-runtime/gateway-package-version';
 
 export const GW_AUTHOR = 'llm-gateway-module';
@@ -120,10 +123,6 @@ const bounded = async (check: () => Promise<boolean>): Promise<boolean> => {
   }
 };
 
-const refused = (what: string) => async (): Promise<never> => {
-  throw new Error(`${what} is not available on the product gateway`);
-};
-
 type Probed<T> = T & { probe?(): Promise<boolean> };
 
 export interface CreateGwNamespaceModuleOptions {
@@ -183,12 +182,9 @@ export const createGwNamespaceModule = async (
     mode: 'personal-passthrough',
     crossUserPoolEnabled: false,
     callerAuth: withSettlementMode(withRoutePartition(productCallerAuth, partition)),
-    pool: { listEligibleAccounts: refused('pool'), select: refused('pool'), snapshotModels: refused('pool') },
-    authResolver: { resolve: refused('native auth resolver') },
-    dispatch: {
-      dispatch: refused('native dispatch'),
-      dispatchStream: () => { throw new Error('native dispatch is not available on the product gateway'); },
-    },
+    pool: createCmPoolPort(),
+    authResolver: createCmAuthResolver(),
+    dispatch: createCmDispatchPort(),
   };
   const probes: Array<() => Promise<boolean>> = [
     async () => Boolean(await readActiveCutover()),
