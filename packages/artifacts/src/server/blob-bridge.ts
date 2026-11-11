@@ -14,7 +14,7 @@
  * dependency from this package to cluster-mesh.
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { blobDigestOfKey, type PublicationBlobStore } from './publication.js';
+import { blobDigestOfKey, type BlobKeyPage, type PublicationBlobStore } from './publication.js';
 import { assertBlobPrefix } from './blob-prefix.js';
 
 /** Per-process pagination secret: cursors are unforgeable without it, invalid after restart. */
@@ -60,33 +60,85 @@ export function verifyStoredBytesForKey(key: string, bytes: Uint8Array): Uint8Ar
   return bytes;
 }
 
-interface PageCursor {
+/**
+ * CMF-S1 (CR-4) — sealed page-cursor states. `keyset` resumes after a full
+ * key (offset-free, so a byte-trimmed page replays exactly); `offset` serves
+ * the in-memory fallback for stores without `listKeysPaged`. Composite stores
+ * seal their own dual state (see `composite-blob.ts`). States are opaque to
+ * callers and bound to their prefix scope: a foreign or tampered cursor is
+ * refused, never applied.
+ */
+export type BlobPageCursorState =
+  | { readonly kind: 'keyset'; readonly after?: string }
+  | { readonly kind: 'offset'; readonly offset: number };
+
+interface SealedCursor {
   readonly v: 1;
   readonly prefix: string;
-  readonly offset: number;
+  readonly state: BlobPageCursorState;
   readonly tag: string;
 }
 
-function cursorTag(prefix: string, offset: number): string {
-  return createHmac('sha256', PAGE_MAC_KEY).update(`blob-page/v1:${prefix}:${offset}`).digest('hex');
+function cursorTag(prefix: string, state: string): string {
+  return createHmac('sha256', PAGE_MAC_KEY).update(`blob-page/v1:${prefix}\n${state}`).digest('hex');
 }
 
-function encodeCursor(cursor: PageCursor): string {
+/** Seal a cursor state for a prefix scope (opaque, integrity-protected). */
+export function sealBlobPageCursor(prefix: string, state: BlobPageCursorState): string {
+  const encoded = JSON.stringify(state);
+  const cursor: SealedCursor = { v: 1, prefix, state: JSON.parse(encoded) as BlobPageCursorState,
+    tag: cursorTag(prefix, encoded) };
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
-function decodeCursor(continuation: string, prefix: string): number {
-  let parsed: PageCursor;
+/** Open a sealed cursor for a prefix scope (rejects foreign/tampered states). */
+export function openBlobPageCursor(continuation: string, prefix: string): BlobPageCursorState {
+  let parsed: SealedCursor;
   try {
-    parsed = JSON.parse(Buffer.from(continuation, 'base64url').toString('utf8')) as PageCursor;
+    parsed = JSON.parse(Buffer.from(continuation, 'base64url').toString('utf8')) as SealedCursor;
   } catch {
     throw new Error('invalid blob page continuation');
   }
-  if (parsed?.v !== 1 || typeof parsed.offset !== 'number' || !Number.isSafeInteger(parsed.offset) ||
-    parsed.offset < 0 || parsed.prefix !== prefix || parsed.tag !== cursorTag(parsed.prefix, parsed.offset)) {
+  const state = parsed?.state;
+  const validKind = state?.kind === 'keyset' || state?.kind === 'offset';
+  const validOffset = state?.kind !== 'offset' || (typeof state.offset === 'number' &&
+    Number.isSafeInteger(state.offset) && state.offset >= 0);
+  const validAfter = state?.kind !== 'keyset' || state.after === undefined || typeof state.after === 'string';
+  if (parsed?.v !== 1 || !validKind || !validOffset || !validAfter || parsed.prefix !== prefix ||
+    parsed.tag !== cursorTag(parsed.prefix, JSON.stringify(state))) {
     throw new Error('invalid blob page continuation');
   }
-  return parsed.offset;
+  return state;
+}
+
+/**
+ * Trim a key list to the encoded-byte budget (CR-4). The first key is always
+ * kept (a single key larger than the budget fails closed instead of looping
+ * forever); the caller resumes after the last kept key.
+ */
+export function cutBlobKeysByBudget(keys: readonly string[], maxEncodedBytes: number): {
+  kept: string[]; dropped: number;
+} {
+  const kept: string[] = [];
+  let encoded = 0;
+  for (const key of keys) {
+    const size = Buffer.byteLength(key, 'utf8');
+    if (size > maxEncodedBytes) throw new Error('blob key exceeds page byte budget');
+    if (kept.length > 0 && encoded + size > maxEncodedBytes) break;
+    kept.push(key);
+    encoded += size;
+  }
+  return { kept, dropped: keys.length - kept.length };
+}
+
+function encodeCursor(prefix: string, offset: number): string {
+  return sealBlobPageCursor(prefix, { kind: 'offset', offset });
+}
+
+function decodeCursor(continuation: string, prefix: string): number {
+  const state = openBlobPageCursor(continuation, prefix);
+  if (state.kind !== 'offset') throw new Error('invalid blob page continuation');
+  return state.offset;
 }
 
 /**
@@ -113,19 +165,50 @@ export function pageBlobKeys(all: readonly string[], prefix: string, page: Bound
     encoded += size;
   }
   if (index >= all.length) return { keys };
-  return { keys, continuation: encodeCursor({ v: 1, prefix, offset: index, tag: cursorTag(prefix, index) }) };
+  return { keys, continuation: encodeCursor(prefix, index) };
 }
 
 /**
  * Bounded key enumeration over any blob store (CR-4).
- * Callers never hold an unbounded key list: every page honors the item and
- * encoded-byte budgets and carries the opaque continuation forward.
+ * Stores with `listKeysPaged` page at the backend (keyset resume, bounded
+ * work per call); the rest fall back to `listKeys` + in-memory slicing.
+ * Either way every page honors the item and encoded-byte budgets and carries
+ * an opaque scope-bound integrity-protected continuation forward.
  */
 export async function listBlobKeysPaged(
-  store: Pick<PublicationBlobStore, 'listKeys'>,
+  store: Pick<PublicationBlobStore, 'listKeys' | 'listKeysPaged'>,
   prefix: string,
   page: BoundedBlobPage,
 ): Promise<BoundedBlobKeys> {
+  assertBlobPrefix(prefix);
+  if (!Number.isSafeInteger(page.maxItems) || page.maxItems < 1) throw new Error('invalid blob page maxItems');
+  if (!Number.isSafeInteger(page.maxEncodedBytes) || page.maxEncodedBytes < 1) {
+    throw new Error('invalid blob page maxEncodedBytes');
+  }
+  if (store.listKeysPaged !== undefined) {
+    const after = page.continuation === undefined ? undefined : (() => {
+      const state = openBlobPageCursor(page.continuation, prefix);
+      if (state.kind !== 'keyset') throw new Error('invalid blob page continuation');
+      if (state.after !== undefined && !state.after.startsWith(prefix)) {
+        throw new Error('invalid blob page continuation');
+      }
+      return state.after;
+    })();
+    const side: BlobKeyPage = after === undefined
+      ? { maxItems: page.maxItems, maxEncodedBytes: page.maxEncodedBytes }
+      : { maxItems: page.maxItems, maxEncodedBytes: page.maxEncodedBytes, startAfter: after };
+    const result = await store.listKeysPaged(prefix, side);
+    const capped = result.keys.slice(0, page.maxItems);
+    const { kept, dropped } = cutBlobKeysByBudget(capped, page.maxEncodedBytes);
+    const done = !result.hasMore && dropped === 0 && result.keys.length === capped.length;
+    if (kept.length === 0) {
+      if (result.keys.length === 0 && !result.hasMore) return { keys: [] };
+      throw new Error('blob key exceeds page byte budget');
+    }
+    if (done) return { keys: kept };
+    return { keys: kept, continuation: sealBlobPageCursor(prefix,
+      { kind: 'keyset', after: kept[kept.length - 1] }) };
+  }
   const all = (await store.listKeys(prefix)).filter((key) => key.startsWith(prefix)).sort();
   return pageBlobKeys(all, prefix, page);
 }
@@ -168,6 +251,11 @@ export function createVerifiedBlobStore(upstream: PublicationBlobStore): Publica
     async listKeys(prefix: string): Promise<string[]> {
       return upstream.listKeys(prefix);
     },
+    ...(upstream.listKeysPaged === undefined ? {} : {
+      async listKeysPaged(prefix: string, page: BlobKeyPage) {
+        return upstream.listKeysPaged!(prefix, page);
+      },
+    }),
     async deleteBlob(key: string): Promise<void> {
       await upstream.deleteBlob(key);
     },
