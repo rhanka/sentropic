@@ -43,6 +43,10 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/cluster-mesh/src/storage/artifact-blob.ts`
   - `packages/cluster-mesh/src/storage/index.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `package-lock.json`
+  - `api/package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -58,6 +62,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- BRT4a-EX2 (CI gate fix, scope exception for 4 version-bump files): `enforce-package-bump` failed after the `origin/main` rebase (T5a merged cluster-mesh `0.26.0-dev.24`, equal to the branch version while the branch carries cluster-mesh src changes from `474cd8db1`) — dev.24 → dev.25 bump + root/api lock sync + fixture tgz rename + CHANGELOG entry, mirroring `d35d00f93`. Impact: version strings only, no behavior. Rollback: revert the bump commit; the gate returns to the same single failure.
 - BRT4a-EX1 (CI fix, scope exception for 3 packaging files outside Allowed Paths): `validate-cluster-mesh (source|lazy)` failed on `prepare-artifacts.spec.ts` — the selected fixture pinned `@sentropic/artifacts` 0.2.26 while the branch bumped the candidate to 0.2.27 (package-bump gate). Reason: PR CI must be green before the T3-gated merge; the fixture follow-up is the smallest blocking fix, no behavior change. Impact: `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` + `fixtures/selected/package{,-lock}.json` only; integrity `sha512-a/6mzB+...8cA==` computed from the branch-HEAD pack (`make pack-publishable-manifest PACKAGE=artifacts`, PASS, sha256 8d77d2...). Rollback: revert the fix commit; CI returns to the same single-test failure.
 
 ## AI Flaky tests
@@ -126,3 +131,4 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] MAJOR 6: local-blob concurrent create-only race test; s3 `StartAfter`/`MaxKeys` paging unit test.
   - [x] Typecheck impacted (typecheck-artifacts + typecheck-api PASS, lint-api 0 errors); scoped suites green (bridge 14/14, composite 12/12, s3 3/3, sqlite 7/7, cmf-s2 9/9, cmf-s3 7/7, host-migrations 19/19, artifact-content 170/170).
   - [ ] Push rebased branch, CI green, French report, down-volumes, do NOT merge.
+  - [ ] Bump cluster-mesh dev.24 → dev.25 for enforce-package-bump (BRT4a-EX2); re-run packaging alignment; push; CI green.
