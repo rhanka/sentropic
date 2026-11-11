@@ -104,4 +104,40 @@ describe('composite blob placement', () => {
     await mk('db').putBlob(keyFor(bytes), bytes);
     await mk('s3').putBlob(keyFor(bytes), bytes);
   });
+
+  it('reads db-placed blobs through the composite in s3 mode', async () => {
+    const db = createMemoryBlobStore();
+    const s3 = createMemoryBlobStore();
+    const bytes = new TextEncoder().encode('db placed but s3 mode');
+    const key = keyFor(bytes);
+    await db.putBlob(key, bytes);
+    const store = createCompositeBlobStore({ db, s3, mode: 's3', inlineMaxBytes: 8,
+      placements: { getPlacement: async () => 'db' } });
+    expect(await store.getBlob(key)).toEqual(bytes);
+  });
+
+  it('lists only its side in db and s3 modes', async () => {
+    const db = createMemoryBlobStore();
+    const s3 = createMemoryBlobStore();
+    const inert: PublicationBlobStore = {
+      putBlob: async (key) => { throw new Error(`not configured ${key}`); },
+      getBlob: async () => undefined,
+      listKeys: async () => [],
+      deleteBlob: async () => {},
+    };
+    const dbBytes = new TextEncoder().encode('db side');
+    const dbKey = keyFor(dbBytes);
+    await db.putBlob(dbKey, dbBytes);
+    const dbStore = createCompositeBlobStore({ db, s3: inert, mode: 'db', inlineMaxBytes: 8,
+      placements: { getPlacement: async () => undefined } });
+    expect(await dbStore.listKeys('artifacts/scope-a/blobs/sha256/')).toEqual([dbKey]);
+    expect(await dbStore.getBlob(dbKey)).toEqual(dbBytes);
+    expect(await dbStore.getBlob(keyFor(new TextEncoder().encode('missing')))).toBeUndefined();
+    const s3Bytes = new TextEncoder().encode('s3 side value longer');
+    const s3Key = keyFor(s3Bytes);
+    await s3.putBlob(s3Key, s3Bytes);
+    const s3Store = createCompositeBlobStore({ db: createMemoryBlobStore(), s3, mode: 's3', inlineMaxBytes: 8,
+      placements: { getPlacement: async () => undefined } });
+    expect(await s3Store.listKeys('artifacts/scope-a/blobs/sha256/')).toEqual([s3Key]);
+  });
 });

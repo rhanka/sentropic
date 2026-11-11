@@ -43,15 +43,31 @@ function privateStorage() {
 }
 const placementMode = parseBlobPlacementMode(process.env.APP_ARTIFACT_STORAGE_PLACEMENT);
 const placementInlineMaxBytes = parseBlobInlineMaxBytes(process.env.APP_ARTIFACT_STORAGE_INLINE_MAX_BYTES);
+function s3EnvConfigured(): boolean {
+  return Boolean(process.env.APP_ARTIFACT_S3_BUCKET && process.env.APP_ARTIFACT_S3_REGION &&
+    process.env.APP_ARTIFACT_S3_ACCESS_KEY_ID && process.env.APP_ARTIFACT_S3_SECRET_ACCESS_KEY);
+}
+if ((placementMode === 's3' || placementMode === 'db+s3') && artifactHostEnabled() && !s3EnvConfigured()) {
+  throw new Error(`Artifact blob placement mode '${placementMode}' requires object-store env (APP_ARTIFACT_S3_*)`);
+}
 const objectBlobs: PublicationBlobStore = {
   putBlob: async (key, bytes) => (await privateStorage()).blobs.putBlob(key, bytes),
   getBlob: async key => (await privateStorage()).blobs.getBlob(key),
   deleteBlob: async key => (await privateStorage()).blobs.deleteBlob(key),
   listKeys: async prefix => (await privateStorage()).blobs.listKeys(prefix),
 };
-/** CMF-S2: `s3` keeps the current behavior; `db`/`db+s3` compose DB bytes with the object placement. */
-const blobs: PublicationBlobStore = placementMode === 's3' ? objectBlobs
-  : createPlacementBlobStore({ pool, s3: objectBlobs, mode: placementMode, inlineMaxBytes: placementInlineMaxBytes });
+/** Inert object side for `db` mode without object-store env: reads miss, lists empty, deletes no-op. */
+const inertObjectBlobs: PublicationBlobStore = {
+  putBlob: async (key) => { throw new Error(`Object placement not configured (put ${key})`); },
+  getBlob: async () => undefined,
+  getBlobRange: async () => undefined,
+  listKeys: async () => [],
+  deleteBlob: async () => {},
+};
+const objectSide: PublicationBlobStore = s3EnvConfigured() ? objectBlobs : inertObjectBlobs;
+/** CMF-S2: every mode reads through the composite so `db`-placed blobs stay readable (spec §2.4.1). */
+const blobs: PublicationBlobStore =
+  createPlacementBlobStore({ pool, s3: objectSide, mode: placementMode, inlineMaxBytes: placementInlineMaxBytes });
 
 const currentIdentity = createCurrentArtifactIdentity(resource);
 /** The builder's dependency cache objects live in the same dedicated private artifact storage. */

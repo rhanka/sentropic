@@ -18,4 +18,25 @@ describe('standalone content listener', () => {
   it('should refuse enabled serving without explicit private configuration before listening', async () => {
     await expect(startContentServer({ env: { APP_ARTIFACT_CONTENT_ENABLED: '1' }, port: 0 })).rejects.toThrow(/required/);
   });
+
+  it('should refuse db+s3 placement without object-store env', async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { writeFileSync, rmSync } = await import('node:fs');
+    const dir = mkdtempSync(join(tmpdir(), 'w3b-key-'));
+    const keyFile = join(dir, 'key');
+    writeFileSync(keyFile, 'k'.repeat(64));
+    try {
+      await expect(startContentServer({ hostname: '127.0.0.1', port: 0, env: {
+        APP_ARTIFACT_CONTENT_ENABLED: '1',
+        DATABASE_URL: 'postgres://localhost:5432/postgres',
+        APP_ARTIFACT_CONTENT_BASE_DOMAIN: 'content.example.test',
+        APP_ARTIFACT_CONTENT_SIGNING_KEY_FILE: keyFile,
+        APP_ARTIFACT_STORAGE_PLACEMENT: 'db+s3',
+      } })).rejects.toThrow(/requires object-store env/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
