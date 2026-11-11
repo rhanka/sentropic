@@ -3,6 +3,7 @@ import { DeleteObjectCommand, GetObjectCommand, GetPublicAccessBlockCommand, Put
 import type { Pool } from 'pg';
 import type { CacheObject, CachePorts } from './cache';
 import { sha256 } from './integrity';
+import { TREE_LIMITS } from './supervisor-transfer';
 import { LiveError } from './records';
 
 export interface PrivateCacheBlobs {
@@ -43,12 +44,15 @@ const CACHE_KEY_PREFIX = 'artifact-builder-cache/v1/';
 const CACHE_FILE = /^files\/[a-f0-9]{64}$/;
 /** Admitted manifest objects: `<lockSha>/<keySha>/<uuid>` under the prefix. */
 const CACHE_MANIFEST = /^[a-f0-9]{64}\/[a-f0-9]{64}\/[0-9a-f-]{36}$/;
-/** Own key discipline of the builder-cache store: only the two cache shapes above, refused before any S3 call. */
+/** Sealed-unit archives: `<lockSha>/<keySha>/sealed-<treeSha256>.tar.zst` under the prefix (§7.1.2). */
+const CACHE_ARCHIVE = /^[a-f0-9]{64}\/[a-f0-9]{64}\/sealed-[a-f0-9]{64}\.tar\.zst$/;
+/** Own key discipline of the builder-cache store: only the admitted cache shapes, refused before any S3 call. */
 function assertCacheKey(key: string): void {
   const suffix = key.startsWith(CACHE_KEY_PREFIX) ? key.slice(CACHE_KEY_PREFIX.length) : undefined;
-  if (suffix === undefined || !(CACHE_FILE.test(suffix) || CACHE_MANIFEST.test(suffix))) {
-    throw new Error(`invalid builder-cache key (must be ${CACHE_KEY_PREFIX}files/<sha256> or `
-      + `${CACHE_KEY_PREFIX}<lockSha>/<keySha>/<uuid>)`);
+  if (suffix === undefined
+    || !(CACHE_FILE.test(suffix) || CACHE_MANIFEST.test(suffix) || CACHE_ARCHIVE.test(suffix))) {
+    throw new Error(`invalid builder-cache key (must be ${CACHE_KEY_PREFIX}files/<sha256>, `
+      + `${CACHE_KEY_PREFIX}<lockSha>/<keySha>/<uuid> or ${CACHE_KEY_PREFIX}<lockSha>/<keySha>/sealed-<treeSha>.tar.zst)`);
   }
 }
 
@@ -140,6 +144,20 @@ function fileRef(digest: string) {
   if (!/^[a-f0-9]{64}$/.test(digest)) throw new LiveError('dependency_cache_invalid');
   return `${CACHE_KEY_PREFIX}files/${digest}`;
 }
+/** Sealed archive object of one cache entry: `<lockSha>/<keySha>/sealed-<treeSha>.tar.zst` under the prefix.
+ * The writer bounds the bytes at admission; the reader re-verifies `sha256(archive)` against the receipt. */
+export function sealedArchiveRef(key: string, treeSha256: string) {
+  if (!/^[a-f0-9]{64}\/[a-f0-9]{64}$/.test(key) || !/^[a-f0-9]{64}$/.test(treeSha256)) {
+    throw new LiveError('dependency_cache_invalid');
+  }
+  return `${CACHE_KEY_PREFIX}${key}/sealed-${treeSha256}.tar.zst`;
+}
+/** Typed guard of a sealed archive ref: malformed refs refuse as `dependency_cache_invalid` before any S3 call. */
+export function assertArchiveRef(ref: string): void {
+  if (typeof ref !== 'string' || !CACHE_ARCHIVE.test(ref.slice(CACHE_KEY_PREFIX.length))) {
+    throw new LiveError('dependency_cache_invalid');
+  }
+}
 /** Private cache bucket/credentials stay at the host. Only complete immutable manifests get a pointer; file objects are
  * written as the install streams and stay invisible until a manifest naming them is admitted. */
 export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs): CachePorts['storage'] {
@@ -176,6 +194,19 @@ export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs)
     },
     putFile: async (digest, bytes) => blobs.put(fileRef(digest), bytes),
     getFile: async digest => blobs.get(fileRef(digest)),
+    /** Sealed-unit archive of one entry: written once at seal time under the receipt's tree digest, read back
+     * by digest on every archive materialization. Oversized archives refuse before any S3 call. */
+    putArchive: async (ref, bytes) => {
+      assertArchiveRef(ref);
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength > TREE_LIMITS.totalBytes) {
+        throw new LiveError('dependency_cache_invalid');
+      }
+      await blobs.put(ref, bytes);
+    },
+    getArchive: async ref => {
+      assertArchiveRef(ref);
+      return blobs.get(ref);
+    },
     async quarantine(key) {
       prefix(key);
       // Keep quarantined bytes private for diagnosis; an incomplete/invalid entry is never mountable.

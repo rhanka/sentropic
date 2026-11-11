@@ -76,7 +76,8 @@ function harness(selection: readonly string[]) {
     }),
     storage: { read: vi.fn(async () => stored), admit: vi.fn(async (_key, object) => (stored ??= object)),
       quarantine: vi.fn(async () => { stored = undefined; }),
-      putFile: vi.fn(async () => undefined), getFile: vi.fn(async () => undefined) },
+      putFile: vi.fn(async () => undefined), getFile: vi.fn(async () => undefined),
+      putArchive: vi.fn(async () => undefined), getArchive: vi.fn(async () => undefined) },
   };
   return { lock, ports, fetched, cache: createDependencyCache(ports), source };
 }
