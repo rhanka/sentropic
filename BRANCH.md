@@ -1,0 +1,96 @@
+# Feature: build-only seeding for never-reconciled bindings
+
+## Objective
+Let the first publication of a new artifact run build-only from its admitted host job when the binding was never reconciled, and retire a REVIVING runtime with a gone pod to DORMANT on the scheduler tick.
+
+## Scope / Guardrails
+- Scope limited to builder live service seeding, tick retire, live-host job contract, scoped unit tests.
+- No migration in `api/drizzle/*.sql`.
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/build-only-seeding`.
+- Automated test campaigns must run on dedicated environments (`ENV=test-build-seed`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/src/services/artifacts/live/build-only.ts`
+  - `api/src/services/artifacts/live/controller.ts`
+  - `api/src/services/artifacts/live/ports.ts`
+  - `api/src/services/artifacts/live/service.ts`
+  - `api/src/services/artifacts/live/remote-host.ts`
+  - `api/src/services/artifacts/live/README.md`
+  - `api/tests/unit/artifacts-live/fixture.ts`
+  - `api/tests/unit/artifacts-live/job-admission.test.ts`
+  - `api/tests/unit/artifacts-live/controller.test.ts`
+  - `api/tests/unit/artifacts-live/remote-drafts.test.ts`
+  - `api/tests/unit/artifacts-live/remote-host.test.ts`
+  - `packages/artifacts/src/live-host/recheck.ts`
+  - `packages/artifacts/tests/live-host-recheck.test.ts`
+  - `packages/artifacts/tests/live-host-accept.test.ts`
+  - `packages/artifacts/package.json`
+  - `package-lock.json`
+  - `api/package-lock.json`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+- [ ] No open items.
+
+## AI Flaky tests
+- [ ] Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+- [ ] No AI suites touched by this branch; none run.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single stacked PR on fix/artifacts-binding-unreconciled, one test cycle, no sub-workstreams.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI changes in this branch, no UAT surface.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, .tmp/packets/COMMON-RULES.md.
+  - [x] Create isolated worktree tmp/worktrees/build-only-seeding on fix/artifacts-build-only-seeding stacked on origin/fix/artifacts-binding-unreconciled.
+  - [x] Copy root .env into worktree, set ENV=test-build-seed API_PORT=8937 UI_PORT=5337 MAILDEV_UI_PORT=1237.
+  - [x] Replace inherited BRANCH.md with this lane scope (finalize scope boundaries with make scope-check).
+- [ ] **Lot 1 — Host job carries the binding owner**
+  - [ ] Extend HostJob and HostRecheckView binding with ownerId, populate in resolvePendingJob.
+  - [ ] Require ownerId in builder remote-host job validation.
+  - [ ] Update package tests live-host-recheck and live-host-accept.
+  - [ ] Bump packages/artifacts to 0.2.26 and sync lock version lines.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api API_PORT=8937 UI_PORT=5337 MAILDEV_UI_PORT=1237 ENV=test-build-seed`
+    - [ ] **API tests**
+      - [ ] `api/tests/unit/artifacts-live/job-admission.test.ts` (seed path, no-job refusal)
+      - [ ] `api/tests/unit/artifacts-live/controller.test.ts` (REVIVING retire)
+      - [ ] `api/tests/unit/artifacts-live/remote-drafts.test.ts` (seed then reconcile monotonicity)
+      - [ ] `api/tests/unit/artifacts-live/remote-host.test.ts` (ownerId validation)
+      - [ ] Scoped runs while evolving: `make test-api-unit SCOPE=tests/unit/artifacts-live/<file>.test.ts API_PORT=8937 UI_PORT=5337 MAILDEV_UI_PORT=1237 ENV=test-build-seed`
+- [ ] **Lot 2 — Build-only seeding and REVIVING retire**
+  - [ ] Add LivePorts seedBinding wired to remote reconciled.
+  - [ ] Seed binding view from admitted job on binding_unreconciled, fail closed otherwise.
+  - [ ] Retire REVIVING with gone or failed pod to DORMANT on scheduler tick.
+  - [ ] Update live README seeding paragraph.
+  - [ ] Lot gate: same scoped unit tests as Lot 1.
+- [ ] **Lot 3 — Final validation**
+  - [ ] Typecheck API.
+  - [ ] Retest scoped API suites.
+  - [ ] Bumped packages/artifacts/package.json version (0.2.26) for changed src, enforced by CI enforce-package-bump.
+  - [ ] Final gate step 1: create PR stacked on #994 using BRANCH.md text as PR body.
+  - [ ] Final gate step 2: run and verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once CI is green, commit removal of BRANCH.md, push, do not merge.
