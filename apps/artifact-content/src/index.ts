@@ -5,7 +5,9 @@ import { serve } from '@hono/node-server';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Pool } from 'pg';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
+import type { PublicationBlobStore } from '@sentropic/artifacts/server/publication';
 import { createPrivateArtifactStorage } from '../../../api/src/services/artifacts/lifecycle';
+import { createPlacementBlobStore, parseBlobInlineMaxBytes, parseBlobPlacementMode } from '../../../api/src/services/artifacts/blob-placement';
 import { createContentRuntime } from './runtime';
 import { createLiveUpgrade } from './live-upgrade';
 import { liveFromEnv, withRemoteAddress } from './live-config';
@@ -48,16 +50,50 @@ export async function startContentServer(options: {
       live ??= liveFromEnv(env, baseDomain, dataPlane);
       const signingSecret = () => readFileSync(keyFile);
       if (signingSecret().length < 32) throw new Error('Dedicated content signing key must contain at least 32 bytes');
-      const bucket = required('APP_ARTIFACT_S3_BUCKET');
-      s3 = new S3Client({ region: required('APP_ARTIFACT_S3_REGION'), endpoint: env.APP_ARTIFACT_S3_ENDPOINT,
-        forcePathStyle: !!env.APP_ARTIFACT_S3_ENDPOINT, credentials: {
-          accessKeyId: required('APP_ARTIFACT_S3_ACCESS_KEY_ID'), secretAccessKey: required('APP_ARTIFACT_S3_SECRET_ACCESS_KEY'),
-        } });
-      const storage = await createPrivateArtifactStorage({ client: s3, bucket });
+      // CMF-S2: `s3` keeps the current behavior; `db`/`db+s3` read through the composite
+      // placement (DB bytes first by registration, object placement otherwise).
+      const placementMode = parseBlobPlacementMode(env.APP_ARTIFACT_STORAGE_PLACEMENT);
+      const placementInlineMaxBytes = parseBlobInlineMaxBytes(env.APP_ARTIFACT_STORAGE_INLINE_MAX_BYTES);
       pool = new Pool({ connectionString, max: 10 });
+      let blobs: { getBlob: (key: string) => Promise<Uint8Array | undefined> };
+      if (placementMode === 's3') {
+        const bucket = required('APP_ARTIFACT_S3_BUCKET');
+        s3 = new S3Client({ region: required('APP_ARTIFACT_S3_REGION'), endpoint: env.APP_ARTIFACT_S3_ENDPOINT,
+          forcePathStyle: !!env.APP_ARTIFACT_S3_ENDPOINT, credentials: {
+            accessKeyId: required('APP_ARTIFACT_S3_ACCESS_KEY_ID'), secretAccessKey: required('APP_ARTIFACT_S3_SECRET_ACCESS_KEY'),
+          } });
+        const storage = await createPrivateArtifactStorage({ client: s3, bucket });
+        blobs = { getBlob: key => storage.blobs.getBlob(key) };
+      } else {
+        // Object side is optional: DB-only deployments serve from `blob_bytes`,
+        // and any object read fails closed when the placement is unconfigured.
+        const s3Configured = Boolean(env.APP_ARTIFACT_S3_BUCKET && env.APP_ARTIFACT_S3_REGION &&
+          env.APP_ARTIFACT_S3_ACCESS_KEY_ID && env.APP_ARTIFACT_S3_SECRET_ACCESS_KEY);
+        let objectBlobs: PublicationBlobStore;
+        if (s3Configured) {
+          s3 = new S3Client({ region: env.APP_ARTIFACT_S3_REGION!, endpoint: env.APP_ARTIFACT_S3_ENDPOINT,
+            forcePathStyle: !!env.APP_ARTIFACT_S3_ENDPOINT, credentials: {
+              accessKeyId: env.APP_ARTIFACT_S3_ACCESS_KEY_ID!, secretAccessKey: env.APP_ARTIFACT_S3_SECRET_ACCESS_KEY!,
+            } });
+          const storage = await createPrivateArtifactStorage({ client: s3, bucket: env.APP_ARTIFACT_S3_BUCKET! });
+          objectBlobs = storage.blobs;
+        } else {
+          const notConfigured = (op: string) => Promise.reject(new Error(`Object placement not configured (content ${op})`));
+          objectBlobs = {
+            putBlob: (key) => notConfigured(`put ${key}`),
+            getBlob: (key) => notConfigured(`get ${key}`),
+            getBlobRange: (key) => notConfigured(`range ${key}`),
+            listKeys: (prefix) => notConfigured(`list ${prefix}`),
+            deleteBlob: (key) => notConfigured(`delete ${key}`),
+          };
+        }
+        const composite = createPlacementBlobStore({ pool, s3: objectBlobs,
+          mode: placementMode, inlineMaxBytes: placementInlineMaxBytes });
+        blobs = { getBlob: key => composite.getBlob(key) };
+      }
       const runtime = createContentRuntime({ pool, baseDomain, signingSecret, enabled, live,
         profileDigest: compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE).profileDigest,
-        blobs: { getBlob: key => storage.blobs.getBlob(key) } });
+        blobs });
       handle = request => {
         if (new URL(request.url).pathname.startsWith('/_reader/') && env.APP_ARTIFACT_READER_ENABLED !== '1') {
           return Promise.resolve(new Response(null, { status: 404, headers: { 'cache-control': 'no-store' } }));
