@@ -158,3 +158,21 @@ data:
   # workspaces (npm ci --workspace each, no root dependencies; immo 09/11: the full monorepo install OOMs a builder pod).
   # Absent or invalid, every forge read and binding refuses forge_unconfigured.
   ARTIFACT_BUILDER_REPOSITORIES_JSON: '[{"storageScopeId":"radar-immobilier-preprod","repoId":"radar-immobilier","locator":"rhanka/radar-immobilier","installationRef":"enroll_d6fac2e1-8328-4e74-8bc4-08aeafe54f11","allowedSubPaths":[""],"installWorkspaces":["ui","packages/radar-domain","packages/radar-scoring","packages/radar-sources"]}]'
+  # Ops job-failure alerts L1 (PREPROD ONLY, feat/ops-notify-l1-preprod-wiring).
+  # Ingest allowlist (api/src/routes/ops-job-failures.ts, fail-closed: unset denies
+  # every ingestion with 403 before any write): the dedicated immo emitter client for
+  # target immo-preprod, source app (immo radar-refresh-pv end-of-run emission).
+  # Registered via the governed make oauth-register-service-client-job with scope
+  # service:ops-job-failure-ingest (see docs/runbooks/ops-job-failure-notify.md).
+  # The k8s watcher (source k8s) does not exist yet (L2); no wildcard entry.
+  OPS_JOB_FAILURE_INGEST_CLIENTS_JSON: '{"immo-preprod-ops-ingest":{"targets":["immo-preprod"],"sources":["app"]}}'
+  # Product recipients pull (api/src/services/notifications/ops-recipients.ts): target
+  # immo-preprod resolves through this URL instead of the platform declaration, so
+  # OPS_JOB_FAILURE_TARGETS_JSON stays unset. The value is the BASE URL only: the
+  # fetcher appends ?target=<productKey> itself
+  # (packages/cluster-mesh/src/notifications/recipients-http.ts). The bearer the
+  # platform presents lives in Secret sentropic-api (OPS_JOB_FAILURE_RECIPIENTS_BEARER),
+  # never in this ConfigMap. Read at api start: effective at the next api rollout
+  # (this ConfigMap is not hash-suffixed: kubectl apply -k then
+  # kubectl rollout restart deploy/api -n sentropic-preprod).
+  OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON: '{"immo-preprod":"https://preprod.immo.sent-tech.ca/api/v1/ops/recipients"}'
