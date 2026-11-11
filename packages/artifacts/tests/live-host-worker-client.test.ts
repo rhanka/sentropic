@@ -137,7 +137,7 @@ describe('live-host worker client: draft staging before reconcile (host live API
       .rejects.toMatchObject({ kind: 'provider_unavailable' });
   });
 
-  it('preserves a terminal builder failure on the ACK and ignores malformed shapes', async () => {
+it('preserves a terminal builder failure on the ACK and ignores malformed shapes', async () => {
     const { store, record } = await seededStore([{ path: 'a.txt', text: 'a', mode: '100644' }]);
     const failure = { code: 'builder_unavailable', reason: 'phase_timeout:install:drain' };
     const fetcher = vi.fn(async (url: URL) => String(url).endsWith('/reconcile')
@@ -152,5 +152,25 @@ describe('live-host worker client: draft staging before reconcile (host live API
       : new Response(null, { status: 204 }));
     await expect(client(store, malformed).reconcile(id)).resolves.toEqual({ liveSessionId: 'sess-1', leaseEpoch: 4,
       routeEpoch: 3, revision: record.revision, ready: false });
+  });
+
+  it('maps a 409 cache_not_prewarmed refusal to a typed retriable error instead of provider_unavailable', async () => {
+    const { store } = await seededStore([]);
+    const fetcher = vi.fn(async (url: URL) => {
+      const path = String(url).slice(BASE.length + 1);
+      if (path === 'v1/live/reconcile') {
+        return new Response(JSON.stringify({ error: 'cache_not_prewarmed', reason: 'a'.repeat(64),
+          lockSha256: 'a'.repeat(64), retriable: true }), { status: 409 });
+      }
+      return new Response(null, { status: 204 });
+    });
+    const failure = await client(store, fetcher).reconcile(id).then(() => undefined, error => error);
+    expect(failure).toMatchObject({ kind: 'cache_not_prewarmed', name: 'ArtifactOperationError' });
+    expect(failure.details).toMatchObject({
+      refusal: { allowed: false, reason: 'unavailable', status: 409, publicCode: 'cache_not_prewarmed', retriable: true },
+      publicDetails: { lockSha256: 'a'.repeat(64) },
+    });
+    const opaque = vi.fn(async () => new Response(JSON.stringify({ error: 'cache_not_prewarmed' }), { status: 500 }));
+    await expect(client(store, opaque).reconcile(id)).rejects.toMatchObject({ kind: 'provider_unavailable' });
   });
 });
