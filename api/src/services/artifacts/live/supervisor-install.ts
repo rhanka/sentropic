@@ -45,8 +45,9 @@ export function createCleanInstall(core: SupervisorCore,
     // watchdog mid-transfer; the abort signal cuts a superseded install at the next frame or file instead of
     // leaving it running against a pod the teardown already deleted.
     const bounds = { signal, onProgress: () => input.progress?.report() };
+    // Pipelined source transfer (§7.2.1): same frames and digest, up to 8 puts in flight.
     const sourceSent = await runInstallStep(input.progress, 'source_transfer',
-      () => core.transfer(runtime, 'install', files, TREE_LIMITS, stagingFailure, bounds),
+      () => core.streamPipelined(runtime, 'install', files, TREE_LIMITS, stagingFailure, bounds),
       { signal, log: options.log, now: options.now,
         counts: () => ({ files: files.length,
           bytes: files.reduce((total, file) => total + file.bytes.byteLength, 0) }) });
@@ -64,7 +65,7 @@ export function createCleanInstall(core: SupervisorCore,
       }
     }
     const cacheSent = await runInstallStep(input.progress, 'tarball_stream',
-      () => core.stream(runtime, 'npm-cache', tarballs(input.tarballs), TARBALL_LIMITS,
+      () => core.streamPipelined(runtime, 'npm-cache', tarballs(input.tarballs), TARBALL_LIMITS,
         failure('dependency_integrity_missing'), bounds),
       { signal, log: options.log, now: options.now, counts: () => ({ files: staged.length, bytes: streamBytes }) });
     const runId = core.id();
