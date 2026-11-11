@@ -17,6 +17,13 @@ export interface LiveRuntime {
   stateDetail?: string;
   /** Consecutive automatic crash restores of this binding; a normal revive resets it. */
   crashRestores?: number;
+  /** Pool fence epoch (§7.3.2 D10): set when the session runs on a claimed pool pod (`warm` or `warm-deps`).
+   * Absent on session-created pods — their frames keep the legacy fence shape (no new keys), so pods running
+   * the pre-L3 bootstrap still accept them. */
+  poolEpoch?: number;
+  /** Pool bind state (§7.3.2 D10): `1` on a claimed pod, `0` on pool-fill/idle-renew frames (with zeroed
+   * generation/leaseEpoch/routeEpoch). Absent means bound (legacy shape). */
+  poolBound?: 0 | 1;
 }
 export interface PublicationProgress {
   generation: number; latestVerifiedHeadSha: string; progressSeq: number;

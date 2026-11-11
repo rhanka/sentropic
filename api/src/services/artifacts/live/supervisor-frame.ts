@@ -11,12 +11,16 @@ export const MAX_REPLY_BYTES = 2 * 1024 * 1024;
 export const FRAME_TTL_MS = 30_000;
 const CLOCK_SKEW_MS = 5_000;
 export type SupervisorOp = 'phase' | 'terminate' | 'renew' | 'clear' | 'put' | 'stage' | 'dependencies' | 'install'
-  | 'overlay' | 'hostFile' | 'prebundle' | 'dev' | 'build' | 'snapshot' | 'extractArchive';
+  | 'overlay' | 'hostFile' | 'prebundle' | 'dev' | 'build' | 'snapshot' | 'extractArchive' | 'claim' | 'scrub'
+  | 'sealDependencies' | 'applyOverlay';
 const OPS: ReadonlySet<string> = new Set<SupervisorOp>(['phase', 'terminate', 'renew', 'clear', 'put', 'stage', 'dependencies',
-  'install', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'snapshot', 'extractArchive']);
-/** Durable controller fence plus the leased pod identity; the pod refuses any fence older than one it has seen. */
+  'install', 'overlay', 'hostFile', 'prebundle', 'dev', 'build', 'snapshot', 'extractArchive', 'claim', 'scrub',
+  'sealDependencies', 'applyOverlay']);
+/** Durable controller fence plus the leased pod identity; the pod refuses any fence older than one it has seen.
+ * `poolEpoch`/`bound` ride only pool-claimed frames (§7.3.2 D10); session frames keep the legacy shape. */
 export interface FrameFence {
   generation: number; sessionId: string; leaseEpoch: number; routeEpoch: number; podName: string; podUid: string;
+  poolEpoch?: number; bound?: 0 | 1;
 }
 export interface FrameBody {
   v: typeof FRAME_VERSION; id: string; op: SupervisorOp; fence: FrameFence;
