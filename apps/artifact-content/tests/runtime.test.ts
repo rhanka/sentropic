@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -146,6 +146,59 @@ describe('durable app content composition', () => {
       await pool.query(`UPDATE artifacts.releases SET state='ready' WHERE id=$1`, [releaseId]);
       await pool.query('DELETE FROM artifacts.releases WHERE id=$1', [next]);
     }
+  });
+
+  it('should serve release bytes from the db placement store in db mode', async () => {
+    const { createPostgresDbBlobStore } = await import('@sentropic/artifacts/adapters/db-blob');
+    const { rows } = await pool.query<{ manifest: string }>('SELECT manifest FROM artifacts.releases WHERE id=$1', [releaseId]);
+    const manifest = JSON.parse(rows[0]!.manifest) as { files: { digest: string }[] };
+    const recorded = manifest.files[0]!.digest;
+    const hex = recorded.startsWith('sha256:') ? recorded.slice('sha256:'.length) : recorded;
+    expect(hex).toBe(createHash('sha256').update(bytes).digest('hex'));
+    const digest = `sha256:${hex}`;
+    await pool.query(`INSERT INTO artifacts.blob_bytes (storage_scope_id, digest, bytes) VALUES ($1, $2, $3)
+      ON CONFLICT DO NOTHING`, [scope, digest, Buffer.from(bytes)]);
+    const host = createContentRuntime({ pool, ...config, enabled: () => true,
+      signingSecret: () => key, blobs: createPostgresDbBlobStore(pool) });
+    const started = await host.fetch(new Request(`${origin}/_reader/nonce`));
+    const { nonce } = await started.json();
+    const issued = await createArtifactReaderActivation({ pool, ...config }).issue(session,
+      { artifactId, releaseId, channel: 'stable', targetOrigin: origin, nonce });
+    const activated = await host.fetch(new Request(`${origin}/_reader/activate`, { method: 'POST',
+      headers: { origin, 'content-type': 'application/json', 'x-artifact-activation': '1',
+        cookie: started.headers.get('set-cookie')! },
+      body: JSON.stringify({ flowId: issued.flow.flowId, ticketId: issued.ticket.ticketId }) }));
+    expect(activated.status).toBe(204);
+    const read = await host.fetch(new Request(origin, {
+      headers: { cookie: activated.headers.get('set-cookie')! } }));
+    expect(read.status).toBe(200);
+    expect(await read.text()).toBe('<h1>Private runtime</h1>');
+  });
+
+  it('should serve release bytes through the composite store in db+s3 mode', async () => {
+    const { createPlacementBlobStore } = await import('../../../api/src/services/artifacts/blob-placement');
+    const { createMemoryBlobStore } = await import('@sentropic/artifacts/server/publication');
+    const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    await pool.query(`INSERT INTO artifacts.blob_bytes (storage_scope_id, digest, bytes) VALUES ($1, $2, $3)
+      ON CONFLICT DO NOTHING`, [scope, digest, Buffer.from(bytes)]);
+    // No registered placement: the composite probes db first, then the object side.
+    const s3 = createMemoryBlobStore();
+    const composite = createPlacementBlobStore({ pool, s3, mode: 'db+s3', inlineMaxBytes: 8 });
+    const host = createContentRuntime({ pool, ...config, enabled: () => true,
+      signingSecret: () => key, blobs: { getBlob: (listedKey: string) => composite.getBlob(listedKey) } });
+    const started = await host.fetch(new Request(`${origin}/_reader/nonce`));
+    const { nonce } = await started.json();
+    const issued = await createArtifactReaderActivation({ pool, ...config }).issue(session,
+      { artifactId, releaseId, channel: 'stable', targetOrigin: origin, nonce });
+    const activated = await host.fetch(new Request(`${origin}/_reader/activate`, { method: 'POST',
+      headers: { origin, 'content-type': 'application/json', 'x-artifact-activation': '1',
+        cookie: started.headers.get('set-cookie')! },
+      body: JSON.stringify({ flowId: issued.flow.flowId, ticketId: issued.ticket.ticketId }) }));
+    expect(activated.status).toBe(204);
+    const read = await host.fetch(new Request(origin, {
+      headers: { cookie: activated.headers.get('set-cookie')! } }));
+    expect(read.status).toBe(200);
+    expect(await read.text()).toBe('<h1>Private runtime</h1>');
   });
 
   it('should serve the enabled real listener with private S3 reads and a rotating mounted key', async () => {
