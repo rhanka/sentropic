@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { emptyHeavyPhaseQueueState, type HeavyPhaseKind, type HeavyPhaseQueue, type HeavyPhaseQueueState,
   type HeavyPhaseQueueStore, type HeavyPhaseSlotKind } from '@sentropic/cluster-mesh';
 import type { CachePorts } from './cache';
+import { runInstallStep } from './deadline';
 import type { LiveStore } from './ports';
 import { podName, quotaExceeded } from './pods';
 import { LiveError } from './records';
@@ -107,9 +108,12 @@ export async function liveHolds(store: Pick<LiveStore, 'active'>) {
 /** The in-pod clean install is the `install` heavy phase; an install outside a pod is not a node phase. The
  * watchdog abort crosses the queue wait, so a cut install stops re-enqueuing its ticket. */
 export const gatedInstall = (heavy: LiveHeavyGate, install: CachePorts['cleanInstall']): CachePorts['cleanInstall'] =>
-  input => input.runtime
-    ? heavy.run(input.runtime.podName, 'install', () => install(input), { signal: input.signal })
-    : install(input);
+  input => {
+    const runtime = input.runtime;
+    if (!runtime) return install(input);
+    return runInstallStep(input.progress, 'heavy_admit',
+      () => heavy.run(runtime.podName, 'install', () => install(input), { signal: input.signal }));
+  };
 
 const QUEUE_NAMESPACE = 'artifact-live-heavy-queue/v1';
 /** Durable queue state of one node in the existing host KV migration, serialized by a node lock across replicas. */
