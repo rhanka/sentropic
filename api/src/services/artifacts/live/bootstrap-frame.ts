@@ -77,9 +77,9 @@ AGENT_SECTIONS.push(function leaseOps(ctx) {
 });
 
 /**
- * Warm-pool bind state (§7.3.2): an unbound pool agent accepts only pool-fill ops and `renew` — a session op
- * (`overlay`, `dev`, `build`, `snapshot`, `sealDependencies`, `applyOverlay`) is refused before it runs, so a
- * warm pod can never serve a session it was not claimed for. `claim` binds, `scrub` unbinds for the next epoch.
+ * Warm-pool bind state (§7.3.2): an unbound pool agent accepts only pool-fill ops and 'renew' — a session op
+ * ('overlay', 'dev', 'build', 'snapshot', 'sealDependencies', 'applyOverlay') is refused before it runs, so a
+ * warm pod can never serve a session it was not claimed for. 'claim' binds, 'scrub' unbinds for the next epoch.
  */
 AGENT_SECTIONS.push(function poolOps(ctx) {
   let bound = false;
