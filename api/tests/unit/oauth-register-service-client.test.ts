@@ -60,6 +60,11 @@ describe('buildServiceClientRegistration', () => {
     }
   });
 
+  it('accepts the ops job-failure ingest scope', () => {
+    expect(desired({ OAUTH_SERVICE_CLIENT_SCOPES: 'service:ops-job-failure-ingest' }).allowedScopes)
+      .toEqual(['service:ops-job-failure-ingest']);
+  });
+
   it('refuses weak secrets, bad ids, the reserved workload id and insecure resources', () => {
     for (const secret of ['', 'short', `${SECRET} `, `dev-only-${SECRET}`]) {
       expect(() => desired({ OAUTH_SERVICE_CLIENT_SECRET: secret })).toThrow(/OAUTH_SERVICE_CLIENT_SECRET/);
