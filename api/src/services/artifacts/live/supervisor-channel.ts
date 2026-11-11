@@ -1,8 +1,8 @@
 import type { KeyObject } from 'node:crypto';
 import { conflict, LiveError, type LiveRuntime } from './records';
 import { FRAME_TTL_MS, readReply, sealFrame, type FrameFence, type SupervisorOp } from './supervisor-frame';
-import { entryOf, manifestDigest, putWriter, readSnapshot, streamSnapshot, treeDigest, type TransferEntry, type TransferFailure,
-  type TransferFile, type TransferTarget, type TreeLimits } from './supervisor-transfer';
+import { entryOf, manifestDigest, putWriter, readSnapshot, streamSnapshot, treeDigest, type PutFrame, type TransferEntry,
+  type TransferFailure, type TransferFile, type TransferTarget, type TreeLimits } from './supervisor-transfer';
 
 /** One signed frame to the pod bootstrap on worker ingress :5173, relayed by artifact-content; raw reply bytes back. */
 export interface SupervisorChannel {
@@ -28,6 +28,9 @@ function compare(a: number[], b: number[]) {
   return 0;
 }
 
+/** Pipelined put window (§7.2.1): up to 8 signed put frames in flight, each still individually fenced and
+ * acknowledged by `(transfer id, frame seq)`. */
+export const PIPELINE_WINDOW = 8;
 /** Fenced, signed, bounded command core shared by the supervisor methods and the clean installer. */
 export function createSupervisorChannel(options: ChannelOptions) {
   const timeoutMs = options.timeoutMs ?? 300_000;
@@ -75,6 +78,39 @@ export function createSupervisorChannel(options: ChannelOptions) {
       return unavailable(); // transport detail is never surfaced
     } finally { clearTimeout(timer); set.delete(controller); callOptions.signal?.removeEventListener('abort', onExternal); }
   }
+  /** Pipelined tree stream (§7.2.1): same frames, limits and digest as `stream`, but up to `PIPELINE_WINDOW`
+   * puts in flight. A refused frame fails the whole transfer with its closed refusal; later frames are never
+   * sent after the first failure. */
+  async function streamPipelined(runtime: LiveRuntime, target: TransferTarget,
+    files: AsyncIterable<TransferFile> | Iterable<TransferFile>, limits: TreeLimits, fail: TransferFailure,
+    streamOptions: SupervisorCallOptions = {}) {
+    const id = options.id(); const writer = putWriter(id, target);
+    const entries: TransferEntry[] = []; let total = 0;
+    const inFlight = new Set<Promise<unknown>>();
+    let failure: unknown;
+    async function send(frame: PutFrame) {
+      if (failure !== undefined) throw failure;
+      streamOptions.signal?.throwIfAborted();
+      const run = call(runtime, 'put', frame as unknown as Record<string, unknown>, streamOptions)
+        .then(() => { streamOptions.onProgress?.(); });
+      inFlight.add(run);
+      void run.then(() => { inFlight.delete(run); }, error => { inFlight.delete(run); failure ??= error; });
+      while (inFlight.size >= PIPELINE_WINDOW && failure === undefined) await Promise.race(inFlight);
+      if (failure !== undefined) throw failure;
+    }
+    for await (const file of files) {
+      if (failure !== undefined) throw failure;
+      streamOptions.signal?.throwIfAborted();
+      const entry = entryOf(file, fail); total += entry.size;
+      if (entries.length >= limits.files || entry.size > limits.fileBytes || total > limits.totalBytes) fail('limit');
+      entries.push(entry);
+      for (const frame of writer.add(file)) await send(frame);
+    }
+    for (const frame of writer.end()) await send(frame);
+    await Promise.allSettled(inFlight);
+    if (failure !== undefined) throw failure;
+    return { transfer: id, treeDigest: manifestDigest(entries, limits, fail) };
+  }
   /** Streams a tree file by file into bounded put frames, holding one file and one frame. Per-file and running limits
    * refuse as soon as they overflow; the whole tree is checked before the digest that the commit frame carries, so a
    * refused or interrupted tree is never committed. */
@@ -105,6 +141,6 @@ export function createSupervisorChannel(options: ChannelOptions) {
     sink: (file: TransferFile) => Promise<void>, drainOptions: SupervisorCallOptions = {}) =>
     streamSnapshot(cursor => call(runtime, 'snapshot', { root, cursor }, drainOptions), limits, links, fail, sink,
       drainOptions.onProgress);
-  return { call, transfer, stream, snapshot, drain, id: options.id };
+  return { call, transfer, stream, streamPipelined, snapshot, drain, id: options.id };
 }
 export type SupervisorCore = ReturnType<typeof createSupervisorChannel>;
