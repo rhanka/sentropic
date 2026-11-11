@@ -109,7 +109,8 @@ describe('pod bootstrap agent: offline install and dependency materialization', 
       storage: { read: async key => objects.get(key), admit: async (key, object) => { objects.set(key, object); return object; },
         quarantine: async () => undefined, putFile: async (digest, bytes) => { blobs.set(digest, bytes); },
         getFile: async digest => blobs.get(digest),
-        putArchive: async (ref, bytes) => { blobs.set(ref, bytes); }, getArchive: async ref => blobs.get(ref) } });
+        putArchive: async (ref, bytes) => { blobs.set(ref, bytes); }, getArchive: async ref => blobs.get(ref),
+        putSource: async (ref, bytes) => { blobs.set(ref, bytes); }, getSource: async ref => blobs.get(ref) } });
     const identity = { storageScopeId: 's', repoId: 'r', lockSha256: createHash('sha256').update(lock).digest('hex'), platform: 'linux-x64',
       nodeVersion: '24', npmVersion: '11', image: BUILDER_IMAGE, policyRevision: 'p1', workspaceTopology: 'ui', integrityDigest: createHash('sha256').digest('hex'), installWorkspaces: [] };
     // GB1 at the pinned commit: no script entry in the lock, so no qualification file (digest of zero bytes).

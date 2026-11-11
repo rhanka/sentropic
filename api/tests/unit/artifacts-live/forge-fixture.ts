@@ -63,7 +63,8 @@ export const STAGED = ['bin/run.sh', GB1_QUALIFICATION_PATH, 'package-lock.json'
 
 /** Mocked GitHub REST + codeload, and the reader over a recorded generation-1 binding. */
 export async function setup(options: { compare?: Record<string, string>; config?: boolean; record?: boolean;
-  generation?: (k: typeof key) => Promise<number> } = {}) {
+  generation?: (k: typeof key) => Promise<number>;
+  units?: { get(ref: string): Promise<Uint8Array | undefined>; put(ref: string, bytes: Uint8Array): Promise<void> } } = {}) {
   let now = 1_700_000_000_000; let leases = 0; let refs = 0;
   const state = { archive: tarball(REPO), refused: new Set<string>(), location: '', branches: { 'artifact/demo': HEAD } as Record<string, string> };
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -90,7 +91,7 @@ export async function setup(options: { compare?: Record<string, string>; config?
   const bindings = createForgeBindings(memoryRows(), config);
   if (options.record !== false && config) await bindings.admit(key, 1, binding);
   const reads = createLeaseForgeReads({ config, bindings, generation: options.generation ?? (async () => 1), fetch: fetch as unknown as typeof globalThis.fetch,
-    now: () => now, id: () => `stage-${++refs}` });
+    now: () => now, id: () => `stage-${++refs}`, ...(options.units ? { units: options.units } : {}) });
   return { reads, bindings, fetch, calls, acquire, subscribers, state, advance(ms: number) { now += ms; } };
 }
 export const failure = async (work: Promise<unknown>) => { try { await work; } catch (error) { return error as Error & { code: string }; } throw new Error('resolved'); };
