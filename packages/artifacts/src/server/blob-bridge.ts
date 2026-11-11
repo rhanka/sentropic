@@ -14,7 +14,7 @@
  * dependency from this package to cluster-mesh.
  */
 import { createHash } from 'node:crypto';
-import { blobDigestOfKey } from './publication.js';
+import { blobDigestOfKey, type PublicationBlobStore } from './publication.js';
 import { assertBlobPrefix } from './blob-prefix.js';
 
 export interface BoundedBlobPage {
@@ -117,5 +117,56 @@ export function pageBlobKeys(all: readonly string[], prefix: string, page: Bound
  * Bounded key enumeration over any blob store (CR-4).
  * Callers never hold an unbounded key list: every page honors the item and
  * encoded-byte budgets and carries the opaque continuation forward.
- * (Paged wrapper lands with the verified store in the next commit.)
  */
+export async function listBlobKeysPaged(
+  store: Pick<PublicationBlobStore, 'listKeys'>,
+  prefix: string,
+  page: BoundedBlobPage,
+): Promise<BoundedBlobKeys> {
+  const all = (await store.listKeys(prefix)).filter((key) => key.startsWith(prefix)).sort();
+  return pageBlobKeys(all, prefix, page);
+}
+
+/**
+ * Wrap an upstream blob store with the bridge guards.
+ * putBlob clones first, verifies before any I/O, then delegates to an
+ * upstream that implements create-only writes; a conflicting write is
+ * settled by read-back: identical bytes are idempotent, different bytes
+ * fail closed without overwriting. getBlob verifies digest before serving.
+ */
+export function createVerifiedBlobStore(upstream: PublicationBlobStore): PublicationBlobStore {
+  return {
+    async putBlob(key: string, bytes: Uint8Array): Promise<void> {
+      const snapshot = cloneBlobBytes(bytes);
+      verifyBytesForKey(key, snapshot);
+      try {
+        await upstream.putBlob(key, snapshot);
+      } catch (error) {
+        const stored = await upstream.getBlob(key).catch(() => undefined);
+        if (stored !== undefined) {
+          verifyStoredBytesForKey(key, stored);
+          if (stored.byteLength === snapshot.byteLength &&
+            sha256Hex(stored) === sha256Hex(snapshot)) return;
+        }
+        throw error;
+      }
+      const stored = await upstream.getBlob(key);
+      if (stored === undefined) throw new Error(`blob missing after write: ${key}`);
+      verifyStoredBytesForKey(key, stored);
+    },
+    async getBlob(key: string): Promise<Uint8Array | undefined> {
+      const stored = await upstream.getBlob(key);
+      if (stored === undefined) return undefined;
+      return verifyStoredBytesForKey(key, stored);
+    },
+    async getBlobRange(key: string, start: number, endInclusive: number): Promise<Uint8Array | undefined> {
+      return upstream.getBlobRange?.(key, start, endInclusive);
+    },
+    async listKeys(prefix: string): Promise<string[]> {
+      return upstream.listKeys(prefix);
+    },
+    async deleteBlob(key: string): Promise<void> {
+      await upstream.deleteBlob(key);
+    },
+  };
+}
