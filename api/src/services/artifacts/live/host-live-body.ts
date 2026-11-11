@@ -42,7 +42,14 @@ export const invalid = (c: Context) => c.json({ error: 'invalid_request' }, 400)
 /** Closed refusal codes; anything that is not a LiveError is builder_unavailable, with no detail. */
 export function refusal(c: Context, error: unknown) {
   if (!(error instanceof LiveError)) return c.json({ error: 'builder_unavailable' }, 503);
-  return c.json({ error: error.code, ...(error.reason ? { reason: error.reason } : {}) }, STATUS[error.code] ?? 409);
+  const body: Record<string, unknown> = { error: error.code, ...(error.reason ? { reason: error.reason } : {}) };
+  if (error.code === 'cache_not_prewarmed') {
+    // §7.1.4 shape: the lock rides the reason and is repeated as `lockSha256`; the miss is retriable
+    // once the prewarm seals. `cacheState` stays queryable through `GET /v1/cache`, not the refusal.
+    if (typeof error.reason === 'string') body.lockSha256 = error.reason;
+    body.retriable = true;
+  }
+  return c.json(body, STATUS[error.code] ?? 409);
 }
 export function actorOf(value: unknown): LiveActor | null {
   if (!closed(value, ['principalId'], ['invitation']) || !token(value.principalId)) return null;
