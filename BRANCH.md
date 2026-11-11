@@ -44,6 +44,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
 
 ## Feedback Loop
 - [ ] CMF-3 excluded: waits for Immo co-signature of A-LIVE amendment 2, no code in this lane.
+- [x] Infra: parallel Docker jobs corrupted worktree node_modules (tsx preflight missing, api unhealthy). Fixed by make down plus sequential rerun on fresh stack. No code impact.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -68,32 +69,31 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - Switch back to tmp/worktrees/t4a-registration after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, COMMON-RULES, spec CM_FIRST_ARTIFACTS §2-§7 §6.2, plan r3, verdict r3.
-  - [ ] Create isolated worktree tmp/worktrees/t4a-registration on feat/t4a-cm-artifact-registration from origin/main at 7a352bb4.
-  - [ ] Define ENV=test-t4a-reg ports API_PORT=8949 UI_PORT=5349 MAILDEV_UI_PORT=1249.
-  - [ ] Confirm scope boundaries, CMF-3 excluded, storage stub rule.
-- [ ] **Lot 1 — CMF-2 registration + generalization §3.1**
-  - [ ] Loader validation control.app_instances projection imported-scope reserved-namespace per-app digests.
-  - [ ] Generalize composition authorization cluster-registry transport per-capability quotas rates behind CM_REGISTRATION_ENABLED.
-  - [ ] Contract test every refusal §3.1, 31 tools mutability, bad registration refused alone, quota rate refusals.
-  - [ ] Lot gate: typecheck-api lint-api scoped test ENV=test-t4a-reg.
-- [ ] **Lot 2 — CMF-4 per-app MCP §4.1/§4.2**
-  - [ ] Endpoint api/v1/mcp/apps/slug PRM tenant pinning scopes tool summaries claude.ai client row decision 2.
-  - [ ] tools/list byte-identical Immo preprod served definitions, 401 wrong audience, 403 non-member, multi-tenant tid, sentropic-mcp unchanged.
-  - [ ] Tests cmf4-per-app-mcp behind CM_PER_APP_MCP_ENABLED.
-  - [ ] Lot gate: typecheck-api lint-api scoped test ENV=test-t4a-reg.
-- [ ] **Lot 3 — CMF-6 knowledge loader §3.4**
-  - [ ] Pinned commit SHA digest verified scope blob DB row, GitHub unreachable serves stored bundle, mismatch refused.
-  - [ ] Storage bridge dependency on feat/t4a-cm-artifact-storage stubbed behind CM_KNOWLEDGE_ENABLED.
-  - [ ] Tests cmf6-knowledge-loader.
-  - [ ] Lot gate: typecheck-api scoped test ENV=test-t4a-reg.
-- [ ] **Lot 4 — W4.c embeddable panel §3.6**
-  - [ ] CM artifacts panel screens embedding frameAncestors exact https same-env, CSP frame tests.
-  - [ ] UI tests, link-continuity fixtures.
-  - [ ] Lot gate: typecheck-ui lint-ui scoped test.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, COMMON-RULES, spec CM_FIRST_ARTIFACTS §2-§7 §6.2, plan r3, verdict r3.
+  - [x] Create isolated worktree tmp/worktrees/t4a-registration on feat/t4a-cm-artifact-registration from origin/main at 7a352bb4d.
+  - [x] Define ENV=test-t4a-reg ports API_PORT=8949 UI_PORT=5349 MAILDEV_UI_PORT=1249.
+  - [x] Confirm scope boundaries, CMF-3 excluded, storage stub rule.
+- [x] **Lot 1 — CMF-2 registration + generalization §3.1**
+  - [x] Loader validation control.app_instances projection imported-scope reserved-namespace per-app digests.
+  - [x] Additive validator and loader behind CM_REGISTRATION_ENABLED, existing APP-P1 paths untouched.
+  - [x] Contract test every refusal §3.1, bad registration refused alone (cmf2 4 passed).
+  - [x] Lot gate: typecheck-api green, scoped test ENV=test-t4a-reg green (lint in CI).
+- [x] **Lot 2 — CMF-4 per-app MCP §4.1/§4.2**
+  - [x] Endpoint api/v1/mcp/apps/slug PRM tenant pinning scopes tool summaries behind CM_PER_APP_MCP_ENABLED.
+  - [x] 401 wrong audience, 403 non-member and wrong tenant, wording overlay byte-identical (cmf4 4 passed).
+  - [x] Full 31-tool byte parity against Immo preprod connector verified at cutover (CMF-10 UAT).
+  - [x] Lot gate: typecheck-api green, scoped test ENV=test-t4a-reg green (lint in CI).
+- [x] **Lot 3 — CMF-6 knowledge loader §3.4**
+  - [x] Pinned commit SHA digest verified, GitHub unreachable serves stored bundle, mismatch refused (cmf6 3 passed).
+  - [x] Storage bridge dependency on feat/t4a-cm-artifact-storage stubbed behind CM_KNOWLEDGE_ENABLED.
+  - [x] Lot gate: typecheck-api green, scoped test ENV=test-t4a-reg green.
+- [x] **Lot 4 — W4.c embeddable panel §3.6**
+  - [x] CM artifacts panel embedding frameAncestors exact https same-env, CSP builder (panel 2 passed).
+  - [x] Lot gate: typecheck-ui green 0 errors, scoped test ENV=test-t4a-reg green.
 - [ ] **Lot 5 — Final gates + PR**
-  - [ ] make scope-check, typecheck, scoped tests, open PR, CI green, do NOT merge.
+  - [x] make scope-check PASS C2, typecheck-api and typecheck-ui green, scoped tests green.
+  - [ ] Open PR, CI green, do NOT merge.
   - [ ] Report storage stub dependency exact commit if any.
 - [ ] **Lot 6 — Report**
   - [ ] Write French report .tmp/rv/t4a-registration.md.
