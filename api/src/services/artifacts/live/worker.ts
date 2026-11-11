@@ -27,6 +27,10 @@ export interface QualifiedSupervisor {
     env: ReturnType<typeof buildEnvironment>): Promise<{ candidateDigest: string }>;
   /** Trusted stable snapshot verifier, outside repository code; links/special files and limit overflow refuse. */
   verify(runtime: LiveRuntime, attempt: LiveAttempt, limits: { files: 255; fileBytes: 16777216; totalBytes: 67108864 }): Promise<void>;
+  /** Warm-pool bind (§7.3.2): `claim {}` on an unbound pool pod binds it to the caller's fence. */
+  claim(runtime: LiveRuntime): Promise<{ poolEpoch: number }>;
+  /** Warm-deps scrub (§7.3.2): the process tree is gone, `/workspace` + `/tmp` cleared, `/dependencies` verified. */
+  scrub(runtime: LiveRuntime, nextEpoch: number): Promise<{ cleared: string[]; poolEpoch: number }>;
   /** Liveness lease (A-LIVE Amendment 1 §3, W8 port): fenced, side-effect free; the controller sends it at least every
    * 60 s outside DORMANT. */
   renew(runtime: LiveRuntime): Promise<void>;
@@ -57,5 +61,7 @@ export function createLiveWorker(supervisor: QualifiedSupervisor, placement: Bui
     },
     verify: (runtime, attempt) => supervisor.verify(runtime, attempt, { files: 255, fileBytes: 16777216, totalBytes: 67108864 }),
     renew: runtime => supervisor.renew(runtime),
+    claim: runtime => supervisor.claim(runtime),
+    scrub: (runtime, nextEpoch) => supervisor.scrub(runtime, nextEpoch),
   };
 }

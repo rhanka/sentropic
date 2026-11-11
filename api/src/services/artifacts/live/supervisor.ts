@@ -149,6 +149,18 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if (!same(limits, OUTPUT_LIMITS) || typeof attempt.candidateDigest !== 'string' || !DIGEST.test(attempt.candidateDigest)) unavailable('verify_invalid');
       if ((await output(runtime)).digest !== attempt.candidateDigest) unavailable('output_changed');
     },
+    /** Warm-pool bind (§7.3.2): `claim {}` on the unbound pool pod binds it to the caller's fence. */
+    async claim(runtime) {
+      const data = await call(runtime, 'claim', {});
+      if (data.claimed !== true || !Number.isSafeInteger(data.poolEpoch)) unavailable('claim_unconfirmed');
+      return { poolEpoch: data.poolEpoch as number };
+    },
+    /** Warm-deps scrub (§7.3.2): the ACK must prove the cleared set and the next epoch, or the pod is deleted. */
+    async scrub(runtime, nextEpoch) {
+      const data = await call(runtime, 'scrub', { nextEpoch });
+      if (!Array.isArray(data.cleared) || data.poolEpoch !== nextEpoch) unavailable('scrub_unconfirmed');
+      return { cleared: data.cleared as string[], poolEpoch: nextEpoch };
+    },
   };
   return { ...supervisor, cleanInstall: createCleanInstall(core, options.sources.source) };
 }
