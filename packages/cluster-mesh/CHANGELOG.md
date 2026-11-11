@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.0-dev.24
+
+- T5a CM providers, code only (flag-gated, no state move, no migration): CMP-L1
+  gateway `pool`/`authResolver`/`dispatch` wiring with the app workload principal
+  (GD-14), CMP-L3 in-process internal gateway wrapper, CMP-P1 versioned prompt
+  registry (GD-7) with settings-seeded API adapter, CMP-E1 multi-app email port
+  with allowlist/rate/audit, and CODE move of the object-type registry
+  validation into `@sentropic/ubo-contracts` (private, no bump).
+
 ## 0.26.0-dev.22
 
 - Merge `origin/main` (llm-mesh 0.35.0, llm-gateway 0.22.6, `<0.36.0` range) and refresh the
