@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { defaultInstallBudget, INSTALL_CEILING_MS_DEFAULT, INSTALL_STALL_MS_DEFAULT, MAX_TIMEOUT_MS,
-  readInstallBudget, runPhase, withinInstallBudget } from '../../../src/services/artifacts/live/deadline';
+import { defaultInstallBudget, INSTALL_CACHE_ADMIT_TIMEOUT_MS, INSTALL_CACHE_LOOKUP_TIMEOUT_MS, INSTALL_CEILING_MS_DEFAULT,
+  INSTALL_STALL_MS_DEFAULT, MAX_TIMEOUT_MS, readInstallBudget, runInstallStep, runPhase, withinInstallBudget, withinPhase,
+  type InstallStepFields } from '../../../src/services/artifacts/live/deadline';
 import { LiveError } from '../../../src/services/artifacts/live/records';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -107,6 +108,100 @@ describe('install progress watchdog', () => {
     late!.report(); late!.suspendStall(true); late!.suspendStall(false);
     await delay(150);
     expect(result).toBe('done');
+  });
+  it('carries the last install sub-step in the ceiling reason', async () => {
+    await expect(withinInstallBudget(async progress => {
+      progress.step?.('cache_lookup');
+      await delay(300);
+      return 'late';
+    }, { stallMs: 10_000, ceilingMs: 150 }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install:cache_lookup' });
+  });
+  it('carries the last install sub-step in the stall reason', async () => {
+    await expect(withinInstallBudget(async progress => {
+      progress.step?.('tarball_stream');
+      progress.report();
+      await delay(300);
+      return 'late';
+    }, { stallMs: 50, ceilingMs: 5_000 }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install:tarball_stream' });
+  });
+  it('bounds the 11/11 preprod hang window below the 20 min ceiling', () => {
+    expect(INSTALL_CACHE_LOOKUP_TIMEOUT_MS).toBeLessThan(INSTALL_CEILING_MS_DEFAULT);
+    expect(INSTALL_CACHE_ADMIT_TIMEOUT_MS).toBeLessThan(INSTALL_CEILING_MS_DEFAULT);
+  });
+  it('clears the last sub-step on success so a gap hang is bare, not the completed step', async () => {
+    await expect(withinInstallBudget(async progress => {
+      progress.step?.('cache_lookup');
+      progress.clearStep?.();
+      await delay(200);
+      return 'late';
+    }, { stallMs: 10_000, ceilingMs: 120 }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install' });
+  });
+  it('aborts withinPhase on signal without waiting for the timeout', async () => {
+    const controller = new AbortController();
+    const pending = withinPhase(new Promise<never>(() => {}), 5_000, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout' });
+  });
+});
+
+describe('install sub-steps', () => {
+  it('records the step for the budget reason and logs ok with ms and counts', async () => {
+    const lines: InstallStepFields[] = [];
+    let now = 1_000;
+    const steps: string[] = [];
+    const progress = { report: () => undefined, suspendStall: () => undefined, step: (name: string) => steps.push(name) };
+    const result = await runInstallStep(progress, 'source_transfer', async () => 'sent',
+      { log: fields => lines.push(fields), now: () => (now += 40), counts: () => ({ files: 3, bytes: 300 }) });
+    expect(result).toBe('sent');
+    expect(steps).toEqual(['source_transfer']);
+    expect(lines).toEqual([{ msg: 'artifact_live_install_step', step: 'source_transfer', ms: 40,
+      files: 3, bytes: 300, outcome: 'ok' }]);
+  });
+  it('logs fail with the step reason on a sub-step timeout', async () => {
+    const lines: InstallStepFields[] = [];
+    const progress = { report: () => undefined, suspendStall: () => undefined, step: () => undefined };
+    await expect(runInstallStep(progress, 'cache_lookup', () => new Promise<never>(() => {}),
+      { log: fields => lines.push(fields), now: () => 0, timeoutMs: 50 }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install:cache_lookup' });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ msg: 'artifact_live_install_step', step: 'cache_lookup', outcome: 'fail',
+      reason: 'builder_unavailable:phase_timeout:install:cache_lookup' });
+  });
+  it('passes a deterministic failure through with its reason and a fail line', async () => {
+    const lines: InstallStepFields[] = [];
+    const progress = { report: () => undefined, suspendStall: () => undefined, step: () => undefined };
+    const failure = new LiveError('builder_unavailable', 'install_failed:exit_1');
+    await expect(runInstallStep(progress, 'recipe', async () => { throw failure; },
+      { log: fields => lines.push(fields), now: () => 0 })).rejects.toBe(failure);
+    expect(lines[0]).toMatchObject({ step: 'recipe', outcome: 'fail',
+      reason: 'builder_unavailable:install_failed:exit_1' });
+  });
+  it('clears the budget step on success via clearStep', async () => {
+    const lines: InstallStepFields[] = [];
+    let cleared = 0;
+    const progress = { report: () => undefined, suspendStall: () => undefined, step: () => undefined,
+      clearStep: () => { cleared += 1; } };
+    await runInstallStep(progress, 'cache_lookup', async () => 'hit',
+      { log: fields => lines.push(fields), now: () => 0 });
+    expect(lines[0]).toMatchObject({ step: 'cache_lookup', outcome: 'ok' });
+    expect(cleared).toBe(1);
+  });
+  it('fails promptly on signal abort with a step-named fail line, not the inner timeout', async () => {
+    const lines: InstallStepFields[] = [];
+    const controller = new AbortController();
+    const progress = { report: () => undefined, suspendStall: () => undefined, step: () => undefined,
+      clearStep: () => undefined };
+    const pending = runInstallStep(progress, 'cache_lookup', () => new Promise<never>(() => {}),
+      { log: fields => lines.push(fields), now: () => 0, timeoutMs: 5_000, signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'phase_timeout:install:cache_lookup' });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ step: 'cache_lookup', outcome: 'fail',
+      reason: 'builder_unavailable:phase_timeout:install:cache_lookup' });
   });
 });
 
