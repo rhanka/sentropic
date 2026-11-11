@@ -3,9 +3,11 @@ import { createMcpAuth, MCP_SCOPES, type McpAuth } from '@sentropic/mcp-auth';
 import { fromJwksPort } from '@sentropic/oauth-verify';
 import {
   buildCanonicalPerAppTools,
+  isWriteTool,
   type AppArtifactsRegistration,
   type CanonicalPerAppTool,
 } from '../../services/artifacts/app-registration';
+import { isToolPermitted } from '../../services/mcp/client-policy';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import { resolveOAuthIssuer } from '../auth/oauth';
@@ -131,6 +133,64 @@ export function createPerAppMcpRouter(
       return c.json({ error: 'insufficient_scope' }, 403);
     }
     return c.json({ tools: buildPerAppToolList(registration) });
+  });
+
+  router.post('/api/v1/mcp/apps/:slug', async (c) => {
+    if (!isPerAppMcpEnabled()) return c.json({ error: 'disabled' }, 404);
+    const registration = deps.load(c.req.param('slug'));
+    if (!registration) return c.json({ error: 'unknown_app' }, 404);
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse_error' } }, 400);
+    }
+    const envelope = body as { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
+    const id = envelope.id ?? null;
+    if (envelope.jsonrpc !== '2.0' || typeof envelope.method !== 'string') {
+      return c.json({ jsonrpc: '2.0', id, error: { code: -32600, message: 'invalid_request' } }, 400);
+    }
+    const params = (envelope.params ?? {}) as { name?: unknown; arguments?: unknown };
+    if (envelope.method === 'tools/list') {
+      const auth = await authenticate(c.req.raw, registration);
+      if (!auth.ok) {
+        if (auth.challenge) return auth.challenge as unknown as Response;
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: auth.error } }, auth.status);
+      }
+      if (!auth.principal.scopes.includes(MCP_SCOPES.DISCOVER) &&
+        !auth.principal.scopes.includes(MCP_SCOPES.TOOLS_INVOKE)) {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: 'insufficient_scope' } }, 403);
+      }
+      return c.json({ jsonrpc: '2.0', id, result: { tools: buildPerAppToolList(registration) } });
+    }
+    if (envelope.method === 'tools/call') {
+      const auth = await authenticate(c.req.raw, registration);
+      if (!auth.ok) {
+        if (auth.challenge) return auth.challenge as unknown as Response;
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: auth.error } }, auth.status);
+      }
+      const tool = params.name;
+      if (typeof tool !== 'string') {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32602, message: 'invalid_params' } }, 400);
+      }
+      const listed = buildPerAppToolList(registration).some((entry) => entry.name === tool);
+      if (!listed) {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32601, message: 'unknown_tool' } }, 404);
+      }
+      if (!isToolPermitted(auth.principal.clientId, tool)) {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: 'tool_not_permitted' } }, 403);
+      }
+      const needsInvoke = isWriteTool(tool);
+      if (needsInvoke && !auth.principal.scopes.includes(MCP_SCOPES.TOOLS_INVOKE)) {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: 'insufficient_scope' } }, 403);
+      }
+      if (!needsInvoke && !auth.principal.scopes.includes(MCP_SCOPES.DISCOVER) &&
+        !auth.principal.scopes.includes(MCP_SCOPES.TOOLS_INVOKE)) {
+        return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: 'insufficient_scope' } }, 403);
+      }
+      return c.json({ jsonrpc: '2.0', id, error: { code: -32603, message: 'tool_not_wired' } }, 501);
+    }
+    return c.json({ jsonrpc: '2.0', id, error: { code: -32601, message: 'method_not_found' } }, 404);
   });
 
   router.get('/api/v1/mcp/apps/:slug/.well-known/oauth-protected-resource', (c) => {
