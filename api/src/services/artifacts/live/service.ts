@@ -22,6 +22,8 @@ import { composeSupervisor } from './supervisor-composition';
 import type { SupervisorSources } from './supervisor';
 import { CACHE_STATE_NAMESPACE, createCacheJobs, createHostCacheApi, PREWARM_ADMISSION_RETRY_MS,
   PREWARM_ADMISSION_WAIT_MS, type CacheJobRecord, type PrewarmExecutor } from './cache-api';
+import { createPoolManager, POOL_NAMESPACE } from './pool';
+import { createHostPoolApi } from './pool-api';
 import { createPhaseEventSink, PHASE_EVENTS_NAMESPACE } from './phase-events';
 import { createRelaySupervisorChannel, SUPERVISOR_COMMAND_TIMEOUT_MS } from './supervisor-relay';
 import { createBuildJobs, jobForgeBinding, runStaleMs } from './build-jobs';
@@ -87,6 +89,10 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
     waiterTtlMs: options.admission.waiterTtlMs, now: options.now, holders: () => store.active() });
   const pods = createBuilderPods(options.kubernetes, bootstrap, options.placement, options.sizing);
+  // Warm pod pool (§7.3): durable rows over the same host KV as the heavy queue and the cache state.
+  // `options.pool` below is the Postgres pool; the LivePorts pool manager is passed explicitly so the pg
+  // handle never leaks into the controller ports.
+  const poolManager = createPoolManager(createPostgresKvRows(options.pool, POOL_NAMESPACE), { now: options.now });
   const delay = (ms: number) => new Promise<void>(resolve => { const timer = setTimeout(resolve, ms); timer.unref?.(); });
   /** Prewarm seal executor (§7.1.3, §7.1.6): one fresh pod per seal with yielding heavy admission (5 s
    * pod-slot wait retried every 60 s, so a prewarm never starves a user build beyond one in-flight heavy
@@ -127,8 +133,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
       }
     },
   };
-  return { controller: createLiveController({ ...options, cache, store, admission, heavy, pods,
-    worker: createLiveWorker(supervisor, options.placement) }), prewarmExecutor };
+  return { controller: createLiveController({ ...options, pool: poolManager, cache, store, admission, heavy, pods,
+    worker: createLiveWorker(supervisor, options.placement) }), prewarmExecutor, poolManager };
 }
 /** M3-B builder service: the live controller composed with the SG4b handoff publication, the Postgres job ledger,
  * the remote host live state (D0: drafts, session invitation state and package fences pushed by the host) and the host API
@@ -148,6 +154,8 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
    * load-bearing, so this must be the same snapshot machinery (e.g. `reads.snapshotRepo`). Absent keeps
    * the prewarm endpoints refusing `forge_unconfigured` instead of composing a second lease client here. */
   forgeSnapshot?: (scope: string, binding: ForgeBinding, commitSha: string) => Promise<SourceSnapshot>;
+  /** `ARTIFACT_POOL_ADMIN=1` (preprod only by configuration): enables `POST /v1/pool/drain`. */
+  poolAdmin?: boolean;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
     runStaleMs(options.heavy.maxWaitMs, options.installBudget?.ceilingMs));
@@ -156,7 +164,7 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });
   const rows = createPostgresRemoteLiveRows(options.pool);
   const remote = createRemoteLive(rows); const drafts = createRemoteDrafts(rows);
-  const { controller, prewarmExecutor } = createArtifactLiveService({ ...options, publication,
+  const { controller, prewarmExecutor, poolManager } = createArtifactLiveService({ ...options, publication,
     jobBinding: jobForgeBinding(jobs, options.forgeBindings),
     seedBinding: (key, seed) => remote.reconciled(key, seed), seedSession: key => remote.session(key).catch(() => undefined),
     drafts: drafts.drafts, invitations: remote.invitations,
@@ -173,7 +181,11 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
     { now: options.now, id: options.id });
   const snapshotRepo = options.forgeSnapshot ?? (async () => unconfigured());
   const cacheApi = createHostCacheApi({ authenticate: options.authenticate, jobs: cacheJobs, snapshotRepo,
-    executor: prewarmExecutor, schedule: options.schedule });
-  const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live).route('/', cacheApi);
+    executor: prewarmExecutor, schedule: options.schedule,
+    // A sealed prewarm registers its key as hot, so renewal holds the pool minimum for it (§7.3.1 D3).
+    onSealed: sealed => { void poolManager.noteHot(sealed.scope, sealed.cacheKey).catch(() => undefined); } });
+  const poolApi = createHostPoolApi({ authenticate: options.authenticate, pool: poolManager,
+    kubernetes: options.kubernetes, now: options.now, admin: options.poolAdmin ?? false });
+  const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live).route('/', cacheApi).route('/', poolApi);
   return { controller, api, jobs, remote, drafts, cacheJobs };
 }
