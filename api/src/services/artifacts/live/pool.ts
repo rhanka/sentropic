@@ -6,9 +6,6 @@ import { poolPodName } from './pods';
 /** Durable warm-pool namespace (§7.3.1): one canonical row per `(scope, cacheKey)`, one scope index row.
  * No schema change — the same host KV as the heavy queue and the cache state. */
 export const POOL_NAMESPACE = 'artifact-builder-pool/v1';
-/** Pool label selecting every builder pool pod for adoption (`list`) and the drain proof. */
-export const POOL_LABEL = 'sentropic.dev/pool';
-export const POOL_LABEL_VALUE = 'artifact-builders';
 /** Maximum pool-pod age (§7.3.2): 24 h, then delete and refill (bounds image/agent drift). */
 export const POOL_MAX_AGE_MS = 24 * 3600_000;
 /** Env name of the pool minimum per hot key (default 1, §7.3.1, D3/Q4). */

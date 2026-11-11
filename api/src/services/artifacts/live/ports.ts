@@ -80,6 +80,12 @@ export interface LivePorts {
      * supervisor probe. A fresh intent never adopts a dead pod: it is deleted and recreated fenced. */
     ensure(key: LiveKey, runtime: LiveRuntime): Promise<{ uid: string; adopted: boolean; phase?: string; creationTimestamp?: string }>;
     remove(key: LiveKey, runtime: LiveRuntime): Promise<void>;
+    /** Merge-patch pod labels, fenced by the recorded pod uid (pool claim relabels, release unlabels). */
+    patchLabels(runtime: LiveRuntime, labels: Record<string, string | null>): Promise<void>;
+    /** Delete the Service while the pod stays warm (the pool, not teardown, owns it). */
+    removeService(key: LiveKey, runtime: LiveRuntime): Promise<void>;
+    /** Claim a warm pool pod: relabel to the binding set, then adopt through `ensure` (no slot taken). */
+    adoptClaimed(key: LiveKey, runtime: LiveRuntime): Promise<{ uid: string; adopted: boolean; phase?: string; creationTimestamp?: string }>;
     /** Pod liveness for teardown: a gone, terminal or terminating pod never needs a supervisor quiesce. */
     probe(key: LiveKey, runtime: LiveRuntime): Promise<'active' | 'absent' | 'terminating' | 'terminal'>;
     /** Closed Kubernetes status of the runtime's pod for loss classification, or undefined when the apiserver
