@@ -27,7 +27,12 @@ export interface PoolClaim {
 }
 const entryKey = (scope: string, cacheKey: string) => `pool:${scope}:${cacheKey}`;
 const indexKey = (scope: string) => `scope:${scope}`;
-
+/** Hot-key registry (namespace-wide): every `(scope, cacheKey)` the pool must hold (prewarm seals and pool
+ * releases register here). Renewal and boot adoption iterate it, so no scope enumeration is needed. */
+const HOT_INDEX = 'hot';
+const NUL = String.fromCharCode(0);
+const hotId = (scope: string, cacheKey: string): string => scope + NUL + cacheKey;
+const unhotId = (id: string): [string, string] => id.split(NUL) as [string, string];
 const poolId = () => randomUUID().replace(/-/g, '').slice(0, 16);
 
 async function indexAdd(store: KvStore, scope: string, key: string): Promise<void> {
@@ -103,12 +108,18 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
      * deletes the pod instead of calling this. */
     async releaseWarmDeps(scope: string, cacheKey: string, baseHeadSha: string): Promise<PoolEntry> {
       const at = now();
-      return store.update<PoolEntry, PoolEntry>(entryKey(scope, cacheKey), current => {
+      const entry = await store.update<PoolEntry, PoolEntry>(entryKey(scope, cacheKey), current => {
         if (!current || current.state !== 'claimed') throw new LiveError('builder_unavailable', 'pool_release_mismatch');
         const next: PoolEntry = { ...current, state: 'warm-deps', poolEpoch: current.poolEpoch + 1,
           baseHeadSha, lastRenewAt: at };
         return { next, result: next };
       });
+      await store.update<string[], void>(HOT_INDEX, current => {
+        const id = hotId(scope, cacheKey);
+        const next = current?.includes(id) ? current : [...(current ?? []), id];
+        return { next, result: undefined };
+      });
+      return entry;
     },
     /** Background refill promotion (`warm-deps → warm`) after the base source + prebundle were restaged.
      * `filledAt` (image/drift age) is preserved: only a fresh fill resets it. */
@@ -128,12 +139,20 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
     async releaseUnclaimed(scope: string, cacheKey: string, podName: string, podUid: string,
       baseHeadSha: string, poolEpoch: number): Promise<PoolEntry | undefined> {
       const at = now();
-      return store.update<PoolEntry, PoolEntry | undefined>(entryKey(scope, cacheKey), current => {
+      const entry = await store.update<PoolEntry, PoolEntry | undefined>(entryKey(scope, cacheKey), current => {
         if (current && current.state !== 'absent') return { result: undefined };
         const next: PoolEntry = { scope, cacheKey, baseHeadSha, podName, podUid, poolEpoch,
           state: 'warm-deps', filledAt: at, lastRenewAt: at };
         return { next, result: next };
       });
+      if (entry) {
+        await store.update<string[], void>(HOT_INDEX, current => {
+          const id = hotId(scope, cacheKey);
+          const next = current?.includes(id) ? current : [...(current ?? []), id];
+          return { next, result: undefined };
+        });
+      }
+      return entry;
     },
     /** Drop a row in any state back to absent, for scrub-doubt pod deletions. */
     async drop(scope: string, cacheKey: string): Promise<void> {
@@ -237,6 +256,77 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
         renewed++;
       }
       return { renewed, evicted };
+    },
+    /** Register a hot key (§7.3.1 D3): prewarm seals and pool releases call this, so renewal and boot
+     * adoption hold the minimum without enumerating scopes. Idempotent. */
+    async noteHot(scope: string, cacheKey: string): Promise<void> {
+      await store.update<string[], void>(HOT_INDEX, current => {
+        const id = hotId(scope, cacheKey);
+        const next = current?.includes(id) ? current : [...(current ?? []), id];
+        return { next, result: undefined };
+      });
+    },
+    /** Renew every hot key (§7.3.1): a fenced `renew` on each `warm`/`warm-deps` pod at least every 60 s so idle
+     * pool pods never self-terminate (30 min lease); entries older than 24 h are evicted instead. Prunes hot
+     * keys whose rows are gone. */
+    async renewHot(renew: (entry: PoolEntry) => Promise<void>,
+      removePod: (podName: string, podUid: string) => Promise<void>): Promise<{ renewed: number; evicted: number }> {
+      const hot = (await store.read<string[]>(HOT_INDEX)) ?? [];
+      let renewed = 0; let evicted = 0; const alive: string[] = [];
+      for (const id of hot) {
+        const [scope, cacheKey] = unhotId(id);
+        const key = entryKey(scope, cacheKey);
+        const entry = await store.read<PoolEntry>(key);
+        if (!entry || entry.scope !== scope || entry.state === 'absent') continue;
+        alive.push(id);
+        if (entry.state !== 'warm' && entry.state !== 'warm-deps') continue;
+        if (now() - entry.filledAt > POOL_MAX_AGE_MS) {
+          if (entry.podUid) await removePod(entry.podName, entry.podUid).catch(() => undefined);
+          await store.update<PoolEntry, void>(key, () => ({ next: { ...entry, state: 'absent' }, result: undefined }));
+          evicted++; continue;
+        }
+        await renew(entry);
+        await store.update<PoolEntry, void>(key, current => {
+          if (!current || (current.state !== 'warm' && current.state !== 'warm-deps')) return { result: undefined };
+          return { next: { ...current, lastRenewAt: now() }, result: undefined };
+        }).catch(() => undefined);
+        renewed++;
+      }
+      if (alive.length !== hot.length) {
+        await store.update<string[], void>(HOT_INDEX, () => ({ next: alive, result: undefined }));
+      }
+      return { renewed, evicted };
+    },
+    /** Boot adoption across hot keys (§7.3.5, §7.5.4): one namespace `list` of pool-labelled pods, cross-checked
+     * per hot row (adopted + re-held by the caller, orphans dropped and deleted). */
+    async adoptHot(survivors: Array<{ name: string; uid: string }>,
+      removePod: (podName: string, podUid: string) => Promise<void>): Promise<{
+        adopted: PoolEntry[]; orphaned: number; orphansDeleted: number }> {
+      const hot = (await store.read<string[]>(HOT_INDEX)) ?? [];
+      const byName = new Map(survivors.map(s => [s.name, s.uid]));
+      const adopted: PoolEntry[] = [];
+      let orphaned = 0; let orphansDeleted = 0;
+      for (const id of hot) {
+        const [scope, cacheKey] = unhotId(id);
+        const key = entryKey(scope, cacheKey);
+        const entry = await store.read<PoolEntry>(key);
+        if (!entry || entry.scope !== scope || entry.state === 'absent') continue;
+        const uid = byName.get(entry.podName);
+        byName.delete(entry.podName);
+        const alive = uid === entry.podUid && entry.podUid !== '' && now() - entry.filledAt <= POOL_MAX_AGE_MS;
+        if (!alive || entry.state === 'filling') {
+          orphaned++;
+          await store.update<PoolEntry, void>(key, () => ({ next: { ...entry, state: 'absent' }, result: undefined }));
+          if (alive && entry.podUid) await removePod(entry.podName, entry.podUid).catch(() => undefined);
+          continue;
+        }
+        adopted.push(entry);
+      }
+      for (const [name, uid] of byName) {
+        await removePod(name, uid).catch(() => undefined);
+        orphansDeleted++;
+      }
+      return { adopted, orphaned, orphansDeleted };
     },
   };
 }
