@@ -6,11 +6,11 @@ import { sha256 } from '../../../src/services/artifacts/live/integrity';
 import type { IntegrityPin } from '../../../src/services/artifacts/live/integrity';
 import { GB1_QUALIFICATION_PATH } from '../../../src/services/artifacts/live/gb1-qualification';
 import { artifactEnvironment, BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
-import type { InstallBudget } from '../../../src/services/artifacts/live/deadline';
+import type { InstallBudget, InstallStepFields } from '../../../src/services/artifacts/live/deadline';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-function cacheFixture(budget?: InstallBudget) {
+function cacheFixture(budget?: InstallBudget, options?: { log?: (fields: InstallStepFields) => void; now?: () => number }) {
   const bytes = Buffer.from('qualified tarball');
   const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
   const entry = { version: '1.0.0', resolved: 'https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz', integrity };
@@ -43,7 +43,7 @@ function cacheFixture(budget?: InstallBudget) {
       workspaceTopology: 'root', integrityDigest: sha256(qualification), installWorkspaces: [] };
     return { lockfile, cacheIdentity, stagingRef: 'verified-clean-checkout', gb1 };
   };
-  return { lock, rows, ports, source, files, installed, cache: createDependencyCache(ports, budget), stored: () => stored! };
+  return { lock, rows, ports, source, files, installed, cache: createDependencyCache(ports, budget, options), stored: () => stored! };
 }
 async function collect(cache: ReturnType<typeof createDependencyCache>, receipt: CacheReceipt) {
   const out: DependencyFile[] = [];
@@ -160,15 +160,42 @@ describe('locked dependency cache', () => {
       reason: 'phase_timeout:install:recipe' });
     expect(f.ports.storage.admit).not.toHaveBeenCalled();
   });
-  it('should name cache_lookup when the lookup hangs past the ceiling (11/11 preprod)', async () => {
-    // The 11/11 install never reported progress: the lookup sets its step before the first DB/S3 read, so the
-    // ceiling names the hanging sub-step instead of failing blind with the bare phase reason.
-    const f = cacheFixture({ stallMs: 10_000, ceilingMs: 100 });
+  it('should name cache_lookup when the lookup hangs past its own bound (11/11 preprod)', async () => {
+    // The 11/11 install never reported progress: the lookup sets its step before the first DB/S3 read, so its
+    // own 120 s bound (exercised here with a short lookupMs) names the hanging sub-step well before the ceiling.
+    const lines: InstallStepFields[] = [];
+    const f = cacheFixture({ stallMs: 10_000, ceilingMs: 5_000, lookupMs: 50 },
+      { log: fields => lines.push(fields) });
     f.ports.storage.read = vi.fn(async () => new Promise<never>(() => {}));
     await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable',
       reason: 'phase_timeout:install:cache_lookup' });
     expect(f.ports.storage.admit).not.toHaveBeenCalled();
     expect(f.ports.cleanInstall).not.toHaveBeenCalled();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ msg: 'artifact_live_install_step', step: 'cache_lookup', outcome: 'fail',
+      reason: 'builder_unavailable:phase_timeout:install:cache_lookup' });
+  });
+  it('should bound cache_admit below the ceiling with a step-named fail line', async () => {
+    const lines: InstallStepFields[] = [];
+    const f = cacheFixture({ stallMs: 10_000, ceilingMs: 5_000, admitMs: 50 },
+      { log: fields => lines.push(fields) });
+    f.ports.storage.admit = vi.fn(async () => new Promise<never>(() => {}));
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'phase_timeout:install:cache_admit' });
+    expect(f.ports.cleanInstall).toHaveBeenCalledOnce();
+    expect(lines.some(line => line.step === 'cache_lookup' && line.outcome === 'ok')).toBe(true);
+    expect(lines.at(-1)).toMatchObject({ msg: 'artifact_live_install_step', step: 'cache_admit', outcome: 'fail',
+      reason: 'builder_unavailable:phase_timeout:install:cache_admit' });
+  });
+  it('should log cache_lookup ok and cache_admit ok with file and byte counts on a cold install', async () => {
+    const lines: InstallStepFields[] = [];
+    const f = cacheFixture(undefined, { log: fields => lines.push(fields) });
+    await f.cache.acquire(f.source());
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ msg: 'artifact_live_install_step', step: 'cache_lookup', outcome: 'ok' });
+    expect(lines[1]).toMatchObject({ msg: 'artifact_live_install_step', step: 'cache_admit', outcome: 'ok' });
+    expect(lines[1].files).toBe(1);
+    expect(lines[1].bytes).toBeGreaterThan(0);
   });
   it('should install a qualified script package with its hook disabled and refuse an unqualified one', async () => {
     const f = cacheFixture(); const entry = f.lock.packages['node_modules/pkg']; entry.hasInstallScript = true;
