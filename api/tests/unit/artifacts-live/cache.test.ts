@@ -285,6 +285,62 @@ describe('sealed user path (requireSealed)', () => {
   });
 });
 
+describe('prewarm seal (tar.zst unit)', () => {
+  it('should seal one deterministic archive and materialize it back file by file', async () => {
+    const f = cacheFixture();
+    const receipt = await f.cache.seal!(f.source());
+    expect(receipt.archive).toMatchObject({ sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(receipt.archive!.ref).toBe(
+      `artifact-builder-cache/v1/${receipt.key}/sealed-${receipt.treeSha256}.tar.zst`);
+    expect(f.ports.storage.putFile).not.toHaveBeenCalled();
+    expect(await collect(f.cache, receipt)).toEqual([f.installed]);
+    expect(f.stored().manifest).toEqual([{ path: 'pkg/index.js', mode: 292, size: 18,
+      sha256: sha256(f.installed.bytes) }]);
+  });
+  it('should produce the same archive sha256 for two seals of one tree', async () => {
+    const f = cacheFixture(); const g = cacheFixture();
+    const first = await f.cache.seal!(f.source());
+    const second = await g.cache.seal!(g.source());
+    expect(second.archive!.sha256).toBe(first.archive!.sha256);
+    expect(second.archive!.bytes).toBe(first.archive!.bytes);
+  });
+  it('should join an existing sealed entry without reinstalling', async () => {
+    const f = cacheFixture();
+    const sealed = await f.cache.seal!(f.source());
+    const joined = await f.cache.seal!(f.source());
+    expect(joined).toEqual(sealed);
+    expect(f.ports.cleanInstall).toHaveBeenCalledOnce();
+    await expect(f.cache.requireSealed!(f.source())).resolves.toEqual(sealed);
+  });
+  it('should quarantine a tampered archive as sealed_unit_invalid', async () => {
+    const f = cacheFixture();
+    const receipt = await f.cache.seal!(f.source());
+    expect(f.ports.storage.putArchive).toHaveBeenCalledOnce();
+    const ref = receipt.archive!.ref;
+    const stored = new Map<string, Uint8Array>();
+    stored.set(ref, Buffer.from('tampered'));
+    f.ports.storage.getArchive = vi.fn(async (key: string) => stored.get(key));
+    await expect(collect(f.cache, receipt)).rejects.toMatchObject({ code: 'sealed_unit_invalid' });
+    expect(f.ports.storage.quarantine).toHaveBeenCalledWith(receipt.key);
+  });
+  it('should cut a stalled seal with phase_timeout:seal:<step>', async () => {
+    const lines: InstallStepFields[] = [];
+    const f = cacheFixture({ stallMs: 50, ceilingMs: 5_000 }, { log: fields => lines.push(fields) });
+    f.ports.cleanInstall = vi.fn(async input => {
+      for await (const tarball of input.tarballs) expect(tarball.bytes).toBeInstanceOf(Uint8Array);
+      input.progress?.step?.('recipe');
+      await new Promise<never>(() => {});
+    });
+    await expect(f.cache.seal!(f.source(), { stallMs: 50, ceilingMs: 5_000 })).rejects.toMatchObject({
+      code: 'builder_unavailable', reason: 'phase_timeout:seal:recipe' });
+    expect(f.ports.storage.admit).not.toHaveBeenCalled();
+    expect(f.ports.storage.putArchive).not.toHaveBeenCalled();
+    // Only the lookup completed with a line; the stall cut the install inside cleanInstall (its inner
+    // steps keep their own lines on the real supervisor path) with the seal-named budget reason.
+    expect(lines).toMatchObject([{ step: 'cache_lookup', outcome: 'ok' }]);
+  });
+});
+
 describe('locked dependency cache identity', () => {
   it('should scope identical lockfiles by repository, runtime and policy', async () => {
     const f = cacheFixture(); const first = await f.cache.acquire(f.source());
