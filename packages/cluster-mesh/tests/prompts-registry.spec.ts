@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   InMemoryPromptRegistry, promptContentDigest,
-} from '../../src/prompts/registry';
+} from '../src/prompts/registry.js';
 
 describe('CMP-P1 prompt registry (GD-7)', () => {
   it('digests content canonically', () => {
