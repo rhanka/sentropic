@@ -149,14 +149,18 @@ describe('artifact host migrations', () => {
   });
 
   it('should default existing blob rows to object placement with DB tables present', async () => {
+    // True migration path: a row that predates 0014 has no placement value;
+    // 0014's ADD COLUMN with DEFAULT 'object' backfills it. Simulate by
+    // dropping the column, inserting without it, then re-applying the 0014
+    // DDL directly (IF NOT EXISTS makes the re-apply safe).
     await runMigrations(database);
     await database.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-p', 'tenant-a')`);
-    // Simulate a pre-0014 row: drop the placement column, insert without it,
-    // then re-run migrations to backfill via DEFAULT 'object'.
     await database.query(`ALTER TABLE artifacts.blobs DROP COLUMN placement`);
     await database.query(`INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
       VALUES ('scope-p', 'sha256:${'ab'.repeat(32)}', 3)`);
-    await runMigrations(database);
+    const migration0014 = artifactMigrationAssets.find(
+      (asset) => asset.id === '@sentropic/artifacts/migrations/0014_db_blob_placement.sql')!;
+    await database.query(migration0014.read());
     expect((await database.query(`SELECT placement FROM artifacts.blobs WHERE storage_scope_id = 'scope-p'`)).rows)
       .toEqual([{ placement: 'object' }]);
     expect((await database.query(`SELECT to_regclass('artifacts.blob_bytes')::text AS bytes,
