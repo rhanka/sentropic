@@ -73,7 +73,13 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
     },
     async deleteBlob(key: string): Promise<void> {
       await lock(digestOfKey(key), async () => {
-        const outcomes = await Promise.allSettled([db.deleteBlob(key), s3.deleteBlob(key)]);
+        // Deferred per side: a synchronously-throwing store (unknown key)
+        // must settle as a rejection inside allSettled, never escape during
+        // argument evaluation and leave the other side floating unawaited.
+        const attempt = async (side: PublicationBlobStore): Promise<void> => {
+          await side.deleteBlob(key);
+        };
+        const outcomes = await Promise.allSettled([attempt(db), attempt(s3)]);
         if (outcomes.every((outcome) => outcome.status === 'rejected')) {
           throw (outcomes[0] as PromiseRejectedResult).reason;
         }

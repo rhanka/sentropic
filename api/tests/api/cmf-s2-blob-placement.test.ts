@@ -88,7 +88,8 @@ describe('composite blob placement', () => {
       const artifactId = (ensured.body as { artifactId: string }).artifactId;
       const published = await bound.http({ method: 'POST', path: '/publish',
         body: { artifactId, idempotencyKey: randomUUID(),
-          files: [{ path: 'index.html', mimeType: 'text/html', text: '<h1>db</h1>' }] } });
+          files: [{ path: 'index.html', mimeType: 'text/html',
+            text: `<h1>placement ${withPlacement ? 'db' : 'object'}</h1>` }] } });
       expect(published.status).toBe(201);
     };
     await publish(false);
