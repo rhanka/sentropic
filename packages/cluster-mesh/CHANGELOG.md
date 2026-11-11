@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.26.0-dev.22
+
+- Merge `origin/main` (llm-mesh 0.35.0, llm-gateway 0.22.6, `<0.36.0` range) and refresh the
+  `selected` packaging fixture lock for the merged tree. No functional change to the
+  notifications module; version bump keeps the package above `origin/main` (`dev.21`).
+
 ## 0.26.0-dev.21
 
 - Ops job-failure notifications (`notifications` module): frozen `OpsJobFailureV1` event
