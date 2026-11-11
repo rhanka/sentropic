@@ -224,8 +224,13 @@ describe('composite blob placement', () => {
     const store = createPlacementBlobStore({ pool, s3, mode: 'db+s3', inlineMaxBytes: 8 });
     const refs = createMemoryRefcountStore();
     const client = await pool.connect();
+    // pg rowCount is `number | null`; the claim store needs a strict count.
+    const tx = { query: async <T>(text: string, params: readonly unknown[]) => {
+      const result = await client.query(text, [...params]);
+      return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
+    } };
     try {
-      const report = await createGcService(refs).collect(store, prefix, createPostgresDeletionClaimStore(client));
+      const report = await createGcService(refs).collect(store, prefix, createPostgresDeletionClaimStore(tx));
       expect(report.failures).toEqual([]);
       expect(report.deleted).toEqual([key]);
       expect(await db.getBlob(key)).toBeUndefined();
@@ -238,8 +243,12 @@ describe('composite blob placement', () => {
     await s3.putBlob(key, bytes);
     await refs.addRef(digest, 'release:test');
     const retainedClient = await pool.connect();
+    const retainedTx = { query: async <T>(text: string, params: readonly unknown[]) => {
+      const result = await retainedClient.query(text, [...params]);
+      return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
+    } };
     try {
-      const report = await createGcService(refs).collect(store, prefix, createPostgresDeletionClaimStore(retainedClient));
+      const report = await createGcService(refs).collect(store, prefix, createPostgresDeletionClaimStore(retainedTx));
       expect(report.deleted).toEqual([]);
       expect(report.retained).toEqual([key]);
       expect(await db.getBlob(key)).toEqual(bytes);
