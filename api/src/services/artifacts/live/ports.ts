@@ -54,6 +54,9 @@ export interface LivePorts {
    * (first-write through the reconciled monotonicity rules, so a later live reconcile at the same
    * generation with a different owner stays stale). */
   seedBinding(key: LiveKey, seed: RemoteSession): Promise<PackageFences>;
+  /** The frozen seed of a never-reconciled binding, if the binding view is a seed (epochs 0); undefined when
+   * the host reconciled or nothing was recorded. Lets a retried build-only reuse the frozen host fence. */
+  seedSession(key: LiveKey): Promise<RemoteSession | undefined>;
   forge: {
     head(key: LiveKey): Promise<string>;
     fastForward(key: LiveKey, before: string, after: string): Promise<boolean>;
