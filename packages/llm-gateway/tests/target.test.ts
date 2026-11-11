@@ -42,8 +42,8 @@ describe('launch-alias target-map', () => {
     });
   });
 
-  it('routes the Fable 5 and 5.1 launch aliases to Anthropic at high/xhigh/max', () => {
-    for (const model of ['claude-fable-5', 'claude-fable-5-1']) {
+  it('routes the Fable 5, 5.1 and 5.2 launch aliases to Anthropic at high/xhigh/max', () => {
+    for (const model of ['claude-fable-5', 'claude-fable-5-1', 'claude-fable-5-2']) {
       for (const effort of ['high', 'xhigh', 'max', 'medium', 'low'] as const) {
         expect(resolve(`${model}-${effort}`)).toEqual({
           providerId: 'anthropic', transportProviderId: 'claude-code', model, effort,
@@ -77,6 +77,14 @@ describe('launch-alias target-map', () => {
     expect(resolve('claude-fable-5-1')).toEqual({
       providerId: 'anthropic', transportProviderId: 'claude-code',
       model: 'claude-fable-5-1',
+    });
+    expect(resolve('claude-fable-5-2')).toEqual({
+      providerId: 'anthropic', transportProviderId: 'claude-code',
+      model: 'claude-fable-5-2',
+    });
+    expect(resolve('gemini-4-carbon')).toEqual({
+      providerId: 'gemini', transportProviderId: 'cloud-code',
+      model: 'gemini-4-carbon',
     });
     expect(resolve('gpt-6-astra')).toEqual({
       providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
@@ -213,6 +221,29 @@ describe('describeTargetRoutes (discovery)', () => {
         model: 'zai-glm-5-3', effort: 'max',
       },
     ]);
+    // Owner mapping 2026-11-10: Fable 5.2 requests are served by Gemini 4
+    // Carbon on the cloud slot. The unmapped max alias keeps the default
+    // contributor muse candidate like every other unlisted alias, then the
+    // Astra codex slot, Carbon, and the GLM tail.
+    expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-fable-5-2-max']).toEqual([
+      MERGED['claude-fable-5-2-max'],
+      {
+        providerId: 'muse', transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor', effort: 'max',
+      },
+      {
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-6-astra', effort: 'max',
+      },
+      {
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-4-carbon', effort: 'high',
+      },
+      {
+        providerId: 'mistral', transportProviderId: 'mistral-vibe',
+        model: 'zai-glm-5-3', effort: 'max',
+      },
+    ]);
     expect(describeCanonicalTargetRoutes()).toHaveLength(
       Object.values(CANONICAL_TARGET_ROUTE_MAPPINGS)
         .reduce((total, targets) => total + targets.length, 0),
@@ -230,6 +261,12 @@ describe('describeTargetRoutes (discovery)', () => {
     )).toEqual(['claude-code', 'muse', 'codex', 'cloud-code', 'mistral-vibe']);
     expect(resolveCandidates('claude-fable-5-1-max')[2]).toMatchObject({
       transportProviderId: 'codex', model: 'gpt-6-astra', effort: 'max',
+    });
+    expect(resolveCandidates('claude-fable-5-2-max')[2]).toMatchObject({
+      transportProviderId: 'codex', model: 'gpt-6-astra', effort: 'max',
+    });
+    expect(resolveCandidates('claude-fable-5-2-max')[3]).toMatchObject({
+      transportProviderId: 'cloud-code', model: 'gemini-4-carbon', effort: 'high',
     });
   });
 
@@ -257,6 +294,12 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-4-argon', effort: 'high',
     });
+    // Carbon slot (owner mapping 2026-11-10): the Fable 5.2 family serves
+    // Gemini 4 Carbon at high effort on the cloud slot with no muse candidate.
+    const Carbon = () => ({
+      providerId: 'gemini', transportProviderId: 'cloud-code',
+      model: 'gemini-4-carbon', effort: 'high',
+    });
     // GLM 5.3 supplemental fallback (owner decisions 2026-10-07 and
     // 2026-10-08): appended after Codex and Cloud Code for the Opus, Claude
     // 5.5 and Fable 5.1 aliases, at +1 rung on the low/high/max ladder.
@@ -274,6 +317,9 @@ describe('describeTargetRoutes (discovery)', () => {
       ['claude-fable-5-1-max', [Wonder('max'), Codex('gpt-6-astra', 'max'), Argon(), Glm()]],
       ['claude-fable-5-1-medium', [Wonder('high'), Codex('gpt-6-astra', 'medium'), Argon(), Glm('high')]],
       ['claude-fable-5-1-low', [Wonder('medium'), Codex('gpt-6-astra', 'low'), Argon(), Glm('high')]],
+      ['claude-fable-5-2-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Carbon(), Glm()]],
+      ['claude-fable-5-2-medium', [Muse('high'), Codex('gpt-6-astra', 'medium'), Carbon(), Glm('high')]],
+      ['claude-fable-5-2-low', [Muse('medium'), Codex('gpt-6-astra', 'low'), Carbon(), Glm('high')]],
       ['claude-opus-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm()]],
       ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud(), Glm()]],
       ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm()]],
@@ -293,6 +339,25 @@ describe('describeTargetRoutes (discovery)', () => {
     ];
     for (const [alias, expected] of cases) {
       expect(resolveCandidates(alias).slice(1)).toEqual(expected);
+    }
+  });
+
+  it('resolves the Fable 5.2 gateway aliases to Gemini 4 Carbon', () => {
+    // Owner mapping 2026-11-10: requests for Fable 5.2 are served by Gemini 4
+    // Carbon. The faithful Anthropic target stays first; Carbon is the mapped
+    // Cloud Code candidate. The mapped base/high/xhigh aliases emit no muse
+    // candidate; max/medium/low keep the default contributor muse candidate.
+    const resolveCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
+    for (const alias of ['claude-fable-5-2', 'claude-fable-5-2-high', 'claude-fable-5-2-xhigh',
+      'claude-fable-5-2-max', 'claude-fable-5-2-medium', 'claude-fable-5-2-low']) {
+      const candidates = resolveCandidates(alias);
+      expect(candidates.filter((target) => target.transportProviderId === 'cloud-code')).toEqual([{
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-4-carbon', effort: 'high',
+      }]);
+      expect(candidates.some((target) => target.transportProviderId === 'muse'), alias).toBe(
+        ['claude-fable-5-2-max', 'claude-fable-5-2-medium', 'claude-fable-5-2-low'].includes(alias),
+      );
     }
   });
 

@@ -26,7 +26,7 @@ const pinnedCost = (usage: SettleUsage): bigint => {
 
 describe('native admitted settlement', () => {
   it.each(NATIVE_MODELS)('should pin measured and interrupted one-hour amounts for %s', model => {
-    const fable = model === NATIVE_MODELS[2];
+    const fable = model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3];
     const equal = { input_tokens: 100, cache_read_input_tokens: 10000, cache_creation_input_tokens: 200, output_tokens: 500 };
     const cases = [
       { delta: equal, termination: 'completed' as const, expected: fable ? 1750n : 2500n, output: 500 },
