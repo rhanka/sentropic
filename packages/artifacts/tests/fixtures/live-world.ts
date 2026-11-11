@@ -7,7 +7,8 @@ import type { LiveAuthority, LiveServiceDeps } from '../../src/server/live-contr
 
 export function liveWitness(options: { store?: LiveStore; now?: () => number; invited?: (actorId: string) => boolean;
   rights?: (actorId: string) => Partial<Pick<LiveAuthority, 'canReadCode' | 'canWrite' | 'humanLinked'>>;
-  invitations?: LiveServiceDeps['invitations']; onWorkerEvent?: LiveServiceDeps['onWorkerEvent'] } = {}) {
+  invitations?: LiveServiceDeps['invitations']; onWorkerEvent?: LiveServiceDeps['onWorkerEvent'];
+  redriveConcurrency?: number; redriveItemTimeoutMs?: number } = {}) {
   let head = 'a'.repeat(40);
   let canReadCode = true;
   const binding = { ...gitBinding(), channel: 'personal' as const, executor: 'sandbox' as const, personalPrincipalId: 'alice', headCommitSha: head };
@@ -29,16 +30,19 @@ export function liveWitness(options: { store?: LiveStore; now?: () => number; in
   };
   const worker = { reconcile: vi.fn(async () => undefined), stop: vi.fn(async () => undefined) };
   const store = options.store ?? createMemoryLiveStore();
-  const service = createLiveService({ store, git, worker, ...(options.now ? { now: options.now } : {}),
+  const deps: LiveServiceDeps = { store, git, worker, ...(options.now ? { now: options.now } : {}),
     ...(options.invitations ? { invitations: options.invitations } : {}),
     ...(options.onWorkerEvent ? { onWorkerEvent: options.onWorkerEvent } : {}),
+    ...(options.redriveConcurrency !== undefined ? { redriveConcurrency: options.redriveConcurrency } : {}),
+    ...(options.redriveItemTimeoutMs !== undefined ? { redriveItemTimeoutMs: options.redriveItemTimeoutMs } : {}),
     keys: { current: async () => ({ version: 'k1', key: Buffer.alloc(32, 3) }), resolve: async () => Buffer.alloc(32, 3) },
     authorize: async invocation => ({ binding, ownerId: 'alice', canReadCode, canWrite: true, humanLinked: true,
       invited: options.invited?.(invocation.actorId) ?? false, ...options.rights?.(invocation.actorId),
       qualified: true, target: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, branch: binding.branch,
         subPath: '', principalId: invocation.actorId, outputDir: 'dist' },
       repository: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, locator: '', installationRef: '',
-        branchPrefix: 'artifact/' as const, allowedSubPaths: [''], canWrite: true, writablePaths: ['ui/**'], refusedWritePaths: [] } }) });
+        branchPrefix: 'artifact/' as const, allowedSubPaths: [''], canWrite: true, writablePaths: ['ui/**'], refusedWritePaths: [] } });
+  const service = createLiveService(deps);
   const context = { actorId: 'alice', storageScopeId: binding.storageScopeId, invocationId: 'inv-1' };
   let sequence = 0;
   const call = async (op: string, args: Record<string, unknown> = {}) => service.execute(op,
@@ -49,6 +53,6 @@ export function liveWitness(options: { store?: LiveStore; now?: () => number; in
     return call('live_write', { expectedHeadSha: head, expectedLiveRevision: state.liveRevision,
       idempotencyKey: 'write-' + ++sequence, ...args });
   };
-  return { service, call, status, write, git, worker, binding, store, context, baseFiles, setHead: (sha: string) => { head = sha; },
+  return { service, deps, call, status, write, git, worker, binding, store, context, baseFiles, setHead: (sha: string) => { head = sha; },
     revoke: () => { canReadCode = false; } };
 }

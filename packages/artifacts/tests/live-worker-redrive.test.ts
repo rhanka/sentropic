@@ -2,7 +2,8 @@ import { expect, it } from 'vitest';
 import { liveWitness } from './fixtures/live-world.js';
 import { ArtifactOperationError } from '../src/server/failures.js';
 import type { LiveWorkerEvent } from '../src/server/live-contracts.js';
-import { createMemoryLiveStore, liveWorkerPending, type LiveIdentity } from '../src/server/live-store.js';
+import { createMemoryLiveStore, liveWorkerPending, normalizeRedriveLimit, type LiveIdentity } from '../src/server/live-store.js';
+import { settleLiveWorker } from '../src/server/live-worker.js';
 
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 
@@ -119,4 +120,81 @@ it('should admit live writers on a build_failed binding and still refuse a pendi
   w.binding.state = 'build_pending';
   await expect(w.write({ files: [{ path: 'ui/b.ts', text: 'later' }] }))
     .rejects.toMatchObject({ kind: 'git_live_conflict', details: { publicDetails: { reason: 'pending_publication' } } });
+});
+
+it('should return skipped instead of settled when the worker ACK no longer matches the runtime', async () => {
+  const { w, events, identity, record, start, scope } = world();
+  await start('start'); await settle();
+  events.length = 0;
+  w.worker.reconcile.mockImplementation(async () => ({ liveSessionId: (await record()).runtime!.liveSessionId,
+    leaseEpoch: 999, routeEpoch: 999, revision: 'stale', ready: true }) as never);
+  expect(await w.service.redrive(scope)).toEqual([{ ...identity, action: 'project', outcome: 'skipped' }]);
+  expect((await record()).runtime!.phase).toBe('REVIVING');
+  expect(events).toEqual([]);
+});
+
+it('should skip a stop settle when the runtime already left the stop phases', async () => {
+  const { w, deps, identity, record, builder, start } = world();
+  builder(true);
+  const started = await start('start'); await settle();
+  const state = await w.status();
+  await w.call('live_control', { action: 'stop', liveSessionId: started.liveSessionId,
+    expectedLiveRevision: state.liveRevision, idempotencyKey: 'stop-1' });
+  expect((await record()).runtime).toMatchObject({ phase: 'DORMANT' });
+  w.worker.stop.mockClear();
+  await expect(settleLiveWorker({ deps, identity, action: 'stop',
+    result: { liveSessionId: started.liveSessionId }, now: Date.now() })).resolves.toBe('skipped');
+  expect(w.worker.stop).not.toHaveBeenCalled();
+});
+
+it('should not double-call the worker when two redrives overlap', async () => {
+  const { w, identity, record, start, scope } = world();
+  let release!: (ack: Record<string, unknown>) => void;
+  const gate = new Promise<Record<string, unknown>>(resolve => { release = resolve; });
+  w.worker.reconcile.mockImplementation(() => gate as never);
+  await start('start');
+  const first = w.service.redrive(scope);
+  await settle();
+  expect(await w.service.redrive(scope)).toEqual([]);
+  const row = await record();
+  release({ liveSessionId: row.runtime!.liveSessionId, leaseEpoch: row.runtime!.leaseEpoch,
+    routeEpoch: row.runtime!.routeEpoch, revision: row.revision, ready: true });
+  await expect(first).resolves.toEqual([{ ...identity, action: 'project', outcome: 'skipped' }]);
+  expect(w.worker.reconcile).toHaveBeenCalledTimes(1);
+});
+
+it('should clamp redrive limits and order pending deterministically', async () => {
+  const store = createMemoryLiveStore();
+  const seed = (artifactId: string, lastAccessAt: string) =>
+    store.transaction({ storageScopeId: 'scope-a', artifactId, bindingGeneration: 1 }, async tx => {
+      tx.record = { storageScopeId: 'scope-a', artifactId, bindingGeneration: 1, revision: 'r1',
+        runtime: { phase: 'REVIVING', appliedRevision: null, lastAccessAt, liveSessionId: 's-' + artifactId } } as never;
+    });
+  await seed('b-art', '2026-11-11T02:00:00.000Z');
+  await seed('a-art', '2026-11-11T02:00:00.000Z');
+  expect((await store.pending!('scope-a')).map(identity => identity.artifactId)).toEqual(['a-art', 'b-art']);
+  expect(await store.pending!('scope-a', -1)).toEqual([]);
+  expect(await store.pending!('scope-a', 0)).toEqual([]);
+  expect(await store.pending!('scope-a', Number.NaN)).toEqual([]);
+  expect((await store.pending!('scope-a', 1000)).map(identity => identity.artifactId)).toEqual(['a-art', 'b-art']);
+  expect(normalizeRedriveLimit(undefined)).toBe(64);
+  expect(normalizeRedriveLimit(1000)).toBe(64);
+});
+
+it('should report pending with an event when the worker answers void', async () => {
+  const { w, events, identity, record, start, scope } = world();
+  expect(await start('start')).toMatchObject({ state: 'REVIVING', workerPending: true });
+  await settle();
+  expect(events).toEqual([{ identity, action: 'project', outcome: 'pending' }]);
+  expect((await record()).runtime!.phase).toBe('REVIVING');
+  expect(await w.service.redrive(scope)).toEqual([{ ...identity, action: 'project', outcome: 'pending' }]);
+  expect(events).toEqual([{ identity, action: 'project', outcome: 'pending' },
+    { identity, action: 'project', outcome: 'pending' }]);
+});
+
+it('should surface the error code of standard errors instead of unknown', async () => {
+  const { w, events, identity, start } = world();
+  w.worker.reconcile.mockRejectedValue(Object.assign(new Error('reset by peer'), { code: 'ECONNRESET' }));
+  await start('start'); await settle();
+  expect(events).toEqual([{ identity, action: 'project', outcome: 'failed', code: 'ECONNRESET' }]);
 });
