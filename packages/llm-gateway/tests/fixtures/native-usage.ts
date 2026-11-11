@@ -1,7 +1,7 @@
 import { NativeUsageObserver, type RawNativeUsageUpdate } from '../../src/native-usage.js';
 import { NativeSseFramer } from '../../src/native-sse.js';
 
-export const NATIVE_MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'] as const;
+export const NATIVE_MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-fable-5-2'] as const;
 export const CACHE_START: RawNativeUsageUpdate = {
   input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200,
   cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 }, output_tokens: 1,

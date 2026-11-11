@@ -343,6 +343,7 @@ describe('LocalAccountTransportService', () => {
       'gemini-3.7-flash',
       'gemini-3.8-flash',
       'gemini-4-argon',
+      'gemini-4-carbon',
       'gemini-3.1-pro',
     ]);
     expect(accounts[0]?.supportedModelIds).not.toContain('gemini-3.5-flash');

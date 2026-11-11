@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 0.36.0: add `gemini-4-carbon` (Gemini Cloud Code model mirroring Argon capabilities) and `claude-fable-5-2` (Anthropic claude-code model mirroring Fable 5.1). Fable 5.2 launch aliases serve Gemini 4 Carbon on the Cloud Code slot (owner mapping 2026-11-10) with GPT-6 Astra on the Codex slot; the mapped base/high/xhigh aliases carry no Muse candidate.
+
 ## 0.35.0
 
 - New `llm-mesh-enroll` bin (`./dist/node/cli/bin.js`, dedicated entry
