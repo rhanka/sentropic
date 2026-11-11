@@ -13,7 +13,10 @@ export interface HostRecheckView {
   /** The required head is reachable on the bound branch, observed in this transaction. */
   headReachable: boolean;
   binding: { artifactId: string; state: string; generation: number; executor: string; autoPublish: boolean;
-    pendingJobId: string | null; pendingCommitSha: string | null };
+    pendingJobId: string | null; pendingCommitSha: string | null;
+    /** Binding owner's principalId (personalPrincipalId, attachedBy fallback): the builder seeds its
+     * binding view from this field when the binding was never reconciled. */
+    ownerId: string };
   /** The persisted G0 v3 §2.6 job; `fence` is the attempt last admitted by `resolvePendingJob`. */
   job: { jobId: string; state: string; bindingGeneration: number; commitSha: string; expectedCurrentReleaseId: string | null;
     fence: AttemptFence | null } | undefined;
@@ -25,7 +28,10 @@ export const RECHECK_REFUSALS = ['scope_mismatch', 'publication_paused', 'genera
   'attempt_fenced', 'policy_refused', 'head_unreachable', 'release_conflict', 'image_not_allowed'] as const;
 export type RecheckRefusal = typeof RECHECK_REFUSALS[number];
 /** The host job the builder may build (A-LIVE §8.4 server-resolved commit), from `resolvePendingJob`. */
-export interface HostJob { jobId: string; generation: number; headSha: string; expectedReleaseId: string | null }
+export interface HostJob { jobId: string; generation: number; headSha: string; expectedReleaseId: string | null;
+  /** Binding owner's principalId, copied from the pending job's binding: the builder's only owner source
+   * before the first live reconcile. */
+  ownerId: string }
 
 function pending(view: HostRecheckView, jobId: string, generation: number) {
   const { binding, job } = view;
@@ -59,6 +65,6 @@ export function resolvePendingJob(view: HostRecheckView, jobId: string, fence: A
     || (job.fence && (fence.attempt < job.fence.attempt || (fence.attempt === job.fence.attempt && fence.runId !== job.fence.runId)))) {
     return null;
   }
-  return { job: { jobId, generation: job.bindingGeneration, headSha: job.commitSha, expectedReleaseId: job.expectedCurrentReleaseId },
-    fence: { runId: fence.runId, attempt: fence.attempt } };
+  return { job: { jobId, generation: job.bindingGeneration, headSha: job.commitSha, expectedReleaseId: job.expectedCurrentReleaseId,
+    ownerId: view.binding.ownerId }, fence: { runId: fence.runId, attempt: fence.attempt } };
 }
