@@ -225,6 +225,64 @@ describe('locked dependency cache', () => {
       await expect(g.cache.acquire(g.source())).rejects.toMatchObject({ code: 'dependency_cache_invalid' });
     }
   });
+describe('sealed user path (requireSealed)', () => {
+  it('should throw typed cache_not_prewarmed on a miss without fetching or installing', async () => {
+    const f = cacheFixture();
+    const started = Date.now();
+    await expect(f.cache.requireSealed!(f.source())).rejects.toMatchObject({ code: 'cache_not_prewarmed',
+      reason: f.source().cacheIdentity.lockSha256 });
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(f.ports.fetch).not.toHaveBeenCalled();
+    expect(f.ports.cleanInstall).not.toHaveBeenCalled();
+    expect(f.ports.storage.admit).not.toHaveBeenCalled();
+  });
+  it('should quarantine a corrupt sealed entry and throw cache_not_prewarmed', async () => {
+    const f = cacheFixture(); await f.cache.acquire(f.source()); f.stored().receipt = null as never;
+    await expect(f.cache.requireSealed!(f.source())).rejects.toMatchObject({ code: 'cache_not_prewarmed' });
+    expect(f.ports.storage.quarantine).toHaveBeenCalledOnce();
+    expect(f.ports.cleanInstall).toHaveBeenCalledOnce();
+  });
+  it('should return the sealed receipt on a hit without a second install', async () => {
+    const f = cacheFixture(); const receipt = await f.cache.acquire(f.source());
+    await expect(f.cache.requireSealed!(f.source())).resolves.toEqual(receipt);
+    expect(f.ports.cleanInstall).toHaveBeenCalledOnce();
+    expect(f.ports.fetch).toHaveBeenCalled();
+  });
+  it('should quarantine an incompatible runtime identity as unsealed instead of invalid', async () => {
+    const f = cacheFixture(); await f.cache.acquire(f.source());
+    const source = f.source(); source.cacheIdentity.npmVersion = 'other';
+    await expect(f.cache.requireSealed!(source)).rejects.toMatchObject({ code: 'cache_not_prewarmed' });
+    expect(f.ports.storage.quarantine).toHaveBeenCalledOnce();
+  });
+  it('should refuse a tampered warm entry as unsealed', async () => {
+    const f = cacheFixture(); await f.cache.acquire(f.source());
+    f.stored().manifest[0] = { ...f.stored().manifest[0], size: 64 * 1024 * 1024 + 1 };
+    await expect(f.cache.requireSealed!(f.source())).rejects.toMatchObject({ code: 'cache_not_prewarmed' });
+  });
+  it('should fall back to acquire when the sealed path is disabled or unimplemented', async () => {
+    const { requireUserCache, sealedUserPathEnabled } = await import('../../../src/services/artifacts/live/cache');
+    expect(sealedUserPathEnabled()).toBe(true);
+    expect(sealedUserPathEnabled({})).toBe(true);
+    const f = cacheFixture();
+    const restore = process.env.ARTIFACT_BUILDER_SEALED_CACHE;
+    try {
+      process.env.ARTIFACT_BUILDER_SEALED_CACHE = '0';
+      expect(sealedUserPathEnabled()).toBe(false);
+      const receipt = await requireUserCache(f.cache, f.source());
+      expect(receipt.runId).toBe('clean-run');
+      expect(f.ports.cleanInstall).toHaveBeenCalledOnce();
+    } finally {
+      if (restore === undefined) delete process.env.ARTIFACT_BUILDER_SEALED_CACHE;
+      else process.env.ARTIFACT_BUILDER_SEALED_CACHE = restore;
+    }
+    const g = cacheFixture();
+    const receipt = await requireUserCache({ ...g.cache, requireSealed: undefined }, g.source());
+    expect(receipt.runId).toBe('clean-run');
+    expect(g.ports.cleanInstall).toHaveBeenCalledOnce();
+  });
+});
+
+describe('locked dependency cache identity', () => {
   it('should scope identical lockfiles by repository, runtime and policy', async () => {
     const f = cacheFixture(); const first = await f.cache.acquire(f.source());
     const source = f.source(); source.cacheIdentity.storageScopeId = 'another';
@@ -238,4 +296,5 @@ describe('locked dependency cache', () => {
     for (const name of ['GITHUB_PAGES', 'QA_HARNESS', 'API_PROXY_TARGET', 'NPM_TOKEN', 'DATABASE_URL']) expect(env).not.toHaveProperty(name);
     expect(env.VITE_ARTIFACT_MODE).toBe('1'); expect(INSTALL_RECIPE.args).toContain('--ignore-scripts');
   });
+});
 });
