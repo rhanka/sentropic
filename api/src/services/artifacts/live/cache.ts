@@ -115,6 +115,8 @@ const cacheKey = (id: CacheIdentity) => `${id.lockSha256}/${sha256(JSON.stringif
   id.storageScopeId, id.repoId, id.platform, id.nodeVersion, id.npmVersion, id.image,
   id.policyRevision, id.workspaceTopology, id.integrityDigest, [...(id.installWorkspaces ?? [])].sort(),
 ]))}`;
+/** Canonical sealed-cache key of an identity (§7.1.2): the prewarm state rows and archive refs key off this. */
+export const cacheKeyOf = (identity: CacheIdentity): string => cacheKey(identity);
 const DIGEST = /^[a-f0-9]{64}$/;
 /** Unchanged tree digest over [path, mode, sha256] rows; a size is bound by the per-file rehash on every read. */
 function treeDigest(manifest: readonly DependencyEntry[]) {
