@@ -29,6 +29,10 @@
       "types": "./dist/codecs.d.ts",
       "import": "./dist/codecs.js"
     },
+    "./adapters/db-blob": {
+      "types": "./dist/adapters/db-blob.d.ts",
+      "import": "./dist/adapters/db-blob.js"
+    },
     "./adapters/s3": {
       "types": "./dist/adapters/s3.d.ts",
       "import": "./dist/adapters/s3.js"
