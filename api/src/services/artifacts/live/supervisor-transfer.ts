@@ -1,5 +1,20 @@
 import { createHash } from 'node:crypto';
+import * as zlib from 'node:zlib';
+import { Readable } from 'node:stream';
 import { safeDependencyPath } from './integrity';
+/** `node:zlib` zstd frame support (runtime Node ≥ 22.15, including the API Node 24 and builder Node 26 images;
+ * the pinned `@types/node` predates the declarations, so access is capability-checked, never assumed). */
+interface ZstdShape {
+  createZstdCompress(options?: unknown): NodeJS.ReadWriteStream;
+  createZstdDecompress(options?: unknown): NodeJS.ReadWriteStream;
+}
+function zstd(): ZstdShape {
+  const candidate = zlib as unknown as Partial<ZstdShape>;
+  if (typeof candidate.createZstdCompress !== 'function' || typeof candidate.createZstdDecompress !== 'function') {
+    throw new Error('zstd_unavailable');
+  }
+  return candidate as ZstdShape;
+}
 
 export interface TransferFile { path: string; mode: number; bytes: Uint8Array }
 /** Manifest row of one file; the digest of a tree is computed from these rows, never from bytes held at once. */
@@ -115,4 +130,112 @@ export async function readSnapshot(page: (cursor: number) => Promise<Record<stri
   const files: TransferFile[] = [];
   await streamSnapshot(page, limits, links, fail, async file => { files.push(file); });
   return files;
+}
+
+/** One sealed-unit member: a regular dependency file with a cache manifest mode (0444/0555 on the wire). */
+export interface UstarMember { path: string; mode: 292 | 365; bytes: Uint8Array }
+/** Wire modes of a sealed unit member (the only modes the bounded reader accepts). */
+const ustarMode = (mode: 292 | 365): 0o444 | 0o555 => mode === 365 ? 0o555 : 0o444;
+const RECORD = 512;
+/** Deterministic ustar header of one member: zeroed mtime/uid/gid, sorting by path done by the caller. The tree
+ * walk that feeds the seal is already deterministic, so identical trees seal to identical bytes. */
+export function ustarHeader(member: { path: string; mode: 292 | 365; size: number }, fail: TransferFailure): Uint8Array {
+  if (!member || !safeDependencyPath(member.path) || member.path.split('/').includes('.git')
+    || ![292, 365].includes(member.mode) || !Number.isSafeInteger(member.size) || member.size < 0) fail('invalid');
+  const raw = Buffer.byteLength(member.path);
+  if (raw === 0 || raw > 255) fail('invalid');
+  let name = member.path; let prefix = '';
+  if (raw > 100) {
+    const cut = member.path.lastIndexOf('/', 155);
+    if (cut <= 0 || cut >= member.path.length - 1 || Buffer.byteLength(member.path.slice(0, cut)) > 155
+      || Buffer.byteLength(member.path.slice(cut + 1)) > 100) fail('invalid');
+    prefix = member.path.slice(0, cut); name = member.path.slice(cut + 1);
+  }
+  const header = Buffer.alloc(RECORD, 0);
+  header.write(name, 0, 100, 'utf8'); header.write(ustarMode(member.mode).toString(8).padStart(7, '0'), 100, 8, 'utf8');
+  header.write('0'.repeat(8), 108, 8, 'utf8'); header.write('0'.repeat(8), 116, 8, 'utf8');
+  header.write(member.size.toString(8).padStart(11, '0'), 124, 12, 'utf8');
+  header.write(' '.repeat(8), 148, 8, 'utf8'); header[156] = 0x30; header.write('ustar\0', 257, 6, 'utf8');
+  header.write('00', 263, 2, 'utf8'); header.write(prefix, 345, 155, 'utf8');
+  let checksum = 0;
+  for (let i = 0; i < RECORD; i++) checksum += i >= 148 && i < 156 ? 0x20 : header[i]!;
+  header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 8, 'utf8');
+  return header;
+}
+/** Deterministic sealed-unit stream (§7.1.2): ustar records (sorted paths, 0444/0555, zeroed mtime/uid/gid)
+ * through one `zstd` frame (default level 3, single-thread). Holds one member plus the compressor window. */
+export async function* tarZst(members: AsyncIterable<UstarMember>): AsyncGenerator<Uint8Array> {
+  async function* tar(): AsyncGenerator<Uint8Array> {
+    for await (const member of members) {
+      if (!member || !(member.bytes instanceof Uint8Array)) throw new Error('invalid sealed member');
+      yield ustarHeader({ path: member.path, mode: member.mode, size: member.bytes.byteLength }, () => {
+        throw new Error('invalid sealed member');
+      });
+      for (let offset = 0; offset < member.bytes.byteLength; offset += RECORD) {
+        const record = Buffer.alloc(RECORD, 0);
+        record.set(member.bytes.subarray(offset, Math.min(offset + RECORD, member.bytes.byteLength)), 0);
+        yield record;
+      }
+    }
+    yield Buffer.alloc(RECORD, 0); yield Buffer.alloc(RECORD, 0);
+  }
+  const compressed = Readable.from(tar()).pipe(zstd().createZstdCompress());
+  for await (const chunk of compressed) yield chunk as Uint8Array;
+}
+/** Bounded ustar + zstd reader (§7.2.3): regular files only (no links, devices, absolute/`..` paths — the same
+ * refusals as `safeDependencyPath`), wire modes only, running counters against `limits`, decompression ratio
+ * bound (refuses past 20:1 or past `totalBytes`, whichever first), streaming extraction. `archiveBytes` is the
+ * compressed size the ratio is measured against; the caller rehashes every extracted file. */
+export async function* extractTarZst(archive: Uint8Array, archiveBytes: number, limits: TreeLimits,
+  fail: TransferFailure): AsyncGenerator<UstarMember> {
+  if (!(archive instanceof Uint8Array)) fail('invalid');
+  let queue = Buffer.alloc(0); let ended = false; let total = 0; let count = 0;
+  const text = (bytes: Buffer, from: number, to: number) => bytes.subarray(from, to).toString('utf8').replace(/\0.*$/, '');
+  const take = async (length: number): Promise<Buffer> => {
+    while (queue.byteLength < length) {
+      if (ended) fail('invalid');
+      const piece = await next();
+      if (piece === null) { ended = true; continue; }
+      queue = Buffer.concat([queue, piece]);
+    }
+    const out = queue.subarray(0, length); queue = queue.subarray(length);
+    return out;
+  };
+  const decompressed = Readable.from([Buffer.from(archive)]).pipe(zstd().createZstdDecompress());
+  const iterator = decompressed[Symbol.asyncIterator]();
+  const next = async (): Promise<Uint8Array | null> => {
+    try { const step = await iterator.next(); return step.done ? null : step.value as Uint8Array; }
+    catch { fail('invalid'); }
+  };
+  for (;;) {
+    const header = await take(RECORD);
+    if (header.every(byte => byte === 0)) {
+      const second = await take(RECORD);
+      if (!second.every(byte => byte === 0)) fail('invalid');
+      if (queue.byteLength !== 0) fail('invalid');
+      return;
+    }
+    const magic = header.subarray(257, 263).toString('utf8');
+    if (magic !== 'ustar\0') fail('invalid');
+    const type = String.fromCharCode(header[156]!);
+    if (type !== '0' && type !== '\0') fail('invalid');
+    const name = text(header, 0, 100); const prefix = text(header, 345, 500);
+    const path = prefix ? `${prefix}/${name}` : name;
+    const mode = parseInt(text(header, 100, 108).trim() || '0', 8);
+    const size = parseInt(text(header, 124, 136).trim() || '0', 8);
+    if (!safeDependencyPath(path) || path.split('/').includes('.git')
+      || (mode !== 0o444 && mode !== 0o555) || !Number.isSafeInteger(size) || size < 0) fail('invalid');
+    let checksum = 0;
+    for (let i = 0; i < RECORD; i++) checksum += i >= 148 && i < 156 ? 0x20 : header[i]!;
+    if (checksum !== parseInt(text(header, 148, 156).trim() || '0', 8)) fail('invalid');
+    if (size > limits.fileBytes || ++count > limits.files) fail('limit');
+    const body = Buffer.alloc(size);
+    let read = 0;
+    while (read < size) { const piece = await take(Math.min(size - read, 1 << 20)); piece.copy(body, read); read += piece.byteLength; }
+    const padding = (RECORD - (size % RECORD)) % RECORD;
+    if (padding) await take(padding);
+    total += size;
+    if (total > limits.totalBytes || total > archiveBytes * 20) fail('limit');
+    yield { path, mode: mode === 0o555 ? 365 : 292, bytes: body };
+  }
 }
