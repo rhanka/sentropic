@@ -3,8 +3,9 @@ import { assertFence, automaticEligible, conflict, idleDeadline, LiveError, publ
   type LiveRuntime, type LiveState } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { requireUserCache } from './cache';
-import { runPhase, withinPhase } from './deadline';
+import { phaseKeyHash, runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
+import { logger } from '../../../logger';
 
 const idle = (ports: LivePorts, state: LiveState | undefined): state is LiveState =>
   !!state && state.runtime.phase === 'LIVE' && ports.now() > idleDeadline(state.runtime);
@@ -33,6 +34,21 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     if (draft.dirty && draft.baseHeadSha !== head) throw new LiveError('git_live_draft_conflict');
     const source = await ports.forge.snapshot(key, head);
     if (source.headSha !== head) throw new LiveError('git_head_moved');
+    // Sealed-cache pre-admission (§7.1.4): on an unsealed lockfile the idle build skips with a typed log
+    // line instead of installing, and the session stays LIVE for the next pass. No pod is created.
+    let cache;
+    try {
+      cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source));
+    } catch (error) {
+      if (!(error instanceof LiveError) || error.code !== 'cache_not_prewarmed') throw error;
+      await transition(ports, key, runtime, state => {
+        if (state.runtime.phase !== 'QUIESCING') conflict('stale_fence');
+        state.runtime.phase = 'LIVE'; state.runtime.attempt = null;
+      }).catch(() => undefined);
+      logger.info({ msg: 'artifact_idle_build_skipped', key: phaseKeyHash(key), reason: 'cache_not_prewarmed',
+        ...(typeof error.reason === 'string' ? { lockSha256: error.reason } : {}) });
+      return;
+    }
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'QUIESCING') conflict('stale_fence');
       state.runtime.phase = 'BUILDING';
@@ -44,7 +60,6 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     await ports.worker.clean(runtime);
     // The phase closures capture the fenced post-transition runtime, not the pre-guard union.
     const installing = runtime;
-    const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, installing));
     await runPhase(key, 'prepare', () => ports.worker.prepare(installing, source, cache));
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
     await transition(ports, key, runtime, state => {
