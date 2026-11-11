@@ -44,15 +44,18 @@ const CACHE_KEY_PREFIX = 'artifact-builder-cache/v1/';
 const CACHE_FILE = /^files\/[a-f0-9]{64}$/;
 /** Admitted manifest objects: `<lockSha>/<keySha>/<uuid>` under the prefix. */
 const CACHE_MANIFEST = /^[a-f0-9]{64}\/[a-f0-9]{64}\/[0-9a-f-]{36}$/;
-/** Sealed-unit archives: `<lockSha>/<keySha>/sealed-<treeSha256>.tar.zst` under the prefix (§7.1.2). */
+/** Sealed-unit archives: `<lockSha>/<keySha>/sealed-<treeSha>.tar.zst` under the prefix (§7.1.2). */
 const CACHE_ARCHIVE = /^[a-f0-9]{64}\/[a-f0-9]{64}\/sealed-[a-f0-9]{64}\.tar\.zst$/;
+/** Source units: `sources/<commitSha>-<filterDigest>.tar.zst` — the forge reader's repacked snapshot (§7.2.2). */
+const CACHE_SOURCE = /^sources\/[0-9a-f]{40}-[a-f0-9]{64}\.tar\.zst$/;
 /** Own key discipline of the builder-cache store: only the admitted cache shapes, refused before any S3 call. */
 function assertCacheKey(key: string): void {
   const suffix = key.startsWith(CACHE_KEY_PREFIX) ? key.slice(CACHE_KEY_PREFIX.length) : undefined;
-  if (suffix === undefined
-    || !(CACHE_FILE.test(suffix) || CACHE_MANIFEST.test(suffix) || CACHE_ARCHIVE.test(suffix))) {
+  if (suffix === undefined || !(CACHE_FILE.test(suffix) || CACHE_MANIFEST.test(suffix) || CACHE_ARCHIVE.test(suffix)
+    || CACHE_SOURCE.test(suffix))) {
     throw new Error(`invalid builder-cache key (must be ${CACHE_KEY_PREFIX}files/<sha256>, `
-      + `${CACHE_KEY_PREFIX}<lockSha>/<keySha>/<uuid> or ${CACHE_KEY_PREFIX}<lockSha>/<keySha>/sealed-<treeSha>.tar.zst)`);
+      + `${CACHE_KEY_PREFIX}<lockSha>/<keySha>/<uuid>, ${CACHE_KEY_PREFIX}<lockSha>/<keySha>/sealed-<treeSha>.tar.zst `
+      + `or ${CACHE_KEY_PREFIX}sources/<commitSha>-<filterDigest>.tar.zst)`);
   }
 }
 
@@ -193,6 +196,23 @@ export function assertArchiveRef(ref: string): void {
     throw new LiveError('dependency_cache_invalid');
   }
 }
+/** Filter digest of a source unit: the path filtering the repack covers (subPath today, §7.2.2). */
+export function sourceFilterDigest(subPath: string) {
+  return sha256(`source-filter/v1:${subPath}`);
+}
+/** Source-unit object of one commit: `sources/<commitSha>-<filterDigest>.tar.zst` under the prefix. */
+export function sourceUnitRef(commitSha: string, filterDigest: string) {
+  if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^[a-f0-9]{64}$/.test(filterDigest)) {
+    throw new LiveError('dependency_cache_invalid');
+  }
+  return `${CACHE_KEY_PREFIX}sources/${commitSha}-${filterDigest}.tar.zst`;
+}
+/** Typed guard of a source-unit ref: malformed refs refuse as `dependency_cache_invalid` before any S3 call. */
+export function assertSourceRef(ref: string): void {
+  if (typeof ref !== 'string' || !CACHE_SOURCE.test(ref.slice(CACHE_KEY_PREFIX.length))) {
+    throw new LiveError('dependency_cache_invalid');
+  }
+}
 /** Private cache bucket/credentials stay at the host. Only complete immutable manifests get a pointer; file objects are
  * written as the install streams and stay invisible until a manifest naming them is admitted. */
 export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs): CachePorts['storage'] {
@@ -240,6 +260,19 @@ export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs)
     },
     getArchive: async ref => {
       assertArchiveRef(ref);
+      return blobs.get(ref);
+    },
+    /** Source unit of one commit (§7.2.2): written once per commit after the forge download, read back by the
+     * staged-manifest comparison. Oversized or malformed refs refuse before any S3 call. */
+    putSource: async (ref, bytes) => {
+      assertSourceRef(ref);
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength > TREE_LIMITS.totalBytes) {
+        throw new LiveError('dependency_cache_invalid');
+      }
+      await blobs.put(ref, bytes);
+    },
+    getSource: async ref => {
+      assertSourceRef(ref);
       return blobs.get(ref);
     },
     async quarantine(key) {
