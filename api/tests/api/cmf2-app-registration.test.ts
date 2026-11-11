@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadAppRegistrationsFromEnv, validateAppRegistration } from '../src/services/artifacts/app-registration';
+import { loadAppRegistrationsFromEnv, validateAppRegistration } from '../../src/services/artifacts/app-registration';
 
 const HEX64 = 'a'.repeat(64);
 function validRegistration() {

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { createKnowledgeStore, verifyKnowledgeBytes, verifyKnowledgeDescriptor } from '../src/services/artifacts/knowledge-loader';
+import { createKnowledgeStore, verifyKnowledgeBytes, verifyKnowledgeDescriptor } from '../../src/services/artifacts/knowledge-loader';
 
 const digestOf = (text: string): string => createHash('sha256').update(Buffer.from(text)).digest('hex');
 function descriptorFor(text: string) {

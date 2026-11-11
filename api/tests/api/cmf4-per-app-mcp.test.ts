@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildPerAppToolList, perAppToolsBytes, resolvePerAppAuth } from '../src/routes/namespaces/mcp-apps';
-import type { AppArtifactsRegistration } from '../src/services/artifacts/app-registration';
+import { buildPerAppToolList, perAppToolsBytes, resolvePerAppAuth } from '../../src/routes/namespaces/mcp-apps';
+import type { AppArtifactsRegistration } from '../../src/services/artifacts/app-registration';
 
 const HEX64 = 'b'.repeat(64);
 function registration(): AppArtifactsRegistration {
