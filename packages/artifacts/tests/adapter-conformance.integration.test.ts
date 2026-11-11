@@ -108,7 +108,8 @@ const postgresBackend: ConformanceBackend & { open(reuseBucket?: string): Promis
         }
         return {
           blobs: createS3BlobStore({ client: s3, bucket }),
-          verifiesDigest: false,
+          // CMF-S1: the S3 adapter verifies digests pre-I/O and writes create-only.
+          verifiesDigest: true,
           cleanup: async () => {
             try {
               const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucket as string }));
