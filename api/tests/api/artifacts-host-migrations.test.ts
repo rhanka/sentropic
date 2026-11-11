@@ -151,6 +151,9 @@ describe('artifact host migrations', () => {
   it('should default existing blob rows to object placement with DB tables present', async () => {
     await runMigrations(database);
     await database.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-p', 'tenant-a')`);
+    // Simulate a pre-0014 row: drop the placement column, insert without it,
+    // then re-run migrations to backfill via DEFAULT 'object'.
+    await database.query(`ALTER TABLE artifacts.blobs DROP COLUMN placement`);
     await database.query(`INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
       VALUES ('scope-p', 'sha256:${'ab'.repeat(32)}', 3)`);
     await runMigrations(database);
