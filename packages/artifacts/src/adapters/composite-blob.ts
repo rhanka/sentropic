@@ -68,6 +68,8 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
         s3.getBlobRange?.(key, start, endInclusive);
     },
     async listKeys(prefix: string): Promise<string[]> {
+      if (mode === 'db') return db.listKeys(prefix);
+      if (mode === 's3') return s3.listKeys(prefix);
       const [fromDb, fromS3] = await Promise.all([db.listKeys(prefix), s3.listKeys(prefix)]);
       return [...new Set([...fromDb, ...fromS3])].sort();
     },
