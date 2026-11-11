@@ -162,6 +162,15 @@ const buildingView = (entry: { lockSha256: string; cacheKey: string; jobId: stri
   ({ lockSha256: entry.lockSha256, cacheKey: entry.cacheKey, state: 'building' as const, jobId: entry.jobId,
     startedAt: entry.startedAt });
 
+/** Yielding prewarm admission (§7.1.6): the pod slot is attempted with a 5 s wait, retried every 60 s, so a
+ * prewarm for the next lockfile never starves a user build beyond one in-flight heavy phase. */
+export const PREWARM_ADMISSION_WAIT_MS = 5_000;
+export const PREWARM_ADMISSION_RETRY_MS = 60_000;
+/** Seal execution on a prewarm builder pod (composed in `service.ts`, beside the user-path cache). */
+export interface PrewarmExecutor {
+  execute(job: CacheJobRecord, source: SourceSnapshot,
+    progress?: (step: string) => Promise<void>): Promise<CacheReceipt>;
+}
 /** Prewarm trigger contract (§7.1.3) on the existing builder mount, behind the same hostGate S2S authentication
  * (scope `artifacts:builder`). Derives the complete `CacheIdentity` through the same snapshot machinery the
  * user path uses — identity equality is load-bearing — and verifies the pinned lockfile before admitting. */
@@ -172,7 +181,7 @@ export function createHostCacheApi(options: {
   /** Repo-scoped forge read building its target through the registry admission (never a generation binding row). */
   snapshotRepo(scope: string, binding: ForgeBinding, commitSha: string): Promise<SourceSnapshot>;
   /** Runs `seal()` on a prewarm builder pod with yielding heavy admission (§7.1.6, 5 s wait retried every 60 s). */
-  executor: { execute(job: CacheJobRecord, source: SourceSnapshot): Promise<CacheReceipt> };
+  executor: PrewarmExecutor;
   /** Background seal runner owned by the composition; nothing starts on import. */
   schedule(work: () => Promise<void>): void;
 }) {
@@ -181,8 +190,11 @@ export function createHostCacheApi(options: {
   const keyOf = (c: Context<HostBuildEnv>): string => c.get('identity').storageScopeId;
   async function settle(job: CacheJobRecord, source: SourceSnapshot): Promise<void> {
     try {
-      await options.jobs.heartbeat(job.cacheKey, job.jobId, 'snapshot_ready');
-      const receipt = await options.executor.execute(job, source);
+      const progress = async (step: string) => {
+        await options.jobs.heartbeat(job.cacheKey, job.jobId, step).catch(() => undefined);
+      };
+      await progress('snapshot_ready');
+      const receipt = await options.executor.execute(job, source, progress);
       await options.jobs.completeSeal(job.cacheKey, job.jobId, { treeSha256: receipt.treeSha256,
         files: receipt.inventory.length, bytes: receipt.archive?.bytes ?? 0 });
     } catch (error) {
