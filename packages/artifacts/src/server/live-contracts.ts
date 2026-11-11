@@ -12,11 +12,14 @@ export interface LiveAuthority {
 /** A binding accepts live writers while attached, and after a terminal build failure: the failed job is over, and
  * only edits and a new commit can repair the build (a pending job still refuses with pending_publication). */
 export const liveWritable = (state: GitBinding['state']): boolean => state === 'attached' || state === 'build_failed';
+export interface LiveWorkerFailure { code: string; reason: string }
 export interface LiveWorkerPort {
   /** Trusted controller reads the authoritative store; no draft key or store API enters the worker. */
   reconcile(identity: LiveIdentity): Promise<void | { liveSessionId: string; leaseEpoch: number;
-    routeEpoch: number; revision: string; ready: boolean }>;
-  /** Confirms quiescence, durable checkpoint and complete pod/volume decommissioning. */
+    routeEpoch: number; revision: string; ready: boolean; failure?: LiveWorkerFailure }>;
+  /** Confirms quiescence, durable checkpoint and complete pod/volume decommissioning. A total stop
+   * answers without touching the runtime when it holds no (or no longer this) session, so a re-driven
+   * stop converges instead of replaying a refusal. */
   stop(input: LiveIdentity & { liveSessionId: string; leaseEpoch: number }): Promise<void>;
 }
 export interface LiveInvitationRevoked { storageScopeId: string; artifactId: string; liveSessionId: string;
@@ -41,13 +44,23 @@ export interface LiveServiceDeps {
   gitMessageMaxUnits?: number; idempotencyKeyMaxUnits?: number;
   invitations?: LiveInvitationPort;
   /** Observer of every worker settle that did not complete: 'failed' carries the typed code of the refusal, 'pending'
-   * a worker that is not ready yet. The host logs it; a throw is ignored. */
+   * a worker that is not ready yet. A terminal builder failure also carries its reason and moves the runtime to
+   * DORMANT with `code:reason` as stateDetail, so the host stops re-driving it. The host logs it; a throw is ignored. */
   onWorkerEvent?(event: LiveWorkerEvent): void;
+  /** Bounded re-drive tuning. Defaults keep the 60 s host timer safe: at most 4 worker calls in flight,
+   * each abandoned after 35 s. Hosts with a faster builder may raise the concurrency; a slower one lowers it. */
+  redriveConcurrency?: number;
+  /** Per-item settle budget in milliseconds for redriveLiveWorkers (default 35000). Never throws: an expired
+   * item reports 'failed' with code 'timeout' and stays pending for the next tick, unless it already moved. */
+  redriveItemTimeoutMs?: number;
 }
-/** 'settled': the worker confirmed and the runtime moved; 'pending': not ready yet; 'failed': the worker refused or
- * was unreachable; 'skipped': nothing to do (no worker, or the session is no longer the current one). */
+/** 'settled': the worker confirmed and the runtime moved; 'pending': not ready yet; 'failed': the worker refused,
+ * was unreachable, timed out, or abandoned the revive (terminal: the runtime moved to DORMANT with the failure as
+ * stateDetail and the host stops re-driving it); 'skipped': nothing to do (no worker, or the session is no longer
+ * the current one, or a concurrent settle already moved it). */
 export type LiveWorkerOutcome = 'settled' | 'pending' | 'failed' | 'skipped';
-export interface LiveWorkerEvent { identity: LiveIdentity; action: 'project' | 'stop'; outcome: 'failed' | 'pending'; code?: string }
+export interface LiveWorkerEvent { identity: LiveIdentity; action: 'project' | 'stop'; outcome: 'failed' | 'pending';
+  code?: string; reason?: string }
 export interface LiveRedriveItem extends LiveIdentity { action: 'project' | 'stop'; outcome: LiveWorkerOutcome }
 export interface LiveService {
   execute(operation: string, args: Record<string, unknown>, invocation: LiveInvocation): Promise<Record<string, any>>;
