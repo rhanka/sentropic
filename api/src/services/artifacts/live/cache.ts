@@ -8,7 +8,7 @@ import { LiveError, type LiveRuntime } from './records';
 import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY, installRecipeFor } from './recipes';
 import { subsetLockPaths, validateWorkspaces } from './workspace-subset';
 import { extractTarZst, tarZst, TREE_LIMITS, type TransferFailure } from './supervisor-transfer';
-import { sealedArchiveRef } from './cache-storage';
+import { sealedArchiveRef, tarballRef } from './cache-storage';
 
 export interface CacheIdentity {
   storageScopeId: string; repoId: string; lockSha256: string; platform: string;
@@ -36,6 +36,8 @@ export interface SealedSource { lockfile: Uint8Array; cacheIdentity: CacheIdenti
  * defect signal on this path, never an install. Replaces the 120 s `INSTALL_CACHE_LOOKUP_TIMEOUT_MS` bound
  * on every path that migrated to `requireSealed` (§7.1.1). */
 export const SEALED_LOOKUP_TIMEOUT_MS = 5_000;
+/** Seal tarball prefetch window (§7.1.6): up to 8 verified tarballs in flight, admitted in lock order. */
+export const SEAL_PREFETCH_WINDOW = 8;
 /** Kill-switch of the L1 sealed user path (default on): `0` keeps the legacy inline-install `acquire` on
  * user paths (§11 rollback shape). New behavior ships enabled; the old path stays implemented one release. */
 export const sealedUserPathEnabled = (env: Readonly<Record<string, string | undefined>> = process.env) =>
@@ -71,6 +73,9 @@ export interface CachePorts {
     /** Source unit of one commit (`sourceUnitRef`); the forge reader's repacked snapshot (§7.2.2). */
     putSource(ref: string, bytes: Uint8Array): Promise<void>;
     getSource(ref: string): Promise<Uint8Array | undefined>;
+    /** Verified tarball store (`tarballRef`); content-addressed by SRI, reused by every seal (§7.1.6). */
+    putTarball(ref: string, bytes: Uint8Array): Promise<void>;
+    getTarball(ref: string): Promise<Uint8Array | undefined>;
   };
 }
 function invalid(): never { throw new LiveError('dependency_cache_invalid'); }
@@ -241,14 +246,43 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
           try { return verify(existing, identity); }
           catch { await ports.storage.quarantine(key); }
         }
-        /** One verified tarball at a time; an altered one stops the stream before the pod runs the install. */
+        /** Bounded-parallel tarball prefetch (§7.1.6): up to `SEAL_PREFETCH_WINDOW` verified fetches in
+         * flight, yielded in lock order so the pod stream admission stays ordered. Verified tarballs are
+         * stored content-addressed (`tarballRef`) on first fetch; later seals reuse the bytes without
+         * touching the relay. A store outage fails the seal (the archive admission needs the store anyway);
+         * a corrupt store entry refetches from the relay and overwrites it. */
         async function* tarballs() {
           progress.step?.('tarball_fetch');
-          for (const pin of inventory) {
-            const bytes = await ports.fetch(pin, NPM_RELAY, signal);
-            verifySri(bytes, pin.integrity);
-            progress.report();
-            yield { pin, bytes };
+          // Pulls never reject (results carry the error) so a failure observed in order leaves no unhandled
+          // rejection behind in the still-flying window.
+          const inFlight = new Map<number, Promise<{ pin: IntegrityPin; bytes: Uint8Array } | { error: unknown }>>();
+          const pull = async (index: number) => {
+            try {
+              const pin = inventory[index]!;
+              const stored = await ports.storage.getTarball(tarballRef(pin.integrity));
+              if (stored) {
+                try {
+                  verifySri(stored, pin.integrity);
+                  progress.report();
+                  return { pin, bytes: stored };
+                } catch { /* corrupt store entry: refetch below and overwrite */ }
+              }
+              const bytes = await ports.fetch(pin, NPM_RELAY, signal);
+              verifySri(bytes, pin.integrity);
+              await ports.storage.putTarball(tarballRef(pin.integrity), bytes);
+              progress.report();
+              return { pin, bytes };
+            } catch (error) { return { error }; }
+          };
+          let cursor = 0; let next = 0;
+          for (; cursor < Math.min(SEAL_PREFETCH_WINDOW, inventory.length); cursor++) inFlight.set(cursor, pull(cursor));
+          while (inFlight.size > 0) {
+            const result = await inFlight.get(next)!;
+            inFlight.delete(next);
+            if (cursor < inventory.length) { inFlight.set(cursor, pull(cursor)); cursor++; }
+            next++;
+            if ('error' in result) throw result.error;
+            yield result;
           }
           progress.clearStep?.();
         }
@@ -270,7 +304,10 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
           for (;;) {
             const next = pending.shift();
             if (next) { yield next; continue; }
-            if (failure !== undefined) throw failure;
+            // A seal failure ends the tar input instead of throwing through the pipe: throwing across the
+            // zstd stream boundary strands the consumer, while a clean end always resolves it. The consumer
+            // rethrows `failure` after the truncated tar completes (a truncated tar is never admitted).
+            if (failure !== undefined) return;
             if (finished) return;
             await new Promise<void>(resolve => { wake = resolve; });
           }
@@ -282,6 +319,7 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
             if (size > TREE_LIMITS.totalBytes) invalid();
             chunks.push(chunk);
           }
+          if (failure !== undefined) throw failure;
           return Buffer.concat(chunks);
         })();
         consume.catch(() => undefined);
