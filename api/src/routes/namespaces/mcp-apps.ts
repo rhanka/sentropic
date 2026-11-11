@@ -14,23 +14,6 @@ import { resolveOAuthIssuer } from '../auth/oauth';
 
 export const isPerAppMcpEnabled = (): boolean => process.env.CM_PER_APP_MCP_ENABLED === '1';
 
-export interface PerAppAuthInput {
-  audience: string | undefined;
-  tid: string | undefined;
-  member: boolean;
-}
-
-/** @deprecated Kept for the transition only; the router no longer calls it. */
-export function resolvePerAppAuth(registration: AppArtifactsRegistration, input: PerAppAuthInput):
-  { ok: true } | { ok: false; status: 401 | 403; error: string } {
-  if (!input.audience || input.audience !== registration.mcp.resource) {
-    return { ok: false, status: 401, error: 'wrong_audience' };
-  }
-  if (!input.tid || input.tid !== registration.tenantId) return { ok: false, status: 403, error: 'tenant_pinned' };
-  if (!input.member) return { ok: false, status: 403, error: 'non_member' };
-  return { ok: true };
-}
-
 export interface VerifiedPerAppPrincipal {
   sub: string;
   clientId: string;

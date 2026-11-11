@@ -44,6 +44,9 @@ function routerWithStubs() {
     if (token === 'good' || token === 'good-query-ignored' || token === 'good-header-ignored') {
       return { sub: 'u1', clientId: 'c1', tid: TENANT, scopes: ['mcp:discover', 'mcp:tools:invoke'] as const };
     }
+    if (token === 'read-only') {
+      return { sub: 'u1', clientId: 'sentropic-mcp', tid: TENANT, scopes: ['mcp:discover'] as const };
+    }
     if (token === 'wrong-tid') {
       return { sub: 'u1', clientId: 'c1', tid: 'other', scopes: ['mcp:discover', 'mcp:tools:invoke'] as const };
     }
@@ -133,5 +136,49 @@ describe('CMF-4 per-app MCP', () => {
     } finally {
       delete process.env.CM_PER_APP_MCP_ENABLED;
     }
+  });
+  it('should serve the same bytes on JSON-RPC tools/list', async () => {
+    process.env.CM_PER_APP_MCP_ENABLED = '1';
+    try {
+      const { router, reg } = routerWithStubs();
+      const rpc = await router.request('/api/v1/mcp/apps/radar-immobilier', {
+        method: 'POST',
+        headers: { authorization: 'Bearer good', 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      });
+      expect(rpc.status).toBe(200);
+      const rpcBody = (await rpc.json()) as { result: { tools: unknown[] } };
+      expect(JSON.stringify(rpcBody.result.tools)).toBe(perAppToolsBytes(reg));
+    } finally {
+      delete process.env.CM_PER_APP_MCP_ENABLED;
+    }
+  });
+  it('should enforce per-tool mutability and the read-only client', async () => {
+    process.env.CM_PER_APP_MCP_ENABLED = '1';
+    try {
+      const { router } = routerWithStubs();
+      const unknownTool = await router.request('/api/v1/mcp/apps/radar-immobilier', {
+        method: 'POST',
+        headers: { authorization: 'Bearer good', 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'nope', arguments: {} } }),
+      });
+      expect(unknownTool.status).toBe(404);
+      const readOnlyWrite = await router.request('/api/v1/mcp/apps/radar-immobilier', {
+        method: 'POST',
+        headers: { authorization: 'Bearer read-only', 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'artifacts_publish', arguments: {} } }),
+      });
+      expect(readOnlyWrite.status).toBe(403);
+    } finally {
+      delete process.env.CM_PER_APP_MCP_ENABLED;
+    }
+  });
+  it('should stay disabled behind the flag', async () => {
+    delete process.env.CM_PER_APP_MCP_ENABLED;
+    const { router } = routerWithStubs();
+    const res = await router.request('/api/v1/mcp/apps/radar-immobilier/tools', {
+      headers: { authorization: 'Bearer good' },
+    });
+    expect(res.status).toBe(404);
   });
 });
