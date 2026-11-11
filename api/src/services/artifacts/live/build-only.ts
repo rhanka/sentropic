@@ -4,6 +4,7 @@ import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey, ty
 import { enrichPodLoss, isPodCause, isTransportLoss, podName } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
+import { requireUserCache } from './cache';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 import { LiveHostError, type HostJob } from '@sentropic/artifacts/live-host';
@@ -160,7 +161,7 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
         baselineSeq: state.progress.publicationBaselineSeq, initial: false };
     });
     await ports.worker.clean(runtime);
-    const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, runtime));
+    const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
     await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
     const building = runtime;
     const candidate = await ports.heavy.run(building.podName, 'build', () => runPhase(key, 'build',

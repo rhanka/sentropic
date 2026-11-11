@@ -2,6 +2,7 @@ import type { LivePorts } from './ports';
 import { assertFence, automaticEligible, conflict, idleDeadline, LiveError, publicationBaseline, type LiveKey,
   type LiveRuntime, type LiveState } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
+import { requireUserCache } from './cache';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 
@@ -43,7 +44,7 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     await ports.worker.clean(runtime);
     // The phase closures capture the fenced post-transition runtime, not the pre-guard union.
     const installing = runtime;
-    const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, installing));
+    const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, installing));
     await runPhase(key, 'prepare', () => ports.worker.prepare(installing, source, cache));
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
     await transition(ports, key, runtime, state => {

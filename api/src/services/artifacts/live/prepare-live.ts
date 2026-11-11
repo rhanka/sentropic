@@ -3,6 +3,7 @@ import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
 import { enrichPodLoss, isPodCause } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, observeHead, transition } from './transitions';
+import { requireUserCache } from './cache';
 import { runPhase, withinPhase } from './deadline';
 
 /** Cold revive, crash restore or wake: adopts only a responsive pod, and reports a lost pod with its Kubernetes
@@ -39,7 +40,7 @@ async function preparePod(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) 
   const source = await ports.forge.snapshot(key, head);
   if (source.headSha !== head) throw new LiveError('git_head_moved');
   await ports.worker.clean(runtime);
-  const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, runtime));
+  const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
   await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
   await ports.worker.restore(runtime, draft);
   await ports.heavy.run(runtime.podName, 'prebundle', () => runPhase(key, 'prebundle',

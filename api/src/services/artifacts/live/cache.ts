@@ -23,8 +23,24 @@ export interface CacheReceipt {
   runId: string; installOptions: typeof INSTALL_RECIPE; seal: string;
 }
 export interface CacheObject { receipt: CacheReceipt; manifest: readonly DependencyEntry[] }
+/** Lookup-only source of `requireSealed`: the lockfile, its cache identity and the GB1 inputs. No staging
+ * reference and no runtime: the user path never installs. */
+export interface SealedSource { lockfile: Uint8Array; cacheIdentity: CacheIdentity; gb1: Gb1Source }
+/** User-path bound of one sealed-cache lookup (Postgres SELECT + one manifest GET): 5 s. A lookup has no
+ * business exceeding it, and exceeding it is a typed `builder_unavailable:cache_lookup_timeout` — an SLO
+ * defect signal on this path, never an install. Replaces the 120 s `INSTALL_CACHE_LOOKUP_TIMEOUT_MS` bound
+ * on every path that migrated to `requireSealed` (§7.1.1). */
+export const SEALED_LOOKUP_TIMEOUT_MS = 5_000;
+/** Kill-switch of the L1 sealed user path (default on): `0` keeps the legacy inline-install `acquire` on
+ * user paths (§11 rollback shape). New behavior ships enabled; the old path stays implemented one release. */
+export const sealedUserPathEnabled = (env: Readonly<Record<string, string | undefined>> = process.env) =>
+  (env.ARTIFACT_BUILDER_SEALED_CACHE ?? '1') !== '0';
 export interface CachePorts {
   signingKey(): Uint8Array;
+  /** Lookup-only sealed-cache read (§7.1.1): sealed hit returns the verified receipt; miss or corrupt entry
+   * throws `cache_not_prewarmed`. Optional so older fakes keep compiling: `requireUserCache` falls back
+   * to `acquire` when it is absent. */
+  requireSealed?(source: SealedSource): Promise<CacheReceipt>;
   /** Downloads exact pinned tarballs through this relay; redirects/alternate registries are forbidden. The watchdog
    * aborts `signal` on a cut install so a hung fetch stops instead of holding the relay. */
   fetch(pin: IntegrityPin, relay: typeof NPM_RELAY, signal?: AbortSignal): Promise<Uint8Array>;
@@ -47,6 +63,46 @@ export interface CachePorts {
   };
 }
 function invalid(): never { throw new LiveError('dependency_cache_invalid'); }
+/** GB1 qualification and workspace-subset selection shared by `acquire` (user + prewarm fallback) and
+ * `requireSealed`/`seal` (L1 split): identity checks first, then the reachable subset over the validated lock. */
+function qualifiedInventory(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; gb1: Gb1Source }) {
+  const identity = source.cacheIdentity;
+  if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
+  // GB1 at the pinned commit (W5 port); the qualification file digest is the identity's integrity digest.
+  const evidence = integrityEvidence(qualifyBuild(source.gb1));
+  if (evidence.lockSha256 !== identity.lockSha256 || evidence.digest !== identity.integrityDigest) invalid();
+  // Workspace subset after the full-lock qualification above: the lock stays validated whole (every remote
+  // entry still needs literal SRI or the sealed map), then only the reachable subset is fetched and installed.
+  const selection = [...(identity.installWorkspaces ?? [])].sort();
+  let inventory = evidence.inventory;
+  if (selection.length > 0) {
+    const lockText = Buffer.from(source.lockfile).toString('utf8');
+    const files = source.gb1.files as Record<string, string>;
+    const rootManifest = files['package.json'];
+    if (typeof rootManifest !== 'string') invalid();
+    const validated = validateWorkspaces(selection, rootManifest,
+      Object.keys(files).filter(path => path === 'package.json' || path.endsWith('/package.json')));
+    const keep = subsetLockPaths(lockText, validated);
+    inventory = evidence.inventory.filter(pin => keep.has(pin.path));
+  }
+  return { identity, inventory, recipe: installRecipeFor(selection), key: cacheKey(identity) };
+}
+/** User-path cache surface: the lookup-only `requireSealed` (L1, when implemented and enabled) with the
+ * legacy inline-install `acquire` as the §11 rollback fallback. Structural so `LivePorts['cache']` fits
+ * without importing the ports (which import these cache types). */
+export interface UserCache {
+  acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
+    runtime?: LiveRuntime): Promise<CacheReceipt>;
+  requireSealed?(source: SealedSource): Promise<CacheReceipt>;
+}
+/** User-path cache entry point (§7.1.1, §7.1.4): `requireSealed` when the cache implements it and the L1
+ * path is enabled, otherwise the legacy inline-install `acquire` (§11 rollback shape). */
+export async function requireUserCache(cache: UserCache,
+  source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
+  runtime?: LiveRuntime) {
+  if (sealedUserPathEnabled() && cache.requireSealed) return cache.requireSealed(source);
+  return cache.acquire(source, runtime);
+}
 const cacheKey = (id: CacheIdentity) => `${id.lockSha256}/${sha256(JSON.stringify([
   id.storageScopeId, id.repoId, id.platform, id.nodeVersion, id.npmVersion, id.image,
   id.policyRevision, id.workspaceTopology, id.integrityDigest, [...(id.installWorkspaces ?? [])].sort(),
@@ -97,30 +153,25 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
     } catch { return invalid(); }
   }
   return {
+    /** Lookup-only sealed read for user paths (§7.1.1): sealed hit returns the verified receipt; miss or
+     * corrupt entry quarantines and throws typed `cache_not_prewarmed` carrying the lockSha256 — never a
+     * fetch, never an install, bounded at `SEALED_LOOKUP_TIMEOUT_MS`. */
+    async requireSealed(source: SealedSource) {
+      const { identity, key } = qualifiedInventory(source);
+      const unsealed = (): never => { throw new LiveError('cache_not_prewarmed', identity.lockSha256); };
+      let existing: CacheObject | undefined;
+      try {
+        existing = await runInstallStep(undefined, 'cache_lookup', () => read(key),
+          { timeoutMs: SEALED_LOOKUP_TIMEOUT_MS, log: options.log, now: options.now });
+      } catch { unsealed(); }
+      if (!existing) unsealed();
+      try { return verify(existing as CacheObject, identity); }
+      catch { await ports.storage.quarantine(key); unsealed(); }
+    },
     async acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
       runtime?: LiveRuntime) {
       return withinInstallBudget(async (progress, signal) => {
-        const identity = source.cacheIdentity;
-        if (identity.image !== BUILDER_IMAGE || sha256(source.lockfile) !== identity.lockSha256) invalid();
-        // GB1 at the pinned commit (W5 port); the qualification file digest is the identity's integrity digest.
-        const evidence = integrityEvidence(qualifyBuild(source.gb1));
-        if (evidence.lockSha256 !== identity.lockSha256 || evidence.digest !== identity.integrityDigest) invalid();
-        // Workspace subset after the full-lock qualification above: the lock stays validated whole (every remote
-        // entry still needs literal SRI or the sealed map), then only the reachable subset is fetched and installed.
-        const selection = [...(identity.installWorkspaces ?? [])].sort();
-        let inventory = evidence.inventory;
-        if (selection.length > 0) {
-          const lockText = Buffer.from(source.lockfile).toString('utf8');
-          const files = source.gb1.files as Record<string, string>;
-          const rootManifest = files['package.json'];
-          if (typeof rootManifest !== 'string') invalid();
-          const validated = validateWorkspaces(selection, rootManifest,
-            Object.keys(files).filter(path => path === 'package.json' || path.endsWith('/package.json')));
-          const keep = subsetLockPaths(lockText, validated);
-          inventory = evidence.inventory.filter(pin => keep.has(pin.path));
-        }
-        const recipe = installRecipeFor(selection);
-        const key = cacheKey(identity);
+        const { identity, inventory, recipe, key } = qualifiedInventory(source);
         const existing = await runInstallStep(progress, 'cache_lookup', () => read(key),
           { timeoutMs: budget.lookupMs ?? INSTALL_CACHE_LOOKUP_TIMEOUT_MS, signal, log: options.log, now: options.now });
         if (existing) {
