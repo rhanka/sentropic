@@ -1,5 +1,9 @@
+import { createHash } from 'node:crypto';
+import { ARTIFACTS_TOOL_DEFINITIONS } from '@sentropic/artifacts/mcp-core';
+
 const HEX64 = /^[0-9a-f]{64}$/;
 const SCOPE_ID = /^[A-Za-z0-9_-]+$/;
+const UUID36 = /^[0-9a-f-]{36}$/;
 const RESERVED_PREFIXES = ['app-artifact-', 'artifact-'];
 
 export interface AppArtifactsRegistration {
@@ -29,15 +33,97 @@ export interface AppArtifactsRegistration {
 
 export const isRegistrationEnabled = (): boolean => process.env.CM_REGISTRATION_ENABLED === '1';
 
-const isHttpsOrigin = (value: unknown): value is string => {
-  if (typeof value !== 'string') return false;
+export const isStrictHttpsOrigin = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !value) return false;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && !url.pathname.replace('/', '');
-  } catch { return false; }
+    return url.protocol === 'https:' && url.origin === value && !url.username && !url.password;
+  } catch { return false; };
+};
+
+export const isHttpsUrl = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash;
+  } catch { return false; };
+};
+
+const sha256Hex = (input: string): string => createHash('sha256').update(input, 'utf8').digest('hex');
+
+const canonicalJson = (value: unknown): string => {
+  if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+  }
+  throw new Error('not_canonical_json');
 };
 
 const isHex40 = (value: unknown): boolean => typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
+
+export interface CanonicalPerAppTool { name: string; description: string; inputSchema: unknown }
+
+export function buildCanonicalPerAppTools(selectedCapabilities: string[], toolSummaries: Record<string, string>): CanonicalPerAppTool[] {
+  const selected = new Set(selectedCapabilities);
+  return Object.entries(ARTIFACTS_TOOL_DEFINITIONS)
+    .filter(([name]) => selected.has(name))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, tool]) => ({
+      name,
+      description: toolSummaries[name] ?? tool.description,
+      inputSchema: tool.inputSchema,
+    }));
+}
+
+export function computeProfileDigest(selectedCapabilities: string[]): string {
+  return sha256Hex(canonicalJson([...selectedCapabilities].sort()));
+}
+
+export function computeToolDefinitionsDigest(tools: CanonicalPerAppTool[]): string {
+  return sha256Hex(canonicalJson(tools));
+}
+
+export function computeManifestDigest(profileDigest: string, toolDefinitionsDigest: string, resource: string): string {
+  return sha256Hex(canonicalJson({ profileDigest, resource, toolDefinitionsDigest }));
+}
+
+export function getToolMutability(toolName: string): string | undefined {
+  return (ARTIFACTS_TOOL_DEFINITIONS as Record<string, { mutability: string }>)[toolName]?.mutability;
+}
+
+export function isWriteTool(toolName: string): boolean {
+  return getToolMutability(toolName) !== 'read-only';
+}
+
+export interface ProjectedAppInstance {
+  id: string;
+  tenantId: string;
+  environment: string;
+  controlEnvironment: 'prod' | 'preview' | 'local';
+  workspaceId: string;
+  storageScopeId: string;
+  storageOrigin: 'native' | 'imported';
+  mcpResource: string;
+  desiredState: { appSlug: string; registrationRevision: string };
+}
+
+export function projectAppInstance(registration: AppArtifactsRegistration): ProjectedAppInstance {
+  return {
+    id: registration.appInstanceId,
+    tenantId: registration.tenantId,
+    environment: registration.environment,
+    controlEnvironment: registration.environment === 'prod' ? 'prod' : 'preview',
+    workspaceId: registration.workspaceId,
+    storageScopeId: registration.storage.storageScopeId,
+    storageOrigin: registration.storage.origin,
+    mcpResource: registration.mcp.resource,
+    desiredState: { appSlug: registration.appSlug, registrationRevision: registration.revision },
+  };
+}
 
 /** Fail-closed validation of §3.1. Returns refusal reason, never throws on bad input. */
 export function validateAppRegistration(input: unknown): { ok: true; value: AppArtifactsRegistration } | { ok: false; reason: string } {
