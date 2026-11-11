@@ -41,8 +41,23 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     deletionTimestamp?: string; creationTimestamp?: string }; spec: unknown;
     status?: { phase?: string; reason?: string; message?: string; containerStatuses?: Array<{ state?: { terminated?: { reason?: string } };
       lastState?: { terminated?: { reason?: string } } }> } }>();
+  const matchesSelector = (labels: Record<string, string>, selector: string) =>
+    selector.split(',').filter(part => part.length > 0).every(part => {
+      const index = part.indexOf('=');
+      return index > 0 && labels[part.slice(0, index)] === part.slice(index + 1);
+    });
   const core: KubernetesCore = {
     get: vi.fn(async (kind, name) => objects.get(kind + name) as never),
+    list: vi.fn(async (kind, labelSelector: string) => [...objects]
+      .filter(([id]) => id.startsWith(kind))
+      .map(([, object]) => object)
+      .filter(object => matchesSelector(object.metadata.labels, labelSelector)) as never),
+    patchLabels: vi.fn(async (kind, name, uid, labels) => {
+      const object = objects.get(kind + name);
+      if (!object) throw new Error('NotFound');
+      if (object.metadata.uid !== uid) throw new Error('UID mismatch');
+      Object.assign(object.metadata.labels, labels);
+    }),
     create: vi.fn(async (kind, value) => {
       const object = structuredClone(value) as { metadata: { name: string; uid: string; labels: Record<string, string>;
         creationTimestamp?: string }; spec: unknown; status?: { phase?: string } };
