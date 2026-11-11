@@ -139,6 +139,10 @@ describe('supervisor offline clean install', () => {
     const core = {
       id: () => 'run-1',
       transfer: vi.fn(async () => ({ transfer: 'src' })),
+      streamPipelined: vi.fn(async (_rt: unknown, _op: unknown, items: AsyncIterable<unknown>) => {
+        for await (const _item of items);
+        return { transfer: 'cache' };
+      }),
       stream: vi.fn(async (_rt: unknown, _op: unknown, items: AsyncIterable<unknown>) => {
         for await (const _item of items);
         return { transfer: 'cache' };
@@ -168,6 +172,7 @@ describe('supervisor offline clean install', () => {
     const core = {
       id: () => 'run-1',
       transfer: vi.fn(async () => ({ transfer: 'src' })),
+      streamPipelined: vi.fn(async () => ({ transfer: 'cache' })),
       stream: vi.fn(async () => ({ transfer: 'cache' })),
       drain: vi.fn(async () => undefined),
       call: vi.fn(async () => ({ cleared: ['/tmp'] })),
