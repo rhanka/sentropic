@@ -17,10 +17,16 @@ const noAdmittedJob = (error: unknown): boolean => error instanceof LiveHostErro
  * recorded as the view when the host never reconciled. The returned run id seeds the build runtime's
  * session, so the host attempt fence recorded by the seed resolution still matches the run's re-resolution.
  * Only a host refusal (no admitted job) keeps `binding_unreconciled`; a transport failure propagates.
+ *
+ * The job resolution stays first: the host job is the only owner and generation source before the first
+ * reconcile, and both the admission slot and the draft read need them. A refusal after the freeze reuses
+ * the frozen fence on retry (the seed row carries the run id), so the retry never ends in job_not_pending.
  */
 async function admittedBinding(ports: LivePorts, key: LiveKey, jobId: string) {
-  try { return { binding: await currentBinding(ports, key), seedRunId: undefined as string | undefined }; }
-  catch (error) {
+  try {
+    const binding = await currentBinding(ports, key);
+    return { binding, seedRunId: await frozenSeedRun(ports, key) };
+  } catch (error) {
     if (!(error instanceof LiveError) || error.code !== 'git_live_conflict' || error.reason !== 'binding_unreconciled') throw error;
   }
   const previous = await ports.store.read(key);
@@ -36,13 +42,23 @@ async function admittedBinding(ports: LivePorts, key: LiveKey, jobId: string) {
   // The admitted coordinates, recorded at the job generation (R1), then the (generation, owner) view through
   // the reconciled monotonicity rules; a lost race to a concurrent live reconcile falls back to its view.
   await ports.jobBinding(key, jobId, job.generation);
+  // Epochs 0: the seed is not a live session, so the host's first live reconcile at (lease 1, route 1)
+  // of the same owner is accepted while another owner stays stale. The seed row keeps the run id so a
+  // retry after a refusal re-resolves with the identical fence instead of ending in job_not_pending.
   try {
     await ports.seedBinding(key, { generation: job.generation, ownerId: job.ownerId,
-      liveSessionId: runId, leaseEpoch: attempt, routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1 });
+      liveSessionId: runId, leaseEpoch: 0, routeEpoch: 0 });
   } catch (error) {
     if (!(error instanceof LiveError) || error.code !== 'git_live_conflict' || error.reason !== 'stale_session') throw error;
   }
   return { binding: await currentBinding(ports, key), seedRunId: runId };
+}
+/** The frozen run id of a seeded-but-never-built binding (its seed row still carries epochs 0 with the
+ * run id); undefined once any runtime was persisted or the host reconciled over the seed. */
+async function frozenSeedRun(ports: LivePorts, key: LiveKey): Promise<string | undefined> {
+  if (await ports.store.read(key).catch(() => undefined)) return undefined;
+  const seed = await ports.seedSession(key).catch(() => undefined);
+  return seed && seed.liveSessionId && seed.leaseEpoch === 0 && seed.routeEpoch === 0 ? seed.liveSessionId : undefined;
 }
 
 /** Explicit historical publication uses one clean pod; dormant drafts never enter this worker. */
@@ -70,7 +86,7 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
     try { await ports.admission.acquire(key, binding.ownerId); }
     catch { throw loss; }
     let second;
-    try { second = await createBuildRuntime(ports, key, binding, draft, seedRunId); }
+    try { second = await createBuildRuntime(ports, key, binding, draft); }
     catch (error) {
       await releaseIfDormant(ports, key);
       throw (error instanceof LiveError && error.reason === 'pending_publication' ? loss : error);

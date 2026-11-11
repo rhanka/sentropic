@@ -10,7 +10,7 @@ import { buildOnly } from './build-only';
 import { fenceInvitations } from './invitations';
 import { projectRevision } from './project';
 import { authorizeLive, liveRole, type LiveActor } from './authorize';
-import { currentBinding, failed, teardown, transition } from './transitions';
+import { currentBinding, currentRuntime, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
   /** Finishes an interrupted teardown without clearing its recorded cause; the scheduler tick drives it until the
@@ -111,7 +111,7 @@ export function createLiveController(ports: LivePorts) {
         // A queued or admitted build of this pod leaves the node queue; the revive phases queue on their own.
         await ports.heavy.cancel(runtime.podName);
         return await prepareLive(ports, key, runtime);
-      } catch (error) { await failed(ports, key, runtime, error); throw error; }
+      } catch (error) { await failed(ports, key, await currentRuntime(ports, key, runtime), error); throw error; }
     },
     /** Narrow stop after code-right revocation exposes teardown fields only. Identity comes from host auth. */
     async stop(key: LiveKey, input: { ownerId: string; sessionId: string; generation: number }) {

@@ -81,6 +81,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     binding: vi.fn(async k => ({ ...binding, ownerId: owners.get(idOf(k)) ?? binding.ownerId })),
     jobBinding: vi.fn(async () => {}),
     seedBinding: vi.fn(async () => ({ liveSessionId: '', leaseEpoch: 0, routeEpoch: 0 })),
+    seedSession: vi.fn(async () => undefined),
     forge: { head: vi.fn(async () => binding.headSha), fastForward: vi.fn(async (_key, before, after) => before < after),
       reachable: vi.fn(async () => true),
       snapshot: vi.fn(async (_key, headSha) => ({ headSha, treeSha: `tree-${headSha}`, lockfile: new Uint8Array(),
