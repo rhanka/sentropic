@@ -21,6 +21,10 @@ export const poolPodName = (id: string) => {
 };
 export const isPoolPodName = (name: string) => POOL_POD_NAME_RE.test(name);
 export const isPhysicalPodName = (name: string) => SESSION_POD_NAME_RE.test(name) || POOL_POD_NAME_RE.test(name);
+/** Pool-membership label (§7.3.5): every pool pod carries it, so `list` re-adopts survivors by selector and
+ * the drain proof enumerates them. Scoped to the builder namespace by the in-cluster client. */
+export const POOL_LABEL = 'sentropic.dev/pool';
+export const POOL_LABEL_VALUE = 'artifact-builders';
 const labels = (key: LiveKey, runtime: LiveRuntime) => ({
   'sentropic.dev/artifact-binding': bindingLabel(key),
   'sentropic.dev/artifact-session': digest(runtime.sessionId),
@@ -195,14 +199,14 @@ export interface KubernetesCore {
    * survivors after an API restart and cross-checks KV rows (§7.3.5). */
   list<T>(resource: 'pods', labelSelector: string): Promise<T[]>;
   /** Merge-patch object labels, fenced by uid like delete: a uid mismatch is `stale_fence`, a gone object
-   * is `builder_unavailable/pod_gone`. The pool manager unlabels binding labels on warm-deps release. */
-  patchLabels(resource: 'pods' | 'services', name: string, uid: string, labels: Record<string, string>): Promise<void>;
+   * is `builder_unavailable/pod_gone`. A `null` value deletes the key (warm-deps release unlabels). */
+  patchLabels(resource: 'pods' | 'services', name: string, uid: string, labels: Record<string, string | null>): Promise<void>;
 }
 /** Pod liveness for teardown: a gone, terminal or terminating pod never needs a supervisor quiesce. */
 export type PodProbe = 'active' | 'absent' | 'terminating' | 'terminal';
 export function createBuilderPods(core: KubernetesCore, bootstrap: string, placement: BuilderPlacement,
   sizing: WorkerSizing = defaultWorkerSizing()) {
-  return {
+  const pods = {
     async ensure(key: LiveKey, runtime: LiveRuntime) {
       const expected = labels(key, runtime);
       let pod = await core.get<Pod>('pods', runtime.podName);
@@ -303,5 +307,26 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
         await core.waitDeleted('services', runtime.podName, service.metadata.uid);
       }
     },
+    /** Merge-patch pod labels, fenced by the recorded pod uid (pool claim relabels, warm-deps release unlabels). */
+    async patchLabels(runtime: LiveRuntime, labels: Record<string, string | null>) {
+      if (!runtime.podUid) conflict('stale_fence');
+      await core.patchLabels('pods', runtime.podName, runtime.podUid, labels);
+    },
+    /** Delete the Service of a released pod while the pod itself stays warm (the pool, not teardown, owns it). */
+    async removeService(key: LiveKey, runtime: LiveRuntime) {
+      const service = await core.get<{ metadata: Pod['metadata'] }>('services', runtime.podName);
+      if (!service) return;
+      if (Object.entries(labels(key, runtime)).some(([k, v]) => service.metadata.labels[k] !== v)) conflict('stale_fence');
+      await core.delete('services', runtime.podName, service.metadata.uid);
+      await core.waitDeleted('services', runtime.podName, service.metadata.uid);
+    },
+    /** Claim a warm pool pod for a session: relabel to the binding set, then adopt through `ensure`
+     * (the pod exists, so no slot is taken and the Service is created under the physical name). */
+    async adoptClaimed(key: LiveKey, runtime: LiveRuntime) {
+      if (!runtime.podUid) conflict('stale_fence');
+      await core.patchLabels('pods', runtime.podName, runtime.podUid, labels(key, runtime));
+      return pods.ensure(key, runtime);
+    },
   };
+  return pods;
 }

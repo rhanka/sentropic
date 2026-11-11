@@ -52,11 +52,14 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
       .filter(([id]) => id.startsWith(kind))
       .map(([, object]) => object)
       .filter(object => matchesSelector(object.metadata.labels, labelSelector)) as never),
-    patchLabels: vi.fn(async (kind, name, uid, labels) => {
+    patchLabels: vi.fn(async (kind, name, uid, labels: Record<string, string | null>) => {
       const object = objects.get(kind + name);
       if (!object) throw new Error('NotFound');
       if (object.metadata.uid !== uid) throw new Error('UID mismatch');
-      Object.assign(object.metadata.labels, labels);
+      for (const [label, value] of Object.entries(labels)) {
+        if (value === null) delete object.metadata.labels[label];
+        else object.metadata.labels[label] = value;
+      }
     }),
     create: vi.fn(async (kind, value) => {
       const object = structuredClone(value) as { metadata: { name: string; uid: string; labels: Record<string, string>;
