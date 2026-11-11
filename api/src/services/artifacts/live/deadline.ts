@@ -26,6 +26,15 @@ export const MAX_TIMEOUT_MS = 2_147_483_647;
  * bound fails with that bound's error, not the watchdog's. A cut install never poisons the cache (admission is
  * atomic), so a retry starts cold again instead of resuming a half-written entry. */
 export const INSTALL_CEILING_MS_DEFAULT = 1_200_000;
+/** Prewarm (seal) stall bound: 120 s without step progress fails the seal (§7.1.6). Retries are strictly
+ * cheaper than first attempts (fetched tarballs and the cached snapshot are reused), so a cut seal fails fast. */
+export const PREWARM_STALL_MS_DEFAULT = 120_000;
+/** Prewarm (seal) hard ceiling: 15 min (§7.1.6). A cut seal lands `failed` with `phase_timeout:seal:<step>`. */
+export const PREWARM_CEILING_MS_DEFAULT = 900_000;
+/** Progress-based bound of the prewarm seal: fixed stall watchdog plus the 15 min ceiling (no env override —
+ * raising a ceiling named in the spec requires amending the spec, §7.1.1). */
+export const defaultSealBudget = (): InstallBudget =>
+  ({ stallMs: PREWARM_STALL_MS_DEFAULT, ceilingMs: PREWARM_CEILING_MS_DEFAULT });
 /** Progress-based bound of the dependency install phase: stall watchdog plus absolute ceiling. */
 export interface InstallBudget { stallMs: number; ceilingMs: number; lookupMs?: number; admitMs?: number }
 export const defaultInstallBudget = (): InstallBudget =>
@@ -73,9 +82,10 @@ export async function withinPhase<T>(work: Promise<T>, milliseconds = PHASE_DEAD
     if (signal && onAbort) signal.removeEventListener('abort', onAbort);
   }
 }
-/** Install-phase failure: the failing phase rides in the reason, so the job ledger and `stateDetail` name it. */
-const installTimeout = (step?: string) => new LiveError('builder_unavailable',
-  step ? `phase_timeout:install:${step}` : 'phase_timeout:install');
+/** Install-phase failure: the failing phase rides in the reason, so the job ledger and `stateDetail` name it.
+ * The prewarm seal uses the `seal` phase so a cut seal lands `phase_timeout:seal:<step>` (§7.1.6). */
+const installTimeout = (step?: string, phase = 'install') => new LiveError('builder_unavailable',
+  step ? `phase_timeout:${phase}:${step}` : `phase_timeout:${phase}`);
 /** Progress-based bound of the dependency install phase: `report` on every streamed tarball, sent put frame or
  * drained file keeps the stall timer quiet, the opaque `npm ci` sub-phase suspends it, and the absolute ceiling
  * always applies. The stall arms only on the first `report`, so a slow start (heavy-queue admission, forge
@@ -84,7 +94,7 @@ const installTimeout = (step?: string) => new LiveError('builder_unavailable',
  * as a zombie; it does not attest termination by itself, callers still quiesce and confirm teardown before
  * replacement. */
 export async function withinInstallBudget<T>(work: (progress: InstallProgress, signal: AbortSignal) => Promise<T>,
-  budget: InstallBudget = defaultInstallBudget()): Promise<T> {
+  budget: InstallBudget = defaultInstallBudget(), phase = 'install'): Promise<T> {
   const controller = new AbortController();
   let stall: ReturnType<typeof setTimeout> | undefined;
   let ceiling: ReturnType<typeof setTimeout> | undefined;
@@ -100,7 +110,8 @@ export async function withinInstallBudget<T>(work: (progress: InstallProgress, s
   const arm = () => {
     clearTimeout(stall); stall = undefined;
     if (!suspended && seen && !settled && !controller.signal.aborted) {
-      stall = setTimeout(() => { controller.abort(); rejectStall(installTimeout(lastStep)); }, budget.stallMs); stall.unref();
+      stall = setTimeout(() => { controller.abort(); rejectStall(installTimeout(lastStep, phase)); }, budget.stallMs);
+      stall.unref();
     }
   };
   const progress: InstallProgress = { report: () => { if (!settled) { seen = true; arm(); } },
@@ -108,7 +119,8 @@ export async function withinInstallBudget<T>(work: (progress: InstallProgress, s
     step: name => { if (!settled && typeof name === 'string' && name.length > 0) lastStep = name; },
     clearStep: () => { if (!settled) lastStep = undefined; } };
   try {
-    ceiling = setTimeout(() => { controller.abort(); rejectCeiling(installTimeout(lastStep)); }, budget.ceilingMs); ceiling.unref();
+    ceiling = setTimeout(() => { controller.abort(); rejectCeiling(installTimeout(lastStep, phase)); }, budget.ceilingMs);
+    ceiling.unref();
     // A cut install is aborted, but a stage that ignores the signal may still settle late; its late rejection
     // must never surface as an unhandled rejection after the race already settled.
     const run = work(progress, controller.signal); run.catch(() => undefined);
@@ -136,6 +148,8 @@ export const defaultStepLogger: InstallStepLogger = fields => logger.info(fields
  * last-step is cleared so a later gap hang blames no completed step. */
 export async function runInstallStep<T>(progress: Pick<InstallProgress, 'step' | 'clearStep'> | undefined, step: string,
   work: () => Promise<T>, options: { log?: InstallStepLogger; now?: () => number; timeoutMs?: number; signal?: AbortSignal;
+    /** Budget phase naming the step timeout (`install` default, `seal` on the prewarm path, §7.1.6). */
+    phase?: string;
     counts?: (result: T | undefined) => { bytes?: number; files?: number } } = {}): Promise<T> {
   const log = options.log ?? defaultStepLogger;
   const now = options.now ?? Date.now;
@@ -174,7 +188,7 @@ export async function runInstallStep<T>(progress: Pick<InstallProgress, 'step' |
     return result;
   } catch (error) {
     const failure = error instanceof LiveError && error.code === 'builder_unavailable' && error.reason === 'phase_timeout'
-      ? new LiveError(error.code, `phase_timeout:install:${step}`, error.detail) : error;
+      ? new LiveError(error.code, `phase_timeout:${options.phase ?? 'install'}:${step}`, error.detail) : error;
     const reason = failure instanceof LiveError ? (failure.reason ? `${failure.code}:${failure.reason}` : failure.code)
       : 'builder_unavailable';
     const { bytes, files } = options.counts?.(undefined) ?? {};
