@@ -4,7 +4,8 @@
   export let height: number = 640;
   const isHttps = (value: string): boolean => {
     try {
-      return new URL(value).protocol === 'https:';
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password;
     } catch {
       return false;
     }

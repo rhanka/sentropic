@@ -93,6 +93,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
 - [x] **Lot 4 — W4.c embeddable panel §3.6**
   - [x] CM artifacts panel embedding frameAncestors exact https same-env, CSP builder (panel 2 passed, csp 3 passed).
   - [x] Lot gate: typecheck-ui green 0 errors, scoped test ENV=test-t4a-reg green.
+  - [x] FIX Argon MAJOR-8/MINOR-9: strict origin (url.origin === value) + same-env, CSP router wired, UI test strengthened (csp 5, panel 3 passed).
 - [ ] **Lot 5 — Final gates + PR**
   - [x] make scope-check PASS C2, typecheck-api and typecheck-ui green, scoped tests green.
   - [ ] Open PR, CI green, do NOT merge.
