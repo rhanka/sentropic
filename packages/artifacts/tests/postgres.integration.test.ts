@@ -36,6 +36,11 @@ const SQL_SHARING = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0006_sharing.sql'),
   'utf8',
 );
+// 0014 provides `blobs.placement`, written by release registration.
+const SQL_BLOB_PLACEMENT = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0014_db_blob_placement.sql'),
+  'utf8',
+);
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const store = createPostgresArtifactStore(pool);
@@ -49,6 +54,7 @@ beforeAll(async () => {
   await setup.query(SQL_TERMINAL);
   await setup.query(SQL_METADATA);
   await setup.query(SQL_SHARING);
+  await setup.query(SQL_BLOB_PLACEMENT);
   await setup.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-1', 'org-1')`);
   await setup.end();
 });
