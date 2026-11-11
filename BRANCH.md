@@ -23,6 +23,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `packages/artifacts/src/adapters/db-blob.ts`
   - `packages/artifacts/src/adapters/composite-blob.ts`
   - `packages/artifacts/src/server/blob-bridge.ts`
+  - `packages/artifacts/src/mcp-core.ts`
   - `packages/artifacts/migrations/0014_db_blob_placement.sql`
   - `packages/artifacts/tests/**`
   - `packages/artifacts/package.json`
