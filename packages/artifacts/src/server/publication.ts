@@ -551,6 +551,14 @@ export interface GuardedPublicationDeps {
   readonly blobConcurrency?: number;
   /** Per-publish blob-staging budget in ms; one shared deadline for every concurrent blob operation. */
   readonly blobDeadlineMs?: number;
+  /**
+   * CMF-S2 — DB placement promotion. Decides, per staged blob size, whether
+   * the finalized `artifacts.blobs` row reads 'db' (bytes in `blob_bytes`)
+   * instead of the default 'object'. Absent = 'object' (current behavior).
+   * Promotion only; a publication never demotes a row (mode changes go
+   * through placement migration).
+   */
+  readonly placementForSize?: (sizeBytes: number) => 'db' | 'object';
 }
 
 export interface GuardedPublicationService {
@@ -706,6 +714,13 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
           });
           for (const staged of prepared.entries) {
             await unit.registerBlob(input.storageScopeId, staged.entry.digest, staged.entry.size);
+            if (deps.placementForSize?.(staged.entry.size) === 'db') {
+              await client.query(
+                `UPDATE artifacts.blobs SET placement = 'db'
+                 WHERE storage_scope_id = $1 AND digest = $2`,
+                [input.storageScopeId, staged.entry.digest],
+              );
+            }
             await unit.addReleaseRef(staged.entry.digest, releaseId);
             addedRefs.push(staged.entry.digest);
           }
