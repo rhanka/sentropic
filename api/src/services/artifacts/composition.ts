@@ -20,6 +20,8 @@ export interface ArtifactHostOptions {
   /** Initial cumulative publication-byte budget for a newly mapped workspace. */
   quotaBytes: number;
   currentIdentity: CurrentArtifactIdentity;
+  /** CMF-S2: DB placement promotion for finalized blobs; absent = object (current behavior). */
+  placementForSize?: (sizeBytes: number) => 'db' | 'object';
 }
 
 /** No listeners, migrations, memory defaults, maintenance jobs or activation here. */
@@ -70,6 +72,7 @@ export function createArtifactHost(options: ArtifactHostOptions) {
         readPolicyRevision: async () => (await authorization.current()).revision,
       },
       publication: { blobs, intents: store, refs: createPostgresClaimGuardedRefs(store, createPostgresCommitExecutor(pool)),
+        placementForSize: options.placementForSize,
         createUnitWriter: createPostgresPublicationUnitWriter,
         locks: { 'artifact-lifecycle': [async (client) => {
           await client.query('SELECT id FROM artifacts.artifacts WHERE id = $1 AND storage_scope_id = $2 FOR UPDATE',
