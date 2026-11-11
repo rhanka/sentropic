@@ -44,7 +44,10 @@ export function readInstallBudget(env: Readonly<Record<string, string | undefine
 }
 /** Progress signal of the install phase; the opaque offline `npm ci` sub-phase suspends the stall timer (it is still
  * covered by the ceiling) because the API observes no progress while the pod runs it. */
-export interface InstallProgress { report(): void; suspendStall(suspended: boolean): void }
+export interface InstallProgress { report(): void; suspendStall(suspended: boolean): void;
+  /** Current install sub-step (cache lookup, heavy admission, forge re-download, transfer, recipe, drain):
+   * recorded for the ceiling/stall reason so a future timeout names its sub-step. Optional for older fakes. */
+  step?(name: string): void }
 /** A timeout does not attest termination: callers must quiesce and confirm teardown before replacement. */
 export async function withinPhase<T>(work: Promise<T>, milliseconds = PHASE_DEADLINE_MS): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -55,7 +58,8 @@ export async function withinPhase<T>(work: Promise<T>, milliseconds = PHASE_DEAD
   } finally { clearTimeout(timer); }
 }
 /** Install-phase failure: the failing phase rides in the reason, so the job ledger and `stateDetail` name it. */
-const installTimeout = () => new LiveError('builder_unavailable', 'phase_timeout:install');
+const installTimeout = (step?: string) => new LiveError('builder_unavailable',
+  step ? `phase_timeout:install:${step}` : 'phase_timeout:install');
 /** Progress-based bound of the dependency install phase: `report` on every streamed tarball, sent put frame or
  * drained file keeps the stall timer quiet, the opaque `npm ci` sub-phase suspends it, and the absolute ceiling
  * always applies. The stall arms only on the first `report`, so a slow start (heavy-queue admission, forge
@@ -71,6 +75,7 @@ export async function withinInstallBudget<T>(work: (progress: InstallProgress, s
   let suspended = false;
   let seen = false;
   let settled = false;
+  let lastStep: string | undefined;
   let rejectStall!: (error: unknown) => void;
   let rejectCeiling!: (error: unknown) => void;
   const stalled = new Promise<never>((_resolve, reject) => { rejectStall = reject; });
@@ -79,18 +84,56 @@ export async function withinInstallBudget<T>(work: (progress: InstallProgress, s
   const arm = () => {
     clearTimeout(stall); stall = undefined;
     if (!suspended && seen && !settled && !controller.signal.aborted) {
-      stall = setTimeout(() => { controller.abort(); rejectStall(installTimeout()); }, budget.stallMs); stall.unref();
+      stall = setTimeout(() => { controller.abort(); rejectStall(installTimeout(lastStep)); }, budget.stallMs); stall.unref();
     }
   };
   const progress: InstallProgress = { report: () => { if (!settled) { seen = true; arm(); } },
-    suspendStall: suspend => { if (!settled) { suspended = suspend; arm(); } } };
+    suspendStall: suspend => { if (!settled) { suspended = suspend; arm(); } },
+    step: name => { if (!settled && typeof name === 'string' && name.length > 0) lastStep = name; } };
   try {
-    ceiling = setTimeout(() => { controller.abort(); rejectCeiling(installTimeout()); }, budget.ceilingMs); ceiling.unref();
+    ceiling = setTimeout(() => { controller.abort(); rejectCeiling(installTimeout(lastStep)); }, budget.ceilingMs); ceiling.unref();
     // A cut install is aborted, but a stage that ignores the signal may still settle late; its late rejection
     // must never surface as an unhandled rejection after the race already settled.
     const run = work(progress, controller.signal); run.catch(() => undefined);
     return await Promise.race([run, stalled, expired]);
   } finally { settled = true; clearTimeout(stall); clearTimeout(ceiling); }
+}
+/** Bound of one cache lookup (Postgres SELECT + S3 GET): the warm-hit path has no other bound, so a hung lookup
+ * would otherwise wait for the 20 min ceiling with no progress and no named sub-step (preprod 11/11). */
+export const INSTALL_CACHE_LOOKUP_TIMEOUT_MS = 120_000;
+/** Structured install sub-step log: one bounded line per completed sub-step (ok/fail) with duration and counts,
+ * so a future timeout's completed prefix plus its ceiling/stall reason name the hanging sub-step. */
+export interface InstallStepFields {
+  msg: 'artifact_live_install_step'; step: string; ms: number; bytes?: number; files?: number;
+  outcome: 'ok' | 'fail'; reason?: string;
+}
+export type InstallStepLogger = (fields: InstallStepFields) => void;
+const defaultStepLogger: InstallStepLogger = fields => logger.info(fields, fields.msg);
+/** Runs one install sub-step: records it for the budget reason, times it, logs one bounded line on completion.
+ * A sub-step `timeoutMs` throws `phase_timeout:install:<step>` (like the budget) so the phase log names it. */
+export async function runInstallStep<T>(progress: Pick<InstallProgress, 'step'> | undefined, step: string,
+  work: () => Promise<T>, options: { log?: InstallStepLogger; now?: () => number; timeoutMs?: number;
+    counts?: (result: T | undefined) => { bytes?: number; files?: number } } = {}): Promise<T> {
+  const log = options.log ?? defaultStepLogger;
+  const now = options.now ?? Date.now;
+  progress?.step?.(step);
+  const started = now();
+  try {
+    const result = options.timeoutMs !== undefined ? await withinPhase(work(), options.timeoutMs) : await work();
+    const { bytes, files } = options.counts?.(result) ?? {};
+    log({ msg: 'artifact_live_install_step', step, ms: now() - started, ...(bytes !== undefined ? { bytes } : {}),
+      ...(files !== undefined ? { files } : {}), outcome: 'ok' });
+    return result;
+  } catch (error) {
+    const failure = error instanceof LiveError && error.code === 'builder_unavailable' && error.reason === 'phase_timeout'
+      ? new LiveError(error.code, `phase_timeout:install:${step}`, error.detail) : error;
+    const reason = failure instanceof LiveError ? (failure.reason ? `${failure.code}:${failure.reason}` : failure.code)
+      : 'builder_unavailable';
+    const { bytes, files } = options.counts?.(undefined) ?? {};
+    log({ msg: 'artifact_live_install_step', step, ms: now() - started, ...(bytes !== undefined ? { bytes } : {}),
+      ...(files !== undefined ? { files } : {}), outcome: 'fail', reason });
+    throw failure;
+  }
 }
 /** Key hash for phase logs: the ledger identity is never logged raw. */
 export function phaseKeyHash(key: { storageScopeId: string; artifactId: string }): string {
