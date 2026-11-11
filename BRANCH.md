@@ -87,8 +87,8 @@ Keep at least 1 warm pod per (scope, hot cacheKey) so a live start attaches inst
 - [x] **Lot 6 — Warm-deps release + warm-hit paths**
   - [x] transitions.ts release branch, prepare-live warm claim, build-only warm/warm-deps claim, worker stageSource.
   - [ ] Lot gate: controller + races tests green.
-- [ ] **Lot 7 — Pool endpoints**
-  - [ ] GET /v1/pool, POST /v1/pool/drain, service mount.
+- [x] **Lot 7 — Pool endpoints**
+  - [x] GET /v1/pool, POST /v1/pool/drain (poolAdmin gate), service mount, prewarm onSealed hot registration.
   - [ ] Lot gate: prewarm-api family green.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint

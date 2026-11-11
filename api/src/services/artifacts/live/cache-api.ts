@@ -184,6 +184,8 @@ export function createHostCacheApi(options: {
   executor: PrewarmExecutor;
   /** Background seal runner owned by the composition; nothing starts on import. */
   schedule(work: () => Promise<void>): void;
+  /** Fired after a seal is admitted (best-effort): the service registers the hot pool key. */
+  onSealed?: (sealed: { scope: string; cacheKey: string; lockSha256: string }) => void;
 }) {
   const app = new Hono<HostBuildEnv>();
   app.use('*', hostGate(options.authenticate));
@@ -197,6 +199,8 @@ export function createHostCacheApi(options: {
       const receipt = await options.executor.execute(job, source, progress);
       await options.jobs.completeSeal(job.cacheKey, job.jobId, { treeSha256: receipt.treeSha256,
         files: receipt.inventory.length, bytes: receipt.archive?.bytes ?? 0 });
+      try { options.onSealed?.({ scope: job.scope, cacheKey: job.cacheKey, lockSha256: job.lockSha256 }); }
+      catch { /* hot registration is best-effort; the row stays queryable through GET /v1/cache */ }
     } catch (error) {
       const code = error instanceof LiveError ? error.code : 'builder_unavailable';
       const reason = error instanceof LiveError ? error.reason : undefined;

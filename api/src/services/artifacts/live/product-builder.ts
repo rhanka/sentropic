@@ -15,6 +15,7 @@ import { parseBuilderHostBindings } from './builder-mount';
 import { createLiveScheduler } from './scheduler';
 import { readBuilderCacheStorage, type BuilderCacheStorage, type PrivateCacheBlobs } from './cache-storage';
 import { readInstallBudget } from './deadline';
+import { ARTIFACT_POOL_ADMIN_ENV } from './pool';
 import { LiveError } from './records';
 import type { HostIdentity } from './host-build-api';
 import { readWorkerSizing, type KubernetesCore } from './pods';
@@ -128,6 +129,7 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
     installEnv: installEnvironment(readInstallHeapMb(env)),
     forge: remoteHostForge(reads), sources: { source: reads.source }, forgeBindings,
     forgeSnapshot: (scope, binding, commitSha) => reads.snapshotRepo(scope, binding, commitSha),
+    poolAdmin: env[ARTIFACT_POOL_ADMIN_ENV]?.trim() === '1',
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });
   let running: { stop(): void } | null = null;
