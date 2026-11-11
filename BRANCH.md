@@ -18,6 +18,10 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `api/tests/api/artifacts-*.ts`
   - `api/tests/api/cmf-s2-blob-placement.test.ts`
   - `api/tests/api/cmf-s3-placement-migrate.test.ts`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
+  - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
   - `api/src/scripts/cm-placement-migrate.ts`
   - `packages/artifacts/src/adapters/**`
   - `packages/artifacts/src/adapters/db-blob.ts`
