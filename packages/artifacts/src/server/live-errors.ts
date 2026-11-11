@@ -4,6 +4,7 @@ export const LIVE_FAILURE_STATUS = {
   git_live_conflict: 409, git_live_draft_conflict: 409, git_live_snapshot_expired: 409,
   git_live_draft_expired: 410, git_live_draft_unavailable: 503,
   dependency_integrity_missing: 422, dependency_integrity_mismatch: 422, dependency_cache_invalid: 422,
+  cache_not_prewarmed: 409, lock_mismatch: 422, sealed_unit_invalid: 500,
   git_not_attached: 422, git_binding_paused: 409, git_diverged: 409, builder_unavailable: 503,
   git_auto_publish_refused: 422, git_build_job_mismatch: 409, git_sha_not_on_branch: 422,
 } as const;
