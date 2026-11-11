@@ -35,7 +35,9 @@ function cacheFixture(budget?: InstallBudget, options?: { log?: (fields: Install
       putArchive: vi.fn(async (ref, data) => { archives.set(ref, data); }),
       getArchive: vi.fn(async ref => archives.get(ref)),
       putSource: vi.fn(async (ref, data) => { archives.set(ref, data); }),
-      getSource: vi.fn(async ref => archives.get(ref)) },
+      getSource: vi.fn(async ref => archives.get(ref)),
+      putTarball: vi.fn(async (ref, data) => { archives.set(ref, data); }),
+      getTarball: vi.fn(async ref => archives.get(ref)) },
   };
   const source = () => {
     const lockText = JSON.stringify(lock); const lockfile = Buffer.from(lockText);
@@ -324,6 +326,68 @@ describe('prewarm seal (tar.zst unit)', () => {
     f.ports.storage.getArchive = vi.fn(async (key: string) => stored.get(key));
     await expect(collect(f.cache, receipt)).rejects.toMatchObject({ code: 'sealed_unit_invalid' });
     expect(f.ports.storage.quarantine).toHaveBeenCalledWith(receipt.key);
+  });
+  it('should prefetch tarballs with a bounded window while admitting them in order', async () => {
+    const f = cacheFixture();
+    const extra = f.lock.packages['node_modules/pkg'] as Record<string, unknown>;
+    for (let i = 0; i < 9; i++) {
+      f.lock.packages[`node_modules/p${i}`] = { ...extra, version: `1.0.${i}`,
+        resolved: `https://registry.npmjs.org/p${i}/-/p${i}-1.0.0.tgz` };
+    }
+    let inFlight = 0; let peak = 0;
+    const inner = f.ports.fetch;
+    f.ports.fetch = vi.fn(async (pin, relay, signal) => {
+      inFlight++; peak = Math.max(peak, inFlight);
+      try { await delay(10); return inner(pin, relay, signal); } finally { inFlight--; }
+    });
+    const { SEAL_PREFETCH_WINDOW } = await import('../../../src/services/artifacts/live/cache');
+    const receipt = await f.cache.seal!(f.source());
+    expect(receipt.inventory).toHaveLength(10);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(SEAL_PREFETCH_WINDOW);
+    // All ten pins share one integrity: the first window fills with relay fetches, the tail joins on the
+    // stored tarball once the first put lands.
+    expect(f.ports.fetch).toHaveBeenCalledTimes(SEAL_PREFETCH_WINDOW);
+  });
+  it('should reuse stored tarballs without touching the relay, refetching corrupt entries', async () => {
+    const { tarballRef } = await import('../../../src/services/artifacts/live/cache-storage');
+    const f = cacheFixture();
+    await f.cache.seal!(f.source());
+    expect(f.ports.fetch).toHaveBeenCalledTimes(1);
+    // A new lockfile sharing the pin: the common tarball serves from the store, only the new pin crosses the relay.
+    const g = cacheFixture();
+    g.ports.storage = f.ports.storage;
+    const extra = g.lock.packages['node_modules/pkg'] as Record<string, unknown>;
+    const integrity = String(extra.integrity);
+    const extraBytes = Buffer.from('extra tarball');
+    const extraSri = `sha512-${createHash('sha512').update(extraBytes).digest('base64')}`;
+    g.lock.packages['node_modules/extra'] = { version: '9.9.9',
+      resolved: 'https://registry.npmjs.org/extra/-/extra-9.9.9.tgz', integrity: extraSri };
+    const innerFetch = g.ports.fetch;
+    g.ports.fetch = vi.fn(async (pin, relay, signal) =>
+      (pin.path === 'node_modules/extra' ? extraBytes : innerFetch(pin, relay, signal)));
+    g.ports.cleanInstall = vi.fn(async (input: any) => {
+      for await (const tarball of input.tarballs) void tarball;
+      await input.sink(g.installed);
+      return { runId: 'run' };
+    });
+    await g.cache.seal!(g.source());
+    const fetch = vi.mocked(g.ports.fetch);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0].path).toBe('node_modules/extra');
+    // A corrupt store entry refetches from the relay instead of failing the seal.
+    await f.ports.storage.putTarball(tarballRef(integrity), Buffer.from('garbage'));
+    const h = cacheFixture();
+    h.ports.storage = f.ports.storage;
+    h.lock.packages['node_modules/other'] = { ...extra, version: '8.8.8',
+      resolved: 'https://registry.npmjs.org/other/-/other-8.8.8.tgz' };
+    h.ports.cleanInstall = vi.fn(async (input: any) => {
+      for await (const tarball of input.tarballs) void tarball;
+      await input.sink(h.installed);
+      return { runId: 'run' };
+    });
+    await h.cache.seal!(h.source());
+    expect(vi.mocked(h.ports.fetch)).toHaveBeenCalledTimes(2);
   });
   it('should cut a stalled seal with phase_timeout:seal:<step>', async () => {
     const lines: InstallStepFields[] = [];
