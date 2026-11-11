@@ -100,6 +100,31 @@ describe('lease forge reads: snapshot (contract §4)', () => {
     expect(snap.cacheIdentity.installWorkspaces).toEqual([]);
   });
 
+describe('lease forge reads: repo-scoped prewarm snapshot (§7.1.3)', () => {
+  it('should assemble the identical identity as the user path without a binding row', async () => {
+    const s = await setup();
+    const user = await s.reads.snapshot(key, HEAD);
+    const prewarm = await s.reads.snapshotRepo(key.storageScopeId, binding, HEAD);
+    expect(prewarm).toMatchObject({ headSha: user.headSha, treeSha: user.treeSha,
+      gb1: { subPath: binding.subPath } });
+    expect(Buffer.from(prewarm.lockfile).toString()).toBe(Buffer.from(user.lockfile).toString());
+    expect(prewarm.cacheIdentity).toEqual(user.cacheIdentity);
+    // The staged prewarm tree reads back like a user staging ref.
+    expect((await s.reads.source(prewarm.stagingRef)).map(f => f.path).sort()).toEqual(STAGED);
+  });
+  it('should fail closed on an unadmitted binding or a malformed commit before any forge call', async () => {
+    const s = await setup();
+    const before = s.fetch.mock.calls.length;
+    expect(await failure(s.reads.snapshotRepo('other-scope', binding, HEAD))).toMatchObject({
+      code: 'git_repo_not_registered' });
+    expect(await failure(s.reads.snapshotRepo(key.storageScopeId, { ...binding, branch: 'nope' }, HEAD)))
+      .toMatchObject({ code: 'git_ref_not_allowed' });
+    expect(await failure(s.reads.snapshotRepo(key.storageScopeId, binding, 'short'))).toMatchObject({
+      code: 'builder_unavailable' });
+    expect(s.fetch.mock.calls.length).toBe(before);
+  });
+});
+
   it('should validate the workspace selection at snapshot and scope the cache identity', async () => {
     const s = await setup();
     const mono = tarball([
