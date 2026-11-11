@@ -5,6 +5,7 @@ import { enrichPodLoss, isPodCause, isTransportLoss, podName } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, currentRuntime, failed, observeHead, teardown, transition } from './transitions';
 import { requireUserCache } from './cache';
+import { eventsContext } from './phase-events';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 import { LiveHostError, type HostJob } from '@sentropic/artifacts/live-host';
@@ -148,9 +149,11 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
     // Sealed-cache pre-admission (§7.1.4): the snapshot and the lookup run before the first pod slot, so an
     // unsealed lockfile rejects with 409 before any admission beyond the job itself. The catch below returns
     // the row to DORMANT so a retry after sealing starts clean.
+    const events = eventsContext(ports, job.jobId, 'git_publish');
     const source = await ports.forge.snapshot(key, job.headSha);
     if (source.headSha !== job.headSha) throw new LiveError('git_head_moved');
-    const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
+    const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime),
+      events ? { events } : {});
     const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
     runtime = await transition(ports, key, runtime, state => {
       state.runtime.podUid = pod.uid;
@@ -165,16 +168,16 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
         baselineSeq: state.progress.publicationBaselineSeq, initial: false };
     });
     await ports.worker.clean(runtime);
-    await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
+    await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache), events ? { events } : {});
     const building = runtime;
     const candidate = await ports.heavy.run(building.podName, 'build', () => runPhase(key, 'build',
-      () => withinPhase(ports.worker.build(building, building.attempt!))));
+      () => withinPhase(ports.worker.build(building, building.attempt!)), events ? { events } : {}));
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.phase !== 'BUILDING' || state.runtime.pendingWake) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt!.candidateDigest = candidate.candidateDigest;
       state.runtime.attempt!.evidence = buildEvidence(source, cache);
     });
-    await runPhase(key, 'verify', () => ports.worker.verify(runtime, runtime.attempt!));
+    await runPhase(key, 'verify', () => ports.worker.verify(runtime, runtime.attempt!), events ? { events } : {});
     await observeHead(ports, key, runtime);
     runtime = await ports.store.transaction(key, async unit => {
       assertFence(unit.state, runtime);
