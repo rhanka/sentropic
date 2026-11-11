@@ -203,7 +203,7 @@ describe('native cache pricing and TTL evidence', () => {
       const snapshot = observer.snapshot('completed');
       expect(snapshot).toMatchObject({ estimated: false, nativeInputUsageValidated: true,
         nativeInputUsageSource: 'json', nativeServedModelId: model,
-        nativeInputPriceUnits40: fixture.units[model === NATIVE_MODELS[2] ? 1 : 0] });
+        nativeInputPriceUnits40: fixture.units[model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3] ? 1 : 0] });
       expect(snapshot.inputTokens).toBe(fixture.usage.input_tokens
         + fixture.usage.cache_read_input_tokens + fixture.usage.cache_creation_input_tokens);
       expect(snapshot.rawUsage?.input_tokens).toBe(100);
@@ -327,7 +327,7 @@ describe('native proof and output provenance', () => {
 
 describe('native pricing policy and arithmetic bounds', () => {
   it.each(NATIVE_MODELS)('should enforce both exact units40 bounds for %s', model => {
-    const minimum = model === NATIVE_MODELS[2] ? 100 : 400;
+    const minimum = model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3] ? 100 : 400;
     expect(validateNativeInputPriceUnits40(100, minimum, model, NATIVE_CACHE_PRICING_POLICY)).toBe(true);
     expect(validateNativeInputPriceUnits40(100, 8000, model, NATIVE_CACHE_PRICING_POLICY)).toBe(true);
     for (const units of [0, minimum - 1, 8001]) {

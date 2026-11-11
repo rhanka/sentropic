@@ -588,7 +588,7 @@ describe('native cumulative input and pinned stream amounts', () => {
         ...(clean ? [nativeFrame('message_stop')] : [])], { model });
       const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
       await collect(result.stream);
-      const fable = model === NATIVE_MODELS[2];
+      const fable = model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3];
       expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean ? fable ? 1200 : 1350 : fable ? 64_200 : 64_350);
       expect(h.snapshots[0]).toMatchObject({ inputTokens: 2150, outputTokens: 500, totalTokens: 2650,
         nativeInputUsageValidated: true, nativeInputUsageSource: 'message_delta', finalOutputObserved: clean, estimated: !clean });
@@ -644,7 +644,7 @@ describe('native served-model and substantive-iterations latches', () => {
       expect(snapshot).toMatchObject({ inputTokens: 10_350, outputTokens: 500, totalTokens: 10_850,
         iterationsPresent: latched, nativeInputUsageValidated: !latched, estimated: latched, finalOutputObserved: true });
       const charged = h.recorder.settlements[0]!.attempts[0]!.usage;
-      expect(nativeAmount(charged)).toBe(latched ? 74_350 : model === NATIVE_MODELS[2] ? 1700 : 2450);
+      expect(nativeAmount(charged)).toBe(latched ? 74_350 : model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3] ? 1700 : 2450);
       expect(charged.outputTokens).toBe(latched ? 32_000 : 500);
       if (latched) {
         expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
@@ -655,7 +655,7 @@ describe('native served-model and substantive-iterations latches', () => {
     });
   it.each(NATIVE_MODELS.flatMap(model => ['mismatch', 'fallback', 'iterations'].map(cause => ({ model, cause }))))(
     'keeps a late latch after valid input even if later evidence looks normal: $model $cause', async ({ model, cause }) => {
-      const other = model === NATIVE_MODELS[2] ? NATIVE_MODELS[1] : NATIVE_MODELS[2];
+      const other = model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3] ? NATIVE_MODELS[1] : NATIVE_MODELS[2];
       const trigger = cause === 'mismatch' ? nativeStart(other, mixed)
         : cause === 'fallback' ? nativeFrame('content_block_start', { content_block: { type: 'fallback', fallback_credit_token: 'opaque' } })
           : nativeFrame('message_delta', { usage: { iterations: [{ input_tokens: 999_999, output_tokens: 999_999 }] } });
@@ -765,7 +765,7 @@ describe('SDK-shaped one-hour cache deltas and pinned amounts', () => {
       model, allowanceInput: 10_300, body: { system: [{ type: 'text', text: 'cached', cache_control: { type: 'ephemeral', ttl } }] },
     });
     await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
-    const fable = model === NATIVE_MODELS[2];
+    const fable = model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3];
     const expected = growth ? clean ? fable ? 1950 : 2700 : fable ? 64_950 : 65_700
       : clean ? fable ? 1750 : 2500 : fable ? 64_750 : 65_500;
     expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(expected);
@@ -786,7 +786,8 @@ describe('SDK-shaped one-hour cache deltas and pinned amounts', () => {
         body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
       await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
       expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean
-        ? model === NATIVE_MODELS[2] ? 1900 : 2650 : model === NATIVE_MODELS[2] ? 64_900 : 65_650);
+        ? model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3] ? 1900 : 2650
+        : model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3] ? 64_900 : 65_650);
       expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_450, outputTokens: 500,
         rawUsage: { cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 } } });
     });
@@ -796,7 +797,7 @@ describe('SDK-shaped one-hour cache deltas and pinned amounts', () => {
       nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 300, output_tokens: 500 } }),
       nativeFrame('message_stop')], { model });
     await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
-    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(model === NATIVE_MODELS[2] ? 1725 : 2475);
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(model === NATIVE_MODELS[2] || model === NATIVE_MODELS[3] ? 1725 : 2475);
     expect(h.snapshots[0]!.nativeCacheWriteSplitReason).toBeUndefined();
   });
   it.each([{ cache_creation_input_tokens: 199 }, { cache_creation_input_tokens: 199,

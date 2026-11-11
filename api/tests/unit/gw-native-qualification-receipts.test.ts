@@ -207,11 +207,11 @@ describe('native qualification safety', () => {
       expect(() => reserveQualificationSend(directory)).toThrow('not armed');
     } finally { rmSync(directory, { recursive: true }); }
   });
-  it('should plan exactly nine generation, three count and one WebSearch turn', () => {
+  it('should plan exactly twelve generation, four count and one WebSearch turn', () => {
     const cases = qualificationCases({ body: { messages: [], safeguards: [] }, betas: [],
       successfulSafeguardResults: [], webSearchBody: {}, webSearchBetas: [], payloadSource: 'fixture' });
-    expect(cases).toHaveLength(13); expect(cases.filter(c => c.count)).toHaveLength(3);
-    expect(cases.filter(c => !c.count && c.name !== 'websearch')).toHaveLength(9);
+    expect(cases).toHaveLength(17); expect(cases.filter(c => c.count)).toHaveLength(4);
+    expect(cases.filter(c => !c.count && c.name !== 'websearch')).toHaveLength(12);
     expect(cases.filter(c => c.name === 'websearch')).toHaveLength(1);
     for (const c of cases) {
       expect(c.count ? !('max_tokens' in c.body) && !('stream' in c.body) : c.body.max_tokens === 16).toBe(true);

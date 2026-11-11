@@ -426,6 +426,18 @@ export const modelProfiles = [
   },
   {
     providerId: 'gemini',
+    modelId: 'gemini-4-carbon',
+    label: 'Gemini 4 Carbon',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 65_536,
+    },
+  },
+  {
+    providerId: 'gemini',
     modelId: 'gemini-3.5-flash',
     label: 'Gemini 3.5 Flash',
     reasoningTier: 'advanced',
@@ -479,6 +491,14 @@ export const modelProfiles = [
     providerId: 'anthropic',
     modelId: 'claude-fable-5-1',
     label: 'Fable 5.1',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('anthropic', 'advanced', { vision: true }),
+  },
+  {
+    providerId: 'anthropic',
+    modelId: 'claude-fable-5-2',
+    label: 'Fable 5.2',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('anthropic', 'advanced', { vision: true }),
