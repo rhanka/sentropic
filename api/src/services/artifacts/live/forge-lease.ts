@@ -18,6 +18,37 @@ interface Row { path: string; mode: number; size: number; sha256: string }
 interface Staged { target: Target; sha: string; manifest: Row[]; expiresAt: number }
 const rowsOf = (tree: ForgeTree): Row[] => tree.files.map(f => ({ path: f.path, mode: f.mode, size: f.bytes.byteLength,
   sha256: sha256(f.bytes) })).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+/** Shared snapshot assembly of the user path (`snapshot`) and the prewarm trigger (`snapshotRepo`): identical
+ * identity derivation, so a prewarm seals exactly the `cacheKey` a start will look up. */
+async function snapshotTarget(t: Target, sha: string, ports: {
+  commit(repository: BuilderRepository, sha: string): Promise<unknown>;
+  tree(t: Target, sha: string): Promise<ForgeTree>; stage(entry: Staged): string; now(): number;
+}): Promise<SourceSnapshot> {
+  const commit = await ports.commit(t.repository, sha) as { sha: unknown; tree: unknown };
+  const treeSha = field(commit.tree, 'sha');
+  if (commit.sha !== sha || typeof treeSha !== 'string' || !SHA.test(treeSha)) return unavailable();
+  const files = await ports.tree(t, sha);
+  const lock = files.files.find(file => file.path === 'package-lock.json');
+  if (!lock) throw new LiveError('lock_missing');
+  const stagingRef = ports.stage({ target: t, sha, manifest: rowsOf(files), expiresAt: ports.now() + STAGING.ttlMs });
+  const topology = files.files.filter(f => f.path === 'package.json' || f.path.endsWith('/package.json'))
+    .map(f => f.path).sort();
+  const rawSelection = [...(t.repository.installWorkspaces ?? [])].sort();
+  let installWorkspaces: readonly string[] = rawSelection;
+  if (rawSelection.length > 0) {
+    const rootManifest = files.gb1['package.json'];
+    if (typeof rootManifest !== 'string') throw new LiveError('build_descriptor_invalid', 'unknown_workspace');
+    installWorkspaces = validateWorkspaces(rawSelection, rootManifest,
+      Object.keys(files.gb1).filter(path => path === 'package.json' || path.endsWith('/package.json')));
+  }
+  return { headSha: sha, treeSha, lockfile: lock.bytes, stagingRef, gb1: { subPath: t.binding.subPath, files: files.gb1 },
+    cacheIdentity: { storageScopeId: t.key.storageScopeId, repoId: t.binding.repoId, lockSha256: sha256(lock.bytes),
+      platform: BUILDER_TOOLCHAIN.platform, nodeVersion: BUILDER_TOOLCHAIN.nodeVersion,
+      npmVersion: BUILDER_TOOLCHAIN.npmVersion, image: BUILDER_IMAGE,
+      policyRevision: sha256(JSON.stringify([installRecipeFor(installWorkspaces), NPM_RELAY])),
+      workspaceTopology: sha256(JSON.stringify(topology)), integrityDigest: sha256(files.gb1[GB1_QUALIFICATION_PATH] ?? ''),
+      installWorkspaces } };
+}
 
 /** Generation of the forge reads (R1): the controller's current runtime for the key (build-only: the job generation;
  * live: the binding generation); a DORMANT or absent runtime falls back to the host's last reconcile (`remote.session`). */
@@ -37,7 +68,10 @@ export function createLeaseForgeReads(options: {
   /** Binding generation of the forge reads (`runtimeGeneration`). */
   generation(key: LiveKey): Promise<number>;
   fetch?: typeof fetch; now?: () => number; id?: () => string;
-}): ForgeReads & { close(): void } {
+}): ForgeReads & { close(): void;
+  /** Repo-scoped prewarm snapshot (§7.1.3); see the method comment. */
+  snapshotRepo(scope: string, binding: ForgeBinding, commitSha: string): Promise<SourceSnapshot>;
+} {
   const { config } = options;
   const now = options.now ?? Date.now; const id = options.id ?? randomUUID;
   const staging = new Map<string, Staged>();
@@ -83,6 +117,9 @@ export function createLeaseForgeReads(options: {
     while (staging.size > STAGING.entries) staging.delete(staging.keys().next().value!);
     return ref;
   }
+  async function fetchCommit(repository: BuilderRepository, sha: string): Promise<unknown> {
+    return json(await github(repository, `/git/commits/${sha}`, AbortSignal.timeout(FORGE_TIMEOUTS.callMs)));
+  }
   return {
     close: () => client?.close(),
     head: async key => headOf(await target(key)),
@@ -98,30 +135,18 @@ export function createLeaseForgeReads(options: {
     },
     async snapshot(key, sha): Promise<SourceSnapshot> {
       if (typeof sha !== 'string' || !SHA.test(sha)) return unavailable();
-      const t = await target(key);
-      const commit = await json(await github(t.repository, `/git/commits/${sha}`, AbortSignal.timeout(FORGE_TIMEOUTS.callMs)));
-      const treeSha = field(commit.tree, 'sha');
-      if (commit.sha !== sha || typeof treeSha !== 'string' || !SHA.test(treeSha)) return unavailable();
-      const files = await tree(t, sha);
-      const lock = files.files.find(file => file.path === 'package-lock.json');
-      if (!lock) throw new LiveError('lock_missing');
-      const stagingRef = stage({ target: t, sha, manifest: rowsOf(files), expiresAt: now() + STAGING.ttlMs });
-      const topology = files.files.filter(f => f.path === 'package.json' || f.path.endsWith('/package.json')).map(f => f.path).sort();
-      const rawSelection = [...(t.repository.installWorkspaces ?? [])].sort();
-      let installWorkspaces: readonly string[] = rawSelection;
-      if (rawSelection.length > 0) {
-        const rootManifest = files.gb1['package.json'];
-        if (typeof rootManifest !== 'string') throw new LiveError('build_descriptor_invalid', 'unknown_workspace');
-        installWorkspaces = validateWorkspaces(rawSelection, rootManifest,
-          Object.keys(files.gb1).filter(path => path === 'package.json' || path.endsWith('/package.json')));
-      }
-      return { headSha: sha, treeSha, lockfile: lock.bytes, stagingRef, gb1: { subPath: t.binding.subPath, files: files.gb1 },
-        cacheIdentity: { storageScopeId: key.storageScopeId, repoId: t.binding.repoId, lockSha256: sha256(lock.bytes),
-          platform: BUILDER_TOOLCHAIN.platform, nodeVersion: BUILDER_TOOLCHAIN.nodeVersion,
-          npmVersion: BUILDER_TOOLCHAIN.npmVersion, image: BUILDER_IMAGE,
-          policyRevision: sha256(JSON.stringify([installRecipeFor(installWorkspaces), NPM_RELAY])),
-          workspaceTopology: sha256(JSON.stringify(topology)), integrityDigest: sha256(files.gb1[GB1_QUALIFICATION_PATH] ?? ''),
-          installWorkspaces } };
+      return snapshotTarget(await target(key), sha, { commit: fetchCommit, tree, stage, now });
+    },
+    /** Repo-scoped prewarm snapshot (§7.1.3): the identical assembly as `snapshot` — same registry admission
+     * (`admitBinding`), same `SourceSnapshot` shape, same cache identity a user start will hit — but resolved
+     * from the host-supplied binding at the pinned commit, never from a generation binding row. The branch is
+     * used for admission and retention current-ref tracking only; content is pinned by `commitSha`. */
+    async snapshotRepo(scope, binding, commitSha): Promise<SourceSnapshot> {
+      if (!config) return unconfigured();
+      if (typeof commitSha !== 'string' || !SHA.test(commitSha)) return unavailable();
+      const repository = admitBinding(config, scope, binding);
+      const key = { storageScopeId: scope, artifactId: `prewarm:${binding.repoId}:${binding.subPath || 'root'}` };
+      return snapshotTarget({ key, repository, binding }, commitSha, { commit: fetchCommit, tree, stage, now });
     },
     /** Re-downloads the recorded commit and returns its files only when every row equals the staged manifest. */
     async source(stagingRef) {
