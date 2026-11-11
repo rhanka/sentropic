@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { ForgeReads } from './forge';
 import { admitBinding, unconfigured, type BuilderRepository, type ForgeBinding, type ForgeBindings, type ForgeConfig } from './forge-binding';
-import { readForgeTarball, unstable, type ForgeTree } from './forge-tar';
+import { FORGE_LIMITS, readForgeTarball, unstable, type ForgeTree } from './forge-tar';
 import { GB1_QUALIFICATION_PATH } from './gb1-qualification';
 import { validateWorkspaces } from './workspace-subset';
-import { sha256 } from './integrity';
+import { safeDependencyPath, sha256 } from './integrity';
+import { extractTarZst, tarZst, type UstarMember } from './supervisor-transfer';
+import { assertSourceRef, sourceFilterDigest, sourceUnitRef } from './cache-storage';
 import type { LiveStore, SourceSnapshot } from './ports';
 import { LiveError, type LiveKey } from './records';
 import { CODELOAD, createLeasedGitHub, discard, field, FORGE_TIMEOUTS, json, unavailable, USER_AGENT } from './forge-github';
@@ -18,6 +20,68 @@ interface Row { path: string; mode: number; size: number; sha256: string }
 interface Staged { target: Target; sha: string; manifest: Row[]; expiresAt: number }
 const rowsOf = (tree: ForgeTree): Row[] => tree.files.map(f => ({ path: f.path, mode: f.mode, size: f.bytes.byteLength,
   sha256: sha256(f.bytes) })).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+/** GB1 read rule mirrored from readForgeTarball (GB1_NAMES there): descriptors, manifests, locks and the
+ * qualification file, by repository path. Any drift is caught by the snapshot equivalence test. */
+const GB1_BASENAMES = new Set(['package.json', 'package-lock.json', 'sentropic.artifact.json']);
+/** Descriptor outputDir filter mirrored from withoutOutput (forge-tar.ts): build output is never staged. */
+function withoutUnitOutput(files: ForgeTree['files'], gb1: Record<string, string>, subPath: string) {
+  let outputDir: unknown;
+  try {
+    outputDir = (JSON.parse(gb1[subPath ? `${subPath}/sentropic.artifact.json` : 'sentropic.artifact.json'] ?? 'null') as
+      { outputDir?: unknown } | null)?.outputDir;
+  } catch { return files; }
+  if (typeof outputDir !== 'string' || !safeDependencyPath(outputDir.replace(/\/+$/, ''))) return files;
+  const root = outputDir.replace(/\/+$/, '');
+  return files.filter(file => file.path !== root && !file.path.startsWith(`${root}/`));
+}
+/** Repacks one filtered snapshot tree into its deterministic source unit (§7.2.2): every kept raw file under
+ * its full repository path (subPath-prefixed), so the load side re-derives files and GB1 inputs with the
+ * original inside/read rule. GB1-only files outside subPath ride as regular members; their bytes are UTF-8
+ * text (descriptors, manifests, locks, the qualification file) by construction. */
+async function treeToUnit(tree: ForgeTree, subPath: string): Promise<Uint8Array> {
+  const full = (stripped: string) => subPath === '' ? stripped : `${subPath}/${stripped}`;
+  const members: UstarMember[] = tree.files.map(f => ({ path: full(f.path),
+    mode: f.mode === 0o755 ? 365 as const : 292 as const, bytes: f.bytes }));
+  const inside = new Set(members.map(member => member.path));
+  for (const [path, text] of Object.entries(tree.gb1)) {
+    if (!inside.has(path)) members.push({ path, mode: 292 as const, bytes: Buffer.from(text, 'utf8') });
+  }
+  members.sort((a, b) => (a.path < b.path ? -1 : 1));
+  async function* stream(): AsyncGenerator<UstarMember> { for (const member of members) yield member; }
+  const chunks: Uint8Array[] = []; let size = 0;
+  for await (const chunk of tarZst(stream())) {
+    size += chunk.byteLength;
+    if (size > FORGE_LIMITS.totalBytes) return unstable('unit_too_large');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+/** Rebuilds one filtered snapshot tree from its source unit: the same inside/read split and output filter as
+ * the tarball parse, so a cached unit is indistinguishable from a fresh download. Malformed units refuse. */
+async function unitToTree(cached: Uint8Array, subPath: string): Promise<ForgeTree> {
+  if (!(cached instanceof Uint8Array)) return unstable('unit_invalid');
+  const fail = (kind: 'limit' | 'invalid'): never => {
+    if (kind === 'limit') throw new LiveError('limit_exceeded', 'forge_snapshot');
+    return unstable('unit_invalid');
+  };
+  const members: { path: string; mode: number; bytes: Uint8Array }[] = [];
+  for await (const member of extractTarZst(cached, cached.byteLength,
+    { files: FORGE_LIMITS.files, fileBytes: FORGE_LIMITS.fileBytes, totalBytes: FORGE_LIMITS.totalBytes }, fail)) {
+    members.push(member);
+  }
+  const gb1: Record<string, string> = {};
+  const files: ForgeTree['files'] = [];
+  for (const member of members) {
+    const base = member.path.slice(member.path.lastIndexOf('/') + 1);
+    const read = member.path === GB1_QUALIFICATION_PATH || GB1_BASENAMES.has(base);
+    if (read) gb1[member.path] = Buffer.from(member.bytes).toString('utf8');
+    const inside = subPath === '' || member.path.startsWith(`${subPath}/`);
+    if (!inside) continue;
+    files.push({ path: subPath === '' ? member.path : member.path.slice(subPath.length + 1),
+      mode: member.mode === 365 ? 0o755 : 0o644, bytes: member.bytes });
+  }
+  return { files: withoutUnitOutput(files, gb1, subPath), gb1 };
+}
 /** Shared snapshot assembly of the user path (`snapshot`) and the prewarm trigger (`snapshotRepo`): identical
  * identity derivation, so a prewarm seals exactly the `cacheKey` a start will look up. */
 async function snapshotTarget(t: Target, sha: string, ports: {
@@ -67,6 +131,9 @@ export function createLeaseForgeReads(options: {
   config: ForgeConfig | null; bindings: Pick<ForgeBindings, 'read'>;
   /** Binding generation of the forge reads (`runtimeGeneration`). */
   generation(key: LiveKey): Promise<number>;
+  /** Source-unit store (§7.2.2): one deterministic `sources/<commitSha>-<filterDigest>.tar.zst` per commit.
+   * Best-effort read-through cache — a failed put never fails the snapshot, a failed get re-downloads. */
+  units?: { get(ref: string): Promise<Uint8Array | undefined>; put(ref: string, bytes: Uint8Array): Promise<void> };
   fetch?: typeof fetch; now?: () => number; id?: () => string;
 }): ForgeReads & { close(): void;
   /** Repo-scoped prewarm snapshot (§7.1.3); see the method comment. */
@@ -92,9 +159,17 @@ export function createLeaseForgeReads(options: {
     const body = await json(response); const sha = field(body.object, 'sha');
     return body.ref === `refs/heads/${branch}` && typeof sha === 'string' && SHA.test(sha) ? sha : unavailable();
   }
-  /** The tarball of `sha` through at most one redirect, to codeload only, then the filtered tree. */
+  /** The tarball of `sha` through at most one redirect, to codeload only, then the filtered tree. With a
+   * unit store, one commit downloads once: the repacked source unit is served on later snapshots, and the
+   * staged-manifest comparison in `source()` still runs over the unit's manifest rows. */
   async function tree(t: Target, sha: string): Promise<ForgeTree> {
     const signal = AbortSignal.timeout(FORGE_TIMEOUTS.tarballMs);
+    const ref = options.units ? sourceUnitRef(sha, sourceFilterDigest(t.binding.subPath)) : undefined;
+    if (options.units && ref) {
+      assertSourceRef(ref);
+      const cached = await options.units.get(ref).catch(() => undefined);
+      if (cached) return unitToTree(cached, t.binding.subPath);
+    }
     let response = await github(t.repository, `/tarball/${sha}`, signal);
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location') ?? ''; await discard(response);
@@ -102,7 +177,12 @@ export function createLeaseForgeReads(options: {
       response = await client!.get(location, { 'user-agent': USER_AGENT }, signal);
     }
     if (response.status !== 200 || !response.body) { await discard(response); return unavailable(); }
-    return readForgeTarball(response.body, t.binding.subPath);
+    const parsed = await readForgeTarball(response.body, t.binding.subPath);
+    if (options.units && ref) {
+      try { await options.units.put(ref, await treeToUnit(parsed, t.binding.subPath)); }
+      catch { /* best-effort cache: a failed put degrades to re-download, never fails the snapshot */ }
+    }
+    return parsed;
   }
   function staged(ref: string): Staged {
     const entry = staging.get(ref);
