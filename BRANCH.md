@@ -36,6 +36,8 @@ App bascule en mode cluster-mesh asap, code only, flag-gated, preprod-safe.
   - `api/tests/**/email-port*.spec.ts`
   - `api/tests/**/object-type-registry*.spec.ts`
   - `packages/cluster-mesh/tests/**/*.spec.ts`
+  - `scripts/ci/consumer-boundaries.json` (T5a-CI1 only: register the ubo-contracts proving contract so the BR-83 gate passes; no CI logic change)
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -55,6 +57,7 @@ App bascule en mode cluster-mesh asap, code only, flag-gated, preprod-safe.
 ## Feedback Loop
 - [x] T5a-EX1 train-level version bump for `@sentropic/cluster-mesh` (public, src changed): `packages/cluster-mesh/package.json` 0.26.0-dev.23 to 0.26.0-dev.24 plus `package-lock.json` version entry, `CHANGELOG.md` entry, packaging fixture refresh. Reason: `enforce-package-bump` CI gate blocks merge without a bump; this branch is the T5a train (one PR for several wagons) so it carries the bump once. Impact: version strings only, no dependency changes. Rollback: revert the bump commit. Private `@sentropic/ubo-contracts` needs no bump (gate skips private packages).
 - [x] T5a-ENV1 `up-api-test` boot failure 11/11 (environmental, not branch code): `api-1` exited 1 with `EMFILE: too many open files, watch '/workspace/api/src/index.ts'` from `tsx watch`; host `fs.inotify max_user_instances=128` shared with many live stacks (radar-*, test-bridge-ack). Evidence it is not this branch: `test-bridge-ack-api-1` (other lane) failed the same minute on the same `tsx watch` command; this branch changes no boot/watch/fd path. Local workaround: scoped unit tests ran via the CI one-shot runner (`API_TEST_CI=1`, no watch process) — all green. Host-level watch exhaustion reported for the conductor (`reap-test-stacks.sh` drumbeat); no repo change made for it.
+- [x] T5a-CI1 `consumer-contracts` failure 11/11 (CI gate, branch fix): `no owning validation for ubo-contracts: full integration cannot prove it` — first change to `packages/ubo-contracts/src` since the BR-83 gate landed; the repo pins `ubo-contracts.validation` to null (unit test `should load 43 inventoried components` enforces the unvalidated tail), so the fix registers the real proving contract instead: new `boundaries` row `ubo-contracts → consumers [api]`, contracts [`api/tests/object-registry/object-type-registry.test.ts`] (object-registry shard of `test-api-unit-integration`, same job the repo's own `owningValidations` map names). Verified locally: `consumer-contracts-verify` → `ok: true, problems: []`; `test-ci-consumer-contracts` 25/25. No CI logic changed, no component validation invented.
 
 ## AI Flaky tests
 - Acceptance rule:
