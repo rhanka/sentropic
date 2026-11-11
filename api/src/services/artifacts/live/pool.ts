@@ -110,16 +110,34 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
         return { next, result: next };
       });
     },
-    /** Background refill promotion (`warm-deps → warm`) after the base source + prebundle were restaged. */
+    /** Background refill promotion (`warm-deps → warm`) after the base source + prebundle were restaged.
+     * `filledAt` (image/drift age) is preserved: only a fresh fill resets it. */
     async promoteWarm(scope: string, cacheKey: string, baseHeadSha: string): Promise<PoolEntry> {
       const at = now();
       return store.update<PoolEntry, PoolEntry>(entryKey(scope, cacheKey), current => {
         if (!current || current.state !== 'warm-deps') {
           throw new LiveError('builder_unavailable', 'pool_promote_mismatch');
         }
-        const next: PoolEntry = { ...current, state: 'warm', baseHeadSha, filledAt: at, lastRenewAt: at };
+        const next: PoolEntry = { ...current, state: 'warm', baseHeadSha, lastRenewAt: at };
         return { next, result: next };
       });
+    },
+    /** Cold-pod release (§7.3.2, convergence Q2): `absent → warm-deps` for a scrubbed session pod that never
+     * went through a claim (the S6 `stop` whose `publish` follows). Returns undefined when a row already
+     * exists — the caller then deletes its pod instead of doubling the pool. */
+    async releaseUnclaimed(scope: string, cacheKey: string, podName: string, podUid: string,
+      baseHeadSha: string, poolEpoch: number): Promise<PoolEntry | undefined> {
+      const at = now();
+      return store.update<PoolEntry, PoolEntry | undefined>(entryKey(scope, cacheKey), current => {
+        if (current) return { result: undefined };
+        const next: PoolEntry = { scope, cacheKey, baseHeadSha, podName, podUid, poolEpoch,
+          state: 'warm-deps', filledAt: at, lastRenewAt: at };
+        return { next, result: next };
+      });
+    },
+    /** Drop a row in any state back to absent, for scrub-doubt pod deletions. */
+    async drop(scope: string, cacheKey: string): Promise<void> {
+      await store.update<PoolEntry, void>(entryKey(scope, cacheKey), () => ({ next: undefined, result: undefined }));
     },
     /** Per-scope occupancy for `GET /v1/pool` (§7.6.3). */
     async occupancy(scope: string): Promise<{ warm: number; warmDeps: number; filling: number; claimed: number }> {
@@ -170,13 +188,20 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
         if (!entry || entry.scope !== scope) continue;
         const uid = byName.get(entry.podName);
         byName.delete(entry.podName);
-        if (uid === entry.podUid && entry.podUid !== ''
-          && (entry.state === 'warm' || entry.state === 'warm-deps')
-          && now() - entry.filledAt <= POOL_MAX_AGE_MS) {
-          adopted.push(entry); continue;
+        const alive = uid === entry.podUid && entry.podUid !== '' && now() - entry.filledAt <= POOL_MAX_AGE_MS;
+        if (!alive) {
+          orphaned++;
+          await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+          continue;
         }
-        orphaned++;
-        await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+        if (entry.state === 'filling') {
+          // Mid-fill after a dead runner: the tree is untrusted, so the pod is deleted, not adopted.
+          orphaned++;
+          await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+          await removePod(entry.podName, entry.podUid).catch(() => undefined);
+          continue;
+        }
+        adopted.push(entry);
       }
       for (const [name, uid] of byName) {
         await removePod(name, uid).catch(() => undefined);
