@@ -9,7 +9,7 @@ import {
 import { LAUNCH_ALIAS_ROUTE_MAPPINGS } from '../src/routing-targets.js';
 import { modelProfiles } from '../src/catalog.js';
 
-const qualifiedIds = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'];
+const qualifiedIds = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-fable-5-2'];
 // W semantic port of R's exclusive-alias rejection: every launch alias that
 // is not itself an exact Anthropic catalog model stays out of the allowlist.
 // Bare ids below are exact catalog models, so they are accepted (see next test).

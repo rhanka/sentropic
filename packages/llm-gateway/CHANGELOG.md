@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 0.23.0: admit `@sentropic/llm-mesh` `^0.36.0` in the mesh dependency range
+  (follows the 0.36.0 Carbon/Fable 5.2 release); Fable 5.2 requests are served
+  by Gemini 4 Carbon on the Cloud Code slot (owner mapping 2026-11-10), native
+  cache-read weight 1 alongside Fable 5.1.
 - 0.22.6: admit `@sentropic/llm-mesh` `^0.35.0` in the mesh dependency range
   (follows the 0.35.0 enroll CLI release; patch, precedent 143392cea).
 - 0.20.1: widen the optional `@sentropic/auth-hono` peer to `^0.15.0 || ^0.16.0`

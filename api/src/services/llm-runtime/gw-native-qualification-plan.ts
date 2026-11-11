@@ -1,4 +1,4 @@
-export const QUALIFICATION_MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'] as const;
+export const QUALIFICATION_MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-fable-5-2'] as const;
 export type QualificationFixture = {
   body: Record<string, unknown>; betas: string[]; successfulSafeguardResults: unknown;
   webSearchBody: Record<string, unknown>; webSearchBetas: string[]; payloadSource: string;

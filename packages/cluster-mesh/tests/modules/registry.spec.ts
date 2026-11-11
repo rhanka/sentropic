@@ -114,7 +114,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.36.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.37.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
@@ -134,7 +134,7 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.36.0', '0.36.0'],
+    ['0.37.0', '0.37.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
@@ -248,7 +248,7 @@ describe('module registry', () => {
   it('should list the catalog with delivered and source-unavailable entries', () => {
     const catalog = registry().catalog();
     expect(catalog.find((entry) => entry.id === 'gateway/auth')).toMatchObject({
-      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.23.0',
+      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.24.0',
       peers: [
         { packageName: '@sentropic/mcp-auth', entry: '@sentropic/mcp-auth/hono', requiredRange: '>=0.2.1 <0.3.0' },
         { packageName: 'jose', entry: 'jose', requiredRange: '^5.10.0' },
