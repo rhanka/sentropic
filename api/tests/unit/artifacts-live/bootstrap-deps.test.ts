@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { chmod, lstat, mkdir, readFile, readdir, readlink, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, readdir, readlink, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDependencyCache, type CacheObject, type DependencyFile } from '../../../src/services/artifacts/live/cache';
 import { BUILDER_IMAGE, INSTALL_RECIPE, installEnvironment } from '../../../src/services/artifacts/live/recipes';
+import { tarZst } from '../../../src/services/artifacts/live/supervisor-transfer';
 import { fakeSpawn, file, harness, type Spawned } from './bootstrap-harness';
 import { gb1Descriptor } from './fixture';
 
@@ -194,5 +195,69 @@ describe('pod bootstrap agent: workspace-scoped installs', () => {
     await expect(install(await harness({ spawn }), scopedSource, scopedTarballs, ['../x']))
       .rejects.toThrow('failed:invalid_args');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('pod bootstrap agent: sealed-unit extraction', () => {
+  const members = [
+    { path: 'node_modules/a/index.js', mode: 292 as const, bytes: Buffer.from('module.exports = 1') },
+    { path: 'node_modules/a/bin/cli.js', mode: 365 as const, bytes: Buffer.from('#!/usr/bin/env node') },
+  ];
+  /** Cache-format tree digest over [path, mode, sha256] rows, as the seal admits it. */
+  const treeOf = (files: { path: string; mode: 292 | 365; bytes: Buffer }[]) => createHash('sha256')
+    .update(JSON.stringify(files.map(f => [f.path, f.mode,
+      createHash('sha256').update(f.bytes).digest('hex')]).sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1))))
+    .digest('hex');
+  async function archive(files: typeof members = members) {
+    const chunks: Uint8Array[] = [];
+    async function* stream() { for (const f of files) yield f; }
+    for await (const chunk of tarZst(stream())) chunks.push(chunk);
+    return Buffer.concat(chunks);
+  }
+  it('should extract a sealed tar.zst under dependencies with digest verification', async () => {
+    const pod = await harness();
+    const bytes = await archive();
+    const sent = await pod.transfer('archive', [file('sealed.tar.zst', bytes, 0o444)]);
+    const done = await pod.send('extractArchive', { ...sent, tree: treeOf(members), root: 'dependencies' });
+    expect(done).toMatchObject({ files: members.length, bytes: members.reduce((n, f) => n + f.bytes.length, 0) });
+    expect(await readFile(pod.path('dependencies/node_modules/a/index.js'))).toEqual(members[0]!.bytes);
+    expect(await readFile(pod.path('dependencies/node_modules/a/bin/cli.js'))).toEqual(members[1]!.bytes);
+    expect((await stat(pod.path('dependencies/node_modules/a/bin/cli.js'))).mode & 0o777).toBe(0o555);
+    expect((await stat(pod.path('dependencies/node_modules/a/index.js'))).mode & 0o777).toBe(0o444);
+  });
+  it('should refuse a tampered archive, a wrong tree digest, a bad root and a multi-file transfer', async () => {
+    const pod = await harness();
+    const bytes = await archive();
+    const tampered = Buffer.from(bytes); tampered[tampered.length - 1] ^= 0xff;
+    const send = (data: Buffer, args: Record<string, unknown>) => pod.transfer('archive', [file('sealed.tar.zst', data, 0o444)])
+      .then(sent => pod.send('extractArchive', { ...sent, tree: treeOf(members), root: 'dependencies', ...args }));
+    await expect(send(tampered, {})).rejects.toThrow();
+    await expect(send(bytes, { tree: 'e'.repeat(64) })).rejects.toThrow('failed:digest_mismatch');
+    await expect(send(bytes, { root: 'install' })).rejects.toThrow('failed:invalid_args');
+    const two = await pod.transfer('archive', [file('a.tar.zst', bytes, 0o444), file('b.tar.zst', bytes, 0o444)]);
+    await expect(pod.send('extractArchive', { ...two, tree: treeOf(members), root: 'workspace' }))
+      .rejects.toThrow('failed:invalid_archive');
+  });
+  it('should refuse a link entry inside the archive', async () => {
+    const header = Buffer.alloc(512, 0);
+    header.write('node_modules/link', 0, 100, 'utf8');
+    header.write('0000444', 100, 7, 'utf8');
+    header.write('00000000000', 124, 11, 'utf8');
+    header.write('        ', 148, 8, 'utf8'); header[156] = 0x32; header.write('ustar\0', 257, 6, 'utf8');
+    let checksum = 0;
+    for (let i = 0; i < 512; i++) checksum += i >= 148 && i < 156 ? 0x20 : header[i]!;
+    header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 8, 'utf8');
+    const { createZstdCompress } = await import('node:zlib') as unknown as {
+      createZstdCompress(): NodeJS.ReadWriteStream;
+    };
+    const { Readable } = await import('node:stream');
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of Readable.from([header, Buffer.alloc(512, 0)]).pipe(createZstdCompress())) {
+      chunks.push(chunk as Uint8Array);
+    }
+    const pod = await harness();
+    const sent = await pod.transfer('archive', [file('sealed.tar.zst', Buffer.concat(chunks), 0o444)]);
+    await expect(pod.send('extractArchive', { ...sent, tree: 'e'.repeat(64), root: 'workspace' }))
+      .rejects.toThrow('failed:invalid_archive');
   });
 });
