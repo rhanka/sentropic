@@ -134,7 +134,7 @@ it('should return skipped instead of settled when the worker ACK no longer match
 });
 
 it('should skip a stop settle when the runtime already left the stop phases', async () => {
-  const { w, deps, identity, record, builder, start } = world();
+  const { w, identity, record, builder, start } = world();
   builder(true);
   const started = await start('start'); await settle();
   const state = await w.status();
@@ -142,7 +142,7 @@ it('should skip a stop settle when the runtime already left the stop phases', as
     expectedLiveRevision: state.liveRevision, idempotencyKey: 'stop-1' });
   expect((await record()).runtime).toMatchObject({ phase: 'DORMANT' });
   w.worker.stop.mockClear();
-  await expect(settleLiveWorker({ deps, identity, action: 'stop',
+  await expect(settleLiveWorker({ deps: w.deps, identity, action: 'stop',
     result: { liveSessionId: started.liveSessionId }, now: Date.now() })).resolves.toBe('skipped');
   expect(w.worker.stop).not.toHaveBeenCalled();
 });
@@ -197,4 +197,60 @@ it('should surface the error code of standard errors instead of unknown', async 
   w.worker.reconcile.mockRejectedValue(Object.assign(new Error('reset by peer'), { code: 'ECONNRESET' }));
   await start('start'); await settle();
   expect(events).toEqual([{ identity, action: 'project', outcome: 'failed', code: 'ECONNRESET' }]);
+});
+
+it('should move to DORMANT with code:reason stateDetail on terminal failure and stop re-driving', async () => {
+  const { w, events, identity, record, builder, start, scope } = world();
+  await start('start'); await settle();
+  events.length = 0;
+  const row = await record();
+  w.worker.reconcile.mockImplementation(async () => ({ liveSessionId: row.runtime!.liveSessionId,
+    leaseEpoch: row.runtime!.leaseEpoch, routeEpoch: row.runtime!.routeEpoch, revision: row.revision,
+    ready: false, failure: { code: 'builder_unavailable', reason: 'phase_timeout:install:drain' } }) as never);
+  expect(await w.service.redrive(scope)).toEqual([{ ...identity, action: 'project', outcome: 'failed' }]);
+  expect(events).toEqual([{ identity, action: 'project', outcome: 'failed',
+    code: 'builder_unavailable', reason: 'phase_timeout:install:drain' }]);
+  expect(await record()).toMatchObject({ runtime: { phase: 'DORMANT', appliedRevision: null,
+    stateDetail: 'builder_unavailable:phase_timeout:install:drain' } });
+  expect(await w.service.redrive(scope)).toEqual([]);
+  builder(true);
+  await start('start-2'); await settle();
+  expect((await record()).runtime!.phase).toBe('LIVE');
+});
+
+it('should abandon a hung worker after the per-item budget and keep the runtime pending', async () => {
+  const events: LiveWorkerEvent[] = [];
+  const w = liveWitness({ redriveItemTimeoutMs: 50, onWorkerEvent: event => events.push(event) });
+  const identity: LiveIdentity = { storageScopeId: w.context.storageScopeId, artifactId: w.binding.artifactId, bindingGeneration: 1 };
+  w.worker.reconcile.mockImplementation(async () => {
+    const row = await w.store.transaction(identity, async tx => tx.record!);
+    return { liveSessionId: row.runtime!.liveSessionId, leaseEpoch: row.runtime!.leaseEpoch,
+      routeEpoch: row.runtime!.routeEpoch, revision: row.revision, ready: false };
+  });
+  const state = await w.status();
+  await w.call('live_control', { action: 'start', expectedHeadSha: state.currentHeadSha,
+    expectedLiveRevision: state.liveRevision, idempotencyKey: 'start-hang' });
+  await settle();
+  expect(events).toEqual([{ identity, action: 'project', outcome: 'pending' }]);
+  events.length = 0;
+  w.worker.reconcile.mockImplementation(() => new Promise(ack => setTimeout(async () => {
+    const row = await w.store.transaction(identity, async tx => tx.record!);
+    ack({ liveSessionId: row.runtime!.liveSessionId, leaseEpoch: row.runtime!.leaseEpoch,
+      routeEpoch: row.runtime!.routeEpoch, revision: row.revision, ready: false });
+  }, 200)) as never);
+  await expect(w.service.redrive(w.context.storageScopeId)).resolves.toEqual([{ ...identity, action: 'project', outcome: 'failed' }]);
+  expect(events).toEqual([{ identity, action: 'project', outcome: 'failed', code: 'timeout' }]);
+  expect((await w.store.transaction(identity, async tx => tx.record!)).runtime!.phase).toBe('REVIVING');
+});
+
+it('should converge a total stop (void answer) to DORMANT', async () => {
+  const { w, record, builder, start } = world();
+  builder(true);
+  const started = await start('start'); await settle();
+  expect((await record()).runtime!.phase).toBe('LIVE');
+  const state = await w.status();
+  const stopped = await w.call('live_control', { action: 'stop', liveSessionId: started.liveSessionId,
+    expectedLiveRevision: state.liveRevision, idempotencyKey: 'stop-void' });
+  expect(stopped).toMatchObject({ state: 'DORMANT' });
+  expect((await record()).runtime).toMatchObject({ phase: 'DORMANT', appliedRevision: null });
 });

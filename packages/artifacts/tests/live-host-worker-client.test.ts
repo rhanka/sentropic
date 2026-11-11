@@ -136,4 +136,21 @@ describe('live-host worker client: draft staging before reconcile (host live API
     await expect(client(store, fakeBuilder({ stop: 200 }).fetcher).stop({ ...id, liveSessionId: 'sess-1', leaseEpoch: 4 }))
       .rejects.toMatchObject({ kind: 'provider_unavailable' });
   });
+
+  it('preserves a terminal builder failure on the ACK and ignores malformed shapes', async () => {
+    const { store, record } = await seededStore([{ path: 'a.txt', text: 'a', mode: '100644' }]);
+    const failure = { code: 'builder_unavailable', reason: 'phase_timeout:install:drain' };
+    const fetcher = vi.fn(async (url: URL) => String(url).endsWith('/reconcile')
+      ? new Response(JSON.stringify({ liveSessionId: 'sess-1', leaseEpoch: 4, routeEpoch: 3,
+        revision: record.revision, ready: false, failure }), { status: 200 })
+      : new Response(null, { status: 204 }));
+    await expect(client(store, fetcher).reconcile(id)).resolves.toEqual({ liveSessionId: 'sess-1', leaseEpoch: 4,
+      routeEpoch: 3, revision: record.revision, ready: false, failure });
+    const malformed = vi.fn(async (url: URL) => String(url).endsWith('/reconcile')
+      ? new Response(JSON.stringify({ liveSessionId: 'sess-1', leaseEpoch: 4, routeEpoch: 3,
+        revision: record.revision, ready: false, failure: { code: '', reason: 7 } }), { status: 200 })
+      : new Response(null, { status: 204 }));
+    await expect(client(store, malformed).reconcile(id)).resolves.toEqual({ liveSessionId: 'sess-1', leaseEpoch: 4,
+      routeEpoch: 3, revision: record.revision, ready: false });
+  });
 });
