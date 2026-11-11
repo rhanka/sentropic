@@ -4,6 +4,7 @@ import { createHeavyPhaseQueue, createMemoryHeavyPhaseQueueStore, PROVISIONAL_HE
   type HeavyPhaseQueueStore } from '@sentropic/cluster-mesh';
 import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall } from '../../../src/services/artifacts/live/heavy';
 import type { LiveRuntime } from '../../../src/services/artifacts/live/records';
+import type { InstallStepFields } from '../../../src/services/artifacts/live/deadline';
 
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
 const budget = { budgetMiB: 1641, podBaseMiB: 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 60_000 };
@@ -77,6 +78,58 @@ describe('live heavy gate (client of the cluster-mesh heavy-phase queue)', () =>
     await expect(wrapped(input)).resolves.toMatchObject({ runId: 'run' });
     held.resolve(); await holder;
     await expect(wrapped({ ...input, runtime: { podName: 'v2' } as LiveRuntime })).resolves.toMatchObject({ runId: 'run' });
+  });
+  it('should log heavy_admit ok at admission time, before the install completes', async () => {
+    const { gate } = world();
+    const lines: InstallStepFields[] = [];
+    let now = 1_000;
+    let loggedBeforeInstall = false;
+    const install = vi.fn(async () => {
+      loggedBeforeInstall = lines.some(line => line.step === 'heavy_admit' && line.outcome === 'ok');
+      await new Promise(resolve => setTimeout(resolve, 20));
+      return { runId: 'run' };
+    });
+    const wrapped = gatedInstall(gate, install, { log: fields => lines.push(fields), now: () => (now += 15) });
+    const input = { lockfile: new Uint8Array(), identity: {} as never, recipe: {} as never, stagingRef: 's',
+      tarballs: (async function* () {})(), sink: async () => undefined,
+      progress: { report: () => undefined, suspendStall: () => undefined,
+        step: vi.fn(), clearStep: vi.fn() } };
+    await expect(wrapped({ ...input, runtime: { podName: 'v2' } as LiveRuntime }))
+      .resolves.toMatchObject({ runId: 'run' });
+    expect(loggedBeforeInstall).toBe(true);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ msg: 'artifact_live_install_step', step: 'heavy_admit', outcome: 'ok' });
+    expect(lines[0].ms).toBeLessThan(20);
+    expect(input.progress.step).toHaveBeenCalledWith('heavy_admit');
+    expect(input.progress.clearStep).toHaveBeenCalledOnce();
+  });
+  it('should log heavy_admit fail once on queued admission without running the install', async () => {
+    const { gate } = world({ maxWaitMs: 5 }); const held = deferred();
+    const lines: InstallStepFields[] = [];
+    const install = vi.fn(async () => ({ runId: 'run' }));
+    const wrapped = gatedInstall(gate, install, { log: fields => lines.push(fields), now: () => 0 });
+    const input = { lockfile: new Uint8Array(), identity: {} as never, recipe: {} as never, stagingRef: 's',
+      tarballs: (async function* () {})(), sink: async () => undefined };
+    const holder = gate.run('v1', 'build', () => held.promise);
+    await expect(wrapped({ ...input, runtime: { podName: 'v2' } as LiveRuntime }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'queued' });
+    expect(install).not.toHaveBeenCalled();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ msg: 'artifact_live_install_step', step: 'heavy_admit', outcome: 'fail',
+      reason: 'builder_unavailable:queued' });
+    held.resolve(); await holder;
+  });
+  it('should not double-log heavy_admit fail when the admitted install itself fails', async () => {
+    const { gate } = world();
+    const lines: InstallStepFields[] = [];
+    const failure = new Error('install boom');
+    const install = vi.fn(async () => { throw failure; });
+    const wrapped = gatedInstall(gate, install, { log: fields => lines.push(fields), now: () => 0 });
+    const input = { lockfile: new Uint8Array(), identity: {} as never, recipe: {} as never, stagingRef: 's',
+      tarballs: (async function* () {})(), sink: async () => undefined };
+    await expect(wrapped({ ...input, runtime: { podName: 'v2' } as LiveRuntime })).rejects.toBe(failure);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ step: 'heavy_admit', outcome: 'ok' });
   });
   it('should keep the queue durable in the host KV with a node row lock and roll back a failed transaction', async () => {
     const queries: string[] = []; let stored: string | undefined; const release = vi.fn();

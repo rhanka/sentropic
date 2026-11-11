@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { INSTALL_RECIPE, NPM_RELAY } from '../../../src/services/artifacts/live/recipes';
 import type { DependencyFile } from '../../../src/services/artifacts/live/cache';
-import { fakePod, refuse, runtime, stream } from './supervisor-pod';
+import { createCleanInstall } from '../../../src/services/artifacts/live/supervisor-install';
+import type { InstallStepFields } from '../../../src/services/artifacts/live/deadline';
+import { fakePod, refuse, runtime, stream, text } from './supervisor-pod';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -131,5 +133,53 @@ describe('supervisor offline clean install', () => {
     await expect(pod.supervisor.cleanInstall({ ...scopedInputs(), recipe: INSTALL_RECIPE as never }))
       .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'install_recipe_invalid' });
     expect(pod.ops()).not.toContain('install');
+  });
+  it('should log install sub-steps in order with counts, distinguishing pre and post clear', async () => {
+    const lines: InstallStepFields[] = [];
+    const core = {
+      id: () => 'run-1',
+      transfer: vi.fn(async () => ({ transfer: 'src' })),
+      stream: vi.fn(async (_rt: unknown, _op: unknown, items: AsyncIterable<unknown>) => {
+        for await (const _item of items);
+        return { transfer: 'cache' };
+      }),
+      drain: vi.fn(async (_rt: unknown, _op: unknown, _limits: unknown, _mode: unknown, _failure: unknown,
+        sink: (file: { path: string; mode: number; bytes: Uint8Array }) => Promise<void>) => {
+        await sink({ path: 'pkg/index.js', mode: 0o644, bytes: Buffer.from('x') });
+      }),
+      call: vi.fn(async (_rt: unknown, op: string) =>
+        op === 'clear' ? { cleared: ['/tmp'] } : { exitCode: 0, signal: null, output: '' }),
+    };
+    const cleanInstall = createCleanInstall(core as never,
+      async () => [text('package-lock.json', '{"lockfileVersion":3}'), text('ui/main.ts', 'ok')],
+      { log: fields => lines.push(fields) });
+    await expect(cleanInstall(inputs())).resolves.toMatchObject({ runId: 'run-1' });
+    expect(lines.map(line => line.step)).toEqual(['forge_redownload', 'clear', 'source_transfer', 'tarball_stream',
+      'recipe', 'drain', 'cleanup']);
+    expect(lines.every(line => line.msg === 'artifact_live_install_step' && line.outcome === 'ok')).toBe(true);
+    expect(lines.find(line => line.step === 'forge_redownload')).toMatchObject({ files: 2 });
+    expect(lines.find(line => line.step === 'source_transfer')).toMatchObject({ files: 2 });
+    expect(lines.find(line => line.step === 'tarball_stream')).toMatchObject({ files: 1 });
+    expect(lines.find(line => line.step === 'drain')).toMatchObject({ files: 1, bytes: 1 });
+  });
+  it('should log forge_redownload fail without running later sub-steps on a source hang', async () => {
+    const lines: InstallStepFields[] = [];
+    const controller = new AbortController();
+    const core = {
+      id: () => 'run-1',
+      transfer: vi.fn(async () => ({ transfer: 'src' })),
+      stream: vi.fn(async () => ({ transfer: 'cache' })),
+      drain: vi.fn(async () => undefined),
+      call: vi.fn(async () => ({ cleared: ['/tmp'] })),
+    };
+    const cleanInstall = createCleanInstall(core as never, () => new Promise<never>(() => {}),
+      { log: fields => lines.push(fields) });
+    const input = { ...inputs(), signal: controller.signal };
+    const pending = cleanInstall(input);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: 'builder_unavailable' });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ step: 'forge_redownload', outcome: 'fail' });
+    expect(core.transfer).not.toHaveBeenCalled();
   });
 });
