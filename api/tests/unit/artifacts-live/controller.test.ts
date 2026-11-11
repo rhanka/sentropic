@@ -100,6 +100,39 @@ describe('artifact live controller', () => {
     await f.controller.buildOnly(key, 'job-1');
     expect(f.published).toEqual(['A']);
   });
+  it('should tear a REVIVING runtime down to DORMANT when its install fails after a pod replace', async () => {
+    const f = fixture();
+    // The pod replace fenced forward (routeEpoch +1) before install failed: the revive handle is stale.
+    // Once (the failed start only): the later build-only runs a real install.
+    vi.mocked(f.ports.cache.acquire).mockImplementationOnce(async () => {
+      await f.ports.store.transaction(key, async unit => { unit.state!.runtime.routeEpoch++; });
+      throw new LiveError('builder_unavailable', 'install_script_not_allowlisted');
+    });
+    await expect(f.controller.start(key)).rejects
+      .toMatchObject({ code: 'builder_unavailable', reason: 'install_script_not_allowlisted' });
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null,
+      stateDetail: 'builder_unavailable:install_script_not_allowlisted' });
+    expect(f.objects.size).toBe(0);
+    // A later build-only is never fenced forever by the failed live start.
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']);
+  });
+  it('should converge a REVIVING runtime to DORMANT on stop', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    await f.ports.store.transaction(key, async unit => { unit.state!.runtime.phase = 'REVIVING'; });
+    expect(await f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 }))
+      .toEqual({ liveSessionId: live.sessionId, state: 'stopped' });
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+    expect(f.objects.size).toBe(0);
+  });
+  it('should converge a RECOVERING runtime to DORMANT on stop', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    await f.ports.store.transaction(key, async unit => { unit.state!.runtime.phase = 'RECOVERING'; });
+    f.objects.delete('pods' + live.podName);
+    expect(await f.controller.stop(key, { ownerId: 'owner', sessionId: live.sessionId, generation: 1 }))
+      .toEqual({ liveSessionId: live.sessionId, state: 'stopped' });
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
+  });
   it('should leave a REVIVING runtime with an active pod to its in-flight revive', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     await f.ports.store.transaction(key, async unit => { unit.state!.runtime.phase = 'REVIVING'; });
