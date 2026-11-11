@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { LiveKey, LiveRuntime } from './records';
 import { conflict, LiveError } from './records';
+import { scrubRecipeOutput, truncateRecipeTail } from './recipe-diagnostics';
 import { BUILDER_IMAGE, artifactEnvironment } from './recipes';
 
 import type { BuilderPlacement } from './placement';
@@ -27,8 +28,8 @@ export const VOLUME_SCRATCH_MB_ENV = 'ARTIFACT_VOLUME_SCRATCH_MB';
 export const VOLUME_DEPENDENCIES_MB_ENV = 'ARTIFACT_VOLUME_DEPENDENCIES_MB';
 export const DEFAULT_WORKER_SIZING = Object.freeze({ sourceMiB: 384, scratchMiB: 1664, dependenciesMiB: 1280 });
 /** Container ephemeral limit: the pod is evicted when source+scratch+dependencies (+ logs) pass it, so it bounds the volume
- * total. 3 x 3400Mi = 10200Mi fits the builder namespace quota limits.ephemeral-storage 10Gi: three concurrent builder
- * pods instead of four, so that a ~1 GiB unpacked install (peak ~2.5 GiB on disk, measured 2026-11-09) is not evicted. */
+ * total. MAX_BUILDER_PODS x 3400Mi (2 x 3400 = 6800Mi) fits the builder namespace quota limits.ephemeral-storage 10Gi,
+ * so that a ~1 GiB unpacked install (peak ~2.5 GiB on disk, measured 2026-11-09) is not evicted. */
 export const WORKER_EPHEMERAL_LIMIT_MIB = 3400;
 const volumeMb = (value: string | undefined, fallback: number, min: number, max: number) => {
   const parsed = Number(value?.trim());
@@ -68,10 +69,12 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
       // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f): LimitRange tenant-defaults cpu <= 1 per container;
-      // ResourceQuota tenant-quota requests.cpu 1, limits.memory 6Gi, limits.ephemeral-storage 10Gi, pods 5; four requests
-      // fit the d2-4 node (4 x 420 = 1680 <= 1706 MiB); the ephemeral limit admits three pods (3 x 3400Mi = 10200Mi <= 10Gi).
-      // Only the limits overcommit.
-      resources: { requests: { cpu: '250m', memory: '420Mi', 'ephemeral-storage': '0' },
+      // ResourceQuota tenant-quota requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi, limits.ephemeral-storage 10Gi.
+      // Memory request = limit = 1536Mi (k8s 09/11: a 420Mi request for a ~1.23 GiB build let the scheduler overcommit a
+      // builder node and the kubelet evicted the pod): the scheduler books what a build uses and the pod is never above
+      // its request. 2 x 1536Mi = requests.memory 3Gi, so MAX_BUILDER_PODS = 2, shared by live and build pods (one per
+      // builder node; the pool autoscales). Only CPU overcommits.
+      resources: { requests: { cpu: '250m', memory: '1536Mi', 'ephemeral-storage': '0' },
         limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
@@ -87,9 +90,87 @@ export const QUOTA_EXCEEDED = 'quota_exceeded';
 export const quotaExceeded = (error: unknown) => error instanceof LiveError && error.reason === QUOTA_EXCEEDED;
 export const quotaRefusal = (statusCode: number, body: string) => statusCode === 403 && /\bexceeded quota\b/.test(body);
 const leaseOf = (pod: Pod) => Number(pod.metadata.labels['sentropic.dev/artifact-lease']);
+interface PodTerminated { reason?: string }
+interface PodContainerStatus { state?: { terminated?: PodTerminated }; lastState?: { terminated?: PodTerminated } }
 interface Pod {
-  metadata: { uid: string; labels: Record<string, string>; deletionTimestamp?: string };
-  status?: { phase?: string };
+  metadata: { uid: string; labels: Record<string, string>; deletionTimestamp?: string; creationTimestamp?: string };
+  status?: { phase?: string; reason?: string; message?: string; containerStatuses?: PodContainerStatus[] };
+}
+/** The pod is unusable as a worker: evicted, failed, succeeded or already terminating. An evicted pod keeps
+ * its Failed object, so a phase check alone replays the 09/11 second failure. */
+const podDead = (pod: Pod) => pod.metadata.deletionTimestamp !== undefined
+  || pod.status?.phase === 'Failed' || pod.status?.phase === 'Succeeded';
+/** Closed Kubernetes status of the runtime's pod, for loss classification and the phase log line. */
+export interface PodReport {
+  phase?: string; reason?: string; message?: string; deletionTimestamp?: string;
+  oomkilled: boolean; creationTimestamp?: string;
+}
+const reportOf = (pod: Pod): PodReport => ({
+  phase: pod.status?.phase, reason: pod.status?.reason, message: pod.status?.message,
+  deletionTimestamp: pod.metadata.deletionTimestamp,
+  oomkilled: (pod.status?.containerStatuses ?? []).some(entry =>
+    entry.state?.terminated?.reason === 'OOMKilled' || entry.lastState?.terminated?.reason === 'OOMKilled'),
+  creationTimestamp: pod.metadata.creationTimestamp,
+});
+/** Closed pod-loss causes carried in the job reason and the `artifact_live_phase` line. `pod_unavailable` is the
+ * generic fallback (a dead pod the apiserver names no finer cause for); `supervisor_unresponsive` is a present
+ * pod whose supervisor does not answer. */
+export interface PodLoss { reason: string; detail: string }
+/** Log-only k8s detail: bounded and scrubbed like a recipe tail, never ledger material. */
+const K8S_DETAIL_MAX_CHARS = 512;
+const k8sDetail = (value: string) => truncateRecipeTail(scrubRecipeOutput(value), K8S_DETAIL_MAX_CHARS);
+export function classifyPodLoss(report: PodReport | undefined): PodLoss {
+  if (!report) return { reason: 'pod_gone', detail: 'NotFound' };
+  if (report.reason === 'Evicted') {
+    return { reason: 'pod_evicted', detail: k8sDetail(`Evicted${report.message ? `: ${report.message}` : ''}`) };
+  }
+  if (report.oomkilled) return { reason: 'pod_oomkilled', detail: 'OOMKilled' };
+  if (report.phase === 'Failed' || report.phase === 'Succeeded' || report.deletionTimestamp) {
+    return { reason: 'pod_unavailable',
+      detail: k8sDetail(`${report.phase ?? 'Terminating'}${report.reason ? `: ${report.reason}` : ''}`) };
+  }
+  return { reason: 'supervisor_unresponsive', detail: k8sDetail(report.phase ?? 'Unknown') };
+}
+/** Closed pod-loss causes, for the `artifact_live_phase` `pod` observation line. */
+const POD_CAUSES = new Set(['pod_evicted', 'pod_oomkilled', 'pod_gone', 'pod_unavailable', 'supervisor_unresponsive']);
+export function isPodCause(error: unknown): error is LiveError {
+  return error instanceof LiveError && error.code === 'builder_unavailable' && POD_CAUSES.has(error.reason ?? '');
+}
+/** Transport-class `builder_unavailable` reasons: the pod or the path to it is lost, so one retry on a fresh
+ * pod is safe. Deterministic failures (`install_failed:*`, `build_failed:*`, `verify*`, `publication_*`,
+ * `git_*`), `pod_oomkilled` (the container exceeded its own limit; a fresh identical pod dies the same way)
+ * and `phase_timeout*` (too slow, not lost) never retry. */
+const RETRYABLE_REASONS = new Set(['pod_evicted', 'pod_gone', 'pod_unavailable', 'supervisor_unresponsive',
+  'supervisor_relay_unreachable', 'supervisor_channel_aborted', 'k8s_unreachable', 'k8s_timeout']);
+const RETRYABLE_RELAY = /^supervisor_relay_5[0-9][0-9]$/;
+export function isTransportLoss(error: unknown): error is LiveError {
+  return error instanceof LiveError && error.code === 'builder_unavailable'
+    && (RETRYABLE_REASONS.has(error.reason ?? '') || RETRYABLE_RELAY.test(error.reason ?? ''));
+}
+/** Relay or channel failures whose pod-level cause can still be read from the apiserver. A clean pod
+ * disappearance (`pod_missing`) already proves the pod is gone, even when a later describe cannot confirm it. */
+const ENRICHABLE_RELAY = /^supervisor_relay_5[0-9][0-9]$/;
+const ENRICHABLE_REASONS = new Set(['supervisor_relay_unreachable', 'supervisor_channel_aborted', 'pod_missing']);
+/** Rewrites a transport failure with the Kubernetes pod cause when the apiserver names one (eviction, OOM kill,
+ * gone pod, silent supervisor). Passes everything else through, including an unreadable apiserver, so a
+ * `supervisor_relay_*` reason is kept exactly when no pod-level cause is known. */
+export async function enrichPodLoss(deps: { describe(key: LiveKey, runtime: LiveRuntime): Promise<PodReport | undefined> },
+  key: LiveKey, runtime: LiveRuntime, error: unknown): Promise<unknown> {
+  if (!(error instanceof LiveError) || error.code !== 'builder_unavailable') return error;
+  const reason = error.reason ?? '';
+  if (!ENRICHABLE_RELAY.test(reason) && !ENRICHABLE_REASONS.has(reason)) return error;
+  let report: PodReport | undefined;
+  try { report = await deps.describe(key, runtime); }
+  catch {
+    if (reason === 'pod_missing') return new LiveError('builder_unavailable', 'pod_gone', 'NotFound');
+    return error;
+  }
+  const loss = classifyPodLoss(report);
+  // A present pod that never started (Pending) names no pod-level cause: a relay failure there is a boot race,
+  // so the `supervisor_relay_*` reason is kept. Every dead, evicted, OOM-killed, gone or Running-but-silent pod
+  // is rewritten with its Kubernetes cause.
+  if (loss.reason === 'supervisor_unresponsive' && report?.phase !== 'Running') return error;
+  return new LiveError('builder_unavailable', loss.reason, loss.detail);
 }
 export interface KubernetesCore {
   get<T>(resource: 'pods' | 'services', name: string): Promise<T | undefined>;
@@ -106,6 +187,7 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
     async ensure(key: LiveKey, runtime: LiveRuntime) {
       const expected = labels(key, runtime);
       let pod = await core.get<Pod>('pods', runtime.podName);
+      let created = false;
       // No surge: a pod of an older lease of this binding (or a terminating one) still counts against the tenant quota.
       // A fresh intent deletes it and waits for its 404 (bounded by waitDeleted) before creating the replacement.
       if (pod && runtime.podUid === null && (leaseOf(pod) < runtime.leaseEpoch
@@ -116,7 +198,7 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       }
       if (!pod) {
         if (runtime.podUid !== null) throw new LiveError('builder_unavailable', 'pod_missing');
-        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement, sizing)); }
+        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement, sizing)); created = true; }
         catch (error) {
           // Creation may have committed before a timeout/response loss. Discover before retrying.
           pod = await core.get<Pod>('pods', runtime.podName);
@@ -125,8 +207,21 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
       }
       if (!pod.metadata.uid || Object.entries(expected).some(([k, v]) => pod!.metadata.labels[k] !== v)
         || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
-      if (pod.metadata.deletionTimestamp || ['Failed', 'Succeeded'].includes(pod.status?.phase ?? '')) {
-        throw new LiveError('builder_unavailable', 'pod_unavailable');
+      // A fresh intent never adopts a dead pod: the Failed object of an evicted pod stays, and adopting it replays
+      // the 09/11 second failure. The replacement carries the same lease labels under a new uid. A fenced runtime
+      // never replaces its own pod here: teardown owns that deletion, with the classified cause.
+      if (podDead(pod)) {
+        if (runtime.podUid !== null) { const loss = classifyPodLoss(reportOf(pod)); throw new LiveError('builder_unavailable', loss.reason, loss.detail); }
+        if (!pod.metadata.deletionTimestamp) await core.delete('pods', runtime.podName, pod.metadata.uid);
+        await core.waitDeleted('pods', runtime.podName, pod.metadata.uid);
+        try { pod = await core.create<Pod>('pods', builderPod(key, runtime, bootstrap, placement, sizing)); created = true; }
+        catch (error) {
+          pod = await core.get<Pod>('pods', runtime.podName);
+          if (!pod) throw error;
+        }
+        if (!pod.metadata.uid || Object.entries(expected).some(([k, v]) => pod!.metadata.labels[k] !== v)
+          || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
+        if (podDead(pod) && !created) { const loss = classifyPodLoss(reportOf(pod)); throw new LiveError('builder_unavailable', loss.reason, loss.detail); }
       }
       const service = { apiVersion: 'v1', kind: 'Service', metadata: {
         name: runtime.podName, namespace: placement.namespace, labels: expected,
@@ -151,7 +246,15 @@ export function createBuilderPods(core: KubernetesCore, bootstrap: string, place
         await core.waitDeleted('services', runtime.podName, existing.metadata.uid);
         await core.create('services', service);
       } else if (!existing) await core.create('services', service);
-      return { uid: pod.metadata.uid };
+      return { uid: pod.metadata.uid, adopted: !created, phase: pod.status?.phase,
+        creationTimestamp: pod.metadata.creationTimestamp };
+    },
+    async describe(key: LiveKey, runtime: LiveRuntime): Promise<PodReport | undefined> {
+      const pod = await core.get<Pod>('pods', runtime.podName);
+      if (!pod) return undefined;
+      if (Object.entries(labels(key, runtime)).some(([k, v]) => pod.metadata.labels[k] !== v)
+        || (runtime.podUid !== null && runtime.podUid !== pod.metadata.uid)) conflict('stale_fence');
+      return reportOf(pod);
     },
     async probe(key: LiveKey, runtime: LiveRuntime): Promise<PodProbe> {
       const pod = await core.get<Pod>('pods', runtime.podName);
