@@ -10,7 +10,7 @@ import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob';
 import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createPlacementBlobStore } from '../../src/services/artifacts/blob-placement';
-import { migratePlacement, parsePlacementMigrateArgs } from '../../src/scripts/cm-placement-migrate';
+import { migratePlacement, parsePlacementMigrateArgs, runPlacementMigrateCli } from '../../src/scripts/cm-placement-migrate';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 let pool: Pool;
@@ -67,10 +67,16 @@ describe('placement migration', () => {
     expect(report.done).toBe(true);
     expect(report.totalBefore).toBe(1);
     expect(report.totalAfter).toBe(1);
+    expect(report.beforeByPlacement).toEqual({ db: 1 });
+    expect(report.afterByPlacement).toEqual({ object: 1 });
+    expect(report.nextCursor).toBeUndefined();
     expect(report.batches).toHaveLength(1);
     expect(report.batches[0]).toMatchObject({ copied: 1, alreadyPlaced: 0 });
     expect(await s3.getBlob(key)).toEqual(bytes);
     expect((await pool.query('SELECT placement FROM artifacts.blobs')).rows).toEqual([{ placement: 'object' }]);
+    // Complete migration verifies every row reached the target placement.
+    expect((await pool.query(`SELECT count(*)::int AS n FROM artifacts.blobs WHERE placement <> 'object'`)).rows)
+      .toEqual([{ n: 0 }]);
     // Never deletes the source: the DB bytes survive the switch.
     expect((await pool.query('SELECT digest FROM artifacts.blob_bytes')).rows).toHaveLength(1);
   });
@@ -86,6 +92,11 @@ describe('placement migration', () => {
     const db = createPostgresDbBlobStore(pool);
     const composite = createPlacementBlobStore({ pool, s3, mode: 'db+s3', inlineMaxBytes: 8 });
     const report = await migratePlacement({ pool, composite, db, s3, scope: SCOPE, to: 'db' });
+    expect(report.done).toBe(true);
+    expect(report.totalBefore).toBe(1);
+    expect(report.totalAfter).toBe(1);
+    expect(report.beforeByPlacement).toEqual({ object: 1 });
+    expect(report.afterByPlacement).toEqual({ db: 1 });
     expect(report.batches[0]).toMatchObject({ copied: 1 });
     expect((await pool.query('SELECT placement FROM artifacts.blobs')).rows).toEqual([{ placement: 'db' }]);
     expect(await composite.getBlob(key)).toEqual(bytes);
@@ -119,6 +130,78 @@ describe('placement migration', () => {
     // Re-running is a verified no-op: counts equal, digests equal, source intact.
     const third = await migratePlacement({ pool, composite, db, s3, scope: SCOPE, to: 'object' });
     expect(third.batches[0]).toMatchObject({ copied: 0, alreadyPlaced: 3 });
+    expect(third.done).toBe(true);
+    expect(third.beforeByPlacement).toEqual({ object: 3 });
+    expect(third.afterByPlacement).toEqual({ object: 3 });
     expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.blob_bytes')).rows).toEqual([{ n: 3 }]);
+  });
+
+  it('requires an extra resume when batches exactly fill maxBatches', async () => {
+    const s3 = createMemoryBlobStore();
+    const db = createPostgresDbBlobStore(pool);
+    const composite = createPlacementBlobStore({ pool, s3, mode: 'db', inlineMaxBytes: 8 });
+    for (let index = 0; index < 2; index += 1) {
+      await seedDbBlob(new TextEncoder().encode(`exact batch ${index}`), 'db');
+    }
+    const first = await migratePlacement({ pool, composite, db, s3, scope: SCOPE,
+      to: 'object', batchSize: 1, maxBatches: 2 });
+    expect(first.done).toBe(false);
+    expect(first.nextCursor).toBeDefined();
+    expect(first.batches).toHaveLength(2);
+    const second = await migratePlacement({ pool, composite, db, s3, scope: SCOPE,
+      to: 'object', resumeFrom: first.nextCursor });
+    expect(second.done).toBe(true);
+    expect(second.totalBefore).toBe(2);
+    expect(second.totalAfter).toBe(2);
+    expect((await pool.query(`SELECT count(*)::int AS n FROM artifacts.blobs WHERE placement = 'object'`)).rows)
+      .toEqual([{ n: 2 }]);
+  });
+
+  it('exposes an executable CLI that reports per-placement counts', async () => {
+    const bytes = new TextEncoder().encode('cli migrate me');
+    await seedDbBlob(bytes, 'db');
+    const s3 = createMemoryBlobStore();
+    const logs: string[] = [];
+    const errors: string[] = [];
+    const stdout = console.log;
+    const stderr = console.error;
+    console.log = (line: string) => { logs.push(String(line)); };
+    console.error = (line: string) => { errors.push(String(line)); };
+    const exitCode = process.exitCode;
+    try {
+      await runPlacementMigrateCli({ argv: ['node', 'api', '--placement-migrate', '--scope', SCOPE, '--to', 'object'], pool, s3 });
+      expect(process.exitCode).toBe(exitCode);
+      expect(errors).toEqual([]);
+      const report = JSON.parse(logs[logs.length - 1]!);
+      expect(report.status).toBe('done');
+      expect(report.scope).toBe(SCOPE);
+      expect(report.to).toBe('object');
+      expect(report.beforeByPlacement).toEqual({ db: 1 });
+      expect(report.afterByPlacement).toEqual({ object: 1 });
+      expect(report.done).toBe(true);
+    } finally {
+      console.log = stdout;
+      console.error = stderr;
+      process.exitCode = exitCode;
+    }
+    expect((await pool.query(`SELECT count(*)::int AS n FROM artifacts.blobs WHERE placement = 'object'`)).rows)
+      .toEqual([{ n: 1 }]);
+  });
+
+  it('refuses CLI execution without a scope', async () => {
+    const s3 = createMemoryBlobStore();
+    const errors: string[] = [];
+    const stderr = console.error;
+    console.error = (line: string) => { errors.push(String(line)); };
+    const exitCode = process.exitCode;
+    try {
+      await runPlacementMigrateCli({ argv: ['node', 'api', '--placement-migrate', '--to', 'object'], pool, s3 });
+      expect(process.exitCode).toBe(1);
+      const report = JSON.parse(errors[errors.length - 1]!);
+      expect(report.status).toBe('failed');
+    } finally {
+      console.error = stderr;
+      process.exitCode = exitCode;
+    }
   });
 });
