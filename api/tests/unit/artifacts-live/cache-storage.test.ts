@@ -43,16 +43,19 @@ function fakePool() {
 }
 
 describe('builder cache blob store', () => {
-  it('should accept exactly the two cache key shapes under artifact-builder-cache/v1/ and refuse any other key before any S3 call', async () => {
+  it('should accept exactly the three cache key shapes under artifact-builder-cache/v1/ and refuse any other key before any S3 call', async () => {
     const f = fakeS3();
     const blobs = createBuilderCacheBlobs({ bucket: 'builder-dependency-cache', client: f.client });
     const manifestKey = `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/${randomUUID()}`;
+    const archiveKey = `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('e')}.tar.zst`;
     await blobs.put(fileKey, Buffer.from('file'));
     await blobs.put(manifestKey, Buffer.from('manifest'));
+    await blobs.put(archiveKey, Buffer.from('archive'));
     expect(f.send.mock.calls.map(([command]) => command).filter(command => command instanceof PutObjectCommand)
       .map(command => (command as PutObjectCommand).input)).toEqual([
       { Bucket: 'builder-dependency-cache', Key: fileKey, Body: Buffer.from('file') },
-      { Bucket: 'builder-dependency-cache', Key: manifestKey, Body: Buffer.from('manifest') }]);
+      { Bucket: 'builder-dependency-cache', Key: manifestKey, Body: Buffer.from('manifest') },
+      { Bucket: 'builder-dependency-cache', Key: archiveKey, Body: Buffer.from('archive') }]);
     await blobs.get(fileKey);
     await blobs.delete(fileKey);
     // Every out-of-prefix key is refused for put, get and delete: the old dependency-cache namespace, the artifacts
@@ -61,13 +64,15 @@ describe('builder cache blob store', () => {
       `artifact-builder-cache/v2/files/${digest64('c')}`, '../artifact-builder-cache/v1/files/' + digest64('c'),
       'artifact-builder-cache/v1/files/' + digest64('C'),
       `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/not-a-uuid`,
-      `artifact-builder-cache/v1/extra/${digest64('b')}/${digest64('d')}/${randomUUID()}`]) {
+      `artifact-builder-cache/v1/extra/${digest64('b')}/${digest64('d')}/${randomUUID()}`,
+      `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('e')}.tar.gz`,
+      `artifact-builder-cache/v1/${digest64('b')}/sealed-${digest64('e')}.tar.zst`]) {
       await expect(blobs.put(key, Buffer.from('x'))).rejects.toThrow(/invalid builder-cache key/);
       await expect(blobs.get(key)).rejects.toThrow(/invalid builder-cache key/);
       await expect(blobs.delete(key)).rejects.toThrow(/invalid builder-cache key/);
     }
-    // Two puts, one get and one delete — no refusal ever reached the client, privacy check included.
-    expect(f.send.mock.calls.filter(([command]) => !(command instanceof GetPublicAccessBlockCommand))).toHaveLength(4);
+    // Three puts, one get and one delete — no refusal ever reached the client, privacy check included.
+    expect(f.send.mock.calls.filter(([command]) => !(command instanceof GetPublicAccessBlockCommand))).toHaveLength(5);
   });
 
   it('should fail closed on a non-private bucket: every effect rechecks, is refused and never sends an object command', async () => {
@@ -113,6 +118,26 @@ describe('builder cache blob store', () => {
     await expect(storage.read(`${digest64('b')}/${digest64('d')}`))
       .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'cache_s3_unavailable' });
     expect(query.mock.calls.filter(([sql]) => sql.startsWith('DELETE'))).toEqual([]);
+  });
+
+  it('should round-trip one sealed archive end to end (putArchive, getArchive) against S3', async () => {
+    const f = fakeS3();
+    const storage = createPostgresCacheStorage({ query: fakePool().query } as never,
+      createBuilderCacheBlobs({ bucket: 'builder-dependency-cache', client: f.client }));
+    const ref = `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('e')}.tar.zst`;
+    const bytes = Buffer.from('sealed-unit');
+    await storage.putArchive(ref, bytes);
+    expect(await storage.getArchive(ref)).toEqual(new Uint8Array(bytes));
+    const absent = `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('f')}.tar.zst`;
+    expect(await storage.getArchive(absent)).toBeUndefined();
+    expect([...f.objects.keys()]).toEqual([ref]);
+    // A malformed archive ref or an oversized archive refuses before any S3 call.
+    const before = f.send.mock.calls.length;
+    await expect(storage.putArchive(`artifact-builder-cache/v1/${digest64('b')}/sealed-${digest64('e')}.tar.zst`, bytes))
+      .rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    await expect(storage.putArchive(ref, Buffer.alloc(1024 * 1024 * 1024 + 1)))
+      .rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    expect(f.send.mock.calls.length).toBe(before);
   });
 
   it('should round-trip the real generated keys end to end (putFile, admit, getFile, read) against S3', async () => {
