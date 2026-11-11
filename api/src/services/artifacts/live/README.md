@@ -147,7 +147,14 @@ node:http so no undici 300 s headers timeout cuts a command; each command is bou
   `leaseEpoch`, `routeEpoch`, monotonic per generation) and the session
   `invitation: {epoch, expiresAt}`, then reconciles toward the staged draft and
   answers the BridgeAck (`ready` = LIVE and applied revision = draft revision).
-  `POST /v1/live/stop` checks the fences (409 `stale_session`), then 204.
+  When the builder abandons the revive (install ceiling, repeated supervisor
+  loss, recipe failure), the ACK carries `failure: {code, reason}` in the
+  `code:reason` shape of the phase log line and the host `stateDetail`
+  instead of throwing, so the package stops re-driving the item.
+  `POST /v1/live/stop` is total: fences that are absent or of another
+  session or lease answer 204 without touching any runtime (never 409
+  `stale_session`), so a re-driven stop converges; the matching session
+  still tears down through the controller, then 204.
   `POST /v1/live/grant` records the session invitation, fences the route on a
   higher epoch, then answers `{grant}` (`authorizeLive`), 409 `invalid_phase`
   or `stale_session`, or 403. The remote `invitations.current` returns the last
@@ -189,7 +196,14 @@ durable draft (§5.5).
 The package `LiveService` owns the revision model: revisions are opaque strings
 and an edit is acknowledged once durable. `createLiveWorkerBridge` implements its
 `LiveWorkerPort`: it wakes an idle attempt, then projects the durable draft and
-reports `ready` only when the worker applied that exact revision.
+reports `ready` only when the worker applied that exact revision. A revive the
+builder abandoned answers `ready: false` with `failure: {code, reason}` (the
+typed `builder_unavailable` code, e.g. `phase_timeout:install:drain`); fence
+and busy conflicts still throw, and a moved draft still answers `ready: false`
+with no `failure`. The package consumes `failure` through `onWorkerEvent` and
+its own `stateDetail` and stops re-driving; older package readers ignore the
+unknown field. `stop` never refuses: absent or foreign fences answer without
+touching any runtime, so a re-driven stop always converges.
 
 Authority is the binding owner, i.e. the acting user. `authorize` returns the
 route grant the host signs into its live assertion: writes for the binding owner
