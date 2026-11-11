@@ -7,6 +7,7 @@ import type { LiveHeavyGate } from './heavy';
 import type { CacheIdentity, CacheReceipt } from './cache';
 import type { AttemptFence, HostJob } from '@sentropic/artifacts/live-host';
 import type { Gb1Source } from './gb1-qualification';
+import type { PhaseEventSink } from './phase-events';
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
@@ -43,6 +44,9 @@ export interface LivePorts {
   /** Host-owned invitation fence of the binding generation: a monotonic revocation epoch (an invitation is valid only
    * when issued at the current epoch) and the earliest live invitation expiry. */
   invitations: { current(key: LiveKey, generation: number): Promise<{ epoch: number; expiresAt: number | null }> };
+  /** Phase-event sink (§7.6.1): when present, `runPhase`/`runInstallStep` write one durable event per
+   * phase/step carrying the invocation context. Absent on older compositions (events stay log-only). */
+  events?: PhaseEventSink;
   now(): number;
   id(): string;
   /** Records the git binding stored with the admitted host job at its HostJob generation, before any forge read of the

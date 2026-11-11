@@ -3,6 +3,7 @@ import { assertFence, automaticEligible, conflict, idleDeadline, LiveError, publ
   type LiveRuntime, type LiveState } from './records';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { requireUserCache } from './cache';
+import { eventsContext } from './phase-events';
 import { phaseKeyHash, runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 import { logger } from '../../../logger';
@@ -34,11 +35,13 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     if (draft.dirty && draft.baseHeadSha !== head) throw new LiveError('git_live_draft_conflict');
     const source = await ports.forge.snapshot(key, head);
     if (source.headSha !== head) throw new LiveError('git_head_moved');
+    const events = eventsContext(ports, runtime.sessionId, 'git_publish');
     // Sealed-cache pre-admission (§7.1.4): on an unsealed lockfile the idle build skips with a typed log
     // line instead of installing, and the session stays LIVE for the next pass. No pod is created.
     let cache;
     try {
-      cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source));
+      cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source),
+        events ? { events } : {});
     } catch (error) {
       if (!(error instanceof LiveError) || error.code !== 'cache_not_prewarmed') throw error;
       await transition(ports, key, runtime, state => {
@@ -60,7 +63,7 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     await ports.worker.clean(runtime);
     // The phase closures capture the fenced post-transition runtime, not the pre-guard union.
     const installing = runtime;
-    await runPhase(key, 'prepare', () => ports.worker.prepare(installing, source, cache));
+    await runPhase(key, 'prepare', () => ports.worker.prepare(installing, source, cache), events ? { events } : {});
     // Deliberately never call restore: the acknowledged draft remains in the trusted store.
     await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING') conflict('stale_fence');
@@ -87,12 +90,14 @@ async function admittedBuild(ports: LivePorts, key: LiveKey, runtime: LiveRuntim
       state.runtime.phase = 'BUILDING';
     });
     const attempt = runtime.attempt!;
-    const candidate = await runPhase(key, 'build', () => withinPhase(ports.worker.build(runtime, attempt)));
+    const events = eventsContext(ports, runtime.sessionId, 'git_publish');
+    const candidate = await runPhase(key, 'build', () => withinPhase(ports.worker.build(runtime, attempt)),
+      events ? { events } : {});
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.pendingWake || state.runtime.phase !== 'BUILDING' || state.runtime.attempt?.id !== attempt.id) conflict('stale_fence');
       state.runtime.phase = 'VERIFYING'; state.runtime.attempt.candidateDigest = candidate.candidateDigest;
     });
-    await runPhase(key, 'verify', () => ports.worker.verify(runtime, runtime.attempt!));
+    await runPhase(key, 'verify', () => ports.worker.verify(runtime, runtime.attempt!), events ? { events } : {});
     const finalHead = await observeHead(ports, key, runtime);
     if (finalHead !== attempt.headSha) throw new LiveError('git_head_moved');
     runtime = await ports.store.transaction(key, async unit => {
