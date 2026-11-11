@@ -137,20 +137,50 @@ export function validateAppRegistration(input: unknown): { ok: true; value: AppA
   const storage = r.storage as Record<string, unknown> | undefined;
   if (typeof storage !== 'object' || storage === null) return { ok: false, reason: 'unknown_storage' };
   const scopeId = storage.storageScopeId;
-  if (typeof scopeId !== 'string' || !SCOPE_ID.test(scopeId)) return { ok: false, reason: 'imported_scope_invalid' };
-  if (RESERVED_PREFIXES.some((p) => scopeId.startsWith(p)) || scopeId.includes('/')) {
-    return { ok: false, reason: 'imported_scope_reserved' };
-  }
   if (storage.origin !== 'native' && storage.origin !== 'imported') return { ok: false, reason: 'unknown_origin' };
+  if (storage.origin === 'native') {
+    if (typeof scopeId !== 'string' || !UUID36.test(scopeId)) return { ok: false, reason: 'imported_scope_invalid' };
+  } else {
+    if (typeof scopeId !== 'string' || !SCOPE_ID.test(scopeId)) return { ok: false, reason: 'imported_scope_invalid' };
+    if (RESERVED_PREFIXES.some((p) => scopeId.startsWith(p)) || scopeId.includes('/')) {
+      return { ok: false, reason: 'imported_scope_reserved' };
+    }
+  }
   if (!Number.isSafeInteger(storage.quotaBytes) || (storage.quotaBytes as number) <= 0) {
     return { ok: false, reason: 'quota_refused' };
   }
   if (!['db', 's3', 'db+s3'].includes(storage.placement as string)) return { ok: false, reason: 'placement_not_offered' };
+  if (storage.placement === 'db+s3') {
+    const inline = (storage as { inlineMaxBytes?: unknown }).inlineMaxBytes;
+    if (inline !== undefined && (!Number.isSafeInteger(inline) || (inline as number) <= 0)) {
+      return { ok: false, reason: 'quota_refused' };
+    }
+  }
+  const actorQuotas = (storage as { actorQuotas?: unknown }).actorQuotas as
+    { maxBytes?: unknown; ratePerWindow?: unknown; windowSeconds?: unknown } | undefined;
+  if (actorQuotas !== undefined) {
+    const { maxBytes, ratePerWindow, windowSeconds } = actorQuotas;
+    if (!Number.isSafeInteger(maxBytes) || (maxBytes as number) <= 0 ||
+      !Number.isSafeInteger(ratePerWindow) || (ratePerWindow as number) <= 0 ||
+      !Number.isSafeInteger(windowSeconds) || (windowSeconds as number) <= 0) {
+      return { ok: false, reason: 'quota_refused' };
+    }
+  }
   // Placement routing needs the CMF-S1/S2 blob bridge from part A storage lane; stubbed here.
   const profile = r.profile as Record<string, unknown> | undefined;
   if (typeof profile !== 'object' || profile === null || !Array.isArray(profile.selectedCapabilities) ||
     typeof profile.profileDigest !== 'string' || !HEX64.test(profile.profileDigest) ||
     typeof profile.manifestDigest !== 'string' || !HEX64.test(profile.manifestDigest)) {
+    return { ok: false, reason: 'profile_digest_mismatch' };
+  }
+  const selected = profile.selectedCapabilities as unknown[];
+  if (!selected.length || new Set(selected).size !== selected.length ||
+    selected.some((name) => typeof name !== 'string' ||
+      !(ARTIFACTS_TOOL_DEFINITIONS as Record<string, unknown>)[name])) {
+    return { ok: false, reason: 'profile_digest_mismatch' };
+  }
+  const selectedNames = selected as string[];
+  if (computeProfileDigest(selectedNames) !== profile.profileDigest) {
     return { ok: false, reason: 'profile_digest_mismatch' };
   }
   const presentation = r.presentation as Record<string, unknown> | undefined;
@@ -159,35 +189,49 @@ export function validateAppRegistration(input: unknown): { ok: true; value: AppA
     typeof presentation.toolDefinitionsDigest !== 'string' || !HEX64.test(presentation.toolDefinitionsDigest as string)) {
     return { ok: false, reason: 'served_definitions_digest_mismatch' };
   }
+  const summaries = presentation.toolSummaries as Record<string, string>;
+  if (Object.entries(summaries).some(([name, text]) =>
+    typeof text !== 'string' || !text || !(ARTIFACTS_TOOL_DEFINITIONS as Record<string, unknown>)[name])) {
+    return { ok: false, reason: 'served_definitions_digest_mismatch' };
+  }
   const mcp = r.mcp as Record<string, unknown> | undefined;
   if (typeof mcp !== 'object' || mcp === null || typeof mcp.resource !== 'string' ||
-    !mcp.resource.includes('/api/v1/mcp/apps/') || !Array.isArray(mcp.clientIds)) {
+    !isHttpsUrl(mcp.resource) || !mcp.resource.includes('/api/v1/mcp/apps/') ||
+    !Array.isArray(mcp.clientIds) || mcp.clientIds.some((id) => typeof id !== 'string' || !id)) {
     return { ok: false, reason: 'unknown_mcp_resource' };
+  }
+  const canonicalTools = buildCanonicalPerAppTools(selectedNames, summaries);
+  if (computeToolDefinitionsDigest(canonicalTools) !== presentation.toolDefinitionsDigest) {
+    return { ok: false, reason: 'served_definitions_digest_mismatch' };
+  }
+  if (computeManifestDigest(profile.profileDigest as string,
+    presentation.toolDefinitionsDigest as string, mcp.resource as string) !== profile.manifestDigest) {
+    return { ok: false, reason: 'profile_digest_mismatch' };
   }
   const knowledge = r.knowledge as Record<string, unknown> | undefined;
   if (typeof knowledge !== 'object' || knowledge === null || typeof knowledge.repoId !== 'string' || !knowledge.repoId ||
     !isHex40(knowledge.commitSha) || typeof knowledge.path !== 'string' || !knowledge.path ||
+    knowledge.path.includes('..') ||
     typeof knowledge.digest !== 'string' || !HEX64.test(knowledge.digest as string)) {
     return { ok: false, reason: 'knowledge_digest_mismatch' };
   }
   const embedding = r.embedding as { frameAncestors?: unknown } | undefined;
   if (embedding !== undefined && (!Array.isArray(embedding.frameAncestors) ||
-    !embedding.frameAncestors.every(isHttpsOrigin))) return { ok: false, reason: 'frame_ancestors_refused' };
-  const view = r.viewAddress as { appOrigin?: unknown; contentBaseDomains?: unknown } | undefined;
-  if (view !== undefined && ((view.appOrigin !== undefined && !isHttpsOrigin(view.appOrigin)) ||
-    (view.contentBaseDomains !== undefined && (!Array.isArray(view.contentBaseDomains) ||
-      !view.contentBaseDomains.every((d: unknown) => typeof d === 'string' && !!d))))) {
-    return { ok: false, reason: 'content_domain_collision' };
+    !embedding.frameAncestors.every(isStrictHttpsOrigin))) return { ok: false, reason: 'frame_ancestors_refused' };
+  const view = r.viewAddress as { appOrigin?: unknown; contentBaseDomains?: unknown; nonRoutingHosts?: unknown } | undefined;
+  if (view !== undefined) {
+    if (view.appOrigin !== undefined && !isStrictHttpsOrigin(view.appOrigin)) {
+      return { ok: false, reason: 'content_domain_collision' };
+    }
+    const bases = view.contentBaseDomains;
+    if (bases !== undefined && (!Array.isArray(bases) ||
+      !bases.every((d: unknown) => typeof d === 'string' && !!d))) {
+      return { ok: false, reason: 'content_domain_collision' };
+    }
   }
   if (r.domain !== undefined) return { ok: false, reason: 'domain_not_enabled_in_t4a' };
-  if (typeof r.revision !== 'string' || !r.revision || !Array.isArray(r.reviewedBy)) {
+  if (typeof r.revision !== 'string' || !r.revision || !Array.isArray(r.reviewedBy) || !r.reviewedBy.length) {
     return { ok: false, reason: 'revision_not_reviewed' };
-  }
-  const actorQuotas = (storage as { actorQuotas?: unknown }).actorQuotas as
-    { maxBytes?: unknown; ratePerWindow?: unknown; windowSeconds?: unknown } | undefined;
-  if (actorQuotas !== undefined && (!Number.isSafeInteger(actorQuotas.maxBytes) ||
-    !Number.isSafeInteger(actorQuotas.ratePerWindow) || !Number.isSafeInteger(actorQuotas.windowSeconds))) {
-    return { ok: false, reason: 'quota_refused' };
   }
   return { ok: true, value: r as unknown as AppArtifactsRegistration };
 }
@@ -202,10 +246,40 @@ export function loadAppRegistrationsFromEnv(): { loaded: AppArtifactsRegistratio
   if (!Array.isArray(parsed)) return { loaded: [], refused: [{ index: -1, reason: 'not_an_array' }] };
   const loaded: AppArtifactsRegistration[] = [];
   const refused: { index: number; reason: string }[] = [];
+  const seenSlugs = new Map<string, number>();
+  const seenInstances = new Map<string, number>();
+  const seenScopes = new Map<string, number>();
+  const seenResources = new Map<string, number>();
+  const seenDomains = new Map<string, number>();
   parsed.forEach((entry, index) => {
     const result = validateAppRegistration(entry);
-    if (result.ok) loaded.push(result.value);
-    else refused.push({ index, reason: result.reason });
+    if (!result.ok) {
+      refused.push({ index, reason: result.reason });
+      return;
+    }
+    const value = result.value;
+    const collisions: { key: string; seen: Map<string, number>; reason: string }[] = [
+      { key: `${value.appSlug}:${value.environment}`, seen: seenSlugs, reason: 'slug_collision' },
+      { key: value.appInstanceId, seen: seenInstances, reason: 'instance_collision' },
+      { key: value.storage.storageScopeId, seen: seenScopes, reason: 'scope_collision' },
+      { key: value.mcp.resource, seen: seenResources, reason: 'resource_collision' },
+    ];
+    for (const { key, seen, reason } of collisions) {
+      if (seen.has(key)) {
+        refused.push({ index, reason });
+        return;
+      }
+    }
+    const domains = value.viewAddress?.contentBaseDomains ?? [];
+    for (const domain of domains) {
+      if (seenDomains.has(domain)) {
+        refused.push({ index, reason: 'content_domain_collision' });
+        return;
+      }
+    }
+    collisions.forEach(({ key, seen }) => seen.set(key, index));
+    domains.forEach((domain) => seenDomains.set(domain, index));
+    loaded.push(value);
   });
   return { loaded, refused };
 }
