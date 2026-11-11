@@ -54,6 +54,10 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs main: if unrelated, accept and record command + failing test file + signature in BRANCH.md; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- [x] CI 43026125152 e2e shard 5 flake (allowlisted, sign-off requis au merge):
+  - command: CI `test-e2e (5)` shard on head 32a358e5e (PR #1002)
+  - failing file: e2e/tests/00-ai-generation.spec.ts:181 (generer des cas d'usage, verifier les references)
+  - signature: net::ERR_ABORTED on folders/dashboard/sse fetches + toBeVisible timeout 5000ms on AI-generated references; sibling AI test (:102, 19s) passed in same shard; no touched path (folders/dashboard/sse/AI) in this lane's diff (additive routes only); allowlist: rules/testing.md lists 00-ai-generation.spec.ts as AI-flaky non-blocking.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
