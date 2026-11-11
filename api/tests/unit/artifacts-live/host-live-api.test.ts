@@ -43,7 +43,7 @@ describe('host live API (remote host D0)', () => {
   });
   it('grants the binding owner a read route only while LIVE', async () => {
     const s = setup(); await s.stage('r1');
-    expect(await (await s.call('grant', grant({ principalId: 'owner' }))).json()).toEqual({ error: 'git_live_conflict', reason: 'stale_session' });
+    expect(await (await s.call('grant', grant({ principalId: 'owner' }))).json()).toEqual({ error: 'git_live_conflict', reason: 'binding_unreconciled' });
     await s.call('reconcile', reconcile());
     const ok = await s.call('grant', grant({ principalId: 'owner' }));
     expect(ok.status).toBe(200);
@@ -63,7 +63,7 @@ describe('host live API (remote host D0)', () => {
   });
   it('lets a host of another storage scope see nothing of the binding', async () => {
     const s = setup(); await s.stage('r1'); await s.call('reconcile', reconcile());
-    expect(await (await s.call('grant', grant({ principalId: 'owner' }), 'other')).json()).toMatchObject({ reason: 'stale_session' });
+    expect(await (await s.call('grant', grant({ principalId: 'owner' }), 'other')).json()).toMatchObject({ reason: 'binding_unreconciled' });
     expect(await (await s.call('stop', stop(), 'other')).json()).toMatchObject({ reason: 'stale_session' });
     expect(await (await s.call('reconcile', reconcile(), 'other')).json()).toMatchObject({ reason: 'draft_not_staged' });
     await s.stage('evil', 'other');

@@ -110,12 +110,12 @@ describe('host build API (M3-B)', () => {
     await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); expect(s.build).toHaveBeenCalledTimes(2);
     s.advance(STALE); await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); expect(s.build).toHaveBeenCalledTimes(3);
   });
-  it('presumes a run dead after its heavy-gate wait and its bounded phases, never after a pod lifetime', async () => {
+  it('presumes a run dead after two heavy-gate waits and two bounded passes, never after a pod lifetime', async () => {
     expect(BUILD_ONLY_PHASES).toEqual(['install', 'prepare', 'build', 'verify']);
     expect(PHASE_DEADLINE_MS).toBe(300_000);
-    expect(runStaleMs(0, 300_000)).toBe(1_200_000);
-    expect(runStaleMs(0)).toBe(1_200_000 + 3 * PHASE_DEADLINE_MS);
-    expect(STALE).toBe(HEAVY_WAIT_MS + 1_200_000 + 3 * PHASE_DEADLINE_MS);
+    expect(runStaleMs(0, 300_000)).toBe(2_400_000);
+    expect(runStaleMs(0)).toBe(2 * (1_200_000 + 3 * PHASE_DEADLINE_MS));
+    expect(STALE).toBe(2 * (HEAVY_WAIT_MS + 1_200_000 + 3 * PHASE_DEADLINE_MS));
     const s = setup(); await s.jobs.admit(k, 'job-1', binding);
     s.advance(STALE - 1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(false);
     s.advance(1); expect((await s.jobs.admit(k, 'job-1', binding)).run).toBe(true);
@@ -132,6 +132,12 @@ describe('host build API (M3-B)', () => {
     const s = setup(); await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); await s.settle();
     expect((await s.status('job-1', 'other')).status).toBe(403);
     expect((await s.status('job-2')).status).toBe(404);
+  });
+  it('carries binding_unreconciled on the host job when the binding was never reconciled', async () => {
+    const s = setup(vi.fn(async () => { throw new LiveError('git_live_conflict', 'binding_unreconciled'); }));
+    await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); await s.settle();
+    expect(await (await s.status('job-1')).json()).toMatchObject({ state: 'build_failed',
+      code: 'git_live_conflict', reason: 'binding_unreconciled' });
   });
   it('fails a run that ended without publication, so the host can re-admit it', async () => {
     const s = setup(); await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); await s.settle();

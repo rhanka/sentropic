@@ -7,10 +7,11 @@ import { INSTALL_CEILING_MS_DEFAULT, PHASE_DEADLINE_MS } from './deadline';
 /** Bounded phases of one build-only run: the install runs under the progress watchdog ceiling, the others under
  * PHASE_DEADLINE_MS (withinPhase or its recipe timeout). */
 export const BUILD_ONLY_PHASES = ['install', 'prepare', 'build', 'verify'] as const;
-/** A run older than its heavy-gate wait plus the install ceiling and the other bounded phases is presumed dead and
- * can be re-admitted. There is no pod lifetime to derive it from (A-LIVE Amendment 1). */
+/** A run older than two heavy-gate waits plus two bounded build passes is presumed dead and can be re-admitted.
+ * The factor two covers the one transport retry on a fresh pod: a legitimate retry doubles the bounded duration.
+ * There is no pod lifetime to derive it from (A-LIVE Amendment 1). */
 export const runStaleMs = (heavyWaitMs: number, installCeilingMs: number = INSTALL_CEILING_MS_DEFAULT) =>
-  heavyWaitMs + installCeilingMs + (BUILD_ONLY_PHASES.length - 1) * PHASE_DEADLINE_MS;
+  2 * (heavyWaitMs + installCeilingMs + (BUILD_ONLY_PHASES.length - 1) * PHASE_DEADLINE_MS);
 /** Builder-side job ledger of the host build API. One run token per admission; only the current run may fail it. */
 export interface BuildJobRecord {
   storageScopeId: string; artifactId: string; jobId: string; state: 'accepted' | 'published' | 'failed';
