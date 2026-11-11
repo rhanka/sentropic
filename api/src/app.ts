@@ -95,6 +95,7 @@ import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
 import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
 import { clusterMeshLiveQualificationRouter } from './routes/cluster-mesh-live-qualification';
+import { createOpsJobFailuresRouter } from './routes/ops-job-failures';
 import { createProductGitHubAppLease, createProductGitHubAppRouter } from './routes/github-app';
 import { isGitHubAppPath } from './services/cluster-mesh/github-app-host';
 import {
@@ -473,6 +474,8 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
   ...ROOT_MOUNT_REMAPS,
 } as const;
 app.route('/api/v1/cluster-mesh/qualification', clusterMeshLiveQualificationRouter);
+// Notify L1: service-authenticated OpsJobFailureV1 ingestion (`POST /api/v1/ops/ingest`).
+app.route('/api/v1/ops', createOpsJobFailuresRouter());
 // A-LIVE W1 (M2-S): mounted SG0-app enrollment host on the public origin
 // (`/api/v1/github-app/*`, reached through the ui nginx /api/v1/ proxy). Code
 // only until the GB4-P go (A-LIVE §10): without its env vars and a provisioned

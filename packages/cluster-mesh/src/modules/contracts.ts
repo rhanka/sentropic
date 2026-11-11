@@ -26,6 +26,7 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'mcp/memory',
   'engram-memory/substrate',
   'comments',
+  'notifications',
 ] as const;
 
 /** Catalogued capabilities not delivered by this release; always gated `source_unavailable`. */
