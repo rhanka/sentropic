@@ -89,6 +89,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - [x] Pinned commit SHA digest verified, GitHub unreachable serves stored bundle, mismatch refused (cmf6 3 passed).
   - [x] Storage bridge dependency on feat/t4a-cm-artifact-storage stubbed behind CM_KNOWLEDGE_ENABLED.
   - [x] Lot gate: typecheck-api green, scoped test ENV=test-t4a-reg green.
+  - [x] FIX Argon MAJOR-7/MINOR-10: verifyKnowledgeDescriptor in load(), no refetch when cached, afterEach env cleanup (cmf6 4 passed).
 - [x] **Lot 4 — W4.c embeddable panel §3.6**
   - [x] CM artifacts panel embedding frameAncestors exact https same-env, CSP builder (panel 2 passed, csp 3 passed).
   - [x] Lot gate: typecheck-ui green 0 errors, scoped test ENV=test-t4a-reg green.

@@ -34,18 +34,23 @@ const cacheKey = (d: KnowledgeDescriptor): string => `${d.repoId}:${d.commitSha}
 export function createKnowledgeStore() {
   const stored = new Map<string, Uint8Array>();
   return {
-    async load(descriptor: KnowledgeDescriptor, fetch: () => Promise<Uint8Array>): Promise<Uint8Array> {
+    async load(descriptor: unknown, fetch: () => Promise<Uint8Array>): Promise<Uint8Array> {
       if (!isKnowledgeEnabled()) throw new Error('Knowledge loader is disabled');
-      const key = cacheKey(descriptor);
+      const checked = verifyKnowledgeDescriptor(descriptor);
+      if (!checked.ok) throw new Error(checked.reason);
+      const pinned = checked.value;
+      const key = cacheKey(pinned);
       const cached = stored.get(key);
+      if (cached) return cached;
       try {
         const bytes = await fetch();
-        const verified = verifyKnowledgeBytes(descriptor, bytes);
+        const verified = verifyKnowledgeBytes(pinned, bytes);
         if (!verified.ok) throw new Error(verified.reason);
         stored.set(key, bytes);
         return bytes;
       } catch (error) {
-        if (cached) return cached;
+        const retry = stored.get(key);
+        if (retry) return retry;
         throw error;
       }
     },
