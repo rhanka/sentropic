@@ -9,7 +9,7 @@ const builder = { kid: 'builder-1', key: generateKeyPairSync('ed25519').privateK
 const builderKeys = (kid: string) => (kid === 'builder-1' ? createPublicKey(builder.key) : undefined);
 const key = { storageScopeId: 'scope-a', artifactId: 'artifact-a' };
 const fence = { runId: 'run-1', attempt: 2 };
-const hostJob = { jobId: 'job-1', generation: 1, headSha: 'c'.repeat(40), expectedReleaseId: null };
+const hostJob = { jobId: 'job-1', generation: 1, headSha: 'c'.repeat(40), expectedReleaseId: null, ownerId: 'owner-a' };
 const files = [{ path: 'index.html', bytes: new Uint8Array(Buffer.from('<p>B</p>')) }];
 const tuple = { commitSha: 'c'.repeat(40), treeSha: 't'.repeat(40), lockfileDigest: 'l', descriptorDigest: 'd', builderImageDigest: 'i',
   nodeVersion: 'v24', npmVersion: '11', publicEnvHashes: {} };
@@ -89,6 +89,8 @@ describe('HTTP remote host (live-host host build paths)', () => {
   it('treats any other answer as a transport failure with an unknown outcome', async () => {
     for (const answer of [() => new Response('oops', { status: 502 }), () => json(500, { v: 1, error: 'free text' }),
       () => json(200, { v: 1, job: { ...hostJob, generation: '1' } }), () => json(200, { job: hostJob }),
+      () => json(200, { v: 1, job: { ...hostJob, ownerId: '' } }),
+      () => json(200, { v: 1, job: { ...hostJob, ownerId: 'with space' } }),
       () => { throw new TypeError('network'); }]) {
       const error = await setup(answer).host.job(key, 'job-1', fence).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(Error); expect(error).not.toBeInstanceOf(LiveHostError);

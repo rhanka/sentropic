@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fixture, key } from './fixture';
+import { fixture, key, memoryRows } from './fixture';
 import { LiveError } from '../../../src/services/artifacts/live/records';
+import { LiveHostError } from '@sentropic/artifacts/live-host';
+import { createRemoteLive } from '../../../src/services/artifacts/live/remote-live';
+
+/** A never-reconciled binding whose view is backed by a real remote row, seeded from the admitted job. */
+function seededFixture() {
+  const f = fixture();
+  const live = createRemoteLive(memoryRows());
+  vi.mocked(f.ports.binding).mockImplementation(async k => {
+    const s = await live.session(k);
+    return { ...f.binding, generation: s.generation, ownerId: s.ownerId };
+  });
+  vi.mocked(f.ports.seedBinding).mockImplementation((k, seed) => live.reconciled(k, seed));
+  return { f, live };
+}
 
 describe('builder job admission (M1 pending job)', () => {
   it('resolves the job with the attempt fence of this run and builds that attempt', async () => {
@@ -31,13 +45,44 @@ describe('builder job admission (M1 pending job)', () => {
     expect(order(f.ports.jobBinding)).toBeLessThan(order(f.ports.forge.reachable));
     expect(f.published).toEqual(['A']);
   });
-  it('refuses a never-reconciled binding at admission before any pod exists and writes no phase', async () => {
+  it('seeds the binding view from the admitted job when never reconciled, then builds and publishes', async () => {
+    const { f, live } = seededFixture();
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']); expect(f.core.create).toHaveBeenCalled();
+    expect(f.events).toEqual(expect.arrayContaining(['checkpoint', 'clean', 'prepare:A', 'build', 'verify']));
+    expect(f.ports.seedBinding).toHaveBeenCalledWith(key,
+      expect.objectContaining({ generation: 1, ownerId: 'owner' }));
+    expect(await live.session(key)).toMatchObject({ generation: 1, ownerId: 'owner' });
+    // The run re-resolved the job with the seeded run id, so the host fence still matches.
+    const [, , fence] = vi.mocked(f.ports.publication.job).mock.calls[0];
+    const [, , attempt, runtime] = vi.mocked(f.ports.publication.commit).mock.calls[0];
+    expect({ runId: runtime.sessionId, attempt: attempt.leaseEpoch }).toEqual(fence);
+  });
+  it('keeps the fence monotonic on a reconcile after a seeded build', async () => {
+    const { f, live } = seededFixture();
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']);
+    // A later live reconcile at the same generation with another owner stays stale.
+    await expect(live.reconciled(key, { generation: 1, ownerId: 'intruder',
+      liveSessionId: 'live-1', leaseEpoch: 99, routeEpoch: 99 }))
+      .rejects.toMatchObject({ code: 'git_live_conflict', reason: 'stale_session' });
+    // The same owner with higher counters is accepted (the live session takes over).
+    await expect(live.reconciled(key, { generation: 1, ownerId: 'owner',
+      liveSessionId: 'live-1', leaseEpoch: 99, routeEpoch: 99 }))
+      .resolves.toMatchObject({ liveSessionId: 'live-1' });
+    // A replay with lower counters stays stale.
+    await expect(live.reconciled(key, { generation: 1, ownerId: 'owner',
+      liveSessionId: 'live-1', leaseEpoch: 2, routeEpoch: 2 }))
+      .rejects.toMatchObject({ code: 'git_live_conflict', reason: 'stale_session' });
+  });
+  it('keeps binding_unreconciled when no admitted job exists and writes no phase', async () => {
     const f = fixture();
     vi.mocked(f.ports.binding).mockRejectedValueOnce(new LiveError('git_live_conflict', 'binding_unreconciled'));
+    vi.mocked(f.ports.publication.job).mockRejectedValueOnce(new LiveHostError('handoff_mismatch', 'job_not_pending'));
     await expect(f.controller.buildOnly(key, 'job-1')).rejects
       .toMatchObject({ code: 'git_live_conflict', reason: 'binding_unreconciled' });
     expect(f.core.create).not.toHaveBeenCalled(); expect(f.ports.worker.build).not.toHaveBeenCalled();
-    expect(await f.state()).toBeUndefined();
+    expect(f.ports.seedBinding).not.toHaveBeenCalled(); expect(await f.state()).toBeUndefined();
   });
   it('refuses a job without a recordable binding before any forge read or pod', async () => {
     const f = fixture(); vi.mocked(f.ports.jobBinding).mockRejectedValueOnce(new LiveError('binding_conflict'));
