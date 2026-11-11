@@ -56,7 +56,7 @@ Let the first publication of a new artifact run build-only from its admitted hos
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single stacked PR on fix/artifacts-binding-unreconciled, one test cycle, no sub-workstreams.
+- Rationale: single PR on origin/main (rebased after #994 merged, stacking dropped), one test cycle, no sub-workstreams.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
@@ -91,6 +91,6 @@ Let the first publication of a new artifact run build-only from its admitted hos
   - [ ] Typecheck API.
   - [ ] Retest scoped API suites.
   - [ ] Bumped packages/artifacts/package.json version (0.2.26) for changed src, enforced by CI enforce-package-bump.
-  - [ ] Final gate step 1: create PR stacked on #994 using BRANCH.md text as PR body.
+  - [ ] Final gate step 1: create PR on origin/main using BRANCH.md text as PR body.
   - [ ] Final gate step 2: run and verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once CI is green, commit removal of BRANCH.md, push, do not merge.
