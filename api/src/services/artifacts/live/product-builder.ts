@@ -129,6 +129,7 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
     installBudget: readInstallBudget(env), sizing: readWorkerSizing(env),
     installEnv: installEnvironment(readInstallHeapMb(env)),
     forge: remoteHostForge(reads), sources: { source: reads.source }, forgeBindings,
+    forgeSnapshot: (scope, binding, commitSha) => reads.snapshotRepo(scope, binding, commitSha),
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });
   let running: { stop(): void } | null = null;
