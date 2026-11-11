@@ -66,7 +66,9 @@ describe('builder cache blob store', () => {
       `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/not-a-uuid`,
       `artifact-builder-cache/v1/extra/${digest64('b')}/${digest64('d')}/${randomUUID()}`,
       `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('e')}.tar.gz`,
-      `artifact-builder-cache/v1/${digest64('b')}/sealed-${digest64('e')}.tar.zst`]) {
+      `artifact-builder-cache/v1/${digest64('b')}/sealed-${digest64('e')}.tar.zst`,
+      `artifact-builder-cache/v1/sources/${'a'.repeat(40)}-${digest64('e')}.tar.gz`,
+      `artifact-builder-cache/v1/sources/${'a'.repeat(39)}-${digest64('e')}.tar.zst`]) {
       await expect(blobs.put(key, Buffer.from('x'))).rejects.toThrow(/invalid builder-cache key/);
       await expect(blobs.get(key)).rejects.toThrow(/invalid builder-cache key/);
       await expect(blobs.delete(key)).rejects.toThrow(/invalid builder-cache key/);
@@ -131,6 +133,11 @@ describe('builder cache blob store', () => {
     const absent = `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('f')}.tar.zst`;
     expect(await storage.getArchive(absent)).toBeUndefined();
     expect([...f.objects.keys()]).toEqual([ref]);
+    // Source units round-trip under their own shape; a missing unit is a miss, not an error.
+    const unit = `artifact-builder-cache/v1/sources/${'a'.repeat(40)}-${digest64('e')}.tar.zst`;
+    await storage.putSource(unit, bytes);
+    expect(await storage.getSource(unit)).toEqual(new Uint8Array(bytes));
+    expect(await storage.getSource(unit.replace(/a{40}/, 'b'.repeat(40)))).toBeUndefined();
     // A malformed archive ref or an oversized archive refuses before any S3 call.
     const before = f.send.mock.calls.length;
     await expect(storage.putArchive(`artifact-builder-cache/v1/${digest64('b')}/sealed-${digest64('e')}.tar.zst`, bytes))
