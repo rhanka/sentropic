@@ -54,6 +54,40 @@ describe('s3 create-only puts', () => {
     expect(await blobs.getBlob(KEY)).toEqual(new Uint8Array(BYTES));
   });
 
+  it('pages with StartAfter and MaxKeys without loading the whole prefix', async () => {
+    const prefix = 'artifacts/scope-a/blobs/sha256/';
+    const all = [0, 1, 2, 3, 4].map((index) => `${prefix}${String(index).repeat(64).slice(0, 64)}`).sort();
+    const seen: Array<{ startAfter: unknown; maxKeys: unknown }> = [];
+    const send = vi.fn(async (command: { constructor: { name: string }; input?: Record<string, unknown> }) => {
+      if (command.constructor.name !== 'ListObjectsV2Command') throw new Error(`unexpected command ${command.constructor.name}`);
+      const input = command.input ?? {};
+      seen.push({ startAfter: input.StartAfter, maxKeys: input.MaxKeys });
+      const keys = all.filter((key) => key.startsWith(input.Prefix as string) && (input.StartAfter === undefined || key > (input.StartAfter as string)));
+      const maxKeys = input.MaxKeys as number;
+      const page = keys.slice(0, maxKeys);
+      return { Contents: page.map((Key) => ({ Key })), IsTruncated: keys.length > maxKeys };
+    });
+    const blobs = createS3BlobStore({ client: { send } as never, bucket: 'unit' });
+    expect(blobs.listKeysPaged).toBeDefined();
+    const walked: string[] = [];
+    let startAfter: string | undefined;
+    for (;;) {
+      const result = await blobs.listKeysPaged!(prefix, startAfter === undefined
+        ? { maxItems: 2, maxEncodedBytes: 1_000_000 }
+        : { maxItems: 2, maxEncodedBytes: 1_000_000, startAfter });
+      expect(result.keys.length).toBeLessThanOrEqual(2);
+      walked.push(...result.keys);
+      if (!result.hasMore) break;
+      startAfter = result.keys[result.keys.length - 1];
+    }
+    expect(walked).toEqual(all);
+    expect(seen[0]).toMatchObject({ startAfter: prefix, maxKeys: 3 });
+    expect(seen[1]).toMatchObject({ startAfter: all[1], maxKeys: 3 });
+    await expect(blobs.listKeysPaged!(prefix, {
+      maxItems: 2, maxEncodedBytes: 1_000_000, startAfter: 'artifacts/other/blobs/sha256/' + 'f'.repeat(64),
+    })).rejects.toThrow(/resume key/);
+  });
+
   it('fails closed when stored bytes do not verify', async () => {
     const send = vi.fn(async (command: { constructor: { name: string }; input?: Record<string, unknown> }) => {
       const name = command.constructor.name;
