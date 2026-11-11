@@ -28,6 +28,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - `api/tests/api/cmf4-per-app-mcp.test.ts`
   - `api/tests/api/cmf6-knowledge-loader.test.ts`
   - `ui/tests/cmf-panel.test.ts`
+  - `api/tests/api/cmf-panel-csp.test.ts`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -89,7 +90,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - [x] Storage bridge dependency on feat/t4a-cm-artifact-storage stubbed behind CM_KNOWLEDGE_ENABLED.
   - [x] Lot gate: typecheck-api green, scoped test ENV=test-t4a-reg green.
 - [x] **Lot 4 — W4.c embeddable panel §3.6**
-  - [x] CM artifacts panel embedding frameAncestors exact https same-env, CSP builder (panel 2 passed).
+  - [x] CM artifacts panel embedding frameAncestors exact https same-env, CSP builder (panel 2 passed, csp 3 passed).
   - [x] Lot gate: typecheck-ui green 0 errors, scoped test ENV=test-t4a-reg green.
 - [ ] **Lot 5 — Final gates + PR**
   - [x] make scope-check PASS C2, typecheck-api and typecheck-ui green, scoped tests green.
