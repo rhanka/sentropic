@@ -33,6 +33,10 @@
       "types": "./dist/adapters/db-blob.d.ts",
       "import": "./dist/adapters/db-blob.js"
     },
+    "./adapters/composite-blob": {
+      "types": "./dist/adapters/composite-blob.d.ts",
+      "import": "./dist/adapters/composite-blob.js"
+    },
     "./adapters/s3": {
       "types": "./dist/adapters/s3.d.ts",
       "import": "./dist/adapters/s3.js"
