@@ -135,6 +135,10 @@
       "types": "./dist/server/publication.d.ts",
       "import": "./dist/server/publication.js"
     },
+    "./server/blob-bridge": {
+      "types": "./dist/server/blob-bridge.d.ts",
+      "import": "./dist/server/blob-bridge.js"
+    },
     "./server/access": {
       "types": "./dist/server/access.d.ts",
       "import": "./dist/server/access.js"
