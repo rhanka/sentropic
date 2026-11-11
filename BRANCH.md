@@ -68,29 +68,29 @@ Let the first publication of a new artifact run build-only from its admitted hos
   - [x] Create isolated worktree tmp/worktrees/build-only-seeding on fix/artifacts-build-only-seeding stacked on origin/fix/artifacts-binding-unreconciled.
   - [x] Copy root .env into worktree, set ENV=test-build-seed API_PORT=8937 UI_PORT=5337 MAILDEV_UI_PORT=1237.
   - [x] Replace inherited BRANCH.md with this lane scope (finalize scope boundaries with make scope-check).
-- [ ] **Lot 1 — Host job carries the binding owner**
-  - [ ] Extend HostJob and HostRecheckView binding with ownerId, populate in resolvePendingJob.
-  - [ ] Require ownerId in builder remote-host job validation.
-  - [ ] Update package tests live-host-recheck and live-host-accept.
-  - [ ] Bump packages/artifacts to 0.2.26 and sync lock version lines.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8937 UI_PORT=5337 MAILDEV_UI_PORT=1237 ENV=test-build-seed`
-    - [ ] **API tests**
-      - [ ] `api/tests/unit/artifacts-live/job-admission.test.ts` (seed path, no-job refusal)
-      - [ ] `api/tests/unit/artifacts-live/controller.test.ts` (REVIVING retire)
-      - [ ] `api/tests/unit/artifacts-live/remote-drafts.test.ts` (seed then reconcile monotonicity)
-      - [ ] `api/tests/unit/artifacts-live/remote-host.test.ts` (ownerId validation)
-      - [ ] Scoped runs while evolving: `make test-api-unit SCOPE=tests/unit/artifacts-live/<file>.test.ts API_PORT=8937 UI_PORT=5337 MAILDEV_UI_PORT=1237 ENV=test-build-seed`
-- [ ] **Lot 2 — Build-only seeding and REVIVING retire**
-  - [ ] Add LivePorts seedBinding wired to remote reconciled.
-  - [ ] Seed binding view from admitted job on binding_unreconciled, fail closed otherwise.
-  - [ ] Retire REVIVING with gone or failed pod to DORMANT on scheduler tick.
-  - [ ] Update live README seeding paragraph.
-  - [ ] Lot gate: same scoped unit tests as Lot 1.
+- [x] **Lot 1 — Host job carries the binding owner**
+  - [x] Extend HostJob and HostRecheckView binding with ownerId, populate in resolvePendingJob.
+  - [x] Require ownerId in builder remote-host job validation.
+  - [x] Update package tests live-host-recheck and live-host-accept.
+  - [x] Bump packages/artifacts to 0.2.26 and sync lock version lines.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=8937 UI_PORT=5337 MAILDEV_UI_PORT=1237 ENV=test-build-seed`: pass (rebased head, observed exit 0)
+    - [x] **API tests** (`make test-api-unit SCOPE=tests/unit/artifacts-live ... ENV=test-build-seed`): 57 files, 447 tests passed
+      - [x] `api/tests/unit/artifacts-live/job-admission.test.ts` (seed path, no-job refusal, monotonic fence)
+      - [x] `api/tests/unit/artifacts-live/controller.test.ts` (REVIVING retire)
+      - [x] `api/tests/unit/artifacts-live/remote-drafts.test.ts` (unchanged, regression green)
+      - [x] `api/tests/unit/artifacts-live/remote-host.test.ts` (ownerId validation)
+    - [x] **Package tests**: live-host-recheck 23 passed, live-host-accept 9 passed
+- [x] **Lot 2 — Build-only seeding and REVIVING retire**
+  - [x] Add LivePorts seedBinding wired to remote reconciled.
+  - [x] Seed binding view from admitted job on binding_unreconciled, fail closed otherwise.
+  - [x] Retire REVIVING with gone or failed pod to DORMANT on scheduler tick.
+  - [x] Update live README seeding paragraph.
+  - [x] Lot gate: same scoped unit tests as Lot 1.
 - [ ] **Lot 3 — Final validation**
   - [ ] Typecheck API.
   - [ ] Retest scoped API suites.
   - [ ] Bumped packages/artifacts/package.json version (0.2.26) for changed src, enforced by CI enforce-package-bump.
-  - [ ] Final gate step 1: create PR on origin/main using BRANCH.md text as PR body.
+  - [x] Final gate step 1: create PR on origin/main using BRANCH.md text as PR body (PR #995, draft).
   - [ ] Final gate step 2: run and verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once CI is green, commit removal of BRANCH.md, push, do not merge.
