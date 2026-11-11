@@ -8,7 +8,7 @@ This file carries names, refs and dates only, never a value.
 
 Central store: `/home/antoinefa/src/sentropic/.env`, git-ignored, mode `0600`.
 Every `*_PREPROD` variable below holds one 64 lowercase hex value (32 random bytes,
-`openssl rand -hex 32`), minted per §5. Values are never printed, logged or committed.
+`openssl rand -hex 32`), minted per §4. Values are never printed, logged or committed.
 
 | Central `.env` name | Content | Lands in |
 | --- | --- | --- |
