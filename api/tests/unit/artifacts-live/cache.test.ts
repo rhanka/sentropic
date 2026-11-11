@@ -33,7 +33,9 @@ function cacheFixture(budget?: InstallBudget, options?: { log?: (fields: Install
       quarantine: vi.fn(async () => { stored = undefined; }),
       putFile: vi.fn(async (digest, data) => { files.set(digest, data); }), getFile: vi.fn(async digest => files.get(digest)),
       putArchive: vi.fn(async (ref, data) => { archives.set(ref, data); }),
-      getArchive: vi.fn(async ref => archives.get(ref)) },
+      getArchive: vi.fn(async ref => archives.get(ref)),
+      putSource: vi.fn(async (ref, data) => { archives.set(ref, data); }),
+      getSource: vi.fn(async ref => archives.get(ref)) },
   };
   const source = () => {
     const lockText = JSON.stringify(lock); const lockfile = Buffer.from(lockText);

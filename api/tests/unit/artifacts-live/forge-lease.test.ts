@@ -100,6 +100,29 @@ describe('lease forge reads: snapshot (contract §4)', () => {
     expect(snap.cacheIdentity.installWorkspaces).toEqual([]);
   });
 
+describe('lease forge reads: source units (§7.2.2)', () => {
+  it('should download once per commit and serve repeats from the repacked unit', async () => {
+    const units = new Map<string, Uint8Array>();
+    const store = { get: async (ref: string) => units.get(ref),
+      put: async (ref: string, bytes: Uint8Array) => { units.set(ref, bytes); } };
+    const s = await setup({ units: store });
+    const codeloads = () => s.calls.filter(c => c.url.startsWith('https://codeload.github.com')).length;
+    const first = await s.reads.snapshot(key, HEAD);
+    expect(codeloads()).toBe(1);
+    expect([...units.keys()]).toEqual([expect.stringMatching(
+      /^artifact-builder-cache\/v1\/sources\/a{40}-[a-f0-9]{64}\.tar\.zst$/)]);
+    const second = await s.reads.snapshot(key, HEAD);
+    expect(codeloads()).toBe(1);
+    expect(second.cacheIdentity).toEqual(first.cacheIdentity);
+    expect(Buffer.from(second.lockfile).toString()).toBe(Buffer.from(first.lockfile).toString());
+    expect((await s.reads.source(second.stagingRef)).map(f => f.path).sort()).toEqual(STAGED);
+    // The prewarm path shares the commit unit: no third download.
+    const viaUnit = await s.reads.snapshotRepo(key.storageScopeId, binding, HEAD);
+    expect(codeloads()).toBe(1);
+    expect(viaUnit.cacheIdentity).toEqual(first.cacheIdentity);
+  });
+});
+
 describe('lease forge reads: repo-scoped prewarm snapshot (§7.1.3)', () => {
   it('should assemble the identical identity as the user path without a binding row', async () => {
     const s = await setup();
