@@ -99,7 +99,7 @@ async function agentUnlock(path) {
 export function createAgent(options) {
   const root = options.root || '/';
   if (!options.env || !options.buildEnv || !options.installEnv) throw new AgentError('failed', 'environment_missing');
-  const ctx = { options, recipes: options.recipes, env: options.env, ops: {}, resets: [],
+  const ctx = { options, recipes: options.recipes, env: options.env, ops: {}, resets: [], guards: [],
     at: (path) => agentPath.join(root, path),
     state: { fence: null, phase: 'stopped', live: false, child: null, revision: null, groups: new Set() },
     define(name, args, run, immediate = false) { ctx.ops[name] = { args, run, immediate }; },
@@ -193,6 +193,7 @@ export function createAgent(options) {
   async function dispatch(body) {
     const entry = ctx.ops[body.op];
     if (!entry) agentFail('failed', 'unknown_operation');
+    for (const guard of ctx.guards) guard(body);
     const args = agentArgs(body.args, entry.args);
     const fence = { ...body.fence };
     try { return await (entry.immediate ? entry.run(args, fence) : serial(() => entry.run(args, fence))); }

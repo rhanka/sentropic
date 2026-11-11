@@ -22,7 +22,8 @@ export const failure = (code: string, reason?: string): TransferFailure => kind 
   if (kind === 'limit') throw new LiveError('limit_exceeded');
   throw new LiveError(code, reason);
 };
-const rank = (f: { generation: number; leaseEpoch: number; routeEpoch: number }) => [f.generation, f.leaseEpoch, f.routeEpoch];
+const rank = (f: { generation: number; leaseEpoch: number; routeEpoch: number; poolEpoch?: number; bound?: number }) =>
+  [f.poolEpoch ?? 0, f.bound ?? 1, f.generation, f.leaseEpoch, f.routeEpoch];
 function compare(a: number[], b: number[]) {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1;
   return 0;
@@ -43,8 +44,11 @@ export function createSupervisorChannel(options: ChannelOptions) {
     const seen = highest.get(runtime.podName);
     const order = seen ? compare(rank(runtime), rank(seen)) : 1;
     if (order < 0 || (order === 0 && (seen!.sessionId !== runtime.sessionId || seen!.podUid !== runtime.podUid))) conflict('stale_fence');
-    const fence = { generation: runtime.generation, sessionId: runtime.sessionId, leaseEpoch: runtime.leaseEpoch,
-      routeEpoch: runtime.routeEpoch, podName: runtime.podName, podUid: runtime.podUid };
+    // Pool-claimed sessions ride the extended fence (§7.3.2 D10); session-created pods keep the legacy
+    // shape so pre-L3 bootstraps still accept their frames.
+    const fence: FrameFence = { generation: runtime.generation, sessionId: runtime.sessionId, leaseEpoch: runtime.leaseEpoch,
+      routeEpoch: runtime.routeEpoch, podName: runtime.podName, podUid: runtime.podUid,
+      ...(runtime.poolEpoch !== undefined ? { poolEpoch: runtime.poolEpoch, bound: runtime.poolBound ?? 1 as 0 | 1 } : {}) };
     highest.set(runtime.podName, fence);
     return fence;
   }

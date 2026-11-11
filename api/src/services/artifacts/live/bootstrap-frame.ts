@@ -20,9 +20,9 @@ import { verify as frameVerify } from 'node:crypto';
 const FRAME = { version: 1, signature: 64, maxBytes: 2097152, ttlMs: 30000, skewMs: 5000, seen: 65536,
   leaseMs: ${LIVENESS_LEASE_MS}, leaseExit: ${LEASE_EXIT_CODE} };
 const FRAME_OPS = ['phase', 'terminate', 'renew', 'clear', 'put', 'stage', 'dependencies', 'install', 'overlay', 'hostFile',
-  'prebundle', 'dev', 'build', 'snapshot', 'extractArchive'];
+  'prebundle', 'dev', 'build', 'snapshot', 'extractArchive', 'claim', 'scrub', 'sealDependencies', 'applyOverlay'];
 const FRAME_KEYS = ['v', 'id', 'op', 'fence', 'issuedAt', 'expiresAt', 'args'];
-const FENCE_KEYS = ['generation', 'sessionId', 'leaseEpoch', 'routeEpoch', 'podName', 'podUid'];
+const FENCE_KEYS = ['generation', 'sessionId', 'leaseEpoch', 'routeEpoch', 'podName', 'podUid', 'poolEpoch', 'bound'];
 const frameObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
 
 /** The W3 reference check (openFrame) with closed keys; null means "not a supervisor frame". */
@@ -43,25 +43,78 @@ function frameOpen(publicKey, frame, now) {
   return body;
 }
 function frameFence(state, fence, identity) {
-  if (Object.keys(fence).some((key) => !FENCE_KEYS.includes(key)) || FENCE_KEYS.some((key) => !Object.hasOwn(fence, key))) {
+  // Pool epochs (§7.3.2 D10): absent keys mean a session-created pod (epoch 0, bound). Ordering is
+  // lexicographic over (poolEpoch, bound, generation, leaseEpoch, routeEpoch), so a scrubbed pod at
+  // epoch k + 1 accepts any generation while every epoch-k frame is permanently stale.
+  const poolEpoch = fence.poolEpoch ?? 0;
+  const bound = fence.bound ?? 1;
+  if (Object.keys(fence).some((key) => !FENCE_KEYS.includes(key))
+    || FENCE_KEYS.some((key) => key !== 'poolEpoch' && key !== 'bound' && !Object.hasOwn(fence, key))) {
     agentFail('fenced', 'invalid_fence');
   }
-  const order = [fence.generation, fence.leaseEpoch, fence.routeEpoch];
-  if (!order.every((n) => Number.isSafeInteger(n) && n >= 0) || typeof fence.sessionId !== 'string' || !AGENT_ID.test(fence.sessionId)) {
+  const order = [poolEpoch, bound, fence.generation, fence.leaseEpoch, fence.routeEpoch];
+  if (!order.every((n) => Number.isSafeInteger(n) && n >= 0) || bound > 1
+    || typeof fence.sessionId !== 'string' || !AGENT_ID.test(fence.sessionId)) {
+    agentFail('fenced', 'invalid_fence');
+  }
+  // Pool-fill and idle-renew frames run unbound: no session epochs may ride them.
+  if (bound === 0 && (fence.generation !== 0 || fence.leaseEpoch !== 0 || fence.routeEpoch !== 0)) {
     agentFail('fenced', 'invalid_fence');
   }
   if (fence.podName !== identity.podName || fence.podUid !== identity.podUid) agentFail('fenced', 'wrong_pod');
   if (state.fence) {
-    const seen = [state.fence.generation, state.fence.leaseEpoch, state.fence.routeEpoch];
+    const seen = [state.fence.poolEpoch ?? 0, state.fence.bound ?? 1,
+      state.fence.generation, state.fence.leaseEpoch, state.fence.routeEpoch];
     let cmp = 0;
-    for (let i = 0; i < 3 && cmp === 0; i++) cmp = Math.sign(order[i] - seen[i]);
+    for (let i = 0; i < 5 && cmp === 0; i++) cmp = Math.sign(order[i] - seen[i]);
     if (cmp < 0 || (cmp === 0 && fence.sessionId !== state.fence.sessionId)) agentFail('fenced', 'stale_fence');
   }
-  state.fence = { ...fence };
+  state.fence = { ...fence, poolEpoch, bound };
 }
 AGENT_SECTIONS.push(function leaseOps(ctx) {
   /** Liveness renewal (Amendment 1 §3): no side effect and never queued; the receiver renewed the lease on the fenced frame. */
   ctx.define('renew', [], async () => ({ renewed: true }), true);
+});
+
+/**
+ * Warm-pool bind state (§7.3.2): an unbound pool agent accepts only pool-fill ops and `renew` — a session op
+ * (`overlay`, `dev`, `build`, `snapshot`, `sealDependencies`, `applyOverlay`) is refused before it runs, so a
+ * warm pod can never serve a session it was not claimed for. `claim` binds, `scrub` unbinds for the next epoch.
+ */
+AGENT_SECTIONS.push(function poolOps(ctx) {
+  let bound = false;
+  ctx.guards.push((body) => {
+    if (!bound && ['overlay', 'dev', 'build', 'snapshot', 'sealDependencies', 'applyOverlay'].includes(body.op)) {
+      agentFail('fenced', 'unbound_pool');
+    }
+  });
+  ctx.define('claim', [], async (_args, fence) => {
+    if ((fence.bound ?? 1) !== 1) agentFail('fenced', 'invalid_fence');
+    if (bound) agentFail('failed', 'already_bound');
+    bound = true;
+    return { claimed: true, poolEpoch: fence.poolEpoch ?? 0 };
+  });
+  ctx.define('scrub', ['nextEpoch'], async (args, fence) => {
+    if ((fence.bound ?? 1) !== 1) agentFail('fenced', 'invalid_fence');
+    if (!bound) agentFail('failed', 'not_bound');
+    if (args.nextEpoch !== (fence.poolEpoch ?? 0) + 1) agentFail('failed', 'epoch_mismatch');
+    // The whole process tree is gone: a scrubbed pod keeps no session process across epochs.
+    await ctx.terminateAll();
+    for (const root of ['/workspace', '/tmp']) {
+      const dir = ctx.at(root);
+      const names = await agentFs.readdir(dir).catch(agentMissing);
+      if (names === null) { await agentFs.mkdir(dir, { recursive: true }); continue; }
+      for (const name of names) {
+        if (root === '/tmp' && AGENT_HOST_FILES.includes(root + '/' + name)) continue;
+        await agentFs.rm(dir + '/' + name, { recursive: true, force: true });
+      }
+    }
+    // Any scrub doubt deletes the pod (§5.5): without a readable sealed tree there is no warm-deps release.
+    const deps = await agentFs.readdir(ctx.at('/dependencies')).catch(agentMissing);
+    if (deps === null) agentFail('integrity', 'dependencies_missing');
+    bound = false;
+    return { cleared: ['/workspace', '/tmp'], poolEpoch: args.nextEpoch };
+  });
 });
 function frameReceiver(ctx, dispatch) {
   const { options, state } = ctx;
