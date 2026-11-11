@@ -13,12 +13,15 @@ import { createLocalBlobStore } from '../src/adapters/local-blob.js';
 import {
   cloneBlobBytes,
   createVerifiedBlobStore,
+  cutBlobKeysByBudget,
   listBlobKeysPaged,
+  openBlobPageCursor,
   pageBlobKeys,
+  sealBlobPageCursor,
   verifyBytesForKey,
   verifyStoredBytesForKey,
 } from '../src/server/blob-bridge.js';
-import { createMemoryBlobStore } from '../src/server/publication.js';
+import { createMemoryBlobStore, type PublicationBlobStore } from '../src/server/publication.js';
 
 function keyFor(bytes: Uint8Array, scope = 'scope-a'): string {
   return `artifacts/${scope}/blobs/sha256/${createHash('sha256').update(bytes).digest('hex')}`;
@@ -125,5 +128,90 @@ describe('blob bridge guards', () => {
     await expect(listBlobKeysPaged(upstream, prefix, {
       maxItems: 10, maxEncodedBytes: 1_000_000, continuation: forged,
     })).rejects.toThrow(/invalid blob page continuation/);
+  });
+
+  it('rounds a sealed keyset cursor through open', () => {
+    const prefix = 'artifacts/scope-a/blobs/sha256/';
+    const sealed = sealBlobPageCursor(prefix, { kind: 'keyset', after: `${prefix}${'a'.repeat(64)}` });
+    expect(openBlobPageCursor(sealed, prefix)).toEqual({ kind: 'keyset', after: `${prefix}${'a'.repeat(64)}` });
+    expect(() => openBlobPageCursor(sealed, 'artifacts/other/blobs/sha256/')).toThrow(/invalid blob page continuation/);
+  });
+
+  it('trims pages to the encoded-byte budget keeping the first key', () => {
+    const keys = ['artifacts/scope-a/blobs/sha256/' + 'a'.repeat(64), 'artifacts/scope-a/blobs/sha256/' + 'b'.repeat(64)];
+    const first = cutBlobKeysByBudget(keys, keys[0]!.length);
+    expect(first).toEqual({ kept: [keys[0]], dropped: 1 });
+    expect(() => cutBlobKeysByBudget(keys, keys[0]!.length - 1)).toThrow(/exceeds page byte budget/);
+  });
+
+  it('delegates to store-level paging without loading the whole prefix', async () => {
+    const prefix = 'artifacts/scope-a/blobs/sha256/';
+    const all = [0, 1, 2, 3, 4].map((index) => `${prefix}${String(index).repeat(64).slice(0, 64)}`);
+    const seen: string[][] = [];
+    const store: PublicationBlobStore = {
+      ...createMemoryBlobStore(),
+      async listKeys() { throw new Error('must not bulk-load for a paged walk'); },
+      async listKeysPaged(listPrefix, page) {
+        seen.push([listPrefix, String(page.startAfter ?? '')]);
+        const start = page.startAfter === undefined ? 0 : (() => {
+          const index = all.findIndex((key) => key > page.startAfter!);
+          return index === -1 ? all.length : index;
+        })();
+        const keys = all.slice(start, start + page.maxItems);
+        return { keys, hasMore: start + page.maxItems < all.length };
+      },
+    };
+    const first = await listBlobKeysPaged(store, prefix, { maxItems: 2, maxEncodedBytes: 1_000_000 });
+    expect(first.keys).toEqual(all.slice(0, 2));
+    expect(first.continuation).toBeDefined();
+    const second = await listBlobKeysPaged(store, prefix, {
+      maxItems: 2, maxEncodedBytes: 1_000_000, continuation: first.continuation,
+    });
+    expect(second.keys).toEqual(all.slice(2, 4));
+    expect(second.continuation).toBeDefined();
+    const third = await listBlobKeysPaged(store, prefix, {
+      maxItems: 2, maxEncodedBytes: 1_000_000, continuation: second.continuation,
+    });
+    expect(third.keys).toEqual(all.slice(4));
+    expect(third.continuation).toBeUndefined();
+    expect(seen.map((entry) => entry[1])).toEqual(['', all[1], all[3]]);
+  });
+
+  it('replays a byte-trimmed tail by key without skipping', async () => {
+    const prefix = 'artifacts/scope-a/blobs/sha256/';
+    const all = [0, 1, 2].map((index) => `${prefix}${String(index).repeat(64).slice(0, 64)}`);
+    const store: PublicationBlobStore = {
+      ...createMemoryBlobStore(),
+      async listKeys() { throw new Error('must not bulk-load for a paged walk'); },
+      async listKeysPaged(_listPrefix, page) {
+        const start = page.startAfter === undefined ? 0 : (() => {
+          const index = all.findIndex((key) => key > page.startAfter!);
+          return index === -1 ? all.length : index;
+        })();
+        const keys = all.slice(start, start + page.maxItems);
+        return { keys, hasMore: start + page.maxItems < all.length };
+      },
+    };
+    const budget = Buffer.byteLength(all[0]!, 'utf8');
+    const first = await listBlobKeysPaged(store, prefix, { maxItems: 10, maxEncodedBytes: budget });
+    expect(first.keys).toEqual(all.slice(0, 1));
+    const second = await listBlobKeysPaged(store, prefix, {
+      maxItems: 10, maxEncodedBytes: budget, continuation: first.continuation,
+    });
+    expect(second.keys).toEqual(all.slice(1, 2));
+    const third = await listBlobKeysPaged(store, prefix, {
+      maxItems: 10, maxEncodedBytes: budget, continuation: second.continuation,
+    });
+    expect(third.keys).toEqual(all.slice(2));
+    expect(third.continuation).toBeUndefined();
+  });
+
+  it('settles concurrent identical puts through create-only without overwrite', async () => {
+    const blobs = createLocalBlobStore(join(mkdtempSync(join(tmpdir(), 'cmf-s1-race-')), 'blobs'));
+    await Promise.all([blobs.putBlob(KEY, BYTES), blobs.putBlob(KEY, BYTES), blobs.putBlob(KEY, BYTES)]);
+    expect(await blobs.getBlob(KEY)).toEqual(new Uint8Array(BYTES));
+    const other = new Uint8Array(BYTES.length).fill(7);
+    await expect(blobs.putBlob(KEY, other)).rejects.toThrow(/digest mismatch/);
+    expect(await blobs.getBlob(KEY)).toEqual(new Uint8Array(BYTES));
   });
 });
