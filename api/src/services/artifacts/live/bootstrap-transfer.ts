@@ -12,6 +12,9 @@ AGENT_SECTIONS.push(function transferOps(ctx) {
     workspace: { root: '/workspace', ...TREE }, install: { root: '/tmp', ...TREE }, dependencies: { root: '/dependencies', ...TREE },
     overlay: { root: '/workspace', files: 255, fileBytes: 1048576, totalBytes: 8388608 },
     'npm-cache': { root: '/tmp', ...TREE },
+    // Sealed-unit archive relay (§7.1.2): the one tar.zst arrives as a single-file transfer staged under the
+    // reserved area of /tmp (never in the tree proper); extractArchive below commits and extracts it.
+    archive: { root: '/tmp', ...TREE },
   };
   const MODES = [0o444, 0o555, 0o644, 0o755];
   const OPEN = 4; const PUT_ENTRIES = 256;
@@ -84,6 +87,103 @@ AGENT_SECTIONS.push(function transferOps(ctx) {
         dispose: () => drop(t) };
     } catch (error) { await drop(t); throw error; }
   };
+  /** Bounded sealed-unit extraction (§7.2.3): commits the one-file archive transfer, decompresses its zstd
+   * frame and extracts ustar records under root (workspace or dependencies) with the same refusals as the
+   * API reader — regular files only (no links, devices, absolute/dotdot/.git paths), 0444/0555 modes, running
+   * counters, 20:1 decompression ratio bound, streaming (one file plus the window in memory). The tree digest
+   * over extracted [path, mode, sha256] rows must equal tree, or the extraction refuses. */
+  ctx.define('extractArchive', ['transfer', 'treeDigest', 'tree', 'root'], async ({ transfer, treeDigest, tree, root }) => {
+    agentArgs({ transfer, treeDigest, tree, root }, ['transfer', 'treeDigest', 'tree', 'root']);
+    const base = root === 'workspace' ? '/workspace' : root === 'dependencies' ? '/dependencies' : null;
+    if (base === null || typeof tree !== 'string' || !AGENT_SHA.test(tree)) agentFail('failed', 'invalid_args');
+    const set = await ctx.commitTransfer(transfer, treeDigest, 'archive');
+    try {
+      if (set.files.length !== 1) agentFail('failed', 'invalid_archive');
+      const staged = set.files[0];
+      const { createZstdDecompress } = await import('node:zlib');
+      const handle = await agentFs.open(at(staged.staged), 'r');
+      try {
+        const { size } = await handle.stat();
+        if (!Number.isSafeInteger(size) || size < 0 || size > TREE.totalBytes) agentFail('limit', 'limit_exceeded');
+        const zstd = createZstdDecompress();
+        const feed = (async () => {
+          let position = 0;
+          while (position < size) {
+            const chunk = Buffer.alloc(Math.min(1048576, size - position));
+            const { bytesRead } = await handle.read(chunk, 0, chunk.length, position);
+            if (bytesRead === 0) agentFail('failed', 'unstable_tree');
+            position += bytesRead;
+            if (!zstd.write(chunk.subarray(0, bytesRead))) {
+              await new Promise((resolve) => zstd.once('drain', resolve));
+            }
+          }
+          zstd.end();
+        })();
+        feed.catch(() => undefined);
+        const iterator = zstd[Symbol.asyncIterator]();
+        let queue = Buffer.alloc(0);
+        const next = async () => {
+          try { const step = await iterator.next(); return step.done ? null : step.value; }
+          catch { agentFail('failed', 'invalid_archive'); }
+        };
+        const take = async (length) => {
+          while (queue.length < length) {
+            const piece = await next();
+            if (piece === null) agentFail('failed', 'invalid_archive');
+            queue = Buffer.concat([queue, piece]);
+          }
+          const out = queue.subarray(0, length); queue = queue.subarray(length);
+          return out;
+        };
+        const text = (bytes, from, to) => bytes.subarray(from, to).toString('utf8').replace(/\0.*$/, '');
+        const rows = []; let total = 0; let count = 0;
+        for (;;) {
+          const header = await take(512);
+          if (header.every((byte) => byte === 0)) {
+            const second = await take(512);
+            if (!second.every((byte) => byte === 0) || queue.length !== 0) agentFail('failed', 'invalid_archive');
+            break;
+          }
+          if (header.subarray(257, 263).toString('utf8') !== 'ustar\0') agentFail('failed', 'invalid_archive');
+          const type = String.fromCharCode(header[156]);
+          if (type !== '0' && type !== '\0') agentFail('failed', 'invalid_archive');
+          const name = text(header, 0, 100); const prefix = text(header, 345, 500);
+          const path = prefix ? prefix + '/' + name : name;
+          const mode = parseInt(text(header, 100, 108).trim() || '0', 8);
+          const fileSize = parseInt(text(header, 124, 136).trim() || '0', 8);
+          agentRelative(path);
+          if (base === '/dependencies' && !path.split('/').includes('node_modules')) agentFail('failed', 'invalid_path');
+          if (mode !== 0o444 && mode !== 0o555) agentFail('failed', 'invalid_mode');
+          if (!Number.isSafeInteger(fileSize) || fileSize < 0) agentFail('failed', 'invalid_archive');
+          let checksum = 0;
+          for (let i = 0; i < 512; i++) checksum += i >= 148 && i < 156 ? 0x20 : header[i];
+          if (checksum !== parseInt(text(header, 148, 156).trim() || '0', 8)) agentFail('failed', 'invalid_archive');
+          if (fileSize > TREE.fileBytes || ++count > TREE.files) agentFail('limit', 'limit_exceeded');
+          const hash = agentHash('sha256'); let read = 0;
+          const target = at(base + '/' + path);
+          await agentFs.mkdir(agentPath.dirname(target), { recursive: true });
+          const out = await agentFs.open(target, 'wx', mode);
+          try {
+            while (read < fileSize) {
+              const piece = await take(Math.min(fileSize - read, 1048576));
+              hash.update(piece); read += piece.length;
+              await out.write(piece);
+            }
+          } finally { await out.close(); }
+          await agentFs.chmod(target, mode);
+          const padding = (512 - (fileSize % 512)) % 512;
+          if (padding) await take(padding);
+          total += fileSize;
+          if (total > TREE.totalBytes || total > size * 20) agentFail('limit', 'limit_exceeded');
+          rows.push([path, mode === 0o555 ? 365 : 292, hash.digest('hex')]);
+        }
+        await feed;
+        rows.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+        if (agentSha(JSON.stringify(rows)) !== tree) agentFail('failed', 'digest_mismatch');
+        return { files: rows.length, bytes: total };
+      } finally { await handle.close(); }
+    } finally { await set.dispose(); }
+  });
   /** Refuses links in parents and, unless replacing a regular file, any existing entry. */
   ctx.checkTarget = async (base, path, replace) => {
     await agentNoLinks(at, base, path);
