@@ -80,8 +80,8 @@ Wire the deployed L1 job-failure notifier in preprod only: ConfigMap values, rec
   - [x] Patch Secret sentropic-api in sentropic-preprod with the bearer key from .env by name.
   - [ ] Register the ingest client after the PR is merged and deployed.
 - [ ] **Lot 4 — PR and CI**
-  - [ ] Push branch, open PR with BRANCH.md as body.
-  - [ ] CI green on the PR head, resolve blockers.
+  - [x] Push branch, open PR with BRANCH.md as body.
+  - [x] CI green on the PR head, resolve blockers.
 - [ ] **Lot N — Final validation**
   - [ ] Retest scopes touched by Lot 1.
   - [ ] Delete BRANCH.md, push, leave the merge to the conductor.
