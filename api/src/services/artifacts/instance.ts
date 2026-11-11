@@ -1,6 +1,7 @@
 import { S3Client } from '@aws-sdk/client-s3';
 import type { Context } from 'hono';
 import type { PublicationBlobStore } from '@sentropic/artifacts/server/publication';
+import { placementForPut } from '@sentropic/artifacts/adapters/composite-blob';
 import { pool } from '../../db/client';
 import { env } from '../../config/env';
 import { resolveOAuthIssuer } from '../../routes/auth/oauth';
@@ -8,6 +9,7 @@ import { isOriginAllowed, parseAllowedOrigins } from '../../utils/cors';
 import { resolveCmTenant } from '../identity/cm-tenancy';
 import { createArtifactHost } from './composition';
 import { createPrivateArtifactStorage } from './lifecycle';
+import { createPlacementBlobStore, parseBlobInlineMaxBytes, parseBlobPlacementMode } from './blob-placement';
 import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdentity } from './credentials';
 import { createArtifactTransport } from './transport';
 import { createWorkspaceDirectory } from './workspace-directory';
@@ -39,19 +41,25 @@ function privateStorage() {
   }
   return storage;
 }
-const blobs: PublicationBlobStore = {
+const placementMode = parseBlobPlacementMode(process.env.APP_ARTIFACT_STORAGE_PLACEMENT);
+const placementInlineMaxBytes = parseBlobInlineMaxBytes(process.env.APP_ARTIFACT_STORAGE_INLINE_MAX_BYTES);
+const objectBlobs: PublicationBlobStore = {
   putBlob: async (key, bytes) => (await privateStorage()).blobs.putBlob(key, bytes),
   getBlob: async key => (await privateStorage()).blobs.getBlob(key),
   deleteBlob: async key => (await privateStorage()).blobs.deleteBlob(key),
   listKeys: async prefix => (await privateStorage()).blobs.listKeys(prefix),
 };
+/** CMF-S2: `s3` keeps the current behavior; `db`/`db+s3` compose DB bytes with the object placement. */
+const blobs: PublicationBlobStore = placementMode === 's3' ? objectBlobs
+  : createPlacementBlobStore({ pool, s3: objectBlobs, mode: placementMode, inlineMaxBytes: placementInlineMaxBytes });
 
 const currentIdentity = createCurrentArtifactIdentity(resource);
 /** The builder's dependency cache objects live in the same dedicated private artifact storage. */
 export const productPrivateCacheBlobs: PrivateCacheBlobs = {
   put: (key, bytes) => blobs.putBlob(key, bytes), get: key => blobs.getBlob(key), delete: key => blobs.deleteBlob(key),
 };
-export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes, currentIdentity });
+export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes, currentIdentity,
+  placementForSize: (size) => placementForPut(placementMode, size, placementInlineMaxBytes) });
 /** Same credential reader as the host, so a listed workspace matches its bind() authority. */
 export const productWorkspaceDirectory = createWorkspaceDirectory({ pool, currentIdentity });
 export const productArtifactTransport = createArtifactTransport(productArtifactHost);
