@@ -34,6 +34,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `package-lock.json`
   - `api/package-lock.json`
   - `apps/artifact-content/src/**`
+  - `apps/artifact-content/tests/**`
   - `deploy/ci/artifact-content/object-store/artifact-content-db-role.sql`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
