@@ -1,6 +1,6 @@
 import type { LivePorts } from './ports';
 import { conflict, type LiveKey } from './records';
-import { podName } from './pods';
+import { bindingRowKey } from './pods';
 
 /** Fences of one package LiveService session (the host's `record.runtime`), echoed in every BridgeAck. */
 export interface PackageFences { liveSessionId: string; leaseEpoch: number; routeEpoch: number }
@@ -25,8 +25,8 @@ const fencesOf = (s: RemoteSession): PackageFences => ({ liveSessionId: s.liveSe
  * host pushed with a reconcile or a grant.
  */
 export function createRemoteLive(rows: RemoteRows) {
-  const fenceRow = (key: LiveKey) => rowOf(podName(key), 'fences');
-  const invitationRow = (key: LiveKey, generation: number) => rowOf(podName(key), 'invitation', generation);
+  const fenceRow = (key: LiveKey) => rowOf(bindingRowKey(key), 'fences');
+  const invitationRow = (key: LiveKey, generation: number) => rowOf(bindingRowKey(key), 'invitation', generation);
   const read = (key: LiveKey) => rows.read<RemoteSession>(fenceRow(key));
   return {
     invitations: {

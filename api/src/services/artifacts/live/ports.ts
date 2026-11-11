@@ -11,8 +11,9 @@ import type { PhaseEventSink } from './phase-events';
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
-  /** Every runtime that is not DORMANT (this environment): the scheduler set and the admission slots after a restart. */
-  active(): Promise<Array<{ key: LiveKey; ownerId: string; phase: LivePhase }>>;
+  /** Every runtime that is not DORMANT (this environment): the scheduler set and the admission slots after a restart.
+   * `podName` is the stored physical pod (§7.3.2 D10), so heavy holds reseed on the claimed name after a restart. */
+  active(): Promise<Array<{ key: LiveKey; ownerId: string; phase: LivePhase; podName: string }>>;
   /** Serializes one binding across API replicas. Exceptions roll back state AND release writes. */
   transaction<T>(key: LiveKey, work: (unit: {
     state: LiveState | undefined; save(state: LiveState): void; client?: PoolClient;

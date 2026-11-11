@@ -1,7 +1,7 @@
 import type { DraftSnapshot, LiveBinding, LivePorts } from './ports';
 import { releaseIfDormant } from './admission';
 import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey, type LiveRuntime } from './records';
-import { enrichPodLoss, isPodCause, isTransportLoss, podName } from './pods';
+import { bindingRowKey, enrichPodLoss, isPodCause, isTransportLoss, podName } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, currentRuntime, failed, observeHead, teardown, transition } from './transitions';
 import { requireUserCache } from './cache';
@@ -110,7 +110,7 @@ async function createBuildRuntime(ports: LivePorts, key: LiveKey, binding: LiveB
     const previous = unit.state;
     const runtime = { generation: binding.generation, ownerId: binding.ownerId, sessionId: seedRunId ?? ports.id(),
       phase: 'BUILD_PROVISIONING' as const, leaseEpoch: (previous?.runtime.leaseEpoch ?? 0) + 1,
-      rowVersion: previous?.runtime.rowVersion ?? 0, podUid: null, podName: podName(key),
+      rowVersion: previous?.runtime.rowVersion ?? 0, podUid: null, podName: podName(key), binding: bindingRowKey(key),
       sourceRevision: draft.revision, appliedRevision: null, baseHeadSha: draft.baseHeadSha, liveTreeSha: draft.treeSha,
       lastAccessAt: ports.now(),
       routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1, invitationEpoch: 0, invitationExpiresAt: null,

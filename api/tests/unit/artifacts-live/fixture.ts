@@ -60,7 +60,8 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
   const store: LiveStore = {
     read: async k => structuredClone(states.get(idOf(k))),
     active: async () => [...states].filter(([, state]) => state.runtime.phase !== 'DORMANT')
-      .map(([id, state]) => ({ key: keys.get(id)!, ownerId: state.runtime.ownerId, phase: state.runtime.phase })),
+      .map(([id, state]) => ({ key: keys.get(id)!, ownerId: state.runtime.ownerId, phase: state.runtime.phase,
+        podName: state.runtime.podName })),
     async transaction(k, work) {
       const previous = tail; let unlock!: () => void;
       tail = new Promise<void>(resolve => { unlock = resolve; }); await previous;

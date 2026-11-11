@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DraftSnapshot, LivePorts } from './ports';
 import { conflict, LiveError, type LiveKey } from './records';
-import { podName } from './pods';
+import { bindingRowKey } from './pods';
 import type { SupervisorSources } from './supervisor';
 import { rowOf, type RemoteRows } from './remote-live';
 
@@ -38,24 +38,27 @@ export function createRemoteDrafts(rows: RemoteRows) {
     return draft;
   }
   const drafts: LivePorts['drafts'] = {
-    current: async (key, generation) => snapshot(await sealed(podName(key), generation)),
+    current: async (key, generation) => snapshot(await sealed(bindingRowKey(key), generation)),
     // The host owns the draft: a clean draft behind a new head is restaged by the host, never advanced here.
     advanceClean: async () => { throw new LiveError('git_live_draft_conflict'); },
     /** The host made the revision durable before pushing it; this verifies the builder copy is still that revision. */
     async checkpoint(key, draft) {
-      const current = await sealed(podName(key), draft.generation);
+      const current = await sealed(bindingRowKey(key), draft.generation);
       if (current.revision !== draft.revision || current.baseHeadSha !== draft.baseHeadSha || current.treeSha !== draft.treeSha) {
         throw new LiveError('git_live_revision_moved');
       }
     },
   };
-  /** `SupervisorSources.draft`: the complete overlay of the exact sealed revision. */
+  /** `SupervisorSources.draft`: the complete overlay of the exact sealed revision. Reads the logical
+   * binding row (§7.3.2 D10) carried by the runtime, falling back to `podName` for pre-L3 rows; a claimed pool
+   * pod therefore restores the same draft as a session-created pod. */
   const draft: SupervisorSources['draft'] = async (runtime, wanted) => {
-    const d = await sealed(runtime.podName, runtime.generation);
+    const binding = runtime.binding ?? runtime.podName;
+    const d = await sealed(binding, runtime.generation);
     if (d.revision !== wanted.revision || d.generation !== wanted.generation) conflict('stale_fence');
     const files: DraftFile[] = [];
     for (const [index, hash] of d.pages.entries()) {
-      const page = await rows.read<Page>(rowOf(runtime.podName, 'page', d.slot, index));
+      const page = await rows.read<Page>(rowOf(binding, 'page', d.slot, index));
       if (!page || digest(page) !== hash) conflict('stale_fence');
       for (const f of page) files.push({ path: f.path, mode: f.mode, bytes: new Uint8Array(Buffer.from(f.data, 'base64')) });
     }
@@ -64,7 +67,7 @@ export function createRemoteDrafts(rows: RemoteRows) {
   /** One page of the revision being staged: page 0 starts it, the next pages follow in order; replaying the last page
    * is a no-op. */
   async function page(key: LiveKey, input: { generation: number; revision: string; page: number; files: readonly DraftFile[] }) {
-    const binding = podName(key); const index = input.page;
+    const binding = bindingRowKey(key); const index = input.page;
     if (input.files.length === 0) throw new LiveError('invalid_request', 'empty_page');
     if (index >= DRAFT_LIMITS.pages || input.files.length > DRAFT_LIMITS.paths) limit();
     const bytes = input.files.reduce((total, f) => total + f.bytes.byteLength, 0);
@@ -92,7 +95,7 @@ export function createRemoteDrafts(rows: RemoteRows) {
     });
   }
   /** Seals the staged pages (none for a clean or deletion-only draft) as the current draft; a replay is a no-op. */
-  const seal = (key: LiveKey, input: SealInput) => rows.update<DraftRow, void>(draftRow(podName(key)), current => {
+  const seal = (key: LiveKey, input: SealInput) => rows.update<DraftRow, void>(draftRow(bindingRowKey(key)), current => {
     const s = current?.sealed;
     if (s && input.generation < s.generation) conflict('stale_fence');
     if (s && s.revision === input.revision && s.generation === input.generation && s.pages.length === input.pages

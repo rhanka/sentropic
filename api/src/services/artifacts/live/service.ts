@@ -10,7 +10,7 @@ import { createDependencyCache } from './cache';
 import { createPostgresBuildJobStore, createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
 import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, liveHolds } from './heavy';
 import { createFairAdmission } from './admission';
-import { createBuilderPods, podName, type KubernetesCore, type WorkerSizing } from './pods';
+import { bindingRowKey, createBuilderPods, podName, type KubernetesCore, type WorkerSizing } from './pods';
 import { createLiveWorker } from './worker';
 import { createLiveController } from './controller';
 import { fetchLockedTarball } from './npm-relay';
@@ -96,6 +96,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
       const key = { storageScopeId: job.scope, artifactId: `prewarm:${job.jobId}` };
       let runtime: LiveRuntime = { generation: 0, ownerId: 'prewarm', sessionId: job.jobId,
         phase: 'BUILD_PROVISIONING', leaseEpoch: 0, rowVersion: 0, podUid: null, podName: podName(key),
+        binding: bindingRowKey(key),
         sourceRevision: source.headSha, appliedRevision: null, baseHeadSha: source.headSha,
         liveTreeSha: source.treeSha, lastAccessAt: options.now(), routeEpoch: 0, invitationEpoch: 0,
         invitationExpiresAt: null, pendingWake: false, attempt: null };

@@ -1,6 +1,6 @@
 import type { LivePorts } from './ports';
 import { conflict, LiveError, liveRevision, type LiveKey, type LiveRuntime } from './records';
-import { podName } from './pods';
+import { bindingRowKey, podName } from './pods';
 import { releaseIfDormant } from './admission';
 import { currentBinding, currentRuntime, failed } from './transitions';
 import { prepareLive } from './prepare-live';
@@ -24,7 +24,7 @@ export async function revive(ports: LivePorts, key: LiveKey, phase: 'revive' | '
       const now = ports.now();
       const runtime: LiveRuntime = { generation: binding.generation, ownerId: binding.ownerId,
         sessionId: ports.id(), phase: 'REVIVING', leaseEpoch: epoch, rowVersion: previous?.runtime.rowVersion ?? 0,
-        podName: podName(key), podUid: null, sourceRevision: revision, appliedRevision: null,
+        podName: podName(key), binding: bindingRowKey(key), podUid: null, sourceRevision: revision, appliedRevision: null,
         baseHeadSha: draft.baseHeadSha, liveTreeSha: draft.treeSha, lastAccessAt: now,
         routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1, invitationEpoch: invitation.epoch,
         invitationExpiresAt: invitation.expiresAt, pendingWake: false, attempt: null,

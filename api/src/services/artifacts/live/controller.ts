@@ -138,8 +138,9 @@ export function createLiveController(ports: LivePorts) {
         || ['DORMANT', 'RECOVERING', 'DECOMMISSIONING', 'SAVING', 'QUIESCING'].includes(runtime.phase)) return false;
       await ports.worker.renew(runtime); return true;
     },
-    /** The binding's admitted or queued heavy phases (kind, position) for the live status surface. */
-    heavyStatus: (key: LiveKey) => ports.heavy.status(podName(key)),
+    /** The binding's admitted or queued heavy phases (kind, position) for the live status surface.
+     * Reads the stored physical pod (§7.3.2 D10): a claimed session runs under its pool pod name. */
+    heavyStatus: async (key: LiveKey) => ports.heavy.status((await ports.store.read(key))?.runtime.podName ?? podName(key)),
     /** Every runtime that is not DORMANT, for the scheduler. */
     active: () => ports.store.active(),
   };

@@ -7,6 +7,10 @@ export type LivePhase = 'DORMANT' | 'REVIVING' | 'LIVE' | 'QUIESCING' | 'BUILD_P
 export interface LiveRuntime {
   generation: number; ownerId: string; sessionId: string; phase: LivePhase;
   leaseEpoch: number; rowVersion: number; podUid: string | null; podName: string;
+  /** Logical storage-row key (`artifact-<bindingLabel>`, §7.3.2 D10): storage rows stay keyed by binding while
+   * `podName` carries the physical pod (session deterministic name or claimed `artifact-pool-<16-hex>`). Set at
+   * creation/claim; draft reads fall back to `podName` for rows written before L3. */
+  binding?: string;
   sourceRevision: string; appliedRevision: string | null; baseHeadSha: string;
   liveTreeSha: string; lastAccessAt: number;
   routeEpoch: number; invitationEpoch: number; invitationExpiresAt: number | null; pendingWake: boolean; attempt: LiveAttempt | null;

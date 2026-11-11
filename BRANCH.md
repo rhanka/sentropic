@@ -66,9 +66,9 @@ Keep at least 1 warm pod per (scope, hot cacheKey) so a live start attaches inst
   - [x] MAX_BUILDER_PODS 2 to 4, LIVE_NODE_CAPACITY 2 to 4, PRODUCT_HEAVY maxPods 4, PRODUCT_ADMISSION 4.
   - [x] Pod resources requests 250m/768Mi, limits 4/2048Mi.
   - [x] Lot gate: pods.test.ts quota block updated.
-- [ ] **Lot 2 — Identity split (D10)**
-  - [ ] Pool helpers poolPodName/isPoolPodName/bindingRowKey, builderPod + liveViteConfig accept pool names.
-  - [ ] Row keys to bindingRowKey form, draft source binding fallback, active() carries podName, heavyStatus uses stored runtime.
+- [x] **Lot 2 — Identity split (D10)**
+  - [x] Pool helpers poolPodName/isPoolPodName/bindingRowKey, builderPod + liveViteConfig accept pool names.
+  - [x] Row keys to bindingRowKey form, draft source binding fallback, active() carries podName, heavyStatus uses stored runtime.
   - [ ] Lot gate: `make test-api SCOPE=tests/unit/artifacts-live/pods.test.ts ENV=test-slo-l3` via docker-slot.sh.
 - [ ] **Lot 3 — Kubernetes list/patchLabels**
   - [ ] KubernetesCore list/patchLabels, in-cluster impl, fixture impl.
