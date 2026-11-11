@@ -63,5 +63,10 @@ export function createLiveWorker(supervisor: QualifiedSupervisor, placement: Bui
     renew: runtime => supervisor.renew(runtime),
     claim: runtime => supervisor.claim(runtime),
     scrub: (runtime, nextEpoch) => supervisor.scrub(runtime, nextEpoch),
+    async stageSource(runtime, source) {
+      await supervisor.clear(runtime, ['/workspace']);
+      await supervisor.stage(runtime, source);
+      await supervisor.phase(runtime, 'offline');
+    },
   };
 }

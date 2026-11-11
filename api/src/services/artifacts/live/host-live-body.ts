@@ -18,7 +18,7 @@ export const PAGE_BYTES = 2 * 1024 * 1024;
 export const SEAL_BYTES = 512 * 1024;
 const STATUS: Record<string, 400 | 403 | 409 | 413 | 422 | 500 | 503> = { invalid_request: 400,
   access_denied: 403, limit_exceeded: 413, builder_unavailable: 503, dependency_cache_invalid: 503,
-  lock_mismatch: 422, sealed_unit_invalid: 500, cache_not_prewarmed: 409 };
+  lock_mismatch: 422, sealed_unit_invalid: 500, cache_not_prewarmed: 409, pool_exhausted: 503 };
 export type Body = Record<string, unknown>;
 export const int = (value: unknown, min = 0): value is number => Number.isSafeInteger(value) && (value as number) >= min;
 export const token = (value: unknown): value is string => typeof value === 'string' && TOKEN.test(value);
@@ -47,6 +47,10 @@ export function refusal(c: Context, error: unknown) {
     // §7.1.4 shape: the lock rides the reason and is repeated as `lockSha256`; the miss is retriable
     // once the prewarm seals. `cacheState` stays queryable through `GET /v1/cache`, not the refusal.
     if (typeof error.reason === 'string') body.lockSha256 = error.reason;
+    body.retriable = true;
+  }
+  if (error.code === 'pool_exhausted') {
+    // §7.3.3: no warm pod and no pod slot inside the start budget — a later retry may claim a freed pod.
     body.retriable = true;
   }
   return c.json(body, STATUS[error.code] ?? 409);

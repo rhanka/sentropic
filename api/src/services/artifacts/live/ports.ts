@@ -8,6 +8,7 @@ import type { CacheIdentity, CacheReceipt } from './cache';
 import type { AttemptFence, HostJob } from '@sentropic/artifacts/live-host';
 import type { Gb1Source } from './gb1-qualification';
 import type { PhaseEventSink } from './phase-events';
+import type { PoolManager } from './pool';
 
 export interface LiveStore {
   read(key: LiveKey): Promise<LiveState | undefined>;
@@ -48,6 +49,9 @@ export interface LivePorts {
   /** Phase-event sink (§7.6.1): when present, `runPhase`/`runInstallStep` write one durable event per
    * phase/step carrying the invocation context. Absent on older compositions (events stay log-only). */
   events?: PhaseEventSink;
+  /** Warm pod pool (§7.3): when present, prepare/build claim warm pods and teardown releases into it.
+   * Absent on older compositions — every intent takes the cold path (the §7.7 rollback shape). */
+  pool?: PoolManager;
   now(): number;
   id(): string;
   /** Records the git binding stored with the admitted host job at its HostJob generation, before any forge read of the
@@ -115,6 +119,9 @@ export interface LivePorts {
     claim(runtime: LiveRuntime): Promise<{ poolEpoch: number }>;
     /** Warm-deps scrub (§7.3.2): the process tree is gone, `/workspace` + `/tmp` cleared, `/dependencies` verified. */
     scrub(runtime: LiveRuntime, nextEpoch: number): Promise<{ cleared: string[]; poolEpoch: number }>;
+    /** Static-build staging on a claimed pod: clears only `/workspace`, then stages the commit source. The hot
+     * `/dependencies` tree and `/tmp/vite-cache` survive, so a `warm-deps` claim skips pod creation and install. */
+    stageSource(runtime: LiveRuntime, source: SourceSnapshot): Promise<void>;
   };
   routes: { revoke(key: LiveKey, runtime: LiveRuntime): Promise<void>; ready(key: LiveKey, runtime: LiveRuntime): Promise<void> };
   publication: {
