@@ -70,8 +70,8 @@ Keep at least 1 warm pod per (scope, hot cacheKey) so a live start attaches inst
   - [x] Pool helpers poolPodName/isPoolPodName/bindingRowKey, builderPod + liveViteConfig accept pool names.
   - [x] Row keys to bindingRowKey form, draft source binding fallback, active() carries podName, heavyStatus uses stored runtime.
   - [ ] Lot gate: `make test-api SCOPE=tests/unit/artifacts-live/pods.test.ts ENV=test-slo-l3` via docker-slot.sh.
-- [ ] **Lot 3 — Kubernetes list/patchLabels**
-  - [ ] KubernetesCore list/patchLabels, in-cluster impl, fixture impl.
+- [x] **Lot 3 — Kubernetes list/patchLabels**
+  - [x] KubernetesCore list/patchLabels, in-cluster impl, fixture impl.
   - [ ] Lot gate: scoped pods test green.
 - [ ] **Lot 4 — Pool manager**
   - [ ] New pool.ts: claimForLive/claimForBuild, release warm-deps, drain, occupancy, adopt, renew.

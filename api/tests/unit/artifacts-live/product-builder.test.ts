@@ -44,7 +44,8 @@ const PRESENCE_ONLY = [CACHE_S3_BUCKET_ENV, CACHE_S3_REGION_ENV, CACHE_S3_ACCESS
 function deps() {
   const query = vi.fn(async () => ({ rows: [], rowCount: 0 }));
   const pool = { query, connect: async () => ({ query, release() {} }) } as unknown as Pool;
-  const kubernetes = vi.fn((): KubernetesCore => ({ get: vi.fn(), create: vi.fn(), delete: vi.fn(), waitDeleted: vi.fn() }));
+  const kubernetes = vi.fn((): KubernetesCore => ({ get: vi.fn(), create: vi.fn(), delete: vi.fn(), waitDeleted: vi.fn(),
+    list: vi.fn(async () => []), patchLabels: vi.fn() }));
   const authenticate = hostAuthenticator(parseBuilderHostBindings(ENV.ARTIFACT_BUILDER_HOST_BINDINGS_JSON));
   const cacheBlobs = vi.fn(() => ({ put: vi.fn(), get: vi.fn(), delete: vi.fn() }));
   const value: ProductBuilderDeps = { pool, cacheBlobs, authenticate,

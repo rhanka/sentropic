@@ -191,6 +191,12 @@ export interface KubernetesCore {
   delete(resource: 'pods' | 'services', name: string, uid?: string): Promise<void>;
   /** Must confirm 404, not merely accept a DELETE request or a terminating phase. */
   waitDeleted(resource: 'pods' | 'services', name: string, uid?: string): Promise<void>;
+  /** Namespace-confined pod listing by equality label selector (`k=v,k=v`); the pool manager re-adopts
+   * survivors after an API restart and cross-checks KV rows (§7.3.5). */
+  list<T>(resource: 'pods', labelSelector: string): Promise<T[]>;
+  /** Merge-patch object labels, fenced by uid like delete: a uid mismatch is `stale_fence`, a gone object
+   * is `builder_unavailable/pod_gone`. The pool manager unlabels binding labels on warm-deps release. */
+  patchLabels(resource: 'pods' | 'services', name: string, uid: string, labels: Record<string, string>): Promise<void>;
 }
 /** Pod liveness for teardown: a gone, terminal or terminating pod never needs a supervisor quiesce. */
 export type PodProbe = 'active' | 'absent' | 'terminating' | 'terminal';

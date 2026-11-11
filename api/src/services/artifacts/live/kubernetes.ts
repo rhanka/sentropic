@@ -20,13 +20,14 @@ export function createInClusterKubernetes(placement: BuilderPlacement, options: 
   const tokenFile = options.tokenFile ?? `${directory}/token`;
   const base = new URL(options.apiUrl ?? 'https://kubernetes.default.svc');
   if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/') throw new LiveError('builder_unavailable', 'k8s_unconfigured');
-  async function call<T>(method: string, resource: 'pods' | 'services', name?: string, body?: unknown): Promise<T | undefined> {
-    const path = `/api/v1/namespaces/${placement.namespace}/${resource}${name ? `/${encodeURIComponent(name)}` : ''}`;
+  async function call<T>(method: string, resource: 'pods' | 'services', name?: string, body?: unknown,
+    query = '', contentType = 'application/json'): Promise<T | undefined> {
+    const path = `/api/v1/namespaces/${placement.namespace}/${resource}${name ? `/${encodeURIComponent(name)}` : ''}${query}`;
     const bytes = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
     return new Promise<T | undefined>((resolve, reject) => {
       const req = request(new URL(path, base), { method, ca, timeout: 30_000, headers: {
         authorization: `Bearer ${readFileSync(tokenFile, 'utf8').trim()}`,
-        ...(bytes ? { 'content-type': 'application/json', 'content-length': String(bytes.length) } : {}),
+        ...(bytes ? { 'content-type': contentType, 'content-length': String(bytes.length) } : {}),
       } }, response => {
         const chunks: Buffer[] = []; let length = 0;
         response.on('data', (chunk: Buffer) => {
@@ -63,6 +64,17 @@ export function createInClusterKubernetes(placement: BuilderPlacement, options: 
     },
     async delete(resource, name, uid) {
       await call('DELETE', resource, name, deleteOptions(uid));
+    },
+    async list(resource, labelSelector) {
+      const out = await call<{ items: unknown[] }>('GET', resource, undefined, undefined,
+        `?labelSelector=${encodeURIComponent(labelSelector)}`);
+      return (out?.items ?? []) as never;
+    },
+    async patchLabels(resource, name, uid, labels) {
+      const current = await call<{ metadata: { uid: string } }>('GET', resource, name);
+      if (!current) throw new LiveError('builder_unavailable', 'pod_gone');
+      if (current.metadata.uid !== uid) conflict('stale_fence');
+      await call('PATCH', resource, name, { metadata: { labels } }, '', 'application/merge-patch+json');
     },
     async waitDeleted(resource, name, uid) {
       const deadline = Date.now() + 30_000;
