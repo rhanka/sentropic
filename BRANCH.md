@@ -51,7 +51,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- None yet.
+- BRT4a-EX1 (CI fix, scope exception for 3 packaging files outside Allowed Paths): `validate-cluster-mesh (source|lazy)` failed on `prepare-artifacts.spec.ts` — the selected fixture pinned `@sentropic/artifacts` 0.2.26 while the branch bumped the candidate to 0.2.27 (package-bump gate). Reason: PR CI must be green before the T3-gated merge; the fixture follow-up is the smallest blocking fix, no behavior change. Impact: `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` + `fixtures/selected/package{,-lock}.json` only; integrity `sha512-a/6mzB+...8cA==` computed from the branch-HEAD pack (`make pack-publishable-manifest PACKAGE=artifacts`, PASS, sha256 8d77d2...). Rollback: revert the fix commit; CI returns to the same single-test failure.
 
 ## AI Flaky tests
 - Recorded (run 42989330672, head `6cccbce64`): `test-e2e (5)` → `e2e/tests/00-ai-generation.spec.ts` « devrait générer des cas d'usage… » — Timeout 60 s sur POST `/api/v1/initiatives/generate` après erreur fournisseur « Impossible de créer un brouillon de dossier » ; 37 passed / 1 failed / 1 skipped dans le shard. Signature = non-déterminisme fournisseur/réseau (fichier allowlisté). Re-run non tenté (pas de re-run CI sans commit : COMMON-RULES) ; le train re-qualifiera sur la branche train. Sign-off owner requis au merge (gate T3 de toute façon).
