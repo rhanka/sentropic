@@ -85,6 +85,28 @@ describe('artifact live controller', () => {
     expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
     expect(f.objects.size).toBe(0);
   });
+  it('should retire a REVIVING runtime with a gone pod to DORMANT and admit a later build', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    // A live start that failed at install with its pod lost: the REVIVING intent keeps the root cause.
+    await f.ports.store.transaction(key, async unit => {
+      unit.state!.runtime.phase = 'REVIVING';
+      unit.state!.runtime.stateDetail = 'builder_unavailable:install_script_not_allowlisted';
+    });
+    f.objects.delete('pods' + live.podName);
+    await f.controller.reconcile(key);
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null,
+      stateDetail: 'builder_unavailable:install_script_not_allowlisted' });
+    expect(f.objects.size).toBe(0);
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']);
+  });
+  it('should leave a REVIVING runtime with an active pod to its in-flight revive', async () => {
+    const f = fixture(); const live = await f.controller.start(key);
+    await f.ports.store.transaction(key, async unit => { unit.state!.runtime.phase = 'REVIVING'; });
+    await f.controller.reconcile(key);
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'REVIVING', podUid: live.podUid });
+    expect(f.objects.size).toBe(2);
+  });
   it('should not renew a lease for a runtime owned by an in-flight teardown', async () => {
     const f = fixture(); await f.controller.start(key);
     expect(await f.controller.lease(key)).toBe(true);
