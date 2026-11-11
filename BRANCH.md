@@ -25,6 +25,9 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `packages/artifacts/src/server/blob-bridge.ts`
   - `packages/artifacts/migrations/0014_db_blob_placement.sql`
   - `packages/artifacts/tests/**`
+  - `packages/artifacts/package.json`
+  - `package-lock.json`
+  - `api/package-lock.json`
   - `apps/artifact-content/src/**`
   - `deploy/ci/artifact-content/object-store/artifact-content-db-role.sql`
   - `BRANCH.md`
@@ -98,7 +101,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Typecheck impacted (typecheck-artifacts + typecheck-api PASS).
   - [x] Retest API scoped suites (cmf-s2 4/4, cmf-s3 4/4, host-migrations 19/19).
   - [x] Retest package suites scoped (blob-bridge 8/8, composite-blob 8/8).
-  - [x] No version bump and no lock regeneration in this wagon lane (COMMON-RULES OPTIM: the train integration lane bumps once).
+  - [x] Patch bump @sentropic/artifacts 0.2.26 -> 0.2.27 + lock sync (this lane ships a PR, so CI enforce-package-bump applies; stays in the 0.2.x cluster-mesh pin; no other lock churn).
   - [ ] Final gate step 1: open PR with BRANCH.md body, CI green, do NOT merge (T3 gate).
   - [ ] Final gate step 2: French report .tmp/rv/t4a-storage.md.
   - [ ] make down-volumes ENV=test-t4a-storage.
