@@ -4,6 +4,7 @@ import { enrichPodLoss, isPodCause } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, currentRuntime, observeHead, transition } from './transitions';
 import { requireUserCache } from './cache';
+import { eventsContext } from './phase-events';
 import { runPhase, withinPhase } from './deadline';
 import { releaseIfDormant } from './admission';
 
@@ -50,21 +51,23 @@ async function preparePod(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) 
   });
   // Sealed-cache pre-admission (§7.1.4): the snapshot and the lookup run before the first pod slot, so an
   // unsealed lockfile rejects without creating a pod. The rollback in `prepareLive` returns the row to DORMANT.
+  const events = eventsContext(ports, runtime.sessionId, 'live_start');
   const source = await ports.forge.snapshot(key, head);
   if (source.headSha !== head) throw new LiveError('git_head_moved');
-  const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
+  const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime),
+    events ? { events } : {});
   const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
   runtime = await transition(ports, key, runtime, state => {
     state.runtime.podUid = pod.uid;
     if (pod.replaced) state.runtime.routeEpoch++;
   });
   await ports.worker.clean(runtime);
-  await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
+  await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache), events ? { events } : {});
   await ports.worker.restore(runtime, draft);
   await ports.heavy.run(runtime.podName, 'prebundle', () => runPhase(key, 'prebundle',
-    () => withinPhase(ports.worker.prebundle(runtime))));
+    () => withinPhase(ports.worker.prebundle(runtime)), events ? { events } : {}));
   const ready = await ports.heavy.run(runtime.podName, 'dev', () => runPhase(key, 'live',
-    () => withinPhase(ports.worker.live(runtime))), { live: true });
+    () => withinPhase(ports.worker.live(runtime)), events ? { events } : {}), { live: true });
   await currentBinding(ports, key, runtime.generation);
   if (await ports.forge.head(key) !== head) throw new LiveError('git_head_moved');
   const live = await transition(ports, key, runtime, state => {
