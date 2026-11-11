@@ -73,9 +73,9 @@ Pin libxslt 1.1.43-r4 in the ui and e2e Dockerfiles so the security-container-ui
   - [x] Build ui production image + run `test-ui-security-container` via docker-slot.sh in foreground.
   - [x] Build e2e image + run `test-e2e-security-container` via docker-slot.sh in foreground.
   - [x] Record scan outcomes in `## Feedback Loop` if related failures appear.
-- [ ] **Lot N — PR + CI + cleanup + report**
-  - [ ] Push branch (`git push origin fix/ci-cve-libxslt`, never `--set-upstream`).
-  - [ ] Open PR with `BRANCH.md` text as body; verify security-container-ui and security-container-e2e jobs RUN and pass (api/api-tool expected pass unchanged).
-  - [ ] Do NOT merge.
+- [x] **Lot N — PR + CI + cleanup + report**
+  - [x] Push branch (`git push origin fix/ci-cve-libxslt`, never `--set-upstream`).
+  - [x] Open PR #996 with `BRANCH.md` text as body; security-container-ui and security-container-e2e jobs RAN and pass (api/api-tool pass unchanged).
+  - [x] Do NOT merge.
   - [ ] End with `make down-volumes ENV=test-cve-libxslt`.
   - [ ] Write French report to `/home/antoinefa/src/sentropic/.tmp/rv/cve-libxslt.md`.
