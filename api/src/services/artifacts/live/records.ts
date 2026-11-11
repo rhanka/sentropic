@@ -24,6 +24,9 @@ export interface LiveRuntime {
   /** Pool bind state (§7.3.2 D10): `1` on a claimed pod, `0` on pool-fill/idle-renew frames (with zeroed
    * generation/leaseEpoch/routeEpoch). Absent means bound (legacy shape). */
   poolBound?: 0 | 1;
+  /** Sealed dependency identity of this run (`cacheKeyOf(source.cacheIdentity)`), set when the sealed lookup
+   * succeeds. Teardown uses it to release the pod into the pool for the same key instead of deleting it. */
+  cacheKey?: string;
 }
 export interface PublicationProgress {
   generation: number; latestVerifiedHeadSha: string; progressSeq: number;

@@ -7,6 +7,7 @@ import type { CacheReceipt } from '../../../src/services/artifacts/live/cache';
 import { createFairAdmission } from '../../../src/services/artifacts/live/admission';
 import { createHeavyPhaseQueue, createMemoryHeavyPhaseQueueStore, PROVISIONAL_HEAVY_PHASE_COSTS_MIB } from '@sentropic/cluster-mesh';
 import { createQueuedHeavyGate, liveHolds } from '../../../src/services/artifacts/live/heavy';
+import { createPoolManager } from '../../../src/services/artifacts/live/pool';
 import { builderPlacement } from '../../../src/services/artifacts/live/placement';
 import type { RemoteRows } from '../../../src/services/artifacts/live/remote-live';
 
@@ -97,6 +98,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     budgetMiB: options.budgetMiB ?? 100_000, podBaseMiB: 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 36_000_000 } });
   const ports: LivePorts = {
     store, now: () => now, id: () => `id-${++sequence}`,
+    pool: createPoolManager(memoryRows(), { now: () => now }),
     binding: vi.fn(async k => ({ ...binding, ownerId: owners.get(idOf(k)) ?? binding.ownerId })),
     jobBinding: vi.fn(async () => {}),
     seedBinding: vi.fn(async () => ({ liveSessionId: '', leaseEpoch: 0, routeEpoch: 0 })),
@@ -123,6 +125,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
       quiesce: vi.fn(async () => { events.push('quiesce'); }),
       claim: vi.fn(async () => ({ poolEpoch: 0 })),
       scrub: vi.fn(async () => ({ cleared: ['/workspace', '/tmp'], poolEpoch: 1 })),
+      stageSource: vi.fn(async () => { events.push('stageSource'); }),
       build: vi.fn(async () => { events.push('build'); return { candidateDigest: 'candidate' }; }),
       verify: vi.fn(async () => { events.push('verify'); }),
       renew: vi.fn(async () => undefined),
