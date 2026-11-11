@@ -50,12 +50,17 @@ export async function startContentServer(options: {
       live ??= liveFromEnv(env, baseDomain, dataPlane);
       const signingSecret = () => readFileSync(keyFile);
       if (signingSecret().length < 32) throw new Error('Dedicated content signing key must contain at least 32 bytes');
-      // CMF-S2: `s3` keeps the current behavior; `db`/`db+s3` read through the composite
-      // placement (DB bytes first by registration, object placement otherwise).
+      // CMF-S2: every mode reads through the composite so `db`-placed blobs stay
+      // readable (spec §2.4.1); a mode the environment does not offer fails at boot.
       const placementMode = parseBlobPlacementMode(env.APP_ARTIFACT_STORAGE_PLACEMENT);
       const placementInlineMaxBytes = parseBlobInlineMaxBytes(env.APP_ARTIFACT_STORAGE_INLINE_MAX_BYTES);
       pool = new Pool({ connectionString, max: 10 });
       let blobs: { getBlob: (key: string) => Promise<Uint8Array | undefined> };
+      const s3Configured = Boolean(env.APP_ARTIFACT_S3_BUCKET && env.APP_ARTIFACT_S3_REGION &&
+        env.APP_ARTIFACT_S3_ACCESS_KEY_ID && env.APP_ARTIFACT_S3_SECRET_ACCESS_KEY);
+      if ((placementMode === 's3' || placementMode === 'db+s3') && !s3Configured) {
+        throw new Error(`Artifact blob placement mode '${placementMode}' requires object-store env (APP_ARTIFACT_S3_*)`);
+      }
       if (placementMode === 's3') {
         const bucket = required('APP_ARTIFACT_S3_BUCKET');
         s3 = new S3Client({ region: required('APP_ARTIFACT_S3_REGION'), endpoint: env.APP_ARTIFACT_S3_ENDPOINT,
@@ -63,12 +68,11 @@ export async function startContentServer(options: {
             accessKeyId: required('APP_ARTIFACT_S3_ACCESS_KEY_ID'), secretAccessKey: required('APP_ARTIFACT_S3_SECRET_ACCESS_KEY'),
           } });
         const storage = await createPrivateArtifactStorage({ client: s3, bucket });
-        blobs = { getBlob: key => storage.blobs.getBlob(key) };
+        const composite = createPlacementBlobStore({ pool, s3: storage.blobs,
+          mode: placementMode, inlineMaxBytes: placementInlineMaxBytes });
+        blobs = { getBlob: key => composite.getBlob(key) };
       } else {
-        // Object side is optional: DB-only deployments serve from `blob_bytes`,
-        // and any object read fails closed when the placement is unconfigured.
-        const s3Configured = Boolean(env.APP_ARTIFACT_S3_BUCKET && env.APP_ARTIFACT_S3_REGION &&
-          env.APP_ARTIFACT_S3_ACCESS_KEY_ID && env.APP_ARTIFACT_S3_SECRET_ACCESS_KEY);
+        // DB-only deployments serve from `blob_bytes`; unconfigured object reads miss.
         let objectBlobs: PublicationBlobStore;
         if (s3Configured) {
           s3 = new S3Client({ region: env.APP_ARTIFACT_S3_REGION!, endpoint: env.APP_ARTIFACT_S3_ENDPOINT,
@@ -78,13 +82,12 @@ export async function startContentServer(options: {
           const storage = await createPrivateArtifactStorage({ client: s3, bucket: env.APP_ARTIFACT_S3_BUCKET! });
           objectBlobs = storage.blobs;
         } else {
-          const notConfigured = (op: string) => Promise.reject(new Error(`Object placement not configured (content ${op})`));
           objectBlobs = {
-            putBlob: (key) => notConfigured(`put ${key}`),
-            getBlob: (key) => notConfigured(`get ${key}`),
-            getBlobRange: (key) => notConfigured(`range ${key}`),
-            listKeys: (prefix) => notConfigured(`list ${prefix}`),
-            deleteBlob: (key) => notConfigured(`delete ${key}`),
+            putBlob: async (key) => { throw new Error(`Object placement not configured (content put ${key})`); },
+            getBlob: async () => undefined,
+            getBlobRange: async () => undefined,
+            listKeys: async () => [],
+            deleteBlob: async () => {},
           };
         }
         const composite = createPlacementBlobStore({ pool, s3: objectBlobs,
