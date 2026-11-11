@@ -4,10 +4,11 @@ import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey, ty
 import { bindingRowKey, enrichPodLoss, isPodCause, isTransportLoss, podName } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, currentRuntime, failed, observeHead, teardown, transition } from './transitions';
-import { requireUserCache } from './cache';
+import { cacheKeyOf, requireUserCache } from './cache';
 import { eventsContext } from './phase-events';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
+import type { PoolClaim } from './pool';
 import { LiveHostError, type HostJob } from '@sentropic/artifacts/live-host';
 
 const unreconciled = (): never => conflict('binding_unreconciled');
@@ -154,21 +155,46 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
     if (source.headSha !== job.headSha) throw new LiveError('git_head_moved');
     const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime),
       events ? { events } : {});
-    const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
-    runtime = await transition(ports, key, runtime, state => {
-      state.runtime.podUid = pod.uid;
-      if (pod.replaced) state.runtime.routeEpoch++;
-    });
+    const cacheKey = cacheKeyOf(source.cacheIdentity);
+    // Build claim (§7.3.2): a `warm` or `warm-deps` pod skips pod creation and dependency extraction — static
+    // builds stage the committed source directly and never use `/tmp/vite-cache`. A pool outage degrades to
+    // the cold path; the empty pool surfaces as an alert on `/v1/pool` (L6).
+    let claimed: PoolClaim | undefined;
+    if (ports.pool) {
+      try { claimed = await ports.pool.claimForBuild(key.storageScopeId, cacheKey); }
+      catch { claimed = undefined; }
+    }
+    if (claimed) {
+      runtime = await transition(ports, key, runtime, state => {
+        state.runtime.podUid = claimed.podUid; state.runtime.podName = claimed.podName;
+        state.runtime.poolEpoch = claimed.poolEpoch; state.runtime.poolBound = 1;
+      });
+      const claimStarted = ports.now();
+      await ports.pods.adoptClaimed(key, runtime);
+      await ports.worker.claim(runtime);
+      await events?.sink.record({ invocationId: events.invocationId, artifactId: key.artifactId,
+        storageScopeId: key.storageScopeId, operation: 'git_publish', phase: 'pod_ready',
+        pool: claimed.state === 'warm' ? 'warm-hit' : 'warm-deps-hit',
+        at: claimStarted, ms: ports.now() - claimStarted, outcome: 'ok' });
+      await ports.worker.stageSource(runtime, source);
+    } else {
+      const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
+      runtime = await transition(ports, key, runtime, state => {
+        state.runtime.podUid = pod.uid;
+        if (pod.replaced) state.runtime.routeEpoch++;
+      });
+      await ports.worker.clean(runtime);
+      await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache), events ? { events } : {});
+    }
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.phase !== 'BUILD_PROVISIONING') conflict('stale_fence');
       state.runtime.phase = 'BUILDING';
+      state.runtime.cacheKey = cacheKey;
       state.runtime.attempt = { id: job.jobId, kind: 'explicit', headSha: job.headSha, treeSha: source.treeSha,
         startedAt: ports.now(), leaseEpoch: runtime.leaseEpoch, routeEpoch: runtime.routeEpoch,
         expectedReleaseId: job.expectedReleaseId, progressSeq: state.progress.progressSeq,
         baselineSeq: state.progress.publicationBaselineSeq, initial: false };
     });
-    await ports.worker.clean(runtime);
-    await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache), events ? { events } : {});
     const building = runtime;
     const candidate = await ports.heavy.run(building.podName, 'build', () => runPhase(key, 'build',
       () => withinPhase(ports.worker.build(building, building.attempt!)), events ? { events } : {}));

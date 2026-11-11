@@ -84,8 +84,8 @@ Keep at least 1 warm pod per (scope, hot cacheKey) so a live start attaches inst
   - [x] Worker claim/scrub plumbing (supervisor transport, ports, fixtures).
   - [x] Teardown warm-deps release branch (scrub ACK gate, service delete, pool unlabel, slot re-hold).
   - [ ] Lot gate: bootstrap-frame.test.ts green.
-- [ ] **Lot 6 — Warm-deps release + warm-hit paths**
-  - [ ] transitions.ts release branch, prepare-live/build-only claim, controller heavyStatus, refusal pool_exhausted.
+- [x] **Lot 6 — Warm-deps release + warm-hit paths**
+  - [x] transitions.ts release branch, prepare-live warm claim, build-only warm/warm-deps claim, worker stageSource.
   - [ ] Lot gate: controller + races tests green.
 - [ ] **Lot 7 — Pool endpoints**
   - [ ] GET /v1/pool, POST /v1/pool/drain, service mount.
