@@ -4,8 +4,8 @@ import { builderPod, defaultWorkerSizing, podName, readWorkerSizing } from '../.
 import { deleteOptions } from '../../../src/services/artifacts/live/kubernetes';
 import { LiveError } from '../../../src/services/artifacts/live/records';
 import { BUILDER_IMAGE } from '../../../src/services/artifacts/live/recipes';
-import { MAX_BUILDER_PODS } from '../../../src/services/artifacts/live/service';
-import { PRODUCT_HEAVY } from '../../../src/services/artifacts/live/product-builder';
+import { LIVE_NODE_CAPACITY, MAX_BUILDER_PODS } from '../../../src/services/artifacts/live/service';
+import { PRODUCT_ADMISSION, PRODUCT_HEAVY } from '../../../src/services/artifacts/live/product-builder';
 
 describe('builder pod admission and recovery', () => {
   it('should emit the exact VAP/PSA manifest without credentials or persistent volumes', async () => {
@@ -19,8 +19,8 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.nodeSelector).toEqual({ nodepool: 'artifact-builders' });
     expect(pod.spec.tolerations).toEqual([{ key: 'sentropic.dev/pool', operator: 'Equal', value: 'artifact-builders', effect: 'NoExecute' }]);
     const res = pod.spec.containers[0].resources;
-    expect(res.requests).toEqual({ cpu: '250m', memory: '1536Mi', 'ephemeral-storage': '0' });
-    expect(res.limits).toEqual({ cpu: '1', memory: '1536Mi', 'ephemeral-storage': '3400Mi' });
+    expect(res.requests).toEqual({ cpu: '250m', memory: '1280Mi', 'ephemeral-storage': '0' });
+    expect(res.limits).toEqual({ cpu: '4', memory: '2048Mi', 'ephemeral-storage': '3400Mi' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'NODE_OPTIONS', value: '--max-old-space-size=384' });
     expect(pod.spec.containers[0].env).toContainEqual({ name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } });
     expect(pod.spec.containers[0].env.filter(entry => 'valueFrom' in entry)).toHaveLength(1);
@@ -41,20 +41,24 @@ describe('builder pod admission and recovery', () => {
     }
     expect(mebibytes(limits['ephemeral-storage'])).toBe(3400);
     expect(pod.spec.volumes.reduce((sum: number, volume: { emptyDir: { sizeLimit: string } }) => sum + mebibytes(volume.emptyDir.sizeLimit), 0)).toBeLessThanOrEqual(3400 - 64);
-    // k8s measured the d2-4 node: 1458m CPU free after system pods; only CPU overcommits (memory request = limit).
+    // k8s measured the d2-4 node: 1458m CPU free after system pods; only CPU overcommits (memory request < limit burst).
     expect(MAX_BUILDER_PODS * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1458);
-    expect(mebibytes(requests.memory)).toBe(mebibytes(limits.memory));
-    // Tenant LimitRange (cpu <= 1 per container) and ResourceQuota (requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi,
-    // limits.ephemeral-storage 10Gi) admit MAX_BUILDER_PODS = 2 pods, live or build: the memory request is the full limit,
-    // so the scheduler never overcommits a builder node into a kubelet eviction (k8s 09/11).
-    expect(Number(limits.cpu)).toBeLessThanOrEqual(1);
+    expect(mebibytes(requests.memory)).toBe(1280);
+    expect(mebibytes(requests.memory)).toBeLessThan(mebibytes(limits.memory));
+    // Tenant LimitRange (cpu max >= 4 per container for the build burst, memory min 1280Mi) and ResourceQuota
+    // (requests.cpu 1, requests.memory 5Gi, limits.memory 8Gi, limits.ephemeral-storage >= 14Gi) admit
+    // MAX_BUILDER_PODS = 4 pods, live or build (1 warm + 2 live/build + 1 prewarm): the scheduler books the 1280Mi
+    // request (never 420Mi again, k8s 09/11 eviction lesson) while the pod bursts to 2048Mi. CPU limits overcommit
+    // by design (burst 4 per pod on 250m requests); memory and ephemeral never overcommit past quota.
+    expect(Number(limits.cpu)).toBe(4);
     expect(MAX_BUILDER_PODS * Number(requests.cpu.replace(/m$/, ''))).toBeLessThanOrEqual(1000);
-    expect(MAX_BUILDER_PODS * Number(limits.cpu)).toBeLessThanOrEqual(4);
-    expect(MAX_BUILDER_PODS * mebibytes(requests.memory)).toBeLessThanOrEqual(3 * 1024);
-    expect(MAX_BUILDER_PODS * mebibytes(limits.memory)).toBeLessThanOrEqual(6 * 1024);
-    expect(MAX_BUILDER_PODS * mebibytes(limits['ephemeral-storage'])).toBeLessThanOrEqual(10 * 1024);
-    expect(MAX_BUILDER_PODS).toBe(2);
+    expect(MAX_BUILDER_PODS * mebibytes(requests.memory)).toBeLessThanOrEqual(5 * 1024);
+    expect(MAX_BUILDER_PODS * mebibytes(limits.memory)).toBeLessThanOrEqual(8 * 1024);
+    expect(MAX_BUILDER_PODS * mebibytes(limits['ephemeral-storage'])).toBeLessThanOrEqual(14 * 1024);
+    expect(MAX_BUILDER_PODS).toBe(4);
     expect(PRODUCT_HEAVY.maxPods).toBe(MAX_BUILDER_PODS);
+    expect(PRODUCT_ADMISSION.capacity).toBe(MAX_BUILDER_PODS);
+    expect(LIVE_NODE_CAPACITY).toBe(MAX_BUILDER_PODS);
   });
   it('should hold a ~1 GiB unpacked tree with margin by default and stay quota-safe under env sizing', async () => {
     // A ~1 GiB unpacked tree (preprod 2026-11-09: ~854 MiB unpacked, 745 paths): dependencies +25% over 1024,
@@ -78,7 +82,7 @@ describe('builder pod admission and recovery', () => {
     expect(pod.spec.volumes).toEqual([{ name: 'source', emptyDir: { sizeLimit: '256Mi' } },
       { name: 'scratch', emptyDir: { sizeLimit: '2048Mi' } },
       { name: 'dependencies', emptyDir: { sizeLimit: '1024Mi' } }]);
-    expect(pod.spec.containers[0].resources.limits).toEqual({ cpu: '1', memory: '1536Mi', 'ephemeral-storage': '3400Mi' });
+    expect(pod.spec.containers[0].resources.limits).toEqual({ cpu: '4', memory: '2048Mi', 'ephemeral-storage': '3400Mi' });
   });
   it('should adopt the matching pod after a creation response is lost', async () => {
     const f = fixture(); const create = vi.mocked(f.core.create).getMockImplementation()!;
