@@ -50,14 +50,20 @@ async function releaseToPool(ports: LivePorts, key: LiveKey, runtime: LiveRuntim
   const cacheKey = runtime.cacheKey;
   if (!pool || !cacheKey || !runtime.podUid) return false;
   if (detail !== undefined && detail.includes('dependency')) return false;
+  // A failed release after our claim deletes the pod below: drop our row so the key never strands `claimed`.
+  const mine = runtime.poolEpoch !== undefined;
+  const fail = async (): Promise<false> => {
+    if (mine) await pool.drop(key.storageScopeId, cacheKey).catch(() => undefined);
+    return false;
+  };
   try {
     const nextEpoch = (runtime.poolEpoch ?? 0) + 1;
     const ack = await ports.worker.scrub(runtime, nextEpoch);
     if (ack.cleared.length !== 2 || !ack.cleared.includes('/workspace') || !ack.cleared.includes('/tmp')
-      || ack.poolEpoch !== nextEpoch) return false;
+      || ack.poolEpoch !== nextEpoch) return fail();
     await ports.pods.removeService(key, runtime);
     await ports.pods.patchLabels(runtime, { [POOL_LABEL]: POOL_LABEL_VALUE });
-    if (runtime.poolEpoch !== undefined) {
+    if (mine) {
       await pool.releaseWarmDeps(key.storageScopeId, cacheKey, runtime.baseHeadSha);
     } else {
       const entry = await pool.releaseUnclaimed(key.storageScopeId, cacheKey, runtime.podName, runtime.podUid,
@@ -66,7 +72,7 @@ async function releaseToPool(ports: LivePorts, key: LiveKey, runtime: LiveRuntim
     }
     return true;
   } catch {
-    return false;
+    return fail();
   }
 }
 
