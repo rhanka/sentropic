@@ -9,6 +9,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob';
+import { listBlobKeysPaged } from '@sentropic/artifacts/server/blob-bridge';
+import { createGcService, createMemoryRefcountStore, createPostgresDeletionClaimStore } from '@sentropic/artifacts/server/gc';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
@@ -141,6 +143,110 @@ describe('composite blob placement', () => {
     await store.deleteBlob(key);
     expect(await store.getBlob(key)).toBeUndefined();
     await expect(store.deleteBlob(key)).rejects.toThrow(/unknown blob/);
+  });
+
+  it('walks db-side keyset pages to the full set without bulk loading', async () => {
+    const db = createPostgresDbBlobStore(pool);
+    expect(db.listKeysPaged).toBeDefined();
+    const prefix = 'artifacts/scope-p/blobs/sha256/';
+    const expected: string[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const bytes = new TextEncoder().encode(`db page ${index} ${randomUUID()}`);
+      const key = keyFor(bytes);
+      expected.push(key);
+      await db.putBlob(key, bytes);
+    }
+    expected.sort();
+    const seen: string[] = [];
+    let startAfter: string | undefined;
+    for (;;) {
+      const result = await db.listKeysPaged!(prefix, startAfter === undefined
+        ? { maxItems: 2, maxEncodedBytes: 1_000_000 }
+        : { maxItems: 2, maxEncodedBytes: 1_000_000, startAfter });
+      expect(result.keys.length).toBeLessThanOrEqual(2);
+      seen.push(...result.keys);
+      if (!result.hasMore) break;
+      startAfter = result.keys[result.keys.length - 1];
+    }
+    expect(seen).toEqual(expected);
+    await expect(db.listKeysPaged!(prefix, {
+      maxItems: 2, maxEncodedBytes: 1_000_000, startAfter: `artifacts/other/blobs/sha256/${'f'.repeat(64)}`,
+    })).rejects.toThrow(/resume key/);
+  });
+
+  it('walks the composite union through sealed continuations across sides', async () => {
+    const s3 = createMemoryBlobStore();
+    const db = createPostgresDbBlobStore(pool);
+    const prefix = 'artifacts/scope-p/blobs/sha256/';
+    const expected = new Set<string>();
+    for (let index = 0; index < 3; index += 1) {
+      const bytes = new TextEncoder().encode(`union db ${index} ${randomUUID()}`);
+      const key = keyFor(bytes);
+      expected.add(key);
+      await db.putBlob(key, bytes);
+    }
+    for (let index = 0; index < 3; index += 1) {
+      const bytes = new TextEncoder().encode(`union s3 ${index} ${randomUUID()}`);
+      const key = keyFor(bytes);
+      expected.add(key);
+      await s3.putBlob(key, bytes);
+    }
+    const shared = new TextEncoder().encode(`union shared ${randomUUID()}`);
+    const sharedKey = keyFor(shared);
+    expected.add(sharedKey);
+    await db.putBlob(sharedKey, shared);
+    await s3.putBlob(sharedKey, shared);
+    const store = createPlacementBlobStore({ pool, s3, mode: 'db+s3', inlineMaxBytes: 8 });
+    const ordered = [...expected].sort();
+    const seen: string[] = [];
+    let continuation: string | undefined;
+    for (;;) {
+      const page = await listBlobKeysPaged(store, prefix, continuation === undefined
+        ? { maxItems: 2, maxEncodedBytes: 1_000_000 }
+        : { maxItems: 2, maxEncodedBytes: 1_000_000, continuation });
+      expect(page.keys.length).toBeLessThanOrEqual(2);
+      seen.push(...page.keys);
+      if (page.continuation === undefined) break;
+      continuation = page.continuation;
+    }
+    expect(seen).toEqual(ordered);
+  });
+
+  it('collects unreferenced blobs from blob_bytes and s3 under the digest lock', async () => {
+    const s3 = createMemoryBlobStore();
+    const db = createPostgresDbBlobStore(pool);
+    const prefix = 'artifacts/scope-p/blobs/sha256/';
+    const bytes = new TextEncoder().encode('gc collects both sides');
+    const key = keyFor(bytes);
+    const digest = `sha256:${key.split('/').pop()}`;
+    await db.putBlob(key, bytes);
+    await s3.putBlob(key, bytes);
+    const store = createPlacementBlobStore({ pool, s3, mode: 'db+s3', inlineMaxBytes: 8 });
+    const refs = createMemoryRefcountStore();
+    const client = await pool.connect();
+    try {
+      const report = await createGcService(refs).collect(store, prefix, createPostgresDeletionClaimStore(client));
+      expect(report.failures).toEqual([]);
+      expect(report.deleted).toEqual([key]);
+      expect(await db.getBlob(key)).toBeUndefined();
+      expect(await s3.getBlob(key)).toBeUndefined();
+    } finally {
+      client.release();
+    }
+    // A referenced blob is retained on both sides.
+    await db.putBlob(key, bytes);
+    await s3.putBlob(key, bytes);
+    await refs.addRef(digest, 'release:test');
+    const retainedClient = await pool.connect();
+    try {
+      const report = await createGcService(refs).collect(store, prefix, createPostgresDeletionClaimStore(retainedClient));
+      expect(report.deleted).toEqual([]);
+      expect(report.retained).toEqual([key]);
+      expect(await db.getBlob(key)).toEqual(bytes);
+      expect(await s3.getBlob(key)).toEqual(bytes);
+    } finally {
+      retainedClient.release();
+    }
   });
 
   it('collects both copies on delete after a placement migration', async () => {
