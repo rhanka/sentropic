@@ -10,7 +10,7 @@ import { buildOnly } from './build-only';
 import { fenceInvitations } from './invitations';
 import { projectRevision } from './project';
 import { authorizeLive, liveRole, type LiveActor } from './authorize';
-import { currentBinding, failed, teardown, transition } from './transitions';
+import { currentBinding, currentRuntime, failed, teardown, transition } from './transitions';
 
 export function createLiveController(ports: LivePorts) {
   /** Finishes an interrupted teardown without clearing its recorded cause; the scheduler tick drives it until the
@@ -54,6 +54,20 @@ export function createLiveController(ports: LivePorts) {
       if (runtime.phase === 'BUILD_QUEUED') return queuedBuild(ports, key);
       // An interrupted teardown keeps progressing on the scheduler tick until the pod is gone (DORMANT).
       if (runtime.phase === 'RECOVERING') return recover(key);
+      // An interrupted start whose pod is gone or failed is retried no more: the tick retires it to
+      // DORMANT (one bounded probe, fenced teardown), so a later start or build-only is never fenced
+      // forever by pending_publication. An active pod means the revive may still run: leave it alone.
+      // A stale fence means another session's pod: never touch it.
+      if (runtime.phase === 'REVIVING') {
+        let probe;
+        try { probe = await ports.pods.probe(key, runtime); }
+        catch (error) {
+          if (error instanceof LiveError && error.reason === 'stale_fence') return;
+          await failed(ports, key, runtime, error); return;
+        }
+        if (probe === 'active') return;
+        return teardown(ports, key, runtime);
+      }
     },
     start: (key: LiveKey) => revive(ports, key),
     buildOnly: (key: LiveKey, admittedJobId: string) => buildOnly(ports, key, admittedJobId),
@@ -97,7 +111,7 @@ export function createLiveController(ports: LivePorts) {
         // A queued or admitted build of this pod leaves the node queue; the revive phases queue on their own.
         await ports.heavy.cancel(runtime.podName);
         return await prepareLive(ports, key, runtime);
-      } catch (error) { await failed(ports, key, runtime, error); throw error; }
+      } catch (error) { await failed(ports, key, await currentRuntime(ports, key, runtime), error); throw error; }
     },
     /** Narrow stop after code-right revocation exposes teardown fields only. Identity comes from host auth. */
     async stop(key: LiveKey, input: { ownerId: string; sessionId: string; generation: number }) {

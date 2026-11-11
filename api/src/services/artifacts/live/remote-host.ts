@@ -4,9 +4,16 @@ import type { RemoteHost } from './handoff-publication';
 import { LiveError } from './records';
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const hostJob = (value: unknown): value is HostJob => record(value) && typeof value.jobId === 'string'
-  && Number.isSafeInteger(value.generation) && typeof value.headSha === 'string'
-  && (value.expectedReleaseId === null || typeof value.expectedReleaseId === 'string');
+/** Binding owner's principalId, like every host principal: printable ASCII without spaces. */
+const OWNER = /^[\x21-\x7e]{1,256}$/;
+/** A host that has not deployed the owner-carrying job payload yet sends no ownerId; the builder only needs
+ * it on the never-reconciled seed path (missing stays a closed `binding_unreconciled` there), never to refuse
+ * a reconciled build with a transport failure. */
+const hostJob = (value: unknown): value is Omit<HostJob, 'ownerId'> & { ownerId?: unknown } => record(value)
+  && typeof value.jobId === 'string' && Number.isSafeInteger(value.generation) && typeof value.headSha === 'string'
+  && (value.expectedReleaseId === null || typeof value.expectedReleaseId === 'string')
+  && (value.ownerId === undefined || (typeof value.ownerId === 'string'
+    && (value.ownerId === '' || OWNER.test(value.ownerId))));
 /** Any answer that is neither a v1 success nor a closed refusal: the outcome is unknown, so the caller may resend. */
 const transport = (): never => { throw new Error('host_transport_failure'); };
 /** s-archi 16:35: the host may record the pending job just after the builder's first resolution. Only a 409
@@ -45,7 +52,9 @@ export function createHttpRemoteHost(options: {
     async job(key, jobId, fence) {
       const { job } = await call(HOST_BUILD_PATHS.job, () => sealJobRequest({ scopeId: key.storageScopeId,
         artifactId: key.artifactId, jobId, fence }, options.signingKey(), options.now()), notPending);
-      return hostJob(job) ? job : transport();
+      if (!hostJob(job)) return transport();
+      return { jobId: job.jobId, generation: job.generation, headSha: job.headSha,
+        expectedReleaseId: job.expectedReleaseId, ownerId: typeof job.ownerId === 'string' ? job.ownerId : '' };
     },
     async accept(_key, handoff, files) {
       const { receipt } = await call(HOST_BUILD_PATHS.handoff, () => encodeHandoffRequest(handoff, files));
