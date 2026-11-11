@@ -16,11 +16,13 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 - **Allowed Paths (implementation scope)**:
   - `api/src/services/artifacts/**`
   - `api/tests/api/artifacts-*.ts`
+  - `api/tests/api/cmf-s2-blob-placement.test.ts`
+  - `api/tests/api/cmf-s3-placement-migrate.test.ts`
   - `api/src/scripts/cm-placement-migrate.ts`
   - `packages/artifacts/src/adapters/**`
+  - `packages/artifacts/src/adapters/db-blob.ts`
+  - `packages/artifacts/src/adapters/composite-blob.ts`
   - `packages/artifacts/src/server/blob-bridge.ts`
-  - `packages/artifacts/src/server/composite-blobs.ts`
-  - `packages/artifacts/src/server/placement-migrate.ts`
   - `packages/artifacts/migrations/0014_db_blob_placement.sql`
   - `packages/artifacts/tests/**`
   - `apps/artifact-content/src/**`
@@ -76,19 +78,19 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Extend requiredRelations with upload_pages, git_bindings, live drafts, attach intents, invitations.
   - [x] API tests: extend artifacts-host-migrations.test.ts (fresh DB, idempotent rerun, no row changed).
   - [ ] Lot gate: typecheck-api, scoped test file.
-- [ ] **Lot 2 — CMF-S1 blob bridge ArtifactBlobPort**
+- [x] **Lot 2 — CMF-S1 blob bridge ArtifactBlobPort**
   - [ ] Harden S3 putBlob create-only If-None-Match + digest verify + read-back verify.
   - [ ] Harden local putBlob buffer clone + create-only + bounded listKeys continuation.
   - [ ] Bounded listKeys CommonBoundedPage both adapters.
   - [ ] Tests: identical retry idempotent, different bytes refused, wrong digest fails closed, bounded pages.
   - [ ] Lot gate: typecheck, scoped package tests.
-- [ ] **Lot 3 — CMF-S2 migration 0014 + composite placement**
+- [x] **Lot 3 — CMF-S2 migration 0014 + composite placement**
   - [ ] Package migration 0014_db_blob_placement.sql (placement, blob_bytes, upload_staging_bytes).
   - [ ] Composite db+s3 adapter + advisory digest lock coordination.
   - [ ] Artifact-content wired composite read + db-role SELECT grants.
   - [ ] Tests: contract Postgres/SQLite, db/s3/db+s3 round-trips, refusal unknown mode, existing rows read object.
   - [ ] Lot gate: typecheck, scoped tests.
-- [ ] **Lot 4 — CMF-S3 placement-migrate tool**
+- [x] **Lot 4 — CMF-S3 placement-migrate tool**
   - [ ] placement-migrate both directions, AP-3 counts, receipts, resume cursor, never deletes source.
   - [ ] Tests: rehearsal copy equal digests, source intact, resume after crash.
   - [ ] Lot gate: typecheck, scoped tests.
@@ -96,7 +98,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [ ] Typecheck and lint impacted.
   - [ ] Retest API scoped suites.
   - [ ] Retest package suites scoped.
-  - [ ] Bumped packages/artifacts version patch (train rule: no bump per OPTIM? verify; wagon lanes do NOT bump — integration lane bumps once).
+  - [ ] No version bump and no lock regeneration in this wagon lane (COMMON-RULES OPTIM: the train integration lane bumps once).
   - [ ] Final gate step 1: open PR with BRANCH.md body, CI green, do NOT merge (T3 gate).
   - [ ] Final gate step 2: French report .tmp/rv/t4a-storage.md.
   - [ ] make down-volumes ENV=test-t4a-storage.
