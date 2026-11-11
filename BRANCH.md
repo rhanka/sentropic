@@ -1,0 +1,100 @@
+# Feature: t4a registration per-app MCP knowledge panel
+
+## Objective
+Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-safe in one PR, no merge before T3 closes.
+
+## Scope / Guardrails
+- Scope limited to registration loader, per-app MCP endpoint, knowledge loader, embeddable panel.
+- CMF-3 excluded, waits for A-LIVE amendment 2 co-signature.
+- Storage dependency on feat/t4a-cm-artifact-storage stubbed behind flags, never blocking.
+- Everything flag-gated additive, preprod-safe, no legacy fallback.
+- One migration max in api/drizzle/*.sql (none planned).
+- Make-only workflow, no direct Docker commands.
+- Root workspace reserved for user dev/UAT (ENV=dev) and must remain stable.
+- Branch development in isolated worktree tmp/worktrees/t4a-registration.
+- Automated test campaigns on dedicated ENV=test-t4a-reg, never on root dev.
+- In every make command, ENV=<env> must be passed as the last argument.
+- All new text in English.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/src/services/artifacts/app-registration.*`
+  - `api/src/routes/namespaces/mcp-apps.*`
+  - `api/src/services/artifacts/knowledge-loader.*`
+  - `api/src/services/artifacts/artifact-panel.*`
+  - `api/src/app.ts`
+  - `ui/src/lib/components/ArtifactsPanel.svelte`
+  - `api/tests/api/cmf2-app-registration.test.ts`
+  - `api/tests/api/cmf4-per-app-mcp.test.ts`
+  - `api/tests/api/cmf6-knowledge-loader.test.ts`
+  - `ui/tests/cmf-panel.test.ts`
+  - `BRANCH.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare exception ID BRxx-EXn in ## Feedback Loop before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under ## Feedback Loop (or ## Questions / Notes if not yet migrated).
+
+## Feedback Loop
+- [ ] CMF-3 excluded: waits for Immo co-signature of A-LIVE amendment 2, no code in this lane.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as flaky accepted.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs main: if unrelated, accept and record command + failing test file + signature in BRANCH.md; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: One PR for four wagons, train merges after T3, single CI on train head.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in tmp/worktrees/t4a-registration.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (ENV=dev).
+  - Switch back to tmp/worktrees/t4a-registration after UAT.
+
+## Plan / Todo (lot-based)
+- [ ] **Lot 0 — Baseline & constraints**
+  - [ ] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, COMMON-RULES, spec CM_FIRST_ARTIFACTS §2-§7 §6.2, plan r3, verdict r3.
+  - [ ] Create isolated worktree tmp/worktrees/t4a-registration on feat/t4a-cm-artifact-registration from origin/main at 7a352bb4.
+  - [ ] Define ENV=test-t4a-reg ports API_PORT=8949 UI_PORT=5349 MAILDEV_UI_PORT=1249.
+  - [ ] Confirm scope boundaries, CMF-3 excluded, storage stub rule.
+- [ ] **Lot 1 — CMF-2 registration + generalization §3.1**
+  - [ ] Loader validation control.app_instances projection imported-scope reserved-namespace per-app digests.
+  - [ ] Generalize composition authorization cluster-registry transport per-capability quotas rates behind CM_REGISTRATION_ENABLED.
+  - [ ] Contract test every refusal §3.1, 31 tools mutability, bad registration refused alone, quota rate refusals.
+  - [ ] Lot gate: typecheck-api lint-api scoped test ENV=test-t4a-reg.
+- [ ] **Lot 2 — CMF-4 per-app MCP §4.1/§4.2**
+  - [ ] Endpoint api/v1/mcp/apps/slug PRM tenant pinning scopes tool summaries claude.ai client row decision 2.
+  - [ ] tools/list byte-identical Immo preprod served definitions, 401 wrong audience, 403 non-member, multi-tenant tid, sentropic-mcp unchanged.
+  - [ ] Tests cmf4-per-app-mcp behind CM_PER_APP_MCP_ENABLED.
+  - [ ] Lot gate: typecheck-api lint-api scoped test ENV=test-t4a-reg.
+- [ ] **Lot 3 — CMF-6 knowledge loader §3.4**
+  - [ ] Pinned commit SHA digest verified scope blob DB row, GitHub unreachable serves stored bundle, mismatch refused.
+  - [ ] Storage bridge dependency on feat/t4a-cm-artifact-storage stubbed behind CM_KNOWLEDGE_ENABLED.
+  - [ ] Tests cmf6-knowledge-loader.
+  - [ ] Lot gate: typecheck-api scoped test ENV=test-t4a-reg.
+- [ ] **Lot 4 — W4.c embeddable panel §3.6**
+  - [ ] CM artifacts panel screens embedding frameAncestors exact https same-env, CSP frame tests.
+  - [ ] UI tests, link-continuity fixtures.
+  - [ ] Lot gate: typecheck-ui lint-ui scoped test.
+- [ ] **Lot 5 — Final gates + PR**
+  - [ ] make scope-check, typecheck, scoped tests, open PR, CI green, do NOT merge.
+  - [ ] Report storage stub dependency exact commit if any.
+- [ ] **Lot 6 — Report**
+  - [ ] Write French report .tmp/rv/t4a-registration.md.
+  - [ ] make down-volumes ENV=test-t4a-reg.
