@@ -172,10 +172,12 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
       const claimStarted = ports.now();
       await ports.pods.adoptClaimed(key, runtime);
       await ports.worker.claim(runtime);
-      await events?.sink.record({ invocationId: events.invocationId, artifactId: key.artifactId,
-        storageScopeId: key.storageScopeId, operation: 'git_publish', phase: 'pod_ready',
-        pool: claimed.state === 'warm' ? 'warm-hit' : 'warm-deps-hit',
-        at: claimStarted, ms: ports.now() - claimStarted, outcome: 'ok' });
+      if (events) {
+        await events.sink.record({ invocationId: events.invocationId, artifactId: key.artifactId,
+          storageScopeId: key.storageScopeId, operation: 'git_publish', phase: 'pod_ready',
+          pool: claimed.state === 'warm' ? 'warm-hit' : 'warm-deps-hit',
+          at: claimStarted, ms: ports.now() - claimStarted, outcome: 'ok' });
+      }
       await ports.worker.stageSource(runtime, source);
     } else {
       const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));

@@ -34,15 +34,16 @@ export function createHostPoolApi(options: {
       return c.json({ scope, occupancy: await options.pool.occupancy(scope), at: options.now() });
     } catch (error) { return refusal(c, error); }
   });
-  app.post('/v1/pool/drain', bodyLimit({ maxSize: 4096, onError: c => c.json({ error: 'payload_too_large' }, 413 }),
-    async c => {
-      if (!options.admin) return c.json({ error: 'access_denied' }, 403);
-      try {
-        const scope = keyOf(c);
-        const { before, at } = await options.pool.drain(scope, removePod);
-        return c.json({ scope, before, at });
-      } catch (error) { return refusal(c, error); }
-    });
+  app.post('/v1/pool/drain', bodyLimit({ maxSize: 4096,
+    onError: c => c.json({ error: 'payload_too_large' }, 413) }),
+  async c => {
+    if (!options.admin) return c.json({ error: 'access_denied' }, 403);
+    try {
+      const scope = keyOf(c);
+      const { before, at } = await options.pool.drain(scope, removePod);
+      return c.json({ scope, before, at });
+    } catch (error) { return refusal(c, error); }
+  });
   return app;
 }
 

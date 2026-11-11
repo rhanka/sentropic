@@ -77,9 +77,11 @@ async function preparePod(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) 
     await ports.pods.adoptClaimed(key, runtime);
     await ports.worker.claim(runtime);
     runtime = await transition(ports, key, runtime, state => { state.runtime.cacheKey = cacheKey; });
-    await events?.sink.record({ invocationId: events.invocationId, artifactId: key.artifactId,
-      storageScopeId: key.storageScopeId, operation: 'live_start', phase: 'pod_ready', pool: 'warm-hit',
-      at: claimStarted, ms: ports.now() - claimStarted, outcome: 'ok' });
+    if (events) {
+      await events.sink.record({ invocationId: events.invocationId, artifactId: key.artifactId,
+        storageScopeId: key.storageScopeId, operation: 'live_start', phase: 'pod_ready', pool: 'warm-hit',
+        at: claimStarted, ms: ports.now() - claimStarted, outcome: 'ok' });
+    }
     if (claimed.baseHeadSha === draft.baseHeadSha) {
       await ports.worker.restore(runtime, draft);
     } else {
