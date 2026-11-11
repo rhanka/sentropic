@@ -68,14 +68,12 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
         { name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } }],
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
-      // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f): LimitRange tenant-defaults cpu <= 1 per container;
-      // ResourceQuota tenant-quota requests.cpu 1, requests.memory 3Gi, limits.memory 6Gi, limits.ephemeral-storage 10Gi.
-      // Memory request = limit = 1536Mi (k8s 09/11: a 420Mi request for a ~1.23 GiB build let the scheduler overcommit a
-      // builder node and the kubelet evicted the pod): the scheduler books what a build uses and the pod is never above
-      // its request. 2 x 1536Mi = requests.memory 3Gi, so MAX_BUILDER_PODS = 2, shared by live and build pods (one per
-      // builder node; the pool autoscales). Only CPU overcommits.
-      resources: { requests: { cpu: '250m', memory: '1536Mi', 'ephemeral-storage': '0' },
-        limits: { cpu: '1', memory: '1536Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
+      // Tenant quota fit (L3/Q4, k8s lane raises LimitRange cpu to 4 and ResourceQuota to requests
+      // 1vCPU/3Gi, limits.memory 8Gi, limits.ephemeral-storage 14Gi): requests 250m/768Mi book one warm pod plus
+      // three active pods (4 x 250m = 1vCPU, 4 x 768Mi = 3Gi); limits burst to 4 vCPU / 2048Mi for the build
+      // (Q1 small artifact + Q2 burst). Memory request stays the scheduler booking; only CPU overcommits.
+      resources: { requests: { cpu: '250m', memory: '768Mi', 'ephemeral-storage': '0' },
+        limits: { cpu: '4', memory: '2048Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
         { name: 'dependencies', mountPath: '/dependencies' }],
