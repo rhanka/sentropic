@@ -28,12 +28,12 @@ import { createRemoteLive } from './remote-live';
 import { createRemoteDrafts } from './remote-drafts';
 import type { ForgeBindings } from './forge-binding';
 
-/** Live sessions admitted per environment (two builder pod slots shared by live and build pods, one per
- * builder node; a 3rd admitted session would only wait for a pod slot before a `queued` failure). */
-export const LIVE_NODE_CAPACITY = 2;
-/** Builder pods present at once per environment (tenant ResourceQuota pods 5, s-archi 07/11 21:15): every creation
+/** Live sessions admitted per environment (four builder pod slots shared by live and build pods:
+ * 1 warm + 2 live/build + 1 prewarm; a 5th admitted session only waits for a pod slot before a `queued` failure). */
+export const LIVE_NODE_CAPACITY = 4;
+/** Builder pods present at once per environment (tenant ResourceQuota pods 5 admits 4, s-archi 07/11 21:15): every creation
  * takes one of these pod slots in the heavy-phase queue first. */
-export const MAX_BUILDER_PODS = 2;
+export const MAX_BUILDER_PODS = 4;
 /** API composition: runs as sentropic-app; no listeners, background jobs or production activation here.
  * AL-T supplies authenticated owner operations; AL-D supplies the encrypted draft port;
  * SG4 supplies transactional publication. Every supervisor frame rides the artifact-content relay (A-LIVE §8.1):
