@@ -117,6 +117,46 @@ describe('artifact host migrations', () => {
     }
   });
 
+  it('should install package schemas 0009-0013 with all relations on an empty database', async () => {
+    await runMigrations(database);
+    expect(artifactMigrationAssets.map(({ id }) => id)).toEqual([
+      '@sentropic/artifacts/migrations/0001_artifacts.sql',
+      '@sentropic/artifacts/migrations/0002_lifecycle.sql',
+      '@sentropic/artifacts/migrations/0003_coordinator.sql',
+      '@sentropic/artifacts/sql/0001_activation.sql',
+      '@sentropic/artifacts/migrations/0004_terminal_controls.sql',
+      '@sentropic/artifacts/migrations/0005_metadata.sql',
+      '@sentropic/artifacts/migrations/0006_sharing.sql',
+      '@sentropic/artifacts/migrations/0007_uploads.sql',
+      '@sentropic/artifacts/migrations/0008_reader_consent.sql',
+      '@sentropic/artifacts/migrations/0009_upload_pages.sql',
+      '@sentropic/artifacts/migrations/0010_git_bindings.sql',
+      '@sentropic/artifacts/migrations/0011_live_drafts.sql',
+      '@sentropic/artifacts/migrations/0012_git_attach_intents.sql',
+      '@sentropic/artifacts/migrations/0013_live_invitations.sql',
+    ]);
+    const { rows } = await database.query<{ name: string | null }>(`SELECT to_regclass(name)::text AS name
+      FROM unnest(ARRAY['artifacts.upload_pages', 'artifacts.git_bindings', 'artifacts.git_binding_events',
+        'artifacts.git_release_index', 'artifacts.live_drafts', 'artifacts.live_draft_objects',
+        'artifacts.live_commands', 'artifacts.live_commit_quota', 'artifacts.git_attach_intents',
+        'artifacts.live_invitations', 'artifacts.live_invitation_epochs']) AS name`);
+    expect(rows.map((row) => row.name).sort()).toEqual(['artifacts.git_attach_intents',
+      'artifacts.git_binding_events', 'artifacts.git_bindings', 'artifacts.git_release_index',
+      'artifacts.live_commands', 'artifacts.live_commit_quota', 'artifacts.live_draft_objects',
+      'artifacts.live_drafts', 'artifacts.live_invitation_epochs', 'artifacts.live_invitations',
+      'artifacts.upload_pages'].sort());
+  });
+
+  it('should rerun 0009-0013 idempotently without changing existing rows', async () => {
+    await runMigrations(database);
+    await database.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-kept', 'tenant-a')`);
+    const before = await journal();
+    await runMigrations(database);
+    expect(await journal()).toEqual(before);
+    expect((await database.query(`SELECT org_id FROM artifacts.storage_scopes WHERE id = 'scope-kept'`)).rows)
+      .toEqual([{ org_id: 'tenant-a' }]);
+  });
+
   it('should install unchanged package schemas and durable host state on an empty database', async () => {
     await runMigrations(database);
     expect(await journal()).toEqual(artifactMigrationAssets.map(({ id, sha256 }) => ({ asset_id: id, sha256 }))
