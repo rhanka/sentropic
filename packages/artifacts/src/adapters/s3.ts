@@ -18,6 +18,7 @@ import {
 } from '@aws-sdk/client-s3';
 import type { PublicationBlobStore } from '../server/publication.js';
 import { assertBlobPrefix } from '../server/blob-prefix.js';
+import { cloneBlobBytes, verifyBytesForKey, verifyStoredBytesForKey } from '../server/blob-bridge.js';
 
 const BLOB_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/blobs\/sha256\/[0-9a-f]{64}$/;
 
@@ -35,12 +36,25 @@ function assertBlobKey(key: string): void {
 
 /** Create an S3-backed blob store over an injected client (no env reads). */
 export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobStore {
-  return {
+  const store: PublicationBlobStore = {
     async putBlob(key: string, bytes: Uint8Array): Promise<void> {
-      assertBlobKey(key);
-      await options.client.send(
-        new PutObjectCommand({ Bucket: options.bucket, Key: key, Body: bytes }),
-      );
+      // CR-1: clone before verification, then verify before any I/O.
+      const snapshot = cloneBlobBytes(bytes);
+      verifyBytesForKey(key, snapshot);
+      try {
+        await options.client.send(
+          new PutObjectCommand({ Bucket: options.bucket, Key: key, Body: snapshot, IfNoneMatch: '*' }),
+        );
+      } catch (error) {
+        // Create-only: the key already exists. Settle by read-back — identical
+        // bytes are idempotent, different bytes fail closed without overwrite.
+        if (typeof error === 'object' && error !== null && 'name' in error &&
+          (error as { name?: unknown }).name === 'PreconditionFailed') {
+          const stored = await store.getBlob(key);
+          if (stored !== undefined) return;
+        }
+        throw error;
+      }
     },
     async getBlob(key: string): Promise<Uint8Array | undefined> {
       assertBlobKey(key);
@@ -50,7 +64,8 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
         );
         if (out.Body === undefined) return undefined;
         const collected = await out.Body.transformToByteArray();
-        return new Uint8Array(collected);
+        // CR-2: digest and length verified before serving bytes as verified.
+        return verifyStoredBytesForKey(key, new Uint8Array(collected));
       } catch (error) {
         if (typeof error === 'object' && error !== null && 'name' in error) {
           const name = (error as { name?: unknown }).name;
@@ -101,4 +116,5 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
       await options.client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: key }));
     },
   };
+  return store;
 }

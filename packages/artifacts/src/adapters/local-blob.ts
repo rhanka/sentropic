@@ -7,12 +7,11 @@
  * read-back, atomic temp-file+rename writes, and strict deletes (unknown keys
  * fail so callers notice, per the port contract).
  */
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { PublicationBlobStore } from '../server/publication.js';
-import { blobDigestOfKey } from '../server/publication.js';
 import { assertBlobPrefix } from '../server/blob-prefix.js';
+import { cloneBlobBytes, verifyBytesForKey, verifyStoredBytesForKey } from '../server/blob-bridge.js';
 
 const BLOB_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/blobs\/sha256\/[0-9a-f]{64}$/;
 
@@ -23,8 +22,8 @@ function assertBlobKey(key: string): void {
   }
 }
 
-function sha256Hex(bytes: Uint8Array): string {
-  return createHash('sha256').update(bytes).digest('hex');
+function readVerified(key: string, target: string): Uint8Array {
+  return verifyStoredBytesForKey(key, new Uint8Array(readFileSync(target)));
 }
 
 /** Create a filesystem-backed blob store rooted at `root` (created on demand). */
@@ -43,29 +42,35 @@ export function createLocalBlobStore(root: string): PublicationBlobStore {
   };
   return {
     async putBlob(key: string, bytes: Uint8Array): Promise<void> {
-      assertBlobKey(key);
-      const expected = blobDigestOfKey(key).slice('sha256:'.length);
-      const actual = sha256Hex(bytes);
-      if (actual !== expected) {
-        throw new Error(`digest mismatch for blob key ${key}: content sha256:${actual}`);
-      }
+      // CR-1: clone before verification, then verify before any I/O.
+      const snapshot = cloneBlobBytes(bytes);
+      verifyBytesForKey(key, snapshot);
       const target = pathOf(key);
+      if (existsSync(target)) {
+        // Create-only: identical retry is idempotent, different bytes are
+        // refused without touching the stored object.
+        const stored = readVerified(key, target);
+        if (stored.byteLength !== snapshot.byteLength) {
+          throw new Error(`blob key conflict (length differs, no overwrite): ${key}`);
+        }
+        for (let index = 0; index < stored.byteLength; index += 1) {
+          if (stored[index] !== snapshot[index]) {
+            throw new Error(`blob key conflict (bytes differ, no overwrite): ${key}`);
+          }
+        }
+        return;
+      }
       mkdirSync(dirname(target), { recursive: true });
       const temp = `${target}.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`;
-      writeFileSync(temp, bytes);
+      writeFileSync(temp, snapshot, { flag: 'wx' });
       renameSync(temp, target);
     },
     async getBlob(key: string): Promise<Uint8Array | undefined> {
       assertBlobKey(key);
       const target = pathOf(key);
       if (!existsSync(target)) return undefined;
-      const bytes = new Uint8Array(readFileSync(target));
-      const expected = blobDigestOfKey(key).slice('sha256:'.length);
-      const actual = sha256Hex(bytes);
-      if (actual !== expected) {
-        throw new Error(`digest mismatch on read for blob key ${key}: stored sha256:${actual}`);
-      }
-      return bytes;
+      // CR-2: digest verified before serving bytes as verified.
+      return readVerified(key, target);
     },
     async listKeys(prefix: string): Promise<string[]> {
       assertBlobPrefix(prefix);
