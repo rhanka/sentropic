@@ -13,6 +13,7 @@ function seededFixture() {
     return { ...f.binding, generation: s.generation, ownerId: s.ownerId };
   });
   vi.mocked(f.ports.seedBinding).mockImplementation((k, seed) => live.reconciled(k, seed));
+  vi.mocked(f.ports.seedSession).mockImplementation(k => live.session(k).catch(() => undefined));
   return { f, live };
 }
 
@@ -58,22 +59,49 @@ describe('builder job admission (M1 pending job)', () => {
     const [, , attempt, runtime] = vi.mocked(f.ports.publication.commit).mock.calls[0];
     expect({ runId: runtime.sessionId, attempt: attempt.leaseEpoch }).toEqual(fence);
   });
+  it('seeds epochs 0 so the host first live session is accepted', async () => {
+    const { f, live } = seededFixture();
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']);
+    expect(await live.session(key)).toMatchObject({ generation: 1, ownerId: 'owner', leaseEpoch: 0, routeEpoch: 0 });
+  });
   it('keeps the fence monotonic on a reconcile after a seeded build', async () => {
     const { f, live } = seededFixture();
     await f.controller.buildOnly(key, 'job-1');
     expect(f.published).toEqual(['A']);
-    // A later live reconcile at the same generation with another owner stays stale.
+    // A later live reconcile at the same generation with another owner stays stale, even at low counters.
     await expect(live.reconciled(key, { generation: 1, ownerId: 'intruder',
-      liveSessionId: 'live-1', leaseEpoch: 99, routeEpoch: 99 }))
+      liveSessionId: 'live-1', leaseEpoch: 1, routeEpoch: 1 }))
       .rejects.toMatchObject({ code: 'git_live_conflict', reason: 'stale_session' });
-    // The same owner with higher counters is accepted (the live session takes over).
+    // The host's first live session at (lease 1, route 1) is accepted (the live session takes over).
     await expect(live.reconciled(key, { generation: 1, ownerId: 'owner',
-      liveSessionId: 'live-1', leaseEpoch: 99, routeEpoch: 99 }))
+      liveSessionId: 'live-1', leaseEpoch: 1, routeEpoch: 1 }))
       .resolves.toMatchObject({ liveSessionId: 'live-1' });
     // A replay with lower counters stays stale.
     await expect(live.reconciled(key, { generation: 1, ownerId: 'owner',
-      liveSessionId: 'live-1', leaseEpoch: 2, routeEpoch: 2 }))
+      liveSessionId: 'live-1', leaseEpoch: 0, routeEpoch: 0 }))
       .rejects.toMatchObject({ code: 'git_live_conflict', reason: 'stale_session' });
+  });
+  it('reuses the frozen host fence when admission refuses the first seeded attempt', async () => {
+    const { f } = seededFixture();
+    vi.spyOn(f.ports.admission, 'acquire').mockRejectedValueOnce(new LiveError('builder_unavailable', 'queued'));
+    await expect(f.controller.buildOnly(key, 'job-1')).rejects.toMatchObject({ reason: 'queued' });
+    // A refusal writes no runtime state: the retry re-resolves with the identical fence, never job_not_pending.
+    expect(await f.state()).toBeUndefined();
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']);
+    const fences = vi.mocked(f.ports.publication.job).mock.calls.map(([, , fence]) => fence);
+    expect(fences).toHaveLength(2); expect(fences[1]).toEqual(fences[0]); expect(fences[0]).toMatchObject({ attempt: 1 });
+  });
+  it('reuses the frozen host fence when the draft read fails on the first seeded attempt', async () => {
+    const { f } = seededFixture();
+    vi.mocked(f.ports.drafts.current).mockRejectedValueOnce(new LiveError('git_live_draft_conflict'));
+    await expect(f.controller.buildOnly(key, 'job-1')).rejects.toMatchObject({ code: 'git_live_draft_conflict' });
+    expect(await f.state()).toBeUndefined();
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']);
+    const fences = vi.mocked(f.ports.publication.job).mock.calls.map(([, , fence]) => fence);
+    expect(fences).toHaveLength(2); expect(fences[1]).toEqual(fences[0]);
   });
   it('keeps binding_unreconciled when no admitted job exists and writes no phase', async () => {
     const f = fixture();
@@ -83,6 +111,23 @@ describe('builder job admission (M1 pending job)', () => {
       .toMatchObject({ code: 'git_live_conflict', reason: 'binding_unreconciled' });
     expect(f.core.create).not.toHaveBeenCalled(); expect(f.ports.worker.build).not.toHaveBeenCalled();
     expect(f.ports.seedBinding).not.toHaveBeenCalled(); expect(await f.state()).toBeUndefined();
+  });
+  it('builds a reconciled binding whose host job carries no owner yet', async () => {
+    const f = fixture();
+    vi.mocked(f.ports.publication.job).mockResolvedValueOnce({ jobId: 'job-1', generation: 1, headSha: 'A',
+      expectedReleaseId: 'release-B', ownerId: '' });
+    await f.controller.buildOnly(key, 'job-1');
+    expect(f.published).toEqual(['A']); expect(f.core.create).toHaveBeenCalled();
+  });
+  it('keeps binding_unreconciled for an ownerless job when never reconciled', async () => {
+    const f = fixture();
+    vi.mocked(f.ports.binding).mockRejectedValueOnce(new LiveError('git_live_conflict', 'binding_unreconciled'));
+    vi.mocked(f.ports.publication.job).mockResolvedValueOnce({ jobId: 'job-1', generation: 1, headSha: 'A',
+      expectedReleaseId: 'release-B', ownerId: '' });
+    await expect(f.controller.buildOnly(key, 'job-1')).rejects
+      .toMatchObject({ code: 'git_live_conflict', reason: 'binding_unreconciled' });
+    expect(f.core.create).not.toHaveBeenCalled(); expect(f.ports.seedBinding).not.toHaveBeenCalled();
+    expect(await f.state()).toBeUndefined();
   });
   it('refuses a job without a recordable binding before any forge read or pod', async () => {
     const f = fixture(); vi.mocked(f.ports.jobBinding).mockRejectedValueOnce(new LiveError('binding_conflict'));

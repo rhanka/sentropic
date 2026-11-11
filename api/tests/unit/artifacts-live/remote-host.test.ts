@@ -89,7 +89,6 @@ describe('HTTP remote host (live-host host build paths)', () => {
   it('treats any other answer as a transport failure with an unknown outcome', async () => {
     for (const answer of [() => new Response('oops', { status: 502 }), () => json(500, { v: 1, error: 'free text' }),
       () => json(200, { v: 1, job: { ...hostJob, generation: '1' } }), () => json(200, { job: hostJob }),
-      () => json(200, { v: 1, job: { ...hostJob, ownerId: '' } }),
       () => json(200, { v: 1, job: { ...hostJob, ownerId: 'with space' } }),
       () => { throw new TypeError('network'); }]) {
       const error = await setup(answer).host.job(key, 'job-1', fence).catch((caught: unknown) => caught);
@@ -97,6 +96,12 @@ describe('HTTP remote host (live-host host build paths)', () => {
     }
     const missing = await setup(() => json(200, { v: 1 })).host.accept(key, handoff, files).catch((caught: unknown) => caught);
     expect(missing).not.toBeInstanceOf(LiveHostError);
+  });
+  it('accepts a host job without an owner payload (a host before the owner-carrying release)', async () => {
+    const { ownerId: _dropped, ...ownerless } = hostJob;
+    for (const job of [{ ...hostJob, ownerId: '' }, ownerless]) {
+      expect(await setup(() => json(200, { v: 1, job })).host.job(key, 'job-1', fence)).toEqual({ ...hostJob, ownerId: '' });
+    }
   });
   it('refuses a base URL that is not https or carries credentials, a query or a fragment', () => {
     for (const baseUrl of ['http://immo.test/', 'https://user:pw@immo.test/', 'https://immo.test/?a=1', 'https://immo.test/#x', 'not a url']) {
