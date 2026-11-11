@@ -2,6 +2,9 @@ import { expireLiveDraft, persistLiveOverlay, readLiveOverlay } from './live-dra
 import { liveIdentityKey, liveWorkerPending, normalizeRedriveLimit, type LiveIdentity } from './live-store.js';
 import type { LiveRedriveItem, LiveServiceDeps, LiveWorkerOutcome } from './live-contracts.js';
 
+const REDRIVE_CONCURRENCY_DEFAULT = 4;
+const REDRIVE_CONCURRENCY_MAX = 8;
+const REDRIVE_ITEM_TIMEOUT_MS_DEFAULT = 35_000;
 const STOP_PHASES = ['QUIESCING', 'SAVING', 'DECOMMISSIONING'];
 const LIVE_SETTLE_PHASES = ['REVIVING', 'LIVE'];
 
@@ -23,6 +26,13 @@ function report(deps: LiveServiceDeps, identity: LiveIdentity, action: 'project'
   } catch { /* observer only */ }
 }
 
+const validFailure = (failure: unknown): { code: string; reason: string } | null => {
+  if (!failure || typeof failure !== 'object') return null;
+  const { code, reason } = failure as { code?: unknown; reason?: unknown };
+  if (typeof code !== 'string' || !code) return null;
+  return { code, reason: typeof reason === 'string' && reason ? reason : code };
+};
+
 /** One settle per identity at a time: a concurrent caller waits for the in-flight attempt instead of
  * doubling the worker call, then runs its own fenced attempt. No parallel reconcile/stop per session. */
 const settleLocks = new Map<string, Promise<void>>();
@@ -38,6 +48,9 @@ async function withSettleLock<T>(key: string, run: () => Promise<T>): Promise<T>
     release();
   }
 }
+
+/** One redrive pass per scope at a time: an overlapping timer tick yields no items instead of doubling the pool. */
+const redriveInflight = new Set<string>();
 
 async function settleOnce(input: { deps: LiveServiceDeps; identity: LiveIdentity;
   action: 'project' | 'stop'; result: Record<string, any>; now: number }): Promise<LiveWorkerOutcome> {
@@ -70,6 +83,23 @@ async function settleOnce(input: { deps: LiveServiceDeps; identity: LiveIdentity
       return 'pending';
     }
     if (!ack.ready) {
+      const failure = validFailure((ack as { failure?: unknown }).failure);
+      if (failure) {
+        const moved = await deps.store.transaction(identity, async tx => {
+          const record = tx.record; const runtime = record?.runtime;
+          if (!record || !runtime || ack.liveSessionId !== runtime.liveSessionId || ack.leaseEpoch !== runtime.leaseEpoch ||
+            ack.routeEpoch !== runtime.routeEpoch || ack.revision !== record.revision ||
+            !(runtime.phase === 'REVIVING' || (runtime.phase === 'LIVE' && runtime.appliedRevision !== record.revision))) return false;
+          runtime.phase = 'DORMANT'; runtime.appliedRevision = null;
+          runtime.stateDetail = `${failure.code}:${failure.reason}`;
+          result.state = 'DORMANT'; result.runtimeState = 'DORMANT'; result.appliedRevision = null;
+          result.stateDetail = runtime.stateDetail;
+          return true;
+        }).catch(() => false);
+        if (!moved) return 'skipped';
+        report(deps, identity, action, 'failed', failure.code, failure.reason);
+        return 'failed';
+      }
       report(deps, identity, action, 'pending');
       return 'pending';
     }
@@ -109,28 +139,68 @@ export async function settleLiveWorker(input: { deps: LiveServiceDeps; identity:
   return withSettleLock(liveIdentityKey(input.identity), () => settleOnce(input));
 }
 
+const normalizeConcurrency = (value: unknown): number => {
+  const n = Math.trunc(Number(value));
+  if (!Number.isFinite(n)) return REDRIVE_CONCURRENCY_DEFAULT;
+  return Math.min(REDRIVE_CONCURRENCY_MAX, Math.max(1, n));
+};
+const normalizeItemTimeout = (value: unknown): number => {
+  const n = Math.trunc(Number(value));
+  if (!Number.isFinite(n) || n <= 0) return REDRIVE_ITEM_TIMEOUT_MS_DEFAULT;
+  return Math.min(120_000, Math.max(1_000, n));
+};
+
 /**
  * Durable re-drive (host timer, at boot and at most every 60 s): settles again every runtime of the scope that still
  * waits for the worker. A revive whose builder answered `ready: false`, a settle lost with its process and a stop the
  * worker refused are all picked up here; the worker call is the same fenced, idempotent reconcile or stop.
+ * Bounded: at most `redriveConcurrency` (default 4) worker calls in flight, each abandoned after
+ * `redriveItemTimeoutMs` (default 35 s) with a `timeout` failure; an overlapping pass for the same scope yields
+ * no items. A terminal builder failure (`failure: { code, reason }`) moves the runtime to DORMANT with
+ * `code:reason` as stateDetail and is never re-driven. Never throws.
  */
 export async function redriveLiveWorkers(deps: LiveServiceDeps, storageScopeId: string, limit?: number): Promise<LiveRedriveItem[]> {
   if (!deps.worker || !deps.store.pending) return [];
-  const items: LiveRedriveItem[] = [];
-  for (const identity of await deps.store.pending(storageScopeId, normalizeRedriveLimit(limit))) {
-    let waiting: { action: 'project' | 'stop'; liveSessionId: string; leaseEpoch: number } | null = null;
-    try {
-      waiting = await deps.store.transaction(identity, async tx => {
-        const action = liveWorkerPending(tx.record);
-        return action && tx.record!.runtime
-          ? { action, liveSessionId: tx.record!.runtime.liveSessionId, leaseEpoch: tx.record!.runtime.leaseEpoch } : null;
-      });
-    } catch { waiting = null; }
-    if (!waiting) continue;
-    const outcome = await settleLiveWorker({ deps, identity, action: waiting.action,
-      result: { liveSessionId: waiting.liveSessionId, leaseEpoch: waiting.leaseEpoch }, now: (deps.now ?? Date.now)() })
-      .catch(() => 'failed' as const);
-    items.push({ ...identity, action: waiting.action, outcome });
-  }
-  return items;
+  if (redriveInflight.has(storageScopeId)) return [];
+  redriveInflight.add(storageScopeId);
+  try {
+    const pending = await deps.store.pending(storageScopeId, normalizeRedriveLimit(limit));
+    if (!pending.length) return [];
+    const concurrency = normalizeConcurrency(deps.redriveConcurrency);
+    const timeoutMs = normalizeItemTimeout(deps.redriveItemTimeoutMs);
+    const ordered: (LiveRedriveItem | null)[] = new Array(pending.length).fill(null);
+    let next = 0;
+    const runOne = async (): Promise<void> => {
+      while (true) {
+        const index = next++;
+        if (index >= pending.length) return;
+        const identity = pending[index];
+        let waiting: { action: 'project' | 'stop'; liveSessionId: string; leaseEpoch: number } | null = null;
+        try {
+          waiting = await deps.store.transaction(identity, async tx => {
+            const action = liveWorkerPending(tx.record);
+            return action && tx.record!.runtime
+              ? { action, liveSessionId: tx.record!.runtime.liveSessionId, leaseEpoch: tx.record!.runtime.leaseEpoch } : null;
+          });
+        } catch { waiting = null; }
+        if (!waiting) continue;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const settle = settleLiveWorker({ deps, identity, action: waiting.action,
+            result: { liveSessionId: waiting.liveSessionId, leaseEpoch: waiting.leaseEpoch }, now: (deps.now ?? Date.now)() });
+          const late = new Promise<LiveWorkerOutcome>(resolve => {
+            timer = setTimeout(() => {
+              report(deps, identity, waiting!.action, 'failed', 'timeout');
+              resolve('failed');
+            }, timeoutMs);
+          });
+          ordered[index] = { ...identity, action: waiting.action, outcome: await Promise.race([settle, late]) };
+        } catch {
+          ordered[index] = { ...identity, action: waiting.action, outcome: 'failed' };
+        } finally { if (timer) clearTimeout(timer); }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, pending.length) }, () => runOne()));
+    return ordered.filter((item): item is LiveRedriveItem => item !== null);
+  } finally { redriveInflight.delete(storageScopeId); }
 }
