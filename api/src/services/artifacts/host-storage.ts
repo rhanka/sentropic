@@ -12,7 +12,10 @@ const requiredRelations = [
   ...['storage_scopes', 'artifacts', 'releases', 'artifact_current', 'blobs', 'uploads',
     'object_intents', 'idempotency_keys', 'artifact_access', 'artifact_access_events', 'artifact_sources',
     'blob_ref_holders', 'blob_pins', 'operation_keys', 'operation_receipts', 'staged_files',
-    'reader_consents', 'reader_consent_events'].map((name) => `artifacts.${name}`),
+    'reader_consents', 'reader_consent_events', 'upload_pages',
+    'git_bindings', 'git_binding_events', 'git_release_index',
+    'live_drafts', 'live_draft_objects', 'live_commands', 'live_commit_quota',
+    'git_attach_intents', 'live_invitations', 'live_invitation_epochs'].map((name) => `artifacts.${name}`),
 ];
 
 /** Upstream identities and bytes are pinned independently of package versions. */
@@ -42,6 +45,21 @@ export const artifactMigrationAssets = Object.freeze([
   Object.freeze({ id: '@sentropic/artifacts/migrations/0008_reader_consent.sql',
     sha256: 'd6924409d318066fef028acde1566f6098d5ae8045bba89dd341bd7894c08cad',
     read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0008_reader_consent.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0009_upload_pages.sql',
+    sha256: '692d13ae0cabff0c0bd0977c1c083db561b120e89d5539b41bd58d981f315532',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0009_upload_pages.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0010_git_bindings.sql',
+    sha256: '896947eec4898a0918bab2f5d236718095296952ea37c1012fa448c779041de1',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0010_git_bindings.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0011_live_drafts.sql',
+    sha256: 'cc5399440c5531224fdd99337703cf3caebdd39d0f79df527efe3b6d6edf3fa4',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0011_live_drafts.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0012_git_attach_intents.sql',
+    sha256: '8cfb72c5337dcf6305909af52d789940d1944bcf5fca4e4e2d845d745c8d19f8',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0012_git_attach_intents.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0013_live_invitations.sql',
+    sha256: 'fb839f4579df640032a16cadc7cf66a987542701ba853a78e5889d0a2a31f65b',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0013_live_invitations.sql'), 'utf8') }),
 ]);
 
 /** Called only by the API migration runner, after the control stream. */

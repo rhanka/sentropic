@@ -71,10 +71,10 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Verify branch feat/t4a-cm-artifact-storage.
   - [x] ENV=test-t4a-storage, API_PORT=8947 UI_PORT=5347 MAILDEV_UI_PORT=1247.
   - [x] Validate scope boundaries, no EXn needed.
-- [ ] **Lot 1 — CMF-1 schema 0009-0013 in CM + grants**
-  - [ ] Extend artifactMigrationAssets with 0009-0013 sha256 receipts.
-  - [ ] Extend requiredRelations with upload_pages, git_bindings, live drafts, attach intents, invitations.
-  - [ ] API tests: extend artifacts-host-migrations.test.ts (fresh DB, idempotent rerun, no row changed).
+- [x] **Lot 1 — CMF-1 schema 0009-0013 in CM + grants**
+  - [x] Extend artifactMigrationAssets with 0009-0013 sha256 receipts.
+  - [x] Extend requiredRelations with upload_pages, git_bindings, live drafts, attach intents, invitations.
+  - [x] API tests: extend artifacts-host-migrations.test.ts (fresh DB, idempotent rerun, no row changed).
   - [ ] Lot gate: typecheck-api, scoped test file.
 - [ ] **Lot 2 — CMF-S1 blob bridge ArtifactBlobPort**
   - [ ] Harden S3 putBlob create-only If-None-Match + digest verify + read-back verify.
