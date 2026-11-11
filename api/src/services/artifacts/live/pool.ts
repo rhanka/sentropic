@@ -97,6 +97,123 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
         return { next, result: claim };
       });
     },
+    /** Synchronous `warm-deps` release (§7.3.2, convergence Q2): `claimed → warm-deps` with `poolEpoch + 1`,
+     * marked before `stop` answers so an immediately following `git_publish` claims the hot tree. The caller
+     * verified the scrub ACK first (cleared `['/workspace', '/tmp']`, frozen `/dependencies`); any scrub doubt
+     * deletes the pod instead of calling this. */
+    async releaseWarmDeps(scope: string, cacheKey: string, baseHeadSha: string): Promise<PoolEntry> {
+      const at = now();
+      return store.update<PoolEntry, PoolEntry>(entryKey(scope, cacheKey), current => {
+        if (!current || current.state !== 'claimed') throw new LiveError('builder_unavailable', 'pool_release_mismatch');
+        const next: PoolEntry = { ...current, state: 'warm-deps', poolEpoch: current.poolEpoch + 1,
+          baseHeadSha, lastRenewAt: at };
+        return { next, result: next };
+      });
+    },
+    /** Background refill promotion (`warm-deps → warm`) after the base source + prebundle were restaged. */
+    async promoteWarm(scope: string, cacheKey: string, baseHeadSha: string): Promise<PoolEntry> {
+      const at = now();
+      return store.update<PoolEntry, PoolEntry>(entryKey(scope, cacheKey), current => {
+        if (!current || current.state !== 'warm-deps') {
+          throw new LiveError('builder_unavailable', 'pool_promote_mismatch');
+        }
+        const next: PoolEntry = { ...current, state: 'warm', baseHeadSha, filledAt: at, lastRenewAt: at };
+        return { next, result: next };
+      });
+    },
+    /** Per-scope occupancy for `GET /v1/pool` (§7.6.3). */
+    async occupancy(scope: string): Promise<{ warm: number; warmDeps: number; filling: number; claimed: number }> {
+      const keys = (await store.read<string[]>(indexKey(scope))) ?? [];
+      const counts = { warm: 0, warmDeps: 0, filling: 0, claimed: 0 };
+      for (const key of keys) {
+        const entry = await store.read<PoolEntry>(key);
+        if (!entry) continue;
+        if (entry.state === 'warm') counts.warm++;
+        else if (entry.state === 'warm-deps') counts.warmDeps++;
+        else if (entry.state === 'filling') counts.filling++;
+        else counts.claimed++;
+      }
+      return counts;
+    },
+    /** Acceptance drain control (§7.3.3): deletes every unbound pool pod (`warm`, `warm-deps`, `filling`)
+     * for the caller's scope without touching sealed units, and returns the pre-drain occupancy + timestamp
+     * the acceptance report records as the per-run cold proof. Claimed pods (bound sessions) are untouched. */
+    async drain(scope: string, removePod: (podName: string, podUid: string) => Promise<void>): Promise<{
+      before: { warm: number; warmDeps: number; filling: number; claimed: number }; at: number }> {
+      const keys = (await store.read<string[]>(indexKey(scope))) ?? [];
+      const before = { warm: 0, warmDeps: 0, filling: 0, claimed: 0 };
+      for (const key of keys) {
+        const entry = await store.read<PoolEntry>(key);
+        if (!entry || entry.scope !== scope) continue;
+        if (entry.state === 'warm') before.warm++;
+        else if (entry.state === 'warm-deps') before.warmDeps++;
+        else if (entry.state === 'filling') before.filling++;
+        else { before.claimed++; continue; }
+        if (entry.podUid) await removePod(entry.podName, entry.podUid).catch(() => undefined);
+        await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+      }
+      return { before, at: now() };
+    },
+    /** Post-restart adoption (§7.3.5, §7.5.4): cross-checks KV rows against the `list` survivors. A pod
+     * present in Kubernetes with a matching uid is re-adopted (the caller re-holds its heavy slot); a row
+     * whose pod is gone, uid-mismatched or older than 24 h is dropped; a pool-labelled pod with no row is
+     * reported for deletion as an orphan. */
+    async adopt(scope: string, survivors: Array<{ name: string; uid: string }>,
+      removePod: (podName: string, podUid: string) => Promise<void>): Promise<{
+        adopted: PoolEntry[]; orphaned: number; orphansDeleted: number }> {
+      const keys = (await store.read<string[]>(indexKey(scope))) ?? [];
+      const byName = new Map(survivors.map(s => [s.name, s.uid]));
+      const adopted: PoolEntry[] = [];
+      let orphaned = 0; let orphansDeleted = 0;
+      for (const key of keys) {
+        const entry = await store.read<PoolEntry>(key);
+        if (!entry || entry.scope !== scope) continue;
+        const uid = byName.get(entry.podName);
+        byName.delete(entry.podName);
+        if (uid === entry.podUid && entry.podUid !== ''
+          && (entry.state === 'warm' || entry.state === 'warm-deps')
+          && now() - entry.filledAt <= POOL_MAX_AGE_MS) {
+          adopted.push(entry); continue;
+        }
+        orphaned++;
+        await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+      }
+      for (const [name, uid] of byName) {
+        await removePod(name, uid).catch(() => undefined);
+        orphansDeleted++;
+      }
+      return { adopted, orphaned, orphansDeleted };
+    },
+    /** Pool liveness renew (§7.3.1): a fenced `renew` at least every 60 s on every `warm`/`warm-deps` pod so
+     * idle pool pods never self-terminate (30 min lease). Entries older than 24 h are evicted instead. */
+    async renewAll(scope: string, renew: (entry: PoolEntry) => Promise<void>,
+      removePod: (podName: string, podUid: string) => Promise<void>): Promise<{ renewed: number; evicted: number }> {
+      const keys = (await store.read<string[]>(indexKey(scope))) ?? [];
+      let renewed = 0; let evicted = 0;
+      for (const key of keys) {
+        const entry = await store.read<PoolEntry>(key);
+        if (!entry || entry.scope !== scope
+          || (entry.state !== 'warm' && entry.state !== 'warm-deps')) continue;
+        if (now() - entry.filledAt > POOL_MAX_AGE_MS) {
+          if (entry.podUid) await removePod(entry.podName, entry.podUid).catch(() => undefined);
+          await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+          evicted++; continue;
+        }
+        await renew(entry);
+        await store.update<PoolEntry, void>(key, current => {
+          if (!current || (current.state !== 'warm' && current.state !== 'warm-deps')) return { result: undefined };
+          return { next: { ...current, lastRenewAt: now() }, result: undefined };
+        }).catch(() => undefined);
+        renewed++;
+      }
+      return { renewed, evicted };
+    },
   };
+}
+
+/** Pool minimum per hot key (§7.3.1, default 1; 0 disables the pool — the §7.7 rollback shape). */
+export function readPoolMin(env: Readonly<Record<string, string | undefined>>): number {
+  const parsed = Number(env[ARTIFACT_POOL_MIN_ENV]?.trim());
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 4 ? parsed : POOL_MIN_DEFAULT;
 }
 export type PoolManager = ReturnType<typeof createPoolManager>;

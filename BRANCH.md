@@ -75,7 +75,8 @@ Keep at least 1 warm pod per (scope, hot cacheKey) so a live start attaches inst
   - [ ] Lot gate: scoped pods test green.
 - [ ] **Lot 4 — Pool manager**
   - [x] New pool.ts: fill CAS, claimForLive/claimForBuild CAS.
-  - [ ] Release warm-deps, drain, occupancy, adopt, renew; LivePorts.pool wiring, service composition.
+  - [x] Release warm-deps, drain, occupancy, adopt, renew (LivePorts.pool wiring next).
+  - [ ] LivePorts.pool wiring, service composition.
   - [ ] Lot gate: new pool.test.ts green.
 - [ ] **Lot 5 — Frame fence poolEpoch + claim/scrub ops**
   - [ ] FRAME_OPS claim/scrub/extractArchive/applyOverlay/sealDependencies, poolEpoch ordering, renew keeps lease.
