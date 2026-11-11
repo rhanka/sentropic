@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { DraftSnapshot, LiveBinding, LivePorts, LiveStore } from '../../../src/services/artifacts/live/ports';
-import type { LiveKey, LiveState } from '../../../src/services/artifacts/live/records';
+import { LiveError, type LiveKey, type LiveState } from '../../../src/services/artifacts/live/records';
 import { createLiveController } from '../../../src/services/artifacts/live/controller';
 import { createBuilderPods, type KubernetesCore } from '../../../src/services/artifacts/live/pods';
 import type { CacheReceipt } from '../../../src/services/artifacts/live/cache';
@@ -26,6 +26,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
   const owners = new Map<string, string>();
   let tail = Promise.resolve(); let sequence = 0; let now = 0;
   const events: string[] = []; const published: string[] = [];
+  const fences = new Map<string, { runId: string; attempt: number }>();
   const binding: LiveBinding = { generation: 1, ownerId: 'owner', headSha: 'B', healthy: true,
     autoPublish: true, automaticAuthorized: true, releaseId: 'release-B', releaseCommit: 'B', initialUnpublishedBranchEligible: false };
   const invitation = { epoch: 0, expiresAt: null as number | null };
@@ -37,12 +38,17 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
     return drafts.get(idOf(k))!;
   };
   const objects = new Map<string, { metadata: { name: string; uid: string; labels: Record<string, string>;
-    deletionTimestamp?: string }; spec: unknown; status?: { phase?: string } }>();
+    deletionTimestamp?: string; creationTimestamp?: string }; spec: unknown;
+    status?: { phase?: string; reason?: string; message?: string; containerStatuses?: Array<{ state?: { terminated?: { reason?: string } };
+      lastState?: { terminated?: { reason?: string } } }> } }>();
   const core: KubernetesCore = {
     get: vi.fn(async (kind, name) => objects.get(kind + name) as never),
     create: vi.fn(async (kind, value) => {
-      const object = structuredClone(value) as { metadata: { name: string; uid: string; labels: Record<string, string> }; spec: unknown };
-      object.metadata.uid = `uid-${++sequence}`; objects.set(kind + object.metadata.name, object); return object as never;
+      const object = structuredClone(value) as { metadata: { name: string; uid: string; labels: Record<string, string>;
+        creationTimestamp?: string }; spec: unknown; status?: { phase?: string } };
+      object.metadata.uid = `uid-${++sequence}`;
+      object.metadata.creationTimestamp = new Date(now).toISOString(); object.status = { phase: 'Pending' };
+      objects.set(kind + object.metadata.name, object); return object as never;
     }),
     delete: vi.fn(async (kind, name, uid) => {
       if (!objects.has(kind + name)) return;
@@ -99,9 +105,17 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
       renew: vi.fn(async () => undefined),
     },
     routes: { revoke: vi.fn(async () => { events.push('revoke'); }), ready: vi.fn(async () => { events.push('ready'); }) },
-    publication: { job: vi.fn(async (_key, jobId: string) => ({ jobId, generation: binding.generation, headSha: 'A',
-      expectedReleaseId: binding.releaseId })),
-      commit: vi.fn(async (_unit, _key, attempt) => {
+    publication: { job: vi.fn(async (_key, jobId: string, fence?: { runId: string; attempt: number }) => {
+      if (fence) fences.set(jobId, { ...fence });
+      return { jobId, generation: binding.generation, headSha: 'A', expectedReleaseId: binding.releaseId };
+    }),
+      commit: vi.fn(async (_unit, _key, attempt, runtime) => {
+      // The host fence is monotonic: only the latest resolved attempt may commit. A stale attempt that
+      // reaches commit after the next fence was recorded is refused, so a retry can never double-publish.
+      const latest = fences.get(attempt.id);
+      if (latest && (attempt.leaseEpoch !== latest.attempt || (runtime && runtime.sessionId !== latest.runId))) {
+        throw new LiveError('git_live_conflict', 'stale_fence');
+      }
       published.push(attempt.headSha); binding.releaseCommit = attempt.headSha; binding.releaseId = `release-${attempt.headSha}`;
       return { releaseId: binding.releaseId };
     }) },
