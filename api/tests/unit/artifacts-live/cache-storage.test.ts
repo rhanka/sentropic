@@ -43,19 +43,25 @@ function fakePool() {
 }
 
 describe('builder cache blob store', () => {
-  it('should accept exactly the three cache key shapes under artifact-builder-cache/v1/ and refuse any other key before any S3 call', async () => {
+  it('should accept exactly the five cache key shapes under artifact-builder-cache/v1/ and refuse any other key before any S3 call', async () => {
     const f = fakeS3();
     const blobs = createBuilderCacheBlobs({ bucket: 'builder-dependency-cache', client: f.client });
     const manifestKey = `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/${randomUUID()}`;
     const archiveKey = `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('e')}.tar.zst`;
+    const sourceKey = `artifact-builder-cache/v1/sources/${'a'.repeat(40)}-${digest64('e')}.tar.zst`;
+    const tarballKey = `artifact-builder-cache/v1/tarballs/${digest64('e')}`;
     await blobs.put(fileKey, Buffer.from('file'));
     await blobs.put(manifestKey, Buffer.from('manifest'));
     await blobs.put(archiveKey, Buffer.from('archive'));
+    await blobs.put(sourceKey, Buffer.from('source'));
+    await blobs.put(tarballKey, Buffer.from('tarball'));
     expect(f.send.mock.calls.map(([command]) => command).filter(command => command instanceof PutObjectCommand)
       .map(command => (command as PutObjectCommand).input)).toEqual([
       { Bucket: 'builder-dependency-cache', Key: fileKey, Body: Buffer.from('file') },
       { Bucket: 'builder-dependency-cache', Key: manifestKey, Body: Buffer.from('manifest') },
-      { Bucket: 'builder-dependency-cache', Key: archiveKey, Body: Buffer.from('archive') }]);
+      { Bucket: 'builder-dependency-cache', Key: archiveKey, Body: Buffer.from('archive') },
+      { Bucket: 'builder-dependency-cache', Key: sourceKey, Body: Buffer.from('source') },
+      { Bucket: 'builder-dependency-cache', Key: tarballKey, Body: Buffer.from('tarball') }]);
     await blobs.get(fileKey);
     await blobs.delete(fileKey);
     // Every out-of-prefix key is refused for put, get and delete: the old dependency-cache namespace, the artifacts
@@ -68,13 +74,15 @@ describe('builder cache blob store', () => {
       `artifact-builder-cache/v1/${digest64('b')}/${digest64('d')}/sealed-${digest64('e')}.tar.gz`,
       `artifact-builder-cache/v1/${digest64('b')}/sealed-${digest64('e')}.tar.zst`,
       `artifact-builder-cache/v1/sources/${'a'.repeat(40)}-${digest64('e')}.tar.gz`,
-      `artifact-builder-cache/v1/sources/${'a'.repeat(39)}-${digest64('e')}.tar.zst`]) {
+      `artifact-builder-cache/v1/sources/${'a'.repeat(39)}-${digest64('e')}.tar.zst`,
+      `artifact-builder-cache/v1/tarballs/${digest64('e')}.tgz`,
+      'artifact-builder-cache/v1/tarballs/not-hex']) {
       await expect(blobs.put(key, Buffer.from('x'))).rejects.toThrow(/invalid builder-cache key/);
       await expect(blobs.get(key)).rejects.toThrow(/invalid builder-cache key/);
       await expect(blobs.delete(key)).rejects.toThrow(/invalid builder-cache key/);
     }
-    // Three puts, one get and one delete — no refusal ever reached the client, privacy check included.
-    expect(f.send.mock.calls.filter(([command]) => !(command instanceof GetPublicAccessBlockCommand))).toHaveLength(5);
+    // Five puts, one get and one delete — no refusal ever reached the client, privacy check included.
+    expect(f.send.mock.calls.filter(([command]) => !(command instanceof GetPublicAccessBlockCommand))).toHaveLength(7);
   });
 
   it('should fail closed on a non-private bucket: every effect rechecks, is refused and never sends an object command', async () => {
@@ -138,6 +146,14 @@ describe('builder cache blob store', () => {
     await storage.putSource(unit, bytes);
     expect(await storage.getSource(unit)).toEqual(new Uint8Array(bytes));
     expect(await storage.getSource(unit.replace(/a{40}/, 'b'.repeat(40)))).toBeUndefined();
+    // Verified tarballs round-trip content-addressed; oversized or malformed refs refuse.
+    const tarball = `artifact-builder-cache/v1/tarballs/${digest64('e')}`;
+    await storage.putTarball(tarball, bytes);
+    expect(await storage.getTarball(tarball)).toEqual(new Uint8Array(bytes));
+    await expect(storage.putTarball(tarball, Buffer.alloc(64 * 1024 * 1024 + 1)))
+      .rejects.toMatchObject({ code: 'dependency_cache_invalid' });
+    await expect(storage.putTarball(`artifact-builder-cache/v1/tarballs/${digest64('e')}.tgz`, bytes))
+      .rejects.toMatchObject({ code: 'dependency_cache_invalid' });
     // A malformed archive ref or an oversized archive refuses before any S3 call.
     const before = f.send.mock.calls.length;
     await expect(storage.putArchive(`artifact-builder-cache/v1/${digest64('b')}/sealed-${digest64('e')}.tar.zst`, bytes))
