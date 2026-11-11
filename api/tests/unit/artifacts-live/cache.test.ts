@@ -19,6 +19,7 @@ function cacheFixture(budget?: InstallBudget, options?: { log?: (fields: Install
   const rows: { package: string; version: string; integrity: string }[] = [];
   let stored: CacheObject | undefined;
   const files = new Map<string, Uint8Array>();
+  const archives = new Map<string, Uint8Array>();
   const installed: DependencyFile = { path: 'pkg/index.js', mode: 292, bytes: Buffer.from('module.exports = 1') };
   const ports: CachePorts = {
     signingKey: () => Buffer.alloc(32, 1),
@@ -30,7 +31,9 @@ function cacheFixture(budget?: InstallBudget, options?: { log?: (fields: Install
     }),
     storage: { read: vi.fn(async () => stored), admit: vi.fn(async (_key, object) => (stored ??= object)),
       quarantine: vi.fn(async () => { stored = undefined; }),
-      putFile: vi.fn(async (digest, data) => { files.set(digest, data); }), getFile: vi.fn(async digest => files.get(digest)) },
+      putFile: vi.fn(async (digest, data) => { files.set(digest, data); }), getFile: vi.fn(async digest => files.get(digest)),
+      putArchive: vi.fn(async (ref, data) => { archives.set(ref, data); }),
+      getArchive: vi.fn(async ref => archives.get(ref)) },
   };
   const source = () => {
     const lockText = JSON.stringify(lock); const lockfile = Buffer.from(lockText);

@@ -60,6 +60,9 @@ export interface CachePorts {
     /** Content-addressed file objects shared by every entry; `getFile` returns stored bytes that the cache rehashes. */
     putFile(sha256: string, bytes: Uint8Array): Promise<void>;
     getFile(sha256: string): Promise<Uint8Array | undefined>;
+    /** Sealed-unit archive of one entry (`sealedArchiveRef`); `getArchive` returns bytes the cache re-verifies. */
+    putArchive(ref: string, bytes: Uint8Array): Promise<void>;
+    getArchive(ref: string): Promise<Uint8Array | undefined>;
   };
 }
 function invalid(): never { throw new LiveError('dependency_cache_invalid'); }
