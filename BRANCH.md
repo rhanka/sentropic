@@ -130,5 +130,5 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] BLOCKER 3: artifact-content db/db+s3 round-trip reads + lifecycle GC collect over the placement composite (both sides cleaned under the digest lock, referenced retained).
   - [x] MAJOR 6: local-blob concurrent create-only race test; s3 `StartAfter`/`MaxKeys` paging unit test.
   - [x] Typecheck impacted (typecheck-artifacts + typecheck-api PASS, lint-api 0 errors); scoped suites green (bridge 14/14, composite 12/12, s3 3/3, sqlite 7/7, cmf-s2 9/9, cmf-s3 7/7, host-migrations 19/19, artifact-content 170/170).
-  - [ ] Push rebased branch, CI green, French report, down-volumes, do NOT merge.
-  - [ ] Bump cluster-mesh dev.24 → dev.25 for enforce-package-bump (BRT4a-EX2); re-run packaging alignment; push; CI green.
+  - [x] Push rebased branch, CI green, French report, down-volumes, do NOT merge.
+  - [x] Bump cluster-mesh dev.24 → dev.25 for enforce-package-bump (BRT4a-EX2); re-run packaging alignment; push; CI green.
