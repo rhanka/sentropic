@@ -28,6 +28,10 @@ Let the first publication of a new artifact run build-only from its admitted hos
   - `api/tests/unit/artifacts-live/remote-drafts.test.ts`
   - `api/tests/unit/artifacts-live/remote-host.test.ts`
   - `packages/artifacts/src/live-host/recheck.ts`
+  - `packages/artifacts/src/mcp-core.ts` (provider version tracks the bump; same file as release f395a897f)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (follow 0.2.26, precedent 8c2e210d4)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (same)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (pin integrity, precedent 42d6224f2)
   - `packages/artifacts/tests/live-host-recheck.test.ts`
   - `packages/artifacts/tests/live-host-accept.test.ts`
   - `packages/artifacts/package.json`
@@ -47,7 +51,8 @@ Let the first publication of a new artifact run build-only from its admitted hos
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] No open items.
+- [x] Scope extension (no EXn: unknown→allowed, same files as release f395a897f/8c2e210d4): the 0.2.26 bump requires `mcp-core.ts` (probe asserts provider version), `api/package-lock.json` sync, and the cluster-mesh selected fixture + tuple pin (prepare-artifacts.spec + pin test assert the candidate tuple). Added to Allowed Paths.
+- [ ] CI security-container UI/e2e: 2 HIGH libxslt findings (CVE-2026-87636, CVE-2026-9947, base image, no Dockerfile pin) unrelated to this diff; needs a security-lane decision (dedicated branch or register entry with owner + review_by). Not touched from this lane.
 
 ## AI Flaky tests
 - [ ] Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
