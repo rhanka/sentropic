@@ -102,6 +102,13 @@ if (process.argv.includes('--secret-reencrypt')) {
   process.exit(process.exitCode ?? 0);
 }
 
+// CMF-S3 placement migration (both directions, never deletes the source).
+if (process.argv.includes('--placement-migrate')) {
+  const { runPlacementMigrateCli } = await import('./scripts/cm-placement-migrate');
+  await runPlacementMigrateCli();
+  process.exit(process.exitCode ?? 0);
+}
+
 // Fail closed before serving: a deployed runtime never signs or seals with a missing or public key.
 try {
   assertDeploymentSecrets();
