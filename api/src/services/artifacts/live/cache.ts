@@ -1,12 +1,14 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { safeDependencyPath, sha256, verifySri, type IntegrityPin } from './integrity';
 import { integrityEvidence, qualifyBuild, type Gb1Source } from './gb1-qualification';
-import { defaultInstallBudget, withinInstallBudget, INSTALL_CACHE_ADMIT_TIMEOUT_MS, INSTALL_CACHE_LOOKUP_TIMEOUT_MS,
-  runInstallStep, type InstallBudget, type InstallProgress, type InstallStepLogger } from './deadline';
+import { defaultInstallBudget, defaultSealBudget, withinInstallBudget, INSTALL_CACHE_ADMIT_TIMEOUT_MS,
+  INSTALL_CACHE_LOOKUP_TIMEOUT_MS, runInstallStep, type InstallBudget, type InstallProgress,
+  type InstallStepLogger } from './deadline';
 import { LiveError, type LiveRuntime } from './records';
 import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY, installRecipeFor } from './recipes';
 import { subsetLockPaths, validateWorkspaces } from './workspace-subset';
-import { TREE_LIMITS } from './supervisor-transfer';
+import { extractTarZst, tarZst, TREE_LIMITS, type TransferFailure } from './supervisor-transfer';
+import { sealedArchiveRef } from './cache-storage';
 
 export interface CacheIdentity {
   storageScopeId: string; repoId: string; lockSha256: string; platform: string;
@@ -21,6 +23,9 @@ export interface DependencyFile { path: string; mode: 292 | 365; bytes: Uint8Arr
 export interface CacheReceipt {
   key: string; identity: CacheIdentity; treeSha256: string; inventory: readonly IntegrityPin[];
   runId: string; installOptions: typeof INSTALL_RECIPE; seal: string;
+  /** Sealed-unit pointer (§7.1.2): the one `tar.zst` archive admitted with this receipt. Absent on entries
+   * sealed before L1 (transition dual-read) and on seals produced without archive support (rollback). */
+  archive?: { ref: string; sha256: string; bytes: number };
 }
 export interface CacheObject { receipt: CacheReceipt; manifest: readonly DependencyEntry[] }
 /** Lookup-only source of `requireSealed`: the lockfile, its cache identity and the GB1 inputs. No staging
@@ -215,6 +220,97 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         return admitted.receipt;
       }, budget);
     },
+    /** Prewarm-only seal (§7.1.1, §7.1.2): qualifies like `acquire`, then installs once, streams the drained
+     * files into one deterministic `tar.zst` (§7.1.2), stores it under the receipt's tree digest and admits
+     * `{receipt, manifest, archive}` atomically. Per-file objects are NOT written for new seals (D8): the
+     * manifest rows stay readable in the admitted object, the bytes live only in the archive. Never called
+     * on a user path — the prewarm job (cache-api) is the only caller, under the prewarm budget. */
+    async seal(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source;
+      runtime?: LiveRuntime }, sealBudget: InstallBudget = defaultSealBudget()) {
+      return withinInstallBudget(async (progress, signal) => {
+        const { identity, inventory, recipe, key } = qualifiedInventory(source);
+        const existing = await runInstallStep(progress, 'cache_lookup', () => read(key),
+          { timeoutMs: sealBudget.lookupMs ?? INSTALL_CACHE_LOOKUP_TIMEOUT_MS, signal, log: options.log,
+            now: options.now, phase: 'seal' });
+        if (existing) {
+          try { return verify(existing, identity); }
+          catch { await ports.storage.quarantine(key); }
+        }
+        /** One verified tarball at a time; an altered one stops the stream before the pod runs the install. */
+        async function* tarballs() {
+          progress.step?.('tarball_fetch');
+          for (const pin of inventory) {
+            const bytes = await ports.fetch(pin, NPM_RELAY, signal);
+            verifySri(bytes, pin.integrity);
+            progress.report();
+            yield { pin, bytes };
+          }
+          progress.clearStep?.();
+        }
+        // Async channel from the installer sink into the tar stream: the sink resolves at once (no backpressure
+        // into the install), the tar consumes concurrently, so only a few files plus the compressor window are held.
+        const pending: DependencyFile[] = [];
+        const rows: DependencyEntry[] = [];
+        let finished = false; let failure: unknown; let wake: (() => void) | undefined;
+        const sink = async (file: DependencyFile) => {
+          if (failure === undefined && rows.length < TREE_LIMITS.files && file.bytes instanceof Uint8Array) {
+            const digest = sha256(file.bytes);
+            rows.push({ path: file.path, mode: file.mode, size: file.bytes.byteLength, sha256: digest });
+            pending.push(file);
+          }
+          wake?.(); wake = undefined;
+          progress.report();
+        };
+        async function* stream(): AsyncGenerator<DependencyFile> {
+          for (;;) {
+            const next = pending.shift();
+            if (next) { yield next; continue; }
+            if (failure !== undefined) throw failure;
+            if (finished) return;
+            await new Promise<void>(resolve => { wake = resolve; });
+          }
+        }
+        const consume = (async () => {
+          const chunks: Uint8Array[] = []; let size = 0;
+          for await (const chunk of tarZst(stream())) {
+            size += chunk.byteLength;
+            if (size > TREE_LIMITS.totalBytes) invalid();
+            chunks.push(chunk);
+          }
+          return Buffer.concat(chunks);
+        })();
+        consume.catch(() => undefined);
+        let installed: { runId: string };
+        try {
+          installed = await ports.cleanInstall({ ...source, identity, runtime: source.runtime, recipe,
+            tarballs: tarballs(), sink, progress, signal });
+          if (!installed.runId) invalid();
+        } catch (error) {
+          failure = error; wake?.();
+          await consume.catch(() => undefined);
+          throw error;
+        }
+        finished = true; wake?.();
+        const archiveBytes = await consume;
+        const treeSha256 = treeDigest(rows);
+        const ref = sealedArchiveRef(key, treeSha256);
+        await runInstallStep(progress, 'seal_archive', () => ports.storage.putArchive(ref, archiveBytes),
+          { signal, log: options.log, now: options.now, phase: 'seal',
+            counts: () => ({ files: rows.length, bytes: sizeOf(rows) }) });
+        const receipt = { key, identity, treeSha256, inventory, runId: installed.runId, installOptions: recipe,
+          archive: { ref, sha256: sha256(archiveBytes), bytes: archiveBytes.byteLength } };
+        const object = { receipt: { ...receipt, seal: seal(receipt) }, manifest: rows };
+        const admitted = await runInstallStep(progress, 'admit', () => ports.storage.admit(key, object),
+          { timeoutMs: sealBudget.admitMs ?? INSTALL_CACHE_ADMIT_TIMEOUT_MS, signal, log: options.log, now: options.now,
+            phase: 'seal',
+            counts: winner => ({ files: winner?.manifest.length ?? 0, bytes: sizeOf(winner?.manifest ?? []) }) });
+        try {
+          verify(admitted, identity);
+          if (admitted.receipt.treeSha256 !== receipt.treeSha256) invalid();
+        } catch (error) { await ports.storage.quarantine(key); throw error; }
+        return admitted.receipt;
+      }, sealBudget, 'seal');
+    },
     /** Reverify the seal and manifest on every read-only materialization, warm hit included, then rehash each file as it
      * is read: the caller holds one file (at most 64 MiB) at a time. Any mismatch quarantines the entry. */
     async *materialize(receipt: CacheReceipt): AsyncGenerator<DependencyFile> {
@@ -225,6 +321,31 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         verify(object, receipt.identity);
         if (object.receipt.treeSha256 !== receipt.treeSha256) invalid();
       } catch { await quarantine(); }
+      // Sealed-unit path (§7.1.2 consumption): one archive GET, digest check, streaming extraction with the
+      // bounded reader, tree-digest check over rehashed rows. Any mismatch quarantines as `sealed_unit_invalid`.
+      const archive = object.receipt.archive;
+      if (archive) {
+        try {
+          const stored = await ports.storage.getArchive(archive.ref);
+          if (!stored || sha256(stored) !== archive.sha256) throw new LiveError('sealed_unit_invalid');
+          const rows: DependencyEntry[] = [];
+          const archiveFailure: TransferFailure = kind => {
+            if (kind === 'limit') throw new LiveError('limit_exceeded');
+            throw new LiveError('sealed_unit_invalid');
+          };
+          for await (const file of extractTarZst(stored, stored.byteLength, TREE_LIMITS, archiveFailure)) {
+            rows.push({ path: file.path, mode: file.mode, size: file.bytes.byteLength, sha256: sha256(file.bytes) });
+            yield { path: file.path, mode: file.mode, bytes: file.bytes };
+          }
+          if (treeDigest(rows) !== object.receipt.treeSha256) throw new LiveError('sealed_unit_invalid');
+        } catch (error) {
+          await ports.storage.quarantine(receipt.key);
+          if (error instanceof LiveError && error.code === 'sealed_unit_invalid') throw error;
+          throw new LiveError('sealed_unit_invalid');
+        }
+        return;
+      }
+      // Transition dual-read (D8): entries sealed before L1 carry no archive pointer — per-file fallback.
       for (const entry of object.manifest) {
         const bytes = await ports.storage.getFile(entry.sha256);
         if (!bytes || bytes.byteLength !== entry.size || sha256(bytes) !== entry.sha256) await quarantine();
@@ -232,4 +353,8 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
       }
     },
   };
+}
+/** Byte sum of manifest rows (admit/seal-archive counts). */
+function sizeOf(rows: readonly { size: number }[]) {
+  return rows.reduce((total, entry) => total + entry.size, 0);
 }
