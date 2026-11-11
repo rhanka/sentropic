@@ -23,10 +23,12 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `api/tests/api/app-mcp-installed.test.ts`
   - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
   - `api/src/scripts/cm-placement-migrate.ts`
+  - `api/src/index.ts`
   - `packages/artifacts/src/adapters/**`
   - `packages/artifacts/src/adapters/db-blob.ts`
   - `packages/artifacts/src/adapters/composite-blob.ts`
   - `packages/artifacts/src/server/blob-bridge.ts`
+  - `packages/artifacts/src/server/publication.ts`
   - `packages/artifacts/src/mcp-core.ts`
   - `packages/artifacts/migrations/0014_db_blob_placement.sql`
   - `packages/artifacts/tests/**`
@@ -36,6 +38,11 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `apps/artifact-content/src/**`
   - `apps/artifact-content/tests/**`
   - `deploy/ci/artifact-content/object-store/artifact-content-db-role.sql`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/src/storage/artifact-blob.ts`
+  - `packages/cluster-mesh/src/storage/index.ts`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
