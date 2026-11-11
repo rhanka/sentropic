@@ -13,9 +13,12 @@
  * (`@sentropic/cluster-mesh` `storage/common-contract.ts`): same fields, no
  * dependency from this package to cluster-mesh.
  */
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { blobDigestOfKey, type PublicationBlobStore } from './publication.js';
 import { assertBlobPrefix } from './blob-prefix.js';
+
+/** Per-process pagination secret: cursors are unforgeable without it, invalid after restart. */
+const PAGE_MAC_KEY = randomBytes(32);
 
 export interface BoundedBlobPage {
   readonly maxItems: number;
@@ -65,7 +68,7 @@ interface PageCursor {
 }
 
 function cursorTag(prefix: string, offset: number): string {
-  return createHash('sha256').update(`blob-page/v1:${prefix}:${offset}`).digest('hex');
+  return createHmac('sha256', PAGE_MAC_KEY).update(`blob-page/v1:${prefix}:${offset}`).digest('hex');
 }
 
 function encodeCursor(cursor: PageCursor): string {

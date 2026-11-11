@@ -47,14 +47,21 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
         );
       } catch (error) {
         // Create-only: the key already exists. Settle by read-back — identical
-        // bytes are idempotent, different bytes fail closed without overwrite.
+        // bytes are idempotent (verified digest match), different bytes fail
+        // closed without overwrite.
         if (typeof error === 'object' && error !== null && 'name' in error &&
           (error as { name?: unknown }).name === 'PreconditionFailed') {
           const stored = await store.getBlob(key);
-          if (stored !== undefined) return;
+          if (stored !== undefined) {
+            verifyStoredBytesForKey(key, stored);
+            return;
+          }
         }
         throw error;
       }
+      const stored = await store.getBlob(key);
+      if (stored === undefined) throw new Error(`blob missing after write: ${key}`);
+      verifyStoredBytesForKey(key, stored);
     },
     async getBlob(key: string): Promise<Uint8Array | undefined> {
       assertBlobKey(key);
