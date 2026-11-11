@@ -12,6 +12,9 @@ it('should admit only one concurrent edit and keep reset replay from deleting a 
   const reset = { expectedHeadSha: beforeReset.baseHeadSha, expectedLiveRevision: beforeReset.liveRevision, idempotencyKey: 'reset' };
   await w.call('live_reset', reset);
   await w.write({ files: [{ path: 'ui/a.ts', text: 'retained newer draft' }] });
+  // Flush the fire-and-forget settles before measuring: the replay below must add no call of its own.
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
   const projections = w.worker.reconcile.mock.calls.length;
   expect(await w.call('live_reset', reset)).toMatchObject({ replayed: true });
   expect(w.worker.reconcile).toHaveBeenCalledTimes(projections);

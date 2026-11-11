@@ -49,7 +49,9 @@ export async function mutateLive(input: { deps: LiveServiceDeps; tx: LiveTransac
         expiresAt: null, changedPaths: 0, draftBytes: 0, tombstone: 'reset' });
       if (phase !== 'DORMANT') action = 'project';
     } else {
-      if (phase !== 'DORMANT' && !(phase === 'REVIVING' && record.runtime?.origin === 'implicit')) liveBusy('active_session');
+      // A start on a session that is still reviving joins it and dispatches the worker again (same session, same
+      // fences); only a session that is already LIVE refuses.
+      if (phase !== 'DORMANT' && phase !== 'REVIVING') liveBusy('active_session');
       action = 'project';
     }
     if (action === 'project') {
