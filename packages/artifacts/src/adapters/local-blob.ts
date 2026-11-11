@@ -7,7 +7,7 @@
  * read-back, atomic temp-file+rename writes, and strict deletes (unknown keys
  * fail so callers notice, per the port contract).
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { PublicationBlobStore } from '../server/publication.js';
 import { assertBlobPrefix } from '../server/blob-prefix.js';
@@ -47,23 +47,26 @@ export function createLocalBlobStore(root: string): PublicationBlobStore {
       verifyBytesForKey(key, snapshot);
       const target = pathOf(key);
       if (existsSync(target)) {
-        // Create-only: identical retry is idempotent, different bytes are
-        // refused without touching the stored object.
-        const stored = readVerified(key, target);
-        if (stored.byteLength !== snapshot.byteLength) {
-          throw new Error(`blob key conflict (length differs, no overwrite): ${key}`);
-        }
-        for (let index = 0; index < stored.byteLength; index += 1) {
-          if (stored[index] !== snapshot[index]) {
-            throw new Error(`blob key conflict (bytes differ, no overwrite): ${key}`);
-          }
-        }
+        // Create-only: digest-verified read proves the stored bytes name the
+        // key, hence equal the snapshot barring SHA-256 collision.
+        readVerified(key, target);
         return;
       }
       mkdirSync(dirname(target), { recursive: true });
       const temp = `${target}.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`;
       writeFileSync(temp, snapshot, { flag: 'wx' });
-      renameSync(temp, target);
+      try {
+        // Atomic create-only: link fails with EEXIST instead of overwriting.
+        linkSync(temp, target);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+          readVerified(key, target);
+          return;
+        }
+        throw error;
+      } finally {
+        try { unlinkSync(temp); } catch { /* already linked or never created */ }
+      }
     },
     async getBlob(key: string): Promise<Uint8Array | undefined> {
       assertBlobKey(key);
