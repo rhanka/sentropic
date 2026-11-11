@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ARTIFACTS_TOOL_DEFINITIONS } from '@sentropic/artifacts/mcp-core';
-import type { AppArtifactsRegistration } from '../services/artifacts/app-registration';
+import type { AppArtifactsRegistration } from '../../services/artifacts/app-registration';
 
 export const isPerAppMcpEnabled = (): boolean => process.env.CM_PER_APP_MCP_ENABLED === '1';
 
@@ -24,9 +24,9 @@ export function resolvePerAppAuth(registration: AppArtifactsRegistration, input:
 /** Served definitions: package definitions with the registration wording overlay. */
 export function buildPerAppToolList(registration: AppArtifactsRegistration):
   { name: string; description: string; inputSchema: unknown }[] {
-  return Object.values(ARTIFACTS_TOOL_DEFINITIONS).map((tool) => ({
-    name: tool.name,
-    description: registration.presentation.toolSummaries[tool.name] ?? tool.description,
+  return Object.entries(ARTIFACTS_TOOL_DEFINITIONS).map(([name, tool]) => ({
+    name,
+    description: registration.presentation.toolSummaries[name] ?? tool.description,
     inputSchema: tool.inputSchema,
   }));
 }
