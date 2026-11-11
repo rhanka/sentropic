@@ -7,3 +7,4 @@ export * from './message-client.js';
 export * from './message-contracts.js';
 export * from './native-drain-contracts.js';
 export * from './product-authorization.js';
+export * from './email-port.js';
