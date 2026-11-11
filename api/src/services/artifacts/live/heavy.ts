@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { emptyHeavyPhaseQueueState, type HeavyPhaseKind, type HeavyPhaseQueue, type HeavyPhaseQueueState,
   type HeavyPhaseQueueStore, type HeavyPhaseSlotKind } from '@sentropic/cluster-mesh';
 import type { CachePorts } from './cache';
+import { defaultStepLogger, type InstallStepLogger } from './deadline';
 import type { LiveStore } from './ports';
 import { podName, quotaExceeded } from './pods';
 import { LiveError } from './records';
@@ -105,11 +106,35 @@ export async function liveHolds(store: Pick<LiveStore, 'active'>) {
   return { pods: active.map(({ key }) => podName(key)), lives: active.filter(({ phase }) => phase === 'LIVE').map(({ key }) => podName(key)) };
 }
 /** The in-pod clean install is the `install` heavy phase; an install outside a pod is not a node phase. The
- * watchdog abort crosses the queue wait, so a cut install stops re-enqueuing its ticket. */
-export const gatedInstall = (heavy: LiveHeavyGate, install: CachePorts['cleanInstall']): CachePorts['cleanInstall'] =>
-  input => input.runtime
-    ? heavy.run(input.runtime.podName, 'install', () => install(input), { signal: input.signal })
-    : install(input);
+ * watchdog abort crosses the queue wait, so a cut install stops re-enqueuing its ticket.
+ * `heavy_admit` covers only the queue admission: the ok line is logged as soon as the slot is acquired (before the
+ * install runs), with the admission wait as its duration. An install failure never re-logs `heavy_admit` as failed;
+ * only an admission failure (queued timeout or abort during the wait) logs `heavy_admit` fail. */
+export const gatedInstall = (heavy: LiveHeavyGate, install: CachePorts['cleanInstall'],
+  options: { log?: InstallStepLogger; now?: () => number } = {}): CachePorts['cleanInstall'] =>
+  input => {
+    const runtime = input.runtime;
+    if (!runtime) return install(input);
+    const log = options.log ?? defaultStepLogger;
+    const now = options.now ?? Date.now;
+    input.progress?.step?.('heavy_admit');
+    const started = now();
+    let admitted = false;
+    const fail = (error: unknown) => {
+      const reason = error instanceof LiveError
+        ? (error.reason ? `${error.code}:${error.reason}` : error.code) : 'builder_unavailable';
+      log({ msg: 'artifact_live_install_step', step: 'heavy_admit', ms: now() - started, outcome: 'fail', reason });
+    };
+    return heavy.run(runtime.podName, 'install', async () => {
+      admitted = true;
+      log({ msg: 'artifact_live_install_step', step: 'heavy_admit', ms: now() - started, outcome: 'ok' });
+      input.progress?.clearStep?.();
+      return install(input);
+    }, { signal: input.signal }).catch(error => {
+      if (!admitted) fail(error);
+      throw error;
+    });
+  };
 
 const QUEUE_NAMESPACE = 'artifact-live-heavy-queue/v1';
 /** Durable queue state of one node in the existing host KV migration, serialized by a node lock across replicas. */
