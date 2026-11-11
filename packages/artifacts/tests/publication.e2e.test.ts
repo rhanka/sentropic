@@ -39,6 +39,11 @@ const SQL = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0001_artifacts.sql'),
   'utf8',
 );
+// 0014 provides `blobs.placement`, written by release registration.
+const SQL_BLOB_PLACEMENT = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0014_db_blob_placement.sql'),
+  'utf8',
+);
 
 const pool = new Pool({ connectionString: required('DATABASE_URL') });
 const s3 = new S3Client({
@@ -73,6 +78,7 @@ beforeAll(async () => {
   const setup = new Pool({ connectionString: required('DATABASE_URL') });
   await setup.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
   await setup.query(SQL);
+  await setup.query(SQL_BLOB_PLACEMENT);
   await setup.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-1', 'org-1')`);
   await setup.end();
   await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));

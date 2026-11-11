@@ -38,7 +38,8 @@ if (DATABASE_URL === undefined || DATABASE_URL.length === 0) {
   throw new Error('publication authorization proof needs DATABASE_URL');
 }
 
-const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql'].map(
+// 0014 provides `blobs.placement`, written by release registration.
+const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql', '0014_db_blob_placement.sql'].map(
   (name) =>
     readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', name), 'utf8'),
 );
