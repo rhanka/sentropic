@@ -32,6 +32,10 @@ Let the first publication of a new artifact run build-only from its admitted hos
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (follow 0.2.26, precedent 8c2e210d4)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (same)
   - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (pin integrity, precedent 42d6224f2)
+  - `api/src/services/mcp/cluster-registry.ts` (APP-P1 digest repin for 0.2.26, same file as release f395a897f; fixes API boot crash `requires the pinned APP-P1 manifest`)
+  - `api/tests/api/app-mcp-registry.test.ts` (digest history row 0.2.26)
+  - `api/tests/api/app-mcp-installed.test.ts` (provider version + digest)
+  - `api/tests/api/mcp-workspaces-list-dispatch.test.ts` (digest literal)
   - `packages/artifacts/tests/live-host-recheck.test.ts`
   - `packages/artifacts/tests/live-host-accept.test.ts`
   - `packages/artifacts/package.json`
@@ -53,6 +57,7 @@ Let the first publication of a new artifact run build-only from its admitted hos
 ## Feedback Loop
 - [x] Scope extension (no EXn: unknown→allowed, same files as release f395a897f/8c2e210d4): the 0.2.26 bump requires `mcp-core.ts` (probe asserts provider version), `api/package-lock.json` sync, and the cluster-mesh selected fixture + tuple pin (prepare-artifacts.spec + pin test assert the candidate tuple). Added to Allowed Paths.
 - [ ] CI security-container UI/e2e: 2 HIGH libxslt findings (CVE-2026-87636, CVE-2026-9947, base image, no Dockerfile pin) unrelated to this diff; needs a security-lane decision (dedicated branch or register entry with owner + review_by). Not touched from this lane.
+- [x] CI run 42938895943 boot crash (`requires the pinned APP-P1 manifest`, unhealthy api → stack jobs failed): the 0.2.26 bump changes the manifest digest. Repinned to `d86a87d4...` (read from local boot log after temporary instrumentation, then reverted) + test literals; local api container unhealthy → healthy, app-mcp suites green.
 
 ## AI Flaky tests
 - [ ] Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
