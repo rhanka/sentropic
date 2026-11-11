@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createCompositeBlobStore, placementForPut } from '../src/adapters/composite-blob.js';
+import { listBlobKeysPaged } from '../src/server/blob-bridge.js';
 import { createMemoryBlobStore, type PublicationBlobStore } from '../src/server/publication.js';
 
 function keyFor(bytes: Uint8Array, scope = 'scope-a'): string {
@@ -114,6 +115,79 @@ describe('composite blob placement', () => {
     const store = createCompositeBlobStore({ db, s3, mode: 's3', inlineMaxBytes: 8,
       placements: { getPlacement: async () => 'db' } });
     expect(await store.getBlob(key)).toEqual(bytes);
+  });
+
+  it('walks the ordered union through bounded backend pages', async () => {
+    const db = createMemoryBlobStore();
+    const s3 = createMemoryBlobStore();
+    const prefix = 'artifacts/scope-a/blobs/sha256/';
+    const expected = new Set<string>();
+    for (const [side, words] of [[db, ['db alpha', 'db beta']], [s3, ['s3 gamma', 's3 delta']]] as const) {
+      for (const word of words) {
+        const bytes = new TextEncoder().encode(`${word} ${side === db ? 'd' : 's'}`);
+        const key = keyFor(bytes);
+        expected.add(key);
+        await side.putBlob(key, bytes);
+      }
+    }
+    // One key on both sides exercises union deduplication.
+    const shared = new TextEncoder().encode('present on both sides');
+    const sharedKey = keyFor(shared);
+    expected.add(sharedKey);
+    await db.putBlob(sharedKey, shared);
+    await s3.putBlob(sharedKey, shared);
+    const store = createCompositeBlobStore({ db, s3, mode: 'db+s3', inlineMaxBytes: 8,
+      placements: { getPlacement: async () => undefined } });
+    const ordered = [...expected].sort();
+    const seen: string[] = [];
+    let continuation: string | undefined;
+    for (;;) {
+      const page = await listBlobKeysPaged(store, prefix, continuation === undefined
+        ? { maxItems: 2, maxEncodedBytes: 1_000_000 }
+        : { maxItems: 2, maxEncodedBytes: 1_000_000, continuation });
+      expect(page.keys.length).toBeLessThanOrEqual(2);
+      expect(page.keys).toEqual([...page.keys].sort());
+      seen.push(...page.keys);
+      if (page.continuation === undefined) break;
+      continuation = page.continuation;
+    }
+    expect(seen).toEqual(ordered);
+    await expect(listBlobKeysPaged(store, prefix, {
+      maxItems: 2, maxEncodedBytes: 1_000_000, continuation: 'tampered',
+    })).rejects.toThrow(/invalid blob page continuation/);
+  });
+
+  it('pages a side without store-level paging through the fallback slice', async () => {
+    const prefix = 'artifacts/scope-a/blobs/sha256/';
+    const s3backing = createMemoryBlobStore();
+    const bare: PublicationBlobStore = {
+      putBlob: (key, bytes) => s3backing.putBlob(key, bytes),
+      getBlob: (key) => s3backing.getBlob(key),
+      listKeys: (listedPrefix) => s3backing.listKeys(listedPrefix),
+      deleteBlob: (key) => s3backing.deleteBlob(key),
+    };
+    const db = createMemoryBlobStore();
+    const expected: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const bytes = new TextEncoder().encode(`bare side ${index}`);
+      const key = keyFor(bytes);
+      expected.push(key);
+      await s3backing.putBlob(key, bytes);
+    }
+    const store = createCompositeBlobStore({ db, s3: bare, mode: 'db+s3', inlineMaxBytes: 8,
+      placements: { getPlacement: async () => undefined } });
+    expect(store.listKeysPaged).toBeDefined();
+    const seen: string[] = [];
+    let startAfter: string | undefined;
+    for (;;) {
+      const result = await store.listKeysPaged!(prefix, startAfter === undefined
+        ? { maxItems: 2, maxEncodedBytes: 1_000_000 }
+        : { maxItems: 2, maxEncodedBytes: 1_000_000, startAfter });
+      seen.push(...result.keys);
+      if (!result.hasMore) break;
+      startAfter = result.keys[result.keys.length - 1];
+    }
+    expect(seen).toEqual(expected.sort());
   });
 
   it('lists only its side in db and s3 modes', async () => {
