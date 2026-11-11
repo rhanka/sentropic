@@ -434,7 +434,7 @@ export interface PublicationUnitWriter {
   readAuthorization(artifactId: string): Promise<{ state: ArtifactState; acl: ArtifactAcl | undefined }>;
   putSource(artifactId: string, source: SourceRef): Promise<void>;
   putRelease(release: ReleaseRecord): Promise<void>;
-  registerBlob(storageScopeId: string, digest: string, size: number): Promise<void>;
+  registerBlob(storageScopeId: string, digest: string, size: number, placement?: 'db' | 'object'): Promise<void>;
   promoteCurrentLatestWins(artifactId: string, releaseId: string): Promise<void>;
   addReleaseRef(digest: string, holder: string): Promise<void>;
   completeIntent(intentId: string): Promise<void>;
@@ -483,11 +483,11 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
           release.authorPrincipalId ?? null, release.parentReleaseId ?? null, release.revertedFromReleaseId ?? null],
       );
     },
-    async registerBlob(storageScopeId: string, digest: string, size: number): Promise<void> {
+    async registerBlob(storageScopeId: string, digest: string, size: number, placement: 'db' | 'object' = 'object'): Promise<void> {
       await client.query(
-        `INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
-         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-        [storageScopeId, digest, size],
+        `INSERT INTO artifacts.blobs (storage_scope_id, digest, size, placement)
+         VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+        [storageScopeId, digest, size, placement],
       );
     },
     async promoteCurrentLatestWins(artifactId: string, releaseId: string): Promise<void> {
@@ -713,14 +713,8 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
             createdAt: new Date(nowMs).toISOString(),
           });
           for (const staged of prepared.entries) {
-            await unit.registerBlob(input.storageScopeId, staged.entry.digest, staged.entry.size);
-            if (deps.placementForSize?.(staged.entry.size) === 'db') {
-              await client.query(
-                `UPDATE artifacts.blobs SET placement = 'db'
-                 WHERE storage_scope_id = $1 AND digest = $2`,
-                [input.storageScopeId, staged.entry.digest],
-              );
-            }
+            const placement = deps.placementForSize?.(staged.entry.size) ?? 'object';
+            await unit.registerBlob(input.storageScopeId, staged.entry.digest, staged.entry.size, placement);
             await unit.addReleaseRef(staged.entry.digest, releaseId);
             addedRefs.push(staged.entry.digest);
           }

@@ -117,6 +117,7 @@ export { createSqliteArtifactStore, createSqliteCommitExecutor };
 export { createSqliteManagementUnit } from './sqlite-management.js';
 export { createSqliteActivationStore, type SqliteActivationStore } from './sqlite-activation.js';
 export { createLocalBlobStore } from './local-blob.js';
+export { createSqliteDbBlobStore } from './sqlite-blob.js';
 
 /** One-call wiring: open a file, create the writer, build store + executor. */
 export function openSqliteArtifacts(path: string): {

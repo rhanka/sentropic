@@ -219,7 +219,8 @@ export function createSqliteArtifactStore(db: SqliteDatabase, writer: SqliteWrit
         if (scopeId === undefined) throw new Error(`unknown artifact: ${release.artifactId}`);
         for (const file of parsed.files ?? []) {
           if (typeof file.digest !== 'string' || typeof file.size !== 'number') continue;
-          runQuery(db, 'INSERT INTO blobs (storage_scope_id, digest, size) VALUES ($1, $2, $3) ON CONFLICT (storage_scope_id, digest) DO NOTHING', [scopeId, file.digest, file.size]);
+          runQuery(db, `INSERT INTO blobs (storage_scope_id, digest, size, placement) VALUES ($1, $2, $3, 'object')
+            ON CONFLICT (storage_scope_id, digest) DO NOTHING`, [scopeId, file.digest, file.size]);
         }
         // 0004 publication_updated_at side effect.
         runQuery(db, 'UPDATE artifacts SET updated_at = $2 WHERE id = $1', [release.artifactId, release.createdAt]);
