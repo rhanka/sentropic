@@ -125,9 +125,11 @@ describe('locked dependency cache', () => {
     const f = cacheFixture({ stallMs: 50, ceilingMs: 5_000 });
     f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
       for await (const tarball of input.tarballs) { expect(tarball.bytes).toBeInstanceOf(Uint8Array); break; }
+      input.progress?.step?.('tarball_stream');
       await new Promise<never>(() => {});
     });
-    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install' });
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'phase_timeout:install:tarball_stream' });
     expect(f.ports.storage.admit).not.toHaveBeenCalled();
     expect(f.ports.storage.putFile).not.toHaveBeenCalled();
     expect(f.ports.storage.quarantine).not.toHaveBeenCalled();
@@ -138,9 +140,11 @@ describe('locked dependency cache', () => {
     f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
       observed = input.signal;
       for await (const tarball of input.tarballs) { expect(tarball.bytes).toBeInstanceOf(Uint8Array); break; }
+      input.progress?.step?.('tarball_stream');
       await new Promise<never>(() => {});
     });
-    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install' });
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'phase_timeout:install:tarball_stream' });
     expect(observed?.aborted).toBe(true);
     expect(f.ports.storage.admit).not.toHaveBeenCalled();
   });
@@ -149,10 +153,22 @@ describe('locked dependency cache', () => {
     f.ports.cleanInstall = vi.fn<CachePorts['cleanInstall']>(async input => {
       for await (const tarball of input.tarballs) expect(tarball.bytes).toBeInstanceOf(Uint8Array);
       input.progress?.suspendStall(true);
+      input.progress?.step?.('recipe');
       await new Promise<never>(() => {});
     });
-    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:install' });
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'phase_timeout:install:recipe' });
     expect(f.ports.storage.admit).not.toHaveBeenCalled();
+  });
+  it('should name cache_lookup when the lookup hangs past the ceiling (11/11 preprod)', async () => {
+    // The 11/11 install never reported progress: the lookup sets its step before the first DB/S3 read, so the
+    // ceiling names the hanging sub-step instead of failing blind with the bare phase reason.
+    const f = cacheFixture({ stallMs: 10_000, ceilingMs: 100 });
+    f.ports.storage.read = vi.fn(async () => new Promise<never>(() => {}));
+    await expect(f.cache.acquire(f.source())).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'phase_timeout:install:cache_lookup' });
+    expect(f.ports.storage.admit).not.toHaveBeenCalled();
+    expect(f.ports.cleanInstall).not.toHaveBeenCalled();
   });
   it('should install a qualified script package with its hook disabled and refuse an unqualified one', async () => {
     const f = cacheFixture(); const entry = f.lock.packages['node_modules/pkg']; entry.hasInstallScript = true;
