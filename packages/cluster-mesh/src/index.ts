@@ -60,3 +60,4 @@ export type { GitAppEnvelopeStore } from './forge/records.js';
 export { createGitHubAppApi } from './forge/github-api.js';
 export { createGitHubAppEnrollment } from './forge/enrollment.js';
 export { createGitHubAppRouter } from './forge/hono.js';
+export * from './prompts/registry.js';
