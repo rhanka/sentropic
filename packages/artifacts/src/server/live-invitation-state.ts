@@ -22,7 +22,7 @@ export async function sweepInvitations(tx: LiveTransaction, identity: LiveIdenti
 }
 
 /** `liveInvitationState` and `liveViewer` read the committed state; they never write. */
-export function liveInvitationViews(deps: LiveServiceDeps): Omit<LiveSessionService, 'execute'> {
+export function liveInvitationViews(deps: LiveServiceDeps): Omit<LiveSessionService, 'execute' | 'redrive'> {
   const qualified = () => deps.invitations?.qualified === true;
   const read = <T>(identity: LiveIdentity, empty: T, action: (rows: LiveInvitationRecord[], session: string,
     tx: LiveTransaction) => Promise<T>) => deps.store.transaction(identity, async tx => {

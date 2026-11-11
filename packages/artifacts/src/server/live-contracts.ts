@@ -37,7 +37,15 @@ export interface LiveServiceDeps {
   commitPathsMax?: number; commitBytesMax?: number;
   gitMessageMaxUnits?: number; idempotencyKeyMaxUnits?: number;
   invitations?: LiveInvitationPort;
+  /** Observer of every worker settle that did not complete: 'failed' carries the typed code of the refusal, 'pending'
+   * a worker that is not ready yet. The host logs it; a throw is ignored. */
+  onWorkerEvent?(event: LiveWorkerEvent): void;
 }
+/** 'settled': the worker confirmed and the runtime moved; 'pending': not ready yet; 'failed': the worker refused or
+ * was unreachable; 'skipped': nothing to do (no worker, or the session is no longer the current one). */
+export type LiveWorkerOutcome = 'settled' | 'pending' | 'failed' | 'skipped';
+export interface LiveWorkerEvent { identity: LiveIdentity; action: 'project' | 'stop'; outcome: 'failed' | 'pending'; code?: string }
+export interface LiveRedriveItem extends LiveIdentity { action: 'project' | 'stop'; outcome: LiveWorkerOutcome }
 export interface LiveService {
   execute(operation: string, args: Record<string, unknown>, invocation: LiveInvocation): Promise<Record<string, any>>;
 }
@@ -45,6 +53,9 @@ export interface LiveService {
 export interface LiveSessionService extends LiveService {
   liveInvitationState(identity: LiveIdentity): Promise<LiveInvitationState>;
   liveViewer(identity: LiveIdentity, principalId: string): Promise<LiveViewer>;
+  /** Settles again every runtime of the scope that still waits for the worker (see redriveLiveWorkers). Never throws
+   * for a worker refusal; empty without a worker or without 'LiveStore.pending'. */
+  redrive(storageScopeId: string, limit?: number): Promise<LiveRedriveItem[]>;
 }
 export function liveResponse(record: LiveDraftRecord, currentHeadSha: string, now = Date.now()): Record<string, unknown> {
   return { artifactId: record.artifactId, bindingGeneration: record.bindingGeneration,

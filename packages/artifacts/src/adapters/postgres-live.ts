@@ -53,6 +53,14 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
         WHERE storage_scope_id=$1 AND artifact_id=$2 AND record #>> '{runtime,liveSessionId}'=$3`, [scope, artifactId, sessionId]);
       return result.rows[0] ? { storageScopeId: scope, artifactId, bindingGeneration: Number(result.rows[0].binding_generation) } : undefined;
     },
+    async pending(scope, limit = 64) {
+      const result = await pool.query(`SELECT artifact_id, binding_generation FROM artifacts.live_drafts
+        WHERE storage_scope_id=$1 AND (record #>> '{runtime,phase}' IN ('REVIVING','QUIESCING','SAVING','DECOMMISSIONING')
+          OR (record #>> '{runtime,phase}' = 'LIVE' AND record #>> '{runtime,appliedRevision}' IS DISTINCT FROM record ->> 'revision'))
+        ORDER BY record #>> '{runtime,lastAccessAt}' LIMIT $2`, [scope, limit]);
+      return result.rows.map(row => ({ storageScopeId: scope, artifactId: String(row.artifact_id),
+        bindingGeneration: Number(row.binding_generation) }));
+    },
     async transaction(identity, action) {
     const client = await pool.connect();
     const values = [identity.storageScopeId, identity.artifactId, identity.bindingGeneration];
