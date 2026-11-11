@@ -14,8 +14,11 @@ const REVISION = /^[\x21-\x7e]{1,256}$/;
 export interface LiveWorkerFences {
   current(identity: LiveIdentity): Promise<{ ownerId: string; liveSessionId: string; leaseEpoch: number; routeEpoch: number } | undefined>;
 }
-/** Builder answer of a reconcile; the package checks it against its own fences before marking the session LIVE. */
-export interface LiveBridgeAck { liveSessionId: string; leaseEpoch: number; routeEpoch: number; revision: string; ready: boolean }
+/** Builder answer of a reconcile; the package checks it against its own fences before marking the session LIVE.
+ * A terminal `failure` abandons the revive: the package moves the runtime to DORMANT with `code:reason` as
+ * stateDetail and stops re-driving it. Unknown failure shapes are ignored, so older builders stay compatible. */
+export interface LiveBridgeAck { liveSessionId: string; leaseEpoch: number; routeEpoch: number; revision: string; ready: boolean;
+  failure?: { code: string; reason: string } }
 export interface LiveWorkerClientOptions {
   /** Builder base URL (https, no query or fragment); absent keeps every call closed with builder_unavailable. */
   readonly baseUrl?: string | undefined;
@@ -75,7 +78,14 @@ function parseAck(raw: unknown): LiveBridgeAck {
     || !count(r.routeEpoch) || typeof r.revision !== 'string' || !REVISION.test(r.revision) || typeof r.ready !== 'boolean') {
     throw new ArtifactOperationError('provider_unavailable');
   }
-  return { liveSessionId: r.liveSessionId, leaseEpoch: r.leaseEpoch, routeEpoch: r.routeEpoch, revision: r.revision, ready: r.ready };
+  const ack: LiveBridgeAck = { liveSessionId: r.liveSessionId, leaseEpoch: r.leaseEpoch, routeEpoch: r.routeEpoch,
+    revision: r.revision, ready: r.ready };
+  const failure = r.failure as { code?: unknown; reason?: unknown } | null | undefined;
+  if (failure && typeof failure === 'object' && typeof failure.code === 'string' && failure.code &&
+    typeof failure.reason === 'string' && failure.reason) {
+    ack.failure = { code: failure.code, reason: failure.reason };
+  }
+  return ack;
 }
 
 /**
