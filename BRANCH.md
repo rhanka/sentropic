@@ -77,28 +77,28 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Extend artifactMigrationAssets with 0009-0013 sha256 receipts.
   - [x] Extend requiredRelations with upload_pages, git_bindings, live drafts, attach intents, invitations.
   - [x] API tests: extend artifacts-host-migrations.test.ts (fresh DB, idempotent rerun, no row changed).
-  - [ ] Lot gate: typecheck-api, scoped test file.
+  - [x] Lot gate: typecheck-api PASS, artifacts-host-migrations 19/19 (scoped, ENV=test-t4a-storage).
 - [x] **Lot 2 — CMF-S1 blob bridge ArtifactBlobPort**
-  - [ ] Harden S3 putBlob create-only If-None-Match + digest verify + read-back verify.
-  - [ ] Harden local putBlob buffer clone + create-only + bounded listKeys continuation.
-  - [ ] Bounded listKeys CommonBoundedPage both adapters.
-  - [ ] Tests: identical retry idempotent, different bytes refused, wrong digest fails closed, bounded pages.
-  - [ ] Lot gate: typecheck, scoped package tests.
+  - [x] Harden S3 putBlob create-only If-None-Match + digest verify + read-back verify.
+  - [x] Harden local putBlob buffer clone + create-only + bounded listKeys continuation.
+  - [x] Bounded listKeys pages with scope-bound integrity-tagged continuation.
+  - [x] Tests: identical retry idempotent, different bytes refused, wrong digest fails closed, bounded pages.
+  - [x] Lot gate: typecheck-artifacts PASS, blob-bridge 8/8 + composite-blob 8/8 (scoped, ENV=test-t4a-storage).
 - [x] **Lot 3 — CMF-S2 migration 0014 + composite placement**
-  - [ ] Package migration 0014_db_blob_placement.sql (placement, blob_bytes, upload_staging_bytes).
-  - [ ] Composite db+s3 adapter + advisory digest lock coordination.
-  - [ ] Artifact-content wired composite read + db-role SELECT grants.
-  - [ ] Tests: contract Postgres/SQLite, db/s3/db+s3 round-trips, refusal unknown mode, existing rows read object.
-  - [ ] Lot gate: typecheck, scoped tests.
+  - [x] Package migration 0014_db_blob_placement.sql (placement, blob_bytes, upload_staging_bytes).
+  - [x] Composite db+s3 adapter + advisory digest lock coordination (deferred delete sides).
+  - [x] Artifact-content wired composite read + db-role SELECT grants.
+  - [x] Tests: contract Postgres/SQLite, db/s3/db+s3 round-trips, refusal unknown mode, existing rows read object.
+  - [x] Lot gate: typecheck-api PASS, cmf-s2-blob-placement 4/4 (scoped, ENV=test-t4a-storage).
 - [x] **Lot 4 — CMF-S3 placement-migrate tool**
-  - [ ] placement-migrate both directions, AP-3 counts, receipts, resume cursor, never deletes source.
-  - [ ] Tests: rehearsal copy equal digests, source intact, resume after crash.
-  - [ ] Lot gate: typecheck, scoped tests.
+  - [x] placement-migrate both directions, AP-3 counts, per-batch tx switch, resume cursor, never deletes source.
+  - [x] Tests: rehearsal copy equal digests, source intact, resume after crash.
+  - [x] Lot gate: typecheck-api PASS, cmf-s3-placement-migrate 4/4 (scoped, ENV=test-t4a-storage).
 - [ ] **Lot 5 — Final validation**
-  - [ ] Typecheck and lint impacted.
-  - [ ] Retest API scoped suites.
-  - [ ] Retest package suites scoped.
-  - [ ] No version bump and no lock regeneration in this wagon lane (COMMON-RULES OPTIM: the train integration lane bumps once).
+  - [x] Typecheck impacted (typecheck-artifacts + typecheck-api PASS).
+  - [x] Retest API scoped suites (cmf-s2 4/4, cmf-s3 4/4, host-migrations 19/19).
+  - [x] Retest package suites scoped (blob-bridge 8/8, composite-blob 8/8).
+  - [x] No version bump and no lock regeneration in this wagon lane (COMMON-RULES OPTIM: the train integration lane bumps once).
   - [ ] Final gate step 1: open PR with BRANCH.md body, CI green, do NOT merge (T3 gate).
   - [ ] Final gate step 2: French report .tmp/rv/t4a-storage.md.
   - [ ] make down-volumes ENV=test-t4a-storage.
