@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.26.0-dev.22
+
+- Merge `origin/main` (llm-mesh 0.35.0, llm-gateway 0.22.6, `<0.36.0` range) and refresh the
+  `selected` packaging fixture lock for the merged tree. No functional change to the
+  notifications module; version bump keeps the package above `origin/main` (`dev.21`).
+
+## 0.26.0-dev.21
+
+- Ops job-failure notifications (`notifications` module): frozen `OpsJobFailureV1` event
+  contract (product `targetKey`, closed reason taxonomy, 1 KiB detail cap), pure incident
+  state machine (dedup, 24 h digest, escalation at 3 consecutive failures or 24 h firing,
+  1 h anti-flap, 10 mails/h/target cap, dead-man `stale`) and a `RecipientsPort` v1 backed
+  by a validated platform declaration (target to account ids, never hardcoded emails).
+
 ## 0.26.0-dev.19
 
 - Identity replica sync (`mapA4IdentitySource` provenance): legacy WebAuthn credentials carry

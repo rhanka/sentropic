@@ -127,6 +127,13 @@
       "when": 1793750400000,
       "tag": "0022_oauth_consent_optional_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793836800000,
+      "tag": "0023_ops_job_failure_notify",
+      "breakpoints": true
     }
   ]
 }
