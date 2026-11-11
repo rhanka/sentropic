@@ -41,7 +41,7 @@ export function liveWitness(options: { store?: LiveStore; now?: () => number; in
       qualified: true, target: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, branch: binding.branch,
         subPath: '', principalId: invocation.actorId, outputDir: 'dist' },
       repository: { storageScopeId: binding.storageScopeId, repoId: binding.repoId, locator: '', installationRef: '',
-        branchPrefix: 'artifact/' as const, allowedSubPaths: [''], canWrite: true, writablePaths: ['ui/**'], refusedWritePaths: [] } });
+        branchPrefix: 'artifact/' as const, allowedSubPaths: [''], canWrite: true, writablePaths: ['ui/**'], refusedWritePaths: [] } }) };
   const service = createLiveService(deps);
   const context = { actorId: 'alice', storageScopeId: binding.storageScopeId, invocationId: 'inv-1' };
   let sequence = 0;
