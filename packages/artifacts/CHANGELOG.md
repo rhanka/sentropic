@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.27
+
+- Wire the builder terminal failure through the live package: a `reconcile` answer with
+  `ready: false` and `failure: { code, reason }` moves the runtime to DORMANT with
+  `code:reason` as `stateDetail`, reports `onWorkerEvent` (`failed` with the code and reason),
+  and is never re-driven; a later owner `start` or edit revives normally. The live-host
+  `LiveBridgeAck` parser preserves a well-formed `failure` and ignores malformed shapes.
+  A total `stop` (builder holds no or no longer this session) converges instead of replaying
+  a refusal.
+- Fence concurrent live settles: one settle per identity at a time (no parallel
+  `reconcile`/`stop` for the same session), a stop requires its session plus a
+  `QUIESCING`/`SAVING`/`DECOMMISSIONING` phase and lease match before any worker call, and a
+  settle that did not move the runtime reports `skipped` instead of `settled`. A `void`
+  reconcile answer reports `pending` with an event instead of going silent.
+- Bound the re-drive: `pending` limits clamp to `[0, 64]` identically on memory and Postgres,
+  ordering is deterministic (`lastAccessAt`, `artifact_id`, `binding_generation`), and
+  `redriveLiveWorkers` runs at most 4 items in flight (tunable via
+  `redriveConcurrency`) with a 35 s per-item budget (tunable via `redriveItemTimeoutMs`,
+  `timeout` failure on expiry) and skips an overlapping pass for the same scope.
+- Add partial index migration `0014_live_drafts_pending.sql` so the scoped pending scan reads
+  pending rows only; DORMANT rows stay out of the index.
+- `codeOf` also reads `error.code`/`error.name` instead of `unknown` for standard errors.
+- Stays in `0.2.x` (cluster-mesh peer `>=0.2.0 <0.3.0`).
+
 ## 0.2.25
 
 - `@sentropic/artifacts/live-host` ships a generic pending-build reconcile: `reconcilePendingBuilds`

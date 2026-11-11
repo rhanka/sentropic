@@ -11,8 +11,8 @@ import { validateLiveMutation, type LiveBaseTree } from './live-tree.js';
 import { readLivePage } from './live-read.js';
 import { liveBusy, mutateLive } from './live-mutations.js';
 import { executeLiveCommit } from './live-commit.js';
-import { settleLiveWorker } from './live-worker.js';
-import { liveResponse, type LiveServiceDeps, type LiveSessionService } from './live-contracts.js';
+import { redriveLiveWorkers, settleLiveWorker } from './live-worker.js';
+import { liveResponse, liveWritable, type LiveServiceDeps, type LiveSessionService } from './live-contracts.js';
 import { executeLiveInvitation, LIVE_INVITATION_OPERATIONS } from './live-invitations.js';
 import { liveInvitationViews } from './live-invitation-state.js';
 export type * from './live-contracts.js';
@@ -22,7 +22,8 @@ export { LIVE_INVITATION_TOOL_CLASSES } from '../git-tool-definitions.js';
 
 export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
   const now = deps.now ?? Date.now;
-  return { ...liveInvitationViews(deps), async execute(operation, raw, invocation) {
+  return { ...liveInvitationViews(deps), redrive: (storageScopeId, limit) => redriveLiveWorkers(deps, storageScopeId, limit),
+    async execute(operation, raw, invocation) {
     const args = structuredClone(raw) as Record<string, any>;
     if ((LIVE_INVITATION_OPERATIONS as readonly string[]).includes(operation)) {
       if (!matchesSchema(args, GIT_TOOL_DEFINITIONS[`artifacts_${operation}` as keyof typeof GIT_TOOL_DEFINITIONS].inputSchema)) {
@@ -56,7 +57,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
       if (binding.state === 'paused') throw new ArtifactOperationError('git_binding_paused');
       if (binding.state === 'diverged') throw new ArtifactOperationError('git_diverged');
       if (binding.state === 'detached') throw new ArtifactOperationError('git_not_attached');
-      if (binding.state !== 'attached') liveBusy(binding.pendingJobId ? 'pending_publication' : 'invalid_phase');
+      if (!liveWritable(binding.state)) liveBusy(binding.pendingJobId ? 'pending_publication' : 'invalid_phase');
       if (binding.channel !== 'personal' || binding.personalPrincipalId !== invocation.actorId || binding.executor !== 'sandbox') liveBusy('invalid_phase');
       if ((operation === 'live_write' || operation === 'live_control') && (!authority.qualified || !deps.worker)) throw new ArtifactOperationError('builder_unavailable');
     }
@@ -118,7 +119,7 @@ export function createLiveService(deps: LiveServiceDeps): LiveSessionService {
       if (!stop && current.binding.generation !== identity.bindingGeneration || current.ownerId !== invocation.actorId &&
         !(operation === 'live_read' && current.invited && current.canReadCode) ||
         (!stop && !current.canReadCode)) throw new ArtifactOperationError('access_denied');
-      if (writer && !stop && (!current.canWrite || !current.humanLinked || current.binding.state !== 'attached')) throw new ArtifactOperationError('access_denied');
+      if (writer && !stop && (!current.canWrite || !current.humanLinked || !liveWritable(current.binding.state))) throw new ArtifactOperationError('access_denied');
       if ((operation === 'live_write' || operation === 'live_control' && !stop) && !current.qualified) throw new ArtifactOperationError('builder_unavailable');
       authority = current;
       if (command) {

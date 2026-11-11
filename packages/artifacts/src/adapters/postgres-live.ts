@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import { ArtifactOperationError } from '../server/failures.js';
-import { liveIdentityKey, type LiveIdentity, type LiveInvitationLedger, type LiveStore,
+import { liveIdentityKey, normalizeRedriveLimit, type LiveIdentity, type LiveInvitationLedger, type LiveStore,
   type LiveTransaction } from '../server/live-store.js';
 
 const INVITATION_COLUMNS = `storage_scope_id,artifact_id,binding_generation,live_session_id,invitation_id,principal_id,
@@ -52,6 +52,17 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
       const result = await pool.query(`SELECT binding_generation FROM artifacts.live_drafts
         WHERE storage_scope_id=$1 AND artifact_id=$2 AND record #>> '{runtime,liveSessionId}'=$3`, [scope, artifactId, sessionId]);
       return result.rows[0] ? { storageScopeId: scope, artifactId, bindingGeneration: Number(result.rows[0].binding_generation) } : undefined;
+    },
+    async pending(scope, limit?: number) {
+      // Partial index 0014_live_drafts_pending.sql covers the scope filter and the access-time order;
+      // DORMANT rows stay out of the index so every host tick scans pending rows only.
+      const result = await pool.query(`SELECT artifact_id, binding_generation FROM artifacts.live_drafts
+        WHERE storage_scope_id=$1 AND (record #>> '{runtime,phase}' IN ('REVIVING','QUIESCING','SAVING','DECOMMISSIONING')
+          OR (record #>> '{runtime,phase}' = 'LIVE' AND record #>> '{runtime,appliedRevision}' IS DISTINCT FROM record ->> 'revision'))
+        ORDER BY record #>> '{runtime,lastAccessAt}', artifact_id, binding_generation LIMIT $2`,
+      [scope, normalizeRedriveLimit(limit)]);
+      return result.rows.map(row => ({ storageScopeId: scope, artifactId: String(row.artifact_id),
+        bindingGeneration: Number(row.binding_generation) }));
     },
     async transaction(identity, action) {
     const client = await pool.connect();
@@ -109,10 +120,11 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
           [identity.storageScopeId, actor, identity.artifactId, invocation, now]);
         },
         async advanceBinding(input) {
+          // The state is kept: a commit on a build_failed binding leaves it build_failed until the next publish.
           const result = await client.query(`UPDATE artifacts.git_bindings SET head_commit_sha=$4,
-            state='attached', version=version+1, updated_at=$5
+            version=version+1, updated_at=$5
             WHERE storage_scope_id=$1 AND artifact_id=$2 AND generation=$3 AND head_commit_sha=$6
-            AND state='attached' RETURNING artifact_id`, [...values, input.commitSha, input.now, input.expectedHeadSha]);
+            AND state IN ('attached','build_failed') RETURNING artifact_id`, [...values, input.commitSha, input.now, input.expectedHeadSha]);
           if (!result.rows.length) throw new ArtifactOperationError('git_live_conflict', { publicDetails: { reason: 'stale_fence' } });
           await client.query(`INSERT INTO artifacts.git_binding_events
             (storage_scope_id,artifact_id,actor_id,action,before_sha,after_sha,invocation_id,created_at)

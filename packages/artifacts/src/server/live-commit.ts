@@ -4,7 +4,7 @@ import { readLiveOverlay } from './live-drafts.js';
 import { applyLiveMutation, liveTreeSha, validateLiveMutation } from './live-tree.js';
 import { orderedDigest } from '../profile/json.js';
 import { liveBusy } from './live-mutations.js';
-import { liveResponse, type LiveAuthority, type LiveInvocation, type LiveServiceDeps } from './live-contracts.js';
+import { liveResponse, liveWritable, type LiveAuthority, type LiveInvocation, type LiveServiceDeps } from './live-contracts.js';
 import type { LiveCommand, LiveIdentity } from './live-store.js';
 import { LiveCommitUnknownError } from './live-commit-outcome.js';
 import { isGitSha } from './git-port-policy.js';
@@ -22,7 +22,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     if (!record) throw new ArtifactOperationError('git_live_no_changes');
     const current = await deps.authorize(invocation, identity.artifactId);
     if (!current.canReadCode || !current.canWrite || !current.humanLinked || current.ownerId !== invocation.actorId ||
-      current.binding.generation !== identity.bindingGeneration || current.binding.state !== 'attached') throw new ArtifactOperationError('access_denied');
+      current.binding.generation !== identity.bindingGeneration || !liveWritable(current.binding.state)) throw new ArtifactOperationError('access_denied');
     validateLiveMutation(current.repository, current.target, args, 255, 8 * 1024 * 1024);
     const prior = await tx.receipt(command.actorId, command.key);
     if (prior) {
@@ -90,7 +90,7 @@ export async function executeLiveCommit(input: { deps: LiveServiceDeps; identity
     if (record.pendingCommit?.invocationId !== intent.invocationId || record.revision !== intent.revision) liveBusy('stale_fence');
     const current = await deps.authorize(invocation, identity.artifactId);
     if (!current.canReadCode || !current.canWrite || !current.humanLinked || current.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
-    if (current.binding.generation !== identity.bindingGeneration || current.binding.state !== 'attached') liveBusy('stale_fence');
+    if (current.binding.generation !== identity.bindingGeneration || !liveWritable(current.binding.state)) liveBusy('stale_fence');
     await tx.advanceBinding?.({ expectedHeadSha: intent.expectedHeadSha, commitSha: committed.commitSha,
       invocationId: intent.invocationId, actorId: invocation.actorId, now: new Date(now).toISOString() });
     Object.assign(record, { revision: randomUUID(), baseHeadSha: committed.commitSha, baseTreeSha: committed.treeSha,
