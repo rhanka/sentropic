@@ -1,7 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { safeDependencyPath, sha256, verifySri, type IntegrityPin } from './integrity';
 import { integrityEvidence, qualifyBuild, type Gb1Source } from './gb1-qualification';
-import { defaultInstallBudget, withinInstallBudget, type InstallBudget, type InstallProgress } from './deadline';
+import { defaultInstallBudget, withinInstallBudget, INSTALL_CACHE_ADMIT_TIMEOUT_MS, INSTALL_CACHE_LOOKUP_TIMEOUT_MS,
+  runInstallStep, type InstallBudget, type InstallProgress, type InstallStepLogger } from './deadline';
 import { LiveError, type LiveRuntime } from './records';
 import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY, installRecipeFor } from './recipes';
 import { subsetLockPaths, validateWorkspaces } from './workspace-subset';
@@ -70,7 +71,8 @@ function treeDigest(manifest: readonly DependencyEntry[]) {
   }
   return sha256(JSON.stringify(rows));
 }
-export function createDependencyCache(ports: CachePorts, budget: InstallBudget = defaultInstallBudget()) {
+export function createDependencyCache(ports: CachePorts, budget: InstallBudget = defaultInstallBudget(),
+  options: { log?: InstallStepLogger; now?: () => number } = {}) {
   async function read(key: string) {
     try { return await ports.storage.read(key); }
     catch (error) {
@@ -119,7 +121,8 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         }
         const recipe = installRecipeFor(selection);
         const key = cacheKey(identity);
-        const existing = await read(key);
+        const existing = await runInstallStep(progress, 'cache_lookup', () => read(key),
+          { timeoutMs: budget.lookupMs ?? INSTALL_CACHE_LOOKUP_TIMEOUT_MS, signal, log: options.log, now: options.now });
         if (existing) {
           try { return verify(existing, identity); }
           catch (error) { await ports.storage.quarantine(key); throw error; }
@@ -147,7 +150,10 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         const receipt = { key, identity, treeSha256: treeDigest(manifest), inventory,
           runId: installed.runId, installOptions: recipe };
         const object = { receipt: { ...receipt, seal: seal(receipt) }, manifest };
-        const admitted = await ports.storage.admit(key, object);
+        const admitted = await runInstallStep(progress, 'cache_admit', () => ports.storage.admit(key, object),
+          { timeoutMs: budget.admitMs ?? INSTALL_CACHE_ADMIT_TIMEOUT_MS, signal, log: options.log, now: options.now,
+            counts: winner => ({ files: winner?.manifest.length ?? 0,
+              bytes: (winner?.manifest ?? []).reduce((total, entry) => total + entry.size, 0) }) });
         try {
           verify(admitted, identity);
           if (admitted.receipt.treeSha256 !== receipt.treeSha256) invalid();
