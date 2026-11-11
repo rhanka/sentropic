@@ -37,6 +37,7 @@
   - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
