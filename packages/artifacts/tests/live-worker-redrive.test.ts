@@ -241,6 +241,8 @@ it('should abandon a hung worker after the per-item budget and keep the runtime 
   await expect(w.service.redrive(w.context.storageScopeId)).resolves.toEqual([{ ...identity, action: 'project', outcome: 'failed' }]);
   expect(events).toEqual([{ identity, action: 'project', outcome: 'failed', code: 'timeout' }]);
   expect((await w.store.transaction(identity, async tx => tx.record!)).runtime!.phase).toBe('REVIVING');
+  // Let the abandoned worker land so its per-identity lock is released before the next test.
+  await new Promise(resolve => setTimeout(resolve, 250));
 });
 
 it('should converge a total stop (void answer) to DORMANT', async () => {
