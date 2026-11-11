@@ -12,6 +12,7 @@ export const KNOWN_SERVICE_CLIENT_SCOPES: readonly string[] = Object.freeze([
   'remote.sessions.revoke', // remote session revocation
   'github-app:broker', // GitHub App broker mount
   'artifacts:builder', // artifact builder mount
+  'service:ops-job-failure-ingest', // ops job-failure ingest route (notify L1)
 ]);
 
 /** Exchange-only workload, created and rotated only by the named-Secret identity sync. */
