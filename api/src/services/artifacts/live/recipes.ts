@@ -93,7 +93,8 @@ export const BUILD_RECIPE = Object.freeze({
 });
 /** Host-owned wrapper preserves qualified plugins while overriding writable repository server options. */
 export function liveViteConfig(sessionId: string, podName: string, placement: BuilderPlacement) {
-  if (!/^[A-Za-z0-9_-]{1,128}$/.test(sessionId) || !/^artifact-[a-f0-9]{40}$/.test(podName)) throw new Error('Invalid live session');
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(sessionId)
+    || !/^artifact-(?:[a-f0-9]{40}|pool-[a-f0-9]{16})$/.test(podName)) throw new Error('Invalid live session');
   return `import { loadConfigFromFile } from '/workspace/node_modules/vite/dist/node/index.js';
 const loaded = await loadConfigFromFile({command:'serve', mode:'development'}, '/workspace/ui/vite.config.ts');
 const repo = loaded?.config ?? {};

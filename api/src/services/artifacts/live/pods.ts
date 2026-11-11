@@ -8,6 +8,19 @@ import type { BuilderPlacement } from './placement';
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 40);
 export const bindingLabel = (key: LiveKey) => digest([key.storageScopeId, key.artifactId]);
 export const podName = (key: LiveKey) => `artifact-${bindingLabel(key)}`;
+/** Logical storage-row identity (§7.3.2 D10): the same `artifact-<bindingLabel>` string as `podName(key)`.
+ * Row functions use this form so a future physical rename never moves storage rows. */
+export const bindingRowKey = (key: LiveKey) => `artifact-${bindingLabel(key)}`;
+/** Physical pool pod names (§7.3.2 D10): `artifact-pool-<16-hex>`, claimed at `claim` time. Session-created
+ * pods keep the deterministic 40-hex name (cold-known path unchanged). */
+export const POOL_POD_NAME_RE = /^artifact-pool-[a-f0-9]{16}$/;
+export const SESSION_POD_NAME_RE = /^artifact-[a-f0-9]{40}$/;
+export const poolPodName = (id: string) => {
+  if (!/^[a-f0-9]{16}$/.test(id)) throw new LiveError('builder_unavailable', 'pool_pod_descriptor_invalid');
+  return `artifact-pool-${id}`;
+};
+export const isPoolPodName = (name: string) => POOL_POD_NAME_RE.test(name);
+export const isPhysicalPodName = (name: string) => SESSION_POD_NAME_RE.test(name) || POOL_POD_NAME_RE.test(name);
 const labels = (key: LiveKey, runtime: LiveRuntime) => ({
   'sentropic.dev/artifact-binding': bindingLabel(key),
   'sentropic.dev/artifact-session': digest(runtime.sessionId),
@@ -51,7 +64,9 @@ export const defaultWorkerSizing = (): WorkerSizing => ({ ...DEFAULT_WORKER_SIZI
 /** Bootstrap is trusted host code, not repository content or a caller-supplied command. */
 export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string, placement: BuilderPlacement,
   sizing: WorkerSizing = defaultWorkerSizing()) {
-  if (!bootstrap || runtime.podName !== podName(key)) throw new LiveError('builder_unavailable', 'pod_descriptor_invalid');
+  if (!bootstrap || (runtime.podName !== podName(key) && !isPoolPodName(runtime.podName))) {
+    throw new LiveError('builder_unavailable', 'pod_descriptor_invalid');
+  }
   return { apiVersion: 'v1', kind: 'Pod', metadata: {
     name: runtime.podName, namespace: placement.namespace, labels: labels(key, runtime),
   }, spec: {
