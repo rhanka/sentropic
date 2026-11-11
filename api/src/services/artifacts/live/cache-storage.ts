@@ -46,16 +46,19 @@ const CACHE_FILE = /^files\/[a-f0-9]{64}$/;
 const CACHE_MANIFEST = /^[a-f0-9]{64}\/[a-f0-9]{64}\/[0-9a-f-]{36}$/;
 /** Sealed-unit archives: `<lockSha>/<keySha>/sealed-<treeSha>.tar.zst` under the prefix (§7.1.2). */
 const CACHE_ARCHIVE = /^[a-f0-9]{64}\/[a-f0-9]{64}\/sealed-[a-f0-9]{64}\.tar\.zst$/;
+/** Content-addressed tarballs: `tarballs/<sha256-of-integrity>` (§7.1.6) — verified once, reused by every seal. */
+const CACHE_TARBALL = /^tarballs\/[a-f0-9]{64}$/;
 /** Source units: `sources/<commitSha>-<filterDigest>.tar.zst` — the forge reader's repacked snapshot (§7.2.2). */
 const CACHE_SOURCE = /^sources\/[0-9a-f]{40}-[a-f0-9]{64}\.tar\.zst$/;
 /** Own key discipline of the builder-cache store: only the admitted cache shapes, refused before any S3 call. */
 function assertCacheKey(key: string): void {
   const suffix = key.startsWith(CACHE_KEY_PREFIX) ? key.slice(CACHE_KEY_PREFIX.length) : undefined;
   if (suffix === undefined || !(CACHE_FILE.test(suffix) || CACHE_MANIFEST.test(suffix) || CACHE_ARCHIVE.test(suffix)
-    || CACHE_SOURCE.test(suffix))) {
+    || CACHE_SOURCE.test(suffix) || CACHE_TARBALL.test(suffix))) {
     throw new Error(`invalid builder-cache key (must be ${CACHE_KEY_PREFIX}files/<sha256>, `
-      + `${CACHE_KEY_PREFIX}<lockSha>/<keySha>/<uuid>, ${CACHE_KEY_PREFIX}<lockSha>/<keySha>/sealed-<treeSha>.tar.zst `
-      + `or ${CACHE_KEY_PREFIX}sources/<commitSha>-<filterDigest>.tar.zst)`);
+      + `${CACHE_KEY_PREFIX}<lockSha>/<keySha>/<uuid>, ${CACHE_KEY_PREFIX}<lockSha>/<keySha>/sealed-<treeSha>.tar.zst, `
+      + `${CACHE_KEY_PREFIX}sources/<commitSha>-<filterDigest>.tar.zst `
+      + `or ${CACHE_KEY_PREFIX}tarballs/<sha256-of-integrity>)`);
   }
 }
 
@@ -200,6 +203,19 @@ export function assertArchiveRef(ref: string): void {
 export function sourceFilterDigest(subPath: string) {
   return sha256(`source-filter/v1:${subPath}`);
 }
+/** Content-addressed tarball ref: `tarballs/<sha256-of-integrity>` (§7.1.6). */
+export function tarballRef(integrity: string) {
+  if (typeof integrity !== 'string' || integrity.length === 0 || integrity.length > 512) {
+    throw new LiveError('dependency_cache_invalid');
+  }
+  return `${CACHE_KEY_PREFIX}tarballs/${sha256(integrity)}`;
+}
+/** Typed guard of a tarball ref: malformed refs refuse as `dependency_cache_invalid` before any S3 call. */
+export function assertTarballRef(ref: string): void {
+  if (typeof ref !== 'string' || !CACHE_TARBALL.test(ref.slice(CACHE_KEY_PREFIX.length))) {
+    throw new LiveError('dependency_cache_invalid');
+  }
+}
 /** Source-unit object of one commit: `sources/<commitSha>-<filterDigest>.tar.zst` under the prefix. */
 export function sourceUnitRef(commitSha: string, filterDigest: string) {
   if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^[a-f0-9]{64}$/.test(filterDigest)) {
@@ -273,6 +289,18 @@ export function createPostgresCacheStorage(pool: Pool, blobs: PrivateCacheBlobs)
     },
     getSource: async ref => {
       assertSourceRef(ref);
+      return blobs.get(ref);
+    },
+    /** Verified tarball store (§7.1.6): content-addressed by SRI, written once per pin, reused by every seal. */
+    putTarball: async (ref, bytes) => {
+      assertTarballRef(ref);
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength > TREE_LIMITS.fileBytes) {
+        throw new LiveError('dependency_cache_invalid');
+      }
+      await blobs.put(ref, bytes);
+    },
+    getTarball: async ref => {
+      assertTarballRef(ref);
       return blobs.get(ref);
     },
     async quarantine(key) {
