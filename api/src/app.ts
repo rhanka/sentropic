@@ -104,6 +104,9 @@ import {
   refusalBody,
   refusalStatus,
 } from './routes/session-content/receiver';
+import { createPerAppMcpRouter } from './routes/namespaces/mcp-apps';
+import { createPanelRouter } from './services/artifacts/artifact-panel';
+import { loadAppRegistrationsFromEnv } from './services/artifacts/app-registration';
 
 const authPlugin = productAuthPlugin();
 
@@ -490,5 +493,9 @@ app.route('/api/v1', createClusterMeshPlugin({
   namespaces: MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
   mounts: PRODUCT_CLUSTER_MESH_MOUNTS,
 }));
+const perAppRegistrationLoader = (slug: string) =>
+  loadAppRegistrationsFromEnv().loaded.find((registration) => registration.appSlug === slug);
+app.route('/', createPerAppMcpRouter(perAppRegistrationLoader));
+app.route('/', createPanelRouter(perAppRegistrationLoader));
 
 app.get('/', (c) => c.json({ name: 'Sentropic API', version: '0.1.0' }));
