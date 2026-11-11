@@ -1,4 +1,14 @@
+import { Hono, type Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import type { SourceSnapshot } from './ports';
+import { cacheKeyOf, type CacheReceipt } from './cache';
+import { bindingOf, safeSubPath, type ForgeBinding } from './forge-binding';
+import { sha256 } from './integrity';
+import { LiveError } from './records';
+import { parseInstallWorkspaces } from './workspace-subset';
 import type { KvStore } from './cache-storage';
+import { closed, refusal } from './host-live-body';
+import { hostGate, type HostBuildEnv, type HostIdentity } from './host-build-api';
 
 /** Durable cache-state namespace (§7.1.3): one canonical row per `cacheKey`, one alias row per host-queried
  * identity variant, one variant index per lockfile. No schema change — same host KV as the heavy queue. */
@@ -15,8 +25,8 @@ export interface CacheJobRecord {
   error?: { code: string; reason?: string };
 }
 export interface CacheEntryView {
-  lockSha256: string; cacheKey: string; state: CacheStateValue; treeSha256?: string; files?: number; bytes?: number;
-  sealedAt?: number; jobId?: string; step?: string; startedAt?: number; attempts?: number; prebundle?: boolean;
+  lockSha256: string; cacheKey: string; state: CacheStateValue; jobId: string; treeSha256?: string; files?: number;
+  bytes?: number; sealedAt?: number; step?: string; startedAt?: number; attempts?: number; prebundle?: boolean;
   error?: { code: string; reason?: string };
 }
 export interface PrewarmEnsureInput {
@@ -30,10 +40,9 @@ const aliasKey = (scope: string, repoId: string, subPath: string, lockSha256: st
 const indexKey = (scope: string, repoId: string, subPath: string, lockSha256: string) =>
   `variants:${scope}:${repoId}:${subPath || 'root'}:${lockSha256}`;
 const entryView = (record: CacheJobRecord): CacheEntryView => ({ lockSha256: record.lockSha256,
-  cacheKey: record.cacheKey, state: record.state,
+  cacheKey: record.cacheKey, state: record.state, jobId: record.jobId,
   ...(record.sealed ? { treeSha256: record.sealed.treeSha256, files: record.sealed.files,
     bytes: record.sealed.bytes, sealedAt: record.sealed.sealedAt } : {}),
-  ...(record.state === 'building' || record.state === 'failed' ? { jobId: record.jobId } : {}),
   ...(record.step ? { step: record.step } : {}),
   startedAt: record.startedAt, attempts: record.attempts, prebundle: record.prebundle,
   ...(record.error ? { error: record.error } : {}) });
@@ -112,3 +121,155 @@ export function createCacheJobs(store: KvStore, options: { now(): number; id(): 
   };
 }
 export type CacheJobs = ReturnType<typeof createCacheJobs>;
+
+const SHA40 = /^[0-9a-f]{40}$/;
+const SHA64 = /^[a-f0-9]{64}$/;
+const TEXT = /^[\x21-\x7e]{1,256}$/;
+const REF_KINDS = ['branch', 'tag', 'commit'] as const;
+const PREWARM_BODY = ['binding', 'commitSha', 'refKind', 'lockSha256'];
+const PREWARM_OPTIONAL = ['installWorkspaces', 'prebundle', 'idempotencyKey'];
+/** Closed prewarm trigger body (§7.1.3): unknown fields refuse, like every host body. */
+function prewarmBody(value: unknown): {
+  binding: ForgeBinding; commitSha: string; refKind: 'branch' | 'tag' | 'commit'; lockSha256: string;
+  installWorkspaces?: readonly string[]; prebundle: boolean; idempotencyKey?: string;
+} | null {
+  if (!closed(value, PREWARM_BODY, PREWARM_OPTIONAL)) return null;
+  const binding = bindingOf(value.binding);
+  if (!binding) return null;
+  if (typeof value.commitSha !== 'string' || !SHA40.test(value.commitSha)) return null;
+  if (typeof value.refKind !== 'string' || !(REF_KINDS as readonly string[]).includes(value.refKind)) return null;
+  if (typeof value.lockSha256 !== 'string' || !SHA64.test(value.lockSha256)) return null;
+  let installWorkspaces: readonly string[] | undefined;
+  if (value.installWorkspaces !== undefined) {
+    const parsed = parseInstallWorkspaces(value.installWorkspaces);
+    if (!parsed) return null;
+    installWorkspaces = parsed;
+  }
+  if (value.prebundle !== undefined && typeof value.prebundle !== 'boolean') return null;
+  if (value.idempotencyKey !== undefined
+    && (typeof value.idempotencyKey !== 'string' || value.idempotencyKey.length === 0
+      || value.idempotencyKey.length > 128)) return null;
+  return { binding, commitSha: value.commitSha, refKind: value.refKind as 'branch' | 'tag' | 'commit',
+    lockSha256: value.lockSha256, ...(installWorkspaces ? { installWorkspaces } : {}),
+    prebundle: value.prebundle ?? true,
+    ...(typeof value.idempotencyKey === 'string' ? { idempotencyKey: value.idempotencyKey } : {}) };
+}
+/** Sealed view of one entry: already sealed answers 200, new or in-progress answers 202. */
+const sealedView = (entry: CacheEntryView) => ({ lockSha256: entry.lockSha256, cacheKey: entry.cacheKey,
+  state: entry.state, treeSha256: entry.treeSha256!, files: entry.files!, bytes: entry.bytes!,
+  sealedAt: entry.sealedAt! });
+const buildingView = (entry: { lockSha256: string; cacheKey: string; jobId: string; startedAt: number }) =>
+  ({ lockSha256: entry.lockSha256, cacheKey: entry.cacheKey, state: 'building' as const, jobId: entry.jobId,
+    startedAt: entry.startedAt });
+
+/** Prewarm trigger contract (§7.1.3) on the existing builder mount, behind the same hostGate S2S authentication
+ * (scope `artifacts:builder`). Derives the complete `CacheIdentity` through the same snapshot machinery the
+ * user path uses — identity equality is load-bearing — and verifies the pinned lockfile before admitting. */
+export function createHostCacheApi(options: {
+  /** Host identity of the verified service client; null refuses before the body is read. */
+  authenticate(c: Context): HostIdentity | null;
+  jobs: CacheJobs;
+  /** Repo-scoped forge read building its target through the registry admission (never a generation binding row). */
+  snapshotRepo(scope: string, binding: ForgeBinding, commitSha: string): Promise<SourceSnapshot>;
+  /** Runs `seal()` on a prewarm builder pod with yielding heavy admission (§7.1.6, 5 s wait retried every 60 s). */
+  executor: { execute(job: CacheJobRecord, source: SourceSnapshot): Promise<CacheReceipt> };
+  /** Background seal runner owned by the composition; nothing starts on import. */
+  schedule(work: () => Promise<void>): void;
+}) {
+  const app = new Hono<HostBuildEnv>();
+  app.use('*', hostGate(options.authenticate));
+  const keyOf = (c: Context<HostBuildEnv>): string => c.get('identity').storageScopeId;
+  async function settle(job: CacheJobRecord, source: SourceSnapshot): Promise<void> {
+    try {
+      await options.jobs.heartbeat(job.cacheKey, job.jobId, 'snapshot_ready');
+      const receipt = await options.executor.execute(job, source);
+      await options.jobs.completeSeal(job.cacheKey, job.jobId, { treeSha256: receipt.treeSha256,
+        files: receipt.inventory.length, bytes: receipt.archive?.bytes ?? 0 });
+    } catch (error) {
+      const code = error instanceof LiveError ? error.code : 'builder_unavailable';
+      const reason = error instanceof LiveError ? error.reason : undefined;
+      await options.jobs.fail(job.cacheKey, job.jobId, code, reason).catch(() => undefined);
+    }
+  }
+  app.post('/v1/cache/prewarm', bodyLimit({ maxSize: 4096, onError: c => c.json({ error: 'payload_too_large' }, 413) }),
+    async c => {
+      const raw = await c.req.text();
+      let parsed: ReturnType<typeof prewarmBody>;
+      try { parsed = prewarmBody(JSON.parse(raw)); } catch { parsed = null; }
+      if (!parsed) return c.json({ error: 'invalid_request' }, 400);
+      const scope = keyOf(c);
+      let source: SourceSnapshot;
+      try { source = await options.snapshotRepo(scope, parsed.binding, parsed.commitSha); }
+      catch (error) { return refusal(c, error); }
+      // The host never supplies lockfile bytes: the builder verifies its pinned snapshot against the claim.
+      if (sha256(source.lockfile) !== parsed.lockSha256) {
+        return c.json({ error: 'lock_mismatch', reason: 'lockfile_mismatch' }, 422);
+      }
+      // `installWorkspaces` is an assertion over the builder's own registry selection, never an input to it.
+      const derived = [...source.cacheIdentity.installWorkspaces].sort();
+      if (parsed.installWorkspaces
+        && (parsed.installWorkspaces.length !== derived.length
+          || parsed.installWorkspaces.some((name, index) => name !== derived[index]))) {
+        return c.json({ error: 'lock_mismatch', reason: 'install_workspaces_mismatch' }, 422);
+      }
+      const workspaces = parsed.installWorkspaces ?? derived;
+      const cacheKey = cacheKeyOf(source.cacheIdentity);
+      let ensured: { record: CacheJobRecord; created: boolean };
+      try {
+        ensured = await options.jobs.ensure({ scope, cacheKey, lockSha256: parsed.lockSha256,
+          refKind: parsed.refKind, branch: parsed.binding.branch, installWorkspaces: workspaces,
+          prebundle: parsed.prebundle,
+          ...(parsed.idempotencyKey ? { idempotencyKey: parsed.idempotencyKey } : {}) });
+        await options.jobs.alias({ scope, repoId: parsed.binding.repoId, subPath: parsed.binding.subPath,
+          lockSha256: parsed.lockSha256, installWorkspaces: workspaces, cacheKey });
+      } catch (error) { return refusal(c, error); }
+      const { record, created } = ensured;
+      if (record.state === 'sealed') {
+        const entry = await options.jobs.readEntry(cacheKey);
+        if (entry?.state === 'sealed') return c.json(sealedView(entry));
+      }
+      if (created) {
+        const job = record;
+        options.schedule(() => settle(job, source));
+      }
+      return c.json(buildingView({ lockSha256: record.lockSha256, cacheKey, jobId: record.jobId,
+        startedAt: record.startedAt }), 202);
+    });
+  app.get('/v1/cache', async c => {
+    const query = c.req.query();
+    const keys = Object.keys(query);
+    if (keys.some(key => !['lockSha256', 'repoId', 'subPath', 'installWorkspaces'].includes(key))) {
+      return c.json({ error: 'invalid_request' }, 400);
+    }
+    const { lockSha256, repoId } = query as Record<string, string | undefined>;
+    if (typeof lockSha256 !== 'string' || !SHA64.test(lockSha256) || typeof repoId !== 'string'
+      || !TEXT.test(repoId)) return c.json({ error: 'invalid_request' }, 400);
+    const subPath = query.subPath ?? '';
+    if (typeof subPath !== 'string' || !safeSubPath(subPath)) return c.json({ error: 'invalid_request' }, 400);
+    let installWorkspaces: readonly string[] = [];
+    if (query.installWorkspaces !== undefined) {
+      if (typeof query.installWorkspaces !== 'string') return c.json({ error: 'invalid_request' }, 400);
+      const parsed = parseInstallWorkspaces(query.installWorkspaces === ''
+        ? [] : query.installWorkspaces.split(','));
+      if (!parsed) return c.json({ error: 'invalid_request' }, 400);
+      installWorkspaces = parsed;
+    }
+    try {
+      const entries = await options.jobs.readVariant({ scope: keyOf(c), repoId, subPath, lockSha256,
+        installWorkspaces });
+      return c.json({ entries });
+    } catch (error) { return refusal(c, error); }
+  });
+  app.get('/v1/cache/by-key', async c => {
+    const query = c.req.query();
+    if (Object.keys(query).sort().join() !== 'cacheKey' || typeof query.cacheKey !== 'string'
+      || !/^[a-f0-9]{64}\/[a-f0-9]{64}$/.test(query.cacheKey)) {
+      return c.json({ error: 'invalid_request' }, 400);
+    }
+    try {
+      const entry = await options.jobs.readEntry(query.cacheKey);
+      return entry ? c.json(entry) : c.json({ error: 'not_found' }, 404);
+    } catch (error) { return refusal(c, error); }
+  });
+  return app;
+}

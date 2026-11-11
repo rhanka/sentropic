@@ -16,8 +16,9 @@ export const CONTROL_BYTES = 2048;
 /** One page: at most 1 MiB of file bytes as base64 plus the metadata of at most 255 entries. */
 export const PAGE_BYTES = 2 * 1024 * 1024;
 export const SEAL_BYTES = 512 * 1024;
-const STATUS: Record<string, 400 | 403 | 413 | 503> = { invalid_request: 400, access_denied: 403, limit_exceeded: 413,
-  builder_unavailable: 503, dependency_cache_invalid: 503 };
+const STATUS: Record<string, 400 | 403 | 409 | 413 | 422 | 500 | 503> = { invalid_request: 400,
+  access_denied: 403, limit_exceeded: 413, builder_unavailable: 503, dependency_cache_invalid: 503,
+  lock_mismatch: 422, sealed_unit_invalid: 500, cache_not_prewarmed: 409 };
 export type Body = Record<string, unknown>;
 export const int = (value: unknown, min = 0): value is number => Number.isSafeInteger(value) && (value as number) >= min;
 export const token = (value: unknown): value is string => typeof value === 'string' && TOKEN.test(value);
