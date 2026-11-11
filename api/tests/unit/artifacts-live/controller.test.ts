@@ -85,6 +85,16 @@ describe('artifact live controller', () => {
     expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null });
     expect(f.objects.size).toBe(0);
   });
+  it('should reject a live start on an unsealed lockfile and return the runtime to DORMANT', async () => {
+    const f = fixture();
+    f.ports.cache = { ...f.ports.cache,
+      requireSealed: async () => { throw new LiveError('cache_not_prewarmed', 'a'.repeat(64)); } };
+    await expect(f.controller.start(key)).rejects.toMatchObject({ code: 'cache_not_prewarmed' });
+    // No pod was created for the refused start, and the session never remains in REVIVING.
+    expect((await f.state())?.runtime).toMatchObject({ phase: 'DORMANT', podUid: null,
+      stateDetail: `cache_not_prewarmed:${'a'.repeat(64)}` });
+    expect(f.objects.size).toBe(0);
+  });
   it('should retire a REVIVING runtime with a gone pod to DORMANT and admit a later build', async () => {
     const f = fixture(); const live = await f.controller.start(key);
     // A live start that failed at install with its pod lost: the REVIVING intent keeps the root cause.
