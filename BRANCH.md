@@ -95,12 +95,12 @@
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [x] Record slot owner and exact ports: ENV=test-models-carbon, API_PORT=8939, UI_PORT=5339, MAILDEV_UI_PORT=1239.
-- [ ] **Lot 1 — Model declarations (mesh)**
-  - [ ] catalog.ts: `gemini-4-carbon` after `gemini-4-argon`, `claude-fable-5-2` after `claude-fable-5-1`
-  - [ ] providers.ts: id lists and per-provider lists
-  - [ ] routing-targets.ts: faithful targets for both models
-  - [ ] local-account-transport-service.ts: verified Cloud Code list gains carbon
-  - [ ] council.source.json: exclusions gain both keys, regen via make
+- [x] **Lot 1 — Model declarations (mesh)**
+  - [x] catalog.ts: `gemini-4-carbon` after `gemini-4-argon`, `claude-fable-5-2` after `claude-fable-5-1`
+  - [x] providers.ts: id lists and per-provider lists
+  - [x] routing-targets.ts: faithful targets for both models
+  - [x] local-account-transport-service.ts: verified Cloud Code list gains carbon
+  - [x] council.source.json: exclusions gain both keys, regen via make
   - [ ] Lot gate:
     - [ ] `make typecheck-llm-mesh ENV=test-models-carbon`
     - [ ] **API tests**
