@@ -19,15 +19,15 @@ for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
 assert(!object(base, 'ConfigMap', 'sentropic-a4-runtime'));
 assert.equal(object(base, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOINT_FILE, undefined);
 for (const [name, image] of Object.entries({
-  api: 'sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05',
-  'auth-idp': 'sentropic-api@sha256:4b78a02fc743ae85ce9f5819d5ebc6b49e02fca7b3161a87ea06afa401a3dc34',
-  ui: 'sentropic-ui@sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e',
-  'artifact-content': 'sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05',
+  api: 'sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
+  'auth-idp': 'sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
+  ui: 'sentropic-ui@sha256:18ad65c8b93c425b82647659dcf6d134c42a8e8112aa68fbbe0f115de87a449d',
+  'artifact-content': 'sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
 })) {
   assert.equal(object(prod, 'Deployment', name).spec.template.spec.containers[0].image,
     `ghcr.io/rhanka/${image}`);
 }
-// prod-a4 keeps the live prod release pins until the cutover IaC change replaces them.
+// T3 cutover IaC: prod carries the candidate pins; prod-a4 inherits them from ../prod.
 for (const name of ['api', 'auth-idp', 'artifact-content', 'ui']) {
   assert.equal(object(prodA4, 'Deployment', name).spec.template.spec.containers[0].image,
     object(prod, 'Deployment', name).spec.template.spec.containers[0].image);
