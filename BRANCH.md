@@ -112,11 +112,11 @@
     - [ ] **E2E tests**
       - [ ] No E2E changes
       - [ ] Sub-lot gate: CI green on PR
-- [ ] **Lot 2 — Gateway mapping + serving rows**
-  - [ ] MUSE_ROUTE_MODEL: `claude-fable-5-2`, `-high`, `-xhigh` to `gemini-4-carbon`
-  - [ ] MUSE_ROUTE_EFFORT + GLM_ROUTE_EFFORT rows for fable-5-2 mirroring fable-5-1
-  - [ ] STANDARD_ROUTE_DEFINITIONS fable-5-2 rows with cloud slot `gemini-4-carbon`
-  - [ ] native-usage.ts weight + fixtures + gw-native-qualification-plan.ts
+- [x] **Lot 2 — Gateway mapping + serving rows**
+  - [x] MUSE_ROUTE_MODEL: `claude-fable-5-2`, `-high`, `-xhigh` to `gemini-4-carbon`
+  - [x] MUSE_ROUTE_EFFORT + GLM_ROUTE_EFFORT rows for fable-5-2 mirroring fable-5-1
+  - [x] STANDARD_ROUTE_DEFINITIONS fable-5-2 rows with cloud slot `gemini-4-carbon`
+  - [x] native-usage.ts weight + fixtures + gw-native-qualification-plan.ts
   - [ ] Lot gate:
     - [ ] `make typecheck-llm-mesh typecheck-llm-gateway ENV=test-models-carbon`
     - [ ] **API tests**
