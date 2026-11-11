@@ -15,7 +15,8 @@ const requiredRelations = [
     'reader_consents', 'reader_consent_events', 'upload_pages',
     'git_bindings', 'git_binding_events', 'git_release_index',
     'live_drafts', 'live_draft_objects', 'live_commands', 'live_commit_quota',
-    'git_attach_intents', 'live_invitations', 'live_invitation_epochs'].map((name) => `artifacts.${name}`),
+    'git_attach_intents', 'live_invitations', 'live_invitation_epochs',
+    'blob_bytes', 'upload_staging_bytes'].map((name) => `artifacts.${name}`),
 ];
 
 /** Upstream identities and bytes are pinned independently of package versions. */
@@ -60,6 +61,9 @@ export const artifactMigrationAssets = Object.freeze([
   Object.freeze({ id: '@sentropic/artifacts/migrations/0013_live_invitations.sql',
     sha256: 'fb839f4579df640032a16cadc7cf66a987542701ba853a78e5889d0a2a31f65b',
     read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0013_live_invitations.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0014_db_blob_placement.sql',
+    sha256: 'ef3ae125f9831ea5bae793868d7564bffb7d737610929ce370fe4b0bc3c14906',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0014_db_blob_placement.sql'), 'utf8') }),
 ]);
 
 /** Called only by the API migration runner, after the control stream. */
