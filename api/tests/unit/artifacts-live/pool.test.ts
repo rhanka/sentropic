@@ -98,4 +98,20 @@ describe('warm pod pool manager (L3)', () => {
     expect(readPoolMin({ ARTIFACT_POOL_MIN_PER_HOT_KEY: 'nope' })).toBe(1);
     expect(readPoolMin({ ARTIFACT_POOL_MIN_PER_HOT_KEY: '9' })).toBe(1);
   });
+  it('should renew hot keys and adopt survivors across scopes', async () => {
+    const { pool, removePod, advance } = setup();
+    await fillWarm(pool);
+    await pool.noteHot('scope-a', 'cache-k');
+    await pool.noteHot('scope-a', 'cache-k');
+    const renewed: string[] = [];
+    expect(await pool.renewHot(async entry => { renewed.push(entry.podName); }, removePod))
+      .toEqual({ renewed: 1, evicted: 0 });
+    expect(renewed).toHaveLength(1);
+    const survivors = [{ name: renewed[0], uid: 'uid-1' }, { name: 'artifact-pool-ffffffffffffffff', uid: 'uid-x' }];
+    const adopted = await pool.adoptHot(survivors, removePod);
+    expect(adopted.adopted).toHaveLength(1);
+    expect(adopted.orphansDeleted).toBe(1);
+    advance(POOL_MAX_AGE_MS + 1);
+    expect(await pool.renewHot(async () => undefined, removePod)).toEqual({ renewed: 0, evicted: 1 });
+  });
 });
