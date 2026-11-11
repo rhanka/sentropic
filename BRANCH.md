@@ -54,6 +54,7 @@ App bascule en mode cluster-mesh asap, code only, flag-gated, preprod-safe.
 
 ## Feedback Loop
 - [x] T5a-EX1 train-level version bump for `@sentropic/cluster-mesh` (public, src changed): `packages/cluster-mesh/package.json` 0.26.0-dev.23 to 0.26.0-dev.24 plus `package-lock.json` version entry, `CHANGELOG.md` entry, packaging fixture refresh. Reason: `enforce-package-bump` CI gate blocks merge without a bump; this branch is the T5a train (one PR for several wagons) so it carries the bump once. Impact: version strings only, no dependency changes. Rollback: revert the bump commit. Private `@sentropic/ubo-contracts` needs no bump (gate skips private packages).
+- [x] T5a-ENV1 `up-api-test` boot failure 11/11 (environmental, not branch code): `api-1` exited 1 with `EMFILE: too many open files, watch '/workspace/api/src/index.ts'` from `tsx watch`; host `fs.inotify max_user_instances=128` shared with many live stacks (radar-*, test-bridge-ack). Evidence it is not this branch: `test-bridge-ack-api-1` (other lane) failed the same minute on the same `tsx watch` command; this branch changes no boot/watch/fd path. Local workaround: scoped unit tests ran via the CI one-shot runner (`API_TEST_CI=1`, no watch process) — all green. Host-level watch exhaustion reported for the conductor (`reap-test-stacks.sh` drumbeat); no repo change made for it.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -117,14 +118,14 @@ App bascule en mode cluster-mesh asap, code only, flag-gated, preprod-safe.
 - [x] **Lot 5 — CODE move type registry**
   - [x] Move validation/interface to packages/ubo-contracts (private, no new dep), api adapter re-exports
   - [x] Existing `api/tests/object-registry/object-type-registry.test.ts` covers, typecheck pending
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest UI (cf Lot1, copy checklist)
-  - [ ] Retest API (cf Lot1, copy checklist)
-  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+- [x] **Lot N — Final validation** (lane resumed 11/11 after network death; 11/11 gates below)
+  - [x] Typecheck & Lint — `typecheck-api` PASS, `lint-api` PASS, `typecheck-cluster-mesh` PASS, `lint-cluster-mesh` PASS (via `docker-slot.sh`, `ENV=test-t5a`)
+  - [x] Retest UI — no UI change, skip with reason recorded (API + package code only)
+  - [x] Retest API — 14/14 T5a unit specs PASS (`gateway-cm-providers` 6, `gateway-internal-calls` 3, `prompt-registry` 2, `email-port` 3) via `test-api-unit` CI one-shot (`API_TEST_CI=1`); 10/10 `object-type-registry` regression PASS (CODE-move); package specs `email-port` 3/3, `prompts-registry` 3/3, `prepare-artifacts` 20/20 PASS via `test-cluster-mesh`
+  - [x] Retest e2e — no E2E change; full suites run in GitHub CI
+  - [ ] Retest AI flaky tests — deferred to CI (`make test-api-ai` needs live provider keys; non-blocking only under acceptance rule, no AI failure observed locally)
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [x] Bumped affected `packages/<pkg>/package.json` version — `@sentropic/cluster-mesh` 0.26.0-dev.23 → 0.26.0-dev.24 + root/api locks + selected fixture + CHANGELOG (T5a-EX1); `@sentropic/ubo-contracts` private, no bump
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge. HELD: train merges only AFTER T3 closes — PR stays open, do NOT merge.
