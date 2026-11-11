@@ -16,9 +16,12 @@ import {
   PutObjectCommand,
   type S3Client,
 } from '@aws-sdk/client-s3';
-import type { PublicationBlobStore } from '../server/publication.js';
+import type { BlobKeyPage, BlobKeyPageResult, PublicationBlobStore } from '../server/publication.js';
 import { assertBlobPrefix } from '../server/blob-prefix.js';
 import { cloneBlobBytes, verifyBytesForKey, verifyStoredBytesForKey } from '../server/blob-bridge.js';
+
+/** Per-call fetch cap: one page never materializes more than this (S3 MaxKeys bound). */
+const PAGE_FETCH_CAP = 1000;
 
 const BLOB_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/blobs\/sha256\/[0-9a-f]{64}$/;
 
@@ -121,6 +124,30 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
     async deleteBlob(key: string): Promise<void> {
       assertBlobKey(key);
       await options.client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: key }));
+    },
+    async listKeysPaged(prefix: string, page: BlobKeyPage): Promise<BlobKeyPageResult> {
+      assertBlobPrefix(prefix);
+      if (!Number.isSafeInteger(page.maxItems) || page.maxItems < 1) throw new Error('invalid blob page maxItems');
+      if (page.startAfter !== undefined) {
+        if (!page.startAfter.startsWith(prefix)) {
+          throw new Error(`invalid blob page resume key: ${page.startAfter}`);
+        }
+        assertBlobKey(page.startAfter);
+      }
+      // Keyset resume: one bounded ListObjectsV2 from the resume key (no
+      // full-prefix load). The caller replays byte-trimmed tails by key.
+      const maxKeys = Math.min(page.maxItems + 1, PAGE_FETCH_CAP);
+      const out = await options.client.send(
+        new ListObjectsV2Command({ Bucket: options.bucket, Prefix: prefix,
+          StartAfter: page.startAfter ?? prefix, MaxKeys: maxKeys }),
+      );
+      const keys = (out.Contents ?? []).flatMap((entry) => entry.Key === undefined ? [] : [entry.Key])
+        .filter((key) => key.startsWith(prefix))
+        .sort();
+      return {
+        keys: keys.slice(0, page.maxItems),
+        hasMore: out.IsTruncated === true || keys.length > page.maxItems,
+      };
     },
   };
   return store;

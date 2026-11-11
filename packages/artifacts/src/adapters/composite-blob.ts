@@ -7,9 +7,10 @@
  * for prepared-but-unfinalized blobs), and coordinates `deleteBlob` across
  * both sides under the caller's digest lock so neither an orphan DB row nor
  * an orphan object survives GC. Enumeration is the ordered union; bounded
- * consumption goes through `listBlobKeysPaged` (CR-4).
+ * pages merge both sides by keyset resume under one sealed continuation
+ * (`listKeysPaged`, CR-4) so no side is ever bulk-loaded.
  */
-import type { PublicationBlobStore } from '../server/publication.js';
+import type { BlobKeyPage, BlobKeyPageResult, PublicationBlobStore } from '../server/publication.js';
 
 export type CompositeBlobMode = 'db' | 's3' | 'db+s3';
 export type RegisteredBlobPlacement = 'db' | 'object';
@@ -72,6 +73,37 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
       if (mode === 's3') return s3.listKeys(prefix);
       const [fromDb, fromS3] = await Promise.all([db.listKeys(prefix), s3.listKeys(prefix)]);
       return [...new Set([...fromDb, ...fromS3])].sort();
+    },
+    async listKeysPaged(prefix: string, page: BlobKeyPage): Promise<BlobKeyPageResult> {
+      // Ordered union over one shared keyset resume: both sides fetch their
+      // first `maxItems` keys after the same resume key, which always covers
+      // the union's first `maxItems` keys (a union member ranks no higher in
+      // its own side than in the union). Bounded per side, no bulk load; the
+      // bridge applies the byte budget and seals the single resume key.
+      if (!Number.isSafeInteger(page.maxItems) || page.maxItems < 1) throw new Error('invalid blob page maxItems');
+      const sides: readonly PublicationBlobStore[] =
+        mode === 'db' ? [db] : mode === 's3' ? [s3] : [db, s3];
+      const fetched = await Promise.all(sides.map(async (side) => {
+        const input: BlobKeyPage = page.startAfter === undefined
+          ? { maxItems: page.maxItems, maxEncodedBytes: page.maxEncodedBytes }
+          : { maxItems: page.maxItems, maxEncodedBytes: page.maxEncodedBytes, startAfter: page.startAfter };
+        if (side.listKeysPaged !== undefined) return side.listKeysPaged(prefix, input);
+        const all = (await side.listKeys(prefix)).filter((key) => key.startsWith(prefix)).sort();
+        const start = page.startAfter === undefined ? 0 : (() => {
+          const index = all.findIndex((key) => key > page.startAfter!);
+          return index === -1 ? all.length : index;
+        })();
+        const keys = all.slice(start, start + page.maxItems);
+        return { keys, hasMore: start + page.maxItems < all.length };
+      }));
+      const seen = new Set<string>();
+      for (const result of fetched) {
+        for (const key of result.keys) seen.add(key);
+      }
+      const union = [...seen].sort();
+      const keys = union.slice(0, page.maxItems);
+      const hasMore = fetched.some((result) => result.hasMore) || union.length > page.maxItems;
+      return { keys, hasMore };
     },
     async deleteBlob(key: string): Promise<void> {
       await lock(digestOfKey(key), async () => {

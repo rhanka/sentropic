@@ -9,9 +9,12 @@
  * belongs to the lifecycle maintenance role (CR-5).
  */
 import type { Pool } from 'pg';
-import type { PublicationBlobStore } from '../server/publication.js';
+import type { BlobKeyPage, BlobKeyPageResult, PublicationBlobStore } from '../server/publication.js';
 import { assertBlobPrefix } from '../server/blob-prefix.js';
 import { cloneBlobBytes, verifyBytesForKey, verifyStoredBytesForKey } from '../server/blob-bridge.js';
+
+/** Per-call fetch cap: one page never materializes more than this. */
+const PAGE_FETCH_CAP = 1000;
 
 const BLOB_KEY_PATTERN = /^artifacts\/([A-Za-z0-9_-]+)\/blobs\/sha256\/([0-9a-f]{64})$/;
 const SCOPE_PREFIX_PATTERN = /^artifacts\/([A-Za-z0-9_-]+)\/blobs\/sha256\//;
@@ -72,6 +75,28 @@ export function createPostgresDbBlobStore(pool: Pool): PublicationBlobStore {
         [scope, digest],
       );
       if (result.rowCount === 0) throw new Error(`unknown blob: ${key}`);
+    },
+    async listKeysPaged(prefix: string, page: BlobKeyPage): Promise<BlobKeyPageResult> {
+      assertBlobPrefix(prefix);
+      const match = SCOPE_PREFIX_PATTERN.exec(prefix);
+      if (!match) throw new Error(`blob listing requires a scope prefix: ${prefix}`);
+      if (!Number.isSafeInteger(page.maxItems) || page.maxItems < 1) throw new Error('invalid blob page maxItems');
+      const after = page.startAfter === undefined ? undefined : (() => {
+        if (!page.startAfter.startsWith(prefix)) throw new Error(`invalid blob page resume key: ${page.startAfter}`);
+        return splitKey(page.startAfter).digest;
+      })();
+      const limit = Math.min(page.maxItems + 1, PAGE_FETCH_CAP);
+      const { rows } = await pool.query<{ digest: string }>(
+        after === undefined
+          ? 'SELECT digest FROM artifacts.blob_bytes WHERE storage_scope_id = $1 ORDER BY digest LIMIT $2'
+          : `SELECT digest FROM artifacts.blob_bytes WHERE storage_scope_id = $1 AND digest > $2
+             ORDER BY digest LIMIT $3`,
+        after === undefined ? [match[1], limit] : [match[1], after, limit],
+      );
+      const keys = rows.map((row) => `artifacts/${match[1]}/blobs/sha256/${row.digest.slice('sha256:'.length)}`)
+        .filter((key) => key.startsWith(prefix))
+        .sort();
+      return { keys: keys.slice(0, page.maxItems), hasMore: rows.length === limit };
     },
   };
 }

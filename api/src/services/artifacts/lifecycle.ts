@@ -87,6 +87,12 @@ export function createArtifactHostJobs(options: {
         await authorize(operation);
         return (await options.page(key, 1)).keys.filter(candidate => candidate === key);
       },
+      ...(options.blobs.listKeysPaged === undefined ? {} : { async listKeysPaged(prefix: string, page: {
+        maxItems: number; maxEncodedBytes: number; startAfter?: string;
+      }) {
+        await authorize(operation);
+        return options.blobs.listKeysPaged!(prefix, page);
+      } }),
     };
   }
   return {
