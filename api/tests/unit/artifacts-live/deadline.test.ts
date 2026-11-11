@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { defaultInstallBudget, INSTALL_CACHE_ADMIT_TIMEOUT_MS, INSTALL_CACHE_LOOKUP_TIMEOUT_MS, INSTALL_CEILING_MS_DEFAULT,
-  INSTALL_STALL_MS_DEFAULT, MAX_TIMEOUT_MS, readInstallBudget, runInstallStep, runPhase, withinInstallBudget, withinPhase,
+import { defaultInstallBudget, defaultSealBudget, INSTALL_CACHE_ADMIT_TIMEOUT_MS, INSTALL_CACHE_LOOKUP_TIMEOUT_MS,
+  INSTALL_CEILING_MS_DEFAULT, INSTALL_STALL_MS_DEFAULT, MAX_TIMEOUT_MS, PREWARM_CEILING_MS_DEFAULT,
+  PREWARM_STALL_MS_DEFAULT, readInstallBudget, runInstallStep, runPhase, withinInstallBudget, withinPhase,
   type InstallStepFields } from '../../../src/services/artifacts/live/deadline';
 import { LiveError } from '../../../src/services/artifacts/live/records';
 
@@ -144,6 +145,31 @@ describe('install progress watchdog', () => {
     const pending = withinPhase(new Promise<never>(() => {}), 5_000, controller.signal);
     controller.abort();
     await expect(pending).rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout' });
+  });
+});
+
+describe('prewarm seal budget', () => {
+  it('fixes the seal stall at 120 s and the ceiling at 15 min with no env override', () => {
+    expect(defaultSealBudget()).toEqual({ stallMs: 120_000, ceilingMs: 900_000 });
+    expect(PREWARM_STALL_MS_DEFAULT).toBe(120_000);
+    expect(PREWARM_CEILING_MS_DEFAULT).toBe(900_000);
+  });
+  it('names a cut seal step phase_timeout:seal:<step>', async () => {
+    const lines: InstallStepFields[] = [];
+    const progress = { report: () => undefined, suspendStall: () => undefined, step: () => undefined };
+    await expect(runInstallStep(progress, 'seal_archive', () => new Promise<never>(() => {}),
+      { log: fields => lines.push(fields), now: () => 0, timeoutMs: 50, phase: 'seal' }))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:seal:seal_archive' });
+    expect(lines[0]).toMatchObject({ step: 'seal_archive', outcome: 'fail',
+      reason: 'builder_unavailable:phase_timeout:seal:seal_archive' });
+  });
+  it('names a stalled seal budget phase_timeout:seal:<step>', async () => {
+    await expect(withinInstallBudget(async inner => {
+      inner.step?.('tarball_fetch');
+      inner.report();
+      await new Promise<never>(() => {});
+    }, { stallMs: 50, ceilingMs: 5_000 }, 'seal'))
+      .rejects.toMatchObject({ code: 'builder_unavailable', reason: 'phase_timeout:seal:tarball_fetch' });
   });
 });
 
