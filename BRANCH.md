@@ -20,7 +20,7 @@
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (`k8s-deploy` target only, under T3-EX1)
+  - `Makefile` (`k8s-deploy` target only, under BR1001-EX1)
   - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
@@ -28,7 +28,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [x] T3-EX1 (`Makefile`, `k8s-deploy` target only): reason = runbook `prod-a4-cutover.md` After-1 requires `make k8s-deploy` to apply `overlays/prod-a4` after the fence (otherwise next prod apply removes A4 wiring); impact = prod deploy path only, single `apply -k` line, preprod target untouched; rollback = revert commit or re-apply `origin/main` overlay path.
+- [x] BR1001-EX1 (`Makefile`, `k8s-deploy` target only): reason = runbook `prod-a4-cutover.md` After-1 requires `make k8s-deploy` to apply `overlays/prod-a4` after the fence (otherwise next prod apply removes A4 wiring); impact = prod deploy path only, single `apply -k` line, preprod target untouched; rollback = revert commit or re-apply `origin/main` overlay path.
 - [ ] `blocked` / `deferred` / `cancelled` / `attention`: none open.
 - [ ] `clarification` / `acknowledge` / `refuse`: owner GO 10/11 ~20:40 Montreal covers T3 fence; merge by conductor at step I (never by operator).
 

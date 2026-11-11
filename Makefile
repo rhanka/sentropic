@@ -4153,13 +4153,13 @@ GH_DEPLOY_RUN_ID ?=
 
 .PHONY: k8s-deploy k8s-deploy-preprod k8s-db-restore-preprod k8s-undeploy k8s-bundle-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
-k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress is part of the overlay
-	# BR-55a: one kustomize apply (base + overlays/prod). The standalone IdP
+k8s-deploy: ## Apply the prod-a4 overlay (kustomize) on the poc cluster — ingress is part of the overlay
+	# BR-55a: one kustomize apply (base + overlays/prod-a4, T3 A4 cutover). The standalone IdP
 	# (auth.sent-tech.ca) runs from the SAME api image; the api owns migrations on the
 	# shared DB and the IdP runs none of its own. The prod overlay sets
 	# namespace=sentropic and includes the ingress (the old K8S_INGRESS gate is gone).
 	# Image = base default (:main) until the release pipeline pins a tag (BR-55c/d).
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/prod
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/prod-a4
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/auth-idp deployment/ui
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api      --timeout=300s
