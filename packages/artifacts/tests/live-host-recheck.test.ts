@@ -15,7 +15,7 @@ const claims = (): HandoffClaims => structuredClone(sealHandoff(input, signer, 0
 const recheckView = (): HostRecheckView => ({
   scopeId: 'scope-a', killSwitch: false, imageAllowlist: [image], currentReleaseId: 'release-A', headReachable: true,
   binding: { artifactId: 'artifact-a', state: 'build_pending', generation: 3, executor: 'sandbox', autoPublish: false,
-    pendingJobId: 'job-1', pendingCommitSha: tuple.commitSha },
+    pendingJobId: 'job-1', pendingCommitSha: tuple.commitSha, ownerId: 'owner-a' },
   job: { jobId: 'job-1', state: 'building', bindingGeneration: 3, commitSha: tuple.commitSha, expectedCurrentReleaseId: 'release-A',
     fence: { runId: 'run-1', attempt: 2 } },
   policy: { ownerAuthorized: true, automaticAuthorized: false, automaticEligible: false },
@@ -58,7 +58,7 @@ describe('live-host publication recheck: the expect() contract (A-LIVE 8.3)', ()
   it('resolves only the binding pending job at its generation and records a monotonic attempt fence', () => {
     const v = recheckView(); v.job!.fence = { runId: 'run-0', attempt: 1 };
     expect(resolvePendingJob(v, 'job-1', { runId: 'run-1', attempt: 2 })).toEqual({ job: { jobId: 'job-1', generation: 3,
-      headSha: tuple.commitSha, expectedReleaseId: 'release-A' }, fence: { runId: 'run-1', attempt: 2 } });
+      headSha: tuple.commitSha, expectedReleaseId: 'release-A', ownerId: 'owner-a' }, fence: { runId: 'run-1', attempt: 2 } });
     expect(resolvePendingJob(v, 'job-1', { runId: 'run-0', attempt: 1 })).not.toBeNull();
     for (const fence of [{ runId: 'run-9', attempt: 1 }, { runId: 'run-9', attempt: 0 }, { runId: '', attempt: 3 }, { runId: 'r', attempt: 2.5 }]) {
       expect(resolvePendingJob(v, 'job-1', fence)).toBeNull();
