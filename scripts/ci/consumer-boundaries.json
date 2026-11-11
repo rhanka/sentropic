@@ -63,6 +63,12 @@
         "apps/llm-gateway/tests/cluster-candidate.test.ts"
       ],
       "note": "cluster-mesh reaches the API namespaces, the IdP plugin, and the gateway host registry"
+    },
+    {
+      "package": "ubo-contracts",
+      "consumers": ["api"],
+      "contracts": ["api/tests/object-registry/object-type-registry.test.ts"],
+      "note": "ubo-contracts validation lives in the api object-registry integration (object-registry shard of test-api-unit-integration); the delegated package test script is not passing evidence"
     }
   ],
   "contractLanes": {
