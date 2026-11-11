@@ -117,10 +117,11 @@ export function createPostgresLiveStore(pool: Pool): LiveStore {
           [identity.storageScopeId, actor, identity.artifactId, invocation, now]);
         },
         async advanceBinding(input) {
+          // The state is kept: a commit on a build_failed binding leaves it build_failed until the next publish.
           const result = await client.query(`UPDATE artifacts.git_bindings SET head_commit_sha=$4,
-            state='attached', version=version+1, updated_at=$5
+            version=version+1, updated_at=$5
             WHERE storage_scope_id=$1 AND artifact_id=$2 AND generation=$3 AND head_commit_sha=$6
-            AND state='attached' RETURNING artifact_id`, [...values, input.commitSha, input.now, input.expectedHeadSha]);
+            AND state IN ('attached','build_failed') RETURNING artifact_id`, [...values, input.commitSha, input.now, input.expectedHeadSha]);
           if (!result.rows.length) throw new ArtifactOperationError('git_live_conflict', { publicDetails: { reason: 'stale_fence' } });
           await client.query(`INSERT INTO artifacts.git_binding_events
             (storage_scope_id,artifact_id,actor_id,action,before_sha,after_sha,invocation_id,created_at)

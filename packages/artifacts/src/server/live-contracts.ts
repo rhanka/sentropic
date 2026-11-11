@@ -9,6 +9,9 @@ export interface LiveAuthority {
   humanLinked: boolean; qualified: boolean; invited?: boolean;
   repository: GitPortRepository; target: GitPortTarget;
 }
+/** A binding accepts live writers while attached, and after a terminal build failure: the failed job is over, and
+ * only edits and a new commit can repair the build (a pending job still refuses with pending_publication). */
+export const liveWritable = (state: GitBinding['state']): boolean => state === 'attached' || state === 'build_failed';
 export interface LiveWorkerPort {
   /** Trusted controller reads the authoritative store; no draft key or store API enters the worker. */
   reconcile(identity: LiveIdentity): Promise<void | { liveSessionId: string; leaseEpoch: number;
