@@ -12,6 +12,7 @@ import { runQueueReaperSweep } from './services/queue-reaper-sweep';
 import { loadReservationReaperConfig, runReservationReaperSweep, startReservationReaper } from './services/llm-metering/reservation-reaper';
 import { runStreamEventsPurge } from './services/chat/stream-purge-sweep';
 import { outboxDispatcher } from './services/outbox/outbox-dispatcher';
+import { OPS_SWEEP_INTERVAL_MS, runOpsNotificationSweepSafe } from './services/notifications/ops-sweep';
 import { objectTypeRegistry } from './services/object-registry';
 import { ensureOpportunityTypeRegistered } from './services/object-registry/opportunity-type';
 import { createJwksAdapter } from './services/auth/jwks-adapter';
@@ -251,6 +252,36 @@ if (process.env.NODE_ENV !== 'test') {
     } catch (error) {
       logger.error({ err: error }, 'Outbox dispatcher failed to start');
     }
+  }
+
+  // Ops notification declarations (notify L1): fail-closed boot validation.
+  // A typoed operator declaration crashes the boot with a clear message
+  // instead of silently changing alert routing.
+  try {
+    const [
+      { parseOpsTargetsDeclarationStrict, parseOpsRecipientsUrlsStrict, assertOpsRecipientsBearerConfigured },
+      { parseOpsIngestAllowlistStrict },
+    ] = await Promise.all([
+      import('./services/notifications/ops-recipients'),
+      import('./routes/ops-job-failures'),
+    ]);
+    parseOpsTargetsDeclarationStrict(env.OPS_JOB_FAILURE_TARGETS_JSON);
+    parseOpsIngestAllowlistStrict(env.OPS_JOB_FAILURE_INGEST_CLIENTS_JSON);
+    const recipientsUrls = parseOpsRecipientsUrlsStrict(env.OPS_JOB_FAILURE_RECIPIENTS_URLS_JSON);
+    assertOpsRecipientsBearerConfigured(recipientsUrls, env.OPS_JOB_FAILURE_RECIPIENTS_BEARER);
+  } catch (error) {
+    logger.error({ err: error }, 'Ops notification declarations invalid; refusing to boot');
+    throw error;
+  }
+
+  // Ops notification sweep (notify L1): time-driven mails, dead-man
+  // incidents and pending-delivery sends. Suppressible for tests
+  // (OPS_NOTIFY_SWEEP_AUTOSTART=false); the sweep itself never throws.
+  if (process.env.OPS_NOTIFY_SWEEP_AUTOSTART !== 'false') {
+    await runOpsNotificationSweepSafe();
+    setInterval(() => {
+      void runOpsNotificationSweepSafe();
+    }, OPS_SWEEP_INTERVAL_MS);
   }
 
   // BR-59-act: idempotently register the `opportunity` object type — the
