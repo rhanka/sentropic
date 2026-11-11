@@ -81,6 +81,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - [x] Contract test every refusal §3.1, bad registration refused alone (cmf2 4 passed).
   - [x] Lot gate: typecheck-api green, scoped test ENV=test-t4a-reg green (lint in CI).
   - [x] FIX Argon BLOCKER-5/MAJOR-6: digest helpers + control.app_instances projection + collision maps (helpers only).
+  - [x] FIX enforced: real digest comparison, strict quotas, native UUID vs imported scope, collision refusals (cmf2 8 passed).
 - [x] **Lot 2 — CMF-4 per-app MCP §4.1/§4.2**
   - [x] Endpoint api/v1/mcp/apps/slug PRM tenant pinning scopes tool summaries behind CM_PER_APP_MCP_ENABLED.
   - [x] 401 wrong audience, 403 non-member and wrong tenant, wording overlay byte-identical (cmf4 4 passed).
