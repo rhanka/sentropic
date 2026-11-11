@@ -42,7 +42,7 @@ export const MAX_BUILDER_PODS = 2;
  * `placement` comes from per-environment configuration (`builderPlacement(process.env)`), never a constant.
  */
 export function createArtifactLiveService(options: Pick<LivePorts,
-  'binding' | 'jobBinding' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
+  'binding' | 'jobBinding' | 'seedBinding' | 'seedSession' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
   | 'invitations'> & {
     pool: Pool; cacheBlobs: PrivateCacheBlobs; placement: BuilderPlacement;
     /** Namespace-only client of the builder namespace (`createInClusterKubernetes(placement)` in the product). */
@@ -87,7 +87,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
  * (builds and live). The sealed candidate holder is both the supervisor sink and the SG4b export.
  * Nothing listens or runs until the host composition mounts `api` and supplies `schedule`. */
 export function createBuilderService(options: Omit<Parameters<typeof createArtifactLiveService>[0],
-  'publication' | 'sources' | 'drafts' | 'invitations' | 'jobBinding'> & {
+  'publication' | 'sources' | 'drafts' | 'invitations' | 'jobBinding' | 'seedBinding' | 'seedSession'> & {
   sources: Pick<SupervisorSources, 'source'>;
   host: RemoteHost; signingKey(): SigningKey; hostKeys: KeyResolver;
   /** `hostAuthenticator(parseBuilderHostBindings(...))` over the S2S guard of the builder mount. */
@@ -104,7 +104,9 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });
   const rows = createPostgresRemoteLiveRows(options.pool);
   const remote = createRemoteLive(rows); const drafts = createRemoteDrafts(rows);
-  const controller = createArtifactLiveService({ ...options, publication, jobBinding: jobForgeBinding(jobs, options.forgeBindings), drafts: drafts.drafts, invitations: remote.invitations,
+  const controller = createArtifactLiveService({ ...options, publication, jobBinding: jobForgeBinding(jobs, options.forgeBindings),
+    seedBinding: (key, seed) => remote.reconciled(key, seed), seedSession: key => remote.session(key).catch(() => undefined),
+    drafts: drafts.drafts, invitations: remote.invitations,
     sources: { ...options.sources, draft: drafts.draft, candidate: input => candidates.candidate(input) } });
   // A build carries no generation (R1): its validated binding is stored with the job, and the build-only run records it
   // at the HostJob generation right after resolving the job, never at the host's last reconcile.

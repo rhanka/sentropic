@@ -2,7 +2,7 @@ import type { LivePorts } from './ports';
 import { conflict, LiveError, liveRevision, type LiveKey, type LiveRuntime } from './records';
 import { podName } from './pods';
 import { releaseIfDormant } from './admission';
-import { currentBinding, failed } from './transitions';
+import { currentBinding, currentRuntime, failed } from './transitions';
 import { prepareLive } from './prepare-live';
 
 /** Cold revive, or the fenced replacement after a crash. A refused pod slot writes no state; past it the session intent
@@ -38,7 +38,7 @@ export async function revive(ports: LivePorts, key: LiveKey, phase: 'revive' | '
       return structuredClone(runtime);
     });
     try { return await prepareLive(ports, key, runtime); }
-    catch (error) { await failed(ports, key, runtime, error); throw error; }
+    catch (error) { await failed(ports, key, await currentRuntime(ports, key, runtime), error); throw error; }
   } catch (error) { await releaseIfDormant(ports, key); throw error; }
 }
 

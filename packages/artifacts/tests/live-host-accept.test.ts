@@ -16,7 +16,7 @@ const input = (over: Record<string, unknown> = {}) => ({ scopeId: 'scope-a', art
   tuple, candidateDigest: candidateDigest(files), expectedReleaseId: 'release-A', ...over });
 const view = (): HostRecheckView => ({ scopeId: 'scope-a', killSwitch: false, imageAllowlist: [image], currentReleaseId: 'release-A',
   headReachable: true, binding: { artifactId: 'artifact-a', state: 'build_pending', generation: 1, executor: 'sandbox',
-    autoPublish: false, pendingJobId: 'job-1', pendingCommitSha: tuple.commitSha },
+    autoPublish: false, pendingJobId: 'job-1', pendingCommitSha: tuple.commitSha, ownerId: 'owner-a' },
   job: { jobId: 'job-1', state: 'building', bindingGeneration: 1, commitSha: tuple.commitSha, expectedCurrentReleaseId: 'release-A',
     fence: { runId: 'run-1', attempt: 1 } }, policy: { ownerAuthorized: true, automaticAuthorized: false, automaticEligible: false } });
 function host$(now = 1_000) {
