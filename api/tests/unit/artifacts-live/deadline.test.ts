@@ -231,6 +231,35 @@ describe('install sub-steps', () => {
   });
 });
 
+describe('phase event write-through', () => {
+  it('should record one durable event per phase and step completion', async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const sink = { record: async (event: Record<string, unknown>) => { recorded.push(event); } };
+    const key = { storageScopeId: 'scope-x', artifactId: 'artifact-y' };
+    const events = { sink: sink as never, invocationId: 'inv-1', operation: 'live_start' as const };
+    await runPhase(key, 'install', async () => 'ok', { now: () => 1_000, events });
+    await runInstallStep(undefined, 'cache_lookup', async () => 'hit', { now: () => 1_040, events });
+    expect(recorded).toEqual([
+      { invocationId: 'inv-1', artifactId: 'artifact-y', storageScopeId: 'scope-x', operation: 'live_start',
+        phase: 'install', at: 1_000, ms: 0, outcome: 'ok' },
+      { invocationId: 'inv-1', operation: 'live_start', phase: 'install', step: 'cache_lookup', at: 1_040, ms: 0,
+        outcome: 'ok' },
+    ]);
+  });
+  it('should record failures with the typed code and keep working without a sink', async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const sink = { record: async (event: Record<string, unknown>) => { recorded.push(event); } };
+    const key = { storageScopeId: 'scope-x', artifactId: 'artifact-y' };
+    const events = { sink: sink as never, invocationId: 'inv-1', operation: 'git_publish' as const };
+    await expect(runPhase(key, 'build', async () => { throw new LiveError('builder_unavailable', 'phase_timeout:build'); },
+      { now: () => 0, events })).rejects.toMatchObject({ reason: 'phase_timeout:build' });
+    expect(recorded).toEqual([{ invocationId: 'inv-1', artifactId: 'artifact-y', storageScopeId: 'scope-x',
+      operation: 'git_publish', phase: 'build', at: 0, ms: 0, outcome: 'fail', code: 'builder_unavailable',
+      reason: 'phase_timeout:build' }]);
+    await expect(runPhase(key, 'build', async () => 'ok', { now: () => 0 })).resolves.toBe('ok');
+  });
+});
+
 describe('phase logging', () => {
   const key = { storageScopeId: 'scope-x', artifactId: 'artifact-y' };
   const expectedHash = createHash('sha256').update(JSON.stringify(['scope-x', 'artifact-y'])).digest('hex');
