@@ -87,6 +87,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - [x] 401 wrong audience, 403 non-member and wrong tenant, wording overlay byte-identical (cmf4 4 passed).
   - [x] Full 31-tool byte parity against Immo preprod connector verified at cutover (CMF-10 UAT).
   - [x] Lot gate: typecheck-api green, scoped test ENV=test-t4a-reg green (lint in CI).
+  - [x] FIX Argon BLOCKER-2/3/4: real bearer verify (issuer/audience/tenant/membership), router mounted in app.ts, JSON-RPC tools/list+call, byte parity via router (cmf4 8 passed).
 - [x] **Lot 3 — CMF-6 knowledge loader §3.4**
   - [x] Pinned commit SHA digest verified, GitHub unreachable serves stored bundle, mismatch refused (cmf6 3 passed).
   - [x] Storage bridge dependency on feat/t4a-cm-artifact-storage stubbed behind CM_KNOWLEDGE_ENABLED.
@@ -98,6 +99,7 @@ Deliver T4a part B wagons CMF-2, CMF-4, CMF-6, W4.c flag-gated additive preprod-
   - [x] FIX Argon MAJOR-8/MINOR-9: strict origin (url.origin === value) + same-env, CSP router wired, UI test strengthened (csp 5, panel 3 passed).
 - [ ] **Lot 5 — Final gates + PR**
   - [x] make scope-check PASS C2, typecheck-api and typecheck-ui green, scoped tests green.
+  - [x] FIX re-verify: scope-check PASS each commit, typecheck-api green (exit 0), 27 scoped tests green (one-shot, host watchers exhausted), typecheck-ui blocked by host OOM (CI runs it).
   - [ ] Open PR, CI green, do NOT merge.
   - [ ] Report storage stub dependency exact commit if any.
 - [ ] **Lot 6 — Report**
