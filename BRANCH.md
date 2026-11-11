@@ -3,6 +3,7 @@
 ## Objective
 - Add `gemini-4-carbon` and `claude-fable-5-2` to llm-mesh and llm-gateway, mirroring `gemini-4-argon` and `claude-fable-5-1`.
 - Map Fable 5.2 requests to Gemini Carbon in the gateway alias map.
+- Interpretation (owner 10/11): requests for Fable 5.2 are served by Gemini Carbon — the Fable 5.2 launch aliases resolve Carbon on the Cloud Code slot while keeping the faithful Anthropic target first.
 
 ## Scope / Guardrails
 - Scope limited to model declarations, routing, tests, versions, locks, fixtures.
