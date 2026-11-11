@@ -133,6 +133,12 @@ describe('host build API (M3-B)', () => {
     expect((await s.status('job-1', 'other')).status).toBe(403);
     expect((await s.status('job-2')).status).toBe(404);
   });
+  it('carries binding_unreconciled on the host job when the binding was never reconciled', async () => {
+    const s = setup(vi.fn(async () => { throw new LiveError('git_live_conflict', 'binding_unreconciled'); }));
+    await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); await s.settle();
+    expect(await (await s.status('job-1')).json()).toMatchObject({ state: 'build_failed',
+      code: 'git_live_conflict', reason: 'binding_unreconciled' });
+  });
   it('fails a run that ended without publication, so the host can re-admit it', async () => {
     const s = setup(); await s.post({ artifactId: 'artifact-a', jobId: 'job-1', binding }); await s.settle();
     expect(await (await s.status('job-1')).json()).toMatchObject({ state: 'build_failed', code: 'git_live_conflict', reason: 'superseded' });
