@@ -35,9 +35,8 @@ const dayOf = (at: number) => new Date(at).toISOString().slice(0, 10);
 /** Maximum events kept per invocation row (an invocation carries ~30 phases; the cap bounds a runaway emitter). */
 export const PHASE_EVENTS_PER_INVOCATION_MAX = 128;
 export function createPhaseEventSink(store: KvStore, options: {
-  now?(): number; log?(fields: Record<string, unknown>): void;
+  log?: (fields: Record<string, unknown>) => void;
 } = {}): PhaseEventSink {
-  const now = options.now ?? Date.now;
   const log = options.log ?? ((fields: Record<string, unknown>) => logger.info(fields));
   let dropped = 0;
   return {
