@@ -105,6 +105,10 @@ export interface LivePorts {
     /** Liveness lease (A-LIVE Amendment 1 §3): one authenticated, fenced frame with no side effect. Without one for
      * 30 minutes the bootstrap kills the process tree and exits. */
     renew(runtime: LiveRuntime): Promise<void>;
+    /** Warm-pool bind (§7.3.2): binds an unbound pool pod to the caller's fence. */
+    claim(runtime: LiveRuntime): Promise<{ poolEpoch: number }>;
+    /** Warm-deps scrub (§7.3.2): the process tree is gone, `/workspace` + `/tmp` cleared, `/dependencies` verified. */
+    scrub(runtime: LiveRuntime, nextEpoch: number): Promise<{ cleared: string[]; poolEpoch: number }>;
   };
   routes: { revoke(key: LiveKey, runtime: LiveRuntime): Promise<void>; ready(key: LiveKey, runtime: LiveRuntime): Promise<void> };
   publication: {

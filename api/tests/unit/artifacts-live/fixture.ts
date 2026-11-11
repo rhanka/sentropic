@@ -118,6 +118,8 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
       prebundle: vi.fn(async () => undefined),
       live: vi.fn(async runtime => ({ revision: runtime.sourceRevision, routeEpoch: runtime.routeEpoch })),
       quiesce: vi.fn(async () => { events.push('quiesce'); }),
+      claim: vi.fn(async () => ({ poolEpoch: 0 })),
+      scrub: vi.fn(async () => ({ cleared: ['/workspace', '/tmp'], poolEpoch: 1 })),
       build: vi.fn(async () => { events.push('build'); return { candidateDigest: 'candidate' }; }),
       verify: vi.fn(async () => { events.push('verify'); }),
       renew: vi.fn(async () => undefined),

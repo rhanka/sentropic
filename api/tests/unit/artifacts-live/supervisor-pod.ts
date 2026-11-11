@@ -52,6 +52,10 @@ export function fakePod(overrides: Partial<Record<FrameBody['op'], Handler>> = {
         data: Buffer.from(f.bytes).toString('base64') }));
       return body.args.cursor === 0 ? { entries: files, next: null } : { entries: [], next: null };
     },
+    claim: () => ({ claimed: true, poolEpoch: 0 }),
+    scrub: body => ({ cleared: ['/workspace', '/tmp'], poolEpoch: body.args.nextEpoch }),
+    sealDependencies: () => { throw new Error('sealDependencies not implemented in L3'); },
+    applyOverlay: () => { throw new Error('applyOverlay not implemented in L3'); },
   };
   const channel = { send: vi.fn(async (_target: unknown, frame: Uint8Array, signal: AbortSignal) => {
     const body = openFrame(publicKey, frame, clock);
