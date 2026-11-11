@@ -134,6 +134,7 @@ describe('artifact host migrations', () => {
       '@sentropic/artifacts/migrations/0011_live_drafts.sql',
       '@sentropic/artifacts/migrations/0012_git_attach_intents.sql',
       '@sentropic/artifacts/migrations/0013_live_invitations.sql',
+      '@sentropic/artifacts/migrations/0014_db_blob_placement.sql',
     ]);
     const { rows } = await database.query<{ name: string | null }>(`SELECT to_regclass(name)::text AS name
       FROM unnest(ARRAY['artifacts.upload_pages', 'artifacts.git_bindings', 'artifacts.git_binding_events',
@@ -145,6 +146,19 @@ describe('artifact host migrations', () => {
       'artifacts.live_commands', 'artifacts.live_commit_quota', 'artifacts.live_draft_objects',
       'artifacts.live_drafts', 'artifacts.live_invitation_epochs', 'artifacts.live_invitations',
       'artifacts.upload_pages'].sort());
+  });
+
+  it('should default existing blob rows to object placement with DB tables present', async () => {
+    await runMigrations(database);
+    await database.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-p', 'tenant-a')`);
+    await database.query(`INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
+      VALUES ('scope-p', 'sha256:${'ab'.repeat(32)}', 3)`);
+    await runMigrations(database);
+    expect((await database.query(`SELECT placement FROM artifacts.blobs WHERE storage_scope_id = 'scope-p'`)).rows)
+      .toEqual([{ placement: 'object' }]);
+    expect((await database.query(`SELECT to_regclass('artifacts.blob_bytes')::text AS bytes,
+      to_regclass('artifacts.upload_staging_bytes')::text AS staging`)).rows)
+      .toEqual([{ bytes: 'artifacts.blob_bytes', staging: 'artifacts.upload_staging_bytes' }]);
   });
 
   it('should rerun 0009-0013 idempotently without changing existing rows', async () => {
