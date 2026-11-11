@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { logger } from '../../../logger';
 import { LiveError } from './records';
+import type { PhaseEvent, PhaseEventSink } from './phase-events';
 import { scrubRecipeOutput, truncateRecipeTail } from './recipe-diagnostics';
 
 /** Bound of one heavy phase; the recipes carry the same 300 s timeout. */
@@ -150,6 +151,8 @@ export async function runInstallStep<T>(progress: Pick<InstallProgress, 'step' |
   work: () => Promise<T>, options: { log?: InstallStepLogger; now?: () => number; timeoutMs?: number; signal?: AbortSignal;
     /** Budget phase naming the step timeout (`install` default, `seal` on the prewarm path, §7.1.6). */
     phase?: string;
+    /** Step-level write-through (§7.6.1); the artifact is the caller's (prewarm seals are lockfile-scoped). */
+    events?: PhaseEventsContext & { artifactId?: string };
     counts?: (result: T | undefined) => { bytes?: number; files?: number } } = {}): Promise<T> {
   const log = options.log ?? defaultStepLogger;
   const now = options.now ?? Date.now;
@@ -185,6 +188,10 @@ export async function runInstallStep<T>(progress: Pick<InstallProgress, 'step' |
     log({ msg: 'artifact_live_install_step', step, ms: now() - started, ...(bytes !== undefined ? { bytes } : {}),
       ...(files !== undefined ? { files } : {}), outcome: 'ok' });
     progress?.clearStep?.();
+    await options.events?.sink.record({ invocationId: options.events.invocationId,
+      ...(options.events.artifactId ? { artifactId: options.events.artifactId } : {}),
+      operation: options.events.operation, phase: options.phase ?? 'install', step, at: started,
+      ms: now() - started, outcome: 'ok' });
     return result;
   } catch (error) {
     const failure = error instanceof LiveError && error.code === 'builder_unavailable' && error.reason === 'phase_timeout'
@@ -194,6 +201,11 @@ export async function runInstallStep<T>(progress: Pick<InstallProgress, 'step' |
     const { bytes, files } = options.counts?.(undefined) ?? {};
     log({ msg: 'artifact_live_install_step', step, ms: now() - started, ...(bytes !== undefined ? { bytes } : {}),
       ...(files !== undefined ? { files } : {}), outcome: 'fail', reason });
+    await options.events?.sink.record({ invocationId: options.events.invocationId,
+      ...(options.events.artifactId ? { artifactId: options.events.artifactId } : {}),
+      operation: options.events.operation, phase: options.phase ?? 'install', step, at: started,
+      ms: now() - started, outcome: 'fail',
+      ...(failure instanceof LiveError ? { code: failure.code, ...(failure.reason ? { reason: failure.reason } : {}) } : {}) });
     throw failure;
   } finally {
     if (signal && onAbort) signal.removeEventListener('abort', onAbort);
@@ -214,17 +226,26 @@ export interface PhaseLogFields {
 }
 export type PhaseLogger = (fields: PhaseLogFields) => void;
 const defaultPhaseLogger: PhaseLogger = ({ msg, ...fields }) => logger.info(fields, msg);
+/** Phase-event write-through (§7.6.1): when present, the phase completion lands one durable event carrying
+ * the invocation context the logs cannot join on. The sink absorbs its own write failures (counter + log). */
+export interface PhaseEventsContext {
+  sink: PhaseEventSink; invocationId: string; operation: PhaseEvent['operation'];
+}
 /** Runs one named heavy phase, logging its start, end, duration and failing phase name on the build-only and live
  * paths. A bare `phase_timeout` from `withinPhase` is rewritten to `phase_timeout:<phase>` so the job ledger and
  * `stateDetail` name the failing phase on every path, not just the install watchdog. */
 export async function runPhase<T>(key: { storageScopeId: string; artifactId: string }, phase: string,
-  work: () => Promise<T>, options: { log?: PhaseLogger; now?: () => number } = {}): Promise<T> {
+  work: () => Promise<T>, options: { log?: PhaseLogger; now?: () => number; events?: PhaseEventsContext } = {},
+): Promise<T> {
   const log = options.log ?? defaultPhaseLogger; const now = options.now ?? Date.now;
   const hashed = phaseKeyHash(key); const started = now();
   log({ msg: 'artifact_live_phase', key: hashed, phase, ms: 0, outcome: 'ok', reason: 'started' });
   try {
     const result = await work();
     log({ msg: 'artifact_live_phase', key: hashed, phase, ms: now() - started, outcome: 'ok' });
+    await options.events?.sink.record({ invocationId: options.events.invocationId, artifactId: key.artifactId,
+      storageScopeId: key.storageScopeId, operation: options.events.operation, phase, at: started,
+      ms: now() - started, outcome: 'ok' });
     return result;
   } catch (error) {
     const failure = error instanceof LiveError && error.code === 'builder_unavailable' && error.reason === 'phase_timeout'
@@ -236,6 +257,10 @@ export async function runPhase<T>(key: { storageScopeId: string; artifactId: str
       ? truncateRecipeTail(scrubRecipeOutput(failure.detail)) : undefined;
     log({ msg: 'artifact_live_phase', key: hashed, phase, ms: now() - started, outcome: 'fail', reason,
       ...(detail === undefined ? {} : { detail }) });
+    await options.events?.sink.record({ invocationId: options.events.invocationId, artifactId: key.artifactId,
+      storageScopeId: key.storageScopeId, operation: options.events.operation, phase, at: started,
+      ms: now() - started, outcome: 'fail',
+      ...(failure instanceof LiveError ? { code: failure.code, ...(failure.reason ? { reason: failure.reason } : {}) } : {}) });
     throw failure;
   }
 }
