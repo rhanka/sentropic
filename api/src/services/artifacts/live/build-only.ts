@@ -6,21 +6,58 @@ import { ensureResponsivePod, notePodLoss } from './pod-probe';
 import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
-import type { HostJob } from '@sentropic/artifacts/live-host';
+import { LiveHostError, type HostJob } from '@sentropic/artifacts/live-host';
+
+const unreconciled = (): never => conflict('binding_unreconciled');
+const noAdmittedJob = (error: unknown): boolean => error instanceof LiveHostError
+  && error.code === 'handoff_mismatch' && error.reason === 'job_not_pending';
+
+/**
+ * The binding of the admitted job: the reconciled view, or the admitted host job's (generation, owner)
+ * recorded as the view when the host never reconciled. The returned run id seeds the build runtime's
+ * session, so the host attempt fence recorded by the seed resolution still matches the run's re-resolution.
+ * Only a host refusal (no admitted job) keeps `binding_unreconciled`; a transport failure propagates.
+ */
+async function admittedBinding(ports: LivePorts, key: LiveKey, jobId: string) {
+  try { return { binding: await currentBinding(ports, key), seedRunId: undefined as string | undefined }; }
+  catch (error) {
+    if (!(error instanceof LiveError) || error.code !== 'git_live_conflict' || error.reason !== 'binding_unreconciled') throw error;
+  }
+  const previous = await ports.store.read(key);
+  const runId = ports.id();
+  const attempt = (previous?.runtime.leaseEpoch ?? 0) + 1;
+  let job;
+  try { job = await ports.publication.job(key, jobId, { runId, attempt }); }
+  catch (error) { if (noAdmittedJob(error)) unreconciled(); throw error; }
+  if (!job || job.jobId !== jobId) throw new LiveError('git_live_conflict', 'job_not_pending');
+  // The host's job payload is the only owner source before the first reconcile; a host that does not
+  // send it yet keeps the closed refusal instead of seeding a fence a later reconcile would stale.
+  if (typeof job.ownerId !== 'string' || job.ownerId.length === 0) unreconciled();
+  // The admitted coordinates, recorded at the job generation (R1), then the (generation, owner) view through
+  // the reconciled monotonicity rules; a lost race to a concurrent live reconcile falls back to its view.
+  await ports.jobBinding(key, jobId, job.generation);
+  try {
+    await ports.seedBinding(key, { generation: job.generation, ownerId: job.ownerId,
+      liveSessionId: runId, leaseEpoch: attempt, routeEpoch: (previous?.runtime.routeEpoch ?? 0) + 1 });
+  } catch (error) {
+    if (!(error instanceof LiveError) || error.code !== 'git_live_conflict' || error.reason !== 'stale_session') throw error;
+  }
+  return { binding: await currentBinding(ports, key), seedRunId: runId };
+}
 
 /** Explicit historical publication uses one clean pod; dormant drafts never enter this worker. */
 export async function buildOnly(ports: LivePorts, key: LiveKey, jobId: string) {
-  const binding = await currentBinding(ports, key);
+  const { binding, seedRunId } = await admittedBinding(ports, key, jobId);
   const draft = await ports.drafts.current(key, binding.generation);
   if (draft.generation !== binding.generation) conflict('stale_fence');
   // A build pod takes a live slot (a refusal writes no state); its clean build then waits in the node queue.
   await ports.admission.acquire(key, binding.ownerId);
-  try { return await buildPod(ports, key, jobId, binding, draft); }
+  try { return await buildPod(ports, key, jobId, binding, draft, seedRunId); }
   catch (error) { await releaseIfDormant(ports, key); throw error; }
 }
-
-async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding, draft: DraftSnapshot) {
-  const first = await createBuildRuntime(ports, key, binding, draft);
+async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: LiveBinding, draft: DraftSnapshot,
+  seedRunId?: string) {
+  const first = await createBuildRuntime(ports, key, binding, draft, seedRunId);
   const firstJob = await resolveAttemptJob(ports, key, jobId, binding, first);
   try { return await runAttempt(ports, key, first, firstJob); }
   catch (loss) {
@@ -33,7 +70,7 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
     try { await ports.admission.acquire(key, binding.ownerId); }
     catch { throw loss; }
     let second;
-    try { second = await createBuildRuntime(ports, key, binding, draft); }
+    try { second = await createBuildRuntime(ports, key, binding, draft, seedRunId); }
     catch (error) {
       await releaseIfDormant(ports, key);
       throw (error instanceof LiveError && error.reason === 'pending_publication' ? loss : error);
@@ -45,12 +82,15 @@ async function buildPod(ports: LivePorts, key: LiveKey, jobId: string, binding: 
     return runAttempt(ports, key, second, secondJob);
   }
 }
-/** One build-only intent: a fresh runtime of the next lease, no pod yet. A concurrent intent wins the fence. */
-async function createBuildRuntime(ports: LivePorts, key: LiveKey, binding: LiveBinding, draft: DraftSnapshot) {
+/** One build-only intent: a fresh runtime of the next lease, no pod yet. A concurrent intent wins the fence.
+ * A seeded first publication reuses the seed run id as its session, so the host attempt fence recorded by
+ * the seed resolution still matches the run's re-resolution in resolveAttemptJob. */
+async function createBuildRuntime(ports: LivePorts, key: LiveKey, binding: LiveBinding, draft: DraftSnapshot,
+  seedRunId?: string) {
   return ports.store.transaction(key, async unit => {
     if (unit.state && unit.state.runtime.phase !== 'DORMANT') conflict('pending_publication');
     const previous = unit.state;
-    const runtime = { generation: binding.generation, ownerId: binding.ownerId, sessionId: ports.id(),
+    const runtime = { generation: binding.generation, ownerId: binding.ownerId, sessionId: seedRunId ?? ports.id(),
       phase: 'BUILD_PROVISIONING' as const, leaseEpoch: (previous?.runtime.leaseEpoch ?? 0) + 1,
       rowVersion: previous?.runtime.rowVersion ?? 0, podUid: null, podName: podName(key),
       sourceRevision: draft.revision, appliedRevision: null, baseHeadSha: draft.baseHeadSha, liveTreeSha: draft.treeSha,

@@ -4,9 +4,12 @@ import type { RemoteHost } from './handoff-publication';
 import { LiveError } from './records';
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+/** Binding owner's principalId, like every host principal: printable ASCII without spaces. */
+const OWNER = /^[\x21-\x7e]{1,256}$/;
 const hostJob = (value: unknown): value is HostJob => record(value) && typeof value.jobId === 'string'
   && Number.isSafeInteger(value.generation) && typeof value.headSha === 'string'
-  && (value.expectedReleaseId === null || typeof value.expectedReleaseId === 'string');
+  && (value.expectedReleaseId === null || typeof value.expectedReleaseId === 'string')
+  && typeof value.ownerId === 'string' && OWNER.test(value.ownerId);
 /** Any answer that is neither a v1 success nor a closed refusal: the outcome is unknown, so the caller may resend. */
 const transport = (): never => { throw new Error('host_transport_failure'); };
 /** s-archi 16:35: the host may record the pending job just after the builder's first resolution. Only a 409

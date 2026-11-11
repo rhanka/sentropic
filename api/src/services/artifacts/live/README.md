@@ -129,10 +129,16 @@ node:http so no undici 300 s headers timeout cuts a command; each command is bou
   base from `ARTIFACT_BUILDER_REMOTE_HOST_URL` (no secret); preprod is
   `https://preprod.immo.sent-tech.ca/api/v1/artifacts`, so the builder calls
   `<base>/live-host/v1/job` and `<base>/live-host/v1/handoff`.
-  A build-only job for a binding the host never reconciled refuses
-  `git_live_conflict:binding_unreconciled` at admission (no pod, no phase line);
-  the host must `POST /v1/live/reconcile` once before the first build of an
-  artifact. The job ledger and `GET /v1/builds/:artifactId/:jobId` carry that
+  A build-only job for a binding the host never reconciled seeds the binding
+  view from the admitted host job instead of refusing: the job resolution
+  returns its generation, its `ownerId` (the binding owner's principalId, the
+  only owner source before the first reconcile) the owner, and the admitted
+  coordinates are recorded at that generation (R1) before the (generation,
+  owner) is written through the reconciled monotonicity rules — so a later
+  live reconcile at the same generation with another owner stays stale.
+  Without an admitted job (host 409 `job_not_pending`) it still refuses
+  `git_live_conflict:binding_unreconciled` at admission (no pod, no phase
+  line). The job ledger and `GET /v1/builds/:artifactId/:jobId` carry that
   `code:reason`.
 - The same service composes the host live API (`createHostLiveApi`) behind the
   same gate; the scope always comes from the host identity, never the body.
