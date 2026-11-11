@@ -119,3 +119,10 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Final gate step 1: PR [#1003](https://github.com/rhanka/sentropic/pull/1003) open, do NOT merge (T3 gate). CI: all green except (a) `validate-cluster-mesh` fixture alignment — needs published 0.2.27 tarball (train/owner publish act, out of lane scope), (b) `test-e2e (5)` AI-flaky allowlisted (recorded above, train re-runs + owner sign-off).
   - [ ] Final gate step 2: French report .tmp/rv/t4a-storage.md.
   - [ ] make down-volumes ENV=test-t4a-storage.
+- [x] **Lot 6 — FIX round 3 (Argon r2 BLOCKER/MAJOR closure, additive only)**
+  - [x] MAJOR 5: store-level bounded keyset paging (`listKeysPaged` on memory/db/sqlite/s3/composite + verified delegation, sealed keyset cursors, byte-budget cut with keyset replay); bridge delegates, fallback kept for foreign stores.
+  - [x] BLOCKER 2: SQLite blob placement contract tests (upgrade backfill `object`, idempotence, `blob_bytes` CRUD + verify + strict delete + scope prefix, keyset paging walk, writer records `placement`).
+  - [x] BLOCKER 3: artifact-content db/db+s3 round-trip reads + lifecycle GC collect over the placement composite (both sides cleaned under the digest lock, referenced retained).
+  - [x] MAJOR 6: local-blob concurrent create-only race test; s3 `StartAfter`/`MaxKeys` paging unit test.
+  - [ ] Typecheck impacted (typecheck-artifacts PASS observed; typecheck-api running); scoped suites green.
+  - [ ] Push rebased branch, CI green, French report, down-volumes, do NOT merge.
