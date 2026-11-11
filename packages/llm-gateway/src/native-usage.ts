@@ -13,7 +13,7 @@ export const NATIVE_CACHE_PRICING_POLICY = 'anthropic-cache-2026-10-02' as const
 // Official model pricing / prompt-caching tables, verified 2026-10-02:
 // https://platform.claude.com/docs/en/about-claude/pricing#prompt-caching
 const readUnits40: Readonly<Record<string, number>> = Object.freeze({
-  'claude-sonnet-5': 4, 'claude-opus-5': 4, 'claude-fable-5-1': 1,
+  'claude-sonnet-5': 4, 'claude-opus-5': 4, 'claude-fable-5-1': 1, 'claude-fable-5-2': 1,
 });
 const nativeReadWeight = (servedModelId: unknown): number | undefined =>
   typeof servedModelId === 'string' && Object.hasOwn(readUnits40, servedModelId)
