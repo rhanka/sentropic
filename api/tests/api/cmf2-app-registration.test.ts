@@ -1,23 +1,39 @@
-import { describe, expect, it } from 'vitest';
-import { loadAppRegistrationsFromEnv, validateAppRegistration } from '../../src/services/artifacts/app-registration';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  buildCanonicalPerAppTools,
+  computeManifestDigest,
+  computeProfileDigest,
+  computeToolDefinitionsDigest,
+  loadAppRegistrationsFromEnv,
+  validateAppRegistration,
+} from '../../src/services/artifacts/app-registration';
 
-const HEX64 = 'a'.repeat(64);
+const SELECTED = ['artifacts_list'];
+const SUMMARIES = { artifacts_list: 'List.' };
+const RESOURCE = 'https://api.preprod.sent-tech.ca/api/v1/mcp/apps/radar-immobilier';
+
 function validRegistration() {
+  const profileDigest = computeProfileDigest(SELECTED);
+  const tools = buildCanonicalPerAppTools(SELECTED, SUMMARIES);
+  const toolDefinitionsDigest = computeToolDefinitionsDigest(tools);
+  const manifestDigest = computeManifestDigest(profileDigest, toolDefinitionsDigest, RESOURCE);
   return {
     appInstanceId: 'radar-preprod',
     appSlug: 'radar-immobilier',
-    environment: 'preprod',
+    environment: 'preprod' as const,
     tenantId: 'tenant-1',
     workspaceId: 'ws-1',
-    storage: { storageScopeId: 'radar-immobilier-preprod', origin: 'imported', quotaBytes: 1000, placement: 's3' },
-    profile: { selectedCapabilities: ['read'], profileDigest: HEX64, manifestDigest: HEX64 },
-    presentation: { toolSummaries: { artifacts_list: 'List.' }, toolDefinitionsDigest: HEX64 },
-    mcp: { resource: 'https://api.preprod.sent-tech.ca/api/v1/mcp/apps/radar-immobilier', clientIds: ['c1'] },
-    knowledge: { repoId: 'rhanka/radar-immobilier', commitSha: 'a'.repeat(40), path: 'artifact-knowledge', digest: HEX64 },
+    storage: { storageScopeId: 'radar-immobilier-preprod', origin: 'imported' as const, quotaBytes: 1000, placement: 's3' as const },
+    profile: { selectedCapabilities: [...SELECTED], profileDigest, manifestDigest },
+    presentation: { toolSummaries: { ...SUMMARIES }, toolDefinitionsDigest },
+    mcp: { resource: RESOURCE, clientIds: ['c1'] },
+    knowledge: { repoId: 'rhanka/radar-immobilier', commitSha: 'a'.repeat(40), path: 'artifact-knowledge', digest: 'b'.repeat(64) },
     revision: 'r1',
     reviewedBy: ['owner'],
   };
 }
+
+afterEach(() => { delete process.env.CM_REGISTRATION_ENABLED; delete process.env.APP_ARTIFACT_REGISTRATIONS_JSON; });
 
 describe('CMF-2 registration validation', () => {
   it('should accept a valid imported registration', () => {
