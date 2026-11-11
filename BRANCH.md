@@ -128,10 +128,10 @@
   - [ ] Lot gate:
     - [ ] `make test-llm-mesh ENV=test-models-carbon`
     - [ ] `make test-llm-gateway ENV=test-models-carbon`
-- [ ] **Lot 4 — Versions, locks, fixtures**
-  - [ ] Bump llm-mesh to 0.36.0 and llm-gateway to 0.23.0 with CHANGELOG entries
-  - [ ] Admit ranges in gateway and cluster-mesh manifests plus specs
-  - [ ] Regenerate root lock via make, council via make, packaging fixtures via make
+- [x] **Lot 4 — Versions, locks, fixtures**
+  - [x] Bump llm-mesh to 0.36.0 and llm-gateway to 0.23.0 with CHANGELOG entries
+  - [x] Admit ranges in gateway and cluster-mesh manifests plus specs
+  - [x] Regenerate root lock via make, council via make, packaging fixtures via make
   - [ ] Lot gate:
     - [ ] `make audit-llm-routing-package-versions ENV=test-models-carbon`
 - [ ] **Lot N — Final validation**
