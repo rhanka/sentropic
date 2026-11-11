@@ -105,3 +105,58 @@ describe('pod bootstrap: liveness lease (A-LIVE Amendment 1 §3)', () => {
     expect(await pod.agent.checkLease()).toBe(false); expect(pod.exits).toEqual([]);
   });
 });
+
+describe('pod bootstrap: warm-pool poolEpoch fence (L3 §7.3.2)', () => {
+  const epoch = (poolEpoch: number, bound: 0 | 1, over: Record<string, unknown> = {}) =>
+    ({ generation: 0, sessionId: 'pool-session', leaseEpoch: 0, routeEpoch: 0, ...POD, poolEpoch, bound, ...over });
+  it('should order pool epochs above generations and reject replayed epoch frames', async () => {
+    const pod = await harness();
+    await pod.send('phase', { phase: 'stopped' }, epoch(1, 0));
+    // A session frame at an older epoch is stale even with a newer generation.
+    await expect(pod.send('phase', { phase: 'stopped' }, fence(9, 9, 's9', 9))).rejects.toThrow('fenced:stale_fence');
+    // Bound-0 frames must not carry session epochs.
+    await expect(pod.send('phase', { phase: 'stopped' },
+      epoch(2, 0, { generation: 1 }))).rejects.toThrow('fenced:invalid_fence');
+    // The next epoch unbinds again after a full cycle below; here epoch 2 bound 0 advances.
+    await pod.send('phase', { phase: 'stopped' }, epoch(2, 0));
+    await expect(pod.send('phase', { phase: 'stopped' }, epoch(1, 0))).rejects.toThrow('fenced:stale_fence');
+  });
+  it('should refuse a second claim at the same fence instead of double-binding', async () => {
+    const pod = await harness();
+    await expect(pod.send('claim', {}, epoch(0, 1))).toEqual({ claimed: true, poolEpoch: 0 });
+    await expect(pod.send('claim', {}, epoch(0, 1))).rejects.toThrow('failed:already_bound');
+    const other = { ...epoch(0, 1), sessionId: 'other-session' };
+    await expect(pod.send('claim', {}, other)).rejects.toThrow('fenced:stale_fence');
+  });
+  it('should scrub to the next epoch, clearing workspace and tmp but keeping host files and dependencies', async () => {
+    const { writeFile, readFile } = await import('node:fs/promises');
+    const pod = await harness();
+    await writeFile(pod.path('workspace/app.ts'), 'console.log(1)');
+    await writeFile(pod.path('tmp/junk.bin'), 'junk');
+    await writeFile(pod.path('tmp/artifact-vite.config.mjs'), 'host');
+    await writeFile(pod.path('dependencies/package.json'), '{}');
+    await pod.send('claim', {}, epoch(0, 1));
+    await expect(pod.send('scrub', { nextEpoch: 1 }, epoch(0, 1))).toEqual({ cleared: ['/workspace', '/tmp'], poolEpoch: 1 });
+    await expect(readFile(pod.path('workspace/app.ts'), 'utf8').then(() => true, () => false)).toBe(false);
+    await expect(readFile(pod.path('tmp/junk.bin'), 'utf8').then(() => true, () => false)).toBe(false);
+    await expect(readFile(pod.path('tmp/artifact-vite.config.mjs'), 'utf8')).toBe('host');
+    await expect(readFile(pod.path('dependencies/package.json'), 'utf8')).toBe('{}');
+    // A replayed scrub at the old epoch is refused; a fresh claim binds the next epoch.
+    await expect(pod.send('scrub', { nextEpoch: 1 }, epoch(0, 1))).rejects.toThrow('failed:not_bound');
+    await expect(pod.send('claim', {}, epoch(1, 1))).toEqual({ claimed: true, poolEpoch: 1 });
+  });
+  it('should refuse scrub without a claim and on epoch mismatch', async () => {
+    const pod = await harness();
+    await expect(pod.send('scrub', { nextEpoch: 1 }, epoch(0, 1))).rejects.toThrow('failed:not_bound');
+    await pod.send('claim', {}, epoch(0, 1));
+    await expect(pod.send('scrub', { nextEpoch: 7 }, epoch(0, 1))).rejects.toThrow('failed:epoch_mismatch');
+  });
+  it('should refuse session ops on an unbound pool pod', async () => {
+    const pod = await harness();
+    await pod.send('phase', { phase: 'stopped' }, epoch(0, 0));
+    await expect(pod.send('overlay', {}, epoch(0, 0))).rejects.toThrow('fenced:unbound_pool');
+    await expect(pod.send('dev', {}, epoch(0, 0))).rejects.toThrow('fenced:unbound_pool');
+    await pod.send('claim', {}, epoch(0, 1));
+    await expect(pod.send('overlay', {})).rejects.toThrow('failed:');
+  });
+});
