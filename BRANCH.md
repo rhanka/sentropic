@@ -53,7 +53,7 @@ App bascule en mode cluster-mesh asap, code only, flag-gated, preprod-safe.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] T5a-EX1 pending if package.json export edit needed: reason additive export, impact none, rollback revert line
+- [x] T5a-EX1 train-level version bump for `@sentropic/cluster-mesh` (public, src changed): `packages/cluster-mesh/package.json` 0.26.0-dev.23 to 0.26.0-dev.24 plus `package-lock.json` version entry, `CHANGELOG.md` entry, packaging fixture refresh. Reason: `enforce-package-bump` CI gate blocks merge without a bump; this branch is the T5a train (one PR for several wagons) so it carries the bump once. Impact: version strings only, no dependency changes. Rollback: revert the bump commit. Private `@sentropic/ubo-contracts` needs no bump (gate skips private packages).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -89,14 +89,14 @@ App bascule en mode cluster-mesh asap, code only, flag-gated, preprod-safe.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [x] ENV=test-t5a API_PORT=8951 UI_PORT=5351 MAILDEV_UI_PORT=1251
   - [x] Branch feat/t5a-cm-providers from origin/main VERIFIED 7a352bb4d
-- [ ] **Lot 1 — CMP-L1 wiring pool/authResolver/dispatch GD-14**
-  - [ ] Add flag-gated cm-app-workload module, no default behavior change
-  - [ ] Wire gw.ts optionally, refused by default preserved
-  - [ ] Scoped tests gateway-cm-providers, typecheck
+- [x] **Lot 1 — CMP-L1 wiring pool/authResolver/dispatch GD-14**
+  - [x] Add flag-gated cm-app-workload module, no default behavior change
+  - [x] Wire gw.ts optionally, refused by default preserved
+  - [x] Scoped tests `api/tests/unit/gateway-cm-providers.spec.ts`, typecheck pending
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
     - [ ] **API tests**
-      - [ ] `api/tests/api/llm/gateway-cm-providers.spec.ts` new
+      - [x] `api/tests/unit/gateway-cm-providers.spec.ts` new
       - [ ] Scoped runs while evolving tests: `make test-api-<suite> SCOPE=tests/your-file.spec.ts ENV=test-<branch-slug>`
       - [ ] Sub-lot gate: `make test-api ENV=test-<branch-slug>`
       - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-<branch-slug>` and document status/signature in `BRANCH.md`
@@ -105,18 +105,18 @@ App bascule en mode cluster-mesh asap, code only, flag-gated, preprod-safe.
       - [ ] Sub-lot gate: `make test-ui ENV=test`
     - [ ] **E2E tests**
       - [ ] No E2E change, CI covers
-- [ ] **Lot 2 — CMP-L3 internal calls in-process gateway**
-  - [ ] Add internal-gateway wrapper flag-gated, default delegates to callLLM
-  - [ ] Scoped tests, typecheck
-- [ ] **Lot 3 — CMP-P1 prompt registry GD-7**
-  - [ ] Add packages/cluster-mesh/src/prompts registry pure + api adapter settings-backed
-  - [ ] Scoped tests, typecheck
-- [ ] **Lot 4 — CMP-E1 email port**
-  - [ ] Add messaging/email-port + api adapter allowlist/rate/audit
-  - [ ] Scoped tests, typecheck
-- [ ] **Lot 5 — CODE move type registry**
-  - [ ] Move validation/interface to packages/cluster-mesh/src/storage, api re-exports
-  - [ ] Scoped tests, typecheck
+- [x] **Lot 2 — CMP-L3 internal calls in-process gateway**
+  - [x] Add internal-gateway wrapper flag-gated, default delegates to direct
+  - [x] Scoped tests `api/tests/unit/gateway-internal-calls.spec.ts`, typecheck pending
+- [x] **Lot 3 — CMP-P1 prompt registry GD-7**
+  - [x] Add packages/cluster-mesh/src/prompts registry pure + api adapter settings-backed
+  - [x] Scoped tests package + `api/tests/unit/prompt-registry.spec.ts`, typecheck pending
+- [x] **Lot 4 — CMP-E1 email port**
+  - [x] Add messaging/email-port + api adapter allowlist/rate/audit
+  - [x] Scoped tests package + `api/tests/unit/email-port.spec.ts`, typecheck pending
+- [x] **Lot 5 — CODE move type registry**
+  - [x] Move validation/interface to packages/ubo-contracts (private, no new dep), api adapter re-exports
+  - [x] Existing `api/tests/object-registry/object-type-registry.test.ts` covers, typecheck pending
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest UI (cf Lot1, copy checklist)
