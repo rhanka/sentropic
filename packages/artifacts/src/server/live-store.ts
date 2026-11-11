@@ -70,6 +70,16 @@ export interface LiveTransaction {
 export interface LiveStore {
   transaction<T>(identity: LiveIdentity, action: (tx: LiveTransaction) => Promise<T>): Promise<T>;
   sessionIdentity(scope: string, artifactId: string, liveSessionId: string): Promise<LiveIdentity | undefined>;
+  /** Drafts of the scope whose runtime still waits for the worker (see liveWorkerPending), oldest access first.
+   * Absent when the adapter cannot list them: the host then has no durable re-drive. */
+  pending?(scope: string, limit?: number): Promise<LiveIdentity[]>;
+}
+/** A runtime waits for the worker while it revives, while a stop is not DORMANT yet, or while LIVE trails its draft. */
+export function liveWorkerPending(record: Pick<LiveDraftRecord, 'revision' | 'runtime'> | undefined): 'project' | 'stop' | null {
+  const runtime = record?.runtime;
+  if (!record || !runtime) return null;
+  if (runtime.phase === 'QUIESCING' || runtime.phase === 'SAVING' || runtime.phase === 'DECOMMISSIONING') return 'stop';
+  return runtime.phase === 'REVIVING' || (runtime.phase === 'LIVE' && runtime.appliedRevision !== record.revision) ? 'project' : null;
 }
 export const liveIdentityKey = (identity: LiveIdentity): string => JSON.stringify([
   identity.storageScopeId, identity.artifactId, identity.bindingGeneration]);
@@ -112,6 +122,11 @@ export function createMemoryLiveStore(): LiveStore {
       const record = [...records.values()].find(row => row.storageScopeId === scope && row.artifactId === artifactId &&
         row.runtime?.liveSessionId === sessionId);
       return record ? { storageScopeId: scope, artifactId, bindingGeneration: record.bindingGeneration } : undefined;
+    },
+    async pending(scope, limit = 64) {
+      return [...records.values()].filter(row => row.storageScopeId === scope && liveWorkerPending(row))
+        .sort((a, b) => (a.runtime!.lastAccessAt < b.runtime!.lastAccessAt ? -1 : 1)).slice(0, limit)
+        .map(row => ({ storageScopeId: scope, artifactId: row.artifactId, bindingGeneration: row.bindingGeneration }));
     },
     transaction: (identity, action) => mutex.runSerialized('live-store', async () => {
     const id = liveIdentityKey(identity);
