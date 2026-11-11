@@ -74,8 +74,8 @@ Keep at least 1 warm pod per (scope, hot cacheKey) so a live start attaches inst
   - [x] KubernetesCore list/patchLabels, in-cluster impl, fixture impl.
   - [ ] Lot gate: scoped pods test green.
 - [ ] **Lot 4 — Pool manager**
-  - [ ] New pool.ts: claimForLive/claimForBuild, release warm-deps, drain, occupancy, adopt, renew.
-  - [ ] LivePorts.pool wiring, service composition.
+  - [x] New pool.ts: fill CAS, claimForLive/claimForBuild CAS.
+  - [ ] Release warm-deps, drain, occupancy, adopt, renew; LivePorts.pool wiring, service composition.
   - [ ] Lot gate: new pool.test.ts green.
 - [ ] **Lot 5 — Frame fence poolEpoch + claim/scrub ops**
   - [ ] FRAME_OPS claim/scrub/extractArchive/applyOverlay/sealDependencies, poolEpoch ordering, renew keeps lease.
