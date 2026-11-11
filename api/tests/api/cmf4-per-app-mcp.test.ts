@@ -8,7 +8,7 @@ function registration(): AppArtifactsRegistration {
     appInstanceId: 'radar-preprod', appSlug: 'radar-immobilier', environment: 'preprod',
     tenantId: 'tenant-radar', workspaceId: 'ws-1',
     storage: { storageScopeId: 'radar-immobilier-preprod', origin: 'imported', quotaBytes: 1000, placement: 's3' },
-    profile: { selectedCapabilities: ['read'], profileDigest: HEX64, manifestDigest: HEX64 },
+    profile: { selectedCapabilities: ['artifacts_list'], profileDigest: HEX64, manifestDigest: HEX64 },
     presentation: { toolSummaries: { artifacts_list: 'List Radar pages.' }, toolDefinitionsDigest: HEX64 },
     mcp: { resource: 'https://api.preprod.sent-tech.ca/api/v1/mcp/apps/radar-immobilier', clientIds: ['immo-mcp'] },
     knowledge: { repoId: 'r', commitSha: 'c'.repeat(40), path: 'k', digest: HEX64 },
