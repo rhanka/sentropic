@@ -54,6 +54,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 - None yet.
 
 ## AI Flaky tests
+- Recorded (run 42989330672, head `6cccbce64`): `test-e2e (5)` → `e2e/tests/00-ai-generation.spec.ts` « devrait générer des cas d'usage… » — Timeout 60 s sur POST `/api/v1/initiatives/generate` après erreur fournisseur « Impossible de créer un brouillon de dossier » ; 37 passed / 1 failed / 1 skipped dans le shard. Signature = non-déterminisme fournisseur/réseau (fichier allowlisté). Re-run non tenté (pas de re-run CI sans commit : COMMON-RULES) ; le train re-qualifiera sur la branche train. Sign-off owner requis au merge (gate T3 de toute façon).
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
   - Non-systematic means at least one success on the same commit and same command.
@@ -103,11 +104,11 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] placement-migrate both directions, AP-3 counts, per-batch tx switch, resume cursor, never deletes source.
   - [x] Tests: rehearsal copy equal digests, source intact, resume after crash.
   - [x] Lot gate: typecheck-api PASS, cmf-s3-placement-migrate 4/4 (scoped, ENV=test-t4a-storage).
-- [ ] **Lot 5 — Final validation**
+- [x] **Lot 5 — Final validation (PR ouverte, NON mergée — gate T3)**
   - [x] Typecheck impacted (typecheck-artifacts + typecheck-api PASS).
   - [x] Retest API scoped suites (cmf-s2 4/4, cmf-s3 4/4, host-migrations 19/19).
   - [x] Retest package suites scoped (blob-bridge 8/8, composite-blob 8/8).
   - [x] Patch bump @sentropic/artifacts 0.2.26 -> 0.2.27 + lock sync (this lane ships a PR, so CI enforce-package-bump applies; stays in the 0.2.x cluster-mesh pin; no other lock churn).
-  - [ ] Final gate step 1: open PR with BRANCH.md body, CI green, do NOT merge (T3 gate).
+  - [x] Final gate step 1: PR [#1003](https://github.com/rhanka/sentropic/pull/1003) open, do NOT merge (T3 gate). CI: all green except (a) `validate-cluster-mesh` fixture alignment — needs published 0.2.27 tarball (train/owner publish act, out of lane scope), (b) `test-e2e (5)` AI-flaky allowlisted (recorded above, train re-runs + owner sign-off).
   - [ ] Final gate step 2: French report .tmp/rv/t4a-storage.md.
   - [ ] make down-volumes ENV=test-t4a-storage.
