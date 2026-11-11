@@ -3,7 +3,7 @@ import type { GitInstallationLeasePort } from '@sentropic/cluster-mesh';
 import { GIT_APP_TARGET_REGISTRY } from '../../cluster-mesh/github-app-host';
 import { LiveError, type LiveKey } from './records';
 import { rowOf, type RemoteRows } from './remote-live';
-import { podName } from './pods';
+import { bindingRowKey } from './pods';
 import { parseInstallWorkspaces } from './workspace-subset';
 
 /** Builder repositories (cm/api): `[{storageScopeId, repoId, locator, installationRef, allowedSubPaths}]`. */
@@ -92,7 +92,7 @@ export function admitBinding(config: ForgeConfig | null, storageScopeId: string,
 
 /** Bindings per `(storageScopeId, artifactId, bindingGeneration)` in the remote-live rows, immutable per generation. */
 export function createForgeBindings(rows: RemoteRows, config: ForgeConfig | null) {
-  const row = (key: LiveKey, generation: number) => rowOf(podName(key), 'binding', generation);
+  const row = (key: LiveKey, generation: number) => rowOf(bindingRowKey(key), 'binding', generation);
   return {
     /** Contract §1 checks only: a build stores its binding with the job, recorded at the HostJob generation (R1). */
     validate: (key: LiveKey, binding: ForgeBinding): void => { admitBinding(config, key.storageScopeId, binding); },

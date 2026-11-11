@@ -4,7 +4,7 @@ import { emptyHeavyPhaseQueueState, type HeavyPhaseKind, type HeavyPhaseQueue, t
 import type { CachePorts } from './cache';
 import { defaultStepLogger, type InstallStepLogger } from './deadline';
 import type { LiveStore } from './ports';
-import { podName, quotaExceeded } from './pods';
+import { quotaExceeded } from './pods';
 import { LiveError } from './records';
 
 /** Phases whose memory peaks stack on a node: the in-pod install, the Vite pre-bundle, the dev server start (which
@@ -103,7 +103,7 @@ export function createQueuedHeavyGate(options: { queue: HeavyPhaseQueue; node: s
 }
 export async function liveHolds(store: Pick<LiveStore, 'active'>) {
   const active = await store.active();
-  return { pods: active.map(({ key }) => podName(key)), lives: active.filter(({ phase }) => phase === 'LIVE').map(({ key }) => podName(key)) };
+  return { pods: active.map(({ podName }) => podName), lives: active.filter(({ phase }) => phase === 'LIVE').map(({ podName }) => podName) };
 }
 /** The in-pod clean install is the `install` heavy phase; an install outside a pod is not a node phase. The
  * watchdog abort crosses the queue wait, so a cut install stops re-enqueuing its ticket.
