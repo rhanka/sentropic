@@ -2,14 +2,15 @@ import { Hono, type Context } from 'hono';
 import type { Pool } from 'pg';
 import { createHeavyPhaseQueue, type HeavyPhaseBudget } from '@sentropic/cluster-mesh';
 import type { LivePorts } from './ports';
+import { LiveError, type LiveRuntime } from './records';
 import type { CachePorts } from './cache';
 import type { PrivateCacheBlobs } from './cache-storage';
-import { createPostgresCacheStorage } from './cache-storage';
+import { createPostgresCacheStorage, createPostgresKvRows } from './cache-storage';
 import { createDependencyCache } from './cache';
 import { createPostgresBuildJobStore, createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
 import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, liveHolds } from './heavy';
 import { createFairAdmission } from './admission';
-import { createBuilderPods, type KubernetesCore, type WorkerSizing } from './pods';
+import { createBuilderPods, podName, type KubernetesCore, type WorkerSizing } from './pods';
 import { createLiveWorker } from './worker';
 import { createLiveController } from './controller';
 import { fetchLockedTarball } from './npm-relay';
@@ -19,11 +20,16 @@ import { createHandoffPublication, type RemoteHost } from './handoff-publication
 import { createCandidateStore } from './candidate-store';
 import { composeSupervisor } from './supervisor-composition';
 import type { SupervisorSources } from './supervisor';
+import { CACHE_STATE_NAMESPACE, createCacheJobs, createHostCacheApi, PREWARM_ADMISSION_RETRY_MS,
+  PREWARM_ADMISSION_WAIT_MS, type CacheJobRecord, type PrewarmExecutor } from './cache-api';
+import { createPhaseEventSink, PHASE_EVENTS_NAMESPACE } from './phase-events';
 import { createRelaySupervisorChannel, SUPERVISOR_COMMAND_TIMEOUT_MS } from './supervisor-relay';
 import { createBuildJobs, jobForgeBinding, runStaleMs } from './build-jobs';
 import { defaultInstallBudget, type InstallBudget } from './deadline';
 import { createHostBuildApi, type HostBuildEnv, type HostIdentity } from './host-build-api';
 import { createHostLiveApi } from './host-live-api';
+import type { SourceSnapshot } from './ports';
+import { unconfigured, type ForgeBinding } from './forge-binding';
 import { createRemoteLive } from './remote-live';
 import { createRemoteDrafts } from './remote-drafts';
 import type { ForgeBindings } from './forge-binding';
@@ -43,7 +49,7 @@ export const MAX_BUILDER_PODS = 2;
  */
 export function createArtifactLiveService(options: Pick<LivePorts,
   'binding' | 'jobBinding' | 'seedBinding' | 'seedSession' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
-  | 'invitations'> & {
+  | 'invitations' | 'events'> & {
     pool: Pool; cacheBlobs: PrivateCacheBlobs; placement: BuilderPlacement;
     /** Namespace-only client of the builder namespace (`createInClusterKubernetes(placement)` in the product). */
     kubernetes: KubernetesCore;
@@ -78,9 +84,48 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   options.installBudget ?? defaultInstallBudget());
   const admission = createFairAdmission({ capacity: options.admission.capacity ?? LIVE_NODE_CAPACITY,
     waiterTtlMs: options.admission.waiterTtlMs, now: options.now, holders: () => store.active() });
-  return createLiveController({ ...options, cache, store, admission, heavy,
-    pods: createBuilderPods(options.kubernetes, bootstrap, options.placement, options.sizing),
-    worker: createLiveWorker(supervisor, options.placement) });
+  const pods = createBuilderPods(options.kubernetes, bootstrap, options.placement, options.sizing);
+  const delay = (ms: number) => new Promise<void>(resolve => { const timer = setTimeout(resolve, ms); timer.unref?.(); });
+  /** Prewarm seal executor (§7.1.3, §7.1.6): one fresh pod per seal with yielding heavy admission (5 s
+   * pod-slot wait retried every 60 s, so a prewarm never starves a user build beyond one in-flight heavy
+   * phase). The pod is single-use: removed after the seal whether it succeeded or failed. */
+  const prewarmExecutor: PrewarmExecutor = {
+    async execute(job: CacheJobRecord, source, progress) {
+      const key = { storageScopeId: job.scope, artifactId: `prewarm:${job.jobId}` };
+      let runtime: LiveRuntime = { generation: 0, ownerId: 'prewarm', sessionId: job.jobId,
+        phase: 'BUILD_PROVISIONING', leaseEpoch: 0, rowVersion: 0, podUid: null, podName: podName(key),
+        sourceRevision: source.headSha, appliedRevision: null, baseHeadSha: source.headSha,
+        liveTreeSha: source.treeSha, lastAccessAt: options.now(), routeEpoch: 0, invitationEpoch: 0,
+        invitationExpiresAt: null, pendingWake: false, attempt: null };
+      await progress?.('queued');
+      for (;;) {
+        try {
+          return await heavy.pod(`prewarm:${job.jobId}`, async () => {
+            const pod = await pods.ensure(key, runtime);
+            runtime = { ...runtime, podUid: pod.uid };
+            try {
+              await progress?.('seal');
+              return await cache.seal({ lockfile: source.lockfile, cacheIdentity: source.cacheIdentity,
+                stagingRef: source.stagingRef, gb1: source.gb1, runtime });
+            } finally {
+              await pods.remove(key, runtime).catch(() => undefined);
+              await heavy.hold(runtime.podName, { pod: false }).catch(() => undefined);
+              await heavy.cancel(runtime.podName).catch(() => undefined);
+            }
+          }, { waitMs: PREWARM_ADMISSION_WAIT_MS });
+        } catch (error) {
+          if (error instanceof LiveError && error.code === 'builder_unavailable' && error.reason === 'queued') {
+            await progress?.('queued').catch(() => undefined);
+            await delay(PREWARM_ADMISSION_RETRY_MS);
+            continue;
+          }
+          throw error;
+        }
+      }
+    },
+  };
+  return { controller: createLiveController({ ...options, cache, store, admission, heavy, pods,
+    worker: createLiveWorker(supervisor, options.placement) }), prewarmExecutor };
 }
 /** M3-B builder service: the live controller composed with the SG4b handoff publication, the Postgres job ledger,
  * the remote host live state (D0: drafts, session invitation state and package fences pushed by the host) and the host API
@@ -96,6 +141,10 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
   liveWaitMs: number;
   /** Host git bindings (forge-lease-reader contract §1), validated and recorded before anything is scheduled. */
   forgeBindings: Pick<ForgeBindings, 'admit' | 'validate'>;
+  /** Repo-scoped forge read for the prewarm trigger (§7.1.3): identity equality with the user path is
+   * load-bearing, so this must be the same snapshot machinery (e.g. `reads.snapshotRepo`). Absent keeps
+   * the prewarm endpoints refusing `forge_unconfigured` instead of composing a second lease client here. */
+  forgeSnapshot?: (scope: string, binding: ForgeBinding, commitSha: string) => Promise<SourceSnapshot>;
 }) {
   const jobs = createBuildJobs(createPostgresBuildJobStore(options.pool), options.now, options.id,
     runStaleMs(options.heavy.maxWaitMs, options.installBudget?.ceilingMs));
@@ -104,9 +153,11 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
     signingKey: options.signingKey, hostKeys: options.hostKeys, now: options.now });
   const rows = createPostgresRemoteLiveRows(options.pool);
   const remote = createRemoteLive(rows); const drafts = createRemoteDrafts(rows);
-  const controller = createArtifactLiveService({ ...options, publication, jobBinding: jobForgeBinding(jobs, options.forgeBindings),
+  const { controller, prewarmExecutor } = createArtifactLiveService({ ...options, publication,
+    jobBinding: jobForgeBinding(jobs, options.forgeBindings),
     seedBinding: (key, seed) => remote.reconciled(key, seed), seedSession: key => remote.session(key).catch(() => undefined),
     drafts: drafts.drafts, invitations: remote.invitations,
+    events: createPhaseEventSink(createPostgresKvRows(options.pool, PHASE_EVENTS_NAMESPACE)),
     sources: { ...options.sources, draft: drafts.draft, candidate: input => candidates.candidate(input) } });
   // A build carries no generation (R1): its validated binding is stored with the job, and the build-only run records it
   // at the HostJob generation right after resolving the job, never at the host's last reconcile.
@@ -115,6 +166,11 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
     build: async (key, jobId) => { await controller.buildOnly(key, jobId); } });
   const live = createHostLiveApi({ authenticate: options.authenticate, controller, store: createPostgresLiveStore(options.pool),
     remote, drafts, waitMs: options.liveWaitMs, bind: options.forgeBindings.admit });
-  const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live);
-  return { controller, api, jobs, remote, drafts };
+  const cacheJobs = createCacheJobs(createPostgresKvRows(options.pool, CACHE_STATE_NAMESPACE),
+    { now: options.now, id: options.id });
+  const snapshotRepo = options.forgeSnapshot ?? (async () => unconfigured());
+  const cacheApi = createHostCacheApi({ authenticate: options.authenticate, jobs: cacheJobs, snapshotRepo,
+    executor: prewarmExecutor, schedule: options.schedule });
+  const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live).route('/', cacheApi);
+  return { controller, api, jobs, remote, drafts, cacheJobs };
 }
