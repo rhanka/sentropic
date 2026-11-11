@@ -12,7 +12,10 @@ export const POOL_MAX_AGE_MS = 24 * 3600_000;
 export const ARTIFACT_POOL_MIN_ENV = 'ARTIFACT_POOL_MIN_PER_HOT_KEY';
 export const POOL_MIN_DEFAULT = 1;
 
-export type PoolState = 'filling' | 'warm' | 'warm-deps' | 'claimed';
+/** Tombstone: `KvStore.update` with `next: undefined` is a no-op (memory and Postgres alike keep the row),
+ * so absence is written explicitly. Absent rows are invisible to occupancy/claims/drain/adopt/renew; `beginFill`
+ * and `releaseUnclaimed` treat them as free. */
+export type PoolState = 'filling' | 'warm' | 'warm-deps' | 'claimed' | 'absent';
 export interface PoolEntry {
   scope: string; cacheKey: string; baseHeadSha: string;
   podName: string; podUid: string; poolEpoch: number; state: PoolState;
@@ -47,7 +50,7 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
     async beginFill(scope: string, cacheKey: string, baseHeadSha: string): Promise<PoolEntry> {
       const at = now();
       return store.update<PoolEntry, PoolEntry>(entryKey(scope, cacheKey), current => {
-        if (current && current.state !== undefined) {
+        if (current && current.state !== 'absent') {
           throw new LiveError('builder_unavailable', 'pool_fill_in_progress');
         }
         const next: PoolEntry = { scope, cacheKey, baseHeadSha, podName: poolPodName(poolId()),
@@ -68,7 +71,7 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
     async failFill(scope: string, cacheKey: string): Promise<void> {
       await store.update<PoolEntry, void>(entryKey(scope, cacheKey), current => {
         if (!current || current.state !== 'filling') return { result: undefined };
-        return { next: undefined, result: undefined };
+        return { next: { ...current, state: 'absent' }, result: undefined };
       });
     },
     /** Live claim (§7.3.2): `warm → claimed`. `warm-deps` never serves live (source must be restaged first);
@@ -126,7 +129,7 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
       baseHeadSha: string, poolEpoch: number): Promise<PoolEntry | undefined> {
       const at = now();
       return store.update<PoolEntry, PoolEntry | undefined>(entryKey(scope, cacheKey), current => {
-        if (current) return { result: undefined };
+        if (current && current.state !== 'absent') return { result: undefined };
         const next: PoolEntry = { scope, cacheKey, baseHeadSha, podName, podUid, poolEpoch,
           state: 'warm-deps', filledAt: at, lastRenewAt: at };
         return { next, result: next };
@@ -134,19 +137,22 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
     },
     /** Drop a row in any state back to absent, for scrub-doubt pod deletions. */
     async drop(scope: string, cacheKey: string): Promise<void> {
-      await store.update<PoolEntry, void>(entryKey(scope, cacheKey), () => ({ next: undefined, result: undefined }));
+      await store.update<PoolEntry, void>(entryKey(scope, cacheKey), current => {
+        if (!current) return { result: undefined };
+        return { next: { ...current, state: 'absent' }, result: undefined };
+      });
     },
-    /** Per-scope occupancy for `GET /v1/pool` (§7.6.3). */
+    /** Per-scope occupancy for `GET /v1/pool` (§7.6.3). Absent tombstones are invisible. */
     async occupancy(scope: string): Promise<{ warm: number; warmDeps: number; filling: number; claimed: number }> {
       const keys = (await store.read<string[]>(indexKey(scope))) ?? [];
       const counts = { warm: 0, warmDeps: 0, filling: 0, claimed: 0 };
       for (const key of keys) {
         const entry = await store.read<PoolEntry>(key);
-        if (!entry) continue;
+        if (!entry || entry.state === 'absent') continue;
         if (entry.state === 'warm') counts.warm++;
         else if (entry.state === 'warm-deps') counts.warmDeps++;
         else if (entry.state === 'filling') counts.filling++;
-        else counts.claimed++;
+        else if (entry.state === 'claimed') counts.claimed++;
       }
       return counts;
     },
@@ -159,13 +165,13 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
       const before = { warm: 0, warmDeps: 0, filling: 0, claimed: 0 };
       for (const key of keys) {
         const entry = await store.read<PoolEntry>(key);
-        if (!entry || entry.scope !== scope) continue;
+        if (!entry || entry.scope !== scope || entry.state === 'absent') continue;
         if (entry.state === 'warm') before.warm++;
         else if (entry.state === 'warm-deps') before.warmDeps++;
         else if (entry.state === 'filling') before.filling++;
         else { before.claimed++; continue; }
         if (entry.podUid) await removePod(entry.podName, entry.podUid).catch(() => undefined);
-        await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+        await store.update<PoolEntry, void>(key, current => ({ next: { ...current!, state: 'absent' }, result: undefined }));
       }
       return { before, at: now() };
     },
@@ -180,21 +186,23 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
       const byName = new Map(survivors.map(s => [s.name, s.uid]));
       const adopted: PoolEntry[] = [];
       let orphaned = 0; let orphansDeleted = 0;
+      const tombstone = (key: string, entry: PoolEntry) =>
+        store.update<PoolEntry, void>(key, () => ({ next: { ...entry, state: 'absent' }, result: undefined }));
       for (const key of keys) {
         const entry = await store.read<PoolEntry>(key);
-        if (!entry || entry.scope !== scope) continue;
+        if (!entry || entry.scope !== scope || entry.state === 'absent') continue;
         const uid = byName.get(entry.podName);
         byName.delete(entry.podName);
         const alive = uid === entry.podUid && entry.podUid !== '' && now() - entry.filledAt <= POOL_MAX_AGE_MS;
         if (!alive) {
           orphaned++;
-          await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+          await tombstone(key, entry);
           continue;
         }
         if (entry.state === 'filling') {
           // Mid-fill after a dead runner: the tree is untrusted, so the pod is deleted, not adopted.
           orphaned++;
-          await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+          await tombstone(key, entry);
           await removePod(entry.podName, entry.podUid).catch(() => undefined);
           continue;
         }
@@ -218,7 +226,7 @@ export function createPoolManager(store: KvStore, options: { now(): number }) {
           || (entry.state !== 'warm' && entry.state !== 'warm-deps')) continue;
         if (now() - entry.filledAt > POOL_MAX_AGE_MS) {
           if (entry.podUid) await removePod(entry.podName, entry.podUid).catch(() => undefined);
-          await store.update<PoolEntry, void>(key, () => ({ next: undefined, result: undefined }));
+          await store.update<PoolEntry, void>(key, () => ({ next: { ...entry, state: 'absent' }, result: undefined }));
           evicted++; continue;
         }
         await renew(entry);
