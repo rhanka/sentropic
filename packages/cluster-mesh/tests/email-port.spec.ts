@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createEmailPort, createEmailRateLimiter, isSenderAllowed,
-} from '../../src/messaging/email-port';
+} from '../src/messaging/email-port.js';
 
 const scope = { tenantId: 't1', workspaceId: 'w1', appInstanceId: 'radar-immobilier-preprod' };
 
