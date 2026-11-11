@@ -237,8 +237,8 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         for (const file of parsed.files ?? []) {
           if (typeof file.digest !== 'string' || typeof file.size !== 'number') continue;
           await client.query(
-            `INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
-             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+            `INSERT INTO artifacts.blobs (storage_scope_id, digest, size, placement)
+             VALUES ($1, $2, $3, 'object') ON CONFLICT DO NOTHING`,
             [scopeId, file.digest, file.size],
           );
         }
