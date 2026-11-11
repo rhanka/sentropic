@@ -52,11 +52,10 @@ describe('host live API (remote host D0)', () => {
     const dormant = await s.call('grant', grant({ principalId: 'owner' }));
     expect(dormant.status).toBe(409); expect(await dormant.json()).toEqual({ error: 'git_live_conflict', reason: 'invalid_phase' });
   });
-  it('refuses a stop with a stale lease epoch and keeps the session LIVE', async () => {
+  it('total-stops a stale stop and keeps the session LIVE', async () => {
     const s = setup(); await s.stage('r1'); await s.call('reconcile', reconcile());
     for (const over of [{ leaseEpoch: 6 }, { liveSessionId: 'other-session' }, { bindingGeneration: 2 }]) {
-      const response = await s.call('stop', stop(over));
-      expect(response.status).toBe(409); expect(await response.json()).toEqual({ error: 'git_live_conflict', reason: 'stale_session' });
+      expect((await s.call('stop', stop(over))).status).toBe(204);
     }
     expect((await s.f.state())?.runtime.phase).toBe('LIVE');
     expect((await s.call('stop', stop())).status).toBe(204); expect((await s.f.state())?.runtime.phase).toBe('DORMANT');
@@ -64,7 +63,7 @@ describe('host live API (remote host D0)', () => {
   it('lets a host of another storage scope see nothing of the binding', async () => {
     const s = setup(); await s.stage('r1'); await s.call('reconcile', reconcile());
     expect(await (await s.call('grant', grant({ principalId: 'owner' }), 'other')).json()).toMatchObject({ reason: 'binding_unreconciled' });
-    expect(await (await s.call('stop', stop(), 'other')).json()).toMatchObject({ reason: 'stale_session' });
+    expect((await s.call('stop', stop(), 'other')).status).toBe(204);
     expect(await (await s.call('reconcile', reconcile(), 'other')).json()).toMatchObject({ reason: 'draft_not_staged' });
     await s.stage('evil', 'other');
     expect((await s.drafts.drafts.current(key, 1)).revision).toBe('r1');
