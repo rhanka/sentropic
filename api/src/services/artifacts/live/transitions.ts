@@ -1,5 +1,6 @@
 import type { LivePorts, LiveBinding } from './ports';
 import { assertFence, conflict, LiveError, recordHead, type LiveKey, type LiveRuntime, type LiveState } from './records';
+import { POOL_LABEL, POOL_LABEL_VALUE } from './pods';
 import { withinPhase } from './deadline';
 
 /** Graceful quiesce bound in teardown: an unreachable supervisor endpoint fails fast instead of blocking
@@ -38,6 +39,37 @@ export async function checkpoint(ports: LivePorts, key: LiveKey, runtime: LiveRu
   await ports.drafts.checkpoint(key, draft);
   return draft;
 }
+/** Synchronous `warm-deps` release (§7.3.2, convergence Q2): scrubs the pod, deletes its Service, marks it
+ * pool-owned and hands the row to the pool — so an immediately following `git_publish` claims the hot tree.
+ * Returns false when the pod must be deleted instead: no pool, no sealed key, no recorded pod, a dependency
+ * failure that may have poisoned the tree (§5.5: any scrub doubt deletes the pod), a scrub ACK that does not
+ * prove `['/workspace', '/tmp']`, or a pool row that refuses the release. Never throws. */
+async function releaseToPool(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, detail: string | undefined,
+): Promise<boolean> {
+  const pool = ports.pool;
+  const cacheKey = runtime.cacheKey;
+  if (!pool || !cacheKey || !runtime.podUid) return false;
+  if (detail !== undefined && detail.includes('dependency')) return false;
+  try {
+    const nextEpoch = (runtime.poolEpoch ?? 0) + 1;
+    const ack = await ports.worker.scrub(runtime, nextEpoch);
+    if (ack.cleared.length !== 2 || !ack.cleared.includes('/workspace') || !ack.cleared.includes('/tmp')
+      || ack.poolEpoch !== nextEpoch) return false;
+    await ports.pods.removeService(key, runtime);
+    await ports.pods.patchLabels(runtime, { [POOL_LABEL]: POOL_LABEL_VALUE });
+    if (runtime.poolEpoch !== undefined) {
+      await pool.releaseWarmDeps(key.storageScopeId, cacheKey, runtime.baseHeadSha);
+    } else {
+      const entry = await pool.releaseUnclaimed(key.storageScopeId, cacheKey, runtime.podName, runtime.podUid,
+        runtime.baseHeadSha, nextEpoch);
+      if (!entry) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Always retain the old pod fence until its deletion has been confirmed. A stop or recover without its own detail
  * preserves the root cause instead of clearing it. */
 export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, detail?: string) {
@@ -61,8 +93,14 @@ export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRunt
     await ports.heavy.hold(runtime.podName, { live: false }); await ports.heavy.cancel(runtime.podName);
     await checkpoint(ports, key, runtime);
     runtime = await transition(ports, key, runtime, state => { state.runtime.phase = 'DECOMMISSIONING'; });
-    await ports.pods.remove(key, runtime);
-    await ports.heavy.hold(runtime.podName, { pod: false });
+    if (await releaseToPool(ports, key, runtime, detail)) {
+      // The pool owns the pod now: its pod slot was dropped by the cancel above, so re-hold it. The admission
+      // slot frees with the DORMANT transition below, exactly like the delete path.
+      await ports.heavy.hold(runtime.podName, { pod: true });
+    } else {
+      await ports.pods.remove(key, runtime);
+      await ports.heavy.hold(runtime.podName, { pod: false });
+    }
   } catch (error) {
     const cause = error instanceof LiveError ? (error.reason ? `${error.code}:${error.reason}` : error.code)
       : 'builder_unavailable';
