@@ -2,9 +2,10 @@ import type { LivePorts } from './ports';
 import { conflict, LiveError, type LiveKey, type LiveRuntime } from './records';
 import { enrichPodLoss, isPodCause } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
-import { checkpoint, currentBinding, observeHead, transition } from './transitions';
+import { checkpoint, currentBinding, currentRuntime, observeHead, transition } from './transitions';
 import { requireUserCache } from './cache';
 import { runPhase, withinPhase } from './deadline';
+import { releaseIfDormant } from './admission';
 
 /** Cold revive, crash restore or wake: adopts only a responsive pod, and reports a lost pod with its Kubernetes
  * cause. Callers (`revive`, `wake`) tear the runtime down on the enriched error. */
@@ -13,6 +14,21 @@ export async function prepareLive(ports: LivePorts, key: LiveKey, runtime: LiveR
     return await preparePod(ports, key, runtime);
   } catch (error) {
     if (error instanceof LiveError && error.reason === 'stale_fence') throw error;
+    if (error instanceof LiveError && error.code === 'cache_not_prewarmed') {
+      // §7.1.4: an unsealed lockfile never leaves a half-started runtime behind. The REVIVING row written by
+      // `revive`/`wake` rolls back to DORMANT with the typed detail (no pod was touched: the sealed lookup
+      // runs before the first pod slot), the admission slot is freed, and the typed error reaches the MCP
+      // caller inside the 5 s lookup bound.
+      const current = await currentRuntime(ports, key, runtime);
+      await transition(ports, key, current, state => {
+        if (state.runtime.phase !== 'REVIVING' || state.runtime.sessionId !== current.sessionId) conflict('stale_fence');
+        state.runtime.phase = 'DORMANT'; state.runtime.podUid = null; state.runtime.appliedRevision = null;
+        state.runtime.attempt = null;
+        state.runtime.stateDetail = error.reason ? `${error.code}:${error.reason}` : error.code;
+      }).catch(() => undefined);
+      await releaseIfDormant(ports, key).catch(() => undefined);
+      throw error;
+    }
     const loss = await enrichPodLoss(ports.pods, key, runtime, error);
     if (loss instanceof LiveError && isPodCause(loss)) await notePodLoss(key, loss);
     throw loss;
@@ -32,15 +48,17 @@ async function preparePod(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) 
     state.runtime.sourceRevision = draft.revision; state.runtime.baseHeadSha = draft.baseHeadSha;
     state.runtime.liveTreeSha = draft.treeSha;
   });
+  // Sealed-cache pre-admission (§7.1.4): the snapshot and the lookup run before the first pod slot, so an
+  // unsealed lockfile rejects without creating a pod. The rollback in `prepareLive` returns the row to DORMANT.
+  const source = await ports.forge.snapshot(key, head);
+  if (source.headSha !== head) throw new LiveError('git_head_moved');
+  const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
   const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
   runtime = await transition(ports, key, runtime, state => {
     state.runtime.podUid = pod.uid;
     if (pod.replaced) state.runtime.routeEpoch++;
   });
-  const source = await ports.forge.snapshot(key, head);
-  if (source.headSha !== head) throw new LiveError('git_head_moved');
   await ports.worker.clean(runtime);
-  const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
   await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
   await ports.worker.restore(runtime, draft);
   await ports.heavy.run(runtime.podName, 'prebundle', () => runPhase(key, 'prebundle',

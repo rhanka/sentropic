@@ -3,7 +3,7 @@ import { releaseIfDormant } from './admission';
 import { assertFence, conflict, LiveError, publicationBaseline, type LiveKey, type LiveRuntime } from './records';
 import { enrichPodLoss, isPodCause, isTransportLoss, podName } from './pods';
 import { ensureResponsivePod, notePodLoss } from './pod-probe';
-import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
+import { checkpoint, currentBinding, currentRuntime, failed, observeHead, teardown, transition } from './transitions';
 import { requireUserCache } from './cache';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
@@ -145,13 +145,17 @@ async function resolveAttemptJob(ports: LivePorts, key: LiveKey, jobId: string, 
 async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, job: HostJob) {
   try {
     await checkpoint(ports, key, runtime);
+    // Sealed-cache pre-admission (§7.1.4): the snapshot and the lookup run before the first pod slot, so an
+    // unsealed lockfile rejects with 409 before any admission beyond the job itself. The catch below returns
+    // the row to DORMANT so a retry after sealing starts clean.
+    const source = await ports.forge.snapshot(key, job.headSha);
+    if (source.headSha !== job.headSha) throw new LiveError('git_head_moved');
+    const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
     const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
     runtime = await transition(ports, key, runtime, state => {
       state.runtime.podUid = pod.uid;
       if (pod.replaced) state.runtime.routeEpoch++;
     });
-    const source = await ports.forge.snapshot(key, job.headSha);
-    if (source.headSha !== job.headSha) throw new LiveError('git_head_moved');
     runtime = await transition(ports, key, runtime, state => {
       if (state.runtime.phase !== 'BUILD_PROVISIONING') conflict('stale_fence');
       state.runtime.phase = 'BUILDING';
@@ -161,7 +165,6 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
         baselineSeq: state.progress.publicationBaselineSeq, initial: false };
     });
     await ports.worker.clean(runtime);
-    const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime));
     await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
     const building = runtime;
     const candidate = await ports.heavy.run(building.podName, 'build', () => runPhase(key, 'build',
@@ -186,6 +189,19 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
     return await teardown(ports, key, runtime);
   } catch (error) {
     if (error instanceof LiveError && error.reason === 'stale_fence') return;
+    if (error instanceof LiveError && error.code === 'cache_not_prewarmed') {
+      // §7.1.4: no pod was touched and no build attempt was recorded — back to DORMANT with the typed
+      // detail so a retry after sealing proceeds. The outer `buildOnly` catch frees the admission slot.
+      const current = await currentRuntime(ports, key, runtime).catch(() => runtime);
+      await transition(ports, key, current, state => {
+        if (state.runtime.phase !== 'BUILD_PROVISIONING' || state.runtime.sessionId !== current.sessionId) {
+          conflict('stale_fence');
+        }
+        state.runtime.phase = 'DORMANT'; state.runtime.podUid = null; state.runtime.attempt = null;
+        state.runtime.stateDetail = error.reason ? `${error.code}:${error.reason}` : error.code;
+      }).catch(() => undefined);
+      throw error;
+    }
     const loss = await enrichPodLoss(ports.pods, key, runtime, error);
     if (loss instanceof LiveError && isPodCause(loss)) await notePodLoss(key, loss);
     await failed(ports, key, runtime, loss); throw loss;
