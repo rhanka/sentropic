@@ -4,6 +4,16 @@ import { ArtifactOperationError } from './failures.js';
 export interface LiveIdentity { storageScopeId: string; artifactId: string; bindingGeneration: number }
 /** A-LIVE Amendment 1: idle strictly after 900 s since the last qualifying access; there is no absolute lifetime. */
 export const LIVE_IDLE_THRESHOLD_MS = 900_000;
+/** Upper bound of one redriveLiveWorkers pass: the 60 s host timer stays safe with the default pool. */
+export const MAX_REDRIVE_LIMIT = 64;
+/** Clamps a caller limit to [0, MAX_REDRIVE_LIMIT]: undefined stays the default, 0/negative/NaN select nothing,
+ * oversized values stop at the cap. Memory and Postgres share it so both adapters agree on every input. */
+export const normalizeRedriveLimit = (limit?: unknown): number => {
+  if (limit === undefined) return MAX_REDRIVE_LIMIT;
+  const n = Math.trunc(Number(limit));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, MAX_REDRIVE_LIMIT);
+};
 export interface LiveOverlayEntry { path: string; text: string | null; mode: string }
 export interface LiveRuntimeState {
   liveSessionId: string;
@@ -123,9 +133,11 @@ export function createMemoryLiveStore(): LiveStore {
         row.runtime?.liveSessionId === sessionId);
       return record ? { storageScopeId: scope, artifactId, bindingGeneration: record.bindingGeneration } : undefined;
     },
-    async pending(scope, limit = 64) {
+    async pending(scope, limit?: number) {
       return [...records.values()].filter(row => row.storageScopeId === scope && liveWorkerPending(row))
-        .sort((a, b) => (a.runtime!.lastAccessAt < b.runtime!.lastAccessAt ? -1 : 1)).slice(0, limit)
+        .sort((a, b) => a.runtime!.lastAccessAt.localeCompare(b.runtime!.lastAccessAt) ||
+          a.artifactId.localeCompare(b.artifactId) || a.bindingGeneration - b.bindingGeneration)
+        .slice(0, normalizeRedriveLimit(limit))
         .map(row => ({ storageScopeId: scope, artifactId: row.artifactId, bindingGeneration: row.bindingGeneration }));
     },
     transaction: (identity, action) => mutex.runSerialized('live-store', async () => {
