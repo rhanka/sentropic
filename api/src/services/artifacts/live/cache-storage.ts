@@ -114,6 +114,41 @@ export function createBuilderCacheBlobs(options: { bucket: string; client: S3Cli
   };
 }
 
+/** Durable KV rows over the builder's host-KV namespaces (cache state, phase events): one serialized
+ * read-modify-write per key with the same advisory-lock pattern as the heavy queue and remote-live rows.
+ * Scope always comes from the caller identity, never from row content (§10.3). */
+export interface KvStore {
+  read<T>(key: string): Promise<T | undefined>;
+  update<T, R>(key: string, change: (current: T | undefined) => { next?: T; result: R }): Promise<R>;
+}
+export function createPostgresKvRows(pool: Pool, namespace: string): KvStore {
+  return {
+    read: async key => {
+      const { rows } = await pool.query<{ value: string }>(
+        'SELECT value FROM control.artifact_host_kv WHERE storage_scope_id=$1 AND key=$2', [namespace, key]);
+      return rows[0] ? JSON.parse(rows[0].value) as never : undefined;
+    },
+    update: async (key, change) => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${namespace}:${key}`]);
+        const { rows } = await client.query<{ value: string }>(
+          'SELECT value FROM control.artifact_host_kv WHERE storage_scope_id=$1 AND key=$2 FOR UPDATE', [namespace, key]);
+        const { next, result } = change(rows[0] ? JSON.parse(rows[0].value) as never : undefined);
+        if (next !== undefined) {
+          await client.query(`INSERT INTO control.artifact_host_kv (storage_scope_id, key, value) VALUES ($1,$2,$3)
+            ON CONFLICT (storage_scope_id,key) DO UPDATE SET value=EXCLUDED.value`,
+          [namespace, key, JSON.stringify(next)]);
+        }
+        await client.query('COMMIT');
+        return result;
+      } catch (error) { await client.query('ROLLBACK'); throw error; }
+      finally { client.release(); }
+    },
+  };
+}
+
 /** Private cache bucket/credentials stay at the host. The S3 client (endpoint applied with `forcePathStyle`, exactly
  * like the artifact host writer) opens lazily on first use, and a failed privacy check resets so the next use retries. */
 export function builderCacheBlobs(settings: BuilderCacheStorage): PrivateCacheBlobs {
