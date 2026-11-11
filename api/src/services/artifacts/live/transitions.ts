@@ -76,6 +76,16 @@ export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRunt
     state.runtime.appliedRevision = null; state.runtime.attempt = null;
   }).then(async dormant => { await ports.admission.release(key); return dormant; });
 }
+/** The runtime a failed intent actually left behind. Prepare may fence forward (a replaced pod bumps
+ * routeEpoch) after the caller captured its handle; tearing down with the stale handle would fence-fail
+ * and strand the runtime in REVIVING next to a live pod. A different session means another intent won:
+ * keep the caller's handle so the teardown fences out without touching the winner. */
+export async function currentRuntime(ports: Pick<LivePorts, 'store'>, key: LiveKey,
+  runtime: LiveRuntime): Promise<LiveRuntime> {
+  const stored = await ports.store.read(key).catch(() => undefined);
+  const next = stored?.runtime;
+  return next && next.generation === runtime.generation && next.sessionId === runtime.sessionId ? next : runtime;
+}
 export async function failed(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, error: unknown) {
   const detail = error instanceof LiveError ? (error.reason ? `${error.code}:${error.reason}` : error.code)
     : 'builder_unavailable';
