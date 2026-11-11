@@ -291,6 +291,31 @@ describe('createLlmMesh', () => {
     expect(getModelProfile('gcp', 'google/gemini-4-argon@gcp')).toBeNull();
   });
 
+  it('exposes Gemini 4 Carbon as a Cloud Code model copied from 3.7', () => {
+    const profile = getModelProfile('gemini', 'gemini-4-carbon');
+
+    expect(profile).toMatchObject({
+      providerId: 'gemini', modelId: 'gemini-4-carbon', label: 'Gemini 4 Carbon',
+      reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities).toEqual(
+      getModelProfile('gemini', 'gemini-3.7-flash')?.capabilities,
+    );
+    expect(getModelProfile('gcp', 'google/gemini-4-carbon@gcp')).toBeNull();
+  });
+
+  it('exposes Fable 5.2 next to Fable 5.1 with their family capabilities', () => {
+    const fable = getModelProfile('anthropic', 'claude-fable-5-2');
+
+    expect(fable).toMatchObject({
+      providerId: 'anthropic', modelId: 'claude-fable-5-2', label: 'Fable 5.2',
+      reasoningTier: 'advanced',
+    });
+    expect(fable?.capabilities).toEqual(
+      getModelProfile('anthropic', 'claude-fable-5-1')?.capabilities,
+    );
+  });
+
   it('exposes Fable 5.1 and GPT-6 Astra with their family capabilities', () => {
     const fable = getModelProfile('anthropic', 'claude-fable-5-1');
     const astra = getModelProfile('openai', 'gpt-6-astra');
