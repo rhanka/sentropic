@@ -27,12 +27,21 @@ done
 # keeps mutating the cluster during the emergency recovery.
 killtree() {
   _pid="$1"; _sig="$2"
+  # Snapshot the tree BEFORE the first signal: SIGTERM on the parent
+  # re-parents node/kubectl grandchildren to PID 1, so a ps --ppid taken
+  # afterwards finds nothing (Argon v3 MAJOR 1).
+  _children=$(ps -o pid= --ppid "$_pid" 2>/dev/null || true)
+  _grand=""
+  for _c in $_children; do _grand="$_grand $(ps -o pid= --ppid "$_c" 2>/dev/null || true)"; done
+  _tree="$_children $_grand"
   if [ "$_sig" = "TERM" ]; then
     kill -TERM -"$_pid" 2>/dev/null || true
     pkill -TERM -P "$_pid" 2>/dev/null || true
+    for _c in $_tree; do kill -TERM "$_c" 2>/dev/null || true; done
   else
     kill -KILL -"$_pid" 2>/dev/null || true
     pkill -KILL -P "$_pid" 2>/dev/null || true
+    for _c in $_tree; do kill -KILL "$_c" 2>/dev/null || true; done
   fi
   for _c in $(ps -o pid --ppid "$_pid" 2>/dev/null | tail -n +2); do
     pkill -KILL -P "$_c" 2>/dev/null || true
