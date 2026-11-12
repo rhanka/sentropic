@@ -31,9 +31,9 @@ export const BUILDER_NODE_ENV = 'ARTIFACT_BUILDER_NODE';
 export const BUILDER_HOST_BINDINGS_ENV = 'ARTIFACT_BUILDER_HOST_BINDINGS_JSON';
 /** Lease frames and reconciles of every non-DORMANT runtime (A-LIVE Amendment 1 §3). */
 export const SCHEDULER_INTERVAL_MS = 30_000;
-/** s-archi builder-composition contract (08/11, resized 10/11, capacity 11/11): heavy budget of one logical d2-4 node,
+/** s-archi builder-composition contract (08/11, resized 10/11, capacity 11/11, memory 11/11): heavy budget of one logical d2-4 node,
  * 1641 MiB, 19 MiB measured pod base (one heavy phase at a time, conservative); 4 pods, live or build
- * (requests.memory quota 5Gi: 4 x 1280Mi; limits.memory quota 8Gi: 4 x 2048Mi; CPU burst 4 per pod on 250m requests). */
+ * (requests.memory quota 6Gi: 4 x 1536Mi; limits.memory quota 6Gi: 4 x 1536Mi; CPU burst 4 per pod on 250m requests). */
 export const PRODUCT_HEAVY = Object.freeze({ maxWaitMs: 600_000, pollMs: 1_000, maxPods: 4,
   budget: Object.freeze({ budgetMiB: 1641, podBaseMiB: 19, entryTtlMs: 90_000,
     costs: Object.freeze({ install: 1370, prebundle: 980, dev: 390, build: 1370 }) }) });
