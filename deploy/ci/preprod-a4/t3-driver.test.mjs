@@ -110,6 +110,16 @@ test('classifier SQL is schema-safe and versioned', () => {
   assert.doesNotMatch(text, /\bsettings\.id\b/);
 });
 
+test('classifier SQL is SELECT-only so exec may run it in probe mode', () => {
+  const code = loadSql('t3-classify.sql')
+    .split('\n')
+    .filter(line => !line.trimStart().startsWith('--'))
+    .join('\n');
+  for (const keyword of ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE', 'GRANT', 'REVOKE', 'COPY']) {
+    assert.doesNotMatch(code, new RegExp(`\\b${keyword}\\b`, 'i'));
+  }
+});
+
 test('classifier reports uncommitted on a journal-less database', () => {
   const { ctx } = makeCtx({ scenario: { journal: false } });
   assert.deepEqual(classify(ctx), { journal: false, locks: 0, committed: false, receipts: 0, apiReady: false });
