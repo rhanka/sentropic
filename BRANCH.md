@@ -39,6 +39,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: inspect official schema and existing native decision contracts.
 - [ ] Lot 1: descriptor, codec and bounded transport; one question per existing DecisionRequest.
+  - [x] Bounded v1beta transport, API-key header, deadlines and redirects refused.
 - [ ] Lot 2: adapter, host exports, credential restriction, pricing and reconstruction.
 - [ ] Lot 3: mocked routing, schema/error/deadline tests and residency documentation.
 - [ ] Lot 4: version 0.38.0, scoped checks, independent review and PR CI green.
