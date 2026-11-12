@@ -22,12 +22,12 @@ export interface CacheJobRecord {
   state: CacheStateValue; jobId: string; startedAt: number; step?: string; heartbeatAt: number; attempts: number;
   prebundle: boolean; idempotencyKey?: string;
   sealed?: { treeSha256: string; files: number; bytes: number; sealedAt: number };
-  error?: { code: string; reason?: string };
+  error?: { code: string; reason?: string; retriable?: boolean };
 }
 export interface CacheEntryView {
   lockSha256: string; cacheKey: string; state: CacheStateValue; jobId: string; treeSha256?: string; files?: number;
   bytes?: number; sealedAt?: number; step?: string; startedAt?: number; attempts?: number; prebundle?: boolean;
-  error?: { code: string; reason?: string };
+  error?: { code: string; reason?: string; retriable?: boolean };
 }
 export interface PrewarmEnsureInput {
   scope: string; cacheKey: string; lockSha256: string; refKind: 'branch' | 'tag' | 'commit'; branch: string;
@@ -102,7 +102,7 @@ export function createCacheJobs(store: KvStore, options: { now(): number; id(): 
       return store.update<CacheJobRecord, CacheJobRecord | undefined>(canonicalKey(cacheKey), current => {
         if (!current || current.jobId !== jobId || current.state !== 'building') return { result: undefined };
         const next: CacheJobRecord = { ...current, state: 'failed', step: undefined, heartbeatAt: now(),
-          ...(code ? { error: { code, ...(reason ? { reason } : {}) } } : {}) };
+          ...(code ? { error: { code, ...(reason ? { reason } : {}), retriable: code !== 'lock_mismatch' } } : {}) };
         return { next, result: next };
       });
     },
@@ -123,6 +123,22 @@ export function createCacheJobs(store: KvStore, options: { now(): number; id(): 
       if (!alias) return [];
       const record = await store.read<CacheJobRecord>(canonicalKey(alias.cacheKey));
       return record ? [entryView(record)] : [];
+    },
+    /** Workspace-variant listing (§7.1.3): when the host polls without `installWorkspaces`, returns every
+     * sealed/building/failed variant indexed for the lockfile instead of only the exact (root) alias. */
+    async readVariants(input: { scope: string; repoId: string; subPath: string;
+      lockSha256: string }): Promise<CacheEntryView[]> {
+      const aliases = await store.read<string[]>(indexKey(input.scope, input.repoId, input.subPath,
+        input.lockSha256));
+      if (!aliases?.length) return [];
+      const out: CacheEntryView[] = [];
+      for (const alias of aliases) {
+        const ref = await store.read<{ cacheKey: string }>(alias);
+        if (!ref) continue;
+        const record = await store.read<CacheJobRecord>(canonicalKey(ref.cacheKey));
+        if (record) out.push(entryView(record));
+      }
+      return out;
     },
   };
 }
@@ -202,7 +218,7 @@ export function createHostCacheApi(options: {
       await progress('snapshot_ready');
       const receipt = await options.executor.execute(job, source, progress);
       await options.jobs.completeSeal(job.cacheKey, job.jobId, { treeSha256: receipt.treeSha256,
-        files: receipt.inventory.length, bytes: receipt.archive?.bytes ?? 0 });
+        files: receipt.files ?? receipt.inventory.length, bytes: receipt.archive?.bytes ?? 0 });
     } catch (error) {
       const code = error instanceof LiveError ? error.code : 'builder_unavailable';
       const reason = error instanceof LiveError ? error.reason : undefined;
@@ -264,8 +280,9 @@ export function createHostCacheApi(options: {
       || !TEXT.test(repoId)) return c.json({ error: 'invalid_request' }, 400);
     const subPath = query.subPath ?? '';
     if (typeof subPath !== 'string' || !safeSubPath(subPath)) return c.json({ error: 'invalid_request' }, 400);
+    const hasWorkspaces = query.installWorkspaces !== undefined;
     let installWorkspaces: readonly string[] = [];
-    if (query.installWorkspaces !== undefined) {
+    if (hasWorkspaces) {
       if (typeof query.installWorkspaces !== 'string') return c.json({ error: 'invalid_request' }, 400);
       const parsed = parseInstallWorkspaces(query.installWorkspaces === ''
         ? [] : query.installWorkspaces.split(','));
@@ -273,8 +290,9 @@ export function createHostCacheApi(options: {
       installWorkspaces = parsed;
     }
     try {
-      const entries = await options.jobs.readVariant({ scope: keyOf(c), repoId, subPath, lockSha256,
-        installWorkspaces });
+      const entries = hasWorkspaces
+        ? await options.jobs.readVariant({ scope: keyOf(c), repoId, subPath, lockSha256, installWorkspaces })
+        : await options.jobs.readVariants({ scope: keyOf(c), repoId, subPath, lockSha256 });
       return c.json({ entries });
     } catch (error) { return refusal(c, error); }
   });

@@ -38,7 +38,10 @@ export async function revive(ports: LivePorts, key: LiveKey, phase: 'revive' | '
       return structuredClone(runtime);
     });
     try { return await prepareLive(ports, key, runtime); }
-    catch (error) { await failed(ports, key, await currentRuntime(ports, key, runtime), error); throw error; }
+    catch (error) {
+      if (error instanceof LiveError && error.code === 'cache_not_prewarmed') throw error;
+      await failed(ports, key, await currentRuntime(ports, key, runtime), error); throw error;
+    }
   } catch (error) { await releaseIfDormant(ports, key); throw error; }
 }
 

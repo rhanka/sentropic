@@ -40,7 +40,8 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
     // line instead of installing, and the session stays LIVE for the next pass. No pod is created.
     let cache;
     try {
-      cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source),
+      cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, undefined,
+        events ? { events } : {}),
         events ? { events } : {});
     } catch (error) {
       if (!(error instanceof LiveError) || error.code !== 'cache_not_prewarmed') throw error;

@@ -45,9 +45,11 @@ export function refusal(c: Context, error: unknown) {
   const body: Record<string, unknown> = { error: error.code, ...(error.reason ? { reason: error.reason } : {}) };
   if (error.code === 'cache_not_prewarmed') {
     // §7.1.4 shape: the lock rides the reason and is repeated as `lockSha256`; the miss is retriable
-    // once the prewarm seals. `cacheState` stays queryable through `GET /v1/cache`, not the refusal.
+    // once the prewarm seals. `cacheState` is `absent` on this lookup-only path (building/failed states
+    // stay queryable through `GET /v1/cache`); D1 requires the field on the 409 itself.
     if (typeof error.reason === 'string') body.lockSha256 = error.reason;
     body.retriable = true;
+    body.cacheState = 'absent';
   }
   return c.json(body, STATUS[error.code] ?? 409);
 }

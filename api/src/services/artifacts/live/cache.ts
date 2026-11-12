@@ -3,7 +3,7 @@ import { safeDependencyPath, sha256, verifySri, type IntegrityPin } from './inte
 import { integrityEvidence, qualifyBuild, type Gb1Source } from './gb1-qualification';
 import { defaultInstallBudget, defaultSealBudget, withinInstallBudget, INSTALL_CACHE_ADMIT_TIMEOUT_MS,
   INSTALL_CACHE_LOOKUP_TIMEOUT_MS, runInstallStep, type InstallBudget, type InstallProgress,
-  type InstallStepLogger } from './deadline';
+  type InstallStepLogger, type PhaseEventsContext } from './deadline';
 import { LiveError, type LiveRuntime } from './records';
 import { BUILDER_IMAGE, INSTALL_RECIPE, NPM_RELAY, installRecipeFor } from './recipes';
 import { subsetLockPaths, validateWorkspaces } from './workspace-subset';
@@ -26,6 +26,8 @@ export interface CacheReceipt {
   /** Sealed-unit pointer (§7.1.2): the one `tar.zst` archive admitted with this receipt. Absent on entries
    * sealed before L1 (transition dual-read) and on seals produced without archive support (rollback). */
   archive?: { ref: string; sha256: string; bytes: number };
+  /** Sealed file count (manifest rows) for telemetry (§7.1.3): inventory length counts tarballs, not files. */
+  files?: number;
 }
 export interface CacheObject { receipt: CacheReceipt; manifest: readonly DependencyEntry[] }
 /** Lookup-only source of `requireSealed`: the lockfile, its cache identity and the GB1 inputs. No staging
@@ -109,14 +111,14 @@ function qualifiedInventory(source: { lockfile: Uint8Array; cacheIdentity: Cache
 export interface UserCache {
   acquire(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
     runtime?: LiveRuntime): Promise<CacheReceipt>;
-  requireSealed?(source: SealedSource): Promise<CacheReceipt>;
+  requireSealed?(source: SealedSource, options?: { events?: PhaseEventsContext & { artifactId?: string } }): Promise<CacheReceipt>;
 }
 /** User-path cache entry point (§7.1.1, §7.1.4): `requireSealed` when the cache implements it and the L1
  * path is enabled, otherwise the legacy inline-install `acquire` (§11 rollback shape). */
 export async function requireUserCache(cache: UserCache,
   source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source },
-  runtime?: LiveRuntime) {
-  if (sealedUserPathEnabled() && cache.requireSealed) return cache.requireSealed(source);
+  runtime?: LiveRuntime, options: { events?: PhaseEventsContext & { artifactId?: string } } = {}) {
+  if (sealedUserPathEnabled() && cache.requireSealed) return cache.requireSealed(source, options);
   return cache.acquire(source, runtime);
 }
 const cacheKey = (id: CacheIdentity) => `${id.lockSha256}/${sha256(JSON.stringify([
@@ -174,13 +176,14 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
     /** Lookup-only sealed read for user paths (§7.1.1): sealed hit returns the verified receipt; miss or
      * corrupt entry quarantines and throws typed `cache_not_prewarmed` carrying the lockSha256 — never a
      * fetch, never an install, bounded at `SEALED_LOOKUP_TIMEOUT_MS`. */
-    async requireSealed(source: SealedSource) {
+    async requireSealed(source: SealedSource, sealOptions: { events?: PhaseEventsContext & { artifactId?: string } } = {}) {
       const { identity, key } = qualifiedInventory(source);
       const unsealed = (): never => { throw new LiveError('cache_not_prewarmed', identity.lockSha256); };
       let existing: CacheObject | undefined;
       try {
         existing = await runInstallStep(undefined, 'cache_lookup', () => read(key),
-          { timeoutMs: SEALED_LOOKUP_TIMEOUT_MS, log: options.log, now: options.now });
+          { timeoutMs: SEALED_LOOKUP_TIMEOUT_MS, log: options.log, now: options.now,
+            ...(sealOptions.events ? { events: sealOptions.events } : {}) });
       } catch (error) {
         if (error instanceof LiveError && error.code === 'builder_unavailable') throw error;
         unsealed();
@@ -239,12 +242,14 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
      * manifest rows stay readable in the admitted object, the bytes live only in the archive. Never called
      * on a user path — the prewarm job (cache-api) is the only caller, under the prewarm budget. */
     async seal(source: { lockfile: Uint8Array; cacheIdentity: CacheIdentity; stagingRef: string; gb1: Gb1Source;
-      runtime?: LiveRuntime }, sealBudget: InstallBudget = defaultSealBudget()) {
+      runtime?: LiveRuntime }, sealBudget: InstallBudget = defaultSealBudget(),
+      sealOptions: { events?: PhaseEventsContext & { artifactId?: string } } = {}) {
+      const sealEvents = sealOptions.events ? { events: sealOptions.events } : {};
       return withinInstallBudget(async (progress, signal) => {
         const { identity, inventory, recipe, key } = qualifiedInventory(source);
         const existing = await runInstallStep(progress, 'cache_lookup', () => read(key),
           { timeoutMs: sealBudget.lookupMs ?? INSTALL_CACHE_LOOKUP_TIMEOUT_MS, signal, log: options.log,
-            now: options.now, phase: 'seal' });
+            now: options.now, phase: 'seal', ...sealEvents });
         if (existing) {
           try { return verify(existing, identity); }
           catch { await ports.storage.quarantine(key); }
@@ -341,14 +346,14 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         const treeSha256 = treeDigest(rows);
         const ref = sealedArchiveRef(key, treeSha256);
         await runInstallStep(progress, 'seal_archive', () => ports.storage.putArchive(ref, archiveBytes),
-          { signal, log: options.log, now: options.now, phase: 'seal',
+          { signal, log: options.log, now: options.now, phase: 'seal', ...sealEvents,
             counts: () => ({ files: rows.length, bytes: sizeOf(rows) }) });
         const receipt = { key, identity, treeSha256, inventory, runId: installed.runId, installOptions: recipe,
-          archive: { ref, sha256: sha256(archiveBytes), bytes: archiveBytes.byteLength } };
+          archive: { ref, sha256: sha256(archiveBytes), bytes: archiveBytes.byteLength }, files: rows.length };
         const object = { receipt: { ...receipt, seal: seal(receipt) }, manifest: rows };
         const admitted = await runInstallStep(progress, 'admit', () => ports.storage.admit(key, object),
           { timeoutMs: sealBudget.admitMs ?? INSTALL_CACHE_ADMIT_TIMEOUT_MS, signal, log: options.log, now: options.now,
-            phase: 'seal',
+            phase: 'seal', ...sealEvents,
             counts: winner => ({ files: winner?.manifest.length ?? 0, bytes: sizeOf(winner?.manifest ?? []) }) });
         try {
           verify(admitted, identity);
