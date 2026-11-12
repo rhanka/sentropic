@@ -41,7 +41,7 @@ export function supervisedSync(command, args, options, stateDir) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const record = join(dir, `.t3-command-${randomUUID()}.pgid`);
   const result = spawnSync('sh', ['-c',
-    'umask 077; printf "%s" "$$" > "$1"; kill -0 "$2" 2>/dev/null || exit 125; shift 2; exec "$@"',
+    'umask 077; printf "%s" "$$" > "$1"; kill -0 "$2" 2>/dev/null || exit 125; case "$(cat /proc/"$2"/stat 2>/dev/null)" in ""|*") Z "*) exit 125;; esac; shift 2; exec "$@"',
     't3-command', record, String(process.pid), command, ...args],
   { ...options, detached: true, killSignal: 'SIGKILL' });
   try {
@@ -53,7 +53,11 @@ export function supervisedSync(command, args, options, stateDir) {
 }
 
 export function stopAutomation(stateDir, state, includeWatchdog = false) {
-  const groups = readdirSync(stateDir).filter(n => /^\.t3-command-.*\.pgid$/.test(n))
+  // Freeze the owner before inventory so it cannot launch a command between
+  // our snapshot and termination. In-flight launchers already own a group.
+  if (state.driverPid > 1 && state.driverPid !== process.pid) signal(state.driverPid, 'SIGSTOP');
+  const records = readdirSync(stateDir).filter(n => /^\.t3-command-.*\.pgid$/.test(n));
+  const groups = records
     .map(n => Number(readFileSync(join(stateDir, n), 'utf8'))).filter(n => n > 1);
   const excluded = [process.pid, ...(!includeWatchdog ? [state.watchdogPid] : [])];
   const pids = [state.driverPid, state.childPid, ...(includeWatchdog ? [state.watchdogPid] : [])]
@@ -65,7 +69,15 @@ export function stopAutomation(stateDir, state, includeWatchdog = false) {
       if (p.parent === pids[i] && !pids.includes(p.pid) && !excluded.includes(p.pid)) pids.push(p.pid);
     }
   }
+  const driverGroup = inventory.find(p => p.pid === state.driverPid)?.group;
+  for (const p of inventory) {
+    if (pids.includes(p.pid) && p.group !== driverGroup && !groups.includes(p.group)
+      && !excluded.some(pid => inventory.find(e => e.pid === pid)?.group === p.group)) groups.push(p.group);
+  }
   stop(groups, pids);
+  for (const record of records) {
+    try { unlinkSync(join(stateDir, record)); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

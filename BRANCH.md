@@ -50,15 +50,14 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing file + failure signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-- [ ] Flaky candidate (unrelated, no merge requested): CI run 43153823649 `test-e2e (5)`,
+- [ ] Intermittent failure (cause unestablished, no merge requested): CI run 43153823649 `test-e2e (5)`,
   `e2e/tests/00-ai-generation.spec.ts` — `Failed to start generation: Impossible de creer
-  un brouillon de dossier` + `waitForResponse` 60 s timeout (provider-side signature,
-  no UI/chat/generation path touched by this branch). Awaiting re-run on the fixed head
-  before any verdict.
-- [ ] Flaky candidate (unrelated, no merge requested): CI run 43225518369 `test-e2e (4)`,
+  un brouillon de dossier` + `waitForResponse` 60 s timeout. Later CI passed;
+  this establishes intermittence, without establishing provider or branch causality.
+- [ ] Intermittent failure (cause unestablished, no merge requested): CI run 43225518369 `test-e2e (4)`,
   `e2e/tests/02-organizations.spec.ts:391` — `page.waitForURL: Timeout 10000ms` on detail
-  field editability (timing-only signature, no app/api/ui/auth-idp/package/migration
-  path touched by this branch). Repassed 2m9s with no code change on re-run of the job.
+  field editability. Passed 2m9s on a later attempt without a code change.
+  Outside the AI-flaky allowlist; no acceptance or causal exemption is claimed.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -76,6 +75,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN6 M2: 22 real-process scenarios cover all delivered operations, W0/W8/W9, emergency, stalled driver, and every committed substate; 22/22 pass.
 - [x] RUN6 B7 timing proof: complete rollback and roll-forward consume a shared monotonic deadline through final restoration; HTTP probes and pod waits share it. Both regressions failed first.
 - [x] RUN6 B5 emergency: use the same persisted-group cleanup; no second descendant inventory after reparenting, no broad pkill.
 - [x] RUN6 B5 foundation: persist isolated command PGIDs before exec and kill complete groups on synchronous timeout; retain group records after owner death.
