@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -566,4 +566,69 @@ test('emergency command prints the rollback plan in dry-run', () => {
   const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
     '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
   assert.match(out, /scale deployment\/api --replicas=0/);
+});
+
+test('emergency refuses while another live recovery owns the lock', () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
+  const cfg = join(dir, 'config.json');
+  writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube',
+    namespace: 'sentropic-preprod', revisions: {} }));
+  writeFileSync(join(dir, 't3-recovering.lock'), `other-pid-${process.pid}|${monoMs()}`);
+  assert.throws(() => execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
+    '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' }), /recovery owned by/);
+});
+
+test('emergency classifies after stopping api and passes pre-cm-dir to rollback', () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
+  const cfg = join(dir, 'config.json');
+  writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
+    revisions: { api: '12', 'auth-idp': '9', ui: '4' }, preCmDir: '/pre-cm' }));
+  const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
+    '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
+  const stopped = out.indexOf('automation stopped, lock held');
+  const classified = out.indexOf('classified committed=false');
+  const patch = out.indexOf('patch secret sentropic-api');
+  const undo = out.indexOf('rollout undo');
+  assert.ok(stopped !== -1 && classified !== -1 && patch !== -1 && undo !== -1);
+  assert.ok(stopped < classified && classified < patch && patch < undo, 'freeze, classify, then rollback');
+  assert.ok(out.includes('/pre-cm'), 'pre-cm-dir wired into rollback');
+});
+
+test('emergency converges post-commit instead of legacy rollback', () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
+  const fakeBin = mkdtempSync(join(tmpdir(), 't3-fakebin-'));
+  const fakeState = mkdtempSync(join(tmpdir(), 't3-fakestate-'));
+  writeFileSync(join(fakeBin, 'kubectl'), `#!/bin/sh
+S="$FAKE_KUBECTL_STATE"
+A="$*"
+case "$A" in
+  *"get pods"*) echo '{"items":[]}';;
+  *"get middleware"*) echo '{"spec":{"ipAllowList":{"sourceRange":["9.9.9.9/32"]}}}';;
+  *"get deployment api "*) echo '{"spec":{"replicas":1,"template":{"spec":{"containers":[{"name":"api","image":"candidate-img"}]}}},"status":{"replicas":1,"readyReplicas":1,"observedGeneration":7},"metadata":{"generation":7}}';;
+  *"get deployment "*) N=$(printf '%s' "$A" | sed 's/.*get deployment \\([^ ]*\\).*/\\1/'); if [ -f "$S/scaled-$N" ]; then IMG="candidate-img"; [ "$N" = "ui" ] && IMG="ui-img"; echo "{\\"spec\\":{\\"replicas\\":1,\\"template\\":{\\"spec\\":{\\"containers\\":[{\\"name\\":\\"$N\\",\\"image\\":\\"$IMG\\"}]}}},\\"status\\":{\\"replicas\\":1,\\"readyReplicas\\":1,\\"observedGeneration\\":7},\\"metadata\\":{\\"generation\\":7}}"; else echo '{"spec":{"replicas":0},"status":{"replicas":0}}'; fi;;
+  *"scale deployment/"*"--replicas=1") N=$(printf '%s' "$A" | sed 's/.*scale deployment\\/\\([^ ]*\\).*/\\1/'); touch "$S/scaled-$N";;
+  *"exec "*) IN=$(cat); case "$IN" in
+      *journal_present*) echo 't|0';;
+      *identity_committed*) echo 't';;
+      *asset_column_present*) echo 't';;
+      *to_regclass*) printf 'a|t\\nb|t\\nc|t\\nd|t\\n';;
+      *"AS k,"*) echo 'k|u|3';;
+      *) echo '';;
+    esac;;
+  *) echo '{}';;
+esac
+`);
+  chmodSync(join(fakeBin, 'kubectl'), 0o755);
+  const cfg = join(dir, 'config.json');
+  writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
+    revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
+    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } },
+    images: { candidate: 'candidate-img', ui: 'ui-img' } }));
+  const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
+    '--state-dir', dir, '--config', cfg],
+  { encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, FAKE_KUBECTL_STATE: fakeState } });
+  assert.ok(out.includes('classified committed=true'), 'classified post-commit');
+  assert.ok(out.includes('finish_open_ok substate=TWO_HOSTS_OPEN'), 'converged forward');
+  assert.ok(!out.includes('rollout undo'), 'no legacy boot after commit');
+  assert.ok(!out.includes('patch secret sentropic-api'), 'no key removal after commit');
 });
