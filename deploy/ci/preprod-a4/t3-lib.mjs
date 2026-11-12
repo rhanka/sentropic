@@ -44,7 +44,17 @@ export function effectiveTimeout(timeoutMs, timeoutRef, nowMs = monoMs()) {
   return Math.min(timeoutMs, cap);
 }
 
-export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {} }) {
+export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {}, stateDir = null }) {
+  const track = (childPid) => {
+    if (!stateDir) return;
+    try {
+      const cur = loadState(stateDir);
+      if (!cur) return;
+      cur.childPid = childPid;
+      cur.heartbeatMonoMs = cur.heartbeatMonoMs ?? monoMs();
+      saveState(stateDir, cur);
+    } catch { /* best-effort observability only */ }
+  };
   return (args, input, overrideMs) => {
     const effective = withExecStdin(args, input);
     const line = `kubectl --namespace ${namespace} ${effective.join(' ')}`;
@@ -52,10 +62,12 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
       print(dryRunLine(line, input !== undefined));
       return '';
     }
+    track(process.pid);
     const started = monoMs();
     const result = spawnSync('kubectl',
       ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective],
       { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 });
+    track(result?.pid ?? null);
     if (probeReadOnly) print(`# ${(monoMs() - started)}ms ${line}`);
     if (result.error || result.status !== 0) {
       const err = new Error(`kubectl_failed: ${effective.slice(0, 3).join(' ')}`);
@@ -64,6 +76,25 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
     }
     return result.stdout;
   };
+}
+
+// Exact W8d probe URLs are operator inputs (qualified in P-0.4): the driver
+// never invents OAuth scopes or redirect URIs. Shared by the window driver
+// and the standalone finish-open CLI so both build the same probes from
+// config.endpoints.
+export function buildProbes(config) {
+  const endpoints = config.endpoints ?? {};
+  const probes = [];
+  if (endpoints.appHealth) probes.push({ id: 'S-3', url: endpoints.appHealth, expect: 200 });
+  if (endpoints.idpConfig) probes.push({ id: 'S-4', url: endpoints.idpConfig, expect: 200 });
+  if (endpoints.idpJwks) probes.push({ id: 'S-5', url: endpoints.idpJwks, expect: 200 });
+  if (endpoints.s6Authorize) probes.push({ id: 'S-6', url: endpoints.s6Authorize, expect: 302, options: { redirect: 'manual' } });
+  if (endpoints.appMe) probes.push({ id: 'S-7', url: endpoints.appMe, expect: 401 });
+  if (endpoints.idpMe) probes.push({ id: 'S-8', url: endpoints.idpMe, expect: 401 });
+  for (const [id, url] of [['S-9a', endpoints.emailApp], ['S-9b', endpoints.emailIdp]]) {
+    if (url) probes.push({ id, url, expect: 200, options: { method: 'POST' } });
+  }
+  return { probes, externalProbes: config.externalProbes ?? [] };
 }
 
 function dryRunLine(line, hasInput) {
