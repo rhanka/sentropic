@@ -78,16 +78,16 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - [x] Verify branch feat/t3-window-driver
   - [x] Record ENV=test-t3-driver, API_PORT=8965 UI_PORT=5365 MAILDEV_UI_PORT=1265
   - [x] Confirm scope and guardrails
-- [ ] **Lot 1 — Driver core + watchdog + rollback**
-  - [ ] Add deploy/ci/preprod-a4/t3-classify.sql (schema-safe Q1..Q5)
-  - [ ] Add deploy/ci/preprod-a4/t3-rollback.mjs (JWT_SECRET + SECRET_ENCRYPTION_KEY, real selectors)
-  - [ ] Add deploy/ci/preprod-a4/t3-window-driver.mjs (W0..W9, budgets, dry-run)
-  - [ ] Add deploy/ci/preprod-a4/t3-watchdog.mjs (heartbeat, self rollback)
-  - [ ] Add deploy/ci/preprod-a4/t3-finish-open.mjs (post-commit convergence)
-  - [ ] Add deploy/ci/preprod-a4/t3-emergency.sh (single human command)
-  - [ ] Lot gate:
-    - [ ] typecheck + lint impacted components
-    - [ ] No UI changes, no E2E changes
+- [x] **Lot 1 — Driver core + watchdog + rollback**
+  - [x] Add api/tests/api/t3-classify.sql (schema-safe Q1..Q6)
+  - [x] Add deploy/ci/preprod-a4/t3-rollback.mjs (JWT_SECRET + SECRET_ENCRYPTION_KEY, real selectors)
+  - [x] Add deploy/ci/preprod-a4/t3-window-driver.mjs (W0..W9, budgets, dry-run)
+  - [x] Add deploy/ci/preprod-a4/t3-watchdog.mjs (heartbeat, self rollback)
+  - [x] Add deploy/ci/preprod-a4/t3-finish-open.mjs (post-commit convergence)
+  - [x] Add deploy/ci/preprod-a4/t3-emergency.sh + t3-emergency-classify.mjs (single human command)
+  - [x] Lot gate:
+    - [x] typecheck + lint impacted components
+    - [x] No UI changes, no E2E changes
 - [x] **Lot 2 — Tests**
   - [x] Add deploy/ci/preprod-a4/t3-driver.test.mjs (fault injection matrix, dry-run, budgets)
   - [x] Add api/tests/api/t3-classify.test.ts (migrated DB schema check, wrong column fails)
@@ -97,6 +97,18 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - [x] Run driver DRY-RUN against sentropic-preprod read-only via docker-slot.sh
   - [x] Record read-only step latencies
   - [x] Write /home/antoinefa/src/sentropic/.tmp/rv/t3-driver.md (FR, per finding)
+- [x] **Lot 5 — RUN 3 Argon BLOCKERs + MAJORs (each with a fails-before test)**
+  - [x] B1 W7b gate commitVerified + apiReady; W5 cutoff 110_000; step-bounded delivered timeouts
+  - [x] B2 single-flight claim (no same-owner regrant) + pid expiry 120 s + watchdog reentrancy guard + group kill
+  - [x] B3 recover stops api first, verifies locks, records Q5 relations; waitZeroPods scoped to api
+  - [x] B4 W8/W9 share the 300 s budget (FINISH_CUTOFF 300_000); W5/W8/W9 assertions
+  - [x] B5 emergency stops automation, takes the lock, classifies after api stop, passes preCmDir
+  - [x] B6 W3 poses rotation keys as explicit file-fed stdin steps after wire
+  - [x] M1 frontal Terminating wait loop; M2 awaited verifyService + export force-suspend; M3 dry-run nominal + key patch print
+  - [x] M4 effectiveTimeout bound to the live step deadline (delivered + kubectl)
+  - [x] M5 post-commit resume matrix (patch-in-place, no probe replay, BACKUP_RESUMED/ONE_HOST_OPEN) + Q5 present + Q6 planted enc row
+  - [x] Suite: make test-preprod-a4 88/88 + make test-api-endpoints t3-classify 6/6 ENV=test-t3-driver
+  - [x] make typecheck-api + make lint-api green; make scope-check PASS
 - [ ] **Lot 4 — PR + CI**
   - [ ] Push feat/t3-window-driver, open PR, CI green
   - [ ] No merge
