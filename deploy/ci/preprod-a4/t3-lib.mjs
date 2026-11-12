@@ -22,17 +22,19 @@ export const podLabels = {
 
 const READ_ONLY = new Set(['get', 'auth', 'describe', 'logs', 'top', 'version', 'api-resources', 'kustomize', 'diff']);
 
-export function isReadOnly(args) {
-  return READ_ONLY.has(args[0]);
+export function isReadOnly(args, execIsReadOnly = false) {
+  return READ_ONLY.has(args[0]) || (execIsReadOnly && args[0] === 'exec');
 }
 
 // kubectl runner with a hard timeout (Fable B1: the pilot kills its
 // subprocesses on a timer). Dry-run prints mutating commands and runs only
-// reads when probeReadOnly is set; plain dry-run executes nothing.
-export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, print = () => {} }) {
+// reads when probeReadOnly is set; plain dry-run executes nothing. In probe
+// contexts exec counts as read-only: the driver only ever execs the
+// SELECT-only t3-classify.sql through it (statically asserted in tests).
+export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, print = () => {} }) {
   return (args, input) => {
     const line = `kubectl --namespace ${namespace} ${args.join(' ')}`;
-    if (dryRun && (!probeReadOnly || !isReadOnly(args))) {
+    if (dryRun && (!probeReadOnly || !isReadOnly(args, execIsReadOnly))) {
       print(dryRunLine(line, input !== undefined));
       return '';
     }
