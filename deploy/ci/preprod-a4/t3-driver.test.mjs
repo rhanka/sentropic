@@ -18,6 +18,7 @@ export function makeCall(scenario = {}) {
   const calls = [];
   const liveSecrets = { ...(scenario.secretData ?? {}) };
   const createdSecrets = {};
+  let frontalPollsLeft = scenario.frontalTerminating ?? 0;
   const scaled = {};
   const readyDeploy = (name, image) => ({ spec: { replicas: 1,
     template: { spec: { containers: [{ name, image }] } } },
@@ -42,9 +43,12 @@ export function makeCall(scenario = {}) {
       if (statement.includes('AS k,')) return 'enc-key||3\n';
       return '\n';
     }
-    if (cmd === 'get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=api -o json'
-      || cmd === 'get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=auth-idp -o json'
-      || cmd === 'get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=ui -o json') {
+    if (cmd.startsWith('get pods -l app.kubernetes.io/name=sentropic')) {
+      const component = cmd.match(/component=([a-z-]+)/)?.[1];
+      if ((component === 'ui' || component === 'auth-idp') && frontalPollsLeft > 0) {
+        frontalPollsLeft -= 1;
+        return JSON.stringify({ items: [{ metadata: { name: 'terminating' } }] });
+      }
       return JSON.stringify({ items: [] });
     }
     if (cmd === 'apply -f -' && typeof input === 'string') {
@@ -421,12 +425,30 @@ test('watchdog enforces the total 300 s budget on a live driver', async () => {
   assert.ok(calls.join('\n').includes('scale deployment/api --replicas=0'));
 });
 
+test('reconcile waits for terminating frontals instead of failing', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { frontalTerminating: 3 } });
+  const { reconcileRestrictSafe } = await import('./t3-finish-open.mjs');
+  const state = { namespace: 'sentropic-preprod',
+    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+  reconcileRestrictSafe({ call: ctx.call, dryRun: false }, state);
+  const joined = calls.join('\n');
+  assert.ok(joined.includes('scale deployment/ui --replicas=0'), 'frontal fenced first');
+  assert.ok(joined.includes('scale deployment/auth-idp --replicas=0'), 'frontal fenced first');
+});
+
+test('dry-run prints the key-removal patch even with no keys present', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { secretData: {} } });
+  const { preCommitRollback } = await import('./t3-rollback.mjs');
+  preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, dryRun: true });
+  assert.ok(calls.some(c => c.startsWith('patch secret sentropic-api')), 'patch printed in dry-run');
+});
+
 test('dry-run prints the exact B3 command sequence and touches nothing', async () => {
-  const { ctx, printed } = makeCtx();
+  const { ctx, printed, calls } = makeCtx();
   ctx.dryRun = true;
   ctx.delivered = undefined;
   const code = await drive(ctx);
-  assert.equal(code, 3);
+  assert.equal(code, 0);
   const text = printed.join('\n');
   const order = ['A4_ACTION=fence', 'A4_ACTION=restrict', 'A4_OPERATION=wire',
     'A4_OPERATION=custodian', 'A4_PHASE=snapshot', 'A4_OPERATION=budgets',
@@ -439,6 +461,12 @@ test('dry-run prints the exact B3 command sequence and touches nothing', async (
   }
   assert.ok(!text.includes('A4_OP='));
   assert.ok(readFileSync(`${ctx.stateDir}/request.json`, 'utf8').includes('test'));
+  const joined = calls.join('\n');
+  assert.ok(joined.includes('set image deployment/ui'), 'W8 ui converged');
+  assert.ok(joined.includes('scale deployment/ui --replicas=1'), 'W8 ui started');
+  assert.ok(joined.includes('patch cronjob pgbackup'), 'W8 pgbackup resumed');
+  assert.ok(joined.includes('delete middleware a4-verification --ignore-not-found=true'), 'W8 reopened');
+  assert.ok(!joined.includes('rollout undo'), 'no legacy boot in dry-run');
 });
 
 test('recovery claim is single-flight even for the same owner', async () => {
