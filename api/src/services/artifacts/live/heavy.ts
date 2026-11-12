@@ -135,6 +135,31 @@ export const gatedInstall = (heavy: LiveHeavyGate, install: CachePorts['cleanIns
       throw error;
     });
   };
+/** Yielding heavy gate for the prewarm seal (`sealInstall`, same install-phase budget as `cleanInstall`). */
+export const gatedSealInstall = (heavy: LiveHeavyGate, install: CachePorts['sealInstall'],
+  options: { log?: InstallStepLogger; now?: () => number } = {}): CachePorts['sealInstall'] =>
+  input => {
+    const runtime = input.runtime;
+    const log = options.log ?? defaultStepLogger;
+    const now = options.now ?? Date.now;
+    input.progress?.step?.('heavy_admit');
+    const started = now();
+    let admitted = false;
+    const fail = (error: unknown) => {
+      const reason = error instanceof LiveError
+        ? (error.reason ? `${error.code}:${error.reason}` : error.code) : 'builder_unavailable';
+      log({ msg: 'artifact_live_install_step', step: 'heavy_admit', ms: now() - started, outcome: 'fail', reason });
+    };
+    return heavy.run(runtime.podName, 'install', async () => {
+      admitted = true;
+      log({ msg: 'artifact_live_install_step', step: 'heavy_admit', ms: now() - started, outcome: 'ok' });
+      input.progress?.clearStep?.();
+      return install(input);
+    }, { signal: input.signal }).catch(error => {
+      if (!admitted) fail(error);
+      throw error;
+    });
+  };
 
 const QUEUE_NAMESPACE = 'artifact-live-heavy-queue/v1';
 /** Durable queue state of one node in the existing host KV migration, serialized by a node lock across replicas. */

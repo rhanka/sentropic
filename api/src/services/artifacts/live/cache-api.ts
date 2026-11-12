@@ -100,7 +100,8 @@ export function createCacheJobs(store: KvStore, options: { now(): number; id(): 
     },
     async fail(cacheKey: string, jobId: string, code: string, reason?: string): Promise<CacheJobRecord | undefined> {
       return store.update<CacheJobRecord, CacheJobRecord | undefined>(canonicalKey(cacheKey), current => {
-        if (!current || current.jobId !== jobId || current.state !== 'building') return { result: undefined };
+        if (!current || current.jobId !== jobId
+          || (current.state !== 'building' && current.state !== 'sealed')) return { result: undefined };
         const next: CacheJobRecord = { ...current, state: 'failed', step: undefined, heartbeatAt: now(),
           ...(code ? { error: { code, ...(reason ? { reason } : {}), retriable: code !== 'lock_mismatch' } } : {}) };
         return { next, result: next };
