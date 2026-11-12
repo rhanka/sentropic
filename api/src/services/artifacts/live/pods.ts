@@ -87,11 +87,16 @@ export function builderPod(key: LiveKey, runtime: LiveRuntime, bootstrap: string
         { name: 'ARTIFACT_POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } }],
       securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
         capabilities: { drop: ['ALL'] }, seccompProfile: { type: 'RuntimeDefault' } },
-      // Tenant quota fit (L3/Q4, k8s lane raises LimitRange cpu to 4 and ResourceQuota to requests
-      // 1vCPU/3Gi, limits.memory 8Gi, limits.ephemeral-storage 14Gi): requests 250m/768Mi book one warm pod plus
-      // three active pods (4 x 250m = 1vCPU, 4 x 768Mi = 3Gi); limits burst to 4 vCPU / 2048Mi for the build
-      // (Q1 small artifact + Q2 burst). Memory request stays the scheduler booking; only CPU overcommits.
-      resources: { requests: { cpu: '250m', memory: '768Mi', 'ephemeral-storage': '0' },
+      // Tenant quota fit (owner quota push 2026-11-08, k8s dd7620f; capacity 11/11, convergence Q2+Q4):
+      // k8s raises LimitRange tenant-defaults cpu max 1 to >= 4 per container (build burst) and the namespace quotas to
+      // requests.cpu 1 (4 x 250m), requests.memory 5Gi (4 x 1280Mi), limits.memory 8Gi (4 x 2048Mi),
+      // limits.ephemeral-storage >= 14Gi (4 x 3400Mi); pods quota 5 already admits 4.
+      // Memory request 1280Mi is the namespace LimitRange min (smallest admissible today): the convergence 768Mi would
+      // be refused until k8s lowers that min, saving ~2Gi of requests quota then. Request < limit keeps the burst
+      // (scheduler books 1280Mi, pod bursts to 2048Mi); k8s 09/11 keeps request close to use (never 420Mi again, which
+      // overcommitted a builder node into a kubelet eviction). Only CPU overcommits. 4 pods share live and build slots
+      // (1 warm + 2 live/build + 1 prewarm; the pool autoscales).
+      resources: { requests: { cpu: '250m', memory: '1280Mi', 'ephemeral-storage': '0' },
         limits: { cpu: '4', memory: '2048Mi', 'ephemeral-storage': `${WORKER_EPHEMERAL_LIMIT_MIB}Mi` } },
       ports: [{ name: 'live', containerPort: 5173, protocol: 'TCP' }],
       volumeMounts: [{ name: 'source', mountPath: '/workspace' }, { name: 'scratch', mountPath: '/tmp' },
