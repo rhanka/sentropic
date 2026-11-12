@@ -13,7 +13,8 @@ function podsOf(call, component) {
 function deployReady(call, deploy, image) {
   const out = call(['get', 'deployment', deploy, '-o', 'json']);
   if (!out) return false;
-  const d = JSON.parse(out);
+  const d = JSON.parse(out || '{}');
+  if (!d.spec) return false;
   const current = d.spec?.template?.spec?.containers?.find(c => c.name === deploy)?.image;
   return d.spec?.replicas === 1 && d.status?.readyReplicas === 1
     && d.status?.observedGeneration === d.metadata?.generation && current === image;
@@ -21,7 +22,7 @@ function deployReady(call, deploy, image) {
 
 function ensureStarted(call, deploy, image) {
   if (deployReady(call, deploy, image)) return;
-  const d = JSON.parse(call(['get', 'deployment', deploy, '-o', 'json']));
+  const d = JSON.parse(call(['get', 'deployment', deploy, '-o', 'json']) || '{}');
   const current = d.spec?.template?.spec?.containers?.find(c => c.name === deploy)?.image;
   if (current !== image) call(['set', 'image', `deployment/${deploy}`, `${deploy}=${image}`]);
   call(['scale', `deployment/${deploy}`, '--replicas=1']);
@@ -32,7 +33,8 @@ function ensureStarted(call, deploy, image) {
 // Repair without ever opening traffic: frontals to zero before touching the
 // boundary, middleware patched in place (never create over an existing one,
 // which would fail AlreadyExists), annotations re-applied from the W1 record.
-export function reconcileRestrictSafe(call, state) {
+export function reconcileRestrictSafe(ctx, state) {
+  const call = ctx.call;
   const mw = state.middlewareSpec;
   const want = `${state.namespace}-a4-verification@kubernetescrd`;
   const key = 'traefik.ingress.kubernetes.io/router.middlewares';
@@ -43,7 +45,7 @@ export function reconcileRestrictSafe(call, state) {
   } catch { existing = null; }
   const ingresses = {};
   for (const name of ['sentropic', 'auth-idp']) {
-    ingresses[name] = JSON.parse(call(['get', 'ingress', name, '-o', 'json']));
+    ingresses[name] = JSON.parse(call(['get', 'ingress', name, '-o', 'json']) || '{}');
   }
   const conform = existing && JSON.stringify(existing) === JSON.stringify(mw)
     && Object.values(ingresses).every(i => i.metadata?.annotations?.[key] === want);
@@ -54,6 +56,7 @@ export function reconcileRestrictSafe(call, state) {
   for (const component of ['ui', 'auth-idp']) {
     if (podsOf(call, component).length > 0) throw new Error(`frontal_not_zero: ${component}`);
   }
+  if (!mw && !ctx.dryRun) throw new Error('middleware_spec_missing');
   if (!existing) {
     call(['create', '-f', '-'], JSON.stringify({ apiVersion: 'traefik.io/v1alpha1', kind: 'Middleware',
       metadata: { name: 'a4-verification', namespace: state.namespace }, spec: mw }));
@@ -70,7 +73,7 @@ export function reconcileRestrictSafe(call, state) {
 export async function finishOpen(ctx) {
   const { call, probe, state, save, images, probes = [], externalProbes = [] } = ctx;
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
-    reconcileRestrictSafe(call, state);
+    reconcileRestrictSafe(ctx, state);
     ensureStarted(call, 'ui', images.ui);
     ensureStarted(call, 'auth-idp', images.candidate);
     for (const p of probes) await runProbe(probe, p);
@@ -80,7 +83,7 @@ export async function finishOpen(ctx) {
   }
   if (state.substate === 'ACCEPTED') {
     if (!deployReady(call, 'api', images.candidate)) throw new Error('api_not_ready_accepted');
-    const pg = JSON.parse(call(['get', 'cronjob', 'pgbackup', '-o', 'json']));
+    const pg = JSON.parse(call(['get', 'cronjob', 'pgbackup', '-o', 'json']) || '{}');
     if (pg.spec?.suspend !== false) {
       call(['patch', 'cronjob', 'pgbackup', '--type=merge', '-p', '{"spec":{"suspend":false}}']);
     }
@@ -91,7 +94,7 @@ export async function finishOpen(ctx) {
   if (state.substate === 'BACKUP_RESUMED' || state.substate === 'ONE_HOST_OPEN') {
     const key = 'traefik.ingress.kubernetes.io/router.middlewares-';
     for (const name of ['sentropic', 'auth-idp']) {
-      const ing = JSON.parse(call(['get', 'ingress', name, '-o', 'json']));
+      const ing = JSON.parse(call(['get', 'ingress', name, '-o', 'json']) || '{}');
       if (ing.metadata?.annotations?.['traefik.ingress.kubernetes.io/router.middlewares'] !== undefined) {
         call(['annotate', 'ingress', name, key, '--overwrite']);
         state.openedHosts = [...(state.openedHosts ?? []), name];
