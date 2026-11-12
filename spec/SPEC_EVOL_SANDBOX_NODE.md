@@ -4,7 +4,7 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 
 ## 1. Decisions frozen by this spec
 
-- D1 (host): single VM OVH BHS b3-16 (4 vCPU / 16 GiB / 100 GB NVMe), cgroup v2 slices, gVisor systrap only, escalation to b3-32 when multi-tenant RSS > 12.5 GiB (B6a).
+- D1 (decided): artifact-builder-vm-1, OVH BHS5 d2-4, 2 shared vCPU / about 3.5 GiB for both tenants / 48 GiB disk, Ubuntu 24.04 kernel 6.8. gVisor systrap only. About 24 CAD/month, rollback builder pool min/desired 0, max 2.
 - D8 (operator): operated by the k8s session (IaC, hardening, pinned runsc systrap, systemd/cgroup, mTLS, supervision). Agent delivered by sentropic as a digest-pinned artifact. BHS residency. Removal only with >= 7 days notice plus evidence.
 - Tenants: exactly 2 concurrent tenants, `sentropic` and `immo`.
 - Contract: `contractVersion` is `execution-node.v1` (see `apps/sandbox-node/src/contract.ts`, the normative amendable module).
@@ -14,19 +14,20 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 
 - Isolation key: every call and object carries a mandatory `tenantId`; sandbox isolation is keyed on `(tenantId, sessionId | jobId)`.
 - Warm standby pools are partitioned: `poolOwned = system:warm-pool:<tenantId>`. A cross-tenant claim is rejected (`403` / `409`).
-- cgroup v2 slices: `tenant-sentropic.slice` and `tenant-immo.slice` with `MemoryMin 4 GiB`, `MemoryHigh 6.5 GiB`, `MemoryMax 9 GiB` (burst), `CPUWeight 100`, `TasksMax 4096`, `memory.oom.group=1`.
+- Canonical hierarchy: `builder.slice/builder-tenant.slice/builder-tenant-<tenantId>.slice/builder-sbx-<physicalUid>.scope`. Parent MemoryMax=3456 MiB, MemorySwapMax=0, CPUQuota=180%. Each tenant: MemoryMax=2560 MiB, MemoryHigh=2304 MiB, MemoryLow=768 MiB, CPUWeight=100, TasksMax=4096; each scope has memory.oom.group=1. No burst fields or second build.
 - NVMe layout (mode `0700`, no cross-tenant dedup or reads):
-  `/var/lib/execution-node/tenants/<tenantId>/bases/<kind>/<identityDigest>.erofs` and
-  `/var/lib/execution-node/tenants/<tenantId>/sandboxes/<uid>/{upper,work,retained}`.
+  `/var/lib/builder/tenants/<tenantId>/bases/<kind>/<identityDigest>.erofs` and
+  `/var/lib/builder/tenants/<tenantId>/sandboxes/<uid>/{upper,work,retained}`.
 - Zero static secret on the VM: S3 access uses short-lived presigned URLs scoped to the `s3://.../tenants/<tenantId>/...` prefix, with BHS host validation.
-- Admission: at least 1 live + 1 standby slot reserved per tenant. Over-quota scheduling uses WFQ/DRR 1:1 and returns `429 tenant_quota_exceeded` with `retryAfterMs`.
+- AdmissionLedger: one warm live OR standby per tenant (768 MiB each), plus exactly one global publish build (1664 MiB), sum <=3200 MiB including gVisor/cache/slab. Read complete memory.current before reservation; reject 429 before OOM. Disk/project quota 16 GiB per tenant and inode quota required from S1-A1a. Claim transfers the standby reservation without double accounting.
+- Publish queue: bounded, non-preemptible, strict tenant alternation; at most one adverse service ahead when both tenants wait. No 5 s build wait guarantee. Live admission alone targets p95 <=2 s/max <=5 s outside the build slot. Queue-full 429 counts as qualification failure.
 - Observability: every audit row and metric carries `tenant_id` (+ `purpose`, `node_instance_id`); all evidence stays in BHS.
 
 ## 3. ExecutionNodeV1 identity and transport (frozen)
 
 - `contractVersion`: `execution-node.v1`.
-- Transport is agnostic (`inbound-mtls` / `outbound-relay`) and never changes the `/v1/*` routes.
-- mTLS roles: `control-plane` vs `data-plane`, plus headers `X-Tenant-Id`, `X-Expected-Physical-Uid`, `X-Custody-Token` carrying a `SignedCustodyToken { tenantId, principalId, custodyEpoch, resourceId, deadlineAt }`.
+- D6-B decided: inbound mTLS on public IPv4/agent port, nftables MKS-egress/operator allowlist synchronized by k8s, no vRack. Outbound relay is S2-2, routes unchanged.
+- mTLS roles: operator/control-plane/data-plane, headers X-Tenant-Id, X-Expected-Physical-Uid, X-Custody-Token. Signed custody tokens include tenantId, principalId, custodyEpoch, resourceId, issuedAt, deadlineAt; TTL <=60 s. Mutations fail closed after >5 s without authenticated control-plane heartbeat.
 - `nodeInstanceId`: UUIDv4 assigned at NVMe format; `nodeEpoch`: monotone counter fsync-persisted. A new disk means a new instance id. Unknown instance returns `409 unknown_node_instance`.
 
 ## 4. Ownership and compatibility (frozen)
@@ -49,12 +50,13 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 
 ## 6. Endpoints (frozen surface)
 
-- `GET /v1/node`: real S1 capabilities (`classes: ["sandbox"]`), instance id + epoch.
+- OperatorScope: `GET /v1/node` has no tenantId; reports parentSlice `{ name: 'builder.slice', memoryMaxMiB: 3456 }` and capabilities.supportedOps for actually delivered operations. All TenantScope calls require tenantId or 400 missing_tenant_id. QuotaSnapshot contains limits, effective controlGroup, usage.memoryCurrentBytes/reservedMemoryBytes and globalBuildSlot `{ maxConcurrentBuildsGlobal: 1, holderTenantId?, queueDepth }`; no burst fields.
 - `GET`/`PUT /v1/tenants/:tenantId/quotas`, `GET /v1/tenants/:tenantId/bases/:baseId` (`kind`: `rootfs | dependencies | source | prebundle | vendor-esm...`; cross-tenant base read -> `403 cross_tenant_base_forbidden`).
 - `POST /v1/sandboxes` (`SandboxSpec`: `tenantId`, `physicalUid`, `profile`, `runtimeClass`, `baseMounts` read-only, writable overlay on `/workspace`, `quotaMiB` + inodes, process `uid:gid`, `network` (`none` | ports allowlist), `exec`/`pty`/`snapshots` flags).
-- `POST /v1/sandboxes/:id/claim` (`ClaimSpec`; see §4), `GET` list/detail, `POST renew`, `POST stop { retainOutput, outputSubPath (ui/dist), retentionTtlMs <= 300 s }` (cgroup kill, empty `populated`, `allProcessesExited: true`), `POST artifacts/export { subPath (ui/dist), tar.zst, presignedPutUrl, maxBytes }` allowed only in `stopped-output-retained | exported` (`409 sandbox_still_running`; idempotent; read by a read-only runsc-side reader, symlink-safe), `DELETE` (state `destroyed`).
-- `GET /v1/events` (SSE/NDJSON filtered by `tenantId`), `POST /v1/node/drain` (single-scheduler drain).
-- S2 (isolates, when enabled): `POST /v1/isolates` (+ `renew` / `DELETE`; single-tenant host `workerd` under `runsc --network=none`).
+- `POST /v1/sandboxes/:id/claim`, GET list/detail (scopeName and resources.memoryCurrentBytes/memoryPeakBytes), renew, stop, export and DELETE. Stop resolves systemd ControlGroup and validates tenant ancestry (500 cgroup_tenant_mismatch, no write otherwise); scope-only cgroup.kill and cgroup.events, never tenant kill. Within 5000 ms: 200 stopped-output-retained/destroyed with allProcessesExited:true; otherwise 202 stopping/allProcessesExited:false/retryAfterMs:250. Export requires buildId and confirmed quiescence (409 sandbox_not_quiesced), read-only symlink-safe reader.
+- `POST /v1/sandboxes/:physicalUid/revoke-custody { tenantId, physicalUid, minCustodyEpoch, reason }`: minCustodyEpoch=max(persisted,received), fsync before 200 `{ activeCustodyEpoch, closedStreams, ackedAt }`; close lower-epoch streams with WS 1008/TCP RST locally <=250 ms, end-to-end <=1 s. Refuse new revoked connections/invocations with 403 custody_revoked, including isolates. Epoch 2 then late epoch 1 must remain 2 across restart.
+- `GET /v1/events`: exclusive TenantScope tenantId/afterSeq OR operator certificate `?scope=node` infrastructure events only. Node drain requires X-Operator-Ticket and drainScope=node OR tenant (tenantId mandatory for tenant drain).
+- S2 isolates: one dedicated runsc --network=none sandbox and one dedicated workerd host per session, no intra-tenant host sharing by default. Shared-host benchmarks never qualify strict isolation.
 - Data-plane: `ANY /v1/ports/:port/*`, `POST /v1/exec` (S2 cli-remote / agent-loop), `WS /v1/pty` (relay), `POST /v1/snapshots` (`tar.zst` -> tenant-scoped S3), `POST /v1/isolates/:id/invoke` (no egress; upload outside the isolate).
 
 ## 7. S1-T0 gates consuming this freeze
