@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
+import { buildProbes, claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
   runKubectl, loadState, saveState, stepTimeoutMs, utcNow } from './t3-lib.mjs';
 import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
@@ -48,22 +48,9 @@ export function hashRows(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
-// Exact W8d probe URLs are operator inputs (qualified in P-0.4): the driver
-// never invents OAuth scopes or redirect URIs.
-export function buildProbes(config) {
-  const endpoints = config.endpoints ?? {};
-  const probes = [];
-  if (endpoints.appHealth) probes.push({ id: 'S-3', url: endpoints.appHealth, expect: 200 });
-  if (endpoints.idpConfig) probes.push({ id: 'S-4', url: endpoints.idpConfig, expect: 200 });
-  if (endpoints.idpJwks) probes.push({ id: 'S-5', url: endpoints.idpJwks, expect: 200 });
-  if (endpoints.s6Authorize) probes.push({ id: 'S-6', url: endpoints.s6Authorize, expect: 302, options: { redirect: 'manual' } });
-  if (endpoints.appMe) probes.push({ id: 'S-7', url: endpoints.appMe, expect: 401 });
-  if (endpoints.idpMe) probes.push({ id: 'S-8', url: endpoints.idpMe, expect: 401 });
-  for (const [id, url] of [['S-9a', endpoints.emailApp], ['S-9b', endpoints.emailIdp]]) {
-    if (url) probes.push({ id, url, expect: 200, options: { method: 'POST' } });
-  }
-  return { probes, externalProbes: config.externalProbes ?? [] };
-}
+// buildProbes lives in t3-lib.mjs so the standalone finish-open CLI shares
+// the exact endpoint-to-probe mapping without a driver import cycle.
+export { buildProbes };
 
 export function splitSql(text) {
   const parts = {};
@@ -81,8 +68,20 @@ export function splitSql(text) {
 export function delivered(ctx, script, env, timeoutMs) {
   const flat = Object.entries(env).map(([k, v]) => `${k}=${v}`).join(' ');
   if (ctx.dryRun) { ctx.print(`# dry-run: ${flat} node ${script}`); return ''; }
+  try {
+    if (ctx.stateDir) {
+      const cur = loadState(ctx.stateDir);
+      if (cur) { cur.childPid = process.pid; saveState(ctx.stateDir, cur); }
+    }
+  } catch { /* observability only */ }
   const res = spawnSync('node', [join(HERE, script)],
     { env: { ...process.env, ...env }, encoding: 'utf8', timeout: timeoutMs });
+  try {
+    if (ctx.stateDir) {
+      const cur = loadState(ctx.stateDir);
+      if (cur) { cur.childPid = res?.pid ?? null; saveState(ctx.stateDir, cur); }
+    }
+  } catch { /* observability only */ }
   if (res.error || res.status !== 0) {
     throw new Error(`delivered_failed: ${script} ${(res.stderr ?? '').slice(0, 200)}`);
   }
@@ -195,7 +194,21 @@ export async function recover(ctx, state, reason) {
   }
   RECOVERY_IN_FLIGHT = true;
   try {
+    // The step deadline that armed this recovery is already expired: every
+    // kubectl after this point would be capped to 1000 ms by
+    // effectiveTimeout and fail the rollback. Re-arm the timeout budget to
+    // the fence total so recovery kubectl calls keep usable timeouts.
+    if (ctx.timeoutRef) {
+      ctx.timeoutRef.deadlineMs = state.t0MonoMs != null
+        ? state.t0MonoMs + TOTAL_BUDGET_MS
+        : monoMs() + 120_000;
+      state.stepDeadlineMonoMs = ctx.timeoutRef.deadlineMs;
+    }
     state.recoveryReason = reason;
+    try {
+      const cur = loadState(ctx.stateDir);
+      if (cur) { cur.childPid = process.pid; saveState(ctx.stateDir, cur); }
+    } catch { /* observability only */ }
     saveState(ctx.stateDir, state);
     // Freeze writers BEFORE reading the truth: the commit transaction can
     // land between classify() and the scale-down, which would fork the
@@ -216,6 +229,17 @@ export async function recover(ctx, state, reason) {
       info = { journal: true, locks: 0, committed: true, receipts: 1, apiReady: true, relations: [] };
     } else {
       info = classify(ctx);
+      // PostgreSQL purges the backend of the killed api pod asynchronously:
+      // wait briefly for the advisory lock to drain instead of aborting the
+      // automatic recovery on the first locked read (same budget as the
+      // emergency classifier).
+      const waitStart = monoMs();
+      const waitBudget = ctx.lockWaitMs ?? 60_000;
+      while (info.locks > 0 && monoMs() - waitStart < waitBudget) {
+        ctx.print?.(`# recover: migration lock held (${info.locks}), waiting for backend drain`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        info = classify(ctx);
+      }
     }
     state.commitVerified = info.committed;
     state.apiReady = info.apiReady;
@@ -257,11 +281,17 @@ export async function recover(ctx, state, reason) {
 // touches secret data, so the tenant key acts are explicit steps here —
 // JWT_SECRET + SECRET_ENCRYPTION_KEY into sentropic-api, plus the dedicated
 // auth-idp-session-signing secret. Values travel only via stdin (never argv,
-// never logs: mutating calls print stdin as <redacted-stdin>).
+// never logs: mutating calls print stdin as <redacted-stdin>). Merge patches
+// only: kubectl apply would record every rotated value in the
+// last-applied-configuration annotation.
 export function applyRotationKeys(ctx) {
   const files = ctx.config.rotationKeyFiles ?? {};
   if (ctx.dryRun) {
     ctx.print('# dry-run: pose rotation keys from rotationKeyFiles (apiJwtSecretFile, secretEncryptionKeyFile, idpSessionJwtFile)');
+    ctx.print('# dry-run: patch secret sentropic-api --type=merge (JWT_SECRET, SECRET_ENCRYPTION_KEY)');
+    ctx.call(['patch', 'secret', 'sentropic-api', '--type=merge', '-p',
+      JSON.stringify({ data: { JWT_SECRET: 'dry-run', SECRET_ENCRYPTION_KEY: 'dry-run' } })]);
+    return;
   }
   let apiJwt = 'dry-run', encKey = 'dry-run', idpJwt = 'dry-run';
   if (files.apiJwtSecretFile && files.secretEncryptionKeyFile && files.idpSessionJwtFile) {
@@ -273,15 +303,21 @@ export function applyRotationKeys(ctx) {
     throw new Error('rotation_keys_missing: apiJwtSecretFile,secretEncryptionKeyFile,idpSessionJwtFile');
   }
   const b64 = s => Buffer.from(s, 'utf8').toString('base64');
-  const secret = JSON.parse(ctx.call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
-  const data = { ...(secret.data ?? {}) };
-  data.JWT_SECRET = b64(apiJwt);
-  data.SECRET_ENCRYPTION_KEY = b64(encKey);
-  ctx.call(['apply', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'Secret',
-    metadata: { name: 'sentropic-api', namespace: ctx.config.namespace }, type: 'Opaque', data }));
-  ctx.call(['apply', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'Secret',
-    metadata: { name: 'auth-idp-session-signing', namespace: ctx.config.namespace }, type: 'Opaque',
-    data: { JWT_SECRET: b64(idpJwt) } }));
+  ctx.call(['patch', 'secret', 'sentropic-api', '--type=merge', '-p',
+    JSON.stringify({ data: { JWT_SECRET: b64(apiJwt), SECRET_ENCRYPTION_KEY: b64(encKey) } })]);
+  let idpExists = false;
+  try {
+    const cur = ctx.call(['get', 'secret', 'auth-idp-session-signing', '-o', 'json']);
+    idpExists = Boolean(cur && JSON.parse(cur || '{}').metadata);
+  } catch { idpExists = false; }
+  if (idpExists) {
+    ctx.call(['patch', 'secret', 'auth-idp-session-signing', '--type=merge', '-p',
+      JSON.stringify({ data: { JWT_SECRET: b64(idpJwt) } })]);
+  } else {
+    ctx.call(['create', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'Secret',
+      metadata: { name: 'auth-idp-session-signing', namespace: ctx.config.namespace }, type: 'Opaque',
+      data: { JWT_SECRET: b64(idpJwt) } }));
+  }
   if (!ctx.dryRun) {
     const after = JSON.parse(ctx.call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
     const left = ROTATED_KEYS.filter(key => after.data?.[key] === undefined);
@@ -301,7 +337,7 @@ function baseEnv(ctx, extra = {}) {
 // or cutoff breach routes to recover(); the watchdog covers driver death.
 export async function drive(ctx) {
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
-    namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
+    childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
     stepDeadlineMonoMs: monoMs() + 600_000 };
   saveState(ctx.stateDir, state);
   try {
@@ -426,7 +462,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const probeReadOnly = argv.includes('--probe-readonly');
   const timeoutRef = {};
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
-    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log });
+    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log, stateDir });
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { loadState, monoMs, podLabels, runKubectl, saveState } from './t3-lib.mjs';
+import { buildProbes, loadState, monoMs, podLabels, runKubectl, saveState } from './t3-lib.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -92,6 +92,10 @@ export async function finishOpen(ctx) {
   const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}) };
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
     reconcileRestrictSafe(ctx, state);
+    // The emergency classifier stops api before reading the truth: a committed
+    // database must restart the candidate api here before any opening, or the
+    // post-commit convergence would leave prod fenced with api at 0 replicas.
+    ensureStarted(call, 'api', images.candidate, dry);
     ensureStarted(call, 'ui', images.ui, dry);
     ensureStarted(call, 'auth-idp', images.candidate, dry);
     for (const p of probes) await runProbe(probe, p, dry);
@@ -159,10 +163,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const state = loadState(stateDir) ?? {};
   state.namespace = config.namespace;
   if (!state.middlewareSpec && config.middlewareSpec) state.middlewareSpec = config.middlewareSpec;
+  const fromEndpoints = buildProbes(config);
+  const probes = config.probes ?? fromEndpoints.probes;
+  const externalProbes = config.externalProbes ?? fromEndpoints.externalProbes;
   try {
     const done = await finishOpen({ call, probe: fetch, state,
       save: next => saveState(stateDir, next), images: config.images,
-      probes: config.probes ?? [], externalProbes: config.externalProbes ?? [],
+      probes, externalProbes,
       dryRun, print: console.log });
     console.log(`finish_open_ok substate=${done.substate}`);
   } catch (err) {
