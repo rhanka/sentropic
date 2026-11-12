@@ -197,6 +197,31 @@ test('RUN6 TWO_HOSTS_OPEN restarts all deployments after emergency classificatio
   }
 });
 
+test('RUN6 recovery stays inside the original fence deadline on both branches', async () => {
+  const { recover } = await import('./t3-window-driver.mjs');
+  for (const committed of [false, true]) {
+    const { ctx } = makeCtx({ scenario: { committed } });
+    const t0 = monoMs() - 175_000;
+    ctx.timeoutRef = {};
+    await recover(ctx, { step: 'W8', t0MonoMs: t0, namespace: ctx.config.namespace,
+      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } }, 'run6-late-fault');
+    assert.ok(ctx.timeoutRef.deadlineMs <= t0 + TOTAL_BUDGET_MS, 'no recovery deadline extension');
+    assert.equal(loadState(ctx.stateDir).step, 'DONE');
+  }
+});
+
+test('RUN6 expired budget forbids any additional command and live claim cannot expire', async () => {
+  const { effectiveTimeout, claimDead } = await import('./t3-lib.mjs');
+  assert.throws(() => effectiveTimeout(60000, { deadlineMs: 1000 }, 1001), /budget_exhausted/);
+  assert.equal(claimDead({ owner: `pid-${process.pid}`, at: monoMs() - 180_001 }), false);
+});
+
+test('RUN6 nominal work reserves recovery time before the 300 s fence deadline', async () => {
+  const { STEP_CUTOFFS } = await import('./t3-window-driver.mjs');
+  assert.ok(STEP_CUTOFFS.W8 <= 175_000);
+  assert.ok(STEP_CUTOFFS.W9 <= 175_000);
+});
+
 test('classifier SQL is schema-safe and versioned', () => {
   const text = loadSql('t3-classify.sql');
   assert.match(text, /t3-classify-v1/);
@@ -353,7 +378,7 @@ test('kubectl timeouts are bounded by the live step deadline', async () => {
   const now = monoMs();
   assert.equal(effectiveTimeout(60_000, { deadlineMs: now + 5_000 }, now), 5_000);
   assert.equal(effectiveTimeout(60_000, { deadlineMs: now + 500_000 }, now), 60_000);
-  assert.equal(effectiveTimeout(60_000, { deadlineMs: now - 1_000 }, now), 1000);
+  assert.throws(() => effectiveTimeout(60_000, { deadlineMs: now - 1_000 }, now), /budget_exhausted/);
   assert.equal(effectiveTimeout(60_000, null, now), 60_000);
 });
 
@@ -363,8 +388,8 @@ test('step cutoffs match the window contract', async () => {
   assert.equal(STEP_CUTOFFS.W5, 110_000);
   assert.equal(STEP_CUTOFFS.W7b, commit);
   assert.ok(STEP_CUTOFFS.W7b <= 175_000);
-  assert.equal(STEP_CUTOFFS.W8, 300_000);
-  assert.equal(STEP_CUTOFFS.W9, 300_000);
+  assert.equal(STEP_CUTOFFS.W8, 175_000);
+  assert.equal(STEP_CUTOFFS.W9, 175_000);
   assert.ok(total <= 300_000);
 });
 
@@ -498,7 +523,7 @@ test('watchdog enforces the total 300 s budget on a live driver', async () => {
   const sleeper = spawn('sleep', ['30']);
   try {
     saveState(ctx.stateDir, { step: 'W8', heartbeatMonoMs: monoMs(),
-      driverPid: sleeper.pid, t0MonoMs: monoMs() - 400_000, namespace: 'sentropic-preprod' });
+      driverPid: sleeper.pid, t0MonoMs: monoMs() - 176_000, namespace: 'sentropic-preprod' });
     assert.equal(await poll(ctx), 3);
   } finally {
     try { process.kill(sleeper.pid, 'SIGKILL'); } catch { /* already reaped */ }
@@ -612,9 +637,9 @@ test('recovery claim is single-flight even for the same owner', async () => {
   assert.equal(claimRecovery(ctx.stateDir, 'watchdog'), false);
 });
 
-test('a pid claim older than two minutes is take-over-able', async () => {
+test('a live pid claim cannot be stolen after two minutes', async () => {
   const { claimDead } = await import('./t3-lib.mjs');
-  assert.equal(claimDead({ owner: `pid-${process.pid}`, at: monoMs() - 130_000 }), true);
+  assert.equal(claimDead({ owner: `pid-${process.pid}`, at: monoMs() - 130_000 }), false);
   assert.equal(claimDead({ owner: `pid-${process.pid}`, at: monoMs() }), false);
 });
 
@@ -623,7 +648,7 @@ test('step timeouts are bounded by the step cutoff', async () => {
   const now = monoMs();
   assert.equal(stepTimeoutMs(120_000, now + 5_000, now), 5_000);
   assert.equal(stepTimeoutMs(120_000, now + 500_000, now), 120_000);
-  assert.equal(stepTimeoutMs(30_000, now - 1_000, now), 1000);
+  assert.throws(() => stepTimeoutMs(30_000, now - 1_000, now), /budget_exhausted/);
 });
 
 test('concurrent watchdog polls keep a single writer', async () => {
@@ -873,16 +898,15 @@ test('RUN5 finishOpen restarts a stopped api from ACCEPTED/BACKUP_RESUMED/ONE_HO
   }
 });
 
-test('RUN5 recover at/after the 300 s budget keeps a usable kubectl deadline', async () => {
+test('RUN6 recovery after the fence deadline refuses further writes', async () => {
   const { ctx } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==' } } });
   const { recover } = await import('./t3-window-driver.mjs');
   const { monoMs: now } = await import('./t3-lib.mjs');
   ctx.timeoutRef = {};
   const t0 = now() - 300_000;
   const state = { step: 'W8', namespace: 'sentropic-preprod', t0MonoMs: t0 };
-  const code = await recover(ctx, state, 'run5-w8-cutoff');
-  assert.equal(code, 3);
-  assert.ok(ctx.timeoutRef.deadlineMs - now() > 10_000, 'recovery budget re-armed past the fence total');
+  await assert.rejects(recover(ctx, state, 'run6-too-late'), /budget_exhausted/);
+  assert.equal(ctx.timeoutRef.deadlineMs, undefined, 'no new deadline granted');
 });
 
 test('RUN5 kill paths list children before the first SIGTERM', async () => {
