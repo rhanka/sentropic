@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
   buildProbes, checkRbac, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
-import { loadState, monoMs, saveState } from './t3-lib.mjs';
+import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
 
@@ -108,6 +108,14 @@ test('classifier SQL is schema-safe and versioned', () => {
     assert.doesNotMatch(q, /authorization_codes\.\w*id/);
   }
   assert.doesNotMatch(text, /\bsettings\.id\b/);
+});
+
+test('kubectl exec forwards stdin with -i or psql reads EOF', () => {
+  assert.deepEqual(withExecStdin(['exec', 'pod', '--', 'psql'], 'SELECT 1;'),
+    ['exec', '-i', 'pod', '--', 'psql']);
+  assert.deepEqual(withExecStdin(['get', 'pods'], undefined), ['get', 'pods']);
+  assert.deepEqual(withExecStdin(['exec', 'pod', '--', 'true'], undefined),
+    ['exec', 'pod', '--', 'true']);
 });
 
 test('classifier SQL is SELECT-only so exec may run it in probe mode', () => {

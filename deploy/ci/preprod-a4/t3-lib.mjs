@@ -31,20 +31,27 @@ export function isReadOnly(args, execIsReadOnly = false) {
 // reads when probeReadOnly is set; plain dry-run executes nothing. In probe
 // contexts exec counts as read-only: the driver only ever execs the
 // SELECT-only t3-classify.sql through it (statically asserted in tests).
+// kubectl exec only forwards stdin to the container with -i; without it
+// psql silently reads EOF and returns empty output with status 0.
+export function withExecStdin(args, input) {
+  return input !== undefined && args[0] === 'exec' ? ['exec', '-i', ...args.slice(1)] : args;
+}
+
 export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, print = () => {} }) {
   return (args, input) => {
-    const line = `kubectl --namespace ${namespace} ${args.join(' ')}`;
+    const effective = withExecStdin(args, input);
+    const line = `kubectl --namespace ${namespace} ${effective.join(' ')}`;
     if (dryRun && (!probeReadOnly || !isReadOnly(args, execIsReadOnly))) {
       print(dryRunLine(line, input !== undefined));
       return '';
     }
     const started = monoMs();
     const result = spawnSync('kubectl',
-      ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...args],
+      ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective],
       { input, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 });
     if (probeReadOnly) print(`# ${(monoMs() - started)}ms ${line}`);
     if (result.error || result.status !== 0) {
-      const err = new Error(`kubectl_failed: ${args.slice(0, 3).join(' ')}`);
+      const err = new Error(`kubectl_failed: ${effective.slice(0, 3).join(' ')}`);
       err.cause = result.error?.message ?? result.stderr?.slice(0, 300);
       throw err;
     }
