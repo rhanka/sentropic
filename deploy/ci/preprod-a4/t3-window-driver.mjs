@@ -367,6 +367,7 @@ function baseEnv(ctx, extra = {}) {
 // or cutoff breach routes to recover(); the watchdog covers driver death.
 export async function drive(ctx) {
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
+    watchdogPid: ctx.watchdogPid,
     childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
     stepDeadlineMonoMs: monoMs() + 600_000 };
   saveState(ctx.stateDir, state);
@@ -505,6 +506,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],
     { detached: true, stdio: 'ignore' });
   watchdog.unref();
+  ctx.watchdogPid = watchdog.pid;
   try {
     process.exitCode = await drive(ctx);
   } catch (err) {
