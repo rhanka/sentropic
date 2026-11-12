@@ -5,7 +5,7 @@ import type {
 import { ExecutionNodeError } from './errors.js';
 import type { SandboxMount } from './runtime-adapter.js';
 
-export const NODE_ROOT = '/var/lib/execution-node';
+export const NODE_ROOT = '/var/lib/builder';
 
 export function tenantRoot(tenantId: ExecutionNodeTenantId): string {
   return `${NODE_ROOT}/tenants/${tenantId}`;

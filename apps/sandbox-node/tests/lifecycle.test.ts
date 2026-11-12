@@ -64,7 +64,7 @@ describe('lifecycle', () => {
     expect(stopped.state).toBe('stopped-output-retained');
     const { bytes, sandbox: exported } = await daemon.exportArtifacts('sentropic', created.id, {
       commandId: 'export-1',
-      spec: { subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1_000_000 },
+      spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1_000_000 },
     });
     expect(exported.state).toBe('exported');
     expect(bytes.length).toBeGreaterThan(0);
@@ -92,7 +92,7 @@ describe('lifecycle', () => {
     await expect(
       daemon.exportArtifacts('sentropic', warm.id, {
         commandId: 'export-1',
-        spec: { subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 10 },
+        spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 10 },
       }),
     ).rejects.toThrowError(/sandbox_still_running/);
   });
