@@ -52,7 +52,13 @@ async function pollInner(ctx) {
   const reason = !alive ? 'watchdog_driver_dead' : over ? 'watchdog_budget' : 'watchdog_stale_past_deadline';
   if (!claimRecovery(ctx.stateDir, me)) {
     const owner = readRecoveryClaim(ctx.stateDir);
-    if (!claimDead(owner)) return 'recovery-in-progress';
+    if (!claimDead(owner)) {
+      // Never steal from a running writer. An expired driver recovery is
+      // first stopped, including its command groups, with extinction proof.
+      if (!past || owner.owner !== `pid-${state.driverPid}`) return 'recovery-in-progress';
+      stopAutomation(ctx.stateDir, state);
+      if (readRecoveryClaim(ctx.stateDir)?.owner !== owner.owner) return 'recovery-in-progress';
+    }
     releaseRecovery(ctx.stateDir);
     if (!claimRecovery(ctx.stateDir, me)) return 'recovery-in-progress';
   }

@@ -713,7 +713,7 @@ test('watchdog stands down while the driver owns recovery', async () => {
   const sleeper = spawn('sleep', ['30']);
   try {
     saveState(ctx.stateDir, { step: 'W3', heartbeatMonoMs: monoMs() - 60_000,
-      driverPid: sleeper.pid, t0MonoMs: monoMs(), stepDeadlineMonoMs: monoMs() - 1000,
+      driverPid: sleeper.pid, t0MonoMs: monoMs() - 180_000, stepDeadlineMonoMs: monoMs() + 30_000,
       namespace: 'sentropic-preprod' });
     const { claimRecovery } = await import('./t3-lib.mjs');
     assert.equal(claimRecovery(ctx.stateDir, `pid-${sleeper.pid}`), true);
