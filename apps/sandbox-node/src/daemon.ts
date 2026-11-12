@@ -127,6 +127,11 @@ export class ExecutionNodeDaemon {
     }
     const result = produce();
     this.idempotence.set(`${tenantId}:${commandId}`, { bodyHash, result });
+    if (result instanceof Promise) void result.catch(() => {
+      if (this.idempotence.get(`${tenantId}:${commandId}`)?.result === result) {
+        this.idempotence.delete(`${tenantId}:${commandId}`);
+      }
+    });
     return result;
   }
 
@@ -256,12 +261,14 @@ export class ExecutionNodeDaemon {
       if (!sandbox.compatibility || !compatEqual(sandbox.compatibility, input.claim.compatibility)) {
         throw new ExecutionNodeError('command_id_payload_mismatch', 'standby compatibility mismatch');
       }
-      const promoted = await this.promoteToRunning(input.claim.tenantId, sandbox.id, {
+      sandbox.state = 'creating'; // Lock the standby before the first asynchronous runtime call.
+      let promoted: SandboxRecord;
+      try { promoted = await this.promoteToRunning(input.claim.tenantId, sandbox.id, {
         commandId: `claim-promote:${input.commandId}`,
         quotaMiB: input.quotaMiB,
         uid: input.uid,
         gid: input.gid,
-      });
+      }); } catch (error) { sandbox.state = 'standby'; throw error; }
       promoted.poolOwned = false;
       promoted.ownership = input.claim.ownership;
       this.admission.claim(input.claim.tenantId);

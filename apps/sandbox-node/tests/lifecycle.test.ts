@@ -4,7 +4,7 @@ import type {
   ExecutionNodeOwnership,
   ExecutionNodeSandboxSpec,
 } from '../src/index.js';
-import { createExecutionNode, ExecutionNodeError } from '../src/index.js';
+import { createExecutionNode, ExecutionNodeError, FakeRuntimeAdapter } from '../src/index.js';
 
 function ownership(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeOwnership {
   return {
@@ -51,6 +51,40 @@ function compat(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeClai
 }
 
 describe('lifecycle', () => {
+  it('should retain reservations and refuse export until a pending stop becomes quiescent', async () => {
+    class PendingAdapter extends FakeRuntimeAdapter {
+      exited = false;
+      override async stopSandbox(): Promise<boolean> { return this.exited; }
+    }
+    const adapter = new PendingAdapter();
+    const { daemon, admission } = createExecutionNode({ adapter });
+    const created = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'pending-create' });
+    await daemon.promoteToRunning('sentropic', created.id, { commandId: 'pending-run', quotaMiB: 512, uid: 1000, gid: 1000 });
+    const first = await daemon.stopSandbox('sentropic', created.id, { commandId: 'pending-stop', stop: { retainOutput: true } });
+    expect(first).toMatchObject({ state: 'stopping', allProcessesExited: false });
+    expect(admission.reservedMiB('sentropic')).toBe(768);
+    await expect(daemon.exportArtifacts('sentropic', created.id, { commandId: 'early-export',
+      spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } }))
+      .rejects.toMatchObject({ code: 'sandbox_not_quiesced' });
+    adapter.exited = true;
+    await daemon.stopSandbox('sentropic', created.id, { commandId: 'pending-stop-again', stop: { retainOutput: true } });
+    expect(created).toMatchObject({ state: 'stopped-output-retained', allProcessesExited: true });
+    expect(admission.reservedMiB('sentropic')).toBe(0);
+  });
+
+  it('should serialize concurrent claims and allow rejected admission to retry', async () => {
+    const { daemon } = createExecutionNode();
+    const warm = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'warm',
+      warmStandby: true, compatibility: compat() });
+    const input = { claim: { tenantId: 'sentropic' as const, compatibility: compat(), ownership: ownership() },
+      standbyId: warm.id, quotaMiB: 512, uid: 1000, gid: 1000 };
+    const first = daemon.claimSandbox({ ...input, commandId: 'first' });
+    await expect(daemon.claimSandbox({ ...input, commandId: 'second' })).rejects.toThrowError(/already_claimed/);
+    await first;
+    await expect(daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'retry' })).rejects.toMatchObject({ status: 429 });
+    await daemon.stopSandbox('sentropic', warm.id, { commandId: 'stop-warm', stop: { retainOutput: false } });
+    expect((await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'retry' })).state).toBe('creating');
+  });
   it('runs creating -> running -> stopping -> stopped-output-retained -> exported -> destroyed', async () => {
     const { daemon, audit } = createExecutionNode();
     const created = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'create-1' });

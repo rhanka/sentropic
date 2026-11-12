@@ -8,7 +8,7 @@ FROM ${BASE_IMAGE} AS build
 WORKDIR /workspace
 COPY package.json package-lock.json ./
 COPY apps/sandbox-node apps/sandbox-node
-COPY scripts/ci/locked-tools.mjs scripts/ci/locked-tools.mjs
+COPY scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json scripts/ci/
 # Lockfile-exact dependency closure (no re-resolution).
 RUN node scripts/ci/locked-tools.mjs --prefix /workspace --ignore-scripts --no-audit --no-fund typescript@5.4.5 @types/node
 # Emit compiled daemon (tsconfig is noEmit by default for checks).
