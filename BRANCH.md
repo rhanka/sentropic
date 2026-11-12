@@ -44,3 +44,9 @@
 - [x] Lot 2: adapter, host exports, credential restriction, pricing and reconstruction.
 - [x] Lot 3: mocked routing, schema/error/deadline tests and residency documentation.
 - [ ] Lot 4: version 0.38.0, scoped checks, independent review and PR CI green.
+  - [x] Published npm version checked: 0.36.0; candidate 0.38.0 is greater.
+  - [x] make test-llm-mesh SCOPE=tests/decision- ENV=test-gemini-decisions: 39 files, 642 tests passed.
+  - [x] make typecheck-llm-mesh ENV=test-gemini-decisions: passed.
+  - [x] make lint-llm-mesh ENV=test-gemini-decisions: passed.
+  - [x] make scope-check ENV=test-llm-judge: PASS C2.
+  - [ ] Independent Muse review dispatched after Argon account failure.
