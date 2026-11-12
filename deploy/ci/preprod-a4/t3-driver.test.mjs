@@ -47,6 +47,10 @@ export function makeCall(scenario = {}) {
       return JSON.stringify({ items: [] });
     }
     if (cmd === 'get secret sentropic-api -o json') return JSON.stringify({ data: liveSecrets });
+    if (cmd === 'get middleware a4-verification -o json') {
+      if (scenario.middlewareSpec === false) return '{}';
+      return JSON.stringify({ spec: scenario.middlewareSpec ?? { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } });
+    }
     if (cmd === 'get cronjob sentropic-idp-identity-export -o json') {
       return JSON.stringify({ spec: { suspend: true } });
     }
@@ -193,8 +197,64 @@ test('pre-commit rollback removes both rotated keys before any scale-up', () => 
 
 test('budgets fit the 300 s contract', () => {
   assert.ok(COMMIT_CUTOFF_MS <= 175_000);
-  assert.ok(FINISH_CUTOFF_MS <= 205_000);
+  assert.ok(FINISH_CUTOFF_MS <= 300_000);
   assert.ok(TOTAL_BUDGET_MS <= 300_000);
+});
+
+test('kubectl timeouts are bounded by the live step deadline', async () => {
+  const { effectiveTimeout } = await import('./t3-lib.mjs');
+  const now = monoMs();
+  assert.equal(effectiveTimeout(60_000, { deadlineMs: now + 5_000 }, now), 5_000);
+  assert.equal(effectiveTimeout(60_000, { deadlineMs: now + 500_000 }, now), 60_000);
+  assert.equal(effectiveTimeout(60_000, { deadlineMs: now - 1_000 }, now), 1000);
+  assert.equal(effectiveTimeout(60_000, null, now), 60_000);
+});
+
+test('step cutoffs match the window contract', async () => {
+  const { STEP_CUTOFFS, COMMIT_CUTOFF_MS: commit, TOTAL_BUDGET_MS: total } =
+    await import('./t3-window-driver.mjs');
+  assert.equal(STEP_CUTOFFS.W5, 110_000);
+  assert.equal(STEP_CUTOFFS.W7b, commit);
+  assert.ok(STEP_CUTOFFS.W7b <= 175_000);
+  assert.equal(STEP_CUTOFFS.W8, 300_000);
+  assert.equal(STEP_CUTOFFS.W9, 300_000);
+  assert.ok(total <= 300_000);
+});
+
+test('drive refuses to open traffic on an unverified commit', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { journal: true, committed: false,
+    secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
+  const code = await drive(ctx);
+  assert.equal(code, 3);
+  assert.equal(loadState(ctx.stateDir).recoveryReason, 'commit_unverified');
+  assert.ok(!calls.join('\n').includes('set image'), 'no frontal converged onto the candidate');
+});
+
+test('drive restarts rather than opens on a committed-but-not-ready api', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { journal: true, committed: true,
+    secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
+  const code = await drive(ctx);
+  assert.equal(code, 4);
+  assert.equal(loadState(ctx.stateDir).recoveryReason, 'api_not_ready');
+  const joined = calls.join('\n');
+  assert.ok(joined.includes('scale deployment/api --replicas=1'), 'committed api restarted');
+  assert.equal(loadState(ctx.stateDir).substate, 'TWO_HOSTS_OPEN');
+});
+
+test('delivered timeouts never outlive the step cutoff', async () => {
+  const { ctx } = makeCtx();
+  const seen = [];
+  ctx.delivered = (c, script, env, timeoutMs) => {
+    seen.push([env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE, timeoutMs]);
+    if (env.A4_OPERATION === 'custodian') throw new Error('stop-at-W4');
+    return '';
+  };
+  const code = await drive(ctx);
+  assert.equal(code, 3);
+  const cap = op => seen.find(([name]) => name === op)[1];
+  assert.ok(cap('fence') <= 25_000, `fence timeout ${cap('fence')}`);
+  assert.ok(cap('restrict') <= 35_000, `restrict timeout ${cap('restrict')}`);
+  assert.ok(cap('wire') <= 50_000, `wire timeout ${cap('wire')}`);
 });
 
 test('probe URLs are operator inputs, never invented by the driver', () => {

@@ -37,8 +37,15 @@ export function withExecStdin(args, input) {
   return input !== undefined && args[0] === 'exec' ? ['exec', '-i', ...args.slice(1)] : args;
 }
 
-export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, print = () => {} }) {
-  return (args, input) => {
+export function effectiveTimeout(timeoutMs, timeoutRef, nowMs = monoMs()) {
+  const cap = timeoutRef?.deadlineMs != null
+    ? Math.max(1000, timeoutRef.deadlineMs - nowMs)
+    : Infinity;
+  return Math.min(timeoutMs, cap);
+}
+
+export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {} }) {
+  return (args, input, overrideMs) => {
     const effective = withExecStdin(args, input);
     const line = `kubectl --namespace ${namespace} ${effective.join(' ')}`;
     if (dryRun && (!probeReadOnly || !isReadOnly(args, execIsReadOnly))) {
@@ -48,7 +55,7 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
     const started = monoMs();
     const result = spawnSync('kubectl',
       ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective],
-      { input, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 });
+      { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 });
     if (probeReadOnly) print(`# ${(monoMs() - started)}ms ${line}`);
     if (result.error || result.status !== 0) {
       const err = new Error(`kubectl_failed: ${effective.slice(0, 3).join(' ')}`);
