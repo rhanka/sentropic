@@ -61,6 +61,12 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   Le refresh mk local est no-op hors contexte CI (pas de receipts :
   `siblingSelection: []`), d'ou l'edit chirurgical equivalent.
   Rollback: revert les 3 lignes.
+  SUPERSEDE (2026-11-12, run 6) : le pin 0.3.1 casse TOUS les installs du lane
+  (`npm` choisit le max satisfaisant `^0.3.0` = 0.3.1, tarball 404 -> 502).
+  Un bump transitif non publie est ininstallable dans le lane (pas d'injection
+  `file:` hors consommateurs directs) : pin reverte a 0.3.0 ci-dessous.
+  Le `siblings` check reste rouge par construction (voir rapport) : decision
+  proprietaire requise (gel C0 / lane cluster-mesh / sequence de publication).
 - No `blocked` / `deferred` / `cancelled` / `attention` items.
 
 ## AI Flaky tests
