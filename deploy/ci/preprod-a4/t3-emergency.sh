@@ -20,6 +20,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$STATE_DIR" ] && [ -n "$CONFIG" ] || { echo "usage: t3-emergency.sh --state-dir DIR --config FILE [--finish-open] [--dry-run]" >&2; exit 1; }
+if [ -n "$DRYRUN" ]; then
+  exec node "$HERE/t3-emergency-preview.mjs" "$STATE_DIR" "$CONFIG"
+fi
 
 # 1. Stop the automation: driver pids from the state file, then the watchdog.
 # Kills the whole process group plus direct children (SIGTERM then SIGKILL)
@@ -89,9 +92,10 @@ echo "# emergency: automation stopped, lock held"
 # 3. Freeze the writer, then classify. The helper prints progress on stderr
 # and exactly one JSON line on stdout.
 # shellcheck disable=SC2086
-CLASSIFY_JSON=$(node "$HERE/t3-emergency-classify.mjs" --kubeconfig-file "$KUBECONFIG_FILE" --namespace "$NAMESPACE" $DRYRUN | tail -n 1) || exit "$?"
+CLASSIFY_JSON=$(node "$HERE/t3-emergency-classify.mjs" --kubeconfig-file "$KUBECONFIG_FILE" --namespace "$NAMESPACE" $DRYRUN) || exit "$?"
 COMMITTED=$(node -e 'console.log(JSON.parse(process.argv[1]).committed)' "$CLASSIFY_JSON")
 LOCKS=$(node -e 'console.log(JSON.parse(process.argv[1]).locks)' "$CLASSIFY_JSON")
+[ "$LOCKS" = "0" ] || { echo 'emergency refused: migration locks not zero' >&2; exit 6; }
 echo "# emergency: classified committed=$COMMITTED locks=$LOCKS (after api stop)"
 
 # 4. Dispatch on the truth, never on the requested mode alone: finish-open
