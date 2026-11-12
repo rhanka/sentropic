@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sandbox-node-daemon
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: sandbox-node-daemon
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: sandbox-node-daemon
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentropic
+        app.kubernetes.io/component: sandbox-node-daemon
+    spec:
+      # DEFINITION ONLY — do NOT apply. The k8s session (S1-K1) owns
+      # provisioning, hardening, and the digest stamp (see PINS.md).
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: daemon
+          # S1-K1 replaces the tag below with the published digest recorded
+          # in PINS.md (build-artifact.sh output). Never use :latest.
+          image: ghcr.io/rhanka/sandbox-node-daemon:feat-sandbox-node-step1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              memory: 4Gi
+              cpu: "1"
+            limits:
+              # BHS b3-16 ceiling: burst slice MemoryMax 9 GiB per spec.
+              memory: 9Gi
+              cpu: "4"
+          volumeMounts:
+            - name: tenant-data
+              mountPath: /var/lib/execution-node
+            - name: run
+              mountPath: /run
+      volumes:
+        - name: tenant-data
+          hostPath:
+            path: /var/lib/execution-node
+            type: DirectoryOrCreate
+        - name: run
+          hostPath:
+            path: /run
+            type: Directory
