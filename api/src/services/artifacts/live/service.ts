@@ -77,7 +77,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
       maxPods: options.heavy.maxPods ?? MAX_BUILDER_PODS }) });
   const { bootstrap, supervisor } = composeSupervisor({ key: options.supervisorKey, channel, now: options.now,
     id: options.id, timeoutMs: SUPERVISOR_COMMAND_TIMEOUT_MS, installEnv: options.installEnv,
-    sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt) } });
+    sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt),
+      dependenciesArchive: receipt => cache.sealedArchive(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
     fetch: (pin, relay, signal) => fetchLockedTarball(pin, relay, undefined, signal),
     storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) },

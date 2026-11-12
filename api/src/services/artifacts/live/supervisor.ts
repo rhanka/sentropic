@@ -9,7 +9,7 @@ import type { QualifiedSupervisor } from './worker';
 import { createSupervisorChannel, failure, type ChannelOptions } from './supervisor-channel';
 import { classifyRecipeFailure, readRecipeDiagnostics } from './recipe-diagnostics';
 import { createCleanInstall } from './supervisor-install';
-import { OUTPUT_LIMITS, TREE_LIMITS, type TransferFile } from './supervisor-transfer';
+import { ARCHIVE_LIMITS, OUTPUT_LIMITS, TREE_LIMITS, type TransferFile } from './supervisor-transfer';
 
 /** Trusted byte sources: the pod has no egress (W2 §1), so the supervisor pushes every byte it needs. */
 export interface SupervisorSources {
@@ -20,6 +20,9 @@ export interface SupervisorSources {
   /** Verified cache stream (dependency cache `materialize`): seal and manifest rechecked on every use, then each file
    * rehashed as it is read, one file at a time. */
   dependencies(receipt: CacheReceipt): AsyncIterable<DependencyFile>;
+  /** Sealed-unit archive bytes for in-pod materialization (§7.1.2 consumption): one S3 GET, digest-checked,
+   * no API-side extraction. `undefined` for pre-L1 entries without an archive pointer (D8 fallback). */
+  dependenciesArchive?(receipt: CacheReceipt): Promise<{ bytes: Uint8Array; treeSha256: string } | undefined>;
   /** Trusted sink of the sealed candidate bytes for the SG4b upload; publication authority stays outside the pod. */
   candidate(input: { runtime: LiveRuntime; attempt: LiveAttempt; candidateDigest: string; files: readonly TransferFile[] }): Promise<void>;
 }
@@ -42,7 +45,7 @@ const cacheFailure = failure('dependency_cache_invalid');
 
 export function createSupervisorTransport(options: SupervisorOptions) {
   const core = createSupervisorChannel(options);
-  const { call, transfer, stream, snapshot } = core;
+  const { call, transfer, stream, streamPipelined, snapshot } = core;
   /** The stable output with the single shared candidate digest; a set that digest refuses is an invalid output. */
   async function output(runtime: LiveRuntime) {
     const files = await snapshot(runtime, 'output', OUTPUT_LIMITS, 'refuse', outputFailure);
@@ -78,15 +81,37 @@ export function createSupervisorTransport(options: SupervisorOptions) {
     },
     async dependencies(runtime, cache, mode) {
       if (mode.readOnly !== true || mode.verifyHash !== true) unavailable('dependencies_unconfirmed');
+      const archived = await options.sources.dependenciesArchive?.(cache).catch(() => undefined);
+      if (archived) {
+        if (!(archived.bytes instanceof Uint8Array) || archived.bytes.byteLength === 0) cacheFailure('invalid');
+        const file = { path: 'sealed.tar.zst', mode: 0o444, bytes: archived.bytes };
+        const sent = await streamPipelined(runtime, 'archive', [file], ARCHIVE_LIMITS, cacheFailure);
+        const data = await call(runtime, 'extractArchive', { ...sent, tree: archived.treeSha256, root: 'dependencies' });
+        if (typeof data.files !== 'number' || typeof data.bytes !== 'number') unavailable('dependencies_unconfirmed');
+        return;
+      }
       async function* readOnly(files: AsyncIterable<DependencyFile>) {
         for await (const file of files) {
           if (file.mode !== 292 && file.mode !== 365) cacheFailure('invalid');
           yield { path: file.path, mode: file.mode === 365 ? 0o555 : 0o444, bytes: file.bytes };
         }
       }
-      const sent = await stream(runtime, 'dependencies', readOnly(options.sources.dependencies(cache)), TREE_LIMITS, cacheFailure);
+      const sent = await streamPipelined(runtime, 'dependencies', readOnly(options.sources.dependencies(cache)), TREE_LIMITS, cacheFailure);
       const data = await call(runtime, 'dependencies', { ...sent, cacheKey: cache.key, cacheTree: cache.treeSha256, readOnly: true });
       if (data.treeDigest !== sent.treeDigest || data.readOnly !== true) unavailable('dependencies_unconfirmed');
+    },
+    /** Sealed-unit materialization in-pod (§7.1.2 consumption): the one `tar.zst` archive streams as a
+     * single file through the pipelined channel (`archive` target) and extracts under `/dependencies`
+     * via `extractArchive`, which verifies the archive digest, the tree digest, runs the link-derivation
+     * and freeze, and marks `sealed`. Falls back to per-file `dependencies` when the entry has no archive
+     * (pre-L1 seals, D8 transition). */
+    async dependenciesArchive(runtime, cache, archive: { bytes: Uint8Array; treeSha256: string }, mode: { readOnly: true; verifyHash: true }) {
+      if (mode.readOnly !== true || mode.verifyHash !== true) unavailable('dependencies_unconfirmed');
+      if (!(archive.bytes instanceof Uint8Array) || archive.bytes.byteLength === 0) cacheFailure('invalid');
+      const file = { path: 'sealed.tar.zst', mode: 0o444, bytes: archive.bytes };
+      const sent = await streamPipelined(runtime, 'archive', [file], ARCHIVE_LIMITS, cacheFailure);
+      const data = await call(runtime, 'extractArchive', { ...sent, tree: archive.treeSha256, root: 'dependencies' });
+      if (typeof data.files !== 'number' || typeof data.bytes !== 'number') unavailable('dependencies_unconfirmed');
     },
     /** Atomic projection: the pod applies every create/replace/delete of this revision or none of them. */
     async overlay(runtime, draft) {

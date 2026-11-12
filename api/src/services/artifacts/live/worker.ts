@@ -14,6 +14,8 @@ export interface QualifiedSupervisor {
   clear(runtime: LiveRuntime, paths: readonly string[]): Promise<void>;
   stage(runtime: LiveRuntime, source: SourceSnapshot): Promise<void>;
   dependencies(runtime: LiveRuntime, cache: CacheReceipt, options: { readOnly: true; verifyHash: true }): Promise<void>;
+  dependenciesArchive?(runtime: LiveRuntime, cache: CacheReceipt, archive: { bytes: Uint8Array; treeSha256: string },
+    options: { readOnly: true; verifyHash: true }): Promise<void>;
   overlay(runtime: LiveRuntime, draft: DraftSnapshot): Promise<void>;
   hostFile(runtime: LiveRuntime, path: string, source: string): Promise<void>;
   /** Separate heavy phase, op `prebundle { recipe: 'prebundle' }` (W3). The pod bootstrap writes its frozen

@@ -114,8 +114,10 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   // Forge reads through the in-process SG0-app lease at the binding recorded for the controller's runtime generation.
   const config = forgeConfig(env, deps.gitHubApp);
   const forgeBindings = createForgeBindings(createPostgresRemoteLiveRows(deps.pool), config);
+  const blobStore = deps.cacheBlobs(cacheStorage);
   const reads = createLeaseForgeReads({ config, bindings: forgeBindings, fetch: deps.fetch, now, id,
-    generation: runtimeGeneration(createPostgresLiveStore(deps.pool), key => service.remote.session(key)) });
+    generation: runtimeGeneration(createPostgresLiveStore(deps.pool), key => service.remote.session(key)),
+    units: { get: ref => blobStore.get(ref).catch(() => undefined), put: (ref, bytes) => blobStore.put(ref, bytes) } });
   // D0 binding view: generation and owner of the host's last reconcile; publication stays explicit (R4, no autoPublish).
   const binding: LivePorts['binding'] = async key => {
     const { generation, ownerId } = await service.remote.session(key);
@@ -123,7 +125,7 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
       automaticAuthorized: false, releaseId: null, releaseCommit: null, initialUnpublishedBranchEligible: false };
   };
   const schedule = (work: () => Promise<void>) => { void work().catch(error => deps.log('artifact_builder_job_failed', error)); };
-  service = createBuilderService({ pool: deps.pool, cacheBlobs: deps.cacheBlobs(cacheStorage), placement, supervisorKey: signer,
+  service = createBuilderService({ pool: deps.pool, cacheBlobs: blobStore, placement, supervisorKey: signer,
     relayUrl, kubernetes: deps.kubernetes(placement), host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
     authenticate: deps.authenticate, schedule, liveWaitMs: PRODUCT_LIVE_WAIT_MS, now, id, binding,
     installBudget: readInstallBudget(env), sizing: readWorkerSizing(env),
