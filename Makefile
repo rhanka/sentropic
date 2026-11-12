@@ -768,7 +768,7 @@ test-ci-image-receipts: ci-test-env ## Reject incorrect source, workflow, archiv
 
 .PHONY: test-ghcr-config-identity
 test-ghcr-config-identity: ci-test-env ## Regress config identity independently of Docker's image ID representation
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/image-receipt.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs scripts/ci/ghcr-images.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/image-receipt.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-api-image.test.mjs scripts/ci/resolve-ui-image.test.mjs scripts/ci/resolve-e2e-image.test.mjs scripts/ci/ghcr-images.test.mjs
 
 .PHONY: test-ghcr-e2e-qualification
 test-ghcr-e2e-qualification: ci-test-env ## Qualify provider cancellation accounting without a service stack
@@ -824,7 +824,7 @@ CI_IMAGE_BUILDX = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CA
 CI_IMAGE_BUILD = $(DISK_HYGIENE_GUARD) && $(CI_IMAGE_BUILDX)
 .PHONY: ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e
 ci-build-api:
-	@$(MAKE) ci-build-api-target IMAGE_KIND=api ENV=$(ENV)
+	@node scripts/ci/resolve-api-image.mjs $(ENV)
 ci-build-api-target:
 	@$(CI_IMAGE_BUILD) --target production -f api/Dockerfile -t $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) .
 	@$(MAKE) record-api-image ENV=$(ENV)
@@ -872,7 +872,7 @@ ci-build-ui-static-target:
 		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL) \
 		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL) .
 ci-build-e2e:
-	@$(MAKE) ci-build-e2e-target IMAGE_KIND=e2e ENV=$(ENV)
+	@node scripts/ci/resolve-e2e-image.mjs $(ENV)
 ci-build-e2e-target:
 	@$(CI_IMAGE_BUILD) -f e2e/Dockerfile -t $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) e2e
 
@@ -5058,7 +5058,7 @@ preprod-repin: ## Repin overlays/preprod to the deployed commit's API/UI digests
 	@PREPROD_PUBLISHED_KINDS="$(PREPROD_PUBLISHED_KINDS)" node scripts/ci/preprod-repin.mjs deploy/k8s/overlays/preprod/kustomization.yaml "$(PREPROD_PUBLICATIONS_DIR)"
 
 test-ghcr-images: ci-test-env test-ghcr-login test-ui-image-version ## Reject registry collisions and private or altered manifests
-	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-ui-image.test.mjs scripts/ci/preprod-repin.test.mjs
+	@docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/ghcr-images.test.mjs scripts/ci/publish-image.test.mjs scripts/ci/resolve-api-image.test.mjs scripts/ci/resolve-ui-image.test.mjs scripts/ci/resolve-e2e-image.test.mjs scripts/ci/preprod-repin.test.mjs
 
 .PHONY: test-ghcr-login
 test-ghcr-login: ci-test-env ## Exercise the real Make login recipe with fixture credentials
