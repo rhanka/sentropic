@@ -27,13 +27,17 @@ function killPid(pid) {
   // The driver runs delivered/kubectl children via spawnSync: killing only
   // the driver pid orphans the in-flight child, which keeps writing to the
   // cluster during the rollback. Kill the process group first (the driver
-  // is group leader when started from a shell), then direct children, then
-  // the pid itself. Every step is best-effort.
+  // is group leader when started from a shell), then direct children with
+  // SIGTERM, then SIGKILL the group, the direct children and their own
+  // children (kubectl grandchildren spawned by execution/ops/run). Every
+  // step is best-effort.
   try { process.kill(-pid, 'SIGTERM'); } catch { /* not group leader */ }
-  try { spawnSync('pkill', ['-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
+  try { spawnSync('pkill', ['-TERM', '-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
   try { process.kill(pid, 'SIGTERM'); } catch { return; }
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
   try { process.kill(-pid, 'SIGKILL'); } catch { /* not group leader */ }
+  try { spawnSync('pkill', ['-KILL', '-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
+  try { spawnSync('sh', ['-c', `for c in $(ps -o pid --ppid ${pid} 2>/dev/null | tail -n +2); do pkill -KILL -P $c 2>/dev/null || true; kill -KILL $c 2>/dev/null || true; done`], { timeout: 5000 }); } catch { /* no ps */ }
   try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
 }
 
@@ -87,7 +91,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const probeReadOnly = argv.includes('--probe-readonly');
   const timeoutRef = {};
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
-    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log });
+    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log, stateDir });
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly,
     tier: config.tier, postgresPod: config.postgresPod ?? 'postgres-0',
     probe: fetch, print: console.log };
