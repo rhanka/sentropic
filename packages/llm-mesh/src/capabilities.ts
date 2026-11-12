@@ -45,6 +45,7 @@ export interface StructuredOutputCapabilities {
 }
 
 export interface ReasoningCapabilities {
+  supportedEfforts?: readonly import('./generation.js').ReasoningEffort[];
   support: CapabilitySupport;
   tier: ReasoningTier;
   controls: CapabilitySupport;

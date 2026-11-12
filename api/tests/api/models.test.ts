@@ -93,6 +93,7 @@ describe('llm-mesh model projections', () => {
       'muse-spark-1.3',
       'muse-spark-1.3-contributor',
       'muse-wonder-1.0',
+      'muse-ember-1.0',
       'muse-wonder-full-1.0',
     ]);
     expect(data.models).toHaveLength(37);
