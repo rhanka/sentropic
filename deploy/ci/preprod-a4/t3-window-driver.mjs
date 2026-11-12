@@ -131,9 +131,18 @@ export function checkRbac(ctx) {
   }
 }
 
+const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
+  W5: 110_000, W6: 125_000, W7a: 135_000, W7b: 175_000, W8: 205_000 };
+
+// The watchdog kills only past the step's hard deadline: synchronous kubectl
+// phases (W0 matrix, rollout waits) legitimately block heartbeats, so staleness
+// alone is not a fault — staleness past the deadline is.
 function heartbeat(ctx, state, step) {
   state.step = step;
   state.heartbeatMonoMs = monoMs();
+  state.stepDeadlineMonoMs = state.t0MonoMs != null && STEP_CUTOFFS[step] != null
+    ? state.t0MonoMs + STEP_CUTOFFS[step]
+    : monoMs() + 120_000;
   saveState(ctx.stateDir, state);
 }
 
@@ -167,7 +176,8 @@ function baseEnv(ctx, extra = {}) {
 // or cutoff breach routes to recover(); the watchdog covers driver death.
 export async function drive(ctx) {
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
-    namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null };
+    namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
+    stepDeadlineMonoMs: monoMs() + 120_000 };
   saveState(ctx.stateDir, state);
   try {
     return await driveInner(ctx, state);

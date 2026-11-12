@@ -34,9 +34,10 @@ export async function poll(ctx) {
   const now = monoMs();
   const stale = now - (state.heartbeatMonoMs ?? 0) > STALE_MS;
   const over = state.t0MonoMs != null && now - state.t0MonoMs > TOTAL_BUDGET_MS;
+  const past = state.stepDeadlineMonoMs != null && now > state.stepDeadlineMonoMs;
   const alive = !pidDead(state.driverPid);
-  if (alive && !stale && !over) return 'waiting';
-  const reason = !alive ? 'watchdog_driver_dead' : over ? 'watchdog_budget' : 'watchdog_stale';
+  if (alive && !over && !(stale && past)) return 'waiting';
+  const reason = !alive ? 'watchdog_driver_dead' : over ? 'watchdog_budget' : 'watchdog_stale_past_deadline';
   for (const pid of [state.driverPid, state.childPid]) if (pid && !pidDead(pid)) killPid(pid);
   console.log(`watchdog_firing reason=${reason} step=${state.step}`);
   const code = await recover(ctx, state, reason);
