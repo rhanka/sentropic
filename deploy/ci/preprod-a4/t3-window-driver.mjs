@@ -231,7 +231,8 @@ function cliArg(argv, name) {
 // never a secret on argv. Spawns the watchdog detached, then drives W0..W9.
 if (import.meta.url === `file://${process.argv[1]}`) {
   const argv = process.argv.slice(2);
-  const config = JSON.parse(readFileSync(cliArg(argv, '--config'), 'utf8'));
+  const configPath = cliArg(argv, '--config');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
   const stateDir = cliArg(argv, '--state-dir');
   const dryRun = argv.includes('--dry-run');
   const probeReadOnly = argv.includes('--probe-readonly');
@@ -240,8 +241,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
-    '--state-dir', stateDir, '--kubeconfig-file', config.kubeconfigFile,
-    '--namespace', config.namespace, ...(dryRun ? ['--dry-run'] : [])],
+    '--state-dir', stateDir, '--config', configPath,
+    ...(dryRun ? ['--dry-run'] : [])],
     { detached: true, stdio: 'ignore' });
   watchdog.unref();
   try {
