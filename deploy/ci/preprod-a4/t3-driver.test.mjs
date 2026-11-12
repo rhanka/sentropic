@@ -205,6 +205,20 @@ test('watchdog waits on a live fresh driver and fires on death', async () => {
   assert.equal(loadState(dead.ctx.stateDir).watchdogDone, true);
 });
 
+test('watchdog tolerates a stale heartbeat inside the step deadline', async () => {
+  const { ctx } = makeCtx();
+  const sleeper = spawn('sleep', ['30']);
+  try {
+    saveState(ctx.stateDir, { step: 'W3', heartbeatMonoMs: monoMs() - 60_000,
+      driverPid: sleeper.pid, t0MonoMs: monoMs(), stepDeadlineMonoMs: monoMs() + 60_000,
+      namespace: 'sentropic-preprod' });
+    assert.equal(await poll(ctx), 'waiting');
+    assert.doesNotThrow(() => process.kill(sleeper.pid, 0));
+  } finally {
+    try { process.kill(sleeper.pid, 'SIGKILL'); } catch { /* already reaped */ }
+  }
+});
+
 test('watchdog enforces the total 300 s budget on a live driver', async () => {
   const { ctx, calls } = makeCtx();
   const sleeper = spawn('sleep', ['30']);
