@@ -12,6 +12,7 @@
 - **Allowed Paths (implementation scope)**:
   - `packages/llm-mesh/**`
   - `BRANCH.md`
+  - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -26,6 +27,7 @@
 - [x] Google AI Studio has no Canadian residency guarantee; opt-in by exact evaluator only.
 - [x] Documented responses omit served model identity. Preserve the existing identity gate and ship unqualified; never infer served identity from the request.
 - [x] Track import reserved for the designated conductor; this plan is the source artifact.
+- [x] BRGD-EX1: synchronize only the root lock's llm-mesh workspace version; required by the CI changes gate after a mandatory package bump. No dependency graph change; rollback restores the previous version cell.
 
 ## AI Flaky tests
 - [x] Mocked transport only.
