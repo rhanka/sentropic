@@ -149,4 +149,118 @@ export class ExecutionNodeDaemon {
   listSandboxes(tenantId: ExecutionNodeTenantId): SandboxRecord[] {
     return [...this.sandboxes.values()].filter(sandbox => sandbox.tenantId === tenantId);
   }
+
+  async createSandbox(input: {
+    spec: ExecutionNodeSandboxSpec;
+    ownership: ExecutionNodeOwnership;
+    commandId: string;
+    ticket?: TicketEnvelope;
+    warmStandby?: boolean;
+    compatibility?: ExecutionNodeClaimSpec['compatibility'];
+  }): Promise<SandboxRecord> {
+    if (input.spec.tenantId !== input.ownership.tenantId) {
+      throw new ExecutionNodeError('cross_tenant_base_forbidden', 'spec/ownership tenant mismatch');
+    }
+    if (input.ticket) this.requireTicket(input.ticket, input.spec.tenantId);
+    const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
+    return this.idempotent(input.spec.tenantId, input.commandId, input.spec, () => {
+      this.admission.admit(input.spec.tenantId, input.warmStandby === true ? 'standby' : 'live', input.commandId);
+      const id = randomUUID();
+      const paths = sandboxPaths(input.spec.tenantId, id);
+      const record: SandboxRecord = {
+        id,
+        tenantId: input.spec.tenantId,
+        state: input.warmStandby === true ? 'standby' : 'creating',
+        ownership: input.ownership,
+        compatibility: input.warmStandby === true ? input.compatibility : undefined,
+        poolOwned: input.warmStandby === true,
+        runtimeId: undefined,
+        outputSubPath: undefined,
+        exportedBytes: 0,
+        createdAt: new Date(this.now()).toISOString(),
+      };
+      this.sandboxes.set(this.key(record.tenantId, id), record);
+      this.audit.record('sandbox.created', record.tenantId, id, `mounts=${mounts.length}`);
+      void paths;
+      return record;
+    });
+  }
+
+  async promoteToRunning(tenantId: ExecutionNodeTenantId, id: string, input: {
+    commandId: string;
+    quotaMiB: number;
+    uid: number;
+    gid: number;
+    ticket?: TicketEnvelope;
+  }): Promise<SandboxRecord> {
+    const sandbox = this.getSandbox(tenantId, id);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    if (input.ticket) this.requireTicket(input.ticket, tenantId);
+    return this.idempotent(tenantId, input.commandId, { id, quotaMiB: input.quotaMiB }, async () => {
+      if (sandbox.state !== 'creating' && sandbox.state !== 'standby') {
+        throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
+      }
+      const paths = sandboxPaths(tenantId, id);
+      const { runtimeId } = await this.adapter.runSandbox({
+        tenantId,
+        sandboxUid: id,
+        mounts: [],
+        overlayUpper: paths.upper,
+        overlayWork: paths.work,
+        quotaMiB: input.quotaMiB,
+        uid: input.uid,
+        gid: input.gid,
+      });
+      sandbox.runtimeId = runtimeId;
+      sandbox.state = 'running';
+      this.audit.record('sandbox.running', tenantId, id, runtimeId);
+      return sandbox;
+    });
+  }
+
+  async claimSandbox(input: {
+    claim: ExecutionNodeClaimSpec;
+    commandId: string;
+    standbyId: string;
+    quotaMiB: number;
+    uid: number;
+    gid: number;
+    ticket?: TicketEnvelope;
+  }): Promise<SandboxRecord> {
+    if (input.claim.tenantId !== input.claim.ownership.tenantId) {
+      throw new ExecutionNodeError('cross_tenant_base_forbidden', 'claim/ownership tenant mismatch');
+    }
+    if (input.ticket) this.requireTicket(input.ticket, input.claim.tenantId);
+    const sandbox = this.getSandbox(input.claim.tenantId, input.standbyId);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${input.standbyId}`);
+    return this.idempotent(input.claim.tenantId, input.commandId, input.claim, async () => {
+      if (sandbox.state !== 'standby') {
+        throw new ExecutionNodeError('already_claimed', `sandbox ${sandbox.id} in state ${sandbox.state}`);
+      }
+      if (!sandbox.compatibility || !compatEqual(sandbox.compatibility, input.claim.compatibility)) {
+        throw new ExecutionNodeError('command_id_payload_mismatch', 'standby compatibility mismatch');
+      }
+      const promoted = await this.promoteToRunning(input.claim.tenantId, sandbox.id, {
+        commandId: `claim-promote:${input.commandId}`,
+        quotaMiB: input.quotaMiB,
+        uid: input.uid,
+        gid: input.gid,
+      });
+      promoted.poolOwned = false;
+      promoted.ownership = input.claim.ownership;
+      this.admission.release(input.claim.tenantId, 'standby');
+      this.audit.record('sandbox.claimed', promoted.tenantId, promoted.id);
+      return promoted;
+    });
+  }
+
+  renewSandbox(tenantId: ExecutionNodeTenantId, id: string): SandboxRecord {
+    const sandbox = this.getSandbox(tenantId, id);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    if (TERMINAL.has(sandbox.state)) {
+      throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}`);
+    }
+    this.audit.record('sandbox.renewed', tenantId, id, sandbox.state);
+    return sandbox;
+  }
 }
