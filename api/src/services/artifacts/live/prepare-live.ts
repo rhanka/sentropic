@@ -54,7 +54,8 @@ async function preparePod(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) 
   const events = eventsContext(ports, runtime.sessionId, 'live_start');
   const source = await ports.forge.snapshot(key, head);
   if (source.headSha !== head) throw new LiveError('git_head_moved');
-  const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime),
+  const cache = await runPhase(key, 'install', () => requireUserCache(ports.cache, source, runtime,
+    events ? { events } : {}),
     events ? { events } : {});
   const pod = await ports.heavy.pod(runtime.podName, () => ensureResponsivePod(ports, key, runtime));
   runtime = await transition(ports, key, runtime, state => {

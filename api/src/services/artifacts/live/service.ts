@@ -106,8 +106,11 @@ export function createArtifactLiveService(options: Pick<LivePorts,
             runtime = { ...runtime, podUid: pod.uid };
             try {
               await progress?.('seal');
+              const sealEvents = options.events ? { sink: options.events, invocationId: job.jobId,
+                operation: 'prewarm' as const, artifactId: key.artifactId } : undefined;
               return await cache.seal({ lockfile: source.lockfile, cacheIdentity: source.cacheIdentity,
-                stagingRef: source.stagingRef, gb1: source.gb1, runtime });
+                stagingRef: source.stagingRef, gb1: source.gb1, runtime }, undefined,
+                sealEvents ? { events: sealEvents } : {});
             } finally {
               await pods.remove(key, runtime).catch(() => undefined);
               await heavy.hold(runtime.podName, { pod: false }).catch(() => undefined);
