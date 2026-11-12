@@ -8,9 +8,9 @@ import { preCommitRollback } from './t3-rollback.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TOTAL_BUDGET_MS = 300_000;
-const COMMIT_CUTOFF_MS = 175_000;
-const FINISH_CUTOFF_MS = 205_000;
+export const TOTAL_BUDGET_MS = 300_000;
+export const COMMIT_CUTOFF_MS = 175_000;
+export const FINISH_CUTOFF_MS = 205_000;
 export const COMMIT_MARKER = 1793577600000;
 
 // RBAC matrix, 50 (resource, verb) couples from the executed command set.
@@ -148,7 +148,8 @@ export async function recover(ctx, state, reason) {
   state.apiReady = info.apiReady;
   saveState(ctx.stateDir, state);
   if (!info.committed) {
-    preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir });
+    preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
+      dryRun: ctx.dryRun, note: ctx.print });
     return 3;
   }
   const { probes, externalProbes } = buildProbes(ctx.config);
@@ -191,11 +192,14 @@ async function driveInner(ctx, state) {
   // B3: restrict only AFTER request.json exists (it asserts legacyWritersStopped).
   (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'restrict',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
-  try {
+  {
     const mwOut = ctx.call(['get', 'middleware', 'a4-verification', '-o', 'json']);
-    state.middlewareSpec = mwOut ? JSON.parse(mwOut).spec : null;
-    saveState(ctx.stateDir, state);
-  } catch { state.middlewareSpec = null; }
+    const parsed = mwOut ? JSON.parse(mwOut).spec ?? null : null;
+    if (parsed) {
+      state.middlewareSpec = parsed;
+      saveState(ctx.stateDir, state);
+    }
+  }
   state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
   saveState(ctx.stateDir, state);
   if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
