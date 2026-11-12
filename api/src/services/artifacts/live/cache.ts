@@ -398,6 +398,32 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
         yield { path: entry.path, mode: entry.mode, bytes: bytes! };
       }
     },
+    /** Sealed-unit archive bytes for in-pod materialization (§7.1.2 consumption): one S3 GET, digest
+     * check, no extraction API-side. Returns `undefined` for pre-L1 entries without an archive pointer
+     * (D8 transition dual-read: callers fall back to per-file `materialize`). Any mismatch quarantines
+     * as `sealed_unit_invalid`. */
+    async sealedArchive(receipt: CacheReceipt): Promise<{ bytes: Uint8Array; treeSha256: string } | undefined> {
+      const object = await read(receipt.key);
+      if (!object) invalid();
+      try {
+        verify(object, receipt.identity);
+        if (object.receipt.treeSha256 !== receipt.treeSha256) invalid();
+      } catch {
+        await ports.storage.quarantine(receipt.key);
+        return invalid();
+      }
+      const archive = object.receipt.archive;
+      if (!archive) return undefined;
+      try {
+        const stored = await ports.storage.getArchive(archive.ref);
+        if (!stored || sha256(stored) !== archive.sha256) throw new LiveError('sealed_unit_invalid');
+        return { bytes: stored, treeSha256: object.receipt.treeSha256 };
+      } catch (error) {
+        await ports.storage.quarantine(receipt.key);
+        if (error instanceof LiveError && error.code === 'sealed_unit_invalid') throw error;
+        throw new LiveError('sealed_unit_invalid');
+      }
+    },
   };
 }
 /** Byte sum of manifest rows (admit/seal-archive counts). */

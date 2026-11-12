@@ -28,6 +28,9 @@ const PUT_ENTRIES = 256;
 const PAGE_ENTRIES = 4096;
 /** Decision 07/11 (a): dependency and source trees (immo measured 49318 files / 816 MiB installed). */
 export const TREE_LIMITS = Object.freeze({ files: 65_536, fileBytes: 64 * 1024 * 1024, totalBytes: 1024 * 1024 * 1024 });
+/** Sealed-unit archive relay (§7.1.2): one `tar.zst` file per transfer (compressed immo ~150-190 MiB),
+ * so the per-file bound must admit the whole object while the total stays at the tree ceiling. */
+export const ARCHIVE_LIMITS = Object.freeze({ files: 16, fileBytes: 1024 * 1024 * 1024, totalBytes: 1024 * 1024 * 1024 });
 /** A-LIVE §8.3 stable output snapshot ceilings. */
 export const OUTPUT_LIMITS = Object.freeze({ files: 255, fileBytes: 16777216, totalBytes: 67108864 });
 const MODES = new Set([0o444, 0o555, 0o644, 0o755]);
@@ -201,7 +204,8 @@ export async function* extractTarZst(archive: Uint8Array, archiveBytes: number, 
     const out = queue.subarray(0, length); queue = queue.subarray(length);
     return out;
   };
-  const decompressed = Readable.from([Buffer.from(archive)]).pipe(zstd().createZstdDecompress());
+  const view = Buffer.from(archive.buffer, archive.byteOffset, archive.byteLength);
+  const decompressed = Readable.from([view]).pipe(zstd().createZstdDecompress());
   const iterator = decompressed[Symbol.asyncIterator]();
   const next = async (): Promise<Uint8Array | null> => {
     try { const step = await iterator.next(); return step.done ? null : step.value as Uint8Array; }

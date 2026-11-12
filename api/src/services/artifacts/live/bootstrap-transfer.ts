@@ -92,10 +92,66 @@ AGENT_SECTIONS.push(function transferOps(ctx) {
    * API reader — regular files only (no links, devices, absolute/dotdot/.git paths), 0444/0555 modes, running
    * counters, 20:1 decompression ratio bound, streaming (one file plus the window in memory). The tree digest
    * over extracted [path, mode, sha256] rows must equal tree, or the extraction refuses. */
+  const transferExists = (path) => agentFs.lstat(at(path)).then(() => true, () => false);
+  const transferLink = async (target, path) => {
+    await agentFs.mkdir(agentPath.dirname(at(path)), { recursive: true });
+    await agentFs.symlink(target, at(path));
+  };
+  async function transferLinkFromLockfile() {
+    let lock = null;
+    try { lock = JSON.parse(await agentFs.readFile(at('/workspace/package-lock.json'), 'utf8')); } catch { agentFail('failed', 'lockfile_missing'); }
+    if (!lock || ![2, 3].includes(lock.lockfileVersion) || !lock.packages || typeof lock.packages !== 'object'
+      || Array.isArray(lock.packages)) agentFail('failed', 'invalid_lockfile');
+    const prefixes = new Set(); let links = 0;
+    for (const path of Object.keys(lock.packages).sort()) {
+      if (!path) continue;
+      const parts = agentRelative(path).split('/');
+      const first = parts.indexOf('node_modules');
+      if (first < 0) continue;
+      const entry = lock.packages[path];
+      if (!entry || typeof entry !== 'object') agentFail('failed', 'invalid_lockfile');
+      prefixes.add(parts.slice(0, first).join('/'));
+      let owner = entry; let base = null;
+      if (entry.link === true) {
+        const resolved = agentSourcePath(entry.resolved);
+        owner = lock.packages[resolved];
+        if (!owner || typeof owner !== 'object') agentFail('failed', 'invalid_lockfile');
+        base = '/workspace/' + resolved;
+        await transferLink(base, '/dependencies/' + path); links++;
+      }
+      if (owner.bin === undefined) continue;
+      if (!owner.bin || typeof owner.bin !== 'object' || Array.isArray(owner.bin)) agentFail('failed', 'invalid_lockfile');
+      const binDir = '/dependencies/' + parts.slice(0, parts.lastIndexOf('node_modules') + 1).join('/') + '/.bin';
+      for (const name of Object.keys(owner.bin).sort()) {
+        if (!/^[A-Za-z0-9._@+-]+$/.test(name) || name === '.' || name === '..') agentFail('failed', 'invalid_lockfile');
+        const rel = agentRelative(agentPath.normalize(String(owner.bin[name])));
+        if (await transferExists(binDir + '/' + name)) continue;
+        await transferLink(base ? base + '/' + rel : agentPath.relative(binDir, '/dependencies/' + path + '/' + rel), binDir + '/' + name);
+        links++;
+      }
+    }
+    for (const prefix of [...prefixes].sort()) {
+      const nested = (prefix ? prefix + '/' : '') + 'node_modules';
+      if (!(await transferExists('/dependencies/' + nested))) continue;
+      await agentNoLinks(at, '/workspace', nested);
+      await transferLink('/dependencies/' + nested, '/workspace/' + nested); links++;
+    }
+    return links;
+  }
+  async function transferFreeze(dir) {
+    for (const name of await agentFs.readdir(at(dir))) {
+      if ((await agentFs.lstat(at(dir + '/' + name))).isDirectory()) await transferFreeze(dir + '/' + name);
+    }
+    await agentFs.chmod(at(dir), 0o555);
+  }
   ctx.define('extractArchive', ['transfer', 'treeDigest', 'tree', 'root'], async ({ transfer, treeDigest, tree, root }) => {
     agentArgs({ transfer, treeDigest, tree, root }, ['transfer', 'treeDigest', 'tree', 'root']);
     const base = root === 'workspace' ? '/workspace' : root === 'dependencies' ? '/dependencies' : null;
     if (base === null || typeof tree !== 'string' || !AGENT_SHA.test(tree)) agentFail('failed', 'invalid_args');
+    if (base === '/dependencies') {
+      if (state.sealed) agentFail('failed', 'dependencies_sealed');
+      if (!state.staged) agentFail('failed', 'phase_refused');
+    }
     const set = await ctx.commitTransfer(transfer, treeDigest, 'archive');
     try {
       if (set.files.length !== 1) agentFail('failed', 'invalid_archive');
@@ -180,6 +236,13 @@ AGENT_SECTIONS.push(function transferOps(ctx) {
         await feed;
         rows.sort((a, b) => (a[0] < b[0] ? -1 : 1));
         if (agentSha(JSON.stringify(rows)) !== tree) agentFail('failed', 'digest_mismatch');
+        if (base === '/dependencies') {
+          await transferLinkFromLockfile();
+          for (const name of await agentFs.readdir(at('/dependencies'))) {
+            if ((await agentFs.lstat(at('/dependencies/' + name))).isDirectory()) await transferFreeze('/dependencies/' + name);
+          }
+          state.sealed = true;
+        }
         return { files: rows.length, bytes: total };
       } finally { await handle.close(); }
     } finally { await set.dispose(); }
