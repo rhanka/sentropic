@@ -109,3 +109,97 @@ export function checkRbac(ctx) {
     }
   }
 }
+
+function heartbeat(ctx, state, step) {
+  state.step = step;
+  state.heartbeatMonoMs = monoMs();
+  saveState(ctx.stateDir, state);
+}
+
+// Recovery after any step failure, cutoff breach or driver fault. Re-reads
+// the truth (never trusts the in-memory step) then rolls back pre-commit or
+// converges post-commit. Returns the process exit code.
+export async function recover(ctx, state, reason) {
+  state.recoveryReason = reason;
+  saveState(ctx.stateDir, state);
+  const info = classify(ctx);
+  state.commitVerified = info.committed;
+  state.apiReady = info.apiReady;
+  saveState(ctx.stateDir, state);
+  if (!info.committed) {
+    preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir });
+    return 3;
+  }
+  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images });
+  return 4;
+}
+
+function baseEnv(ctx, extra = {}) {
+  return { A4_TIER: ctx.tier, A4_KUBECONFIG_FILE: ctx.config.kubeconfigFile,
+    A4_REQUEST_FILE: `${ctx.stateDir}/request.json`, A4_DRY_RUN: ctx.dryRun ? '1' : '0', ...extra };
+}
+
+// W0..W9 with hard per-step cutoffs measured from t0 (fence start). Any throw
+// or cutoff breach routes to recover(); the watchdog covers driver death.
+export async function drive(ctx) {
+  const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid };
+  saveState(ctx.stateDir, state);
+  checkRbac(ctx);
+  const t0 = monoMs();
+  state.t0MonoMs = t0;
+  const cutoff = ms => t0 + ms;
+  const left = () => cutoff(TOTAL_BUDGET_MS) - monoMs();
+  heartbeat(ctx, state, 'W1');
+  ctx.d1 = delivered(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'fence',
+    A4_AUTHORIZATION_FILE: ctx.config.authorizationFile,
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(30_000, left()));
+  if (monoMs() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
+  heartbeat(ctx, state, 'W2');
+  writeFileSync(`${ctx.stateDir}/request.json`, JSON.stringify(ctx.config.request), { mode: 0o600 });
+  // B3: restrict only AFTER request.json exists (it asserts legacyWritersStopped).
+  delivered(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'restrict',
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
+  state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
+  saveState(ctx.stateDir, state);
+  if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
+  heartbeat(ctx, state, 'W3');
+  ctx.d3 = delivered(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
+  if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
+  for (const [step, script, env, at] of [
+    ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }, 70_000],
+    ['W5', 'run.mjs', { A4_PHASE: 'snapshot' }, 100_000],
+    ['W6', 'run.mjs', { A4_PHASE: 'checkpoint' }, 125_000],
+    ['W7a', 'execution.mjs', { A4_ACTION: 'delete-custodian' }, 135_000],
+  ]) {
+    heartbeat(ctx, state, step);
+    delivered(ctx, script, { ...baseEnv(ctx), ...env,
+      A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(120_000, left()));
+    if (step === 'W5') {
+      delivered(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
+        A4_BUDGETS_FILE: ctx.config.budgetsFile,
+        A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
+      const now = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
+      if (now !== state.storesSha256) throw new Error('encrypted_stores_drift');
+    }
+    if (monoMs() > cutoff(at)) return recover(ctx, state, `${step}_cutoff`);
+  }
+  heartbeat(ctx, state, 'W7b');
+  if (monoMs() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
+  delivered(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'start-api',
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(120_000, left()));
+  const info = classify(ctx);
+  state.commitVerified = info.committed;
+  state.apiReady = info.apiReady;
+  saveState(ctx.stateDir, state);
+  heartbeat(ctx, state, 'W8');
+  if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
+  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images });
+  if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
+  state.step = 'DONE';
+  state.heartbeatMonoMs = monoMs();
+  saveState(ctx.stateDir, state);
+  return 0;
+}
