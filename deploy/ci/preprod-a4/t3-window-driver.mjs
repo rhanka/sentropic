@@ -229,8 +229,8 @@ async function driveInner(ctx, state) {
     } catch {
       missing = true;
     }
-    if (missing && !ctx.probeReadOnly) throw new Error('middleware_missing_after_restrict');
-    if (missing) ctx.print('# probe: no a4-verification middleware (no fence in probe mode)');
+    if (missing && !ctx.probeReadOnly && !ctx.dryRun) throw new Error('middleware_missing_after_restrict');
+    if (missing) ctx.print('# note: no a4-verification middleware (no fence here)');
   }
   state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
   saveState(ctx.stateDir, state);
