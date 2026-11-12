@@ -1,0 +1,75 @@
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+
+// Monotonic milliseconds shared by driver and watchdog. CLOCK_BOOTTIME via
+// /proc/uptime is immune to NTP steps; Date.now is log-only, never budget.
+export function monoMs() {
+  try {
+    const first = readFileSync('/proc/uptime', 'utf8').trim().split(/\s+/)[0];
+    const seconds = Number(first);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.floor(seconds * 1000);
+  } catch { /* fall through to wall clock (tests, non-Linux) */ }
+  return Date.now();
+}
+
+// Real pod selectors from deploy/k8s/base/30-api.yaml (B1: never `app=api`,
+// which matches nothing and would fake a zero-pod proof).
+export const podLabels = {
+  api: 'app.kubernetes.io/name=sentropic,app.kubernetes.io/component=api',
+  'auth-idp': 'app.kubernetes.io/name=sentropic,app.kubernetes.io/component=auth-idp',
+  ui: 'app.kubernetes.io/name=sentropic,app.kubernetes.io/component=ui',
+};
+
+const READ_ONLY = new Set(['get', 'auth', 'describe', 'logs', 'top', 'version', 'api-resources', 'kustomize', 'diff']);
+
+export function isReadOnly(args) {
+  return READ_ONLY.has(args[0]);
+}
+
+// kubectl runner with a hard timeout (Fable B1: the pilot kills its
+// subprocesses on a timer). Dry-run prints mutating commands and runs only
+// reads when probeReadOnly is set; plain dry-run executes nothing.
+export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, print = () => {} }) {
+  return (args, input) => {
+    const line = `kubectl --namespace ${namespace} ${args.join(' ')}`;
+    if (dryRun && (!probeReadOnly || !isReadOnly(args))) {
+      print(dryRunLine(line, input !== undefined));
+      return '';
+    }
+    const started = monoMs();
+    const result = spawnSync('kubectl',
+      ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...args],
+      { input, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 });
+    if (probeReadOnly) print(`# ${(monoMs() - started)}ms ${line}`);
+    if (result.error || result.status !== 0) {
+      const err = new Error(`kubectl_failed: ${args.slice(0, 3).join(' ')}`);
+      err.cause = result.error?.message ?? result.stderr?.slice(0, 300);
+      throw err;
+    }
+    return result.stdout;
+  };
+}
+
+function dryRunLine(line, hasInput) {
+  return hasInput ? `${line} <redacted-stdin>` : line;
+}
+
+export function loadState(dir) {
+  try {
+    return JSON.parse(readFileSync(`${dir}/t3-window-state.json`, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// Atomic 0600 write: tmp file + rename, never a partial state for the watchdog.
+export function saveState(dir, state) {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const tmp = `${dir}/t3-window-state.json.tmp`;
+  writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
+  renameSync(tmp, `${dir}/t3-window-state.json`);
+}
+
+export function utcNow() {
+  return new Date().toISOString();
+}
