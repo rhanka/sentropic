@@ -78,7 +78,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - [x] Add deploy/ci/preprod-a4/t3-driver.test.mjs (fault injection matrix, dry-run, budgets)
   - [x] Add api/tests/api/t3-classify.test.ts (migrated DB schema check, wrong column fails)
   - [x] Scoped runs: make test-preprod-a4 SCOPE=t3-driver.test.mjs ENV=test-t3-driver
-  - [ ] Scoped runs: make test-api-endpoints SCOPE=tests/api/t3-classify.test.ts ENV=test-t3-driver
+  - [x] Scoped runs: make test-api-endpoints SCOPE=tests/api/t3-classify.test.ts ENV=test-t3-driver
 - [x] **Lot 3 — Preprod read-only dry-run + report**
   - [x] Run driver DRY-RUN against sentropic-preprod read-only via docker-slot.sh
   - [x] Record read-only step latencies
