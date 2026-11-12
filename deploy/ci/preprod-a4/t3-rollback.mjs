@@ -20,11 +20,16 @@ export function waitZeroPods(call, deadlineMs, components = DEPLOYS) {
   }
 }
 
-export function removeRotatedKeys(call) {
+export function removeRotatedKeys(call, dryRun = false) {
   const secret = JSON.parse(call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
   const present = ROTATED_KEYS.filter(key => secret.data?.[key] !== undefined);
   if (present.length > 0) {
     const patch = present.map(key => ({ op: 'remove', path: `/data/${key}` }));
+    call(['patch', 'secret', 'sentropic-api', '--type=json', '-p', JSON.stringify(patch)]);
+  } else if (dryRun) {
+    // Pure dry-run reads nothing, so the get is empty: still print the exact
+    // removal command a real run would issue for both rotated keys.
+    const patch = ROTATED_KEYS.map(key => ({ op: 'remove', path: `/data/${key}` }));
     call(['patch', 'secret', 'sentropic-api', '--type=json', '-p', JSON.stringify(patch)]);
   }
   const after = JSON.parse(call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
@@ -48,7 +53,7 @@ export function preCommitRollback(ctx) {
   for (const deploy of DEPLOYS) call(['scale', `deployment/${deploy}`, '--replicas=0']);
   waitZeroPods(call, monoMs() + (ctx.zeroPodsTimeoutMs ?? 60_000));
   call(['delete', 'pod', 'sentropic-a4-custodian', '--ignore-not-found=true', '--wait=true', '--timeout=60s']);
-  const removed = removeRotatedKeys(call);
+  const removed = removeRotatedKeys(call, dryRun);
   if (preCmDir) {
     call(['apply', '-f', `${preCmDir}/pre-cm-api.yaml`]);
     call(['apply', '-f', `${preCmDir}/pre-cm-auth-idp.yaml`]);

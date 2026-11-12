@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { loadState, podLabels, runKubectl, saveState } from './t3-lib.mjs';
+import { loadState, monoMs, podLabels, runKubectl, saveState } from './t3-lib.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -21,7 +21,16 @@ function deployReady(call, deploy, image) {
     && d.status?.observedGeneration === d.metadata?.generation && current === image;
 }
 
-export function ensureStarted(call, deploy, image) {
+export function ensureStarted(call, deploy, image, opts = {}) {
+  if (opts.dryRun) {
+    // Pure dry-run executes nothing (not even reads): print the exact
+    // convergence commands instead of verifying readiness.
+    opts.print?.(`# dry-run: ensure ${deploy} on ${image}`);
+    call(['set', 'image', `deployment/${deploy}`, `${deploy}=${image}`]);
+    call(['scale', `deployment/${deploy}`, '--replicas=1']);
+    call(['rollout', 'status', `deployment/${deploy}`, '--timeout=120s']);
+    return;
+  }
   if (deployReady(call, deploy, image)) return;
   const d = JSON.parse(call(['get', 'deployment', deploy, '-o', 'json']) || '{}');
   const current = d.spec?.template?.spec?.containers?.find(c => c.name === deploy)?.image;
@@ -54,8 +63,15 @@ export function reconcileRestrictSafe(ctx, state) {
   for (const component of ['ui', 'auth-idp']) {
     if (podsOf(call, component).length > 0) call(['scale', `deployment/${component}`, '--replicas=0']);
   }
+  // Pods linger in Terminating after the scale call: wait for them instead
+  // of failing the repair on the first sighting (a real cluster never
+  // reaches zero in the same millisecond).
+  const deadline = monoMs() + (ctx.frontalsTimeoutMs ?? 30_000);
   for (const component of ['ui', 'auth-idp']) {
-    if (podsOf(call, component).length > 0) throw new Error(`frontal_not_zero: ${component}`);
+    while (podsOf(call, component).length > 0) {
+      if (monoMs() > deadline) throw new Error(`frontal_not_zero: ${component}`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+    }
   }
   if (!mw && !ctx.dryRun) throw new Error('middleware_spec_missing');
   if (!existing) {
@@ -73,17 +89,22 @@ export function reconcileRestrictSafe(ctx, state) {
 
 export async function finishOpen(ctx) {
   const { call, probe, state, save, images, probes = [], externalProbes = [] } = ctx;
+  const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}) };
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
     reconcileRestrictSafe(ctx, state);
-    ensureStarted(call, 'ui', images.ui);
-    ensureStarted(call, 'auth-idp', images.candidate);
-    for (const p of probes) await runProbe(probe, p);
+    ensureStarted(call, 'ui', images.ui, dry);
+    ensureStarted(call, 'auth-idp', images.candidate, dry);
+    for (const p of probes) await runProbe(probe, p, dry);
     state.substate = 'ACCEPTED';
     state.acceptedSha256 = createHash('sha256').update(JSON.stringify(probes.map(p => p.id))).digest('hex');
     save(state);
   }
   if (state.substate === 'ACCEPTED') {
-    if (!deployReady(call, 'api', images.candidate)) throw new Error('api_not_ready_accepted');
+    if (ctx.dryRun) {
+      (ctx.print ?? (() => {}))('# dry-run: skip api readiness gate, resume pgbackup');
+    } else if (!deployReady(call, 'api', images.candidate)) {
+      throw new Error('api_not_ready_accepted');
+    }
     const pg = JSON.parse(call(['get', 'cronjob', 'pgbackup', '-o', 'json']) || '{}');
     if (pg.spec?.suspend !== false) {
       call(['patch', 'cronjob', 'pgbackup', '--type=merge', '-p', '{"spec":{"suspend":false}}']);
@@ -108,12 +129,16 @@ export async function finishOpen(ctx) {
     save(state);
   }
   if (state.substate === 'TWO_HOSTS_OPEN') {
-    for (const p of externalProbes) await runProbe(probe, p);
+    for (const p of externalProbes) await runProbe(probe, p, dry);
   }
   return state;
 }
 
-async function runProbe(probe, p) {
+async function runProbe(probe, p, opts = {}) {
+  if (opts.dryRun) {
+    opts.print?.(`# dry-run: probe ${p.id} ${p.url} expect ${p.expect}`);
+    return;
+  }
   const res = await probe(p.url, { ...p.options, signal: AbortSignal.timeout(p.timeoutMs ?? 5000) });
   await res.body?.cancel?.();
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
@@ -136,7 +161,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     const done = await finishOpen({ call, probe: fetch, state,
       save: next => saveState(stateDir, next), images: config.images,
-      probes: config.probes ?? [], externalProbes: config.externalProbes ?? [] });
+      probes: config.probes ?? [], externalProbes: config.externalProbes ?? [],
+      dryRun, print: console.log });
     console.log(`finish_open_ok substate=${done.substate}`);
   } catch (err) {
     console.error(`finish_open_failed: ${err.message}`);
