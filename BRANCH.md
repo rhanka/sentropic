@@ -40,6 +40,11 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing file + failure signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- [ ] Flaky candidate (unrelated, no merge requested): CI run 43153823649 `test-e2e (5)`,
+  `e2e/tests/00-ai-generation.spec.ts` — `Failed to start generation: Impossible de creer
+  un brouillon de dossier` + `waitForResponse` 60 s timeout (provider-side signature,
+  no UI/chat/generation path touched by this branch). Awaiting re-run on the fixed head
+  before any verdict.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)

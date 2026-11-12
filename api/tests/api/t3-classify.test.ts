@@ -5,10 +5,24 @@ import { Pool } from 'pg';
 import { runMigrations } from '../../src/db/run-migrations';
 import { prepareCmFixtureCutover } from '../utils/cm-fresh-database';
 import { artifactMigrationAssets } from '../../src/services/artifacts/host-storage';
-import { splitSql } from '../../../deploy/ci/preprod-a4/t3-window-driver.mjs';
+
+// Local `-- Qn:` section splitter (same contract as the driver splitSql in
+// deploy/ci/preprod-a4/t3-window-driver.mjs, asserted there by
+// t3-driver.test.mjs). Kept local so this test never reaches outside api/:
+// the CI api image ships api/ but never deploy/.
+function splitSql(text: string): Record<string, string> {
+  const parts: Record<string, string> = {};
+  let current: string | null = null;
+  for (const line of text.split('\n')) {
+    const m = line.match(/^-- (Q[1-6]):/);
+    if (m) { current = m[1]; parts[current] = ''; continue; }
+    if (current && !line.startsWith('--')) parts[current] += `${line}\n`;
+  }
+  return parts;
+}
 
 const sql = splitSql(readFileSync(
-  new URL('../../../deploy/ci/preprod-a4/t3-classify.sql', import.meta.url), 'utf8'));
+  new URL('./t3-classify.sql', import.meta.url), 'utf8'));
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 let database: Pool;
