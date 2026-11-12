@@ -7,6 +7,20 @@ import { AuditLog } from './audit.js';
 import { TenantBaseRegistry } from './mounts.js';
 import { FakeRuntimeAdapter, RunscRuntimeAdapter, type RuntimeAdapter } from './runtime-adapter.js';
 
+export type {
+  ExecutionNodeBaseKind,
+  ExecutionNodeBaseRef,
+  ExecutionNodeClaimSpec,
+  ExecutionNodeExportSpec,
+  ExecutionNodeLifecycleState,
+  ExecutionNodeOwnership,
+  ExecutionNodeQuota,
+  ExecutionNodeSandboxSpec,
+  ExecutionNodeStandbyCompatibility,
+  ExecutionNodeStopSpec,
+  ExecutionNodeTenantId,
+  ExecutionNodeTicket,
+} from '../../../packages/contracts/src/execution-node-v1.js';
 export * from './errors.js';
 export * from './tickets.js';
 export * from './runtime-adapter.js';
