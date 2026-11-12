@@ -24,6 +24,13 @@ if [ -n "$DRYRUN" ]; then
   exec node "$HERE/t3-emergency-preview.mjs" "$STATE_DIR" "$CONFIG"
 fi
 
+# Capture the original fence budget before stopping anything. After expiry,
+# refuse automated writes explicitly instead of silently starting a new window.
+T3_STATE_DIR="$STATE_DIR"
+export T3_STATE_DIR
+T3_DEADLINE_MONO_MS=$(node --input-type=module -e "import { recoveryDeadline } from 'file://$HERE/t3-lib.mjs'; console.log(recoveryDeadline(process.argv[1]));" "$STATE_DIR") || exit "$?"
+export T3_DEADLINE_MONO_MS
+
 # 1. Preserve command group identities across TERM, parent death and KILL.
 # Refuse recovery if any command remains alive; include the named watchdog.
 node "$HERE/t3-processes.mjs" "$STATE_DIR"
