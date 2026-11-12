@@ -12,9 +12,7 @@ COPY scripts/ci/locked-tools.mjs scripts/ci/locked-tools.mjs
 # Lockfile-exact dependency closure (no re-resolution).
 RUN node scripts/ci/locked-tools.mjs --prefix /workspace --ignore-scripts --no-audit --no-fund typescript@5.4.5 @types/node
 # Emit compiled daemon (tsconfig is noEmit by default for checks).
-RUN npx --no-install tsc --project apps/sandbox-node/tsconfig.json \
-  --noEmit false --rootDir apps/sandbox-node/src --outDir apps/sandbox-node/dist \
-  --project apps/sandbox-node/tsconfig.build.json
+RUN npx --no-install tsc --project apps/sandbox-node/tsconfig.build.json
 
 FROM ${BASE_IMAGE} AS runtime
 WORKDIR /srv/sandbox-node
