@@ -88,6 +88,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - No UI change, no UAT checkpoint for this step.
 
 ## Plan / Todo (lot-based)
+- [x] RUN 2 AMD-1/8: account complete memory.current and fixed 768/1664 MiB reservations, reject memory pressure before OOM; capacity regression tests.
 - [x] RUN 2: wire publish admission into daemon, warm claim transfer, canonical builder storage; standalone container qualification target.
 - [x] RUN 2 AMD-8/10: warm live OR standby admission, rejection before allocation and reservation transfer tests.
 - [x] RUN 2 AMD-10: bounded single global publish queue with strict tenant alternation and queue-full rejection tests.

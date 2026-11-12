@@ -1,4 +1,4 @@
-import type { ExecutionNodeTenantId } from './contract.js';
+import { EXECUTION_NODE_CAPACITY as capacity, EXECUTION_NODE_TENANT_SLICE_DEFAULTS, type ExecutionNodeTenantId } from './contract.js';
 import { ExecutionNodeError } from './errors.js';
 import { BuildQueue } from './build-queue.js';
 
@@ -28,7 +28,8 @@ export class ExecutionNodeAdmission {
 
   constructor(
     quotas: Record<ExecutionNodeTenantId, TenantSlotQuota>,
-    options: { globalMaxLive?: number; retryAfterMs?: number } = {},
+    private readonly options: { globalMaxLive?: number; retryAfterMs?: number;
+      memoryCurrentMiB?: (tenantId: ExecutionNodeTenantId) => number } = {},
   ) {
     this.quotas = quotas;
     this.globalMaxLive = options.globalMaxLive ?? Number.POSITIVE_INFINITY;
@@ -37,6 +38,33 @@ export class ExecutionNodeAdmission {
       sentropic: { live: 0, standby: 0 },
       immo: { live: 0, standby: 0 },
     };
+  }
+
+  reservedMiB(tenantId: ExecutionNodeTenantId): number {
+    const slots = this.used[tenantId];
+    return (slots.live + slots.standby) * capacity.sessionMiB
+      + (this.builds.snapshot().holderTenantId === tenantId ? capacity.buildMiB : 0);
+  }
+
+  private checkMemory(tenantId: ExecutionNodeTenantId, additionalMiB: number): void {
+    const tenants = ['sentropic', 'immo'] as const;
+    const usage = (id: ExecutionNodeTenantId) => Math.max(this.reservedMiB(id), this.options.memoryCurrentMiB?.(id) ?? 0);
+    if (usage(tenantId) + additionalMiB > 2560
+      || tenants.reduce((sum, id) => sum + usage(id), 0) + additionalMiB > capacity.reservableMiB) {
+      throw new ExecutionNodeError('tenant_quota_exceeded', 'memory reservation exhausted', 250);
+    }
+  }
+
+  async admitBuild(tenantId: ExecutionNodeTenantId): Promise<void> {
+    await this.builds.acquire(tenantId);
+    try { this.checkMemory(tenantId, 0); }
+    catch (error) { this.builds.release(tenantId); throw error; }
+  }
+
+  quotaSnapshot(tenantId: ExecutionNodeTenantId, controlGroup: string) {
+    return { tenantId, limits: EXECUTION_NODE_TENANT_SLICE_DEFAULTS[tenantId], controlGroup,
+      usage: { memoryCurrentBytes: (this.options.memoryCurrentMiB?.(tenantId) ?? 0) * 1048576,
+        reservedMemoryBytes: this.reservedMiB(tenantId) * 1048576 }, globalBuildSlot: this.builds.snapshot() };
   }
 
   snapshot(tenantId: ExecutionNodeTenantId): AdmissionSnapshot {
@@ -61,6 +89,7 @@ export class ExecutionNodeAdmission {
         this.retryAfterMs,
       );
     }
+    this.checkMemory(tenantId, capacity.sessionMiB);
     this.used[tenantId][slot] += 1;
     if (slot === 'live') this.live += 1;
   }
