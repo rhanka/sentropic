@@ -208,6 +208,22 @@ test('kill after commit converges forward with no legacy boot', async () => {
   assert.equal(loadState(ctx.stateDir).substate, 'TWO_HOSTS_OPEN');
 });
 
+test('committed but not ready api restarts without legacy boot (U2b)', async () => {
+  const { ctx, calls } = makeCtx({
+    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    scenario: { journal: true, committed: true },
+  });
+  let n = 0;
+  ctx.delivered = () => { if (++n >= 9) throw new Error('driver_killed'); return ''; };
+  const code = await drive(ctx);
+  assert.equal(code, 4);
+  const joined = calls.join('\n');
+  assert.ok(joined.includes('scale deployment/api --replicas=0'), 'U2b stops the dead api');
+  assert.ok(joined.includes('scale deployment/api --replicas=1'), 'U2b restarts it');
+  assert.ok(!joined.includes('rollout undo'), 'no legacy boot after commit');
+  assert.equal(loadState(ctx.stateDir).substate, 'TWO_HOSTS_OPEN');
+});
+
 test('watchdog waits on a live fresh driver and fires on death', async () => {
   const live = makeCtx();
   saveState(live.ctx.stateDir, { step: 'W3', heartbeatMonoMs: monoMs(),
