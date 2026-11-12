@@ -39,22 +39,16 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   Reason: `npm ci` rejects a lock whose `packages/` entry mismatches
   `packages/contracts/package.json`; no dependency re-resolution.
   Impact: version string only. Rollback: revert the 1 line.
-- `BR-SN1-EX2` (declared 2026-11-12, owner: agent-core): semver consumer
-  sync for the `0.4.0` minor (`rules/workflow.md`, Dependency authoring).
-  `^0.3.0` excludes `0.4.0`, so the 4 consumers move to `^0.4.0`
-  (`packages/chat-core`, `cluster-mesh`, `comments`, `events`, 1 line each)
-  with matching spec lines in `package-lock.json` (4), `api/package-lock.json`
-  (2) and `ui/package-lock.json` (2). Range-only, no logic change.
-  Rollback: revert the 12 lines.
-- `BR-SN1-EX3` (declared 2026-11-12, owner: agent-core): patch bumps forced
-  by the exact-artifact guard (CI run 3 `package-candidates` /
-  `validate-events|chat-core|comments` : published version + changed dep map
-  => `bump required`). `events 0.2.1->0.2.2`, `chat-core 0.3.2->0.3.3`,
-  `comments 0.3.1->0.3.2` (1 line each) + version-field syncs in
-  `package-lock.json` (3), `api/package-lock.json` (1, comments),
-  `ui/package-lock.json` (1, chat-core). `cluster-mesh@0.26.0-dev.24`
-  verified NOT published (`make pack-cluster-mesh` local PASS) : no bump.
-  No logic change. Rollback: revert the 8 lines.
+- `BR-SN1-EX4` (declared 2026-11-12, owner: agent-core): pivot minor->patch.
+  `0.4.0` + consumer sync (EX2/EX3, reverted) broke the L3a-frozen C0 gate
+  (`comments-contract-boundaries.spec.ts` pins `packages/comments/package.json`
+  via `package-zod4-migration.json`; only the digest-bound Zod migration is
+  accepted) and hardcoded `chat-core-host.spec.ts` (`0.3.2`). Amending that
+  freeze is out of mandate (other scope, owner decision). `0.3.1` keeps every
+  `^0.3.0` consumer spec satisfied, dep maps unchanged, frozen pins intact.
+  Semver-letter tradeoff recorded: the `minor for feature` upgrade (with C0
+  migration) is left to the owner as S1-K1 remainder. Rollback: revert the
+  2 lines (`contracts` package.json + lock `packages/` entry).
 - No `blocked` / `deferred` / `cancelled` / `attention` items.
 
 ## AI Flaky tests
