@@ -54,6 +54,10 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   un brouillon de dossier` + `waitForResponse` 60 s timeout (provider-side signature,
   no UI/chat/generation path touched by this branch). Awaiting re-run on the fixed head
   before any verdict.
+- [ ] Flaky candidate (unrelated, no merge requested): CI run 43225518369 `test-e2e (4)`,
+  `e2e/tests/02-organizations.spec.ts:391` — `page.waitForURL: Timeout 10000ms` on detail
+  field editability (timing-only signature, no app/api/ui/auth-idp/package/migration
+  path touched by this branch). Repassed 2m9s with no code change on re-run of the job.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)

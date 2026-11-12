@@ -28,7 +28,21 @@ export function makeCall(scenario = {}) {
     const cmd = args.join(' ');
     if (cmd.startsWith('patch secret sentropic-api')) {
       const patch = JSON.parse(args[args.indexOf('-p') + 1]);
-      for (const op of patch) delete liveSecrets[op.path.replace('/data/', '')];
+      if (Array.isArray(patch)) {
+        for (const op of patch) {
+          if (op.op === 'remove') delete liveSecrets[op.path.replace('/data/', '')];
+          else if (op.op === 'add' || op.op === 'replace') liveSecrets[op.path.replace('/data/', '')] = op.value;
+        }
+      } else if (patch?.data) {
+        Object.assign(liveSecrets, patch.data);
+      }
+      return '';
+    }
+    if (cmd.startsWith('patch secret auth-idp-session-signing')) {
+      const patch = JSON.parse(args[args.indexOf('-p') + 1]);
+      if (patch?.data) {
+        createdSecrets['auth-idp-session-signing'] = { data: { ...(createdSecrets['auth-idp-session-signing']?.data ?? {}), ...patch.data } };
+      }
       return '';
     }
     if (cmd.startsWith('auth can-i')) return 'yes';
@@ -51,7 +65,7 @@ export function makeCall(scenario = {}) {
       }
       return JSON.stringify({ items: [] });
     }
-    if (cmd === 'apply -f -' && typeof input === 'string') {
+    if ((cmd === 'apply -f -' || cmd === 'create -f -') && typeof input === 'string') {
       try {
         const doc = JSON.parse(input);
         if (doc?.kind === 'Secret' && doc.metadata?.name === 'sentropic-api') {
@@ -185,10 +199,12 @@ test('W3 poses the rotation keys as explicit steps after wire', async () => {
   const { ctx, calls } = makeCtx({ config: { rotationKeyFiles: files } });
   const { applyRotationKeys } = await import('./t3-window-driver.mjs');
   applyRotationKeys(ctx);
-  assert.equal(calls.filter(c => c === 'apply -f -').length, 2);
-  assert.ok(!calls.join('\n').includes('test-jwt-secret'), 'values never in argv');
-  assert.ok(!calls.join('\n').includes('test-enc-key'), 'values never in argv');
-  assert.ok(!calls.join('\n').includes('test-idp-jwt'), 'values never in argv');
+  const joined = calls.join('\n');
+  assert.ok(!joined.includes('apply -f -'), 'no apply, merge patch only');
+  assert.ok(joined.includes('patch secret sentropic-api --type=merge'), 'merge patch used');
+  assert.ok(!joined.includes('test-jwt-secret'), 'values never in argv');
+  assert.ok(!joined.includes('test-enc-key'), 'values never in argv');
+  assert.ok(!joined.includes('test-idp-jwt'), 'values never in argv');
 });
 
 test('W3 fails closed without rotation key files', async () => {
@@ -658,7 +674,7 @@ A="$*"
 case "$A" in
   *"get pods"*) echo '{"items":[]}';;
   *"get middleware"*) echo '{"spec":{"ipAllowList":{"sourceRange":["9.9.9.9/32"]}}}';;
-  *"get deployment api "*) echo '{"spec":{"replicas":1,"template":{"spec":{"containers":[{"name":"api","image":"candidate-img"}]}}},"status":{"replicas":1,"readyReplicas":1,"observedGeneration":7},"metadata":{"generation":7}}';;
+  *"get deployment api "*) if [ -f "$S/scaled-api" ]; then echo '{"spec":{"replicas":1,"template":{"spec":{"containers":[{"name":"api","image":"candidate-img"}]}}},"status":{"replicas":1,"readyReplicas":1,"observedGeneration":7},"metadata":{"generation":7}}'; else echo '{"spec":{"replicas":0},"status":{"replicas":0}}'; fi;;
   *"get deployment "*) N=$(printf '%s' "$A" | sed 's/.*get deployment \\([^ ]*\\).*/\\1/'); if [ -f "$S/scaled-$N" ]; then IMG="candidate-img"; [ "$N" = "ui" ] && IMG="ui-img"; echo "{\\"spec\\":{\\"replicas\\":1,\\"template\\":{\\"spec\\":{\\"containers\\":[{\\"name\\":\\"$N\\",\\"image\\":\\"$IMG\\"}]}}},\\"status\\":{\\"replicas\\":1,\\"readyReplicas\\":1,\\"observedGeneration\\":7},\\"metadata\\":{\\"generation\\":7}}"; else echo '{"spec":{"replicas":0},"status":{"replicas":0}}'; fi;;
   *"scale deployment/"*"--replicas=1") N=$(printf '%s' "$A" | sed 's/.*scale deployment\\/\\([^ ]*\\).*/\\1/'); touch "$S/scaled-$N";;
   *"exec "*) IN=$(cat); case "$IN" in
@@ -685,4 +701,95 @@ esac
   assert.ok(out.includes('finish_open_ok substate=TWO_HOSTS_OPEN'), 'converged forward');
   assert.ok(!out.includes('rollout undo'), 'no legacy boot after commit');
   assert.ok(!out.includes('patch secret sentropic-api'), 'no key removal after commit');
+});
+
+// RUN 4 — Argon round-2 rework: every new BLOCKER/MAJOR first seen red here.
+test('recover resets an expired step deadline so kubectl keeps a usable timeout', async () => {
+  const { ctx } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==' } } });
+  const { recover } = await import('./t3-window-driver.mjs');
+  const { monoMs } = await import('./t3-lib.mjs');
+  ctx.timeoutRef = { deadlineMs: monoMs() - 5_000 };
+  const state = { step: 'W7b', namespace: 'sentropic-preprod', t0MonoMs: monoMs() };
+  const code = await recover(ctx, state, 'test-deadline-reset');
+  assert.equal(code, 3);
+  assert.ok(ctx.timeoutRef.deadlineMs - monoMs() > 10_000, 'recovery deadline moved to the future');
+});
+
+test('recover waits for advisory locks to drain instead of failing fast', async () => {
+  let classifies = 0;
+  const { ctx, calls } = makeCtx({ scenario: { journal: true, locks: 0, secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
+  const origCall = ctx.call;
+  ctx.call = (args, input) => {
+    if (args[0] === 'exec' && String(input ?? '').includes('journal_present')) {
+      classifies += 1;
+      return classifies === 1 ? 't|1\n' : 't|0\n';
+    }
+    return origCall(args, input);
+  };
+  const { recover } = await import('./t3-window-driver.mjs');
+  const code = await recover(ctx, { step: 'W7b', namespace: 'sentropic-preprod', t0MonoMs: monoMs() }, 'test-lock-wait');
+  assert.equal(code, 3, 'rollback after the lock drained');
+  assert.ok(classifies >= 2, 'classify re-read after the first locked read');
+  assert.ok(calls.join('\n').includes('patch secret sentropic-api'));
+});
+
+test('finishOpen restarts a stopped api before opening traffic', async () => {
+  const { ctx, calls } = makeCtx({
+    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    scenario: {},
+  });
+  const { finishOpen } = await import('./t3-finish-open.mjs');
+  const state = { namespace: 'sentropic-preprod', middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+  const images = { candidate: CANDIDATE, ui: UI_IMAGE };
+  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+    save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
+  const joined = calls.join('\n');
+  assert.ok(joined.includes('scale deployment/api --replicas=1'), 'stopped api restarted before open');
+  assert.equal(state.substate, 'TWO_HOSTS_OPEN');
+});
+
+test('finishOpen CLI builds probes from config.endpoints, not only config.probes', async () => {
+  const src = readFileSync(new URL('./t3-finish-open.mjs', import.meta.url), 'utf8');
+  assert.ok(src.includes('config.endpoints') || src.includes('buildProbes'), 'endpoints wired into the CLI path');
+});
+
+test('driver records childPid so the watchdog can kill the in-flight child', async () => {
+  const { ctx } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==' } } });
+  const { drive } = await import('./t3-window-driver.mjs');
+  const code = await drive(ctx);
+  assert.equal(code, 3);
+  const st = loadState(ctx.stateDir);
+  assert.ok(st.childPid !== undefined && st.childPid !== null, 'childPid written');
+});
+
+test('watchdog kills children and grandchildren with SIGKILL, not only SIGTERM', async () => {
+  const src = readFileSync(new URL('./t3-watchdog.mjs', import.meta.url), 'utf8');
+  assert.ok(src.includes('pkill') && src.includes('-KILL') && src.includes('-P'), 'SIGKILL to direct children');
+  assert.ok(src.includes('process.kill(-pid') || src.includes('kill(-pid'), 'process-group kill kept');
+});
+
+test('emergency stops the whole process group and SIGKILLs children', () => {
+  const src = readFileSync(new URL('./t3-emergency.sh', import.meta.url), 'utf8');
+  assert.ok(src.includes('pkill') && src.includes('-KILL') && src.includes('-P'), 'SIGKILL to direct children via pkill -KILL -P');
+  assert.ok(src.includes('kill -TERM -') || src.includes('kill -- -') || src.includes('kill -TERM -') , 'group kill present');
+  assert.ok(src.includes('kill -KILL -') || src.includes('kill -- -'), 'group SIGKILL present');
+});
+
+test('W3 poses rotation keys with patch, never apply (no last-applied annotation)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-keys-'));
+  const files = {
+    apiJwtSecretFile: join(dir, 'jwt'),
+    secretEncryptionKeyFile: join(dir, 'enc'),
+    idpSessionJwtFile: join(dir, 'idp-jwt'),
+  };
+  writeFileSync(files.apiJwtSecretFile, 'test-jwt-secret');
+  writeFileSync(files.secretEncryptionKeyFile, 'test-enc-key');
+  writeFileSync(files.idpSessionJwtFile, 'test-idp-jwt');
+  const { ctx, calls } = makeCtx({ config: { rotationKeyFiles: files } });
+  const { applyRotationKeys } = await import('./t3-window-driver.mjs');
+  applyRotationKeys(ctx);
+  const joined = calls.join('\n');
+  assert.ok(!joined.includes('apply -f -'), 'no kubectl apply left');
+  assert.ok(joined.includes('patch secret sentropic-api --type=merge'), 'merge patch used');
+  assert.ok(!joined.includes('test-jwt-secret'), 'values never in argv');
 });
