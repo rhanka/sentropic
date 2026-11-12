@@ -58,6 +58,7 @@ export function createCacheJobs(store: KvStore, options: { now(): number; id(): 
       const at = now();
       const result = await store.update<CacheJobRecord, { record: CacheJobRecord; created: boolean }>(
         canonicalKey(input.cacheKey), current => {
+          if (current && current.scope !== input.scope) throw new LiveError('access_denied');
           if (!current || current.state === 'failed' || current.state === 'absent' || stale(current)) {
             const next: CacheJobRecord = { scope: input.scope, cacheKey: input.cacheKey, lockSha256: input.lockSha256,
               refKind: input.refKind, branch: input.branch, state: 'building', jobId: id(), startedAt: at,
@@ -108,6 +109,11 @@ export function createCacheJobs(store: KvStore, options: { now(): number; id(): 
     async readEntry(cacheKey: string): Promise<CacheEntryView | undefined> {
       const record = await store.read<CacheJobRecord>(canonicalKey(cacheKey));
       return record ? entryView(record) : undefined;
+    },
+    /** Full job record for scope-checked reads (by-key isolation, §5.4): callers must verify
+     * `record.scope` against the authenticated scope before exposing the view. */
+    async readRecord(cacheKey: string): Promise<CacheJobRecord | undefined> {
+      return store.read<CacheJobRecord>(canonicalKey(cacheKey));
     },
     /** Exact-variant state poll backing `GET /v1/cache`: alias → canonical → view. */
     async readVariant(input: { scope: string; repoId: string; subPath: string; lockSha256: string;
@@ -279,6 +285,8 @@ export function createHostCacheApi(options: {
       return c.json({ error: 'invalid_request' }, 400);
     }
     try {
+      const record = await options.jobs.readRecord(query.cacheKey);
+      if (!record || record.scope !== keyOf(c)) return c.json({ error: 'not_found' }, 404);
       const entry = await options.jobs.readEntry(query.cacheKey);
       return entry ? c.json(entry) : c.json({ error: 'not_found' }, 404);
     } catch (error) { return refusal(c, error); }
