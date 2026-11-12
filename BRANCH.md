@@ -46,6 +46,15 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   with matching spec lines in `package-lock.json` (4), `api/package-lock.json`
   (2) and `ui/package-lock.json` (2). Range-only, no logic change.
   Rollback: revert the 12 lines.
+- `BR-SN1-EX3` (declared 2026-11-12, owner: agent-core): patch bumps forced
+  by the exact-artifact guard (CI run 3 `package-candidates` /
+  `validate-events|chat-core|comments` : published version + changed dep map
+  => `bump required`). `events 0.2.1->0.2.2`, `chat-core 0.3.2->0.3.3`,
+  `comments 0.3.1->0.3.2` (1 line each) + version-field syncs in
+  `package-lock.json` (3), `api/package-lock.json` (1, comments),
+  `ui/package-lock.json` (1, chat-core). `cluster-mesh@0.26.0-dev.24`
+  verified NOT published (`make pack-cluster-mesh` local PASS) : no bump.
+  No logic change. Rollback: revert the 8 lines.
 - No `blocked` / `deferred` / `cancelled` / `attention` items.
 
 ## AI Flaky tests
