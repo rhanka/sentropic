@@ -227,6 +227,7 @@ export async function recover(ctx, state, reason) {
       await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
         dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,
         healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
+        witness: ctx.config.witness,
         zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
       return 3;
     }

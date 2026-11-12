@@ -47,7 +47,7 @@ function revisionOf(call, deploy) {
 
 // Pre-commit rollback. Runs only after the classifier proved
 // identity_committed=false with zero api pods and zero migration locks.
-export function preCommitRollback(ctx) {
+export async function preCommitRollback(ctx) {
   const { call, probe = null, revisions, preCmDir = null, healthUrl = null, jwksUrl = null,
     dryRun = false, note = () => {} } = ctx;
   for (const deploy of DEPLOYS) call(['scale', `deployment/${deploy}`, '--replicas=0']);
@@ -69,14 +69,21 @@ export function preCommitRollback(ctx) {
   call(['patch', 'cronjob', 'pgbackup', '--type=merge', '-p', '{"spec":{"suspend":false}}']);
   const exp = JSON.parse(call(['get', 'cronjob', 'sentropic-idp-identity-export', '-o', 'json']) || '{}');
   if (exp.spec?.suspend !== true) {
-    if (dryRun) note('# dry-run: identity-export suspension unverified (check live before a real run)');
-    else throw new Error('identity_export_must_stay_suspended');
+    if (dryRun) {
+      note('# dry-run: identity-export suspension unverified (check live before a real run)');
+    } else {
+      // Force the guard back on instead of aborting with the Ingress still
+      // closed: an exception here must never leave prod fenced.
+      call(['patch', 'cronjob', 'sentropic-idp-identity-export', '--type=merge', '-p', '{"spec":{"suspend":true}}']);
+      const forced = JSON.parse(call(['get', 'cronjob', 'sentropic-idp-identity-export', '-o', 'json']) || '{}');
+      if (forced.spec?.suspend !== true) throw new Error('identity_export_still_running');
+    }
   }
   for (const name of ['sentropic', 'auth-idp']) {
     call(['annotate', 'ingress', name, 'traefik.ingress.kubernetes.io/router.middlewares-', '--overwrite']);
   }
   call(['delete', 'middleware', 'a4-verification', '--ignore-not-found=true']);
-  if (probe && healthUrl && jwksUrl) verifyService(probe, ctx);
+  if (probe && healthUrl && jwksUrl) await verifyService(probe, ctx);
   return { removedKeys: removed };
 }
 
@@ -102,6 +109,7 @@ export function cliArgs(argv) {
     kubeconfig: get('--kubeconfig-file'), namespace: get('--namespace') ?? 'sentropic-preprod',
     revisions: JSON.parse(get('--revisions-json') ?? '{}'), preCmDir: get('--pre-cm-dir'),
     dryRun: argv.includes('--dry-run'), probeReadOnly: argv.includes('--probe-readonly'),
+    healthUrl: get('--health-url'), jwksUrl: get('--jwks-url'),
   };
 }
 
@@ -111,8 +119,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   else {
     const call = runKubectl({ kubeconfig: args.kubeconfig, namespace: args.namespace, dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, print: console.log });
     try {
-      const out = preCommitRollback({ call, revisions: args.revisions, preCmDir: args.preCmDir,
-        dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log });
+      const out = await preCommitRollback({ call, revisions: args.revisions, preCmDir: args.preCmDir,
+        dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log,
+        probe: fetch, healthUrl: args.healthUrl, jwksUrl: args.jwksUrl });
       if (!args.dryRun) console.log(`rollback_ok removed=${out.removedKeys.join(',') || 'none'}`);
     } catch (err) { console.error(`rollback_failed: ${err.message}`); process.exitCode = 1; }
   }
