@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -145,6 +145,14 @@ function baseEnv(ctx, extra = {}) {
 export async function drive(ctx) {
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid };
   saveState(ctx.stateDir, state);
+  try {
+    return await driveInner(ctx, state);
+  } catch (err) {
+    return recover(ctx, state, `throw:${err.message}`);
+  }
+}
+
+async function driveInner(ctx, state) {
   checkRbac(ctx);
   const t0 = monoMs();
   state.t0MonoMs = t0;
@@ -202,4 +210,34 @@ export async function drive(ctx) {
   state.heartbeatMonoMs = monoMs();
   saveState(ctx.stateDir, state);
   return 0;
+}
+
+function cliArg(argv, name) {
+  const i = argv.indexOf(name);
+  return i === -1 ? null : argv[i + 1] ?? null;
+}
+
+// Standalone entry: config file (0600) carries every input by path or value,
+// never a secret on argv. Spawns the watchdog detached, then drives W0..W9.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const argv = process.argv.slice(2);
+  const config = JSON.parse(readFileSync(cliArg(argv, '--config'), 'utf8'));
+  const stateDir = cliArg(argv, '--state-dir');
+  const dryRun = argv.includes('--dry-run');
+  const probeReadOnly = argv.includes('--probe-readonly');
+  const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
+    dryRun, probeReadOnly, print: console.log });
+  const ctx = { call, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
+    postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch };
+  const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
+    '--state-dir', stateDir, '--kubeconfig-file', config.kubeconfigFile,
+    '--namespace', config.namespace, ...(dryRun ? ['--dry-run'] : [])],
+    { detached: true, stdio: 'ignore' });
+  watchdog.unref();
+  try {
+    process.exitCode = await drive(ctx);
+  } catch (err) {
+    console.error(`driver_fatal: ${err.message}`);
+    process.exitCode = 1;
+  }
 }
