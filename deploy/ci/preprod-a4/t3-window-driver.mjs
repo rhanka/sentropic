@@ -299,7 +299,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
     '--state-dir', stateDir, '--config', configPath,
-    ...(dryRun ? ['--dry-run'] : [])],
+    ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],
     { detached: true, stdio: 'ignore' });
   watchdog.unref();
   try {
