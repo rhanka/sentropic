@@ -33,6 +33,12 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
 
 ## Feedback Loop
 - No exceptions declared (`Makefile`, `docker-compose*.yml`, `api/**`, `ui/**`, `deploy/**` untouched).
+- `BR-SN1-EX1` (declared 2026-11-12, owner: agent-core): root `package-lock.json`
+  version-only sync (`"packages/contracts"` `0.3.0` -> `0.4.0`, 1 line) required
+  by the `enforce-package-bump` CI gate (PR #1012 run 43297181797).
+  Reason: `npm ci` rejects a lock whose `packages/` entry mismatches
+  `packages/contracts/package.json`; no dependency re-resolution.
+  Impact: version string only. Rollback: revert the 1 line.
 - No `blocked` / `deferred` / `cancelled` / `attention` items.
 
 ## AI Flaky tests
