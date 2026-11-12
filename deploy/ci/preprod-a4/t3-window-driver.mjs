@@ -103,18 +103,25 @@ export function psql(ctx, statement, timeoutMs = 30_000) {
   return out;
 }
 
-// Classification: two cheap read-only round trips, no static reference to an
-// optional relation (B2). Branch P needs committed AND apiReady; else U.
+// Classification: cheap read-only round trips, no static reference to an
+// optional relation (B2). Q1 (locks) and Q5 (artifact relations) are always
+// read; the caller must verify locks === 0 before trusting committed.
 export function classify(ctx) {
   const sql = splitSql(loadSql('t3-classify.sql'));
   const q1 = psql(ctx, sql.Q1).trim().split('|');
   const journal = q1[0] === 't';
   const locks = Number(q1[1] ?? 0);
   let committed = false, receipts = 0;
+  const relations = [];
   if (journal) {
     committed = psql(ctx, sql.Q2).trim() === 't';
     const hasAssetCol = psql(ctx, sql.Q3).trim() === 't';
     if (hasAssetCol) receipts = Number(psql(ctx, sql.Q4).trim() || 0);
+    const q5 = psql(ctx, sql.Q5).trim();
+    for (const line of q5 ? q5.split('\n') : []) {
+      const [name, flag] = line.split('|');
+      if (name) relations.push({ name, present: flag === 't' });
+    }
   }
   let apiReady = false;
   try {
@@ -123,7 +130,7 @@ export function classify(ctx) {
     apiReady = d.spec?.replicas === 1 && d.status?.readyReplicas === 1
       && d.status?.observedGeneration === d.metadata?.generation && img === ctx.config.candidateImage;
   } catch { apiReady = false; }
-  return { journal, locks, committed, receipts, apiReady };
+  return { journal, locks, committed, receipts, apiReady, relations };
 }
 
 export function checkRbac(ctx) {
@@ -186,25 +193,37 @@ export async function recover(ctx, state, reason) {
   try {
     state.recoveryReason = reason;
     saveState(ctx.stateDir, state);
+    // Freeze writers BEFORE reading the truth: the commit transaction can
+    // land between classify() and the scale-down, which would fork the
+    // recovery onto an already-committed database while rolling the code
+    // back. The wait is scoped to api: frontals may already run (W8).
+    ctx.print?.('# recover: stopping api before classify');
+    try {
+      ctx.call(['scale', 'deployment/api', '--replicas=0']);
+    } catch (err) {
+      ctx.print?.(`# scale api 0 failed: ${err.message}`);
+    }
+    waitZeroPods(ctx.call, monoMs() + 40_000, ['api']);
     const info = classify(ctx);
     state.commitVerified = info.committed;
     state.apiReady = info.apiReady;
+    state.locks = info.locks;
+    state.receipts = info.receipts;
     saveState(ctx.stateDir, state);
+    if (info.locks > 0) throw new Error(`migration_locks_held: ${info.locks}`);
     if (!info.committed) {
-      preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
-        dryRun: ctx.dryRun, note: ctx.print,
+      await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
+        dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,
+        healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
         zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
       return 3;
     }
     const { probes, externalProbes } = buildProbes(ctx.config);
-    if (!info.apiReady) {
-      // Branch U2b: commit landed just before the api died — one clean restart
-      // without re-import, then converge. Never boots a legacy image here.
-      ctx.print?.('# U2b: restarting committed api before finish-open');
-      ctx.call(['scale', 'deployment/api', '--replicas=0']);
-      waitZeroPods(ctx.call, monoMs() + 40_000);
-      ensureStarted(ctx.call, 'api', ctx.config.images.candidate);
-    }
+    // The api was frozen above, so a committed database always restarts the
+    // api here before converging. Never boots a legacy image: ensureStarted
+    // pins the candidate image.
+    ctx.print?.('# recover: restarting committed api before finish-open');
+    ensureStarted(ctx.call, 'api', ctx.config.images.candidate);
     await finishOpen({ call: ctx.call, probe: ctx.probe, state,
       save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
     return 4;
