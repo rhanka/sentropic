@@ -8,7 +8,7 @@ import type { PrivateCacheBlobs } from './cache-storage';
 import { createPostgresCacheStorage, createPostgresKvRows } from './cache-storage';
 import { createDependencyCache } from './cache';
 import { createPostgresBuildJobStore, createPostgresLiveStore, createPostgresRemoteLiveRows } from './postgres';
-import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, liveHolds } from './heavy';
+import { createPostgresHeavyQueueStore, createQueuedHeavyGate, gatedInstall, gatedSealInstall, liveHolds } from './heavy';
 import { createFairAdmission } from './admission';
 import { createBuilderPods, podName, type KubernetesCore, type WorkerSizing } from './pods';
 import { createLiveWorker } from './worker';
@@ -80,7 +80,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt),
       dependenciesArchive: receipt => cache.sealedArchive(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
-    sealInstall: gatedInstall(heavy, supervisor.sealInstall),
+    sealInstall: gatedSealInstall(heavy, supervisor.sealInstall),
     fetch: (pin, relay, signal) => fetchLockedTarball(pin, relay, undefined, signal),
     storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) },
   options.installBudget ?? defaultInstallBudget());
