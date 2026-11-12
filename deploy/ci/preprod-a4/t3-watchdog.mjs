@@ -59,9 +59,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const stateDir = cliArg(argv, '--state-dir');
   const config = JSON.parse(readFileSync(cliArg(argv, '--config') ?? cliArg(argv, '--config-file'), 'utf8'));
   const dryRun = argv.includes('--dry-run');
+  const probeReadOnly = argv.includes('--probe-readonly');
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
-    dryRun, print: console.log });
-  const ctx = { call, config, stateDir, dryRun, probeReadOnly: false,
+    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, print: console.log });
+  const ctx = { call, config, stateDir, dryRun, probeReadOnly,
     tier: config.tier, postgresPod: config.postgresPod ?? 'postgres-0',
     probe: fetch, print: console.log };
   const stopAt = monoMs() + TOTAL_BUDGET_MS + 180_000;
