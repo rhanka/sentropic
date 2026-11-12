@@ -3,7 +3,7 @@ import type { RetentionReceipt } from './receipt.js';
 import { digestStructuredArtifact } from './validation.js';
 
 export type ResolvedDecisionCriterion = Exclude<DecisionCriterion, { kind: 'registered' }>;
-export type DecisionBackendProtocol = 'jev-native' | 'openai-decisions' | 'systemone-local' | 'structured-llm';
+export type DecisionBackendProtocol = 'jev-native' | 'openai-decisions' | 'gemini-decisions' | 'systemone-local' | 'structured-llm';
 export interface DecisionEvaluatorDescriptor {
   /**
    * Complete definition binding (§3.2): the versioned validation profile the
