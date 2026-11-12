@@ -143,7 +143,7 @@ function heartbeat(ctx, state, step) {
   state.heartbeatMonoMs = monoMs();
   state.stepDeadlineMonoMs = state.t0MonoMs != null && STEP_CUTOFFS[step] != null
     ? state.t0MonoMs + STEP_CUTOFFS[step]
-    : monoMs() + 120_000;
+    : monoMs() + 600_000;
   saveState(ctx.stateDir, state);
 }
 
@@ -190,7 +190,7 @@ function baseEnv(ctx, extra = {}) {
 export async function drive(ctx) {
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
     namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
-    stepDeadlineMonoMs: monoMs() + 120_000 };
+    stepDeadlineMonoMs: monoMs() + 600_000 };
   saveState(ctx.stateDir, state);
   try {
     return await driveInner(ctx, state);
@@ -216,12 +216,21 @@ async function driveInner(ctx, state) {
   (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'restrict',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
   {
-    const mwOut = ctx.call(['get', 'middleware', 'a4-verification', '-o', 'json']);
-    const parsed = mwOut ? JSON.parse(mwOut).spec ?? null : null;
-    if (parsed) {
-      state.middlewareSpec = parsed;
-      saveState(ctx.stateDir, state);
+    // Real runs fail closed here (restrict must have created it). Probes have
+    // no fence, so absence is expected and recorded instead.
+    let missing = false;
+    try {
+      const mwOut = ctx.call(['get', 'middleware', 'a4-verification', '-o', 'json']);
+      const parsed = mwOut ? JSON.parse(mwOut).spec ?? null : null;
+      if (parsed) {
+        state.middlewareSpec = parsed;
+        saveState(ctx.stateDir, state);
+      } else missing = true;
+    } catch {
+      missing = true;
     }
+    if (missing && !ctx.probeReadOnly) throw new Error('middleware_missing_after_restrict');
+    if (missing) ctx.print('# probe: no a4-verification middleware (no fence in probe mode)');
   }
   state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
   saveState(ctx.stateDir, state);
