@@ -197,8 +197,11 @@ export async function recover(ctx, state, reason) {
     const now = ctx.now ?? monoMs;
     // Nominal work stops at 175 s, reserving recovery within the SAME fence.
     // A failed operation never extends the original 300 s deadline.
-    const deadlineMs = Math.min(now() + (ctx.recoveryBudgetMs ?? 125_000),
-      state.t0MonoMs == null ? Infinity : state.t0MonoMs + TOTAL_BUDGET_MS);
+    const globalDeadline = state.t0MonoMs == null ? now() + 125_000 : state.t0MonoMs + TOTAL_BUDGET_MS;
+    // Driver recovery has its own lease inside the fence, leaving 65 s for
+    // the independent watchdog if the recovery owner itself stalls.
+    const deadlineMs = Math.min(now() + (ctx.recoveryBudgetMs ?? (ctx.recoverOwner ? 125_000 : 60_000)),
+      globalDeadline - (ctx.recoverOwner ? 0 : 65_000));
     if (deadlineMs <= now()) throw new Error('budget_exhausted');
     const originalCall = ctx.call;
     ctx = { ...ctx, call: (args, input, cap) => originalCall(args, input,
@@ -370,6 +373,7 @@ function baseEnv(ctx, extra = {}) {
 // W0..W9 with hard per-step cutoffs measured from t0 (fence start). Any throw
 // or cutoff breach routes to recover(); the watchdog covers driver death.
 export async function drive(ctx) {
+  assertPreviewSafe(ctx);
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
     watchdogPid: ctx.watchdogPid,
     childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
@@ -379,6 +383,13 @@ export async function drive(ctx) {
     return await driveInner(ctx, state);
   } catch (err) {
     return recover(ctx, state, `throw:${err.message}`);
+  }
+}
+
+function assertPreviewSafe(ctx) {
+  const previous = loadState(ctx.stateDir);
+  if (ctx.dryRun && ((previous && previous.step !== 'DONE') || readRecoveryClaim(ctx.stateDir))) {
+    throw new Error('preview_active_state: use a separate state directory');
   }
 }
 
@@ -505,6 +516,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log, stateDir });
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
+  assertPreviewSafe(ctx);
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
     '--state-dir', stateDir, '--config', configPath,
     ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],
