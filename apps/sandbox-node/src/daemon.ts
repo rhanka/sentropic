@@ -22,6 +22,7 @@ export interface SandboxRecord {
   ownership: ExecutionNodeOwnership;
   compatibility: ExecutionNodeClaimSpec['compatibility'] | undefined;
   poolOwned: boolean;
+  slot: 'live' | 'standby' | undefined;
   runtimeId: string | undefined;
   outputSubPath: string | undefined;
   exportedBytes: number;
@@ -128,8 +129,14 @@ export class ExecutionNodeDaemon {
   }
 
   getSandbox(tenantId: ExecutionNodeTenantId, id: string): SandboxRecord | undefined {
-    const sandbox = this.sandboxes.get(this.key(tenantId, id));
-    return sandbox;
+    return this.sandboxes.get(this.key(tenantId, id));
+  }
+
+  private releaseSlot(sandbox: SandboxRecord): void {
+    if (sandbox.slot) {
+      this.admission.release(sandbox.tenantId, sandbox.slot);
+      sandbox.slot = undefined;
+    }
   }
 
   /** Cross-tenant access by id fails closed without leaking existence. */
@@ -172,6 +179,7 @@ export class ExecutionNodeDaemon {
         tenantId: input.spec.tenantId,
         state: input.warmStandby === true ? 'standby' : 'creating',
         ownership: input.ownership,
+        slot: input.warmStandby === true ? 'standby' : 'live',
         compatibility: input.warmStandby === true ? input.compatibility : undefined,
         poolOwned: input.warmStandby === true,
         runtimeId: undefined,
@@ -240,6 +248,7 @@ export class ExecutionNodeDaemon {
       if (!sandbox.compatibility || !compatEqual(sandbox.compatibility, input.claim.compatibility)) {
         throw new ExecutionNodeError('command_id_payload_mismatch', 'standby compatibility mismatch');
       }
+      this.admission.admit(input.claim.tenantId, 'live', `claim:${input.commandId}`);
       const promoted = await this.promoteToRunning(input.claim.tenantId, sandbox.id, {
         commandId: `claim-promote:${input.commandId}`,
         quotaMiB: input.quotaMiB,
@@ -249,6 +258,7 @@ export class ExecutionNodeDaemon {
       promoted.poolOwned = false;
       promoted.ownership = input.claim.ownership;
       this.admission.release(input.claim.tenantId, 'standby');
+      promoted.slot = 'live';
       this.audit.record('sandbox.claimed', promoted.tenantId, promoted.id);
       return promoted;
     });
@@ -282,13 +292,12 @@ export class ExecutionNodeDaemon {
       sandbox.state = 'stopping';
       this.audit.record('sandbox.stopping', tenantId, id);
       if (sandbox.runtimeId) await this.adapter.stopSandbox(sandbox.runtimeId);
-      sandbox.runtimeId = undefined;
       if (input.stop.retainOutput === true) {
         sandbox.state = 'stopped-output-retained';
         sandbox.outputSubPath = input.stop.outputSubPath ?? 'ui/dist';
       } else {
         sandbox.state = 'destroyed';
-        this.admission.release(tenantId, 'live');
+        this.releaseSlot(sandbox);
       }
       this.audit.record('sandbox.stopped', tenantId, id, sandbox.state);
       return sandbox;
@@ -303,5 +312,65 @@ export class ExecutionNodeDaemon {
     }
     checkWritePath(path);
     this.audit.record('sandbox.write', tenantId, id, path);
+  }
+
+  async exportArtifacts(tenantId: ExecutionNodeTenantId, id: string, input: {
+    spec: ExecutionNodeExportSpec;
+    commandId: string;
+    ticket?: TicketEnvelope;
+  }): Promise<{ bytes: Buffer; sandbox: SandboxRecord }> {
+    const sandbox = this.getSandbox(tenantId, id);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    if (input.ticket) this.requireTicket(input.ticket, tenantId);
+    if (input.spec.maxBytes <= 0) {
+      throw new ExecutionNodeError('command_id_payload_mismatch', 'maxBytes must be positive');
+    }
+    return this.idempotent(tenantId, input.commandId, { id, spec: input.spec }, async () => {
+      if (sandbox.state !== 'stopped-output-retained' && sandbox.state !== 'exported') {
+        throw new ExecutionNodeError('sandbox_still_running', `sandbox ${id} is ${sandbox.state}`);
+      }
+      if (!sandbox.runtimeId) {
+        throw new ExecutionNodeError('unknown_node_instance', `sandbox ${id} has no runtime output`);
+      }
+      const bytes = await this.adapter.exportOutput(sandbox.runtimeId, input.spec.subPath);
+      if (bytes.length > input.spec.maxBytes) {
+        throw new ExecutionNodeError('command_id_payload_mismatch', 'export exceeds maxBytes');
+      }
+      sandbox.state = 'exported';
+      sandbox.exportedBytes = bytes.length;
+      this.audit.record('sandbox.exported', tenantId, id, `${bytes.length}B`);
+      return { bytes, sandbox };
+    });
+  }
+
+  async deleteSandbox(tenantId: ExecutionNodeTenantId, id: string, input: {
+    commandId: string;
+    ticket?: TicketEnvelope;
+  }): Promise<SandboxRecord> {
+    const sandbox = this.getSandbox(tenantId, id);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    if (input.ticket) this.requireTicket(input.ticket, tenantId);
+    return this.idempotent(tenantId, input.commandId, { id }, async () => {
+      if (sandbox.state === 'running') {
+        throw new ExecutionNodeError('sandbox_still_running', `sandbox ${id} is running`);
+      }
+      if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
+      sandbox.runtimeId = undefined;
+      sandbox.state = 'destroyed';
+      this.releaseSlot(sandbox);
+      this.audit.record('sandbox.destroyed', tenantId, id);
+      return sandbox;
+    });
+  }
+
+  failSandbox(tenantId: ExecutionNodeTenantId, id: string, detail?: string): SandboxRecord {
+    const sandbox = this.getSandbox(tenantId, id);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    if (!TERMINAL.has(sandbox.state)) {
+      sandbox.state = 'failed';
+      this.releaseSlot(sandbox);
+      this.audit.record('sandbox.failed', tenantId, id, detail);
+    }
+    return sandbox;
   }
 }
