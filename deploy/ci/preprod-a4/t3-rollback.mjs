@@ -22,13 +22,13 @@ export function waitZeroPods(call, deadlineMs) {
 }
 
 export function removeRotatedKeys(call) {
-  const secret = JSON.parse(call(['get', 'secret', 'sentropic-api', '-o', 'json']));
+  const secret = JSON.parse(call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
   const present = ROTATED_KEYS.filter(key => secret.data?.[key] !== undefined);
   if (present.length > 0) {
     const patch = present.map(key => ({ op: 'remove', path: `/data/${key}` }));
     call(['patch', 'secret', 'sentropic-api', '--type=json', '-p', JSON.stringify(patch)]);
   }
-  const after = JSON.parse(call(['get', 'secret', 'sentropic-api', '-o', 'json']));
+  const after = JSON.parse(call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
   const left = ROTATED_KEYS.filter(key => after.data?.[key] !== undefined);
   if (left.length > 0) throw new Error(`keys_not_removed: ${left.join(',')}`);
   call(['delete', 'secret', 'auth-idp-session-signing', '--ignore-not-found=true']);
@@ -37,7 +37,7 @@ export function removeRotatedKeys(call) {
 }
 
 function revisionOf(call, deploy) {
-  const out = JSON.parse(call(['get', 'deployment', deploy, '-o', 'json']));
+  const out = JSON.parse(call(['get', 'deployment', deploy, '-o', 'json']) || '{}');
   return String(out.metadata?.annotations?.['deployment.kubernetes.io/revision'] ?? '');
 }
 
@@ -62,7 +62,7 @@ export function preCommitRollback(ctx) {
   for (const deploy of DEPLOYS) call(['scale', `deployment/${deploy}`, '--replicas=1']);
   for (const deploy of DEPLOYS) call(['rollout', 'status', `deployment/${deploy}`, '--timeout=120s']);
   call(['patch', 'cronjob', 'pgbackup', '--type=merge', '-p', '{"spec":{"suspend":false}}']);
-  const exp = JSON.parse(call(['get', 'cronjob', 'sentropic-idp-identity-export', '-o', 'json']));
+  const exp = JSON.parse(call(['get', 'cronjob', 'sentropic-idp-identity-export', '-o', 'json']) || '{}');
   if (exp.spec?.suspend !== true) throw new Error('identity_export_must_stay_suspended');
   for (const name of ['sentropic', 'auth-idp']) {
     call(['annotate', 'ingress', name, 'traefik.ingress.kubernetes.io/router.middlewares-', '--overwrite']);

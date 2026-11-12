@@ -102,6 +102,10 @@ export function classify(ctx) {
 }
 
 export function checkRbac(ctx) {
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print(`# dry-run: ${RBAC_COUNT} kubectl auth can-i checks`);
+    return;
+  }
   for (const [resource, verbs] of RBAC_MATRIX) {
     for (const verb of verbs) {
       const out = ctx.call(['auth', 'can-i', verb, resource]);
@@ -143,7 +147,8 @@ function baseEnv(ctx, extra = {}) {
 // W0..W9 with hard per-step cutoffs measured from t0 (fence start). Any throw
 // or cutoff breach routes to recover(); the watchdog covers driver death.
 export async function drive(ctx) {
-  const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid };
+  const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
+    namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null };
   saveState(ctx.stateDir, state);
   try {
     return await driveInner(ctx, state);
@@ -168,6 +173,11 @@ async function driveInner(ctx, state) {
   // B3: restrict only AFTER request.json exists (it asserts legacyWritersStopped).
   delivered(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'restrict',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
+  try {
+    const mwOut = ctx.call(['get', 'middleware', 'a4-verification', '-o', 'json']);
+    state.middlewareSpec = mwOut ? JSON.parse(mwOut).spec : null;
+    saveState(ctx.stateDir, state);
+  } catch { state.middlewareSpec = null; }
   state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
   saveState(ctx.stateDir, state);
   if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
@@ -228,7 +238,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
     dryRun, probeReadOnly, print: console.log });
   const ctx = { call, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
-    postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch };
+    postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
     '--state-dir', stateDir, '--kubeconfig-file', config.kubeconfigFile,
     '--namespace', config.namespace, ...(dryRun ? ['--dry-run'] : [])],
