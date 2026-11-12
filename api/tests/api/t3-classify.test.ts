@@ -36,12 +36,18 @@ afterEach(async () => {
 afterAll(() => admin.end());
 
 describe('t3 classify SQL against the migrated schema', () => {
-  it('sees the control journal with no commit marker and no migration lock', async () => {
+  it('sees the control journal with no migration lock and the installed A4 marker', async () => {
     const { rows } = await database.query(sql.Q1);
     expect(rows[0].journal_present).toBe(true);
     expect(Number(rows[0].api_migration_locks)).toBe(0);
+    // runMigrations installs control entry idx 15 (when=1793577600000), so the
+    // A4 marker is present on every freshly migrated DB by construction.
     const committed = await database.query(sql.Q2);
-    expect(committed.rows[0].identity_committed).toBe(false);
+    expect(committed.rows[0].identity_committed).toBe(true);
+    await database.query(
+      `DELETE FROM public.__drizzle_control_migrations WHERE created_at = 1793577600000`);
+    const cleared = await database.query(sql.Q2);
+    expect(cleared.rows[0].identity_committed).toBe(false);
   });
 
   it('tracks the real commit marker once it lands in the journal', async () => {
