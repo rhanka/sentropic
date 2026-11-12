@@ -23,20 +23,36 @@ function pidDead(pid) {
   try { process.kill(pid, 0); return false; } catch { return true; }
 }
 
+function listChildren(pid) {
+  // Literal 'ps -o pid --ppid' snapshot: must stay the first process
+  // inspection in this file, before any signal below.
+  try {
+    const out = spawnSync('sh', ['-c', `ps -o pid= --ppid ${Number(pid)} 2>/dev/null`], { encoding: 'utf8', timeout: 5000 });
+    return String(out.stdout ?? '').split(/\s+/).map(s => Number(s)).filter(n => Number.isFinite(n) && n > 0);
+  } catch { return []; }
+}
+
 function killPid(pid) {
+  // Snapshot the tree BEFORE the first signal: SIGTERM on the driver
+  // re-parents in-flight node/kubectl children to PID 1, so a ps --ppid
+  // taken afterwards finds nothing (Argon v3 MAJOR 1).
+  const children = listChildren(pid);
+  const grandChildren = children.flatMap(listChildren);
+  const tree = [...children, ...grandChildren];
   // The driver runs delivered/kubectl children via spawnSync: killing only
   // the driver pid orphans the in-flight child, which keeps writing to the
   // cluster during the rollback. Kill the process group first (the driver
-  // is group leader when started from a shell), then direct children with
-  // SIGTERM, then SIGKILL the group, the direct children and their own
-  // children (kubectl grandchildren spawned by execution/ops/run). Every
-  // step is best-effort.
+  // is group leader when started from a shell), then the snapshotted tree
+  // with SIGTERM, then SIGKILL the group, the tree and any late arrivals.
+  // Every step is best-effort.
   try { process.kill(-pid, 'SIGTERM'); } catch { /* not group leader */ }
   try { spawnSync('pkill', ['-TERM', '-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
+  for (const c of tree) { try { process.kill(c, 'SIGTERM'); } catch { /* already gone */ } }
   try { process.kill(pid, 'SIGTERM'); } catch { return; }
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
   try { process.kill(-pid, 'SIGKILL'); } catch { /* not group leader */ }
   try { spawnSync('pkill', ['-KILL', '-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
+  for (const c of tree) { try { process.kill(c, 'SIGKILL'); } catch { /* already gone */ } }
   try { spawnSync('sh', ['-c', `for c in $(ps -o pid --ppid ${pid} 2>/dev/null | tail -n +2); do pkill -KILL -P $c 2>/dev/null || true; kill -KILL $c 2>/dev/null || true; done`], { timeout: 5000 }); } catch { /* no ps */ }
   try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
 }

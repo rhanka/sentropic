@@ -103,6 +103,15 @@ export async function finishOpen(ctx) {
     state.acceptedSha256 = createHash('sha256').update(JSON.stringify(probes.map(p => p.id))).digest('hex');
     save(state);
   }
+  // Emergency resume: the classifier stops api before reading the truth, so a
+  // restart from ACCEPTED / BACKUP_RESUMED / ONE_HOST_OPEN must restart the
+  // candidate api (and converge ui + auth-idp) before touching traffic.
+  // ensureStarted is idempotent: a ready deployment is left alone.
+  if (state.substate === 'ACCEPTED' || state.substate === 'BACKUP_RESUMED' || state.substate === 'ONE_HOST_OPEN') {
+    ensureStarted(call, 'api', images.candidate, dry);
+    ensureStarted(call, 'ui', images.ui, dry);
+    ensureStarted(call, 'auth-idp', images.candidate, dry);
+  }
   if (state.substate === 'ACCEPTED') {
     if (ctx.dryRun) {
       (ctx.print ?? (() => {}))('# dry-run: skip api readiness gate, resume pgbackup');
