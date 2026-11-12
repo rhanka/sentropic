@@ -5,7 +5,8 @@ build-sandbox-node-artifact:
 	@sh apps/sandbox-node/k8s/build-artifact.sh
 
 check-sandbox-node:
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/source:ro" $(SANDBOX_NODE_IMAGE) sh -ec '\
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/npm-cache \
+	  -v "$(HOME)/.npm:/npm-cache" -v "$(CURDIR):/source:ro" $(SANDBOX_NODE_IMAGE) sh -ec '\
 	  mkdir -p /tmp/qualification/apps; cp -R /source/apps/sandbox-node /tmp/qualification/apps/; \
 	  node /source/scripts/ci/locked-tools.mjs --prefix /tmp/qualification --ignore-scripts --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
 	  cd /tmp/qualification/apps/sandbox-node; \
