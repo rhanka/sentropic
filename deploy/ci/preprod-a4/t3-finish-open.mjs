@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildProbes, loadState, monoMs, podLabels, runKubectl, saveState } from './t3-lib.mjs';
+import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, runKubectl, saveState } from './t3-lib.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -66,7 +66,7 @@ export function reconcileRestrictSafe(ctx, state) {
   // Pods linger in Terminating after the scale call: wait for them instead
   // of failing the repair on the first sighting (a real cluster never
   // reaches zero in the same millisecond).
-  const deadline = monoMs() + (ctx.frontalsTimeoutMs ?? 30_000);
+  const deadline = Math.min(ctx.deadlineMs ?? Infinity, monoMs() + (ctx.frontalsTimeoutMs ?? 30_000));
   for (const component of ['ui', 'auth-idp']) {
     while (podsOf(call, component).length > 0) {
       if (monoMs() > deadline) throw new Error(`frontal_not_zero: ${component}`);
@@ -89,7 +89,9 @@ export function reconcileRestrictSafe(ctx, state) {
 
 export async function finishOpen(ctx) {
   const { call, probe, state, save, images, probes = [], externalProbes = [] } = ctx;
-  const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}) };
+  const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}),
+    deadlineMs: ctx.deadlineMs, now: ctx.now };
+  effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
     reconcileRestrictSafe(ctx, state);
     // The emergency classifier stops api before reading the truth: a committed
@@ -144,6 +146,7 @@ export async function finishOpen(ctx) {
   if (state.substate === 'TWO_HOSTS_OPEN') {
     for (const p of externalProbes) await runProbe(probe, p, dry);
   }
+  effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
   return state;
 }
 
@@ -152,7 +155,8 @@ async function runProbe(probe, p, opts = {}) {
     opts.print?.(`# dry-run: probe ${p.id} ${p.url} expect ${p.expect}`);
     return;
   }
-  const res = await probe(p.url, { ...p.options, signal: AbortSignal.timeout(p.timeoutMs ?? 5000) });
+  const res = await probe(p.url, { ...p.options, signal: AbortSignal.timeout(
+    effectiveTimeout(p.timeoutMs ?? 5000, opts, (opts.now ?? monoMs)())) });
   await res.body?.cancel?.();
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
 }
