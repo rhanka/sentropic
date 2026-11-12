@@ -66,8 +66,8 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   - [x] Lifecycle automaton + idempotence + ticket verification (`src/daemon.ts`, `src/tickets.ts`).
   - [x] Per-tenant admission/quotas + WFQ 1:1 drain + audit events (`src/admission.ts`, `src/audit.ts`).
   - [x] Unit tests written: tenant isolation, lifecycle incl. stop->export->destroy, tickets, admission fairness, adapters.
-  - [ ] Typecheck `apps/sandbox-node` via `exec-api` on `ENV=test-sandbox-node`.
-  - [ ] Unit tests green via `test-api-endpoints SCOPE=apps/sandbox-node/tests` on `ENV=test-sandbox-node`.
+  - [x] Typecheck `apps/sandbox-node` via `exec-api` on `ENV=test-sandbox-node` (green).
+  - [x] Unit tests green via `test-api-endpoints SCOPE=apps/sandbox-node/tests` on `ENV=test-sandbox-node` (5 files, 16 tests).
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & lint for the touched package.
   - [ ] Bump `packages/contracts/package.json` only if a release step requires it (not in S1-T0).

@@ -111,6 +111,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
 
   async stopSandbox(runtimeId: string): Promise<void> {
     if (!this.hasRunsc()) failNoBinary();
+    void runtimeId;
   }
 
   async exportOutput(runtimeId: string, subPath: string): Promise<Buffer> {
@@ -121,5 +122,6 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
 
   async destroySandbox(runtimeId: string): Promise<void> {
     if (!this.hasRunsc()) failNoBinary();
+    void runtimeId;
   }
 }
