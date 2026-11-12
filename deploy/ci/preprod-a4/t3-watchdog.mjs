@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
   runKubectl, loadState, saveState } from './t3-lib.mjs';
@@ -23,13 +24,37 @@ function pidDead(pid) {
 }
 
 function killPid(pid) {
+  // The driver runs delivered/kubectl children via spawnSync: killing only
+  // the driver pid orphans the in-flight child, which keeps writing to the
+  // cluster during the rollback. Kill the process group first (the driver
+  // is group leader when started from a shell), then direct children, then
+  // the pid itself. Every step is best-effort.
+  try { process.kill(-pid, 'SIGTERM'); } catch { /* not group leader */ }
+  try { spawnSync('pkill', ['-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
   try { process.kill(pid, 'SIGTERM'); } catch { return; }
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+  try { process.kill(-pid, 'SIGKILL'); } catch { /* not group leader */ }
   try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
 }
 
+// Single-flight across overlapping 250 ms ticks: poll() is async and
+// recover() yields at the first await, so a second tick would otherwise
+// start a second concurrent recover() for the same stale driver.
+let pollInFlight = false;
+
 // One poll: 'waiting' | 'done' | exit code after firing the recovery.
 export async function poll(ctx) {
+  if (pollInFlight) return 'recovery-in-progress';
+  pollInFlight = true;
+  try {
+    return await pollInner(ctx);
+  } finally {
+    pollInFlight = false;
+  }
+}
+
+async function pollInner(ctx) {
+  const me = `watchdog-pid-${process.pid}`;
   const state = loadState(ctx.stateDir);
   if (!state || state.step === 'DONE' || state.watchdogDone) return 'done';
   const now = monoMs();
@@ -39,15 +64,15 @@ export async function poll(ctx) {
   const alive = !pidDead(state.driverPid);
   if (alive && !over && !(stale && past)) return 'waiting';
   const reason = !alive ? 'watchdog_driver_dead' : over ? 'watchdog_budget' : 'watchdog_stale_past_deadline';
-  if (!claimRecovery(ctx.stateDir, 'watchdog')) {
+  if (!claimRecovery(ctx.stateDir, me)) {
     const owner = readRecoveryClaim(ctx.stateDir);
     if (!claimDead(owner)) return 'recovery-in-progress';
     releaseRecovery(ctx.stateDir);
-    if (!claimRecovery(ctx.stateDir, 'watchdog')) return 'recovery-in-progress';
+    if (!claimRecovery(ctx.stateDir, me)) return 'recovery-in-progress';
   }
   for (const pid of [state.driverPid, state.childPid]) if (pid && !pidDead(pid)) killPid(pid);
   console.log(`watchdog_firing reason=${reason} step=${state.step}`);
-  const code = await recover({ ...ctx, recoverOwner: 'watchdog' }, state, reason);
+  const code = await recover({ ...ctx, recoverOwner: me }, state, reason);
   state.watchdogDone = true;
   state.watchdogExit = code;
   saveState(ctx.stateDir, state);
