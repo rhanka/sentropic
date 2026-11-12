@@ -49,12 +49,12 @@ export function createExecutionNode(config: ExecutionNodeConfig = {}): {
   const nodeInstanceId = config.nodeInstanceId ?? randomUUID();
   const quotas = {
     sentropic: {
-      maxLive: 4,
-      maxStandby: 2,
+      maxLive: 1,
+      maxStandby: 1,
     },
     immo: {
-      maxLive: 4,
-      maxStandby: 2,
+      maxLive: 1,
+      maxStandby: 1,
     },
   } satisfies Record<ExecutionNodeTenantId, { maxLive: number; maxStandby: number }>;
   void EXECUTION_NODE_TENANT_SLICE_DEFAULTS;
@@ -63,7 +63,7 @@ export function createExecutionNode(config: ExecutionNodeConfig = {}): {
   const bases = new TenantBaseRegistry();
   const adapter = config.adapter ?? (config.useRunsc === true ? new RunscRuntimeAdapter() : new FakeRuntimeAdapter());
   const daemon = new ExecutionNodeDaemon({
-    nodeId: config.nodeId ?? 'node-b3-16',
+    nodeId: config.nodeId ?? 'artifact-builder-vm-1',
     nodeInstanceId,
     nodeEpoch: config.nodeEpoch ?? 1,
     adapter,

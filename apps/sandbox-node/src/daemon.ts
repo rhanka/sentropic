@@ -22,7 +22,7 @@ export interface SandboxRecord {
   ownership: ExecutionNodeOwnership;
   compatibility: ExecutionNodeClaimSpec['compatibility'] | undefined;
   poolOwned: boolean;
-  slot: 'live' | 'standby' | undefined;
+  slot: 'live' | 'standby' | 'build' | undefined;
   runtimeId: string | undefined;
   outputSubPath: string | undefined;
   exportedBytes: number;
@@ -134,7 +134,8 @@ export class ExecutionNodeDaemon {
 
   private releaseSlot(sandbox: SandboxRecord): void {
     if (sandbox.slot) {
-      this.admission.release(sandbox.tenantId, sandbox.slot);
+      if (sandbox.slot === 'build') this.admission.builds.release(sandbox.tenantId);
+      else this.admission.release(sandbox.tenantId, sandbox.slot);
       sandbox.slot = undefined;
     }
   }
@@ -170,8 +171,11 @@ export class ExecutionNodeDaemon {
     }
     if (input.ticket) this.requireTicket(input.ticket, input.spec.tenantId);
     const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
-    return this.idempotent(input.spec.tenantId, input.commandId, input.spec, () => {
-      this.admission.admit(input.spec.tenantId, input.warmStandby === true ? 'standby' : 'live', input.commandId);
+    return this.idempotent(input.spec.tenantId, input.commandId, input.spec, async () => {
+      const slot = input.spec.profile === 'artifact-build' ? 'build'
+        : input.warmStandby === true ? 'standby' : 'live';
+      if (slot === 'build') await this.admission.builds.acquire(input.spec.tenantId);
+      else this.admission.admit(input.spec.tenantId, slot, input.commandId);
       const id = randomUUID();
       const paths = sandboxPaths(input.spec.tenantId, id);
       const record: SandboxRecord = {
@@ -179,7 +183,7 @@ export class ExecutionNodeDaemon {
         tenantId: input.spec.tenantId,
         state: input.warmStandby === true ? 'standby' : 'creating',
         ownership: input.ownership,
-        slot: input.warmStandby === true ? 'standby' : 'live',
+        slot,
         compatibility: input.warmStandby === true ? input.compatibility : undefined,
         poolOwned: input.warmStandby === true,
         runtimeId: undefined,
@@ -248,7 +252,6 @@ export class ExecutionNodeDaemon {
       if (!sandbox.compatibility || !compatEqual(sandbox.compatibility, input.claim.compatibility)) {
         throw new ExecutionNodeError('command_id_payload_mismatch', 'standby compatibility mismatch');
       }
-      this.admission.admit(input.claim.tenantId, 'live', `claim:${input.commandId}`);
       const promoted = await this.promoteToRunning(input.claim.tenantId, sandbox.id, {
         commandId: `claim-promote:${input.commandId}`,
         quotaMiB: input.quotaMiB,
@@ -257,7 +260,7 @@ export class ExecutionNodeDaemon {
       });
       promoted.poolOwned = false;
       promoted.ownership = input.claim.ownership;
-      this.admission.release(input.claim.tenantId, 'standby');
+      this.admission.claim(input.claim.tenantId);
       promoted.slot = 'live';
       this.audit.record('sandbox.claimed', promoted.tenantId, promoted.id);
       return promoted;
@@ -292,6 +295,7 @@ export class ExecutionNodeDaemon {
       sandbox.state = 'stopping';
       this.audit.record('sandbox.stopping', tenantId, id);
       if (sandbox.runtimeId) await this.adapter.stopSandbox(sandbox.runtimeId);
+      this.releaseSlot(sandbox);
       if (input.stop.retainOutput === true) {
         sandbox.state = 'stopped-output-retained';
         sandbox.outputSubPath = input.stop.outputSubPath ?? 'ui/dist';
