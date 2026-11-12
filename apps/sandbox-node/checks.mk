@@ -10,5 +10,6 @@ check-sandbox-node:
 	  mkdir -p /tmp/qualification/apps; cp -R /source/apps/sandbox-node /tmp/qualification/apps/; \
 	  node /source/scripts/ci/locked-tools.mjs --prefix /tmp/qualification --ignore-scripts --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
 	  cd /tmp/qualification/apps/sandbox-node; \
+	  sh -n k8s/start.sh k8s/build-artifact.sh; \
 	  ../../node_modules/.bin/tsc --project tsconfig.json; \
 	  ../../node_modules/.bin/vitest run --config vitest.config.ts'

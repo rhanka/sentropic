@@ -20,6 +20,9 @@ values below:
 - Agent release archive SHA-256 (`out/release.digest`): recorded by the
   build target; k8s pins this exact digest in cloud-init delivery and retains
   the previous digest. No publication is needed for this PR.
+- RUN 2 compiled agent release: `sha256:7ae14562ae32724524909f04aa39c066847e09a706bbabc35ece08f3726a0508`.
+  Built locally on 2026-11-12; not published or deployed. k8s verifies the
+  archive and its file manifest before selecting this digest.
 
 ## Verify
 
