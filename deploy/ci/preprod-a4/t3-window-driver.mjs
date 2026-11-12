@@ -35,8 +35,13 @@ export const RBAC_MATRIX = [
 ];
 export const RBAC_COUNT = RBAC_MATRIX.reduce((n, [, verbs]) => n + verbs.length, 0);
 
+// The classifier SQL is a test asset under api/tests/api so the vitest that
+// plays it against a migrated DB resolves it inside the CI api image, which
+// ships api/ but never deploy/. The driver (full checkout) reads the same file.
+const CLASSIFY_SQL_URL = new URL('../../../api/tests/api/t3-classify.sql', import.meta.url);
 export function loadSql(name) {
-  return readFileSync(join(HERE, name), 'utf8');
+  if (name !== 't3-classify.sql') throw new Error(`unknown sql asset: ${name}`);
+  return readFileSync(CLASSIFY_SQL_URL, 'utf8');
 }
 
 export function hashRows(text) {
