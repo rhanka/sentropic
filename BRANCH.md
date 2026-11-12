@@ -14,6 +14,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `BRANCH.md` (mandatory per-commit progress)
   - `deploy/ci/preprod-a4/t3-*`
   - `api/tests/api/t3-*`
   - `deploy/ci/artifact-content/tests.mk` (one read-only `-v` mount line for the
@@ -75,6 +76,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN6 B1/B2/B6: create budgets before custodian, stage both PVC inputs through delivered digest checks, converge TWO_HOSTS_OPEN; regression tests failed first.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, COMMON-RULES.md
   - [x] Read plan v4, reviews Fable + Astra v1/v2/v4, fence journal, runbooks, targets.mk

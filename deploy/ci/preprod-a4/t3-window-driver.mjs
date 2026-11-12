@@ -420,6 +420,8 @@ async function driveInner(ctx, state) {
   ctx.d3 = (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W3'));
   applyRotationKeys(ctx);
+  (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
+    A4_BUDGETS_FILE: ctx.config.budgetsFile }, to(60_000, 'W3'));
   if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
   for (const [step, script, env] of [
     ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }],
@@ -430,10 +432,12 @@ async function driveInner(ctx, state) {
     heartbeat(ctx, state, step);
     (ctx.delivered ?? delivered)(ctx, script, { ...baseEnv(ctx), ...env,
       A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, step));
+    if (step === 'W4' || step === 'W5') {
+      (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'stage',
+        A4_STAGE: step === 'W4' ? 'inputs' : 'rehearsal',
+        A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: ctx.config.rehearsalFile }, to(30_000, step));
+    }
     if (step === 'W5') {
-      (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
-        A4_BUDGETS_FILE: ctx.config.budgetsFile,
-        A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W5'));
       const now = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
       if (now !== state.storesSha256) throw new Error('encrypted_stores_drift');
     }
