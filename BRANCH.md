@@ -42,5 +42,5 @@
   - [x] Bounded v1beta transport, API-key header, deadlines and redirects refused.
   - [x] Native question and usage mapping; binary confidence validated then projected to P(true).
 - [x] Lot 2: adapter, host exports, credential restriction, pricing and reconstruction.
-- [ ] Lot 3: mocked routing, schema/error/deadline tests and residency documentation.
+- [x] Lot 3: mocked routing, schema/error/deadline tests and residency documentation.
 - [ ] Lot 4: version 0.38.0, scoped checks, independent review and PR CI green.

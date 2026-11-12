@@ -75,6 +75,6 @@ export function decodeGeminiDecisionsResponse(candidate: unknown, request: Decis
       || typeof answer.confidence !== 'number'
       || Math.abs(answer.confidence - Math.max(...probabilities as number[])) > descriptor.probabilityTolerance) return invalid('VERDICT_INVALID');
   }
-  return decodeJevResponse({ model: body.model, answers: { verdict: answer },
+  return decodeJevResponse({ model: body.model ?? null, answers: { verdict: answer },
     usage: { input_tokens: usage.total_input_tokens, output_tokens: 0 } }, request, descriptor, requestId);
 }

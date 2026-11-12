@@ -19,7 +19,7 @@ export interface GeminiDecisionsAdapterOptions { transport: GeminiDecisionsTrans
 /** Explicit native registration; ordinary OpenAI chat composition never acquires it. */
 export class GeminiDecisionsAdapter implements ProviderAdapter {
   readonly provider = { ...getProviderProfile('typesafe'), providerId: 'gemini' as const,
-    family: 'gemini' as const, label: 'Gemini Decisions', decisionOnly: true as const };
+    family: 'google' as const, label: 'Gemini Decisions', decisionOnly: true as const };
   readonly descriptor: DecisionEvaluatorDescriptor;
   constructor(private readonly options: GeminiDecisionsAdapterOptions) {
     const descriptor = parseDecisionEvaluatorDescriptor(options.descriptor ?? geminiDecisionsDescriptor);
