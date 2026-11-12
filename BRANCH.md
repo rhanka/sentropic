@@ -88,6 +88,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - No UI change, no UAT checkpoint for this step.
 
 ## Plan / Todo (lot-based)
+- [x] RUN 2 AMD-10: bounded single global publish queue with strict tenant alternation and queue-full rejection tests.
 - [x] RUN 2 AMD-8: freeze d2-4 capacity, per-tenant limits, quota snapshots and stop/scope response types locally.
 - [x] RUN 2: verify feat/sandbox-node-step1 mechanically; restore registry-compatible contracts and consume new types locally.
 - [ ] RUN 2: apply AMD-1..12, d2-4 admission, custody, scope resolution, VM operator contract and regression tests.
