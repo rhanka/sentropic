@@ -14,6 +14,8 @@
   - `api/tests/**`
   - `BRANCH.md`
   - `package-lock.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/llm-gateway/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -22,6 +24,8 @@
   - `api/src/services/llm-account-transports.ts`
 
 ## Feedback Loop
+- [x] BREM-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.
+- [x] RUN 2: rebase onto origin/main required no replay; published llm-mesh remains 0.36.0, below this branch version. Candidate lock changes exactly two consumer range cells; strict npm ci --ignore-scripts --dry-run passed without force or legacy-peer-deps.
 - [x] Local Muse provider catalog confirms muse-ember-1.0; transport model IDs are not enumerated.
 - [x] Track import reserved for designated conductor; source artifact is this plan.
 - [x] BREM-EX1: synchronize only the root lock's llm-mesh workspace version; CI changes rejects the mandatory package bump without it. No dependency graph change; rollback is restoring that version cell.
