@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, runKubectl, saveState } from './t3-lib.mjs';
+import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState } from './t3-lib.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -171,8 +171,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const config = JSON.parse(readFileSync(cliArg(argv, '--config'), 'utf8'));
   const stateDir = cliArg(argv, '--state-dir');
   const dryRun = argv.includes('--dry-run');
+  const deadlineMs = recoveryDeadline(stateDir);
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
-    dryRun, print: console.log });
+    dryRun, print: console.log, timeoutRef: { deadlineMs }, stateDir });
   const state = loadState(stateDir) ?? {};
   state.namespace = config.namespace;
   if (!state.middlewareSpec && config.middlewareSpec) state.middlewareSpec = config.middlewareSpec;
@@ -182,7 +183,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     const done = await finishOpen({ call, probe: fetch, state,
       save: next => saveState(stateDir, next), images: config.images,
-      probes, externalProbes,
+      probes, externalProbes, deadlineMs,
       dryRun, print: console.log });
     console.log(`finish_open_ok substate=${done.substate}`);
   } catch (err) {

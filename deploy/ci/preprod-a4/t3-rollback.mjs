@@ -1,4 +1,4 @@
-import { effectiveTimeout, monoMs, podLabels, runKubectl } from './t3-lib.mjs';
+import { effectiveTimeout, monoMs, podLabels, recoveryDeadline, runKubectl } from './t3-lib.mjs';
 
 // Keys added by the window wire step (fence journal K). Both must be gone and
 // verified gone BEFORE any rollout undo or scale-up (Fable M1), or the legacy
@@ -119,10 +119,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const args = cliArgs(process.argv.slice(2));
   if (!args.kubeconfig) { console.error('usage: t3-rollback.mjs --kubeconfig-file F [--namespace N] ...'); process.exitCode = 1; }
   else {
-    const call = runKubectl({ kubeconfig: args.kubeconfig, namespace: args.namespace, dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, print: console.log });
+    const deadlineMs = recoveryDeadline();
+    const call = runKubectl({ kubeconfig: args.kubeconfig, namespace: args.namespace, dryRun: args.dryRun,
+      probeReadOnly: args.probeReadOnly, print: console.log, timeoutRef: { deadlineMs }, stateDir: process.env.T3_STATE_DIR });
     try {
       const out = await preCommitRollback({ call, revisions: args.revisions, preCmDir: args.preCmDir,
-        dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log,
+        dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log, deadlineMs,
         probe: fetch, healthUrl: args.healthUrl, jwksUrl: args.jwksUrl });
       if (!args.dryRun) console.log(`rollback_ok removed=${out.removedKeys.join(',') || 'none'}`);
     } catch (err) { console.error(`rollback_failed: ${err.message}`); process.exitCode = 1; }

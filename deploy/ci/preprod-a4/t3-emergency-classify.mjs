@@ -1,4 +1,4 @@
-import { monoMs, runKubectl } from './t3-lib.mjs';
+import { effectiveTimeout, monoMs, recoveryDeadline, runKubectl } from './t3-lib.mjs';
 import { classify } from './t3-window-driver.mjs';
 import { waitZeroPods } from './t3-rollback.mjs';
 
@@ -22,18 +22,20 @@ if (!kubeconfig) {
   console.error('usage: t3-emergency-classify.mjs --kubeconfig-file F [--namespace N] [--dry-run]');
   process.exitCode = 1;
 } else {
-  const call = runKubectl({ kubeconfig, namespace, dryRun, print: console.error });
+  const deadlineMs = recoveryDeadline();
+  const call = runKubectl({ kubeconfig, namespace, dryRun, print: console.error,
+    stateDir: process.env.T3_STATE_DIR, timeoutRef: { deadlineMs } });
   try {
     // Freeze writers BEFORE reading the truth: the commit transaction can
     // land between classify and the scale-down (same order as recover()).
     call(['scale', 'deployment/api', '--replicas=0']);
-    waitZeroPods(call, monoMs() + 40_000, ['api']);
+    waitZeroPods(call, Math.min(deadlineMs, monoMs() + 40_000), ['api']);
     const ctx = { call, config: { candidateImage: '' }, postgresPod, postgresUser,
       dryRun, probeReadOnly: false, print: console.error };
     const t0 = monoMs();
     let info = classify(ctx);
     while (info.locks > 0 && monoMs() - t0 < waitBudgetMs) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, effectiveTimeout(2000, { deadlineMs })));
       info = classify(ctx);
     }
     console.log(JSON.stringify({ journal: info.journal, locks: info.locks,
