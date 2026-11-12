@@ -22,7 +22,7 @@ export function makeCall(scenario = {}) {
     template: { spec: { containers: [{ name, image }] } } },
     status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } });
   const call = (args, input) => {
-    calls.push(args.join(' '));
+    calls.push(args.join(' ') + (args[0] === 'exec' ? ` <<<${String(input ?? '').split('\n')[0].slice(0, 120)}` : ''));
     const cmd = args.join(' ');
     if (cmd.startsWith('patch secret sentropic-api')) {
       const patch = JSON.parse(args[args.indexOf('-p') + 1]);
@@ -32,9 +32,12 @@ export function makeCall(scenario = {}) {
     if (cmd.startsWith('auth can-i')) return 'yes';
     if (args[0] === 'exec') {
       const statement = String(input ?? '');
-      if (statement.includes('journal_present')) return scenario.journal === false ? 'f|0\n' : 't|0\n';
+      if (statement.includes('journal_present')) return scenario.journal === false ? 'f|0\n' : `t|${scenario.locks ?? 0}\n`;
       if (statement.includes('identity_committed')) return scenario.committed ? 't\n' : 'f\n';
       if (statement.includes('asset_column_present')) return 'f\n';
+      if (statement.includes('to_regclass(name)')) {
+        return scenario.relations ?? 'control.artifact_host_kv|t\npublic.__drizzle_control_migrations|t\nartifacts.artifacts|t\nartifact_host.activation_namespaces|t\n';
+      }
       if (statement.includes('AS k,')) return 'enc-key||3\n';
       return '\n';
     }
@@ -128,9 +131,39 @@ test('classifier SQL is SELECT-only so exec may run it in probe mode', () => {
   }
 });
 
+test('classifier reports locks, receipts and artifact relations', () => {
+  const { ctx } = makeCtx({ scenario: { journal: true } });
+  const info = classify(ctx);
+  assert.equal(info.locks, 0);
+  assert.ok(Array.isArray(info.relations));
+  assert.equal(info.relations.length, 4);
+  assert.ok(info.relations.every(r => r.present === true && typeof r.name === 'string'));
+});
+
+test('recover stops api before classifying, then rolls back pre-commit', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==' } } });
+  const { recover } = await import('./t3-window-driver.mjs');
+  const code = await recover(ctx, { step: 'W7b', namespace: 'sentropic-preprod' }, 'test-stop-first');
+  assert.equal(code, 3);
+  const scaleApi0 = calls.findIndex(c => c === 'scale deployment/api --replicas=0');
+  const journalExec = calls.findIndex(c => c.includes('journal_present'));
+  const patchKeys = calls.findIndex(c => c.startsWith('patch secret sentropic-api'));
+  assert.ok(scaleApi0 !== -1 && journalExec !== -1 && patchKeys !== -1);
+  assert.ok(scaleApi0 < journalExec, 'api stopped before classify');
+  assert.ok(journalExec < patchKeys, 'classified before rollback');
+});
+
+test('recover refuses to decide while migration locks are held', async () => {
+  const { ctx } = makeCtx({ scenario: { journal: true, locks: 2 } });
+  const { recover } = await import('./t3-window-driver.mjs');
+  await assert.rejects(
+    recover(ctx, { step: 'W7b', namespace: 'sentropic-preprod' }, 'test-locks'),
+    /migration_locks_held/);
+});
+
 test('classifier reports uncommitted on a journal-less database', () => {
   const { ctx } = makeCtx({ scenario: { journal: false } });
-  assert.deepEqual(classify(ctx), { journal: false, locks: 0, committed: false, receipts: 0, apiReady: false });
+  assert.deepEqual(classify(ctx), { journal: false, locks: 0, committed: false, receipts: 0, apiReady: false, relations: [] });
 });
 
 test('classifier proves branch P only with commit marker and ready api', () => {
@@ -203,7 +236,7 @@ test('kill after commit converges forward with no legacy boot', async () => {
   assert.equal(code, 4);
   const joined = calls.join('\n');
   assert.ok(!joined.includes('rollout undo'), 'no legacy boot after commit');
-  assert.ok(!joined.includes('scale deployment/api --replicas=0'), 'api stays up on branch P');
+  assert.ok(joined.includes('scale deployment/api --replicas=0'), 'writers freeze before classify');
   assert.ok(joined.includes('scale deployment/ui --replicas=1'), 'frontals converge');
   assert.equal(loadState(ctx.stateDir).substate, 'TWO_HOSTS_OPEN');
 });
@@ -315,11 +348,11 @@ test('concurrent watchdog polls keep a single writer', async () => {
   const codes = [a, b].sort();
   assert.ok(codes.includes(3), `codes=${codes}`);
   assert.ok(codes.includes(5) || codes.includes('recovery-in-progress'), `codes=${codes}`);
-  assert.equal(calls.filter(c => c === 'scale deployment/api --replicas=0').length, 1);
+  assert.equal(calls.filter(c => c.startsWith('patch secret sentropic-api')).length, 1);
 });
 
 test('recovery claim keeps a single writer', async () => {
-  const first = makeCtx();
+  const first = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
   const { recover } = await import('./t3-window-driver.mjs');
   const state = { step: 'W3', heartbeatMonoMs: 0, driverPid: 2147483647,
     t0MonoMs: monoMs(), namespace: 'sentropic-preprod' };
@@ -330,8 +363,8 @@ test('recovery claim keeps a single writer', async () => {
   const code2 = await recover({ ...second.ctx, stateDir: first.ctx.stateDir, recoverOwner: 'test-loser' },
     loadState(first.ctx.stateDir), 'test-race-late');
   assert.equal(code2, 5);
-  const scales = first.calls.filter(c => c === 'scale deployment/api --replicas=0');
-  assert.equal(scales.length, 1);
+  const patches = first.calls.filter(c => c.startsWith('patch secret sentropic-api'));
+  assert.equal(patches.length, 1);
 });
 
 test('watchdog stands down while the driver owns recovery', async () => {

@@ -11,8 +11,8 @@ function podsOf(call, component) {
   return out ? JSON.parse(out).items ?? [] : [];
 }
 
-export function waitZeroPods(call, deadlineMs) {
-  for (const component of DEPLOYS) {
+export function waitZeroPods(call, deadlineMs, components = DEPLOYS) {
+  for (const component of components) {
     while (podsOf(call, component).length > 0) {
       if (monoMs() > deadlineMs) throw new Error(`pods_not_zero: ${component}`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
