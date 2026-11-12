@@ -283,7 +283,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const dryRun = argv.includes('--dry-run');
   const probeReadOnly = argv.includes('--probe-readonly');
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
-    dryRun, probeReadOnly, print: console.log });
+    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, print: console.log });
   const ctx = { call, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
