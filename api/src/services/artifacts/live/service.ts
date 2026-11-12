@@ -80,6 +80,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     sources: { ...options.sources, dependencies: receipt => cache.materialize(receipt),
       dependenciesArchive: receipt => cache.sealedArchive(receipt) } });
   const cache = createDependencyCache({ ...options.cache, cleanInstall: gatedInstall(heavy, supervisor.cleanInstall),
+    sealInstall: gatedInstall(heavy, supervisor.sealInstall),
     fetch: (pin, relay, signal) => fetchLockedTarball(pin, relay, undefined, signal),
     storage: createPostgresCacheStorage(options.pool, options.cacheBlobs) },
   options.installBudget ?? defaultInstallBudget());
