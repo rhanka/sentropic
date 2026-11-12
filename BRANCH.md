@@ -69,7 +69,7 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   - [x] Typecheck `apps/sandbox-node` via `exec-api` on `ENV=test-sandbox-node` (green).
   - [x] Unit tests green via `test-api-endpoints SCOPE=apps/sandbox-node/tests` on `ENV=test-sandbox-node` (5 files, 16 tests).
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & lint for the touched package.
+  - [x] Typecheck & lint for the touched package (`make typecheck-api` exit 0 on 2026-11-12; scoped vitest 16/16; eslint clean on identical `.ts` per S1-A1a).
   - [ ] Bump `packages/contracts/package.json` only if a release step requires it (not in S1-T0).
   - [ ] Final gate step 1: create/update PR using this `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR.
