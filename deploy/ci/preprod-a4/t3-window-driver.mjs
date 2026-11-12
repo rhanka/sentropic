@@ -221,8 +221,16 @@ export async function recover(ctx, state, reason) {
     state.apiReady = info.apiReady;
     state.locks = info.locks;
     state.receipts = info.receipts;
+    state.relations = info.relations;
     saveState(ctx.stateDir, state);
     if (info.locks > 0) throw new Error(`migration_locks_held: ${info.locks}`);
+    // Q5 is observability, not a gate: a missing artifact relation is
+    // unexpected on a migrated database, so record it and warn loudly
+    // instead of deciding blind.
+    const missingRelations = info.relations.filter(r => !r.present);
+    if (missingRelations.length > 0) {
+      ctx.print?.(`# recover: missing artifact relations: ${missingRelations.map(r => r.name).join(',')}`);
+    }
     if (!info.committed) {
       await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
         dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,

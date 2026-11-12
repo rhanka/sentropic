@@ -448,6 +448,60 @@ test('watchdog enforces the total 300 s budget on a live driver', async () => {
   assert.ok(calls.join('\n').includes('scale deployment/api --replicas=0'));
 });
 
+test('finishOpen patches an existing middleware instead of recreating it', async () => {
+  const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
+    status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
+  const { ctx, calls } = makeCtx({ config: { middlewareSpec: { ipAllowList: { sourceRange: ['1.2.3.4/32'] } } },
+    scenario: { api: readyApi } });
+  const { finishOpen } = await import('./t3-finish-open.mjs');
+  const state = { namespace: 'sentropic-preprod', middlewareSpec: ctx.config.middlewareSpec };
+  const images = { candidate: CANDIDATE, ui: UI_IMAGE };
+  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+    save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
+  const joined = calls.join('\n');
+  assert.ok(!joined.includes('create -f -'), 'no create over the existing middleware (no AlreadyExists)');
+  assert.ok(joined.includes('patch middleware a4-verification'), 'middleware patched in place');
+  assert.equal(state.substate, 'TWO_HOSTS_OPEN');
+});
+
+test('finishOpen resumes from ACCEPTED without replaying probes', async () => {
+  const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
+    status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
+  const { ctx } = makeCtx({ scenario: { api: readyApi } });
+  const { finishOpen } = await import('./t3-finish-open.mjs');
+  const state = { namespace: 'sentropic-preprod', substate: 'ACCEPTED',
+    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+  const images = { candidate: CANDIDATE, ui: UI_IMAGE };
+  const neverProbe = async () => { throw new Error('probe replayed after ACCEPTED'); };
+  await finishOpen({ call: ctx.call, probe: neverProbe, state,
+    save: next => Object.assign(state, next), images,
+    probes: [{ id: 'S-3', url: 'https://app/health', expect: 200 }], externalProbes: [] });
+  assert.equal(state.substate, 'TWO_HOSTS_OPEN');
+});
+
+test('finishOpen resumes from BACKUP_RESUMED and ONE_HOST_OPEN', async () => {
+  for (const substate of ['BACKUP_RESUMED', 'ONE_HOST_OPEN']) {
+    const { ctx } = makeCtx();
+    const { finishOpen } = await import('./t3-finish-open.mjs');
+    const state = { namespace: 'sentropic-preprod', substate,
+      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    const images = { candidate: CANDIDATE, ui: UI_IMAGE };
+    await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+      save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
+    assert.equal(state.substate, 'TWO_HOSTS_OPEN', substate);
+  }
+});
+
+test('recover records missing artifact relations instead of deciding blind', async () => {
+  const { ctx, printed } = makeCtx({ scenario: { relations: 'public.__drizzle_control_migrations|t\ncontrol.artifact_host_kv|f\n' } });
+  const { recover } = await import('./t3-window-driver.mjs');
+  const code = await recover(ctx, { step: 'W7b', namespace: 'sentropic-preprod' }, 'test-relations');
+  assert.equal(code, 3);
+  const missing = loadState(ctx.stateDir).relations.filter(r => !r.present);
+  assert.deepEqual(missing.map(r => r.name), ['control.artifact_host_kv']);
+  assert.ok(printed.join('\n').includes('missing artifact relations'), 'operator warned');
+});
+
 test('reconcile waits for terminating frontals instead of failing', async () => {
   const { ctx, calls } = makeCtx({ scenario: { frontalTerminating: 3 } });
   const { reconcileRestrictSafe } = await import('./t3-finish-open.mjs');
