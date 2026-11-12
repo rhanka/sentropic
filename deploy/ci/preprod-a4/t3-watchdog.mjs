@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { monoMs, runKubectl, loadState, saveState } from './t3-lib.mjs';
+import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
+  runKubectl, loadState, saveState } from './t3-lib.mjs';
 import { classify, recover } from './t3-window-driver.mjs';
 
 // The driver cannot watch itself: a dead driver leaves prod fenced. This
@@ -38,9 +39,15 @@ export async function poll(ctx) {
   const alive = !pidDead(state.driverPid);
   if (alive && !over && !(stale && past)) return 'waiting';
   const reason = !alive ? 'watchdog_driver_dead' : over ? 'watchdog_budget' : 'watchdog_stale_past_deadline';
+  if (!claimRecovery(ctx.stateDir, 'watchdog')) {
+    const owner = readRecoveryClaim(ctx.stateDir);
+    if (!claimDead(owner)) return 'recovery-in-progress';
+    releaseRecovery(ctx.stateDir);
+    if (!claimRecovery(ctx.stateDir, 'watchdog')) return 'recovery-in-progress';
+  }
   for (const pid of [state.driverPid, state.childPid]) if (pid && !pidDead(pid)) killPid(pid);
   console.log(`watchdog_firing reason=${reason} step=${state.step}`);
-  const code = await recover(ctx, state, reason);
+  const code = await recover({ ...ctx, recoverOwner: 'watchdog' }, state, reason);
   state.watchdogDone = true;
   state.watchdogExit = code;
   saveState(ctx.stateDir, state);
@@ -61,7 +68,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const timer = setInterval(async () => {
     try {
       const out = await poll(ctx);
-      if (out !== 'waiting' || monoMs() > stopAt) {
+      if ((out !== 'waiting' && out !== 'recovery-in-progress') || monoMs() > stopAt) {
         clearInterval(timer);
         process.exitCode = out === 'done' ? 0 : Number(out) || 1;
       }

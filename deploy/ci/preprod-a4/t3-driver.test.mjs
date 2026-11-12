@@ -252,6 +252,40 @@ test('dry-run prints the exact B3 command sequence and touches nothing', async (
   assert.ok(readFileSync(`${ctx.stateDir}/request.json`, 'utf8').includes('test'));
 });
 
+test('recovery claim keeps a single writer', async () => {
+  const first = makeCtx();
+  const { recover } = await import('./t3-window-driver.mjs');
+  const state = { step: 'W3', heartbeatMonoMs: 0, driverPid: 2147483647,
+    t0MonoMs: monoMs(), namespace: 'sentropic-preprod' };
+  saveState(first.ctx.stateDir, state);
+  const code1 = await recover(first.ctx, loadState(first.ctx.stateDir), 'test-race');
+  assert.equal(code1, 3);
+  const second = makeCtx();
+  const code2 = await recover({ ...second.ctx, stateDir: first.ctx.stateDir, recoverOwner: 'test-loser' },
+    loadState(first.ctx.stateDir), 'test-race-late');
+  assert.equal(code2, 5);
+  const scales = first.calls.filter(c => c === 'scale deployment/api --replicas=0');
+  assert.equal(scales.length, 1);
+});
+
+test('watchdog stands down while the driver owns recovery', async () => {
+  const { ctx } = makeCtx();
+  const sleeper = spawn('sleep', ['30']);
+  try {
+    saveState(ctx.stateDir, { step: 'W3', heartbeatMonoMs: monoMs() - 60_000,
+      driverPid: sleeper.pid, t0MonoMs: monoMs(), stepDeadlineMonoMs: monoMs() - 1000,
+      namespace: 'sentropic-preprod' });
+    const { claimRecovery } = await import('./t3-lib.mjs');
+    assert.equal(claimRecovery(ctx.stateDir, `pid-${sleeper.pid}`), true);
+    assert.equal(await poll(ctx), 'recovery-in-progress');
+    assert.doesNotThrow(() => process.kill(sleeper.pid, 0));
+  } finally {
+    try { process.kill(sleeper.pid, 'SIGKILL'); } catch { /* already reaped */ }
+    const { releaseRecovery } = await import('./t3-lib.mjs');
+    releaseRecovery(ctx.stateDir);
+  }
+});
+
 test('emergency command prints the rollback plan in dry-run', () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');

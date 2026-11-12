@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { monoMs, runKubectl, loadState, saveState, utcNow } from './t3-lib.mjs';
+import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
+  runKubectl, loadState, saveState, utcNow } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
 
@@ -148,8 +149,19 @@ function heartbeat(ctx, state, step) {
 
 // Recovery after any step failure, cutoff breach or driver fault. Re-reads
 // the truth (never trusts the in-memory step) then rolls back pre-commit or
-// converges post-commit. Returns the process exit code.
+// converges post-commit. Returns the process exit code. The recovery claim
+// keeps exactly one writer: the loser stands down with exit 5.
 export async function recover(ctx, state, reason) {
+  const me = ctx.recoverOwner ?? `pid-${process.pid}`;
+  if (!claimRecovery(ctx.stateDir, me)) {
+    const owner = readRecoveryClaim(ctx.stateDir);
+    if (!claimDead(owner)) {
+      ctx.print?.(`recovery stood down, owned by ${owner?.owner}`);
+      return 5;
+    }
+    releaseRecovery(ctx.stateDir);
+    if (!claimRecovery(ctx.stateDir, me)) return 5;
+  }
   state.recoveryReason = reason;
   saveState(ctx.stateDir, state);
   const info = classify(ctx);

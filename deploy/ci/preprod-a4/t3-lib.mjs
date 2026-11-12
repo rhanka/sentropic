@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 
 // Monotonic milliseconds shared by driver and watchdog. CLOCK_BOOTTIME via
 // /proc/uptime is immune to NTP steps; Date.now is log-only, never budget.
@@ -72,4 +72,42 @@ export function saveState(dir, state) {
 
 export function utcNow() {
   return new Date().toISOString();
+}
+
+// Single-writer claim for recovery: exactly one of driver/watchdog recovers.
+// The lock file holds `owner|monoMs`. A claim owned by a dead pid or older
+// than two minutes is take-over-able; anything else forces stand-down.
+export function readRecoveryClaim(dir) {
+  try {
+    const [owner, at] = readFileSync(`${dir}/t3-recovering.lock`, 'utf8').split('|');
+    return { owner, at: Number(at) };
+  } catch {
+    return null;
+  }
+}
+
+export function claimRecovery(dir, owner) {
+  const path = `${dir}/t3-recovering.lock`;
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const fd = openSync(path, 'wx', 0o600);
+    writeSync(fd, `${owner}|${monoMs()}`);
+    closeSync(fd);
+    return true;
+  } catch {
+    return readRecoveryClaim(dir)?.owner === owner;
+  }
+}
+
+export function releaseRecovery(dir) {
+  try { unlinkSync(`${dir}/t3-recovering.lock`); } catch { /* absent */ }
+}
+
+export function claimDead(claim) {
+  if (!claim) return true;
+  if (claim.owner?.startsWith('pid-')) {
+    try { process.kill(Number(claim.owner.slice(4)), 0); return false; }
+    catch { return true; }
+  }
+  return monoMs() - (claim.at || 0) > 120_000;
 }
