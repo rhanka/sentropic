@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { monoMs, podLabels, runKubectl } from './t3-lib.mjs';
 
 // Keys added by the window wire step (fence journal K). Both must be gone and
@@ -44,7 +43,8 @@ function revisionOf(call, deploy) {
 // Pre-commit rollback. Runs only after the classifier proved
 // identity_committed=false with zero api pods and zero migration locks.
 export function preCommitRollback(ctx) {
-  const { call, probe = null, revisions, preCmDir = null, healthUrl = null, jwksUrl = null } = ctx;
+  const { call, probe = null, revisions, preCmDir = null, healthUrl = null, jwksUrl = null,
+    dryRun = false, note = () => {} } = ctx;
   for (const deploy of DEPLOYS) call(['scale', `deployment/${deploy}`, '--replicas=0']);
   waitZeroPods(call, monoMs() + (ctx.zeroPodsTimeoutMs ?? 60_000));
   call(['delete', 'pod', 'sentropic-a4-custodian', '--ignore-not-found=true', '--wait=true', '--timeout=60s']);
@@ -63,7 +63,10 @@ export function preCommitRollback(ctx) {
   for (const deploy of DEPLOYS) call(['rollout', 'status', `deployment/${deploy}`, '--timeout=120s']);
   call(['patch', 'cronjob', 'pgbackup', '--type=merge', '-p', '{"spec":{"suspend":false}}']);
   const exp = JSON.parse(call(['get', 'cronjob', 'sentropic-idp-identity-export', '-o', 'json']) || '{}');
-  if (exp.spec?.suspend !== true) throw new Error('identity_export_must_stay_suspended');
+  if (exp.spec?.suspend !== true) {
+    if (dryRun) note('# dry-run: identity-export suspension unverified (check live before a real run)');
+    else throw new Error('identity_export_must_stay_suspended');
+  }
   for (const name of ['sentropic', 'auth-idp']) {
     call(['annotate', 'ingress', name, 'traefik.ingress.kubernetes.io/router.middlewares-', '--overwrite']);
   }
@@ -103,7 +106,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   else {
     const call = runKubectl({ kubeconfig: args.kubeconfig, namespace: args.namespace, dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, print: console.log });
     try {
-      const out = preCommitRollback({ call, revisions: args.revisions, preCmDir: args.preCmDir });
+      const out = preCommitRollback({ call, revisions: args.revisions, preCmDir: args.preCmDir,
+        dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log });
       if (!args.dryRun) console.log(`rollback_ok removed=${out.removedKeys.join(',') || 'none'}`);
     } catch (err) { console.error(`rollback_failed: ${err.message}`); process.exitCode = 1; }
   }
