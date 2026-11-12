@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { buildProbes, claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
+import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRecoveryClaim, releaseRecovery,
   runKubectl, loadState, saveState, stepTimeoutMs, utcNow } from './t3-lib.mjs';
 import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
@@ -195,11 +195,15 @@ export async function recover(ctx, state, reason) {
   }
   RECOVERY_IN_FLIGHT = true;
   try {
+    const now = ctx.now ?? monoMs;
     // Nominal work stops at 175 s, reserving recovery within the SAME fence.
     // A failed operation never extends the original 300 s deadline.
-    const deadlineMs = Math.min(monoMs() + (ctx.recoveryBudgetMs ?? 125_000),
+    const deadlineMs = Math.min(now() + (ctx.recoveryBudgetMs ?? 125_000),
       state.t0MonoMs == null ? Infinity : state.t0MonoMs + TOTAL_BUDGET_MS);
-    if (deadlineMs <= monoMs()) throw new Error('budget_exhausted');
+    if (deadlineMs <= now()) throw new Error('budget_exhausted');
+    const originalCall = ctx.call;
+    ctx = { ...ctx, call: (args, input, cap) => originalCall(args, input,
+      effectiveTimeout(cap ?? 60_000, { deadlineMs }, now())) };
     state.stepDeadlineMonoMs = deadlineMs;
     if (ctx.timeoutRef) {
       ctx.timeoutRef.deadlineMs = deadlineMs;
@@ -261,6 +265,7 @@ export async function recover(ctx, state, reason) {
         healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
         witness: ctx.config.witness,
         deadlineMs,
+        now,
         zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
       // The driver recovered itself: mark DONE so the detached watchdog
       // stands down instead of running a second recovery on the reopened
@@ -277,7 +282,7 @@ export async function recover(ctx, state, reason) {
     ctx.print?.('# recover: restarting committed api before finish-open');
     ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
     await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, deadlineMs });
+      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, deadlineMs, now });
     // Same single-writer guard on the post-commit branch.
     state.step = 'DONE';
     state.watchdogDone = true;

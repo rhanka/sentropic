@@ -1,4 +1,4 @@
-import { monoMs, podLabels, runKubectl } from './t3-lib.mjs';
+import { effectiveTimeout, monoMs, podLabels, runKubectl } from './t3-lib.mjs';
 
 // Keys added by the window wire step (fence journal K). Both must be gone and
 // verified gone BEFORE any rollout undo or scale-up (Fable M1), or the legacy
@@ -51,7 +51,7 @@ export async function preCommitRollback(ctx) {
   const { call, probe = null, revisions, preCmDir = null, healthUrl = null, jwksUrl = null,
     dryRun = false, note = () => {} } = ctx;
   for (const deploy of DEPLOYS) call(['scale', `deployment/${deploy}`, '--replicas=0']);
-  waitZeroPods(call, monoMs() + (ctx.zeroPodsTimeoutMs ?? 60_000));
+  waitZeroPods(call, Math.min(ctx.deadlineMs ?? Infinity, monoMs() + (ctx.zeroPodsTimeoutMs ?? 60_000)));
   call(['delete', 'pod', 'sentropic-a4-custodian', '--ignore-not-found=true', '--wait=true', '--timeout=60s']);
   const removed = removeRotatedKeys(call, dryRun);
   if (preCmDir) {
@@ -84,17 +84,19 @@ export async function preCommitRollback(ctx) {
   }
   call(['delete', 'middleware', 'a4-verification', '--ignore-not-found=true']);
   if (probe && healthUrl && jwksUrl) await verifyService(probe, ctx);
+  effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
   return { removedKeys: removed };
 }
 
 async function verifyService(probe, ctx) {
+  const signal = () => AbortSignal.timeout(effectiveTimeout(30_000, ctx, (ctx.now ?? monoMs)()));
   for (const url of [ctx.healthUrl, ctx.jwksUrl]) {
-    const res = await probe(url, { redirect: 'error', signal: AbortSignal.timeout(30_000) });
+    const res = await probe(url, { redirect: 'error', signal: signal() });
     await res.body?.cancel?.();
     if (res.status !== 200) throw new Error(`rollback_verify_failed: ${url}`);
   }
   if (ctx.witness) {
-    const res = await probe(ctx.witness.url, { headers: { cookie: ctx.witness.cookie }, signal: AbortSignal.timeout(30_000) });
+    const res = await probe(ctx.witness.url, { headers: { cookie: ctx.witness.cookie }, signal: signal() });
     await res.body?.cancel?.();
     if (res.status !== 200) throw new Error('rollback_witness_failed');
   }

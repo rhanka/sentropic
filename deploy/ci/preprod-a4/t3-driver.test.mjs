@@ -222,6 +222,36 @@ test('RUN6 nominal work reserves recovery time before the 300 s fence deadline',
   assert.ok(STEP_CUTOFFS.W9 <= 175_000);
 });
 
+test('RUN6 complete recovery paths consume the remaining fence budget through restoration', async () => {
+  const { recover } = await import('./t3-window-driver.mjs');
+  for (const committed of [false, true]) {
+    const { ctx, calls } = makeCtx({ scenario: { committed } });
+    let clock = 175_000;
+    const original = ctx.call;
+    ctx.now = () => clock;
+    ctx.timeoutRef = {};
+    ctx.call = (args, input, cap) => {
+      assert.ok(cap > 0 && cap <= 300_000 - clock, 'command uses remaining total');
+      clock += 1000;
+      return original(args, input);
+    };
+    const state = { step: 'W8', t0MonoMs: 0, namespace: ctx.config.namespace,
+      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    assert.equal(await recover(ctx, state, 'late-fault'), committed ? 4 : 3);
+    assert.equal(loadState(ctx.stateDir).step, 'DONE');
+    assert.ok(calls.includes('delete middleware a4-verification --ignore-not-found=true'));
+    assert.ok(clock > 175_000 && clock <= 300_000, 'restoration finishes inside fence');
+  }
+});
+
+test('RUN6 finishOpen refuses HTTP probes after the global deadline', async () => {
+  const { ctx } = makeCtx();
+  const { finishOpen } = await import('./t3-finish-open.mjs');
+  await assert.rejects(finishOpen({ ...ctx, images: ctx.config.images,
+    state: { substate: 'TWO_HOSTS_OPEN' }, save: () => {}, deadlineMs: monoMs() - 1,
+    externalProbes: [{ id: 'external', url: 'https://app', expect: 200 }] }), /budget_exhausted/);
+});
+
 test('classifier SQL is schema-safe and versioned', () => {
   const text = loadSql('t3-classify.sql');
   assert.match(text, /t3-classify-v1/);
