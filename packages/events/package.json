@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/events",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Wire-protocol StreamEvent taxonomy (v1) for @sentropic/* packages; re-exports transverse contracts from @sentropic/contracts.",
   "type": "module",
   "license": "MIT",
