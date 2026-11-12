@@ -28,8 +28,7 @@ describe('pool endpoints (L3 §7.3.3, §7.6.3)', () => {
       occupancy: { warm: 1, warmDeps: 0, filling: 0, claimed: 0 } });
     const other = setup('scope-b', false, { store });
     const empty = await other.app.request('/v1/pool');
-    expect(await empty.json()).toMatchObject({ scope: 'scope-b',
-      occupancy: { warm: 0, warmDeps: 0, filling: 0, claimed: 0 } });
+    expect(empty.status).toBe(200);
     expect(await empty.json()).toMatchObject({ scope: 'scope-b',
       occupancy: { warm: 0, warmDeps: 0, filling: 0, claimed: 0 } });
   });
