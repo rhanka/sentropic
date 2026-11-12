@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { SandboxCgroup } from '../src/cgroups.js';
 
 describe('resolved systemd scope termination', () => {
+  it('should read complete tenant memory.current through the resolved systemd slice', () => {
+    const cgroup = new SandboxCgroup({
+      controlGroup: () => '/builder.slice/builder-tenant.slice/builder-tenant-immo.slice',
+      read: path => { expect(path).toContain('/memory.current'); return '805306368\n'; }, write: () => {},
+    });
+    expect(cgroup.tenantMemoryMiB('immo')).toBe(768);
+    expect(() => cgroup.tenantMemoryMiB('sentropic')).toThrowError(/cgroup_tenant_mismatch/);
+  });
   it('should kill only the resolved sandbox scope and wait for populated zero', async () => {
     const writes: string[] = [];
     const scope = 'builder-sbx-123.scope';
