@@ -6,6 +6,7 @@ import { ExecutionNodeAdmission } from './admission.js';
 import { AuditLog } from './audit.js';
 import { TenantBaseRegistry } from './mounts.js';
 import { FakeRuntimeAdapter, RunscRuntimeAdapter, type RuntimeAdapter } from './runtime-adapter.js';
+import { SandboxCgroup } from './cgroups.js';
 
 export type {
   ExecutionNodeBaseKind,
@@ -28,6 +29,11 @@ export * from './admission.js';
 export * from './audit.js';
 export * from './mounts.js';
 export * from './daemon.js';
+export * from './contract.js';
+export * from './build-queue.js';
+export * from './cgroups.js';
+export * from './custody.js';
+export * from './recipe-key.js';
 
 export interface ExecutionNodeConfig {
   readonly nodeId?: string;
@@ -37,6 +43,7 @@ export interface ExecutionNodeConfig {
   readonly useRunsc?: boolean;
   readonly ticketPublicKeyPem?: string;
   readonly now?: () => number;
+  readonly memoryCurrentMiB?: (tenantId: ExecutionNodeTenantId) => number;
 }
 
 export function createExecutionNode(config: ExecutionNodeConfig = {}): {
@@ -58,10 +65,11 @@ export function createExecutionNode(config: ExecutionNodeConfig = {}): {
     },
   } satisfies Record<ExecutionNodeTenantId, { maxLive: number; maxStandby: number }>;
   void EXECUTION_NODE_TENANT_SLICE_DEFAULTS;
-  const admission = new ExecutionNodeAdmission(quotas);
+  const adapter = config.adapter ?? (config.useRunsc === true ? new RunscRuntimeAdapter() : new FakeRuntimeAdapter());
+  const admission = new ExecutionNodeAdmission(quotas, { memoryCurrentMiB: config.memoryCurrentMiB
+    ?? (adapter.kind === 'runsc-systrap' ? tenantId => new SandboxCgroup().tenantMemoryMiB(tenantId) : undefined) });
   const audit = new AuditLog(nodeInstanceId, config.now);
   const bases = new TenantBaseRegistry();
-  const adapter = config.adapter ?? (config.useRunsc === true ? new RunscRuntimeAdapter() : new FakeRuntimeAdapter());
   const daemon = new ExecutionNodeDaemon({
     nodeId: config.nodeId ?? 'artifact-builder-vm-1',
     nodeInstanceId,

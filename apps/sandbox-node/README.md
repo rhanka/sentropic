@@ -10,7 +10,10 @@ adapter. No Python. No stack required for unit tests.
 - `src/tickets.ts` — Ed25519 execution-ticket issue/verify (30 s TTL).
 - `src/runtime-adapter.ts` — `RuntimeAdapter` interface, `FakeRuntimeAdapter`
   (tests), `RunscRuntimeAdapter` (`runsc --network=none`, systrap).
-- `src/admission.ts` — per-tenant quotas + WFQ 1:1 pending drain.
+- `src/admission.ts` — one warm session/tenant, complete memory.current reservations.
+- `src/build-queue.ts` — one global publish build, bounded strict tenant alternation.
+- `src/custody.ts` — fsync-persisted monotone revocation and stream fencing.
+- `src/service.ts` — public mTLS bootstrap and job-alerts heartbeat.
 - `src/audit.ts` — append-only audit log (every row carries `tenant_id`).
 - `src/mounts.ts` — per-tenant read-only base mounts + `/workspace` overlay.
 - `src/daemon.ts` — lifecycle automaton, tenant isolation, idempotence.
@@ -30,7 +33,9 @@ adapter. No Python. No stack required for unit tests.
 
 Unit tests need no stack (fake adapter, no database):
 
-- `make up-api-test API_PORT=8795 UI_PORT=5181 MAILDEV_UI_PORT=1088 ENV=test-sandbox-node`
-- `make test-api-endpoints SCOPE=apps/sandbox-node/tests API_TEST_ARGS="--config ../apps/sandbox-node/vitest.config.ts --no-file-parallelism" API_TEST_WORKERS=1 ENV=test-sandbox-node`
-- `make exec-api CMD="npx --no-install tsc --project ../apps/sandbox-node/tsconfig.json" ENV=test-sandbox-node`
-- `make down ENV=test-sandbox-node`
+- `make -f Makefile -f apps/sandbox-node/checks.mk check-sandbox-node ENV=test-sandbox-node`
+- `make -f Makefile -f apps/sandbox-node/checks.mk build-sandbox-node-artifact ENV=test-sandbox-node`
+
+See OPERATOR.md for d2-4 limits and the standalone VM systemd/cloud-init
+delivery contract. The bootstrap advertises only delivered operations;
+unit success does not qualify the host lifecycle or real export reader.
