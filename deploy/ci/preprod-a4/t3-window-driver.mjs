@@ -170,7 +170,8 @@ export async function recover(ctx, state, reason) {
   saveState(ctx.stateDir, state);
   if (!info.committed) {
     preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
-      dryRun: ctx.dryRun, note: ctx.print });
+      dryRun: ctx.dryRun, note: ctx.print,
+      zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
     return 3;
   }
   const { probes, externalProbes } = buildProbes(ctx.config);
