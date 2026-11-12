@@ -439,6 +439,48 @@ authority escalation and lineage conflicts. Package enrollment keeps existing id
 
 ## Generic Decision Capability
 
+### Gemini Decisions (explicit evaluator opt-in)
+
+The host subpath also exports `createGeminiDecisionsAdapter`,
+`createGeminiDecisionsTransport`, `geminiDecisionsDescriptor` and `geminiDecisionsPrice`.
+Register this adapter separately and allowlist its exact evaluator reference;
+ordinary Gemini chat adapters never acquire this capability. Credentials must use
+the host's `environment-token` source named `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+Google AI Studio is outside Canada and does not guarantee Canadian residency.
+Enable this evaluator only where its data processing is explicitly permitted;
+it is never a default evaluator or a fallback.
+
+The [official REST reference](https://aistudio.google.com/docs/decisions-api#request)
+documents `POST https://generativelanguage.googleapis.com/v1beta/decisions`,
+`gemini-decision-1`, an `input` string/content block and a named `questions` map.
+This adapter serializes the existing mesh `inputs` as JSON text and sends one
+`verdict` question per `DecisionRequest`. Native media blocks and batching up to
+1,000 questions are not exposed by this single-decision contract. Binary, choice
+and graded criteria map to `noul`, `choice` and `score`; binary criteria use
+`true_description`/`false_description`. The existing mesh rubric limit is 10 levels.
+The provider supports a 262,144-token context; local JSON/byte admission limits
+remain smaller. Explanations and provider-generated decisions are unsupported.
+
+Binary results preserve P(true); the provider's confidence is validated against
+`max(P(true), 1-P(true))` before projection into the existing score-only binary
+contract. Choice and rubric results retain provider confidence and distributions;
+rubric scores must equal the probability-weighted level index. Calibration claims
+come from the provider; calibration on application traffic remains unqualified.
+Usage maps `total_input_tokens`, `total_output_tokens` and modality counts. Pricing
+is $0.10 per million input tokens and $0 output, billed through the host price row.
+The transport makes one attempt, bounds response bytes, respects cancellation and
+deadlines, refuses redirects and sanitizes errors without exposing provider bodies.
+
+The shipped descriptor remains **unqualified**, matching the existing native
+decision qualification policy. The documented response has no served model ID;
+the adapter never substitutes the requested ID as evidence. Without independently
+qualified served identity, the host returns `SERVED_IDENTITY_MISMATCH` and keeps
+liability pending. Synthetic routing tests supply explicit identity evidence;
+they do not qualify live service behavior. No live calls run in CI.
+
+Sources: [launch announcement](https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/),
+[question types and confidence](https://aistudio.google.com/docs/decisions-api#question-types).
+
 `@sentropic/llm-mesh` provides strict decision evaluation contracts, portable client execution, and native JEV/OpenAI Decisions adapters via three distinct export subpaths:
 
 - `@sentropic/llm-mesh/decision`: Consumer contracts (`EvaluatorRef`, `DecisionRequest`, `DecisionResult`, `DecisionVerdict`, `DecisionReceipt`) and portable remote client (`createRemoteDecisionClient`).
