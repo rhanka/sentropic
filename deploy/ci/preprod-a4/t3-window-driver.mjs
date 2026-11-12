@@ -146,9 +146,8 @@ export function checkRbac(ctx) {
   }
 }
 
-// Hard per-step cutoffs from the fence start (t0). W8 and W9 share the total
-// budget: once start-api has run, only the 300 s fence-to-open contract can
-// still kill the driver — never an earlier W8 deadline inside finishOpen.
+// Hard per-step cutoffs from fence start. All nominal work stops by 175 s,
+// leaving the rest of the original 300 s budget for recovery.
 export const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
   W5: 110_000, W6: 125_000, W7a: 135_000, W7b: 175_000, W8: FINISH_CUTOFF_MS, W9: FINISH_CUTOFF_MS };
 
