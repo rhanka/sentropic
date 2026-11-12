@@ -55,6 +55,7 @@ export interface ExecutionNodeSignedCustodyToken {
   readonly principalId: string;
   readonly custodyEpoch: number;
   readonly resourceId: string;
+  readonly issuedAt: string;
   readonly deadlineAt: string;
 }
 
@@ -148,6 +149,34 @@ export interface ExecutionNodeExportSpec {
   readonly presignedPutUrl: string;
   readonly maxBytes: number;
 }
+
+/** Ed25519 JWS over the canonical payload, execution-provenance.v1. */
+export interface ArtifactProvenanceV1 {
+  schemaVersion: 'execution-provenance.v1';
+  tenantId: ExecutionNodeTenantId;
+  logicalSandboxId: string; physicalUid: string; attemptId: string; buildCommandId: string;
+  nodeInstanceId: string; nodeEpoch: number;
+  runtime: { engine: string; version: string; platform: string; rootfsBaseId: string; rootfsDigest: string };
+  source: { repoId: string; commitSha: string; treeSha256: string; dirtyRevisionDigest: null };
+  bases: Array<{ kind: ExecutionNodeBaseKind; baseId: string; lockSha256: string; erofsSha256: string; dmVerityRootHash: string }>;
+  recipe: { profile: string; entry: string; command: string; envAllowlistDigest: string; artifactModel: string };
+  output: { subPath: string; fileCount: number; totalBytes: number; manifestSha256: string; archiveSha256: string };
+  startedAt: string; stoppedAt: string; exportedAt: string; signatureEd25519: string;
+}
+
+/** S2 only: recipeKey is RFC 8785 JCS SHA-256 of this normalized input. */
+export interface DsRecipeKeyV1 {
+  schemaVersion: 'ds-recipe-key.v1';
+  sources: Record<string, string>;
+  compilers: Record<string, { version: string; digest: string }>;
+  compilerOptions: { urlRewriteMode: string; [option: string]: unknown };
+  importMapManifestDigest: `sha256:${string}` | 'none';
+}
+
+export const EXECUTION_NODE_ISOLATE_POLICY = {
+  runscPerSession: 1, workerdPerSession: 1, network: 'none', sharedHost: false,
+  invalidSourcePathStatus: 400, duplicateNormalizedPathCode: 'DUPLICATE_NORMALIZED_PATH',
+} as const;
 
 export type ExecutionNodeErrorCode =
   | 'sandbox_not_quiesced'
