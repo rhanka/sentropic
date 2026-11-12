@@ -22,18 +22,37 @@ done
 [ -n "$STATE_DIR" ] && [ -n "$CONFIG" ] || { echo "usage: t3-emergency.sh --state-dir DIR --config FILE [--finish-open] [--dry-run]" >&2; exit 1; }
 
 # 1. Stop the automation: driver pids from the state file, then the watchdog.
+# Kills the whole process group plus direct children (SIGTERM then SIGKILL)
+# and grandchildren (kubectl spawned by execution/ops/run), so no orphan
+# keeps mutating the cluster during the emergency recovery.
+killtree() {
+  _pid="$1"; _sig="$2"
+  if [ "$_sig" = "TERM" ]; then
+    kill -TERM -"$_pid" 2>/dev/null || true
+    pkill -TERM -P "$_pid" 2>/dev/null || true
+  else
+    kill -KILL -"$_pid" 2>/dev/null || true
+    pkill -KILL -P "$_pid" 2>/dev/null || true
+  fi
+  for _c in $(ps -o pid --ppid "$_pid" 2>/dev/null | tail -n +2); do
+    pkill -KILL -P "$_c" 2>/dev/null || true
+    kill -KILL "$_c" 2>/dev/null || true
+  done
+  if [ "$_sig" = "TERM" ]; then kill -TERM "$_pid" 2>/dev/null || true;
+  else kill -KILL "$_pid" 2>/dev/null || true; fi
+}
 STATE_FILE="$STATE_DIR/t3-window-state.json"
 if [ -f "$STATE_FILE" ]; then
   # shellcheck disable=SC2046
   PIDS=$(node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log([s.driverPid,s.childPid].filter(Boolean).join(" "))' "$STATE_FILE")
-  for pid in $PIDS; do kill -TERM "$pid" 2>/dev/null || true; done
+  for pid in $PIDS; do killtree "$pid" TERM; done
   for _ in $(seq 1 20); do
     ALIVE=0
     for pid in $PIDS; do kill -0 "$pid" 2>/dev/null && ALIVE=1; done
     [ "$ALIVE" -eq 0 ] && break
     sleep 0.5
   done
-  for pid in $PIDS; do kill -KILL "$pid" 2>/dev/null || true; done
+  for pid in $PIDS; do killtree "$pid" KILL; done
 fi
 pkill -f "t3-watchdog.mjs --state-dir $STATE_DIR" 2>/dev/null || true
 sleep 1
