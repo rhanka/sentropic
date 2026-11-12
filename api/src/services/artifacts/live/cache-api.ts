@@ -206,6 +206,9 @@ export function createHostCacheApi(options: {
   executor: PrewarmExecutor;
   /** Background seal runner owned by the composition; nothing starts on import. */
   schedule(work: () => Promise<void>): void;
+  /** Verifies a `sealed` job still has its archive in storage before short-circuiting (§5.1, MAJOR-2 split-brain).
+   * Absent to keep older fakes compiling: without it, a quarantined key stays `sealed` in jobs forever. */
+  verifySealed?(cacheKey: string): Promise<boolean>;
 }) {
   const app = new Hono<HostBuildEnv>();
   app.use('*', hostGate(options.authenticate));
@@ -260,7 +263,25 @@ export function createHostCacheApi(options: {
       const { record, created } = ensured;
       if (record.state === 'sealed') {
         const entry = await options.jobs.readEntry(cacheKey);
-        if (entry?.state === 'sealed') return c.json(sealedView(entry));
+        if (entry?.state === 'sealed') {
+          if (options.verifySealed) {
+            try {
+              if (await options.verifySealed(cacheKey)) return c.json(sealedView(entry));
+            } catch { /* verification outage fails open to re-seal below, never to a stale sealed */
+            }
+          } else return c.json(sealedView(entry));
+          await options.jobs.fail(cacheKey, record.jobId, 'sealed_unit_invalid', 'archive_missing').catch(() => undefined);
+          const retaken = await options.jobs.ensure({ scope, cacheKey, lockSha256: parsed.lockSha256,
+            refKind: parsed.refKind, branch: parsed.binding.branch, installWorkspaces: workspaces,
+            prebundle: parsed.prebundle,
+            ...(parsed.idempotencyKey ? { idempotencyKey: parsed.idempotencyKey } : {}) }).catch(() => undefined);
+          if (retaken?.created) {
+            const job = retaken.record;
+            options.schedule(() => settle(job, source));
+            return c.json(buildingView({ lockSha256: job.lockSha256, cacheKey, jobId: job.jobId,
+              startedAt: job.startedAt }), 202);
+          }
+        }
       }
       if (created) {
         const job = record;

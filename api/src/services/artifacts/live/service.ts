@@ -174,8 +174,15 @@ export function createBuilderService(options: Omit<Parameters<typeof createArtif
   const cacheJobs = createCacheJobs(createPostgresKvRows(options.pool, CACHE_STATE_NAMESPACE),
     { now: options.now, id: options.id });
   const snapshotRepo = options.forgeSnapshot ?? (async () => unconfigured());
+  const verifyStorage = createPostgresCacheStorage(options.pool, options.cacheBlobs);
   const cacheApi = createHostCacheApi({ authenticate: options.authenticate, jobs: cacheJobs, snapshotRepo,
-    executor: prewarmExecutor, schedule: options.schedule });
+    executor: prewarmExecutor, schedule: options.schedule,
+    verifySealed: async cacheKey => {
+      const object = await verifyStorage.read(cacheKey).catch(() => undefined);
+      const ref = object?.receipt.archive?.ref;
+      if (!ref || !object) return false;
+      return (await verifyStorage.getArchive(ref).catch(() => undefined)) !== undefined;
+    } });
   const api = new Hono<HostBuildEnv>().route('/', builds).route('/', live).route('/', cacheApi);
   return { controller, api, jobs, remote, drafts, cacheJobs };
 }

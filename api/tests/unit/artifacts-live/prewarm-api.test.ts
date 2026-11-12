@@ -251,4 +251,21 @@ describe('prewarm HTTP contract', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]!.state).toBe('sealed');
   });
+  it('should re-seal a sealed job whose archive is quarantined instead of sticking sealed', async () => {
+    const { app, scheduled, source, jobs } = harness();
+    const lockSha256 = sha256(source.lockfile);
+    const first = await post(app, body(lockSha256));
+    expect(first.status).toBe(202);
+    await scheduled[0]!();
+    const sealed = await post(app, body(lockSha256));
+    expect(sealed.status).toBe(200);
+    const quarantined = createHostCacheApi({ authenticate: () => ({ hostId: 'immo', storageScopeId: 'scope' }),
+      jobs, snapshotRepo: async () => source,
+      executor: { execute: async () => ({ treeSha256: 't'.repeat(64), inventory: [],
+        archive: { ref: 'r', sha256: 's'.repeat(64), bytes: 1 } }) as never },
+      schedule: work => { scheduled.push(work); }, verifySealed: async () => false });
+    const resealed = await post(quarantined, body(lockSha256));
+    expect(resealed.status).toBe(202);
+    expect(scheduled).toHaveLength(2);
+  });
 });
