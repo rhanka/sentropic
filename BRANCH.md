@@ -13,6 +13,7 @@
   - `packages/llm-mesh/**`
   - `api/tests/**`
   - `BRANCH.md`
+  - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -23,6 +24,8 @@
 ## Feedback Loop
 - [x] Local Muse provider catalog confirms muse-ember-1.0; transport model IDs are not enumerated.
 - [x] Track import reserved for designated conductor; source artifact is this plan.
+- [x] BREM-EX1: synchronize only the root lock's llm-mesh workspace version; CI changes rejects the mandatory package bump without it. No dependency graph change; rollback is restoring that version cell.
+- [x] Muse review found API model count 37 must become 38; corrected alongside its expected ID list.
 
 ## AI Flaky tests
 - [x] No live provider calls.
