@@ -7,7 +7,7 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 - D1 (host): single VM OVH BHS b3-16 (4 vCPU / 16 GiB / 100 GB NVMe), cgroup v2 slices, gVisor systrap only, escalation to b3-32 when multi-tenant RSS > 12.5 GiB (B6a).
 - D8 (operator): operated by the k8s session (IaC, hardening, pinned runsc systrap, systemd/cgroup, mTLS, supervision). Agent delivered by sentropic as a digest-pinned artifact. BHS residency. Removal only with >= 7 days notice plus evidence.
 - Tenants: exactly 2 concurrent tenants, `sentropic` and `immo`.
-- Contract: `contractVersion` is `execution-node.v1` (see `packages/contracts/src/execution-node-v1.ts`, the normative amendable module).
+- Contract: `contractVersion` is `execution-node.v1` (see `apps/sandbox-node/src/contract.ts`, the normative amendable module).
 - Focus baseline: real Focus `ab86a9f13` for live/publish gates (D14-b PR due 13/11 12h00).
 
 ## 2. Tenant model (frozen)

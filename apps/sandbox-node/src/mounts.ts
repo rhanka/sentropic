@@ -1,7 +1,7 @@
 import type {
   ExecutionNodeBaseRef,
   ExecutionNodeTenantId,
-} from '../../../packages/contracts/src/execution-node-v1.js';
+} from './contract.js';
 import { ExecutionNodeError } from './errors.js';
 import type { SandboxMount } from './runtime-adapter.js';
 

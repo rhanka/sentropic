@@ -49,4 +49,3 @@ export type EventEnvelope<TPayload> = {
 
 export * from './cluster-mesh-namespace.js';
 export * from './verified-invocation-context.js';
-export * from './execution-node-v1.js';

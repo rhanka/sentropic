@@ -19,7 +19,7 @@ adapter. No Python. No stack required for unit tests.
 ## Contract notes
 
 - `contractVersion` is `execution-node.v1`
-  (`packages/contracts/src/execution-node-v1.ts`).
+  (`apps/sandbox-node/src/contract.ts`).
 - Normative cycle: `creating -> standby | running -> stopping ->`
   `stopped-output-retained -> exported -> destroyed` (`failed -> destroyed`).
 - Box network is always `none`; writes are allowed under `/workspace` only.
