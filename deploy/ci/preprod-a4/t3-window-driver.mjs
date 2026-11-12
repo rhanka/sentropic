@@ -158,41 +158,59 @@ function heartbeat(ctx, state, step) {
 // the truth (never trusts the in-memory step) then rolls back pre-commit or
 // converges post-commit. Returns the process exit code. The recovery claim
 // keeps exactly one writer: the loser stands down with exit 5.
+let RECOVERY_IN_FLIGHT = false;
 export async function recover(ctx, state, reason) {
+  // In-process single-flight: a second concurrent recover() (overlapping
+  // watchdog ticks, or a drive() catch racing the watchdog) stands down
+  // instead of running a second recovery in parallel.
+  if (RECOVERY_IN_FLIGHT) {
+    ctx.print?.('recovery stood down, already in flight');
+    return 5;
+  }
   const me = ctx.recoverOwner ?? `pid-${process.pid}`;
-  if (!claimRecovery(ctx.stateDir, me)) {
-    const owner = readRecoveryClaim(ctx.stateDir);
-    if (!claimDead(owner)) {
-      ctx.print?.(`recovery stood down, owned by ${owner?.owner}`);
-      return 5;
+  // The watchdog claims before calling: the same owner holding a live claim
+  // proceeds without re-claiming. Anything else must win the claim.
+  const held = readRecoveryClaim(ctx.stateDir);
+  if (!(held && held.owner === me && !claimDead(held))) {
+    if (!claimRecovery(ctx.stateDir, me)) {
+      const owner = readRecoveryClaim(ctx.stateDir);
+      if (!claimDead(owner)) {
+        ctx.print?.(`recovery stood down, owned by ${owner?.owner}`);
+        return 5;
+      }
+      releaseRecovery(ctx.stateDir);
+      if (!claimRecovery(ctx.stateDir, me)) return 5;
     }
-    releaseRecovery(ctx.stateDir);
-    if (!claimRecovery(ctx.stateDir, me)) return 5;
   }
-  state.recoveryReason = reason;
-  saveState(ctx.stateDir, state);
-  const info = classify(ctx);
-  state.commitVerified = info.committed;
-  state.apiReady = info.apiReady;
-  saveState(ctx.stateDir, state);
-  if (!info.committed) {
-    preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
-      dryRun: ctx.dryRun, note: ctx.print,
-      zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
-    return 3;
+  RECOVERY_IN_FLIGHT = true;
+  try {
+    state.recoveryReason = reason;
+    saveState(ctx.stateDir, state);
+    const info = classify(ctx);
+    state.commitVerified = info.committed;
+    state.apiReady = info.apiReady;
+    saveState(ctx.stateDir, state);
+    if (!info.committed) {
+      preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
+        dryRun: ctx.dryRun, note: ctx.print,
+        zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
+      return 3;
+    }
+    const { probes, externalProbes } = buildProbes(ctx.config);
+    if (!info.apiReady) {
+      // Branch U2b: commit landed just before the api died — one clean restart
+      // without re-import, then converge. Never boots a legacy image here.
+      ctx.print?.('# U2b: restarting committed api before finish-open');
+      ctx.call(['scale', 'deployment/api', '--replicas=0']);
+      waitZeroPods(ctx.call, monoMs() + 40_000);
+      ensureStarted(ctx.call, 'api', ctx.config.images.candidate);
+    }
+    await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
+    return 4;
+  } finally {
+    RECOVERY_IN_FLIGHT = false;
   }
-  const { probes, externalProbes } = buildProbes(ctx.config);
-  if (!info.apiReady) {
-    // Branch U2b: commit landed just before the api died — one clean restart
-    // without re-import, then converge. Never boots a legacy image here.
-    ctx.print?.('# U2b: restarting committed api before finish-open');
-    ctx.call(['scale', 'deployment/api', '--replicas=0']);
-    waitZeroPods(ctx.call, monoMs() + 40_000);
-    ensureStarted(ctx.call, 'api', ctx.config.images.candidate);
-  }
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
-    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
-  return 4;
 }
 
 function baseEnv(ctx, extra = {}) {

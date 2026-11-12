@@ -104,7 +104,10 @@ export function claimRecovery(dir, owner) {
     closeSync(fd);
     return true;
   } catch {
-    return readRecoveryClaim(dir)?.owner === owner;
+    // Single-flight: an existing claim is never re-granted, even to the
+    // same owner. A concurrent recover() in the same process must stand
+    // down instead of running a second recovery in parallel.
+    return false;
   }
 }
 
@@ -114,9 +117,20 @@ export function releaseRecovery(dir) {
 
 export function claimDead(claim) {
   if (!claim) return true;
-  if (claim.owner?.startsWith('pid-')) {
-    try { process.kill(Number(claim.owner.slice(4)), 0); return false; }
+  // A claim older than two minutes is take-over-able even when its process
+  // still answers kill(0): a driver wedged inside recover() must not hold
+  // the watchdog in 'recovery-in-progress' forever.
+  if (monoMs() - (claim.at || 0) > 120_000) return true;
+  const m = String(claim.owner ?? '').match(/pid-(\d+)$/);
+  if (m) {
+    try { process.kill(Number(m[1]), 0); return false; }
     catch { return true; }
   }
-  return monoMs() - (claim.at || 0) > 120_000;
+  return false;
+}
+
+// Per-command timeout bounded by the current step's hard cutoff: a kubectl
+// or delivered sub-command must never outlive the step that owns it.
+export function stepTimeoutMs(requestedMs, deadlineMonoMs, nowMs = monoMs()) {
+  return Math.max(1000, Math.min(requestedMs, deadlineMonoMs - nowMs));
 }
