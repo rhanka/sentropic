@@ -7,7 +7,6 @@ import type { CacheReceipt } from '../../../src/services/artifacts/live/cache';
 import { createFairAdmission } from '../../../src/services/artifacts/live/admission';
 import { createHeavyPhaseQueue, createMemoryHeavyPhaseQueueStore, PROVISIONAL_HEAVY_PHASE_COSTS_MIB } from '@sentropic/cluster-mesh';
 import { createQueuedHeavyGate, liveHolds } from '../../../src/services/artifacts/live/heavy';
-import { createPoolManager } from '../../../src/services/artifacts/live/pool';
 import { builderPlacement } from '../../../src/services/artifacts/live/placement';
 import type { RemoteRows } from '../../../src/services/artifacts/live/remote-live';
 
@@ -96,9 +95,10 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
   };
   const queue = createHeavyPhaseQueue({ store: createMemoryHeavyPhaseQueueStore(), now: () => now, maxPods: options.maxPods ?? 4, budget: {
     budgetMiB: options.budgetMiB ?? 100_000, podBaseMiB: 19, costs: PROVISIONAL_HEAVY_PHASE_COSTS_MIB, entryTtlMs: 36_000_000 } });
+  // No warm pool by default: every intent takes the cold path (the §7.7 rollback shape). Warm-path
+  // tests opt in explicitly with `f.ports.pool = createPoolManager(...)`, so the delete-path suite stays green.
   const ports: LivePorts = {
     store, now: () => now, id: () => `id-${++sequence}`,
-    pool: createPoolManager(memoryRows(), { now: () => now }),
     binding: vi.fn(async k => ({ ...binding, ownerId: owners.get(idOf(k)) ?? binding.ownerId })),
     jobBinding: vi.fn(async () => {}),
     seedBinding: vi.fn(async () => ({ liveSessionId: '', leaseEpoch: 0, routeEpoch: 0 })),

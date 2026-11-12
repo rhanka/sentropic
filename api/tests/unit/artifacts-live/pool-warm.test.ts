@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { fixture, key, owner } from './fixture';
+import { fixture, key, memoryRows, owner } from './fixture';
 import { cacheKeyOf, type CacheIdentity } from '../../../src/services/artifacts/live/cache';
+import { createPoolManager } from '../../../src/services/artifacts/live/pool';
 
 const cacheKey = () => cacheKeyOf({} as CacheIdentity);
 /** A filled pool pod for the fixture's sealed identity, with its Kubernetes object present. */
@@ -13,8 +14,13 @@ async function seedWarmPod(f: ReturnType<typeof fixture>, uid: string) {
 }
 
 describe('warm pod pool claim and release (L3 §7.3.2)', () => {
-  it('should start on a warm pod, release it to warm-deps at stop, and publish from it', async () => {
+  const withPool = () => {
     const f = fixture();
+    f.ports.pool = createPoolManager(memoryRows(), { now: f.ports.now });
+    return f;
+  };
+  it('should start on a warm pod, release it to warm-deps at stop, and publish from it', async () => {
+    const f = withPool();
     const poolPod = await seedWarmPod(f, 'uid-w1');
     const live = await f.controller.start(key);
     expect(live.phase).toBe('LIVE');
@@ -47,7 +53,7 @@ describe('warm pod pool claim and release (L3 §7.3.2)', () => {
     expect(f.events).toContain('prepare:B');
   });
   it('should delete the pod when the scrub ACK does not prove the cleared set', async () => {
-    const f = fixture();
+    const f = withPool();
     const poolPod = await seedWarmPod(f, 'uid-w1');
     const live = await f.controller.start(key);
     // A scrub that clears nothing is scrub doubt (§5.5): the pod is deleted, never pooled.
