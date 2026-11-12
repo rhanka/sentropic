@@ -90,8 +90,10 @@ export function psql(ctx, statement, timeoutMs = 30_000) {
     return '';
   }
   const started = monoMs();
+  // Explicit role: exec lands as OS root, which has no DB role (trust auth
+  // admits the existing app role without a password).
   const out = ctx.call(['exec', ctx.postgresPod, '--',
-    'psql', '-v', 'ON_ERROR_STOP=1', '-X', '-qAt'], statement);
+    'psql', '-U', ctx.postgresUser ?? 'app', '-v', 'ON_ERROR_STOP=1', '-X', '-qAt'], statement);
   if (ctx.probeReadOnly) ctx.print(`# ${(monoMs() - started)}ms psql ${statement.split('\n')[0]}...`);
   return out;
 }
