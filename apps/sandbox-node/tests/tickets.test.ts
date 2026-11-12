@@ -14,7 +14,7 @@ function ticket(overrides: Partial<ExecutionNodeTicket> = {}): ExecutionNodeTick
     method: 'POST',
     path: '/v1/sandboxes',
     bodySha256: sha256Hex(JSON.stringify(body)),
-    targetNodeId: 'node-b3-16',
+    targetNodeId: 'artifact-builder-vm-1',
     expectedNodeInstanceId: 'instance-1',
     expectedNodeEpoch: 7,
     ownership: {
