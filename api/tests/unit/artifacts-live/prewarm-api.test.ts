@@ -222,4 +222,21 @@ describe('prewarm HTTP contract', () => {
     const empty = await app.request(`/v1/cache?lockSha256=${lockSha256}&repoId=repo&subPath=ui`);
     expect(await empty.json()).toEqual({ entries: [] });
   });
+  it('should isolate by-key reads by storage scope (no cross-tenant leak)', async () => {
+    const { app, scheduled, source, jobs } = harness();
+    const lockSha256 = sha256(source.lockfile);
+    const first = await post(app, body(lockSha256));
+    expect(first.status).toBe(202);
+    await scheduled[0]!();
+    const cacheKey = cacheKeyOf(source.cacheIdentity);
+    const own = await app.request(`/v1/cache/by-key?cacheKey=${encodeURIComponent(cacheKey)}`);
+    expect(own.status).toBe(200);
+    const otherApp = createHostCacheApi({ authenticate: () => ({ hostId: 'immo', storageScopeId: 'other' }), jobs,
+      snapshotRepo: async () => source,
+      executor: { execute: async () => ({ treeSha256: 't'.repeat(64), inventory: [], archive: { ref: 'r', sha256: 's'.repeat(64), bytes: 1 } }) as never },
+      schedule: () => undefined });
+    const leaked = await otherApp.request(`/v1/cache/by-key?cacheKey=${encodeURIComponent(cacheKey)}`);
+    expect(leaked.status).toBe(404);
+    expect(await leaked.json()).toEqual({ error: 'not_found' });
+  });
 });
