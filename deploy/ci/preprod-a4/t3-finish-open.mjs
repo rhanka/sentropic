@@ -158,6 +158,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     dryRun, print: console.log });
   const state = loadState(stateDir) ?? {};
   state.namespace = config.namespace;
+  if (!state.middlewareSpec && config.middlewareSpec) state.middlewareSpec = config.middlewareSpec;
   try {
     const done = await finishOpen({ call, probe: fetch, state,
       save: next => saveState(stateDir, next), images: config.images,
