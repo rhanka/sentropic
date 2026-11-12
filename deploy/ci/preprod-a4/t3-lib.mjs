@@ -111,6 +111,17 @@ export function buildProbes(config) {
   return { probes, externalProbes: config.externalProbes ?? [] };
 }
 
+export function validateProbes(probes) {
+  const required = { 'S-3': 200, 'S-4': 200, 'S-5': 200, 'S-6': 302,
+    'S-7': 401, 'S-8': 401, 'S-9a': 200, 'S-9b': 200 };
+  for (const [id, status] of Object.entries(required)) {
+    const p = probes.find(p => p.id === id);
+    if (!p || p.expect !== status || !URL.canParse(p.url) || !['http:', 'https:'].includes(new URL(p.url).protocol)) {
+      throw new Error(`mandatory_probes_missing: ${id}`);
+    }
+  }
+}
+
 function dryRunLine(line, hasInput) {
   return hasInput ? `${line} <redacted-stdin>` : line;
 }

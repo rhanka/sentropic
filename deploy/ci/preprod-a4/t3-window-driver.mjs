@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRecoveryClaim, releaseRecovery,
-  runKubectl, loadState, saveState, stepTimeoutMs, utcNow } from './t3-lib.mjs';
+  runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateProbes } from './t3-lib.mjs';
 import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 
@@ -374,6 +374,7 @@ function baseEnv(ctx, extra = {}) {
 // or cutoff breach routes to recover(); the watchdog covers driver death.
 export async function drive(ctx) {
   assertPreviewSafe(ctx);
+  validateProbes(buildProbes(ctx.config).probes);
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
     watchdogPid: ctx.watchdogPid,
     childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
@@ -517,6 +518,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   assertPreviewSafe(ctx);
+  validateProbes(buildProbes(config).probes);
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
     '--state-dir', stateDir, '--config', configPath,
     ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],

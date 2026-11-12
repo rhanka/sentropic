@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState } from './t3-lib.mjs';
+import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState, validateProbes } from './t3-lib.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -93,6 +93,7 @@ export async function finishOpen(ctx) {
     deadlineMs: ctx.deadlineMs, now: ctx.now };
   effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
+    validateProbes(probes);
     reconcileRestrictSafe(ctx, state);
     // The emergency classifier stops api before reading the truth: a committed
     // database must restart the candidate api here before any opening, or the
@@ -155,10 +156,18 @@ async function runProbe(probe, p, opts = {}) {
     opts.print?.(`# dry-run: probe ${p.id} ${p.url} expect ${p.expect}`);
     return;
   }
-  const res = await probe(p.url, { ...p.options, signal: AbortSignal.timeout(
+  const res = await probe(p.url, { ...p.options, ...(p.id === 'S-6' ? { redirect: 'manual' } : {}), signal: AbortSignal.timeout(
     effectiveTimeout(p.timeoutMs ?? 5000, opts, (opts.now ?? monoMs)())) });
   await res.body?.cancel?.();
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
+  if (p.id === 'S-6') {
+    const location = res.headers?.get('location');
+    const login = location && URL.canParse(location, p.url) ? new URL(location, p.url) : null;
+    if (!login || login.origin !== new URL(p.url).origin || login.pathname !== '/auth/login'
+      || !login.search || login.searchParams.has('error') || location.includes('error=')) {
+      throw new Error('probe_failed: S-6 login_redirect');
+    }
+  }
 }
 
 function cliArg(argv, name) {
