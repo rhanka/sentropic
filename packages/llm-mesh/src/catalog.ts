@@ -655,6 +655,18 @@ export const modelProfiles = [
     capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
   },
   {
+    providerId: 'muse',
+    modelId: 'muse-ember-1.0',
+    label: 'Muse Ember',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('muse', 'advanced', { vision: true }),
+      contextWindowTokens: 1_000_000,
+      reasoning: { ...modelCapabilities('muse', 'advanced').reasoning, supportedEfforts: ['xhigh', 'max'] },
+    },
+  },
+  {
     // Owner request 2026-10-13, id corrected 2026-10-14 against the local
     // Muse provider catalog: Full tier id is `muse-wonder-full-1.0`.
     providerId: 'muse',

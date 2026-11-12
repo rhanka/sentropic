@@ -1488,6 +1488,7 @@ addTransportEquivalentFixture('gemini', 'gemini-4-argon', 'gemini-4-carbon', 'Ge
 addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-spark-1.3', 'Muse Spark 1.3');
 addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-spark-1.3-contributor', 'Muse Spark 1.3 Contributor');
 addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-wonder-1.0', 'Muse Wonder');
+addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-ember-1.0', 'Muse Ember');
 addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-wonder-full-1.0', 'Muse Wonder Full');
 
 // ---------------------------------------------------------------------------
