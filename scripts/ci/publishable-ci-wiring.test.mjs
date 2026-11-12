@@ -151,7 +151,9 @@ test('dedicated manifest_guard filter: only exact image, consumer-policy and loc
     'scripts/ci/consumer-contracts.mjs', 'scripts/ci/consumer-contracts.test.mjs',
     'scripts/ci/consumer-boundaries.json',
     'scripts/ci/ci-lockfile-installs.mjs', 'scripts/ci/ci-lockfile-installs.test.mjs',
+    'scripts/ci/resolve-api-image.mjs', 'scripts/ci/resolve-api-image.test.mjs',
     'scripts/ci/resolve-ui-image.mjs', 'scripts/ci/resolve-ui-image.test.mjs',
+    'scripts/ci/resolve-e2e-image.mjs', 'scripts/ci/resolve-e2e-image.test.mjs',
     'scripts/ci/ui-image-version.sh', 'scripts/ci/ui-image-version.test.sh'];
   const apiLockInputs = ['scripts/ci/locked-tools.mjs', 'scripts/ci/tool-locks.json'];
   assert.deepEqual(filters.api.filter(g => g.startsWith('scripts/ci')), apiLockInputs);
