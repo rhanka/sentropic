@@ -29,6 +29,16 @@ function cacheFixture(budget?: InstallBudget, options?: { log?: (fields: Install
       await input.sink(installed);
       return { runId: 'clean-run' };
     }),
+    sealInstall: vi.fn<CachePorts['sealInstall']>(async input => {
+      const { tarZst } = await import('../../../src/services/artifacts/live/supervisor-transfer');
+      for await (const tarball of input.tarballs) expect(tarball.bytes).toEqual(bytes);
+      const chunks: Uint8Array[] = [];
+      async function* members() { yield { path: installed.path, mode: installed.mode, bytes: installed.bytes }; }
+      for await (const chunk of tarZst(members())) chunks.push(chunk);
+      const archive = Buffer.concat(chunks);
+      const treeSha256 = sha256(JSON.stringify([[installed.path, installed.mode, sha256(installed.bytes)]]));
+      return { runId: 'seal-run', archive, treeSha256, files: 1, bytes: installed.bytes.byteLength };
+    }),
     storage: { read: vi.fn(async () => stored), admit: vi.fn(async (_key, object) => (stored ??= object)),
       quarantine: vi.fn(async () => { stored = undefined; }),
       putFile: vi.fn(async (digest, data) => { files.set(digest, data); }), getFile: vi.fn(async digest => files.get(digest)),
@@ -342,7 +352,8 @@ describe('prewarm seal (tar.zst unit)', () => {
     const sealed = await f.cache.seal!(f.source());
     const joined = await f.cache.seal!(f.source());
     expect(joined).toEqual(sealed);
-    expect(f.ports.cleanInstall).toHaveBeenCalledOnce();
+    expect(f.ports.sealInstall).toHaveBeenCalledOnce();
+    expect(f.ports.cleanInstall).not.toHaveBeenCalled();
     await expect(f.cache.requireSealed!(f.source())).resolves.toEqual(sealed);
   });
   it('should quarantine a tampered archive as sealed_unit_invalid', async () => {
@@ -395,10 +406,15 @@ describe('prewarm seal (tar.zst unit)', () => {
     const innerFetch = g.ports.fetch;
     g.ports.fetch = vi.fn(async (pin, relay, signal) =>
       (pin.path === 'node_modules/extra' ? extraBytes : innerFetch(pin, relay, signal)));
-    g.ports.cleanInstall = vi.fn(async (input: any) => {
+    g.ports.sealInstall = vi.fn(async (input: any) => {
+      const { tarZst } = await import('../../../src/services/artifacts/live/supervisor-transfer');
       for await (const tarball of input.tarballs) void tarball;
-      await input.sink(g.installed);
-      return { runId: 'run' };
+      const chunks: Uint8Array[] = [];
+      async function* members() { yield { path: g.installed.path, mode: g.installed.mode, bytes: g.installed.bytes }; }
+      for await (const chunk of tarZst(members())) chunks.push(chunk);
+      const archive = Buffer.concat(chunks);
+      const treeSha256 = sha256(JSON.stringify([[g.installed.path, g.installed.mode, sha256(g.installed.bytes)]]));
+      return { runId: 'run', archive, treeSha256, files: 1, bytes: g.installed.bytes.byteLength };
     });
     await g.cache.seal!(g.source());
     const fetch = vi.mocked(g.ports.fetch);
@@ -410,10 +426,15 @@ describe('prewarm seal (tar.zst unit)', () => {
     h.ports.storage = f.ports.storage;
     h.lock.packages['node_modules/other'] = { ...extra, version: '8.8.8',
       resolved: 'https://registry.npmjs.org/other/-/other-8.8.8.tgz' };
-    h.ports.cleanInstall = vi.fn(async (input: any) => {
+    h.ports.sealInstall = vi.fn(async (input: any) => {
+      const { tarZst } = await import('../../../src/services/artifacts/live/supervisor-transfer');
       for await (const tarball of input.tarballs) void tarball;
-      await input.sink(h.installed);
-      return { runId: 'run' };
+      const chunks: Uint8Array[] = [];
+      async function* members() { yield { path: h.installed.path, mode: h.installed.mode, bytes: h.installed.bytes }; }
+      for await (const chunk of tarZst(members())) chunks.push(chunk);
+      const archive = Buffer.concat(chunks);
+      const treeSha256 = sha256(JSON.stringify([[h.installed.path, h.installed.mode, sha256(h.installed.bytes)]]));
+      return { runId: 'run', archive, treeSha256, files: 1, bytes: h.installed.bytes.byteLength };
     });
     await h.cache.seal!(h.source());
     expect(vi.mocked(h.ports.fetch)).toHaveBeenCalledTimes(2);
@@ -421,7 +442,7 @@ describe('prewarm seal (tar.zst unit)', () => {
   it('should cut a stalled seal with phase_timeout:seal:<step>', async () => {
     const lines: InstallStepFields[] = [];
     const f = cacheFixture({ stallMs: 50, ceilingMs: 5_000 }, { log: fields => lines.push(fields) });
-    f.ports.cleanInstall = vi.fn(async input => {
+    f.ports.sealInstall = vi.fn(async input => {
       for await (const tarball of input.tarballs) expect(tarball.bytes).toBeInstanceOf(Uint8Array);
       input.progress?.step?.('recipe');
       await new Promise<never>(() => {});

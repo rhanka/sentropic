@@ -52,6 +52,9 @@ export function fakePod(overrides: Partial<Record<FrameBody['op'], Handler>> = {
         data: Buffer.from(f.bytes).toString('base64') }));
       return body.args.cursor === 0 ? { entries: files, next: null } : { entries: [], next: null };
     },
+    sealDependencies: () => ({ files: 1, bytes: 18, archiveBytes: 100,
+      archiveSha256: 'a'.repeat(64), treeSha256: 'b'.repeat(64) }),
+    sealFetch: body => ({ data: Buffer.from('sealed').toString('base64'), next: null, size: 6 }),
   };
   const channel = { send: vi.fn(async (_target: unknown, frame: Uint8Array, signal: AbortSignal) => {
     const body = openFrame(publicKey, frame, clock);

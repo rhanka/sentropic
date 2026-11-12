@@ -188,3 +188,26 @@ describe('supervisor offline clean install', () => {
     expect(core.transfer).not.toHaveBeenCalled();
   });
 });
+
+describe('supervisor in-pod seal', () => {
+  it('should stage only manifests, seal in-pod and fetch one archive (no drain)', async () => {
+    const archive = Buffer.from('sealed-archive-bytes');
+    const archiveSha256 = createHash('sha256').update(archive).digest('hex');
+    const pod = fakePod({
+      sealDependencies: () => ({ files: 1, bytes: 18, archiveBytes: archive.byteLength,
+        archiveSha256, treeSha256: 'c'.repeat(64) }),
+      sealFetch: () => ({ data: archive.toString('base64'), next: null, size: archive.byteLength }),
+    });
+    const input = { lockfile: Buffer.from('{"lockfileVersion":3}'), identity: {} as never,
+      recipe: INSTALL_RECIPE, stagingRef: 'ref-h', runtime,
+      tarballs: stream([{ pin, bytes: tgz }]) };
+    const seal = (pod.supervisor as unknown as { sealInstall: (input: never) => Promise<unknown> }).sealInstall;
+    const result = await seal(input as never) as { runId: string; archive: Uint8Array; treeSha256: string };
+    expect(result.archive).toEqual(archive);
+    expect(result.treeSha256).toBe('c'.repeat(64));
+    expect(pod.ops()).toEqual(['clear', 'put', 'put', 'install', 'sealDependencies', 'sealFetch', 'clear']);
+    expect(pod.ops()).not.toContain('snapshot');
+    const manifestTransfer = String(pod.bodies[1]!.args.transfer);
+    expect(pod.received(manifestTransfer).map(file => file.path)).toEqual(['package-lock.json']);
+  });
+});

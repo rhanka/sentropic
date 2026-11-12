@@ -268,4 +268,35 @@ describe('pod bootstrap agent: sealed-unit extraction', () => {
     await expect(pod.send('extractArchive', { ...sent, tree: 'e'.repeat(64), root: 'workspace' }))
       .rejects.toThrow('failed:invalid_archive');
   });
+  it('should seal the installed tree in-pod and page the archive back via sealFetch', async () => {
+    const pod = await harness({ spawn: fakeSpawn([], npmCi) });
+    expect(await install(pod)).toEqual({ exitCode: 0, signal: null, output: '' });
+    const sealed = await pod.send('sealDependencies', {}) as { files: number; bytes: number;
+      archiveBytes: number; archiveSha256: string; treeSha256: string };
+    expect(sealed.files).toBeGreaterThan(0);
+    expect(sealed.archiveBytes).toBeGreaterThan(0);
+    expect(sealed.archiveSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(sealed.treeSha256).toMatch(/^[a-f0-9]{64}$/);
+    const chunks: Buffer[] = []; let cursor: number | null = 0;
+    while (cursor !== null) {
+      const page = await pod.send('sealFetch', { cursor }) as { data: string; next: number | null; size: number };
+      expect(page.size).toBe(sealed.archiveBytes);
+      chunks.push(Buffer.from(page.data, 'base64'));
+      cursor = page.next;
+    }
+    const archive = Buffer.concat(chunks);
+    expect(archive.byteLength).toBe(sealed.archiveBytes);
+    expect(createHash('sha256').update(archive).digest('hex')).toBe(sealed.archiveSha256);
+    const { createZstdDecompress } = await import('node:zlib');
+    const { Readable } = await import('node:stream');
+    const out: Uint8Array[] = [];
+    for await (const piece of Readable.from([archive]).pipe(createZstdDecompress())) out.push(piece as Uint8Array);
+    expect(Buffer.concat(out).byteLength).toBeGreaterThan(0);
+  });
+  it('should refuse sealDependencies before install and sealFetch with a bad cursor', async () => {
+    const pod = await harness();
+    await expect(pod.send('sealDependencies', {})).rejects.toThrow('failed:phase_refused');
+    await expect(pod.send('sealFetch', { cursor: 0 })).rejects.toThrow('failed:invalid_archive');
+    await expect(pod.send('sealFetch', { cursor: -1 })).rejects.toThrow('failed:invalid_args');
+  });
 });
