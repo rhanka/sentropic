@@ -78,10 +78,34 @@ describe('t3 classify SQL against the migrated schema', () => {
     expect(Number(rows[0].asset_receipts)).toBe(artifactMigrationAssets.length);
   });
 
-  it('reads artifact relations and encrypted-store rows without touching secrets', async () => {
+  it('reads artifact relations as present on the migrated schema', async () => {
     const relations = await database.query(sql.Q5);
-    expect(relations.rows.length).toBeGreaterThan(0);
+    // The four Q5 names are the installer-guarded set: installArtifactPackageAssets
+    // refuses to commit unless every required relation exists (fail-closed).
+    expect(relations.rows).toHaveLength(4);
+    for (const row of relations.rows) {
+      expect(typeof row.name).toBe('string');
+      expect(row.present).toBe(true);
+    }
+    expect(relations.rows.map((row) => row.name).sort()).toEqual([
+      'artifact_host.activation_namespaces',
+      'artifacts.artifacts',
+      'control.artifact_host_kv',
+      'public.__drizzle_control_migrations',
+    ]);
+  });
+
+  it('reads encrypted-store rows without touching secrets', async () => {
+    // A fresh fixture may carry zero enc: rows, which would let the loop below
+    // pass vacuously: plant our own row so the shape is always exercised.
+    const key = `t3-q6-probe-${randomUUID()}`;
+    await database.query(`INSERT INTO public.settings (key, user_id, value) VALUES ($1, NULL, 'enc:deadbeef')`, [key]);
     const stores = await database.query(sql.Q6);
+    expect(stores.rows.length).toBeGreaterThan(0);
+    const ours = stores.rows.find((row) => row.k === key);
+    expect(ours).toBeDefined();
+    expect(ours.u).toBeNull();
+    expect(Number(ours.len)).toBe(12);
     for (const row of stores.rows) {
       expect(Object.keys(row).sort()).toEqual(['k', 'len', 'u']);
     }
