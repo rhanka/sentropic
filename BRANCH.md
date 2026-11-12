@@ -21,6 +21,9 @@
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
   - `packages/llm-gateway/package.json`
+  - `scripts/llm-model-equivalences/council.source.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -29,6 +32,7 @@
   - `api/src/services/llm-account-transports.ts`
 
 ## Feedback Loop
+- [x] BREM-EX4: necessary RUN 3 CI alignment. Rationale: equivalence-council rejects the new unclassified Ember model, and packaging tries to fetch the obsolete dev.24 fixture candidate. Impact: classify Ember as excluded from automatic equivalence without benchmark evidence; regenerate its council; synchronize only selected packaging fixture tuple versions, dependency maps and verified archive evidence. Rollback: revert the alignment commits together with EX3. Assertions, gates and workflows stay intact.
 - [x] BREM-EX3: owner-approved RUN 3 minimal release/runtime extension. Rationale: published gateway dependency-map guard and cluster runtime ceiling block CI. Impact: gateway 0.23.1, cluster 0.26.0-dev.25, matching root lock workspace versions, text/speech ceilings <0.38.0, and the four range regression tests listed above. Rollback: revert the RUN 3 extension commits; no gate or workflow change.
 - [ ] RUN 3: verify focused cluster range tests, strict lock, candidate guard and full CI on the exact head.
 - [x] BREM-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.

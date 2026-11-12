@@ -35,6 +35,7 @@
     "openai:gpt-6-luna",
     "openai:gpt-6-sol",
     "openai:gpt-6.1-sol",
+    "muse:muse-ember-1.0",
     "muse:muse-spark-1.3",
     "muse:muse-spark-1.3-contributor",
     "muse:muse-wonder-1.0",
