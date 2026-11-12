@@ -8,17 +8,18 @@ FROM ${BASE_IMAGE} AS build
 WORKDIR /workspace
 COPY package.json package-lock.json ./
 COPY apps/sandbox-node apps/sandbox-node
-COPY packages/contracts packages/contracts
+COPY scripts/ci/locked-tools.mjs scripts/ci/locked-tools.mjs
 # Lockfile-exact dependency closure (no re-resolution).
-RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN node scripts/ci/locked-tools.mjs --prefix /workspace --ignore-scripts --no-audit --no-fund typescript@5.4.5 @types/node
 # Emit compiled daemon (tsconfig is noEmit by default for checks).
 RUN npx --no-install tsc --project apps/sandbox-node/tsconfig.json \
-  --noEmit false --outDir apps/sandbox-node/dist
+  --noEmit false --rootDir apps/sandbox-node/src --outDir apps/sandbox-node/dist \
+  --project apps/sandbox-node/tsconfig.build.json
 
 FROM ${BASE_IMAGE} AS runtime
 WORKDIR /srv/sandbox-node
 # Zero runtime dependencies: the daemon uses node builtins only.
 COPY --from=build /workspace/apps/sandbox-node/dist ./dist
-COPY --from=build /workspace/packages/contracts/src/execution-node-v1.ts ./contract/
+RUN printf '{"type":"module"}\n' > package.json
 USER 1000:1000
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["node", "dist/service.js"]
