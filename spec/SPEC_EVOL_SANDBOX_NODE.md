@@ -61,14 +61,20 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 
 ## 7. S1-T0 gates consuming this freeze
 
-- G-VM-PROV (S1-K0, T0+6h): provisioned VM, zero code dependency.
-- G-VM-AGENT (S1-K1, T0+15h): agent service active, `/v1/node` plus B7-ISO 8/8.
-- G-A (S1-B1, T0+20h): Focus `ab86a9f13` cold live < 5 s + publish `stop -> export` to BHS S3 < 25 s (with D14-c).
-- G-B (T0+28h): claim < 1 s + L4 + D14-b.
-- G-PUB: D5-S1 whole app p95 <= 20 s target / < 25 s contract (S5); S6 < 40 s; D5-S2 <= 8 s / < 12 s only for the D14-a standalone page.
+- G-VM-PROV: existing VM; k8s hardening about 2-3 agent-hours after artifact delivery, no signed completion date. Cloud-init/unit: poc-k8s/platform/artifact-builder-vm/cloud-init.yaml. No Python; unattended upgrades/reboot window, job-alerts heartbeat/cluster probe, pinned digest rollback and no snapshots.
+- G-VM-AGENT: supportedOps must prove node/quotas/bases/create/stop/export/delete/revoke-custody; bootstrap advertises node/quotas only. G-B adds claim/applyRevision; S1-A1b/S1-F add drain/events/labels and SIGKILL WAL recovery. Never advertise undelivered operations.
+- G-A/G-LIVE-COLD: real Focus ab86a9f13 on d2-4 under both tenant slices; T_open_full is the cold clock (T_routable diagnostic only). Optimize the cold path after drainage, not standby count. No inherited local Node timing qualifies this gate.
+- G-B: claim <1 s, L4 and tagged D14-b release. Claim transfers standby memory. Requalify B3-COLD/B4a/B4b/B5-APP-VM/B6a-QUAL/affected B6c-WFQ and parity after DS, S1-V or S1-V2 changes; no F-FOCUS-OPT -> F-FOCUS-DS capacity transfer.
+- G-PUB: current S5 <25 s plus joint S6 S5 p95 <=12 s/max <=15 s; proposed D5-S1b reallocation is not signed. Qualify only 1 warm/tenant + 1 global build (B6a-QUAL); excess workloads are rejection tests, no two-build cell. WFQ probes start immediately after adverse build start and count 429 as failures. Distinct M1/M2 export clocks compare via T_after_build.
 - G-ISO: 100% refusal of egress / `169.254` / cross-tenant / double claim; dm-verity, else OD-4 visa; BHS residency.
 - G-RECOVERY / G-RB: monotone `nodeEpoch`, `409 stale_node_epoch`, single-scheduler drain.
 
 ## 8. Explicitly NOT frozen (owner decisions pending)
 
-- D2 (order #1007, non-critical + OD-4 visa), D3 (default D3-A stateless; B8-SRC p95 <= 1.5 s else D3-B MKS PVC), D4 (D4-A `T_open_full` p95 <= 0.90 s / max < 1 s vs D4-B `T_routable` p95 < 1 s; default failover D4-B, target S1-V2), D5-M1 vs M2 (default M1, B5 N=10), D5-S1 vs S2 indexed on D14, D6 (S1-P0 30 min: D6-C on vRack else D6-B 4-6 h, D6-A +6 h option), D7 (D7-A: B3-CSP test under real live headers, pre-authorized `worker-src 'self' blob:`), D14 ((a1) whole app + D14-c now + D14-b recommended; (a2) `ui/artifact/` stays a contractual evolution of +12-20 h).
+- D2 (order #1007, non-critical + OD-4 visa), D3 (D3-A stateless, B8-SRC p95 <=1.5 s else D3-B MKS PVC), D4 (warm T_open_full vs T_routable goal, S1-V2), D5-M1 vs M2 and possible signed SLO reallocation, D7 (real CSP qualification), D14 (whole app with import/DS optimization vs separately contracted standalone page). D6 is decided; S1-P0 closed, outbound relay deferred to S2-2.
+
+## 9. Provenance and S2 recipe amendments
+
+- ArtifactProvenanceV1 is execution-provenance.v1: tenantId, logicalSandboxId, physicalUid, attemptId, buildCommandId, nodeInstanceId/nodeEpoch; runtime engine/version/platform/rootfsBaseId/rootfsDigest; source repoId/commitSha/treeSha256/dirtyRevisionDigest:null; bases kind/baseId/lockSha256/erofsSha256/dmVerityRootHash; recipe profile/entry/command/envAllowlistDigest/artifactModel; output subPath/fileCount/totalBytes/manifestSha256/archiveSha256; startedAt/stoppedAt/exportedAt/signatureEd25519. Ed25519 JWS covers the canonical payload, returned as provenance and X-Artifact-Provenance. Normative local type: ArtifactProvenanceV1.
+- S2 ds.compile recipeKey: SHA-256 RFC 8785 JCS ds-recipe-key.v1, normalize POSIX paths first, reject 400 INVALID_SOURCE_PATH and DUPLICATE_NORMALIZED_PATH, sorted complete compilers map (version/digest), canonical compilerOptions including urlRewriteMode and always importMapManifestDigest (sha256:... or none). Distinct output digests, upload outside isolate, tenant-private bases/pinned catalog; Vapor/SSR remains unverified.
+- Protocol corrections assert no measured success/calendar dates: candidates only for no-codeload gate, separate codeload witness, seven source-freshness regimes including external branch changes, N=10 exploratory/N=20 qualification. Search maximum density before 15-minute hold; reserve browser/d2-4 hosts independently; invalidate mean steal >5%.
