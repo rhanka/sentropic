@@ -316,6 +316,27 @@ describe('prewarm seal (tar.zst unit)', () => {
     expect(second.archive!.sha256).toBe(first.archive!.sha256);
     expect(second.archive!.bytes).toBe(first.archive!.bytes);
   });
+  it('should expose sealed archive bytes for in-pod materialization without API-side extract', async () => {
+    const f = cacheFixture();
+    const receipt = await f.cache.seal!(f.source());
+    const archived = await f.cache.sealedArchive!(receipt);
+    expect(archived).toMatchObject({ treeSha256: receipt.treeSha256 });
+    expect(archived!.bytes).toBeInstanceOf(Uint8Array);
+    expect(archived!.bytes.byteLength).toBe(receipt.archive!.bytes);
+  });
+  it('should return undefined sealed archive for pre-L1 entries without an archive pointer', async () => {
+    const f = cacheFixture();
+    const receipt = await f.cache.acquire(f.source());
+    expect(receipt.archive).toBeUndefined();
+    await expect(f.cache.sealedArchive!(receipt)).resolves.toBeUndefined();
+  });
+  it('should quarantine a tampered sealed archive as sealed_unit_invalid', async () => {
+    const f = cacheFixture();
+    const receipt = await f.cache.seal!(f.source());
+    f.ports.storage.getArchive = async () => Buffer.from('tampered');
+    await expect(f.cache.sealedArchive!(receipt)).rejects.toMatchObject({ code: 'sealed_unit_invalid' });
+    expect(f.ports.storage.quarantine).toHaveBeenCalledWith(receipt.key);
+  });
   it('should join an existing sealed entry without reinstalling', async () => {
     const f = cacheFixture();
     const sealed = await f.cache.seal!(f.source());
