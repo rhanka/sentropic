@@ -88,6 +88,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - No UI change, no UAT checkpoint for this step.
 
 ## Plan / Todo (lot-based)
+- [x] RUN 2 AMD-5/12: mTLS listener, explicit operator/tenant scope boundary and verified HTTPS job-alerts heartbeat; authentication regression tests.
 - [x] RUN 2 AMD-12: remove inapplicable DaemonSet; standalone systemd agent unit and digest-only verified release startup for k8s cloud-init ownership.
 - [x] RUN 2 AMD-3/6/7/11: provenance payload and S2 recipe/isolation contract; epoch 2 then late epoch 1, restart, stream closure and heartbeat regression tests.
 - [x] RUN 2 AMD-4/11: monotone custody WAL fsync before acknowledgement, active stream closure, stale reconnection/invocation refusal and heartbeat fail-closed gate.
