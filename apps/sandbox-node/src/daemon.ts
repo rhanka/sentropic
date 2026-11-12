@@ -174,7 +174,7 @@ export class ExecutionNodeDaemon {
     return this.idempotent(input.spec.tenantId, input.commandId, input.spec, async () => {
       const slot = input.spec.profile === 'artifact-build' ? 'build'
         : input.warmStandby === true ? 'standby' : 'live';
-      if (slot === 'build') await this.admission.builds.acquire(input.spec.tenantId);
+      if (slot === 'build') await this.admission.admitBuild(input.spec.tenantId);
       else this.admission.admit(input.spec.tenantId, slot, input.commandId);
       const id = randomUUID();
       const paths = sandboxPaths(input.spec.tenantId, id);
@@ -219,7 +219,7 @@ export class ExecutionNodeDaemon {
         mounts: [],
         overlayUpper: paths.upper,
         overlayWork: paths.work,
-        quotaMiB: input.quotaMiB,
+        quotaMiB: sandbox.slot === 'build' ? 1664 : 768,
         uid: input.uid,
         gid: input.gid,
       });
