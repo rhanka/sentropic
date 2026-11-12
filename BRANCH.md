@@ -19,6 +19,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - `spec/SPEC_EVOL_SANDBOX_NODE.md`
   - `BRANCH.md`
   - `package-lock.json` (restore published contracts version only)
+  - `.github/workflows/ci.yml` (BR-SN1-EX7: sandbox qualification step only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -33,6 +34,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR-SN1-EX7`: add sandbox container qualification to existing required typecheck-lint-api join. No new job/deployment permission; rollback removes that one step.
 - `BR-SN1-EX6`: owner-authorized RUN 2 restores published contracts 0.3.0 and its index/lock; the unreleased contract moves to apps/sandbox-node/src/contract.ts. No publication or consumer dependency changes. Rollback: revert relocation.
 - No exceptions declared (`Makefile`, `docker-compose*.yml`, `api/**`, `ui/**`, `deploy/**` untouched).
 - `BR-SN1-EX1` (declared 2026-11-12, owner: agent-core): root `package-lock.json`
@@ -88,6 +90,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - No UI change, no UAT checkpoint for this step.
 
 ## Plan / Todo (lot-based)
+- [x] RUN 2: CI executes standalone regression suite; spec adds provenance/S2 recipe and staged d2-4 qualification gates.
 - [x] RUN 2 spec: apply normative AMD-1/2/4/5/7/8/9/10/11/12 tenant, scope, admission, transport and lifecycle amendments.
 - [x] RUN 2 regression checks: pending stop retains reservation, export refuses until quiescence, concurrent claims serialize and rejected admissions can retry.
 - [x] RUN 2: build digest-addressed compiled Node release with immutable archive/file manifests; no package or image publication required.

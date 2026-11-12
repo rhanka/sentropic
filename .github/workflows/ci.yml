@@ -1005,6 +1005,8 @@ jobs:
     if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true'
     steps:
       - uses: actions/checkout@v6
+      - name: Qualify standalone sandbox-node amendments
+        run: make -f Makefile -f apps/sandbox-node/checks.mk check-sandbox-node ENV=test-ci-sandbox-node
       - name: Require every selected API static program
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make ci-static-join CI_TYPECHECK_RESULT=${{ needs.api-static.result }} CI_LINT_RESULT=${{ needs.api-static.result }} CI_IDP_WEB_RESULT=${{ needs.idp-web-static.result }} ENV=test-ci-static
