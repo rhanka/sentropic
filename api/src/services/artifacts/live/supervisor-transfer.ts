@@ -20,7 +20,7 @@ export interface TransferFile { path: string; mode: number; bytes: Uint8Array }
 /** Manifest row of one file; the digest of a tree is computed from these rows, never from bytes held at once. */
 export interface TransferEntry { path: string; mode: number; size: number; sha256: string }
 export interface TreeLimits { files: number; fileBytes: number; totalBytes: number }
-export type TransferTarget = 'workspace' | 'dependencies' | 'overlay' | 'install' | 'npm-cache';
+export type TransferTarget = 'workspace' | 'dependencies' | 'overlay' | 'install' | 'npm-cache' | 'archive';
 export type TransferFailure = (kind: 'limit' | 'invalid') => never;
 /** Raw bytes per put frame: base64 plus entry metadata stays under MAX_FRAME_BYTES. */
 export const CHUNK_BYTES = 768 * 1024;
