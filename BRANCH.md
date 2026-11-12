@@ -75,6 +75,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN7 B2/B7: emergency and every real CLI share the original monotonic deadline; expired windows refuse writes; four latency regressions failed first.
 - [x] RUN7 B1/B7: terminate and verify an expired recovery owner before lock takeover; reserve 65 s for watchdog takeover inside original fence. SIGSTOP-in-recover regression failed first.
 - [x] RUN7 M1: driver preview refuses an active state/claim before writes or watchdog launch; real CLI regression failed first.
 - [x] RUN6 B1/B2 integration: actual ops.mjs plus shipped mandatory Secret reference prove custodian readiness dependency and digest-checked staging on an initially empty PVC.

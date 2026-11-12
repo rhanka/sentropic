@@ -45,6 +45,19 @@ export function effectiveTimeout(timeoutMs, timeoutRef, nowMs = monoMs()) {
   return Math.min(timeoutMs, cap);
 }
 
+// One emergency budget, inherited across every CLI process. Expired windows
+// fail closed before any write; restarting an entry point cannot extend it.
+export function recoveryDeadline(stateDir = process.env.T3_STATE_DIR) {
+  const now = monoMs();
+  const state = stateDir ? loadState(stateDir) : null;
+  const inherited = process.env.T3_DEADLINE_MONO_MS == null ? Infinity : Number(process.env.T3_DEADLINE_MONO_MS);
+  if (Number.isNaN(inherited)) throw new Error('invalid_recovery_deadline');
+  const deadlineMs = Math.min(now + 125_000, inherited,
+    state?.t0MonoMs == null ? Infinity : state.t0MonoMs + 300_000);
+  effectiveTimeout(1, { deadlineMs }, now);
+  return deadlineMs;
+}
+
 export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {}, stateDir = null }) {
   const track = (childPid) => {
     if (!stateDir) return;
