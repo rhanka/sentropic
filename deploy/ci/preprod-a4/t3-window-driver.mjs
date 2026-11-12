@@ -42,6 +42,23 @@ export function hashRows(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
+// Exact W8d probe URLs are operator inputs (qualified in P-0.4): the driver
+// never invents OAuth scopes or redirect URIs.
+export function buildProbes(config) {
+  const endpoints = config.endpoints ?? {};
+  const probes = [];
+  if (endpoints.appHealth) probes.push({ id: 'S-3', url: endpoints.appHealth, expect: 200 });
+  if (endpoints.idpConfig) probes.push({ id: 'S-4', url: endpoints.idpConfig, expect: 200 });
+  if (endpoints.idpJwks) probes.push({ id: 'S-5', url: endpoints.idpJwks, expect: 200 });
+  if (endpoints.s6Authorize) probes.push({ id: 'S-6', url: endpoints.s6Authorize, expect: 302, options: { redirect: 'manual' } });
+  if (endpoints.appMe) probes.push({ id: 'S-7', url: endpoints.appMe, expect: 401 });
+  if (endpoints.idpMe) probes.push({ id: 'S-8', url: endpoints.idpMe, expect: 401 });
+  for (const [id, url] of [['S-9a', endpoints.emailApp], ['S-9b', endpoints.emailIdp]]) {
+    if (url) probes.push({ id, url, expect: 200, options: { method: 'POST' } });
+  }
+  return { probes, externalProbes: config.externalProbes ?? [] };
+}
+
 export function splitSql(text) {
   const parts = {};
   let current = null;
@@ -134,8 +151,9 @@ export async function recover(ctx, state, reason) {
     preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir });
     return 3;
   }
+  const { probes, externalProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state,
-    save: next => saveState(ctx.stateDir, next), images: ctx.config.images });
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
   return 4;
 }
 
@@ -213,8 +231,9 @@ async function driveInner(ctx, state) {
   saveState(ctx.stateDir, state);
   heartbeat(ctx, state, 'W8');
   if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
+  const { probes, externalProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state,
-    save: next => saveState(ctx.stateDir, next), images: ctx.config.images });
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
   if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
   state.step = 'DONE';
   state.heartbeatMonoMs = monoMs();
