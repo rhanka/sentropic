@@ -87,7 +87,7 @@ export interface ExecutionNodeBaseRef {
 }
 
 export interface ExecutionNodeQuota {
-  readonly memoryMinMiB: number;
+  readonly memoryLowMiB: number;
   readonly memoryHighMiB: number;
   readonly memoryMaxMiB: number;
   readonly cpuWeight: number;
@@ -99,16 +99,16 @@ export const EXECUTION_NODE_TENANT_SLICE_DEFAULTS: Record<
   ExecutionNodeQuota
 > = {
   sentropic: {
-    memoryMinMiB: 4096,
-    memoryHighMiB: 6656,
-    memoryMaxMiB: 9216,
+    memoryLowMiB: 768,
+    memoryHighMiB: 2304,
+    memoryMaxMiB: 2560,
     cpuWeight: 100,
     tasksMax: 4096,
   },
   immo: {
-    memoryMinMiB: 4096,
-    memoryHighMiB: 6656,
-    memoryMaxMiB: 9216,
+    memoryLowMiB: 768,
+    memoryHighMiB: 2304,
+    memoryMaxMiB: 2560,
     cpuWeight: 100,
     tasksMax: 4096,
   },
@@ -143,12 +143,18 @@ export interface ExecutionNodeStopSpec {
 }
 
 export interface ExecutionNodeExportSpec {
+  readonly buildId: string;
   readonly subPath: string;
   readonly presignedPutUrl: string;
   readonly maxBytes: number;
 }
 
 export type ExecutionNodeErrorCode =
+  | 'sandbox_not_quiesced'
+  | 'cgroup_tenant_mismatch'
+  | 'custody_revoked'
+  | 'control_plane_unavailable'
+  | 'missing_tenant_id'
   | 'already_claimed'
   | 'command_id_payload_mismatch'
   | 'stale_node_epoch'
@@ -164,7 +170,40 @@ export interface ExecutionNodeInfo {
   readonly nodeInstanceId: string;
   readonly nodeEpoch: number;
   readonly classes: readonly ['sandbox'];
+  readonly parentSlice: { readonly name: 'builder.slice'; readonly memoryMaxMiB: 3456 };
+  readonly capabilities: { readonly supportedOps: readonly string[] };
 }
+
+export const EXECUTION_NODE_CAPACITY = {
+  parentMemoryMaxMiB: 3456, parentCpuQuotaPct: 180, reservableMiB: 3200,
+  sessionMiB: 768, buildMiB: 1664, diskMiBPerTenant: 16384,
+  maxWarmPerTenant: 1, maxConcurrentBuildsGlobal: 1,
+} as const;
+
+export interface ExecutionNodeQuotaSnapshot {
+  readonly tenantId: ExecutionNodeTenantId;
+  readonly limits: ExecutionNodeQuota;
+  readonly controlGroup: string;
+  readonly usage: { readonly memoryCurrentBytes: number; readonly reservedMemoryBytes: number };
+  readonly globalBuildSlot: {
+    readonly maxConcurrentBuildsGlobal: 1;
+    readonly holderTenantId?: ExecutionNodeTenantId;
+    readonly queueDepth: number;
+  };
+}
+
+export type ExecutionNodeStopResult =
+  | { status: 200; state: 'stopped-output-retained' | 'destroyed'; allProcessesExited: true }
+  | { status: 202; state: 'stopping'; allProcessesExited: false; retryAfterMs: 250 };
+
+export type ExecutionNodeEventScope =
+  | { tenantId: ExecutionNodeTenantId; afterSeq?: number; scope?: never }
+  | { scope: 'node'; tenantId?: never; operatorCertificate: true };
+
+export type ExecutionNodeDrainSpec = { operatorTicket: string } & (
+  | { drainScope: 'node'; tenantId?: never }
+  | { drainScope: 'tenant'; tenantId: ExecutionNodeTenantId }
+);
 
 export type ExecutionNodeJsonSchema = {
   readonly $schema?: string;
