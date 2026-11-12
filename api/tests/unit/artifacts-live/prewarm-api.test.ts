@@ -200,7 +200,7 @@ describe('prewarm HTTP contract', () => {
     const listed = await app.request(`/v1/cache?lockSha256=${lockSha256}&repoId=repo&subPath=ui`);
     const { entries } = await listed.json() as { entries: Array<{ state: string; error: unknown }> };
     expect(entries[0]).toMatchObject({ state: 'failed',
-      error: { code: 'builder_unavailable', reason: 'phase_timeout:seal:recipe' } });
+      error: { code: 'builder_unavailable', reason: 'phase_timeout:seal:recipe', retriable: true } });
     const readmitted = await post(app, body(lockSha256));
     expect(readmitted.status).toBe(202);
     expect(((await readmitted.json()) as { jobId: string }).jobId).not.toBe(
@@ -238,5 +238,20 @@ describe('prewarm HTTP contract', () => {
     const leaked = await otherApp.request(`/v1/cache/by-key?cacheKey=${encodeURIComponent(cacheKey)}`);
     expect(leaked.status).toBe(404);
     expect(await leaked.json()).toEqual({ error: 'not_found' });
+  });
+  it('should list workspace variants without installWorkspaces and carry retriable on failure', async () => {
+    const { app, scheduled, source } = harness();
+    const lockSha256 = sha256(source.lockfile);
+    const first = await post(app, body(lockSha256));
+    expect(first.status).toBe(202);
+    await scheduled[0]!();
+    const all = await app.request(`/v1/cache?lockSha256=${lockSha256}&repoId=repo&subPath=ui`);
+    expect(all.status).toBe(200);
+    const { entries } = await all.json() as { entries: Array<{ state: string; cacheKey: string }> };
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.state).toBe('sealed');
+    const exact = await app.request(`/v1/cache?lockSha256=${lockSha256}&repoId=repo&subPath=ui&installWorkspaces=`);
+    expect(exact.status).toBe(200);
+    expect(((await exact.json()) as { entries: unknown[] }).entries).toHaveLength(1);
   });
 });

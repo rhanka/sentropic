@@ -114,7 +114,7 @@ describe('host live API typed refusals (§7.1.4)', () => {
     const refused = await app.request('/refuse');
     expect(refused.status).toBe(409);
     expect(await refused.json()).toEqual({ error: 'cache_not_prewarmed', reason: 'a'.repeat(64),
-      lockSha256: 'a'.repeat(64), retriable: true });
+      lockSha256: 'a'.repeat(64), retriable: true, cacheState: 'absent' });
     const app500 = new Hono().get('/refuse', c => refusal(c, new LiveError('sealed_unit_invalid')));
     expect((await app500.request('/refuse')).status).toBe(500);
   });
