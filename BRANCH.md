@@ -1,7 +1,7 @@
 # Feature: Sandbox Node Step 1 — contract freeze (ExecutionNodeV1 + tenant model)
 
 ## Objective
-Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) on the BHS b3-16 host so S1-A1a/S1-K1/S1-B1 can build against a stable surface.
+Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2-4 VM (2 shared vCPU, 3,456 MiB parent ceiling).
 
 ## Scope / Guardrails
 - Scope limited to the contract freeze: spec text + one amendable contract module.
@@ -18,6 +18,7 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   - `packages/contracts/**` (ExecutionNodeV1 types only: `src/execution-node-v1.ts` + its re-export in `src/index.ts`)
   - `spec/SPEC_EVOL_SANDBOX_NODE.md`
   - `BRANCH.md`
+  - `package-lock.json` (restore published contracts version only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -32,6 +33,7 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR-SN1-EX6`: owner-authorized RUN 2 restores published contracts 0.3.0 and its index/lock; the unreleased contract moves to apps/sandbox-node/src/contract.ts. No publication or consumer dependency changes. Rollback: revert relocation.
 - No exceptions declared (`Makefile`, `docker-compose*.yml`, `api/**`, `ui/**`, `deploy/**` untouched).
 - `BR-SN1-EX1` (declared 2026-11-12, owner: agent-core): root `package-lock.json`
   version-only sync (`"packages/contracts"` `0.3.0` -> `0.4.0`, 1 line) required
@@ -86,6 +88,9 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
 - No UI change, no UAT checkpoint for this step.
 
 ## Plan / Todo (lot-based)
+- [x] RUN 2: verify feat/sandbox-node-step1 mechanically; restore registry-compatible contracts and consume new types locally.
+- [ ] RUN 2: apply AMD-1..12, d2-4 admission, custody, scope resolution, VM operator contract and regression tests.
+- [ ] RUN 2: push atomic commits, verify CI green, append evidence to s1-agent-core.md; do not merge or deploy.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Verify branch `feat/sandbox-node-step1` tracks `origin/main` (`5be8e34f3`) in worktree `tmp/worktrees/sandbox-node` before any edit.
   - [x] Confirm scope and guardrails (Allowed/Forbidden above; `Makefile` and `deploy/**` untouched).

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { ExecutionNodeTenantId } from '../../../packages/contracts/src/execution-node-v1.js';
-import { EXECUTION_NODE_TENANT_SLICE_DEFAULTS } from '../../../packages/contracts/src/execution-node-v1.js';
+import type { ExecutionNodeTenantId } from './contract.js';
+import { EXECUTION_NODE_TENANT_SLICE_DEFAULTS } from './contract.js';
 import { ExecutionNodeDaemon } from './daemon.js';
 import { ExecutionNodeAdmission } from './admission.js';
 import { AuditLog } from './audit.js';
@@ -20,7 +20,7 @@ export type {
   ExecutionNodeStopSpec,
   ExecutionNodeTenantId,
   ExecutionNodeTicket,
-} from '../../../packages/contracts/src/execution-node-v1.js';
+} from './contract.js';
 export * from './errors.js';
 export * from './tickets.js';
 export * from './runtime-adapter.js';

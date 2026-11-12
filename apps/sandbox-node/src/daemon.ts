@@ -7,7 +7,7 @@ import type {
   ExecutionNodeSandboxSpec,
   ExecutionNodeStopSpec,
   ExecutionNodeTenantId,
-} from '../../../packages/contracts/src/execution-node-v1.js';
+} from './contract.js';
 import { ExecutionNodeError } from './errors.js';
 import { checkTicket, sha256Hex, verifyTicketSignature } from './tickets.js';
 import type { RuntimeAdapter } from './runtime-adapter.js';

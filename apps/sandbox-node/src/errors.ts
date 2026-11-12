@@ -1,4 +1,4 @@
-import type { ExecutionNodeErrorCode } from '../../../packages/contracts/src/execution-node-v1.js';
+import type { ExecutionNodeErrorCode } from './contract.js';
 
 export const EXECUTION_NODE_HTTP_STATUS: Record<ExecutionNodeErrorCode, number> = {
   already_claimed: 409,
