@@ -22,7 +22,7 @@ export const geminiDecisionsDescriptor: DecisionEvaluatorDescriptor = {
     bundleDigest: digest({ contract, qualification: 'unqualified', sourceDate: '2026-11-12' }) },
   priceProtocol: { authority: 'control.model_pricing', revision: 'gemini-decision-1-standard-2026-11-11' },
   registeredCriteria: [], retention: { status: 'unknown', basis: 'published-policy', retentionDays: null,
-    gap: 'Google AI Studio does not guarantee Canadian residency.',
+    gap: 'unknown (source-gap)',
     evidenceRefs: ['https://ai.google.dev/gemini-api/terms', source] },
 };
 export const geminiDecisionsPrice: DecisionPrice = {
