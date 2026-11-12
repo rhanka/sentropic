@@ -73,7 +73,11 @@ export function makeCall(scenario = {}) {
       return JSON.stringify({ spec: scenario.middlewareSpec ?? { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } });
     }
     if (cmd === 'get cronjob sentropic-idp-identity-export -o json') {
-      return JSON.stringify({ spec: { suspend: true } });
+      return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false } });
+    }
+    if (cmd.startsWith('patch cronjob sentropic-idp-identity-export')) {
+      scenario.exportSuspended = true;
+      return '';
     }
     if (cmd === 'get deployment api -o json') {
       return JSON.stringify(scenario.api ?? (scaled.api
@@ -245,9 +249,28 @@ test('classifier proves branch P only with commit marker and ready api', () => {
   assert.equal(info.apiReady, true);
 });
 
-test('pre-commit rollback removes both rotated keys before any scale-up', () => {
+test('post-rollback verification fails the rollback on bad health', async () => {
+  const { ctx } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
+  const badProbe = async () => ({ status: 500, body: { cancel: async () => {} } });
+  await assert.rejects(
+    preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, probe: badProbe,
+      healthUrl: 'https://app/health', jwksUrl: 'https://idp/jwks' }),
+    /rollback_verify_failed/);
+});
+
+test('rollback forces identity-export suspension and still reopens ingress', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' }, exportSuspended: false } });
+  const out = await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions });
+  assert.deepEqual(out.removedKeys.sort(), ['JWT_SECRET', 'SECRET_ENCRYPTION_KEY']);
+  const joined = calls.join('\n');
+  assert.ok(joined.includes('patch cronjob sentropic-idp-identity-export'), 'guard forced back on');
+  assert.ok(joined.includes('annotate ingress sentropic traefik.ingress.kubernetes.io/router.middlewares-'), 'ingress reopened');
+  assert.ok(joined.includes('delete middleware a4-verification --ignore-not-found=true'), 'middleware removed');
+});
+
+test('pre-commit rollback removes both rotated keys before any scale-up', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
-  const out = preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions });
+  const out = await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions });
   assert.deepEqual(out.removedKeys.sort(), ['JWT_SECRET', 'SECRET_ENCRYPTION_KEY']);
   const joined = calls.join('\n');
   assert.match(joined, /patch secret sentropic-api/);
@@ -439,7 +462,7 @@ test('reconcile waits for terminating frontals instead of failing', async () => 
 test('dry-run prints the key-removal patch even with no keys present', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: {} } });
   const { preCommitRollback } = await import('./t3-rollback.mjs');
-  preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, dryRun: true });
+  await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, dryRun: true });
   assert.ok(calls.some(c => c.startsWith('patch secret sentropic-api')), 'patch printed in dry-run');
 });
 
