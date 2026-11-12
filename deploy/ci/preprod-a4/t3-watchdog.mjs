@@ -9,7 +9,7 @@ import { classify, recover } from './t3-window-driver.mjs';
 // when the driver dies, stalls past its heartbeat, or breaches the total
 // budget, kill any remainder and run the pre-commit rollback (or the
 // post-commit convergence) itself, then record the outcome.
-const TOTAL_BUDGET_MS = 300_000;
+const TOTAL_BUDGET_MS = 175_000;
 const STALE_MS = 1000;
 const POLL_MS = 250;
 

@@ -11,7 +11,7 @@ import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
 export const COMMIT_CUTOFF_MS = 175_000;
-export const FINISH_CUTOFF_MS = 300_000;
+export const FINISH_CUTOFF_MS = 175_000;
 export const COMMIT_MARKER = 1793577600000;
 
 // RBAC matrix, 50 (resource, verb) couples from the executed command set.
@@ -149,7 +149,7 @@ export function checkRbac(ctx) {
 // budget: once start-api has run, only the 300 s fence-to-open contract can
 // still kill the driver — never an earlier W8 deadline inside finishOpen.
 export const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
-  W5: 110_000, W6: 125_000, W7a: 135_000, W7b: 175_000, W8: 300_000, W9: 300_000 };
+  W5: 110_000, W6: 125_000, W7a: 135_000, W7b: 175_000, W8: FINISH_CUTOFF_MS, W9: FINISH_CUTOFF_MS };
 
 // The watchdog kills only past the step's hard deadline: synchronous kubectl
 // phases (W0 matrix, rollout waits) legitimately block heartbeats, so staleness
@@ -194,14 +194,14 @@ export async function recover(ctx, state, reason) {
   }
   RECOVERY_IN_FLIGHT = true;
   try {
-    // The step deadline that armed this recovery is already expired (and at
-    // or past the 300 s fence total it lies in the past): every kubectl
-    // after this point would be capped to 1000 ms by effectiveTimeout and
-    // fail the rollback. Re-arm an independent recovery budget so recovery
-    // kubectl calls keep usable timeouts.
+    // Nominal work stops at 175 s, reserving recovery within the SAME fence.
+    // A failed operation never extends the original 300 s deadline.
+    const deadlineMs = Math.min(monoMs() + (ctx.recoveryBudgetMs ?? 125_000),
+      state.t0MonoMs == null ? Infinity : state.t0MonoMs + TOTAL_BUDGET_MS);
+    if (deadlineMs <= monoMs()) throw new Error('budget_exhausted');
+    state.stepDeadlineMonoMs = deadlineMs;
     if (ctx.timeoutRef) {
-      ctx.timeoutRef.deadlineMs = monoMs() + (ctx.recoveryBudgetMs ?? 180_000);
-      state.stepDeadlineMonoMs = ctx.timeoutRef.deadlineMs;
+      ctx.timeoutRef.deadlineMs = deadlineMs;
     }
     state.recoveryReason = reason;
     try {
@@ -219,7 +219,7 @@ export async function recover(ctx, state, reason) {
     } catch (err) {
       ctx.print?.(`# scale api 0 failed: ${err.message}`);
     }
-    waitZeroPods(ctx.call, monoMs() + 40_000, ['api']);
+    waitZeroPods(ctx.call, Math.min(deadlineMs, monoMs() + 40_000), ['api']);
     let info;
     if (ctx.dryRun && !ctx.probeReadOnly) {
       // Pure dry-run executes nothing, not even reads: simulate the
@@ -234,7 +234,7 @@ export async function recover(ctx, state, reason) {
       // emergency classifier).
       const waitStart = monoMs();
       const waitBudget = ctx.lockWaitMs ?? 60_000;
-      while (info.locks > 0 && monoMs() - waitStart < waitBudget) {
+      while (info.locks > 0 && monoMs() - waitStart < waitBudget && monoMs() + 2000 < deadlineMs) {
         ctx.print?.(`# recover: migration lock held (${info.locks}), waiting for backend drain`);
         await new Promise(resolve => setTimeout(resolve, 2000));
         info = classify(ctx);
@@ -259,6 +259,7 @@ export async function recover(ctx, state, reason) {
         dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,
         healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
         witness: ctx.config.witness,
+        deadlineMs,
         zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
       // The driver recovered itself: mark DONE so the detached watchdog
       // stands down instead of running a second recovery on the reopened
@@ -275,7 +276,7 @@ export async function recover(ctx, state, reason) {
     ctx.print?.('# recover: restarting committed api before finish-open');
     ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
     await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
+      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, deadlineMs });
     // Same single-writer guard on the post-commit branch.
     state.step = 'DONE';
     state.watchdogDone = true;
@@ -384,8 +385,7 @@ async function driveInner(ctx, state) {
   // Per-command timeout: never outlive the current step's hard cutoff nor
   // the total budget. A sub-command that cannot finish in time fails fast
   // and routes to recovery instead of overrunning the step.
-  const to = (ms, step) => Math.max(1000, Math.min(
-    stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step]), left()));
+  const to = (ms, step) => Math.min(stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step]), left());
   heartbeat(ctx, state, 'W1');
   ctx.d1 = (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'fence',
     A4_AUTHORIZATION_FILE: ctx.config.authorizationFile,
@@ -469,7 +469,8 @@ async function driveInner(ctx, state) {
   if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
   const { probes, externalProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,
+    deadlineMs: t0 + FINISH_CUTOFF_MS });
   heartbeat(ctx, state, 'W9');
   if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
   state.step = 'DONE';

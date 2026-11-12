@@ -39,8 +39,9 @@ export function withExecStdin(args, input) {
 
 export function effectiveTimeout(timeoutMs, timeoutRef, nowMs = monoMs()) {
   const cap = timeoutRef?.deadlineMs != null
-    ? Math.max(1000, timeoutRef.deadlineMs - nowMs)
+    ? timeoutRef.deadlineMs - nowMs
     : Infinity;
+  if (cap <= 0) throw new Error('budget_exhausted');
   return Math.min(timeoutMs, cap);
 }
 
@@ -158,7 +159,6 @@ export function claimDead(claim) {
   // A claim older than two minutes is take-over-able even when its process
   // still answers kill(0): a driver wedged inside recover() must not hold
   // the watchdog in 'recovery-in-progress' forever.
-  if (monoMs() - (claim.at || 0) > 120_000) return true;
   const m = String(claim.owner ?? '').match(/pid-(\d+)$/);
   if (m) {
     try { process.kill(Number(m[1]), 0); return false; }
@@ -170,5 +170,5 @@ export function claimDead(claim) {
 // Per-command timeout bounded by the current step's hard cutoff: a kubectl
 // or delivered sub-command must never outlive the step that owns it.
 export function stepTimeoutMs(requestedMs, deadlineMonoMs, nowMs = monoMs()) {
-  return Math.max(1000, Math.min(requestedMs, deadlineMonoMs - nowMs));
+  return effectiveTimeout(requestedMs, { deadlineMs: deadlineMonoMs }, nowMs);
 }
