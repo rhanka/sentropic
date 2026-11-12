@@ -26,8 +26,17 @@ export function makeCall(scenario = {}) {
   const call = (args, input) => {
     calls.push(args.join(' ') + (args[0] === 'exec' ? ` <<<${String(input ?? '').split('\n')[0].slice(0, 120)}` : ''));
     const cmd = args.join(' ');
+    const patchPayload = () => {
+      const at = args.indexOf('-p');
+      if (at !== -1) return JSON.parse(args[at + 1]);
+      const file = args.find(a => String(a).startsWith('--patch-file='));
+      if (file && !String(file).includes('<redacted>')) {
+        return JSON.parse(readFileSync(String(file).slice('--patch-file='.length), 'utf8'));
+      }
+      return null;
+    };
     if (cmd.startsWith('patch secret sentropic-api')) {
-      const patch = JSON.parse(args[args.indexOf('-p') + 1]);
+      const patch = patchPayload();
       if (Array.isArray(patch)) {
         for (const op of patch) {
           if (op.op === 'remove') delete liveSecrets[op.path.replace('/data/', '')];
@@ -39,7 +48,7 @@ export function makeCall(scenario = {}) {
       return '';
     }
     if (cmd.startsWith('patch secret auth-idp-session-signing')) {
-      const patch = JSON.parse(args[args.indexOf('-p') + 1]);
+      const patch = patchPayload();
       if (patch?.data) {
         createdSecrets['auth-idp-session-signing'] = { data: { ...(createdSecrets['auth-idp-session-signing']?.data ?? {}), ...patch.data } };
       }
@@ -792,4 +801,88 @@ test('W3 poses rotation keys with patch, never apply (no last-applied annotation
   assert.ok(!joined.includes('apply -f -'), 'no kubectl apply left');
   assert.ok(joined.includes('patch secret sentropic-api --type=merge'), 'merge patch used');
   assert.ok(!joined.includes('test-jwt-secret'), 'values never in argv');
+});
+
+// RUN 5 — Argon v3 round-3: every NOT FIXED first seen red here.
+test('RUN5 recover marks DONE so the watchdog never runs a second recovery', async () => {
+  for (const committed of [false, true]) {
+    const { ctx } = makeCtx({ scenario: { journal: true, committed,
+      secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
+    const { recover } = await import('./t3-window-driver.mjs');
+    // Real recoveries carry the W1 middleware record; the post-commit branch
+    // converges through it, so the test state must too.
+    const state = { step: 'W7b', namespace: 'sentropic-preprod', t0MonoMs: monoMs(),
+      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    const code = await recover(ctx, state, 'run5-double-recover');
+    assert.ok(code === 3 || code === 4, `recover exit, committed=${committed}`);
+    const saved = loadState(ctx.stateDir);
+    assert.equal(saved.step, 'DONE', 'driver marks DONE before exit');
+    assert.equal(saved.watchdogDone, true, 'watchdog stands down after driver recovery');
+  }
+});
+
+test('RUN5 finishOpen restarts a stopped api from ACCEPTED/BACKUP_RESUMED/ONE_HOST_OPEN', async () => {
+  for (const substate of ['ACCEPTED', 'BACKUP_RESUMED', 'ONE_HOST_OPEN']) {
+    const { ctx, calls } = makeCtx({ scenario: {} });
+    const { finishOpen } = await import('./t3-finish-open.mjs');
+    const state = { namespace: 'sentropic-preprod', substate,
+      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    const images = { candidate: CANDIDATE, ui: UI_IMAGE };
+    await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+      save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
+    const joined = calls.join('\n');
+    assert.ok(joined.includes('scale deployment/api --replicas=1'), `${substate}: api restarted`);
+    assert.ok(joined.includes('rollout status deployment/api'), `${substate}: api rollout awaited`);
+    assert.equal(state.substate, 'TWO_HOSTS_OPEN', substate);
+  }
+});
+
+test('RUN5 recover at/after the 300 s budget keeps a usable kubectl deadline', async () => {
+  const { ctx } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==' } } });
+  const { recover } = await import('./t3-window-driver.mjs');
+  const { monoMs: now } = await import('./t3-lib.mjs');
+  ctx.timeoutRef = {};
+  const t0 = now() - 300_000;
+  const state = { step: 'W8', namespace: 'sentropic-preprod', t0MonoMs: t0 };
+  const code = await recover(ctx, state, 'run5-w8-cutoff');
+  assert.equal(code, 3);
+  assert.ok(ctx.timeoutRef.deadlineMs - now() > 10_000, 'recovery budget re-armed past the fence total');
+});
+
+test('RUN5 kill paths list children before the first SIGTERM', async () => {
+  const watchdog = readFileSync(new URL('./t3-watchdog.mjs', import.meta.url), 'utf8');
+  const helperAt = watchdog.indexOf('function listChildren');
+  const killAt = watchdog.indexOf('function killPid');
+  assert.ok(helperAt !== -1 && killAt !== -1 && helperAt < killAt, 'snapshot helper defined before killPid');
+  assert.ok(watchdog.slice(helperAt, killAt).includes('ps -o pid'), 'helper snapshots with ps --ppid');
+  const killBody = watchdog.slice(killAt);
+  const snapCall = killBody.indexOf('listChildren(pid)');
+  const signals = ['process.kill(-pid', "process.kill(pid, 'SIGTERM'", 'process.kill(c,', "'-TERM'", "'-KILL'"]
+    .map(s => killBody.indexOf(s)).filter(i => i !== -1);
+  const firstTerm = signals.length ? Math.min(...signals) : Infinity;
+  assert.ok(snapCall !== -1 && snapCall < firstTerm, 'watchdog snapshots children before signalling');
+  const emergency = readFileSync(new URL('./t3-emergency.sh', import.meta.url), 'utf8');
+  const eps = emergency.indexOf('ps -o pid');
+  const eterm = emergency.indexOf('pkill -TERM -P "$_pid"');
+  assert.ok(eps !== -1 && eterm !== -1 && eps < eterm, 'emergency snapshots grandchildren before SIGTERM');
+});
+
+test('RUN5 rotation keys never travel in argv, even base64', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-keys-'));
+  const files = {
+    apiJwtSecretFile: join(dir, 'jwt'),
+    secretEncryptionKeyFile: join(dir, 'enc'),
+    idpSessionJwtFile: join(dir, 'idp-jwt'),
+  };
+  writeFileSync(files.apiJwtSecretFile, 'test-jwt-secret');
+  writeFileSync(files.secretEncryptionKeyFile, 'test-enc-key');
+  writeFileSync(files.idpSessionJwtFile, 'test-idp-jwt');
+  const { ctx, calls } = makeCtx({ config: { rotationKeyFiles: files } });
+  const { applyRotationKeys } = await import('./t3-window-driver.mjs');
+  applyRotationKeys(ctx);
+  const joined = calls.join('\n');
+  const b64 = s => Buffer.from(s, 'utf8').toString('base64');
+  assert.ok(!joined.includes('test-jwt-secret') && !joined.includes('test-enc-key'), 'no raw secret in argv');
+  assert.ok(!joined.includes(b64('test-jwt-secret')) && !joined.includes(b64('test-enc-key')), 'no base64 secret in argv');
+  assert.ok(!joined.includes(' -p ') || !joined.includes('JWT_SECRET'), 'no secret payload in -p argv');
 });
