@@ -21,7 +21,7 @@ function deployReady(call, deploy, image) {
     && d.status?.observedGeneration === d.metadata?.generation && current === image;
 }
 
-function ensureStarted(call, deploy, image) {
+export function ensureStarted(call, deploy, image) {
   if (deployReady(call, deploy, image)) return;
   const d = JSON.parse(call(['get', 'deployment', deploy, '-o', 'json']) || '{}');
   const current = d.spec?.template?.spec?.containers?.find(c => c.name === deploy)?.image;

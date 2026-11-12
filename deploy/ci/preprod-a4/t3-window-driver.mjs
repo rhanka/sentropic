@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
   runKubectl, loadState, saveState, utcNow } from './t3-lib.mjs';
-import { preCommitRollback } from './t3-rollback.mjs';
-import { finishOpen } from './t3-finish-open.mjs';
+import { preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
+import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -177,6 +177,14 @@ export async function recover(ctx, state, reason) {
     return 3;
   }
   const { probes, externalProbes } = buildProbes(ctx.config);
+  if (!info.apiReady) {
+    // Branch U2b: commit landed just before the api died — one clean restart
+    // without re-import, then converge. Never boots a legacy image here.
+    ctx.print?.('# U2b: restarting committed api before finish-open');
+    ctx.call(['scale', 'deployment/api', '--replicas=0']);
+    waitZeroPods(ctx.call, monoMs() + 40_000);
+    ensureStarted(ctx.call, 'api', ctx.config.images.candidate);
+  }
   await finishOpen({ call: ctx.call, probe: ctx.probe, state,
     save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
   return 4;
