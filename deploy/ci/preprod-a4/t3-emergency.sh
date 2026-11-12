@@ -24,50 +24,9 @@ if [ -n "$DRYRUN" ]; then
   exec node "$HERE/t3-emergency-preview.mjs" "$STATE_DIR" "$CONFIG"
 fi
 
-# 1. Stop the automation: driver pids from the state file, then the watchdog.
-# Kills the whole process group plus direct children (SIGTERM then SIGKILL)
-# and grandchildren (kubectl spawned by execution/ops/run), so no orphan
-# keeps mutating the cluster during the emergency recovery.
-killtree() {
-  _pid="$1"; _sig="$2"
-  # Snapshot the tree BEFORE the first signal: SIGTERM on the parent
-  # re-parents node/kubectl grandchildren to PID 1, so a ps --ppid taken
-  # afterwards finds nothing (Argon v3 MAJOR 1).
-  _children=$(ps -o pid= --ppid "$_pid" 2>/dev/null || true)
-  _grand=""
-  for _c in $_children; do _grand="$_grand $(ps -o pid= --ppid "$_c" 2>/dev/null || true)"; done
-  _tree="$_children $_grand"
-  if [ "$_sig" = "TERM" ]; then
-    kill -TERM -"$_pid" 2>/dev/null || true
-    pkill -TERM -P "$_pid" 2>/dev/null || true
-    for _c in $_tree; do kill -TERM "$_c" 2>/dev/null || true; done
-  else
-    kill -KILL -"$_pid" 2>/dev/null || true
-    pkill -KILL -P "$_pid" 2>/dev/null || true
-    for _c in $_tree; do kill -KILL "$_c" 2>/dev/null || true; done
-  fi
-  for _c in $(ps -o pid --ppid "$_pid" 2>/dev/null | tail -n +2); do
-    pkill -KILL -P "$_c" 2>/dev/null || true
-    kill -KILL "$_c" 2>/dev/null || true
-  done
-  if [ "$_sig" = "TERM" ]; then kill -TERM "$_pid" 2>/dev/null || true;
-  else kill -KILL "$_pid" 2>/dev/null || true; fi
-}
-STATE_FILE="$STATE_DIR/t3-window-state.json"
-if [ -f "$STATE_FILE" ]; then
-  # shellcheck disable=SC2046
-  PIDS=$(node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log([s.driverPid,s.childPid].filter(Boolean).join(" "))' "$STATE_FILE")
-  for pid in $PIDS; do killtree "$pid" TERM; done
-  for _ in $(seq 1 20); do
-    ALIVE=0
-    for pid in $PIDS; do kill -0 "$pid" 2>/dev/null && ALIVE=1; done
-    [ "$ALIVE" -eq 0 ] && break
-    sleep 0.5
-  done
-  for pid in $PIDS; do killtree "$pid" KILL; done
-fi
-pkill -f "t3-watchdog.mjs --state-dir $STATE_DIR" 2>/dev/null || true
-sleep 1
+# 1. Preserve command group identities across TERM, parent death and KILL.
+# Refuse recovery if any command remains alive; include the named watchdog.
+node "$HERE/t3-processes.mjs" "$STATE_DIR"
 
 # 2. Single-writer lock: refuse when another live recovery owns it.
 # shellcheck disable=SC2046
