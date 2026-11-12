@@ -16,6 +16,16 @@ const host: CgroupIO = {
 export class SandboxCgroup {
   constructor(private readonly io: CgroupIO = host) {}
 
+  tenantMemoryMiB(tenantId: string): number {
+    const name = `builder-tenant-${tenantId}.slice`;
+    const group = this.io.controlGroup(name);
+    if (!['sentropic', 'immo'].includes(tenantId)
+      || group !== `/builder.slice/builder-tenant.slice/${name}`) throw new ExecutionNodeError('cgroup_tenant_mismatch');
+    const bytes = Number(this.io.read(`/sys/fs/cgroup${group}/memory.current`).trim());
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new ExecutionNodeError('cgroup_tenant_mismatch');
+    return bytes / 1048576;
+  }
+
   resolve(scope: string, tenantId: string): string {
     const group = this.io.controlGroup(scope);
     const parent = `/builder.slice/builder-tenant.slice/builder-tenant-${tenantId}.slice/`;
