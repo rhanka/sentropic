@@ -76,6 +76,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN6 B5 foundation: persist isolated command PGIDs before exec and kill complete groups on synchronous timeout; retain group records after owner death.
 - [ ] RUN6 B4/B5/M2: real driver/watchdog process regressions reproduce orphan survivors and supervisor self-termination; implement stable command groups and emergency cleanup.
 - [x] RUN6 B7: reserve 125 s recovery inside original 300 s fence; reject expired commands; no age-based takeover of live recovery claim; three regressions failed first.
 - [x] RUN6 B3/M1: preserve classifier exit and require zero locks; emergency preview executes no process/state/lock mutation; all three regressions failed first.
