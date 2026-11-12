@@ -16,6 +16,8 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
 - **Allowed Paths (implementation scope)**:
   - `deploy/ci/preprod-a4/t3-*`
   - `api/tests/api/t3-*`
+  - `deploy/ci/artifact-content/tests.mk` (one read-only `-v` mount line for the
+    manifests gate so it resolves the same canonical `t3-classify.sql`; see T3-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -31,7 +33,14 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- No exceptions declared.
+- **T3-EX1** (declared before use): mount `api/tests/api` read-only into the
+  `test-artifact-content-manifests` gate container (`deploy/ci/artifact-content/tests.mk`,
+  one `-v` line). Reason: the single canonical `t3-classify.sql` lives under `api/` so the
+  CI api image (which ships `api/` but never `deploy/`) can play it against a migrated DB;
+  the driver and its node tests resolve the same file, and this gate mounts `deploy/` but
+  not `api/`. Impact: gate container gains read-only visibility of api test sources only;
+  no behavior change for any other test (verified: no other preprod-a4 test reads `api/`).
+  Rollback: delete the one `-v` line.
 
 ## AI Flaky tests
 - Acceptance rule:
