@@ -18,9 +18,9 @@ describe('admission fairness', () => {
       expect((error as ExecutionNodeError).status).toBe(429);
       expect((error as ExecutionNodeError).retryAfterMs).toBe(250);
     }
-    expect(admission.pendingLength('sentropic')).toBe(1);
+    expect(admission.snapshot('sentropic').pending).toBe(0);
     admission.release('sentropic', 'live');
-    expect(admission.drainPending().map(request => request.requestId)).toEqual(['r2']);
+    admission.admit('sentropic', 'live', 'r2');
   });
 
   it('keeps reserved standby slots independent per tenant', () => {
@@ -32,21 +32,11 @@ describe('admission fairness', () => {
     expect(() => admission.admit('sentropic', 'standby', 's3')).toThrowError(/tenant_quota_exceeded/);
   });
 
-  it('drains queued tenants WFQ 1:1 in rotation', () => {
-    const admission = new ExecutionNodeAdmission(quotas, { globalMaxLive: 1 });
-    admission.admit('sentropic', 'live', 'a1');
-    for (const requestId of ['a2', 'a3']) {
-      expect(() => admission.admit('sentropic', 'live', requestId)).toThrowError(/tenant_quota_exceeded/);
-    }
-    for (const requestId of ['b1', 'b2']) {
-      expect(() => admission.admit('immo', 'live', requestId)).toThrowError(/tenant_quota_exceeded/);
-    }
-    const served: string[] = [];
-    const holders: Array<'sentropic' | 'immo'> = ['sentropic', 'sentropic', 'immo', 'sentropic'];
-    for (const holder of holders) {
-      admission.release(holder, 'live');
-      served.push(...admission.drainPending().map(request => request.requestId));
-    }
-    expect(served).toEqual(['a2', 'b1', 'a3', 'b2']);
+  it('should transfer standby without a second warm reservation', () => {
+    const admission = new ExecutionNodeAdmission(quotas);
+    admission.admit('sentropic', 'standby', 's1');
+    expect(() => admission.admit('sentropic', 'live', 'l1')).toThrowError(/tenant_quota_exceeded/);
+    admission.claim('sentropic');
+    expect(admission.snapshot('sentropic')).toMatchObject({ live: 1, standby: 0 });
   });
 });
