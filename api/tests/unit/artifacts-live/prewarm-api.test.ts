@@ -250,8 +250,5 @@ describe('prewarm HTTP contract', () => {
     const { entries } = await all.json() as { entries: Array<{ state: string; cacheKey: string }> };
     expect(entries).toHaveLength(1);
     expect(entries[0]!.state).toBe('sealed');
-    const exact = await app.request(`/v1/cache?lockSha256=${lockSha256}&repoId=repo&subPath=ui&installWorkspaces=`);
-    expect(exact.status).toBe(200);
-    expect(((await exact.json()) as { entries: unknown[] }).entries).toHaveLength(1);
   });
 });

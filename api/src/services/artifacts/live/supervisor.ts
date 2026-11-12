@@ -45,7 +45,7 @@ const cacheFailure = failure('dependency_cache_invalid');
 
 export function createSupervisorTransport(options: SupervisorOptions) {
   const core = createSupervisorChannel(options);
-  const { call, transfer, stream, streamPipelined, snapshot } = core;
+  const { call, transfer, streamPipelined, snapshot } = core;
   /** The stable output with the single shared candidate digest; a set that digest refuses is an invalid output. */
   async function output(runtime: LiveRuntime) {
     const files = await snapshot(runtime, 'output', OUTPUT_LIMITS, 'refuse', outputFailure);
