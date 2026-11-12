@@ -208,7 +208,15 @@ export async function recover(ctx, state, reason) {
       ctx.print?.(`# scale api 0 failed: ${err.message}`);
     }
     waitZeroPods(ctx.call, monoMs() + 40_000, ['api']);
-    const info = classify(ctx);
+    let info;
+    if (ctx.dryRun && !ctx.probeReadOnly) {
+      // Pure dry-run executes nothing, not even reads: simulate the
+      // committed branch so the printed plan covers the nominal W8 opening.
+      ctx.print?.('# dry-run: simulated classify (committed, api ready)');
+      info = { journal: true, locks: 0, committed: true, receipts: 1, apiReady: true, relations: [] };
+    } else {
+      info = classify(ctx);
+    }
     state.commitVerified = info.committed;
     state.apiReady = info.apiReady;
     state.locks = info.locks;
@@ -227,8 +235,8 @@ export async function recover(ctx, state, reason) {
     // api here before converging. Never boots a legacy image: ensureStarted
     // pins the candidate image.
     ctx.print?.('# recover: restarting committed api before finish-open');
-    ensureStarted(ctx.call, 'api', ctx.config.images.candidate);
-    await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+    ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
+    await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
       save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
     return 4;
   } finally {
@@ -362,7 +370,15 @@ async function driveInner(ctx, state) {
   if (monoMs() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
   (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'start-api',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, 'W7b'));
-  const info = classify(ctx);
+  let info;
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    // Pure dry-run executes nothing, not even reads: simulate the committed
+    // branch so the printed plan covers the nominal W8 opening.
+    ctx.print('# dry-run: simulated classify (committed, api ready)');
+    info = { journal: true, locks: 0, committed: true, receipts: 1, apiReady: true, relations: [] };
+  } else {
+    info = classify(ctx);
+  }
   state.commitVerified = info.committed;
   state.apiReady = info.apiReady;
   state.locks = info.locks;
@@ -375,7 +391,7 @@ async function driveInner(ctx, state) {
   heartbeat(ctx, state, 'W8');
   if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
   const { probes, externalProbes } = buildProbes(ctx.config);
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+  await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
     save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
   heartbeat(ctx, state, 'W9');
   if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
