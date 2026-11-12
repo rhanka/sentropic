@@ -1,14 +1,10 @@
 import type { ExecutionNodeTenantId } from './contract.js';
 import { ExecutionNodeError } from './errors.js';
+import { BuildQueue } from './build-queue.js';
 
 export interface TenantSlotQuota {
   readonly maxLive: number;
   readonly maxStandby: number;
-}
-
-export interface PendingRequest {
-  readonly tenantId: ExecutionNodeTenantId;
-  readonly requestId: string;
 }
 
 export interface AdmissionSnapshot {
@@ -19,9 +15,8 @@ export interface AdmissionSnapshot {
 }
 
 /**
- * Per-tenant admission with reserved live/standby slots. Over-quota
- * requests queue per tenant and drain WFQ/DRR 1:1 across tenants when
- * capacity frees; exhausted callers get 429 tenant_quota_exceeded.
+ * One warm session per tenant (live OR standby), plus one global build.
+ * Excess live requests are rejected before allocating memory.
  */
 export class ExecutionNodeAdmission {
   private readonly quotas: Record<ExecutionNodeTenantId, TenantSlotQuota>;
@@ -29,8 +24,7 @@ export class ExecutionNodeAdmission {
   private readonly retryAfterMs: number;
   private live = 0;
   private readonly used: Record<ExecutionNodeTenantId, { live: number; standby: number }>;
-  private readonly pending: Record<ExecutionNodeTenantId, PendingRequest[]>;
-  private roundRobin: ExecutionNodeTenantId[];
+  readonly builds = new BuildQueue();
 
   constructor(
     quotas: Record<ExecutionNodeTenantId, TenantSlotQuota>,
@@ -43,26 +37,24 @@ export class ExecutionNodeAdmission {
       sentropic: { live: 0, standby: 0 },
       immo: { live: 0, standby: 0 },
     };
-    this.pending = { sentropic: [], immo: [] };
-    this.roundRobin = ['sentropic', 'immo'];
   }
 
   snapshot(tenantId: ExecutionNodeTenantId): AdmissionSnapshot {
     return { tenantId, live: this.used[tenantId].live,
-      standby: this.used[tenantId].standby, pending: this.pending[tenantId].length };
+      standby: this.used[tenantId].standby, pending: 0 };
   }
 
   private tenantFull(tenantId: ExecutionNodeTenantId, slot: 'live' | 'standby'): boolean {
     const quota = this.quotas[tenantId];
     const limit = slot === 'live' ? quota.maxLive : quota.maxStandby;
     if (this.used[tenantId][slot] >= limit) return true;
+    if (this.used[tenantId].live + this.used[tenantId].standby >= 1) return true;
     if (slot === 'live' && this.live >= this.globalMaxLive) return true;
     return false;
   }
 
-  admit(tenantId: ExecutionNodeTenantId, slot: 'live' | 'standby', requestId: string): void {
+  admit(tenantId: ExecutionNodeTenantId, slot: 'live' | 'standby', _requestId: string): void {
     if (this.tenantFull(tenantId, slot)) {
-      this.pending[tenantId].push({ tenantId, requestId });
       throw new ExecutionNodeError(
         'tenant_quota_exceeded',
         `${tenantId} ${slot} quota exhausted`,
@@ -80,23 +72,13 @@ export class ExecutionNodeAdmission {
     }
   }
 
-  /** WFQ 1:1 — serve one queued request per tenant in rotation. */
-  drainPending(): PendingRequest[] {
-    const served: PendingRequest[] = [];
-    for (const tenantId of this.roundRobin) {
-      const next = this.pending[tenantId][0];
-      if (next && !this.tenantFull(tenantId, 'live')) {
-        this.pending[tenantId].shift();
-        this.used[tenantId].live += 1;
-        this.live += 1;
-        served.push(next);
-      }
+  /** Transfer the existing 768 MiB reservation without double accounting. */
+  claim(tenantId: ExecutionNodeTenantId): void {
+    if (this.used[tenantId].standby !== 1) {
+      throw new ExecutionNodeError('tenant_quota_exceeded', 'no standby reservation', 250);
     }
-    this.roundRobin = [this.roundRobin[1]!, this.roundRobin[0]!];
-    return served;
-  }
-
-  pendingLength(tenantId: ExecutionNodeTenantId): number {
-    return this.pending[tenantId].length;
+    this.used[tenantId].standby -= 1;
+    this.used[tenantId].live += 1;
+    this.live += 1;
   }
 }
