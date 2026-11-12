@@ -286,6 +286,38 @@ test('dry-run prints the exact B3 command sequence and touches nothing', async (
   assert.ok(readFileSync(`${ctx.stateDir}/request.json`, 'utf8').includes('test'));
 });
 
+test('recovery claim is single-flight even for the same owner', async () => {
+  const { claimRecovery } = await import('./t3-lib.mjs');
+  const { ctx } = makeCtx();
+  assert.equal(claimRecovery(ctx.stateDir, 'watchdog'), true);
+  assert.equal(claimRecovery(ctx.stateDir, 'watchdog'), false);
+});
+
+test('a pid claim older than two minutes is take-over-able', async () => {
+  const { claimDead } = await import('./t3-lib.mjs');
+  assert.equal(claimDead({ owner: `pid-${process.pid}`, at: monoMs() - 130_000 }), true);
+  assert.equal(claimDead({ owner: `pid-${process.pid}`, at: monoMs() }), false);
+});
+
+test('step timeouts are bounded by the step cutoff', async () => {
+  const { stepTimeoutMs } = await import('./t3-lib.mjs');
+  const now = monoMs();
+  assert.equal(stepTimeoutMs(120_000, now + 5_000, now), 5_000);
+  assert.equal(stepTimeoutMs(120_000, now + 500_000, now), 120_000);
+  assert.equal(stepTimeoutMs(30_000, now - 1_000, now), 1000);
+});
+
+test('concurrent watchdog polls keep a single writer', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==' } } });
+  saveState(ctx.stateDir, { step: 'W3', heartbeatMonoMs: monoMs() - 60_000,
+    driverPid: 2147483647, t0MonoMs: monoMs(), namespace: 'sentropic-preprod' });
+  const [a, b] = await Promise.all([poll(ctx), poll(ctx)]);
+  const codes = [a, b].sort();
+  assert.ok(codes.includes(3), `codes=${codes}`);
+  assert.ok(codes.includes(5) || codes.includes('recovery-in-progress'), `codes=${codes}`);
+  assert.equal(calls.filter(c => c === 'scale deployment/api --replicas=0').length, 1);
+});
+
 test('recovery claim keeps a single writer', async () => {
   const first = makeCtx();
   const { recover } = await import('./t3-window-driver.mjs');
