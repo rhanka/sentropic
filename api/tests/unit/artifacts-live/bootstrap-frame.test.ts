@@ -123,7 +123,7 @@ describe('pod bootstrap: warm-pool poolEpoch fence (L3 §7.3.2)', () => {
   });
   it('should refuse a second claim at the same fence instead of double-binding', async () => {
     const pod = await harness();
-    await expect(pod.send('claim', {}, epoch(0, 1))).toEqual({ claimed: true, poolEpoch: 0 });
+    expect(await pod.send('claim', {}, epoch(0, 1))).toEqual({ claimed: true, poolEpoch: 0 });
     await expect(pod.send('claim', {}, epoch(0, 1))).rejects.toThrow('failed:already_bound');
     const other = { ...epoch(0, 1), sessionId: 'other-session' };
     await expect(pod.send('claim', {}, other)).rejects.toThrow('fenced:stale_fence');
@@ -136,14 +136,14 @@ describe('pod bootstrap: warm-pool poolEpoch fence (L3 §7.3.2)', () => {
     await writeFile(pod.path('tmp/artifact-vite.config.mjs'), 'host');
     await writeFile(pod.path('dependencies/package.json'), '{}');
     await pod.send('claim', {}, epoch(0, 1));
-    await expect(pod.send('scrub', { nextEpoch: 1 }, epoch(0, 1))).toEqual({ cleared: ['/workspace', '/tmp'], poolEpoch: 1 });
-    await expect(readFile(pod.path('workspace/app.ts'), 'utf8').then(() => true, () => false)).toBe(false);
-    await expect(readFile(pod.path('tmp/junk.bin'), 'utf8').then(() => true, () => false)).toBe(false);
-    await expect(readFile(pod.path('tmp/artifact-vite.config.mjs'), 'utf8')).toBe('host');
-    await expect(readFile(pod.path('dependencies/package.json'), 'utf8')).toBe('{}');
+    expect(await pod.send('scrub', { nextEpoch: 1 }, epoch(0, 1))).toEqual({ cleared: ['/workspace', '/tmp'], poolEpoch: 1 });
+    expect(await readFile(pod.path('workspace/app.ts'), 'utf8').then(() => true, () => false)).toBe(false);
+    expect(await readFile(pod.path('tmp/junk.bin'), 'utf8').then(() => true, () => false)).toBe(false);
+    expect(await readFile(pod.path('tmp/artifact-vite.config.mjs'), 'utf8')).toBe('host');
+    expect(await readFile(pod.path('dependencies/package.json'), 'utf8')).toBe('{}');
     // A replayed scrub at the old epoch is refused; a fresh claim binds the next epoch.
     await expect(pod.send('scrub', { nextEpoch: 1 }, epoch(0, 1))).rejects.toThrow('failed:not_bound');
-    await expect(pod.send('claim', {}, epoch(1, 1))).toEqual({ claimed: true, poolEpoch: 1 });
+    expect(await pod.send('claim', {}, epoch(1, 1))).toEqual({ claimed: true, poolEpoch: 1 });
   });
   it('should refuse scrub without a claim and on epoch mismatch', async () => {
     const pod = await harness();

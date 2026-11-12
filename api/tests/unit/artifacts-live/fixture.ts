@@ -124,7 +124,7 @@ export function fixture(options: { capacity?: number; budgetMiB?: number; maxWai
       live: vi.fn(async runtime => ({ revision: runtime.sourceRevision, routeEpoch: runtime.routeEpoch })),
       quiesce: vi.fn(async () => { events.push('quiesce'); }),
       claim: vi.fn(async () => ({ poolEpoch: 0 })),
-      scrub: vi.fn(async () => ({ cleared: ['/workspace', '/tmp'], poolEpoch: 1 })),
+      scrub: vi.fn(async (_runtime, nextEpoch: number) => ({ cleared: ['/workspace', '/tmp'], poolEpoch: nextEpoch })),
       stageSource: vi.fn(async () => { events.push('stageSource'); }),
       build: vi.fn(async () => { events.push('build'); return { candidateDigest: 'candidate' }; }),
       verify: vi.fn(async () => { events.push('verify'); }),
