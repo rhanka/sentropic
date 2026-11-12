@@ -75,6 +75,8 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN6 B1/B2 integration: actual ops.mjs plus shipped mandatory Secret reference prove custodian readiness dependency and digest-checked staging on an initially empty PVC.
+- [x] RUN6 watchdog remains armed throughout W0 preparation; its fence deadline starts only at W1 and never expires its supervision early.
 - [x] RUN6 M2: 22 real-process scenarios cover all delivered operations, W0/W8/W9, emergency, stalled driver, and every committed substate; 22/22 pass.
 - [x] RUN6 B7 timing proof: complete rollback and roll-forward consume a shared monotonic deadline through final restoration; HTTP probes and pod waits share it. Both regressions failed first.
 - [x] RUN6 B5 emergency: use the same persisted-group cleanup; no second descendant inventory after reparenting, no broad pkill.

@@ -123,8 +123,8 @@ export function utcNow() {
 }
 
 // Single-writer claim for recovery: exactly one of driver/watchdog recovers.
-// The lock file holds `owner|monoMs`. A claim owned by a dead pid or older
-// than two minutes is take-over-able; anything else forces stand-down.
+// The lock file holds `owner|monoMs`. Only a dead owner permits takeover.
+// Live recovery commands are bounded by the original fence deadline.
 export function readRecoveryClaim(dir) {
   try {
     const [owner, at] = readFileSync(`${dir}/t3-recovering.lock`, 'utf8').split('|');
@@ -156,9 +156,7 @@ export function releaseRecovery(dir) {
 
 export function claimDead(claim) {
   if (!claim) return true;
-  // A claim older than two minutes is take-over-able even when its process
-  // still answers kill(0): a driver wedged inside recover() must not hold
-  // the watchdog in 'recovery-in-progress' forever.
+  // Elapsed time alone is never proof that the current writer stopped.
   const m = String(claim.owner ?? '').match(/pid-(\d+)$/);
   if (m) {
     try { process.kill(Number(m[1]), 0); return false; }

@@ -77,11 +77,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly,
     tier: config.tier, postgresPod: config.postgresPod ?? 'postgres-0',
     probe: fetch, print: console.log };
-  const stopAt = monoMs() + 300_000;
   const timer = setInterval(async () => {
     try {
       const out = await poll(ctx);
-      if ((out !== 'waiting' && out !== 'recovery-in-progress') || monoMs() > stopAt) {
+      if (out !== 'waiting' && out !== 'recovery-in-progress') {
         clearInterval(timer);
         process.exitCode = out === 'done' ? 0 : Number(out) || 1;
       }
