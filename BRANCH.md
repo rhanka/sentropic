@@ -56,6 +56,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - No UI change, no UAT checkpoint for this step.
 
 ## Plan / Todo (lot-based)
+- [x] RUN 2 build: compiled digest-addressed archive produced locally; reuse locked dependency download cache after observed registry ETIMEDOUT, without host node_modules.
 - [x] RUN 2: real adapter reads complete memory.current via validated systemd tenant slice; update local exports and standalone qualification instructions.
 - [x] RUN 2 AMD-3/6/7: compile-time incomplete provenance rejection, truthful stop union, strict isolate policy and canonical recipe digest/path collision regressions.
 - [x] RUN 2: CI executes standalone regression suite; spec adds provenance/S2 recipe and staged d2-4 qualification gates.

@@ -19,5 +19,10 @@ tar --sort=name --mtime='2026-01-01' --owner=0 --group=0 --numeric-owner \
 digest=$(sha256sum "$OUT/sandbox-node.tar" | cut -d' ' -f1)
 printf '%s\n' "$digest" > "$OUT/release.digest"
 mv "$OUT/sandbox-node.tar" "$OUT/$digest.tar"
-mv "$release" "$OUT/$digest"
+if test -d "$OUT/$digest"; then
+  cmp "$release/SHA256SUMS" "$OUT/$digest/SHA256SUMS"
+  rm -r "$release"
+else
+  mv "$release" "$OUT/$digest"
+fi
 sha256sum "$OUT/$digest.tar" | tee "$OUT/SHA256SUMS"
