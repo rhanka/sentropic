@@ -17,6 +17,7 @@ const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
 export function makeCall(scenario = {}) {
   const calls = [];
   const liveSecrets = { ...(scenario.secretData ?? {}) };
+  const createdSecrets = {};
   const scaled = {};
   const readyDeploy = (name, image) => ({ spec: { replicas: 1,
     template: { spec: { containers: [{ name, image }] } } },
@@ -46,7 +47,23 @@ export function makeCall(scenario = {}) {
       || cmd === 'get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=ui -o json') {
       return JSON.stringify({ items: [] });
     }
-    if (cmd === 'get secret sentropic-api -o json') return JSON.stringify({ data: liveSecrets });
+    if (cmd === 'apply -f -' && typeof input === 'string') {
+      try {
+        const doc = JSON.parse(input);
+        if (doc?.kind === 'Secret' && doc.metadata?.name === 'sentropic-api') {
+          Object.assign(liveSecrets, doc.data ?? {});
+        }
+        if (doc?.kind === 'Secret' && doc.metadata?.name) {
+          createdSecrets[doc.metadata.name] = doc;
+        }
+      } catch { /* non-JSON stdin */ }
+      return '';
+    }
+    if (cmd.startsWith('get secret ') && cmd.endsWith(' -o json')) {
+      const name = cmd.split(' ')[2];
+      if (name === 'sentropic-api') return JSON.stringify({ data: liveSecrets });
+      if (createdSecrets[name]) return JSON.stringify({ data: createdSecrets[name].data ?? {} });
+    }
     if (cmd === 'get middleware a4-verification -o json') {
       if (scenario.middlewareSpec === false) return '{}';
       return JSON.stringify({ spec: scenario.middlewareSpec ?? { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } });
@@ -80,6 +97,17 @@ export function makeCall(scenario = {}) {
 export function makeCtx(overrides = {}) {
   const { call, calls } = makeCall(overrides.scenario ?? {});
   const printed = [];
+  // Default rotation key material: every full drive poses the W3 keys, so
+  // tests get files unless they opt out (rotationKeyFiles: undefined).
+  const keyDir = mkdtempSync(join(tmpdir(), 't3-keys-'));
+  const defaultKeys = {
+    apiJwtSecretFile: join(keyDir, 'jwt'),
+    secretEncryptionKeyFile: join(keyDir, 'enc'),
+    idpSessionJwtFile: join(keyDir, 'idp'),
+  };
+  writeFileSync(defaultKeys.apiJwtSecretFile, 'test-jwt-secret');
+  writeFileSync(defaultKeys.secretEncryptionKeyFile, 'test-enc-key');
+  writeFileSync(defaultKeys.idpSessionJwtFile, 'test-idp-jwt');
   return {
     ctx: {
       call, printed,
@@ -93,6 +121,7 @@ export function makeCtx(overrides = {}) {
         candidateImage: CANDIDATE, revisions: { api: '12', 'auth-idp': '9', ui: '4' },
         images: { candidate: CANDIDATE, ui: UI_IMAGE },
         request: { format: 'x', operationId: 'test' },
+        rotationKeyFiles: defaultKeys,
         ...(overrides.config ?? {}),
       },
     },
@@ -133,6 +162,39 @@ test('classifier SQL is SELECT-only so exec may run it in probe mode', () => {
   for (const keyword of ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE', 'GRANT', 'REVOKE', 'COPY']) {
     assert.doesNotMatch(code, new RegExp(`\\b${keyword}\\b`, 'i'));
   }
+});
+
+test('W3 poses the rotation keys as explicit steps after wire', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-keys-'));
+  const files = {
+    apiJwtSecretFile: join(dir, 'jwt'),
+    secretEncryptionKeyFile: join(dir, 'enc'),
+    idpSessionJwtFile: join(dir, 'idp-jwt'),
+  };
+  writeFileSync(files.apiJwtSecretFile, 'test-jwt-secret');
+  writeFileSync(files.secretEncryptionKeyFile, 'test-enc-key');
+  writeFileSync(files.idpSessionJwtFile, 'test-idp-jwt');
+  const { ctx, calls } = makeCtx({ config: { rotationKeyFiles: files } });
+  const { applyRotationKeys } = await import('./t3-window-driver.mjs');
+  applyRotationKeys(ctx);
+  assert.equal(calls.filter(c => c === 'apply -f -').length, 2);
+  assert.ok(!calls.join('\n').includes('test-jwt-secret'), 'values never in argv');
+  assert.ok(!calls.join('\n').includes('test-enc-key'), 'values never in argv');
+  assert.ok(!calls.join('\n').includes('test-idp-jwt'), 'values never in argv');
+});
+
+test('W3 fails closed without rotation key files', async () => {
+  const { ctx } = makeCtx({ config: { rotationKeyFiles: undefined } });
+  const { applyRotationKeys } = await import('./t3-window-driver.mjs');
+  assert.throws(() => applyRotationKeys(ctx), /rotation_keys_missing/);
+});
+
+test('W3 key steps print without files in dry-run', async () => {
+  const { ctx, printed } = makeCtx();
+  ctx.dryRun = true;
+  const { applyRotationKeys } = await import('./t3-window-driver.mjs');
+  applyRotationKeys(ctx);
+  assert.ok(printed.join('\n').includes('rotation keys'));
 });
 
 test('classifier reports locks, receipts and artifact relations', () => {

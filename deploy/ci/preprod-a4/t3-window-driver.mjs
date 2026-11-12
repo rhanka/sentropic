@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
   runKubectl, loadState, saveState, stepTimeoutMs, utcNow } from './t3-lib.mjs';
-import { preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
+import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -236,6 +236,45 @@ export async function recover(ctx, state, reason) {
   }
 }
 
+// W3 rotation keys (Astra B3): wire applies the runtime overlay but never
+// touches secret data, so the tenant key acts are explicit steps here —
+// JWT_SECRET + SECRET_ENCRYPTION_KEY into sentropic-api, plus the dedicated
+// auth-idp-session-signing secret. Values travel only via stdin (never argv,
+// never logs: mutating calls print stdin as <redacted-stdin>).
+export function applyRotationKeys(ctx) {
+  const files = ctx.config.rotationKeyFiles ?? {};
+  if (ctx.dryRun) {
+    ctx.print('# dry-run: pose rotation keys from rotationKeyFiles (apiJwtSecretFile, secretEncryptionKeyFile, idpSessionJwtFile)');
+  }
+  let apiJwt = 'dry-run', encKey = 'dry-run', idpJwt = 'dry-run';
+  if (files.apiJwtSecretFile && files.secretEncryptionKeyFile && files.idpSessionJwtFile) {
+    apiJwt = readFileSync(files.apiJwtSecretFile, 'utf8').trim();
+    encKey = readFileSync(files.secretEncryptionKeyFile, 'utf8').trim();
+    idpJwt = readFileSync(files.idpSessionJwtFile, 'utf8').trim();
+    if (!apiJwt || !encKey || !idpJwt) throw new Error('rotation_keys_empty');
+  } else if (!ctx.dryRun) {
+    throw new Error('rotation_keys_missing: apiJwtSecretFile,secretEncryptionKeyFile,idpSessionJwtFile');
+  }
+  const b64 = s => Buffer.from(s, 'utf8').toString('base64');
+  const secret = JSON.parse(ctx.call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
+  const data = { ...(secret.data ?? {}) };
+  data.JWT_SECRET = b64(apiJwt);
+  data.SECRET_ENCRYPTION_KEY = b64(encKey);
+  ctx.call(['apply', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'Secret',
+    metadata: { name: 'sentropic-api', namespace: ctx.config.namespace }, type: 'Opaque', data }));
+  ctx.call(['apply', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'Secret',
+    metadata: { name: 'auth-idp-session-signing', namespace: ctx.config.namespace }, type: 'Opaque',
+    data: { JWT_SECRET: b64(idpJwt) } }));
+  if (!ctx.dryRun) {
+    const after = JSON.parse(ctx.call(['get', 'secret', 'sentropic-api', '-o', 'json']) || '{"data":{}}');
+    const left = ROTATED_KEYS.filter(key => after.data?.[key] === undefined);
+    if (left.length > 0) throw new Error(`rotation_keys_not_applied: ${left.join(',')}`);
+    const idp = JSON.parse(ctx.call(['get', 'secret', 'auth-idp-session-signing', '-o', 'json']) || '{"data":{}}');
+    if (idp.data?.JWT_SECRET === undefined) throw new Error('rotation_keys_not_applied: auth-idp-session-signing');
+  }
+  ctx.print?.('# W3 rotation keys posed: JWT_SECRET, SECRET_ENCRYPTION_KEY, auth-idp-session-signing');
+}
+
 function baseEnv(ctx, extra = {}) {
   return { A4_TIER: ctx.tier, A4_KUBECONFIG_FILE: ctx.config.kubeconfigFile,
     A4_REQUEST_FILE: `${ctx.stateDir}/request.json`, A4_DRY_RUN: ctx.dryRun ? '1' : '0', ...extra };
@@ -299,6 +338,7 @@ async function driveInner(ctx, state) {
   heartbeat(ctx, state, 'W3');
   ctx.d3 = (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W3'));
+  applyRotationKeys(ctx);
   if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
   for (const [step, script, env] of [
     ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }],
