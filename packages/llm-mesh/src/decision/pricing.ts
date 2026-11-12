@@ -43,7 +43,8 @@ export function quoteDecision(request: DecisionRequest, descriptor: DecisionEval
   const callRate = price.billingMode === 'call-rate';
   if (callRate && (descriptor.protocol !== 'systemone-local' || price.inputMicroUsdPerMtok !== '0'
     || price.outputMicroUsdPerMtok !== '0' || price.minimumMicroUsd === '0')) return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
-  const inputOnly = (descriptor.protocol ?? 'jev-native') === 'jev-native' || descriptor.protocol === 'openai-decisions';
+  const inputOnly = (descriptor.protocol ?? 'jev-native') === 'jev-native'
+    || descriptor.protocol === 'openai-decisions' || descriptor.protocol === 'gemini-decisions';
   // Native JEV/Decisions tariffs admit no billed output; reject a foreign output rate.
   if (inputOnly && price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
   // Other protocols price output work, so quoting requires the descriptor's
