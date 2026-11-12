@@ -107,7 +107,7 @@ export async function finishOpen(ctx) {
   // restart from ACCEPTED / BACKUP_RESUMED / ONE_HOST_OPEN must restart the
   // candidate api (and converge ui + auth-idp) before touching traffic.
   // ensureStarted is idempotent: a ready deployment is left alone.
-  if (state.substate === 'ACCEPTED' || state.substate === 'BACKUP_RESUMED' || state.substate === 'ONE_HOST_OPEN') {
+  if (['ACCEPTED', 'BACKUP_RESUMED', 'ONE_HOST_OPEN', 'TWO_HOSTS_OPEN'].includes(state.substate)) {
     ensureStarted(call, 'api', images.candidate, dry);
     ensureStarted(call, 'ui', images.ui, dry);
     ensureStarted(call, 'auth-idp', images.candidate, dry);

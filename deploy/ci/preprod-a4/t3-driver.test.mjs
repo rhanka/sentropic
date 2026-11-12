@@ -164,6 +164,39 @@ test('RBAC matrix covers exactly 50 couples', () => {
   assert.equal(RBAC_COUNT, 50);
 });
 
+test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
+  const { ctx } = makeCtx();
+  const seen = [];
+  ctx.config.remoteFile = '/private/remote.json';
+  ctx.config.rehearsalFile = '/private/rehearsal.json';
+  ctx.delivered = (c, script, env) => {
+    const op = env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE;
+    if (op === 'custodian') assert.ok(seen.includes('budgets'), 'mandatory budgets Secret exists');
+    if (op === 'snapshot') assert.ok(seen.includes('stage:inputs'), 'request/remote on PVC');
+    if (op === 'checkpoint') assert.ok(seen.includes('stage:rehearsal'), 'rehearsal on PVC');
+    if (op === 'stage') {
+      assert.equal(env.A4_REMOTE_FILE, ctx.config.remoteFile);
+      assert.equal(env.A4_REHEARSAL_FILE, ctx.config.rehearsalFile);
+    }
+    seen.push(op === 'stage' ? `${op}:${env.A4_STAGE}` : op);
+    return '';
+  };
+  await drive(ctx);
+  assert.deepEqual(seen.slice(0, 11), ['fence', 'restrict', 'wire', 'budgets', 'custodian',
+    'stage:inputs', 'snapshot', 'stage:rehearsal', 'checkpoint', 'delete-custodian', 'start-api']);
+});
+
+test('RUN6 TWO_HOSTS_OPEN restarts all deployments after emergency classification', async () => {
+  const { ctx, calls } = makeCtx();
+  const { finishOpen } = await import('./t3-finish-open.mjs');
+  const state = { namespace: ctx.config.namespace, substate: 'TWO_HOSTS_OPEN' };
+  await finishOpen({ ...ctx, state, save: () => {}, images: ctx.config.images });
+  for (const name of ['api', 'ui', 'auth-idp']) {
+    assert.ok(calls.includes(`scale deployment/${name} --replicas=1`), name);
+    assert.ok(calls.includes(`rollout status deployment/${name} --timeout=120s`), name);
+  }
+});
+
 test('classifier SQL is schema-safe and versioned', () => {
   const text = loadSql('t3-classify.sql');
   assert.match(text, /t3-classify-v1/);
@@ -553,7 +586,8 @@ test('dry-run prints the exact B3 command sequence and touches nothing', async (
   assert.equal(code, 0);
   const text = printed.join('\n');
   const order = ['A4_ACTION=fence', 'A4_ACTION=restrict', 'A4_OPERATION=wire',
-    'A4_OPERATION=custodian', 'A4_PHASE=snapshot', 'A4_OPERATION=budgets',
+    'A4_OPERATION=budgets', 'A4_OPERATION=custodian', 'A4_STAGE=inputs',
+    'A4_PHASE=snapshot', 'A4_STAGE=rehearsal',
     'A4_PHASE=checkpoint', 'A4_ACTION=delete-custodian', 'A4_ACTION=start-api'];
   let last = -1;
   for (const marker of order) {
