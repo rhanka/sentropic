@@ -67,3 +67,11 @@ export function stopAutomation(stateDir, state, includeWatchdog = false) {
   }
   stop(groups, pids);
 }
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const dir = process.argv[2];
+  let state = {};
+  try { state = JSON.parse(readFileSync(join(dir, 't3-window-state.json'), 'utf8')); }
+  catch (e) { if (e.code !== 'ENOENT') throw e; }
+  stopAutomation(dir, state, true);
+}

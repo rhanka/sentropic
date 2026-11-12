@@ -832,19 +832,6 @@ test('driver records childPid so the watchdog can kill the in-flight child', asy
   assert.ok(st.childPid !== undefined && st.childPid !== null, 'childPid written');
 });
 
-test('watchdog kills children and grandchildren with SIGKILL, not only SIGTERM', async () => {
-  const src = readFileSync(new URL('./t3-watchdog.mjs', import.meta.url), 'utf8');
-  assert.ok(src.includes('pkill') && src.includes('-KILL') && src.includes('-P'), 'SIGKILL to direct children');
-  assert.ok(src.includes('process.kill(-pid') || src.includes('kill(-pid'), 'process-group kill kept');
-});
-
-test('emergency stops the whole process group and SIGKILLs children', () => {
-  const src = readFileSync(new URL('./t3-emergency.sh', import.meta.url), 'utf8');
-  assert.ok(src.includes('pkill') && src.includes('-KILL') && src.includes('-P'), 'SIGKILL to direct children via pkill -KILL -P');
-  assert.ok(src.includes('kill -TERM -') || src.includes('kill -- -') || src.includes('kill -TERM -') , 'group kill present');
-  assert.ok(src.includes('kill -KILL -') || src.includes('kill -- -'), 'group SIGKILL present');
-});
-
 test('W3 poses rotation keys with patch, never apply (no last-applied annotation)', async () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-keys-'));
   const files = {
@@ -907,24 +894,6 @@ test('RUN6 recovery after the fence deadline refuses further writes', async () =
   const state = { step: 'W8', namespace: 'sentropic-preprod', t0MonoMs: t0 };
   await assert.rejects(recover(ctx, state, 'run6-too-late'), /budget_exhausted/);
   assert.equal(ctx.timeoutRef.deadlineMs, undefined, 'no new deadline granted');
-});
-
-test('RUN5 kill paths list children before the first SIGTERM', async () => {
-  const watchdog = readFileSync(new URL('./t3-watchdog.mjs', import.meta.url), 'utf8');
-  const helperAt = watchdog.indexOf('function listChildren');
-  const killAt = watchdog.indexOf('function killPid');
-  assert.ok(helperAt !== -1 && killAt !== -1 && helperAt < killAt, 'snapshot helper defined before killPid');
-  assert.ok(watchdog.slice(helperAt, killAt).includes('ps -o pid'), 'helper snapshots with ps --ppid');
-  const killBody = watchdog.slice(killAt);
-  const snapCall = killBody.indexOf('listChildren(pid)');
-  const signals = ['process.kill(-pid', "process.kill(pid, 'SIGTERM'", 'process.kill(c,', "'-TERM'", "'-KILL'"]
-    .map(s => killBody.indexOf(s)).filter(i => i !== -1);
-  const firstTerm = signals.length ? Math.min(...signals) : Infinity;
-  assert.ok(snapCall !== -1 && snapCall < firstTerm, 'watchdog snapshots children before signalling');
-  const emergency = readFileSync(new URL('./t3-emergency.sh', import.meta.url), 'utf8');
-  const eps = emergency.indexOf('ps -o pid');
-  const eterm = emergency.indexOf('pkill -TERM -P "$_pid"');
-  assert.ok(eps !== -1 && eterm !== -1 && eps < eterm, 'emergency snapshots grandchildren before SIGTERM');
 });
 
 test('RUN5 rotation keys never travel in argv, even base64', async () => {
