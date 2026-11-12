@@ -188,9 +188,9 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
     header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 8, 'utf8');
     return header;
   }
-  /** In-pod seal (§7.1.2 production): walks the installed tree once (`/tmp/install`, node_modules only,
-   * regular files, links skipped), streams a deterministic `tar.zst` to `/tmp/sealed.tar.zst` and returns
-   * the manifest digest inputs. No network, no per-file sink — one archive out via `sealFetch`. */
+  /** In-pod seal (section 7.1.2 production): walks the installed tree once ('/tmp/install', node_modules only,
+   * regular files, links skipped), streams a deterministic 'tar.zst' to '/tmp/sealed.tar.zst' and returns
+   * the manifest digest inputs. No network, no per-file sink — one archive out via 'sealFetch'. */
   ctx.define('sealDependencies', [], async () => {
     if (!state.installed) agentFail('failed', 'phase_refused');
     if (await agentFs.lstat(at(SEAL_FILE)).catch(agentMissing)) agentFail('failed', 'duplicate_path');
@@ -248,7 +248,7 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
     const { size: archiveBytes } = await agentFs.stat(at(SEAL_FILE));
     return { files: files.length, bytes, archiveBytes, archiveSha256: archiveHash.digest('hex'), treeSha256: tree };
   });
-  /** Pages the sealed archive (`/tmp/sealed.tar.zst`) back to the API in 768 KiB slices, like `snapshot`. */
+  /** Pages the sealed archive ('/tmp/sealed.tar.zst') back to the API in 768 KiB slices, like 'snapshot'. */
   ctx.define('sealFetch', ['cursor'], async ({ cursor }) => {
     if (!Number.isSafeInteger(cursor) || cursor < 0) agentFail('failed', 'invalid_args');
     const handle = await agentFs.open(at(SEAL_FILE), 'r').catch(() => agentFail('failed', 'invalid_archive'));
