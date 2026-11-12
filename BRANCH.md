@@ -76,6 +76,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN6 B3/M1: preserve classifier exit and require zero locks; emergency preview executes no process/state/lock mutation; all three regressions failed first.
 - [x] RUN6 B1/B2/B6: create budgets before custodian, stage both PVC inputs through delivered digest checks, converge TWO_HOSTS_OPEN; regression tests failed first.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, rules/testing.md, COMMON-RULES.md
