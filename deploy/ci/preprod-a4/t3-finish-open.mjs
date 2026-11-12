@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { monoMs, podLabels } from './t3-lib.mjs';
+import { readFileSync } from 'node:fs';
+import { loadState, podLabels, runKubectl, saveState } from './t3-lib.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -116,4 +117,29 @@ async function runProbe(probe, p) {
   const res = await probe(p.url, { ...p.options, signal: AbortSignal.timeout(p.timeoutMs ?? 5000) });
   await res.body?.cancel?.();
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
+}
+
+function cliArg(argv, name) {
+  const i = argv.indexOf(name);
+  return i === -1 ? null : argv[i + 1] ?? null;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const argv = process.argv.slice(2);
+  const config = JSON.parse(readFileSync(cliArg(argv, '--config'), 'utf8'));
+  const stateDir = cliArg(argv, '--state-dir');
+  const dryRun = argv.includes('--dry-run');
+  const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
+    dryRun, print: console.log });
+  const state = loadState(stateDir) ?? {};
+  state.namespace = config.namespace;
+  try {
+    const done = await finishOpen({ call, probe: fetch, state,
+      save: next => saveState(stateDir, next), images: config.images,
+      probes: config.probes ?? [], externalProbes: config.externalProbes ?? [] });
+    console.log(`finish_open_ok substate=${done.substate}`);
+  } catch (err) {
+    console.error(`finish_open_failed: ${err.message}`);
+    process.exitCode = 1;
+  }
 }
