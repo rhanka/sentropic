@@ -8,7 +8,7 @@ import { artifactEnvironment, BUILD_RECIPE, buildEnvironment, LIVE_RECIPE, PREBU
 import type { QualifiedSupervisor } from './worker';
 import { createSupervisorChannel, failure, type ChannelOptions } from './supervisor-channel';
 import { classifyRecipeFailure, readRecipeDiagnostics } from './recipe-diagnostics';
-import { createCleanInstall } from './supervisor-install';
+import { createCleanInstall, createSealInstall } from './supervisor-install';
 import { ARCHIVE_LIMITS, OUTPUT_LIMITS, TREE_LIMITS, type TransferFile } from './supervisor-transfer';
 
 /** Trusted byte sources: the pod has no egress (W2 §1), so the supervisor pushes every byte it needs. */
@@ -175,5 +175,6 @@ export function createSupervisorTransport(options: SupervisorOptions) {
       if ((await output(runtime)).digest !== attempt.candidateDigest) unavailable('output_changed');
     },
   };
-  return { ...supervisor, cleanInstall: createCleanInstall(core, options.sources.source) };
+  return { ...supervisor, cleanInstall: createCleanInstall(core, options.sources.source),
+    sealInstall: createSealInstall(core, options.sources.source) };
 }
