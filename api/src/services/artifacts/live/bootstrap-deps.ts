@@ -164,5 +164,108 @@ AGENT_SECTIONS.push(function dependencyOps(ctx) {
     const result = await ctx.runToExit(scoped, INSTALL_DIR, ctx.options.installEnv);
     return { exitCode: result.exitCode, signal: result.signal, output: result.output };
   });
+  const SEAL_FILE = '/tmp/sealed.tar.zst';
+  const SEAL_CHUNK = 786432;
+  /** Deterministic ustar header (zeroed mtime/uid/gid, 0444/0555, ustar magic), mirroring the API writer. */
+  function sealHeader(path, mode, size) {
+    if (typeof path !== 'string' || !path || Buffer.byteLength(path) > 255 || (mode !== 0o444 && mode !== 0o555)
+      || !Number.isSafeInteger(size) || size < 0) agentFail('failed', 'invalid_archive');
+    let name = path; let prefix = '';
+    if (Buffer.byteLength(path) > 100) {
+      const cut = path.lastIndexOf('/', 155);
+      if (cut <= 0 || cut >= path.length - 1 || Buffer.byteLength(path.slice(0, cut)) > 155
+        || Buffer.byteLength(path.slice(cut + 1)) > 100) agentFail('failed', 'invalid_archive');
+      prefix = path.slice(0, cut); name = path.slice(cut + 1);
+    }
+    const header = Buffer.alloc(512, 0);
+    header.write(name, 0, 100, 'utf8'); header.write(mode.toString(8).padStart(7, '0'), 100, 8, 'utf8');
+    header.write('0000000\0', 108, 8, 'utf8'); header.write('0000000\0', 116, 8, 'utf8');
+    header.write(size.toString(8).padStart(11, '0') + '\0', 124, 12, 'utf8');
+    header.write('        ', 148, 8, 'utf8'); header[156] = 0x30; header.write('ustar\0', 257, 6, 'utf8');
+    header.write('00', 263, 2, 'utf8'); header.write(prefix, 345, 155, 'utf8');
+    let checksum = 0;
+    for (let i = 0; i < 512; i++) checksum += i >= 148 && i < 156 ? 0x20 : header[i];
+    header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 8, 'utf8');
+    return header;
+  }
+  /** In-pod seal (§7.1.2 production): walks the installed tree once (`/tmp/install`, node_modules only,
+   * regular files, links skipped), streams a deterministic `tar.zst` to `/tmp/sealed.tar.zst` and returns
+   * the manifest digest inputs. No network, no per-file sink — one archive out via `sealFetch`. */
+  ctx.define('sealDependencies', [], async () => {
+    if (!state.installed) agentFail('failed', 'phase_refused');
+    if (await agentFs.lstat(at(SEAL_FILE)).catch(agentMissing)) agentFail('failed', 'duplicate_path');
+    const files = []; let total = 0;
+    const walk = async (rel) => {
+      for (const name of (await agentFs.readdir(at(INSTALL_DIR + (rel ? '/' + rel : '')))).sort()) {
+        const path = rel ? rel + '/' + name : name;
+        const info = await agentFs.lstat(at(INSTALL_DIR + '/' + path));
+        if (info.isSymbolicLink()) continue;
+        if (info.isDirectory()) { await walk(path); continue; }
+        if (!info.isFile()) agentFail('failed', 'special_file');
+        if (!path.split('/').includes('node_modules')) continue;
+        if (files.length >= 65536 || info.size > 67108864) agentFail('limit', 'limit_exceeded');
+        total += info.size;
+        if (total > 1073741824) agentFail('limit', 'limit_exceeded');
+        files.push({ path, size: info.size, exec: (info.mode & 0o111) !== 0 });
+      }
+    };
+    const top = await agentFs.lstat(at(INSTALL_DIR)).catch(agentMissing);
+    if (!top || !top.isDirectory()) agentFail('failed', 'output_missing');
+    await walk('');
+    files.sort((a, b) => (a.path < b.path ? -1 : 1));
+    const { createZstdCompress } = await import('node:zlib');
+    const zstd = createZstdCompress();
+    const out = await agentFs.open(at(SEAL_FILE), 'w', 0o600);
+    const archiveHash = agentHash('sha256');
+    const writeCompressed = async (chunk) => {
+      if (!zstd.write(chunk)) await new Promise((resolve) => zstd.once('drain', resolve));
+      for (let piece; (piece = zstd.read()) !== null;) { archiveHash.update(piece); await out.write(piece); }
+    };
+    const rows = []; let bytes = 0;
+    try {
+      for (const file of files) {
+        const data = await agentFs.readFile(at(INSTALL_DIR + '/' + file.path));
+        if (data.length !== file.size) agentFail('failed', 'unstable_tree');
+        const digest = agentHash('sha256').update(data).digest('hex');
+        const cacheMode = file.exec ? 365 : 292;
+        rows.push([file.path, cacheMode, digest]);
+        await writeCompressed(sealHeader(file.path, file.exec ? 0o555 : 0o444, data.length));
+        for (let offset = 0; offset < data.length; offset += 512) {
+          const record = Buffer.alloc(512, 0);
+          record.set(data.subarray(offset, Math.min(offset + 512, data.length)), 0);
+          await writeCompressed(record);
+        }
+        bytes += data.length;
+      }
+      await writeCompressed(Buffer.alloc(512, 0));
+      await writeCompressed(Buffer.alloc(512, 0));
+      zstd.end();
+      for (let piece; (piece = zstd.read()) !== null;) { archiveHash.update(piece); await out.write(piece); }
+      await new Promise((resolve, reject) => { zstd.once('end', resolve); zstd.once('error', reject); });
+    } finally { await out.close(); }
+    rows.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const tree = agentSha(JSON.stringify(rows));
+    const { size: archiveBytes } = await agentFs.stat(at(SEAL_FILE));
+    return { files: files.length, bytes, archiveBytes, archiveSha256: archiveHash.digest('hex'), treeSha256: tree };
+  });
+  /** Pages the sealed archive (`/tmp/sealed.tar.zst`) back to the API in 768 KiB slices, like `snapshot`. */
+  ctx.define('sealFetch', ['cursor'], async ({ cursor }) => {
+    if (!Number.isSafeInteger(cursor) || cursor < 0) agentFail('failed', 'invalid_args');
+    const handle = await agentFs.open(at(SEAL_FILE), 'r').catch(() => agentFail('failed', 'invalid_archive'));
+    try {
+      const { size } = await handle.stat();
+      if (!Number.isSafeInteger(size) || size <= 0 || size > 1073741824) agentFail('limit', 'limit_exceeded');
+      if (cursor >= size) agentFail('failed', 'invalid_args');
+      const length = Math.min(SEAL_CHUNK, size - cursor);
+      const data = Buffer.alloc(length);
+      let read = 0;
+      while (read < length) {
+        const { bytesRead } = await handle.read(data, read, length - read, cursor + read);
+        if (bytesRead === 0) agentFail('failed', 'unstable_tree');
+        read += bytesRead;
+      }
+      return { data: data.toString('base64'), next: cursor + length < size ? cursor + length : null, size };
+    } finally { await handle.close(); }
+  });
 });
 `;

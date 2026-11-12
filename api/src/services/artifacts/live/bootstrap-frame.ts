@@ -20,7 +20,7 @@ import { verify as frameVerify } from 'node:crypto';
 const FRAME = { version: 1, signature: 64, maxBytes: 2097152, ttlMs: 30000, skewMs: 5000, seen: 65536,
   leaseMs: ${LIVENESS_LEASE_MS}, leaseExit: ${LEASE_EXIT_CODE} };
 const FRAME_OPS = ['phase', 'terminate', 'renew', 'clear', 'put', 'stage', 'dependencies', 'install', 'overlay', 'hostFile',
-  'prebundle', 'dev', 'build', 'snapshot', 'extractArchive'];
+  'prebundle', 'dev', 'build', 'snapshot', 'extractArchive', 'sealDependencies', 'sealFetch'];
 const FRAME_KEYS = ['v', 'id', 'op', 'fence', 'issuedAt', 'expiresAt', 'args'];
 const FENCE_KEYS = ['generation', 'sessionId', 'leaseEpoch', 'routeEpoch', 'podName', 'podUid'];
 const frameObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
