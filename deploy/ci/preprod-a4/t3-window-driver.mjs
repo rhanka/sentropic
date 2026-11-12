@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildProbes, claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
@@ -194,14 +194,13 @@ export async function recover(ctx, state, reason) {
   }
   RECOVERY_IN_FLIGHT = true;
   try {
-    // The step deadline that armed this recovery is already expired: every
-    // kubectl after this point would be capped to 1000 ms by
-    // effectiveTimeout and fail the rollback. Re-arm the timeout budget to
-    // the fence total so recovery kubectl calls keep usable timeouts.
+    // The step deadline that armed this recovery is already expired (and at
+    // or past the 300 s fence total it lies in the past): every kubectl
+    // after this point would be capped to 1000 ms by effectiveTimeout and
+    // fail the rollback. Re-arm an independent recovery budget so recovery
+    // kubectl calls keep usable timeouts.
     if (ctx.timeoutRef) {
-      ctx.timeoutRef.deadlineMs = state.t0MonoMs != null
-        ? state.t0MonoMs + TOTAL_BUDGET_MS
-        : monoMs() + 120_000;
+      ctx.timeoutRef.deadlineMs = monoMs() + (ctx.recoveryBudgetMs ?? 180_000);
       state.stepDeadlineMonoMs = ctx.timeoutRef.deadlineMs;
     }
     state.recoveryReason = reason;
@@ -261,6 +260,12 @@ export async function recover(ctx, state, reason) {
         healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
         witness: ctx.config.witness,
         zeroPodsTimeoutMs: ctx.probeReadOnly ? 10_000 : undefined });
+      // The driver recovered itself: mark DONE so the detached watchdog
+      // stands down instead of running a second recovery on the reopened
+      // cluster (Argon v3 BLOCKER 1).
+      state.step = 'DONE';
+      state.watchdogDone = true;
+      saveState(ctx.stateDir, state);
       return 3;
     }
     const { probes, externalProbes } = buildProbes(ctx.config);
@@ -271,6 +276,10 @@ export async function recover(ctx, state, reason) {
     ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
     await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
       save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
+    // Same single-writer guard on the post-commit branch.
+    state.step = 'DONE';
+    state.watchdogDone = true;
+    saveState(ctx.stateDir, state);
     return 4;
   } finally {
     RECOVERY_IN_FLIGHT = false;
@@ -284,13 +293,19 @@ export async function recover(ctx, state, reason) {
 // never logs: mutating calls print stdin as <redacted-stdin>). Merge patches
 // only: kubectl apply would record every rotated value in the
 // last-applied-configuration annotation.
+function writePatchFile(ctx, name, text) {
+  mkdirSync(ctx.stateDir, { recursive: true, mode: 0o700 });
+  const path = `${ctx.stateDir}/.t3-${name}-${process.pid}.json`;
+  writeFileSync(path, text, { mode: 0o600 });
+  return path;
+}
+
 export function applyRotationKeys(ctx) {
   const files = ctx.config.rotationKeyFiles ?? {};
   if (ctx.dryRun) {
     ctx.print('# dry-run: pose rotation keys from rotationKeyFiles (apiJwtSecretFile, secretEncryptionKeyFile, idpSessionJwtFile)');
-    ctx.print('# dry-run: patch secret sentropic-api --type=merge (JWT_SECRET, SECRET_ENCRYPTION_KEY)');
-    ctx.call(['patch', 'secret', 'sentropic-api', '--type=merge', '-p',
-      JSON.stringify({ data: { JWT_SECRET: 'dry-run', SECRET_ENCRYPTION_KEY: 'dry-run' } })]);
+    ctx.print('# dry-run: patch secret sentropic-api --type=merge via --patch-file (redacted)');
+    ctx.call(['patch', 'secret', 'sentropic-api', '--type=merge', '--patch-file=<redacted>']);
     return;
   }
   let apiJwt = 'dry-run', encKey = 'dry-run', idpJwt = 'dry-run';
@@ -303,16 +318,29 @@ export function applyRotationKeys(ctx) {
     throw new Error('rotation_keys_missing: apiJwtSecretFile,secretEncryptionKeyFile,idpSessionJwtFile');
   }
   const b64 = s => Buffer.from(s, 'utf8').toString('base64');
-  ctx.call(['patch', 'secret', 'sentropic-api', '--type=merge', '-p',
-    JSON.stringify({ data: { JWT_SECRET: b64(apiJwt), SECRET_ENCRYPTION_KEY: b64(encKey) } })]);
+  // Secrets travel only via --patch-file (0600, unlinked in finally) or via
+  // stdin (create -f -): never in argv, never in logs. kubectl patch does
+  // not create a last-applied-configuration annotation.
+  const apiPatch = JSON.stringify({ data: { JWT_SECRET: b64(apiJwt), SECRET_ENCRYPTION_KEY: b64(encKey) } });
+  const apiPatchFile = writePatchFile(ctx, 'api-patch', apiPatch);
+  try {
+    ctx.call(['patch', 'secret', 'sentropic-api', '--type=merge', `--patch-file=${apiPatchFile}`]);
+  } finally {
+    try { unlinkSync(apiPatchFile); } catch { /* best-effort */ }
+  }
   let idpExists = false;
   try {
     const cur = ctx.call(['get', 'secret', 'auth-idp-session-signing', '-o', 'json']);
     idpExists = Boolean(cur && JSON.parse(cur || '{}').metadata);
   } catch { idpExists = false; }
   if (idpExists) {
-    ctx.call(['patch', 'secret', 'auth-idp-session-signing', '--type=merge', '-p',
-      JSON.stringify({ data: { JWT_SECRET: b64(idpJwt) } })]);
+    const idpPatch = JSON.stringify({ data: { JWT_SECRET: b64(idpJwt) } });
+    const idpPatchFile = writePatchFile(ctx, 'idp-patch', idpPatch);
+    try {
+      ctx.call(['patch', 'secret', 'auth-idp-session-signing', '--type=merge', `--patch-file=${idpPatchFile}`]);
+    } finally {
+      try { unlinkSync(idpPatchFile); } catch { /* best-effort */ }
+    }
   } else {
     ctx.call(['create', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'Secret',
       metadata: { name: 'auth-idp-session-signing', namespace: ctx.config.namespace }, type: 'Opaque',
@@ -441,6 +469,7 @@ async function driveInner(ctx, state) {
   heartbeat(ctx, state, 'W9');
   if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
   state.step = 'DONE';
+  state.watchdogDone = true;
   state.heartbeatMonoMs = monoMs();
   saveState(ctx.stateDir, state);
   return 0;
