@@ -263,4 +263,45 @@ export class ExecutionNodeDaemon {
     this.audit.record('sandbox.renewed', tenantId, id, sandbox.state);
     return sandbox;
   }
+
+  async stopSandbox(tenantId: ExecutionNodeTenantId, id: string, input: {
+    stop: ExecutionNodeStopSpec;
+    commandId: string;
+    ticket?: TicketEnvelope;
+  }): Promise<SandboxRecord> {
+    const sandbox = this.getSandbox(tenantId, id);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    if (input.ticket) this.requireTicket(input.ticket, tenantId);
+    if (input.stop.retentionTtlMs !== undefined && input.stop.retentionTtlMs > 300_000) {
+      throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs exceeds 300s');
+    }
+    return this.idempotent(tenantId, input.commandId, { id, stop: input.stop }, async () => {
+      if (sandbox.state !== 'running') {
+        throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
+      }
+      sandbox.state = 'stopping';
+      this.audit.record('sandbox.stopping', tenantId, id);
+      if (sandbox.runtimeId) await this.adapter.stopSandbox(sandbox.runtimeId);
+      sandbox.runtimeId = undefined;
+      if (input.stop.retainOutput === true) {
+        sandbox.state = 'stopped-output-retained';
+        sandbox.outputSubPath = input.stop.outputSubPath ?? 'ui/dist';
+      } else {
+        sandbox.state = 'destroyed';
+        this.admission.release(tenantId, 'live');
+      }
+      this.audit.record('sandbox.stopped', tenantId, id, sandbox.state);
+      return sandbox;
+    });
+  }
+
+  writeFile(tenantId: ExecutionNodeTenantId, id: string, path: string): void {
+    const sandbox = this.getSandbox(tenantId, id);
+    if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    if (sandbox.state !== 'running') {
+      throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}, writes require running`);
+    }
+    checkWritePath(path);
+    this.audit.record('sandbox.write', tenantId, id, path);
+  }
 }
