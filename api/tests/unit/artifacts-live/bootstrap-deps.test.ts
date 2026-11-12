@@ -218,6 +218,9 @@ describe('pod bootstrap agent: sealed-unit extraction', () => {
   }
   it('should extract a sealed tar.zst under dependencies with digest verification', async () => {
     const pod = await harness();
+    const minimalLock = JSON.stringify({ lockfileVersion: 3, packages: { '': { name: 'root' } } });
+    await pod.send('stage', { ...await pod.transfer('workspace', [file('package-lock.json', minimalLock)]),
+      headSha: HEAD, treeSha: HEAD });
     const bytes = await archive();
     const sent = await pod.transfer('archive', [file('sealed.tar.zst', bytes, 0o444)]);
     const done = await pod.send('extractArchive', { ...sent, tree: treeOf(members), root: 'dependencies' });
@@ -229,6 +232,9 @@ describe('pod bootstrap agent: sealed-unit extraction', () => {
   });
   it('should refuse a tampered archive, a wrong tree digest, a bad root and a multi-file transfer', async () => {
     const pod = await harness();
+    const minimalLock = JSON.stringify({ lockfileVersion: 3, packages: { '': { name: 'root' } } });
+    await pod.send('stage', { ...await pod.transfer('workspace', [file('package-lock.json', minimalLock)]),
+      headSha: HEAD, treeSha: HEAD });
     const bytes = await archive();
     const tampered = Buffer.from(bytes); tampered[tampered.length - 1] ^= 0xff;
     const send = (data: Buffer, args: Record<string, unknown>) => pod.transfer('archive', [file('sealed.tar.zst', data, 0o444)])
