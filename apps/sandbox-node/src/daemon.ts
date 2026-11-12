@@ -27,6 +27,8 @@ export interface SandboxRecord {
   outputSubPath: string | undefined;
   exportedBytes: number;
   createdAt: string;
+  allProcessesExited: boolean;
+  scopeName: string;
 }
 
 export interface DaemonOptions {
@@ -190,6 +192,8 @@ export class ExecutionNodeDaemon {
         outputSubPath: undefined,
         exportedBytes: 0,
         createdAt: new Date(this.now()).toISOString(),
+        allProcessesExited: false,
+        scopeName: `builder-sbx-${id}.scope`,
       };
       this.sandboxes.set(this.key(record.tenantId, id), record);
       this.audit.record('sandbox.created', record.tenantId, id, `mounts=${mounts.length}`);
@@ -289,12 +293,13 @@ export class ExecutionNodeDaemon {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs exceeds 300s');
     }
     return this.idempotent(tenantId, input.commandId, { id, stop: input.stop }, async () => {
-      if (sandbox.state !== 'running') {
+      if (sandbox.state !== 'running' && sandbox.state !== 'stopping') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
       }
       sandbox.state = 'stopping';
       this.audit.record('sandbox.stopping', tenantId, id);
-      if (sandbox.runtimeId) await this.adapter.stopSandbox(sandbox.runtimeId);
+      sandbox.allProcessesExited = sandbox.runtimeId ? await this.adapter.stopSandbox(sandbox.runtimeId) : true;
+      if (!sandbox.allProcessesExited) return sandbox;
       this.releaseSlot(sandbox);
       if (input.stop.retainOutput === true) {
         sandbox.state = 'stopped-output-retained';
@@ -331,8 +336,10 @@ export class ExecutionNodeDaemon {
     }
     return this.idempotent(tenantId, input.commandId, { id, spec: input.spec }, async () => {
       if (sandbox.state !== 'stopped-output-retained' && sandbox.state !== 'exported') {
-        throw new ExecutionNodeError('sandbox_still_running', `sandbox ${id} is ${sandbox.state}`);
+        throw new ExecutionNodeError('sandbox_not_quiesced', `sandbox ${id} is ${sandbox.state}`);
       }
+      if (!sandbox.allProcessesExited) throw new ExecutionNodeError('sandbox_not_quiesced');
+      if (!input.spec.buildId) throw new ExecutionNodeError('command_id_payload_mismatch', 'buildId required');
       if (!sandbox.runtimeId) {
         throw new ExecutionNodeError('unknown_node_instance', `sandbox ${id} has no runtime output`);
       }

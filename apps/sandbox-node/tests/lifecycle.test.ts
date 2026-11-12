@@ -94,7 +94,7 @@ describe('lifecycle', () => {
         commandId: 'export-1',
         spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 10 },
       }),
-    ).rejects.toThrowError(/sandbox_still_running/);
+    ).rejects.toThrowError(/sandbox_not_quiesced/);
   });
 
   it('replays the identical command and rejects a mismatched body', async () => {
