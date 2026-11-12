@@ -95,7 +95,7 @@ export function parseDecisionAdapterResult(candidate: unknown, request: Decision
       score: structuredClone(verdict.score), decision: structuredClone(verdict.decision), label: structuredClone(verdict.label),
       rationale: null, confidence: structuredClone(verdict.confidence), distribution: structuredClone(verdict.distribution) }, ...evidence };
   }
-  if ((descriptor.protocol ?? 'jev-native') !== 'jev-native') {
+  if ((descriptor.protocol ?? 'jev-native') !== 'jev-native' && descriptor.protocol !== 'gemini-decisions') {
     const closed = parseStructuredHostVerdict(value.verdict, request, descriptor);
     if (!closed) return failed('VERDICT_INVALID');
     return { ok: true, verdict: closed.verdict, ...evidence };
