@@ -65,14 +65,24 @@ layers() {
   if grep '^FROM node:' api/Dockerfile e2e/Dockerfile | grep -Ev '@sha256:[a-f0-9]{64}'; then
     echo 'FAIL: Node base digest must be part of the image input key' >&2; return 1
   fi
-  make -n ci-build-api ci-build-api-tool ci-build-ui-target ci-build-e2e IMAGE_KIND=ui CI_IMAGE_CACHE=1 REGISTRY=registry.example/team ENV="$ENV" > "$scratch/builds"
-  for kind in api api-tool ui e2e; do
+  make -n ci-build-api-target ci-build-api-tool ci-build-ui-target ci-build-e2e-target IMAGE_KIND=ui CI_IMAGE_CACHE=1 REGISTRY=registry.example/team ENV="$ENV" > "$scratch/builds"
+  for kind in api-tool ui; do
     grep -F -- "--cache-from type=gha,scope=br78-v1-$kind-linux/amd64" "$scratch/builds"
     grep -F -- "--cache-to type=gha,scope=br78-v1-$kind-linux/amd64,mode=max" "$scratch/builds"
   done
+  make -n ci-build-api-target IMAGE_KIND=api CI_IMAGE_CACHE=1 REGISTRY=registry.example/team ENV="$ENV" > "$scratch/builds-api"
+  grep -F -- "--cache-from type=gha,scope=br78-v1-api-linux/amd64" "$scratch/builds-api"
+  grep -F -- "--cache-to type=gha,scope=br78-v1-api-linux/amd64,mode=max" "$scratch/builds-api"
+  make -n ci-build-e2e-target IMAGE_KIND=e2e CI_IMAGE_CACHE=1 REGISTRY=registry.example/team ENV="$ENV" > "$scratch/builds-e2e"
+  grep -F -- "--cache-from type=gha,scope=br78-v1-e2e-linux/amd64" "$scratch/builds-e2e"
+  grep -F -- "--cache-to type=gha,scope=br78-v1-e2e-linux/amd64,mode=max" "$scratch/builds-e2e"
+  make -n ci-build-api ENV="$ENV" > "$scratch/api-resolver"
+  grep -F -- 'node scripts/ci/resolve-api-image.mjs' "$scratch/api-resolver"
   make -n ci-build-ui ENV="$ENV" > "$scratch/ui-resolver"
   grep -F -- 'node scripts/ci/resolve-ui-image.mjs' "$scratch/ui-resolver"
-  make -n ci-build-api CI_IMAGE_CACHE=0 ENV="$ENV" > "$scratch/cold"
+  make -n ci-build-e2e ENV="$ENV" > "$scratch/e2e-resolver"
+  grep -F -- 'node scripts/ci/resolve-e2e-image.mjs' "$scratch/e2e-resolver"
+  make -n ci-build-api-target CI_IMAGE_CACHE=0 ENV="$ENV" > "$scratch/cold"
   grep -F -- '--no-cache --load' "$scratch/cold"
   if grep -Fq -- '--cache-from' "$scratch/cold"; then return 1; fi
   for cache_enabled in 0 1; do
