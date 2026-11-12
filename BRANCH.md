@@ -38,4 +38,8 @@
 - [x] Lot 1: update providers, catalog, reasoning metadata and package version (0.37.0 > published 0.36.0).
 - [x] Lot 2: extend muse.test.ts, models.test.ts and llm-runtime-stream.test.ts.
 - [ ] Lot 3: run scoped tests, typecheck, scope check and independent review.
+  - [x] make test-llm-mesh SCOPE=tests/muse.test.ts ENV=test-muse-ember: 8 tests passed.
+  - [x] make typecheck-llm-mesh ENV=test-muse-ember: passed.
+  - [x] make scope-check ENV=test-llm-judge: PASS C2.
+  - [ ] Argon review failed with account PERMISSION_DENIED; Muse review dispatched.
 - [ ] Lot 4: open PR, verify CI on exact head and report evidence.
