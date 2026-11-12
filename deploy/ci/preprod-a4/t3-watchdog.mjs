@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { stopAutomation } from './t3-processes.mjs';
 import { readFileSync } from 'node:fs';
 import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
   runKubectl, loadState, saveState } from './t3-lib.mjs';
@@ -21,40 +21,6 @@ function cliArg(argv, name) {
 function pidDead(pid) {
   if (!pid) return true;
   try { process.kill(pid, 0); return false; } catch { return true; }
-}
-
-function listChildren(pid) {
-  // Literal 'ps -o pid --ppid' snapshot: must stay the first process
-  // inspection in this file, before any signal below.
-  try {
-    const out = spawnSync('sh', ['-c', `ps -o pid= --ppid ${Number(pid)} 2>/dev/null`], { encoding: 'utf8', timeout: 5000 });
-    return String(out.stdout ?? '').split(/\s+/).map(s => Number(s)).filter(n => Number.isFinite(n) && n > 0);
-  } catch { return []; }
-}
-
-function killPid(pid) {
-  // Snapshot the tree BEFORE the first signal: SIGTERM on the driver
-  // re-parents in-flight node/kubectl children to PID 1, so a ps --ppid
-  // taken afterwards finds nothing (Argon v3 MAJOR 1).
-  const children = listChildren(pid);
-  const grandChildren = children.flatMap(listChildren);
-  const tree = [...children, ...grandChildren];
-  // The driver runs delivered/kubectl children via spawnSync: killing only
-  // the driver pid orphans the in-flight child, which keeps writing to the
-  // cluster during the rollback. Kill the process group first (the driver
-  // is group leader when started from a shell), then the snapshotted tree
-  // with SIGTERM, then SIGKILL the group, the tree and any late arrivals.
-  // Every step is best-effort.
-  try { process.kill(-pid, 'SIGTERM'); } catch { /* not group leader */ }
-  try { spawnSync('pkill', ['-TERM', '-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
-  for (const c of tree) { try { process.kill(c, 'SIGTERM'); } catch { /* already gone */ } }
-  try { process.kill(pid, 'SIGTERM'); } catch { return; }
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
-  try { process.kill(-pid, 'SIGKILL'); } catch { /* not group leader */ }
-  try { spawnSync('pkill', ['-KILL', '-P', String(pid)], { timeout: 5000 }); } catch { /* no pkill */ }
-  for (const c of tree) { try { process.kill(c, 'SIGKILL'); } catch { /* already gone */ } }
-  try { spawnSync('sh', ['-c', `for c in $(ps -o pid --ppid ${pid} 2>/dev/null | tail -n +2); do pkill -KILL -P $c 2>/dev/null || true; kill -KILL $c 2>/dev/null || true; done`], { timeout: 5000 }); } catch { /* no ps */ }
-  try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
 }
 
 // Single-flight across overlapping 250 ms ticks: poll() is async and
@@ -90,7 +56,7 @@ async function pollInner(ctx) {
     releaseRecovery(ctx.stateDir);
     if (!claimRecovery(ctx.stateDir, me)) return 'recovery-in-progress';
   }
-  for (const pid of [state.driverPid, state.childPid]) if (pid && !pidDead(pid)) killPid(pid);
+  stopAutomation(ctx.stateDir, state);
   console.log(`watchdog_firing reason=${reason} step=${state.step}`);
   const code = await recover({ ...ctx, recoverOwner: me }, state, reason);
   state.watchdogDone = true;
@@ -111,7 +77,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly,
     tier: config.tier, postgresPod: config.postgresPod ?? 'postgres-0',
     probe: fetch, print: console.log };
-  const stopAt = monoMs() + TOTAL_BUDGET_MS + 180_000;
+  const stopAt = monoMs() + 300_000;
   const timer = setInterval(async () => {
     try {
       const out = await poll(ctx);
