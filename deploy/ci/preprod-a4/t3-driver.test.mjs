@@ -681,14 +681,16 @@ test('emergency command prints the rollback plan in dry-run', () => {
   assert.match(out, /scale deployment\/api --replicas=0/);
 });
 
-test('emergency refuses while another live recovery owns the lock', () => {
+test('emergency preview preserves another live recovery lock', () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube',
     namespace: 'sentropic-preprod', revisions: {} }));
   writeFileSync(join(dir, 't3-recovering.lock'), `other-pid-${process.pid}|${monoMs()}`);
-  assert.throws(() => execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
-    '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' }), /recovery owned by/);
+  const before = readFileSync(join(dir, 't3-recovering.lock'), 'utf8');
+  execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
+    '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
+  assert.equal(readFileSync(join(dir, 't3-recovering.lock'), 'utf8'), before);
 });
 
 test('emergency classifies after stopping api and passes pre-cm-dir to rollback', () => {
@@ -698,8 +700,8 @@ test('emergency classifies after stopping api and passes pre-cm-dir to rollback'
     revisions: { api: '12', 'auth-idp': '9', ui: '4' }, preCmDir: '/pre-cm' }));
   const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
     '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
-  const stopped = out.indexOf('automation stopped, lock held');
-  const classified = out.indexOf('classified committed=false');
+  const stopped = out.indexOf('would stop automation');
+  const classified = out.indexOf('pre-commit branch (only if committed=false and locks=0)');
   const patch = out.indexOf('patch secret sentropic-api');
   const undo = out.indexOf('rollout undo');
   assert.ok(stopped !== -1 && classified !== -1 && patch !== -1 && undo !== -1);
