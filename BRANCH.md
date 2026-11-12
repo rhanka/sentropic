@@ -4,7 +4,7 @@
 Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2-4 VM (2 shared vCPU, 3,456 MiB parent ceiling).
 
 ## Scope / Guardrails
-- Scope limited to the contract freeze: spec text + one amendable contract module.
+- Scope: local contract amendments, agent admission/custody helpers, VM artifact/operator definitions and regression qualification.
 - Make-only workflow, no direct Docker commands.
 - Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development happens in isolated worktree `tmp/worktrees/sandbox-node` (verified: branch `feat/sandbox-node-step1` at `origin/main` `5be8e34f3` before any edit).
@@ -36,42 +36,8 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 ## Feedback Loop
 - `BR-SN1-EX7`: add sandbox container qualification to existing required typecheck-lint-api join. No new job/deployment permission; rollback removes that one step.
 - `BR-SN1-EX6`: owner-authorized RUN 2 restores published contracts 0.3.0 and its index/lock; the unreleased contract moves to apps/sandbox-node/src/contract.ts. No publication or consumer dependency changes. Rollback: revert relocation.
-- No exceptions declared (`Makefile`, `docker-compose*.yml`, `api/**`, `ui/**`, `deploy/**` untouched).
-- `BR-SN1-EX1` (declared 2026-11-12, owner: agent-core): root `package-lock.json`
-  version-only sync (`"packages/contracts"` `0.3.0` -> `0.4.0`, 1 line) required
-  by the `enforce-package-bump` CI gate (PR #1012 run 43297181797).
-  Reason: `npm ci` rejects a lock whose `packages/` entry mismatches
-  `packages/contracts/package.json`; no dependency re-resolution.
-  Impact: version string only. Rollback: revert the 1 line.
-- `BR-SN1-EX4` (declared 2026-11-12, owner: agent-core): pivot minor->patch.
-  `0.4.0` + consumer sync (EX2/EX3, reverted) broke the L3a-frozen C0 gate
-  (`comments-contract-boundaries.spec.ts` pins `packages/comments/package.json`
-  via `package-zod4-migration.json`; only the digest-bound Zod migration is
-  accepted) and hardcoded `chat-core-host.spec.ts` (`0.3.2`). Amending that
-  freeze is out of mandate (other scope, owner decision). `0.3.1` keeps every
-  `^0.3.0` consumer spec satisfied, dep maps unchanged, frozen pins intact.
-  Semver-letter tradeoff recorded: the `minor for feature` upgrade (with C0
-  migration) is left to the owner as S1-K1 remainder. Rollback: revert the
-  2 lines (`contracts` package.json + lock `packages/` entry).
-- `BR-SN1-EX5` (declared 2026-11-12, owner: agent-core): selected-fixture
-  lock sibling pin for unpublished `contracts@0.3.1`
-  (`packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`,
-  3 lignes : version+resolved+integrity du seul `node_modules/@sentropic/contracts`).
-  Requis par `check-lock-integrity.mjs siblings` dans le lane lazy
-  (run 5 : `lock pins 0.3.0, sibling is 0.3.1`). Valeur produite a l'identique
-  du refresh sanctionne : `resolved` = URL registre deterministe,
-  `integrity` = sha512 du tarball sibling packe par le flow projet
-  (`make ci-package-candidate`, prefixe `/g` identique au sibling CI).
-  Le refresh mk local est no-op hors contexte CI (pas de receipts :
-  `siblingSelection: []`), d'ou l'edit chirurgical equivalent.
-  Rollback: revert les 3 lignes.
-  SUPERSEDE (2026-11-12, run 6) : le pin 0.3.1 casse TOUS les installs du lane
-  (`npm` choisit le max satisfaisant `^0.3.0` = 0.3.1, tarball 404 -> 502).
-  Un bump transitif non publie est ininstallable dans le lane (pas d'injection
-  `file:` hors consommateurs directs) : pin reverte a 0.3.0 ci-dessous.
-  Le `siblings` check reste rouge par construction (voir rapport) : decision
-  proprietaire requise (gel C0 / lane cluster-mesh / sequence de publication).
-- No `blocked` / `deferred` / `cancelled` / `attention` items.
+- EX1/EX4/EX5 are superseded by EX6: contracts and all consumer manifests/fixtures remain byte-identical to base. Previous failed CI experiments are retained only in the RUN 1 report.
+- S1-K1 host acceptance: OCI bundle/reader and lifecycle transport qualification remain required before routing traffic; bootstrap does not advertise them.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -82,9 +48,9 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single contract-freeze step; no independent CI sub-streams)
+- [x] **Mono-branch** (single follow-up lane, no delegated work)
 - [ ] **Multi-branch**
-- Rationale: S1-T0 is a 2h freeze with no runtime code; one branch, one review.
+- Rationale: apply the owner's follow-up directly on the verified PR branch.
 
 ## UAT Management (in orchestration context)
 - No UI change, no UAT checkpoint for this step.
@@ -117,7 +83,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - [x] **Lot 1 — Spec freeze**
   - [x] Write `spec/SPEC_EVOL_SANDBOX_NODE.md` (English): ExecutionNodeV1 + tenant model frozen; open points (D2/D3/D4/D5/D6/D7/D14) explicitly marked non-frozen.
 - [x] **Lot 2 — Contract module**
-  - [x] Add single amendable module `packages/contracts/src/execution-node-v1.ts` (types + JSON schemas, no dependency) and re-export it from `packages/contracts/src/index.ts`.
+  - [x] Consume unreleased contract in `apps/sandbox-node/src/contract.ts`; leave published contracts untouched.
   - [x] Lot gate: `tsc --noEmit` on `packages/contracts` passes; `git status` shows no `Makefile`, `docker-compose*.yml`, `api/**`, `ui/**`, `deploy/**` changes.
 - [x] **Lot S1-A1a — Sandbox-node daemon (apps/sandbox-node, Node/TS, zero Python)**
   - [x] Daemon against injectable runtime adapter (`src/runtime-adapter.ts`: fake for tests, real `runsc --network=none` systrap compile-safe).
@@ -129,7 +95,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - [x] Unit tests green via `test-api-endpoints SCOPE=apps/sandbox-node/tests` on `ENV=test-sandbox-node` (5 files, 16 tests).
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & lint for the touched package (`make typecheck-api` exit 0 on 2026-11-12; scoped vitest 16/16; eslint clean on identical `.ts` per S1-A1a).
-  - [ ] Bump `packages/contracts/package.json` only if a release step requires it (not in S1-T0).
+  - [x] Keep published contracts 0.3.0 and its lock/index unchanged from base; no publication.
   - [ ] Final gate step 1: create/update PR using this `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR.
-  - [ ] Final gate step 3: once CI is `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [x] Owner constraint: preserve BRANCH.md for follow-up, do not merge or deploy.

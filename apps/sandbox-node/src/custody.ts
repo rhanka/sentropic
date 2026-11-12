@@ -28,6 +28,7 @@ export class CustodyGuard {
   authorize(token: CustodyToken, tenantId: ExecutionNodeTenantId, resourceId: string, mutation = true): void {
     const issued = Date.parse(token.issuedAt), deadline = Date.parse(token.deadlineAt);
     if (token.tenantId !== tenantId || token.resourceId !== resourceId
+      || !Number.isSafeInteger(token.custodyEpoch) || token.custodyEpoch < 0
       || !Number.isFinite(issued) || !Number.isFinite(deadline) || deadline - issued > 60_000
       || deadline <= this.now() || issued > this.now() || deadline <= issued
       || token.custodyEpoch < (this.epochs.get(`${tenantId}:${resourceId}`) ?? 0)) {
