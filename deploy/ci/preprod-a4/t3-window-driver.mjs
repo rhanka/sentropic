@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { supervisedSync } from './t3-processes.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -74,8 +75,8 @@ export function delivered(ctx, script, env, timeoutMs) {
       if (cur) { cur.childPid = process.pid; saveState(ctx.stateDir, cur); }
     }
   } catch { /* observability only */ }
-  const res = spawnSync('node', [join(HERE, script)],
-    { env: { ...process.env, ...env }, encoding: 'utf8', timeout: timeoutMs });
+  const res = supervisedSync('node', [join(HERE, script)],
+    { env: { ...process.env, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
   try {
     if (ctx.stateDir) {
       const cur = loadState(ctx.stateDir);

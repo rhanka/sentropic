@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { supervisedSync } from './t3-processes.mjs';
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 
 // Monotonic milliseconds shared by driver and watchdog. CLOCK_BOOTTIME via
@@ -65,9 +65,9 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
     }
     track(process.pid);
     const started = monoMs();
-    const result = spawnSync('kubectl',
+    const result = supervisedSync('kubectl',
       ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective],
-      { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 });
+      { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
     track(result?.pid ?? null);
     if (probeReadOnly) print(`# ${(monoMs() - started)}ms ${line}`);
     if (result.error || result.status !== 0) {
