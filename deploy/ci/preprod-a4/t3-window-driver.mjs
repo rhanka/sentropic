@@ -182,14 +182,14 @@ async function driveInner(ctx, state) {
   const cutoff = ms => t0 + ms;
   const left = () => cutoff(TOTAL_BUDGET_MS) - monoMs();
   heartbeat(ctx, state, 'W1');
-  ctx.d1 = delivered(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'fence',
+  ctx.d1 = (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'fence',
     A4_AUTHORIZATION_FILE: ctx.config.authorizationFile,
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(30_000, left()));
   if (monoMs() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
   heartbeat(ctx, state, 'W2');
   writeFileSync(`${ctx.stateDir}/request.json`, JSON.stringify(ctx.config.request), { mode: 0o600 });
   // B3: restrict only AFTER request.json exists (it asserts legacyWritersStopped).
-  delivered(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'restrict',
+  (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'restrict',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
   try {
     const mwOut = ctx.call(['get', 'middleware', 'a4-verification', '-o', 'json']);
@@ -200,7 +200,7 @@ async function driveInner(ctx, state) {
   saveState(ctx.stateDir, state);
   if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
   heartbeat(ctx, state, 'W3');
-  ctx.d3 = delivered(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
+  ctx.d3 = (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
   if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
   for (const [step, script, env, at] of [
@@ -210,10 +210,10 @@ async function driveInner(ctx, state) {
     ['W7a', 'execution.mjs', { A4_ACTION: 'delete-custodian' }, 135_000],
   ]) {
     heartbeat(ctx, state, step);
-    delivered(ctx, script, { ...baseEnv(ctx), ...env,
+    (ctx.delivered ?? delivered)(ctx, script, { ...baseEnv(ctx), ...env,
       A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(120_000, left()));
     if (step === 'W5') {
-      delivered(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
+      (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
         A4_BUDGETS_FILE: ctx.config.budgetsFile,
         A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
       const now = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
@@ -223,7 +223,7 @@ async function driveInner(ctx, state) {
   }
   heartbeat(ctx, state, 'W7b');
   if (monoMs() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
-  delivered(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'start-api',
+  (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'start-api',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(120_000, left()));
   const info = classify(ctx);
   state.commitVerified = info.committed;
