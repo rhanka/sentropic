@@ -1,9 +1,9 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
-import type { ExecutionNodeTicket } from '../../../packages/contracts/src/execution-node-v1.js';
+import type { ExecutionNodeTicket } from './contract.js';
 import {
   EXECUTION_NODE_CONTRACT_VERSION,
   EXECUTION_TICKET_TTL_MS,
-} from '../../../packages/contracts/src/execution-node-v1.js';
+} from './contract.js';
 import { ExecutionNodeError } from './errors.js';
 
 export interface TicketKeyPair {

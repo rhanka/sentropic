@@ -1,4 +1,4 @@
-import type { ExecutionNodeTenantId } from '../../../packages/contracts/src/execution-node-v1.js';
+import type { ExecutionNodeTenantId } from './contract.js';
 
 export interface AuditEvent {
   readonly seq: number;
