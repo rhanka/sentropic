@@ -181,7 +181,10 @@ export function createDependencyCache(ports: CachePorts, budget: InstallBudget =
       try {
         existing = await runInstallStep(undefined, 'cache_lookup', () => read(key),
           { timeoutMs: SEALED_LOOKUP_TIMEOUT_MS, log: options.log, now: options.now });
-      } catch { unsealed(); }
+      } catch (error) {
+        if (error instanceof LiveError && error.code === 'builder_unavailable') throw error;
+        unsealed();
+      }
       if (!existing) unsealed();
       try { return verify(existing as CacheObject, identity); }
       catch { await ports.storage.quarantine(key); unsealed(); }

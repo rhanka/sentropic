@@ -266,6 +266,14 @@ describe('sealed user path (requireSealed)', () => {
     f.stored().manifest[0] = { ...f.stored().manifest[0], size: 64 * 1024 * 1024 + 1 };
     await expect(f.cache.requireSealed!(f.source())).rejects.toMatchObject({ code: 'cache_not_prewarmed' });
   });
+  it('should preserve builder_unavailable on S3 outage instead of cache_not_prewarmed', async () => {
+    const { LiveError } = await import('../../../src/services/artifacts/live/records');
+    const f = cacheFixture();
+    f.ports.storage.read = async () => { throw new LiveError('builder_unavailable', 'cache_s3_unavailable'); };
+    await expect(f.cache.requireSealed!(f.source())).rejects.toMatchObject({ code: 'builder_unavailable',
+      reason: 'cache_s3_unavailable' });
+    expect(f.ports.storage.quarantine).not.toHaveBeenCalled();
+  });
   it('should fall back to acquire when the sealed path is disabled or unimplemented', async () => {
     const { requireUserCache, sealedUserPathEnabled } = await import('../../../src/services/artifacts/live/cache');
     expect(sealedUserPathEnabled()).toBe(true);
