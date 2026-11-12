@@ -49,6 +49,18 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   Semver-letter tradeoff recorded: the `minor for feature` upgrade (with C0
   migration) is left to the owner as S1-K1 remainder. Rollback: revert the
   2 lines (`contracts` package.json + lock `packages/` entry).
+- `BR-SN1-EX5` (declared 2026-11-12, owner: agent-core): selected-fixture
+  lock sibling pin for unpublished `contracts@0.3.1`
+  (`packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`,
+  3 lignes : version+resolved+integrity du seul `node_modules/@sentropic/contracts`).
+  Requis par `check-lock-integrity.mjs siblings` dans le lane lazy
+  (run 5 : `lock pins 0.3.0, sibling is 0.3.1`). Valeur produite a l'identique
+  du refresh sanctionne : `resolved` = URL registre deterministe,
+  `integrity` = sha512 du tarball sibling packe par le flow projet
+  (`make ci-package-candidate`, prefixe `/g` identique au sibling CI).
+  Le refresh mk local est no-op hors contexte CI (pas de receipts :
+  `siblingSelection: []`), d'ou l'edit chirurgical equivalent.
+  Rollback: revert les 3 lignes.
 - No `blocked` / `deferred` / `cancelled` / `attention` items.
 
 ## AI Flaky tests
