@@ -39,6 +39,13 @@ Freeze the ExecutionNodeV1 contract and the two-tenant model (sentropic + immo) 
   Reason: `npm ci` rejects a lock whose `packages/` entry mismatches
   `packages/contracts/package.json`; no dependency re-resolution.
   Impact: version string only. Rollback: revert the 1 line.
+- `BR-SN1-EX2` (declared 2026-11-12, owner: agent-core): semver consumer
+  sync for the `0.4.0` minor (`rules/workflow.md`, Dependency authoring).
+  `^0.3.0` excludes `0.4.0`, so the 4 consumers move to `^0.4.0`
+  (`packages/chat-core`, `cluster-mesh`, `comments`, `events`, 1 line each)
+  with matching spec lines in `package-lock.json` (4), `api/package-lock.json`
+  (2) and `ui/package-lock.json` (2). Range-only, no logic change.
+  Rollback: revert the 12 lines.
 - No `blocked` / `deferred` / `cancelled` / `attention` items.
 
 ## AI Flaky tests
