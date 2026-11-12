@@ -77,19 +77,20 @@ Keep at least 1 warm pod per (scope, hot cacheKey) so a live start attaches inst
   - [x] New pool.ts: fill CAS, claimForLive/claimForBuild CAS.
   - [x] Release warm-deps, drain, occupancy, adopt, renew, releaseUnclaimed, drop.
   - [x] LivePorts.pool wiring, cacheKey runtime, pool_exhausted refusal, worker stageSource.
-  - [ ] Service composition.
-  - [ ] Lot gate: new pool.test.ts green.
+  - [x] Hot registry, renewHot, adoptHot; explicit absent tombstones.
+  - [x] Service composition (pool manager, pool API mount, prewarm onSealed).
+  - [x] Lot gate: pool.test.ts 10/10 green (ENV=test-slo-l3).
 - [x] **Lot 5 — Frame fence poolEpoch + claim/scrub ops**
   - [x] FRAME_OPS claim/scrub/extractArchive/applyOverlay/sealDependencies, poolEpoch ordering, agent claim/scrub + unbound allowlist.
   - [x] Worker claim/scrub plumbing (supervisor transport, ports, fixtures).
   - [x] Teardown warm-deps release branch (scrub ACK gate, service delete, pool unlabel, slot re-hold).
-  - [ ] Lot gate: bootstrap-frame.test.ts green.
+  - [x] Lot gate: bootstrap-frame.test.ts 12/12 green (ENV=test-slo-l3).
 - [x] **Lot 6 — Warm-deps release + warm-hit paths**
   - [x] transitions.ts release branch, prepare-live warm claim, build-only warm/warm-deps claim, worker stageSource.
-  - [ ] Lot gate: controller + races tests green.
+  - [x] Lot gate: pool-warm.test.ts 3/3 green (S6 cycle start→stop→publish, ENV=test-slo-l3).
 - [x] **Lot 7 — Pool endpoints**
   - [x] GET /v1/pool, POST /v1/pool/drain (poolAdmin gate), service mount, prewarm onSealed hot registration.
-  - [ ] Lot gate: prewarm-api family green.
+  - [x] Lot gate: pool-api.test.ts 4/4 green (ENV=test-slo-l3).
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest API scoped suites
