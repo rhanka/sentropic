@@ -4,14 +4,14 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { claimDead, claimRecovery, monoMs, readRecoveryClaim, releaseRecovery,
-  runKubectl, loadState, saveState, utcNow } from './t3-lib.mjs';
+  runKubectl, loadState, saveState, stepTimeoutMs, utcNow } from './t3-lib.mjs';
 import { preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
 export const COMMIT_CUTOFF_MS = 175_000;
-export const FINISH_CUTOFF_MS = 205_000;
+export const FINISH_CUTOFF_MS = 300_000;
 export const COMMIT_MARKER = 1793577600000;
 
 // RBAC matrix, 50 (resource, verb) couples from the executed command set.
@@ -146,8 +146,11 @@ export function checkRbac(ctx) {
   }
 }
 
-const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
-  W5: 110_000, W6: 125_000, W7a: 135_000, W7b: 175_000, W8: 205_000 };
+// Hard per-step cutoffs from the fence start (t0). W8 and W9 share the total
+// budget: once start-api has run, only the 300 s fence-to-open contract can
+// still kill the driver — never an earlier W8 deadline inside finishOpen.
+export const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
+  W5: 110_000, W6: 125_000, W7a: 135_000, W7b: 175_000, W8: 300_000, W9: 300_000 };
 
 // The watchdog kills only past the step's hard deadline: synchronous kubectl
 // phases (W0 matrix, rollout waits) legitimately block heartbeats, so staleness
@@ -159,6 +162,7 @@ function heartbeat(ctx, state, step) {
     ? state.t0MonoMs + STEP_CUTOFFS[step]
     : monoMs() + 600_000;
   saveState(ctx.stateDir, state);
+  if (ctx.timeoutRef) ctx.timeoutRef.deadlineMs = state.stepDeadlineMonoMs;
 }
 
 // Recovery after any step failure, cutoff breach or driver fault. Re-reads
@@ -257,16 +261,21 @@ async function driveInner(ctx, state) {
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;
   const left = () => cutoff(TOTAL_BUDGET_MS) - monoMs();
+  // Per-command timeout: never outlive the current step's hard cutoff nor
+  // the total budget. A sub-command that cannot finish in time fails fast
+  // and routes to recovery instead of overrunning the step.
+  const to = (ms, step) => Math.max(1000, Math.min(
+    stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step]), left()));
   heartbeat(ctx, state, 'W1');
   ctx.d1 = (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'fence',
     A4_AUTHORIZATION_FILE: ctx.config.authorizationFile,
-    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(30_000, left()));
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(30_000, 'W1'));
   if (monoMs() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
   heartbeat(ctx, state, 'W2');
   writeFileSync(`${ctx.stateDir}/request.json`, JSON.stringify(ctx.config.request), { mode: 0o600 });
   // B3: restrict only AFTER request.json exists (it asserts legacyWritersStopped).
   (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'restrict',
-    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W2'));
   {
     // Real runs fail closed here (restrict must have created it). Probes have
     // no fence, so absence is expected and recorded instead.
@@ -289,39 +298,46 @@ async function driveInner(ctx, state) {
   if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
   heartbeat(ctx, state, 'W3');
   ctx.d3 = (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
-    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W3'));
   if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
-  for (const [step, script, env, at] of [
-    ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }, 70_000],
-    ['W5', 'run.mjs', { A4_PHASE: 'snapshot' }, 100_000],
-    ['W6', 'run.mjs', { A4_PHASE: 'checkpoint' }, 125_000],
-    ['W7a', 'execution.mjs', { A4_ACTION: 'delete-custodian' }, 135_000],
+  for (const [step, script, env] of [
+    ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }],
+    ['W5', 'run.mjs', { A4_PHASE: 'snapshot' }],
+    ['W6', 'run.mjs', { A4_PHASE: 'checkpoint' }],
+    ['W7a', 'execution.mjs', { A4_ACTION: 'delete-custodian' }],
   ]) {
     heartbeat(ctx, state, step);
     (ctx.delivered ?? delivered)(ctx, script, { ...baseEnv(ctx), ...env,
-      A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(120_000, left()));
+      A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, step));
     if (step === 'W5') {
       (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
         A4_BUDGETS_FILE: ctx.config.budgetsFile,
-        A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(60_000, left()));
+        A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W5'));
       const now = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
       if (now !== state.storesSha256) throw new Error('encrypted_stores_drift');
     }
-    if (monoMs() > cutoff(at)) return recover(ctx, state, `${step}_cutoff`);
+    if (monoMs() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
   }
   heartbeat(ctx, state, 'W7b');
   if (monoMs() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
   (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'start-api',
-    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, Math.min(120_000, left()));
+    A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, 'W7b'));
   const info = classify(ctx);
   state.commitVerified = info.committed;
   state.apiReady = info.apiReady;
+  state.locks = info.locks;
+  state.receipts = info.receipts;
   saveState(ctx.stateDir, state);
+  // Never open traffic on an unverified commit or a dead api: recovery rolls
+  // back pre-commit, or restarts the api and converges post-commit.
+  if (!info.committed) return recover(ctx, state, 'commit_unverified');
+  if (!info.apiReady) return recover(ctx, state, 'api_not_ready');
   heartbeat(ctx, state, 'W8');
   if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
   const { probes, externalProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state,
     save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes });
+  heartbeat(ctx, state, 'W9');
   if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
   state.step = 'DONE';
   state.heartbeatMonoMs = monoMs();
@@ -343,9 +359,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const stateDir = cliArg(argv, '--state-dir');
   const dryRun = argv.includes('--dry-run');
   const probeReadOnly = argv.includes('--probe-readonly');
+  const timeoutRef = {};
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
-    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, print: console.log });
-  const ctx = { call, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
+    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log });
+  const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
     '--state-dir', stateDir, '--config', configPath,
