@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.28
+
+- Surface the sealed-cache miss end to end: `live-host/worker-client` maps
+  builder `409 cache_not_prewarmed` (with `lockSha256`/`cacheState`) instead of
+  collapsing to `provider_unavailable`; `server/failures` projects it as
+  retriable `conflict`; `server/live-errors` registers `cache_not_prewarmed`
+  (409), `lock_mismatch` (422) and `sealed_unit_invalid` (500).
+- Stays in `0.2.x` (cluster-mesh peer `>=0.2.0 <0.3.0`).
+
 ## 0.2.27
 
 - Wire the builder terminal failure through the live package: a `reconcile` answer with
