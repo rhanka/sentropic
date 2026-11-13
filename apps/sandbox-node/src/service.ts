@@ -15,6 +15,7 @@ import { nodeMetrics } from './metrics.js';
 import { createPrivateKey, createPublicKey, sign, createHash } from 'node:crypto';
 import { assertCleanStartup } from './restart.js';
 import { createDataPlane } from './data-plane.js';
+import { custodyVerificationKey } from './custody-key.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -41,7 +42,7 @@ const provenanceKey = createPrivateKey(readFileSync('/etc/execution-node/keys/no
 if (provenanceKey.asymmetricKeyType !== 'ed25519') throw new Error('Ed25519 node provenance key required');
 const provenancePublicKey = createPublicKey(provenanceKey).export({ type: 'spki', format: 'pem' }).toString();
 const dataPlane = createDataPlane({ custody,
-  publicKey: createPublicKey(readFileSync(required('AGENT_TICKET_PUBLIC_KEY'))),
+  publicKey: custodyVerificationKey(readFileSync(required('CUSTODY_PUBLIC_KEY')), readFileSync(required('AGENT_TICKET_PUBLIC_KEY'))),
   sandbox: (tenant, uid) => node.daemon.peekSandbox(tenant, uid),
   target: async (sandbox, port) => {
     if (!sandbox.runtimeId || !node.adapter.portTarget) throw new Error('sandbox_port_unavailable');

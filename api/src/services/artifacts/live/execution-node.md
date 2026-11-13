@@ -30,6 +30,7 @@ No values belong in this document or a lane report.
 - `ARTIFACT_EXECUTION_NODE_EPOCH` (operator-approved positive epoch)
 - `ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64` (base64 SPKI PEM)
 - `ARTIFACT_EXECUTION_TICKET_ED25519_KEY_B64` (base64 Ed25519 PKCS#8 PEM)
+- `ARTIFACT_CUSTODY_ED25519_KEY_B64` (separate base64 Ed25519 PKCS#8 PEM; its public SPKI goes to agent `CUSTODY_PUBLIC_KEY`; reusing the execution key is refused)
 - `SANDBOX_MTLS_CA_CERT_B64`
 - `SANDBOX_MTLS_CONTROL_PLANE_CERT_B64` (CN `control-plane:sentropic-api`)
 - `SANDBOX_MTLS_CONTROL_PLANE_KEY_B64`

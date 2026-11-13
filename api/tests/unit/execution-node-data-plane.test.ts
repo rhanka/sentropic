@@ -2,11 +2,28 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { custodyRpcFixture } from './execution-node-rpc-fixture';
 import { issueNodeCustody, revokeNodeCustody } from '../../src/services/artifacts/live/execution-node-custody';
 import { session } from './execution-node-fake';
+import { sign } from 'node:crypto';
+import { ExecutionNodeAdapter } from '../../src/services/artifacts/live/execution-node-adapter';
+import { sandboxSpec } from './execution-node-fake';
 
 describe('real custody RPC to real agent data plane', () => {
   const fixtures: Awaited<ReturnType<typeof custodyRpcFixture>>[] = [];
   const setup = async () => { const fixture = await custodyRpcFixture(); fixtures.push(fixture); return fixture; };
   afterEach(async () => { await Promise.all(fixtures.splice(0).map(f => f.close())); });
+  it('should refuse the execution key as custody authority and the custody key as execution authority', async () => {
+    const f = await setup(); const lease = await (await f.call('issue')).json();
+    const [head, payload] = lease.token.split('.'); const input = `${head}.${payload}`;
+    const forged = `${input}.${sign(null, Buffer.from(input), f.fake.config.ticketKey).toString('base64url')}`;
+    const req = f.open(forged);
+    const status = await new Promise<number>((resolve, reject) => {
+      req.once('error', reject); req.once('response', res => { res.resume(); resolve(res.statusCode!); }); req.end();
+    });
+    expect(status).toBe(403);
+    const wrong = new ExecutionNodeAdapter({ ...f.fake.config, ticketKey: f.fake.config.custodyKey }, f.fake.adapter.transport);
+    const s = { ...session(), physicalUid: 'cross-use' };
+    await expect(wrong.create(s, sandboxSpec(s), 'cross-use')).rejects.toThrow();
+    expect(f.fake.node.daemon.getSandbox('sentropic', s.physicalUid)).toBeUndefined();
+  });
   it('should preserve owner and guest grants from authorizeLive and refuse a revoked guest', async () => {
     const f = await setup();
     const owner = await f.grant({ principalId: 'principal' });
