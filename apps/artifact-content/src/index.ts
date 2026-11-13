@@ -13,6 +13,7 @@ import type { LiveProxy } from './live';
 import { createSupervisorRoute } from './host';
 import { supervisorRelayFromEnv, type SupervisorRelay } from './supervisor-relay';
 import { dataPlaneFromEnv, type CustodyIssuer } from './data-plane';
+import { custodyIssuerFromEnv } from './custody-issuer';
 
 /** TLS terminates at the dedicated W3.d ingress; Host is validated, forwarded identity is ignored. */
 export async function startContentServer(options: {
@@ -31,7 +32,7 @@ export async function startContentServer(options: {
     status: 404, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
   });
   try {
-    const dataPlane = dataPlaneFromEnv(env, options.custodyIssuer);
+    const dataPlane = dataPlaneFromEnv(env, options.custodyIssuer ?? custodyIssuerFromEnv(env));
     // The supervisor relay is the workers' only ingress (A-LIVE §8.1): its own flag, independent of content and live.
     const supervisor = createSupervisorRoute({ relay: options.supervisorRelay ?? supervisorRelayFromEnv(env, dataPlane),
       baseDomain: env.APP_ARTIFACT_CONTENT_BASE_DOMAIN });
