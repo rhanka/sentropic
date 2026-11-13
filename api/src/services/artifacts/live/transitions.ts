@@ -97,6 +97,7 @@ export async function currentRuntime(ports: Pick<LivePorts, 'store'>, key: LiveK
   return next && next.generation === runtime.generation && next.sessionId === runtime.sessionId ? next : runtime;
 }
 export async function failed(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, error: unknown) {
+  if (error instanceof LiveError && error.reason === 'node_export_pending') return;
   const detail = error instanceof LiveError ? (error.reason ? `${error.code}:${error.reason}` : error.code)
     : 'builder_unavailable';
   // If checkpoint/deletion cannot be confirmed, RECOVERING retains the pod identity and blocks replacement.
