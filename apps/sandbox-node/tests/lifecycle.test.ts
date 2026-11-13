@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   ExecutionNodeClaimSpec,
   ExecutionNodeOwnership,
@@ -53,6 +53,35 @@ function compat(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeClai
 }
 
 describe('lifecycle', () => {
+  it.each(['stop', 'exit'])('should export retained build output after the service deadline (%s)', async mode => {
+    vi.useFakeTimers();
+    class ExitAdapter extends FakeRuntimeAdapter {
+      exit?: (code: number | null) => void;
+      override async runSandbox(options: Parameters<FakeRuntimeAdapter['runSandbox']>[0]) {
+        this.exit = options.onExit; return super.runSandbox(options);
+      }
+    }
+    try {
+      const adapter = new ExitAdapter();
+      const { daemon, admission } = createExecutionNode({ adapter });
+      const box = await daemon.createSandbox({ spec: { ...spec(), profile: 'artifact-build' }, ownership: ownership(), commandId: 'retention' });
+      await daemon.promoteToRunning('sentropic', box.id, { devScope: spec().devScope, commandId: 'run', uid: 1000, gid: 1000, quotaMiB: 1536 });
+      await vi.advanceTimersByTimeAsync(10_000);
+      if (mode === 'exit') { adapter.exit!(0); await vi.advanceTimersByTimeAsync(0); }
+      else await daemon.stopSandbox('sentropic', box.id, { devScope: spec().devScope, commandId: 'stop',
+        stop: { retainOutput: true, retentionTtlMs: 300_000 } });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(box.state).toBe('stopped-output-retained');
+      expect(admission.reservedMiB('sentropic')).toBe(1536);
+      expect((await daemon.exportArtifacts('sentropic', box.id, { devScope: spec().devScope, commandId: 'export',
+        spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } })).bytes.length).toBeGreaterThan(0);
+      await vi.advanceTimersByTimeAsync(239_999);
+      expect(box.state).toBe('exported');
+      await vi.advanceTimersByTimeAsync(1);
+      expect(box.state).toBe('destroyed');
+      expect(admission.reservedMiB('sentropic')).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
   it('should preserve an exit callback delivered before launch returns its runtime id', async () => {
     class EarlyExitAdapter extends FakeRuntimeAdapter {
       override async runSandbox(options: Parameters<FakeRuntimeAdapter['runSandbox']>[0]) {

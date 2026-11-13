@@ -44,9 +44,13 @@ export class BuildQueue {
     });
   }
 
-  release(tenantId: ExecutionNodeTenantId): void {
+  finishExecution(tenantId: ExecutionNodeTenantId): void {
     if (this.holder !== tenantId) throw new Error('publish slot ownership mismatch');
     clearTimeout(this.timer);
+  }
+
+  release(tenantId: ExecutionNodeTenantId): void {
+    this.finishExecution(tenantId);
     this.holder = undefined;
     this.drain();
   }
