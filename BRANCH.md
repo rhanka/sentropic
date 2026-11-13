@@ -52,7 +52,7 @@
   - [x] Review: retain HTTP custody through transformation and backpressure; validate upstream status before Response construction.
   - [x] Review regressions: status 600 and HTTP consumers paused after upstream completion.
   - [x] Review P1 regression: expiry/revocation during a post-fetch live-route check refuses buffered bytes.
-  - [x] Local result: 196 tests across 13 files, scoped TypeScript 5.4.5 with locked Node types passed; lint zero errors (one existing console warning).
+  - [x] Local result: 197 tests across 13 files, scoped TypeScript 5.4.5 with locked Node types passed; lint zero errors (one existing console warning).
   - [x] Distinct sentropic/immo resource admissions preserve separate custody headers and tokens.
   - [x] Second review P1: non-200 upstream HTML is discarded before response release; 201/500 live refusal regressions.
 - [x] Lot 5: README contract/env documentation, independent code review, scoped validation.
@@ -62,5 +62,6 @@
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
   - [x] CI finding: TypeScript 5.4 DOM types lack AbortSignal.any; use a local type bridge to the pinned Node 24 native composition and align the local compiler with the committed lock.
   - [x] Compatibility review P2: remove manual source subscriptions; repeated issuance success/failure with a shared signal leaves no source listeners.
+  - [x] Independent Astra high compatibility closure APPROVE at e27f2a00b63c8e1fadb4cf0ff3ae86b8328e0e75; final change is plan-only.
   - [x] No Compose stack started; isolated Docker test commands self-remove; `make down ENV=feat-s1-c1` completed.
   - [x] CI classifies this path as API; app-cluster-mesh shards invoke test-artifact-content (tests, types, lint) through their Make dependency. No CI edits.
