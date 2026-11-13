@@ -29,9 +29,9 @@ describe('AMD-ISO shared compile contract', () => {
     const canonical = contract.compileCanonicalJson(value);
     const expected = nativeHash('h2a.vue.compile.recipe@1\n' + canonical);
     expect(contract.compileRecipeKey(value)).toBe(expected);
+    expect(expected).toBe(contract.COMPILE_CONFORMANCE_RECIPE_KEY);
     expect(contract.compileRecipeKey(JSON.parse(canonical))).toBe(expected);
     expect(expected).not.toBe(nativeHash(canonical));
-    console.info('VD21_RECIPE_KEY=' + expected);
   });
   it.each(vectors.invalidPaths)('should refuse invalid path %j', path => {
     expect(() => contract.normalizeCompilePath(path)).toThrow();
