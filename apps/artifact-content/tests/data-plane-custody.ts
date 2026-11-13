@@ -20,11 +20,10 @@ export function fixtureCustody() {
       const input = `${header}.${payload}`;
       return `${input}.${sign(null, Buffer.from(input), keys.privateKey).toString('base64url')}`;
     },
-    verify(token: string, tenant: 'sentropic' | 'immo', uid: string): CustodyToken {
-      if (token.length > 4096 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) throw new Error('invalid JWS');
-      const [header, payload, signature] = token.split('.');
-      const metadata = JSON.parse(Buffer.from(header, 'base64url').toString());
-      if (metadata.alg !== 'EdDSA' || metadata.crit || metadata.b64 === false
+    verify(token: string, tenant: 'sentropic' | 'immo', uid: string): CustodyToken & { principalId: string } {
+      const [header, payload, signature, extra] = token.split('.');
+      if (!header || !payload || !signature || extra !== undefined
+        || JSON.parse(Buffer.from(header, 'base64url').toString()).alg !== 'EdDSA'
         || !verify(null, Buffer.from(`${header}.${payload}`), keys.publicKey, Buffer.from(signature, 'base64url'))) {
         throw new Error('invalid JWS');
       }

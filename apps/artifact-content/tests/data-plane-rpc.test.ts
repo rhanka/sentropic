@@ -25,13 +25,13 @@ describe('API custody RPC client', () => {
     await new Promise(resolve => setTimeout(resolve, 300)); expect(api.requests).toHaveLength(count);
   });
   it('should authenticate exact HTTP bytes, preserve all lease fields and forward the API-owned supervisor port', async () => {
-    const { node, api } = await fixture(); node.setPort(8792);
+    const { node, api } = await fixture();
     const transport = dataPlaneFromEnv(node.env, api.replica())!;
     const response = await dataPlaneFetch(transport, subject, '/_supervisor/v1/frame', {
       method: 'POST', headers: {}, signal: AbortSignal.timeout(2000), maxBytes: 1024,
     });
     expect(await response.text()).toBe('live');
-    expect(node.received[0].url).toBe('/v1/ports/8792/_supervisor/v1/frame');
+    expect(node.received[0].url).toBe('/v1/ports/5173/_supervisor/v1/frame');
     expect(api.requests.map(req => req.operation)).toEqual(['watch', 'issue', 'watch']);
     expect(api.requests.every(req => req.authenticated && req.subject.kind === 'supervisor')).toBe(true);
   });
