@@ -74,6 +74,50 @@ The caller authenticates the principal and reads authoritative ownership and
 revocation floor before every issue. `revokeNodeCustody` requires monotone epochs
 and returns the acknowledged ownership; persist it before issuing another token.
 
+## Custody RPC
+
+Internal API endpoint: `POST /api/v1/artifacts/builder/v1/custody/{issue,watch}`.
+Reuse the environment's API/controller ↔ artifact-content HMAC service key:
+`ARTIFACT_LIVE_CONTROLLER_KEY` in API, the matching
+`APP_ARTIFACT_LIVE_CONTROLLER_KEYS` entry in artifact-content. Private Ed25519
+material stays exclusively in API. Serve this path on the internal service only.
+The RPC authenticates before parsing/resolving authority; it does not accept a
+browser bearer, pod name, tenant header or execution ticket as authorization.
+
+Request JSON is `{subject}`. Subject is exactly the C1 `CustodySubject`:
+`{kind:'live',route:LiveRoute}` or `{kind:'supervisor',podName:string}`.
+Authenticate its **exact UTF-8 body bytes** using header `X-Custody-Rpc`:
+`kid:timestamp:mac`, timestamp = decimal Unix milliseconds, skew at most 5000 ms,
+mac = unpadded base64url HMAC-SHA256 of
+`custody-rpc.v1\nPOST\n<pathname>\n<timestamp>\n<sha256hex(body)>`.
+Use a fresh timestamp on every poll; requests are read-only and safely replayable
+within the skew bound. `pathname` includes the complete path above. No query.
+Both endpoints return `Cache-Control: private, no-store`. Bodies are bounded at
+16 KiB. Errors contain closed codes only: 400 `invalid_request`, 403
+`custody_revoked`, 503 `custody_unavailable`; never token/key/request details.
+
+`issue` returns JSON
+`{tenantId,principalId,physicalUid,custodyEpoch,port,token,issuedAt,deadlineAt}`.
+Times are ISO-8601, TTL <=60000 ms, token is compact three-segment EdDSA JWS
+with exactly tenantId, principalId, custodyEpoch, resourceId (=physicalUid),
+issuedAt, deadlineAt. API resolves the current live runtime, persisted node
+allocation and agent ownership/revocation floor before signing. Live route
+session/generation/routeEpoch/podUid/sourceRevision/principal and expiry must
+match current authority; supervisor podName is only a lookup into current
+active runtime state, never a grant. Ports are API-owned: live 5173, supervisor
+8792. Unknown, inactive, replaced, revoked or unowned subjects refuse issuance.
+
+`watch` returns `{version}` after the same authoritative resolution, without
+issuing a token. Version is a SHA-256 fence over the subject's current identity,
+ownership and port. All artifact-content replicas independently poll every
+250 ms while they hold attached streams. Establish watch before issue; compare
+the version before and after issuance. A changed version, non-200, unavailable
+RPC, or request exceeding 500 ms invokes `revoke()` and closes local HTTP/WS;
+an active stream must never survive loss of watch. Unsubscribe cancels its poll.
+This watch-poll choice reaches every replica without an ephemeral in-process
+subscriber list, external broker or durable fan-out delivery race. Agent-local
+expiry and persisted minCustodyEpoch independently cut attached streams.
+
 ## Wire compatibility and S1-B1 handoff
 
 The shipped agent uses `/v1/sandboxes/:id/export`, returning gzip bytes with a
