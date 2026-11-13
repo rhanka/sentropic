@@ -9,6 +9,13 @@ for (const {path, directory, file} of ${JSON.stringify(paths)}) {
   let denied = false;
   try { fs.readFileSync(target); }
   catch (e) { denied = ['ENOENT', 'EACCES', 'EROFS'].includes(e.code); }
+  if (directory) {
+    // Host directories have no fixture sentinel: listing them must also fail.
+    let hidden = false;
+    try { fs.readdirSync(path); }
+    catch (e) { hidden = ['ENOENT', 'EACCES'].includes(e.code); }
+    denied = denied && hidden;
+  }
   check('zero read ' + path, denied);
   denied = false;
   try {

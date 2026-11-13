@@ -37,10 +37,10 @@ values below:
 
 ## RUN 9 delivery (supersedes prior compiled releases)
 
-- RUN 9c archive SHA-256: `84fd2b12a9562a569103975e98b02017f9a1eea81d980fcda89c0354fc0680f7`.
-- SEA executable SHA-256: `87dc380f278905417c1fc5fd7761f15a9fbfc67765db04d0b1d3c4631b2b3a74`.
-- Shared EROFS rootfs SHA-256: `8aa0f66822cadfab0fc101d63402d4c83284a596d3c9dd9f6e54669ed4837078`.
-- Prebuilt qualification EROFS SHA-256: `dab14a8756deb07d440cd872b0bfede3b0342f4f6eed737f26906e073cb5d84a`.
+- RUN 9c archive SHA-256: `fd1485b387325aab91028db93ead5779e0dfb09d741167631af0193d149f47a5`.
+- SEA executable SHA-256: `aa74930069a29cc35ae4ca56ab905a39e2ab69882d3e1925f917f6da50e9c818`.
+- Shared EROFS rootfs SHA-256: `9acd007d7c41cfcacfcc3768936da5d718477dd51f45fc9b5171061a7980729b`.
+- Prebuilt qualification EROFS SHA-256: `26212184ad5451d643ae0143a83d0245e14a001f1c2c97df23bf30882f517e7d`.
 - Supersedes RUN 9 archive `f4cac77d73b130d770dd012a2196899b3fe1e51cc041a9c41d568485dc527818`.
 - Supersedes RUN 8 archive `9789357855f9a377c77fdb9fd9a451b13a21c83bf8e342dcdc62c2ad8da0b036` and all earlier releases.
 - Configuration/unit/operator key/startup/operator guide/restart B-test/isolation qualification and fixture are covered by the archive's ten-entry SHA256SUMS.
