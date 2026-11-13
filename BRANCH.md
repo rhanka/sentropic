@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 4 M6: five forbidden URLs reached fetch before correction; imports now validate exact BHS endpoint, tenant prefix and canonical paths before storage/network access, including cached bases.
 - [x] RUN 4 M5/M8: destroyed-export replay failed first; export promises now discard archive values after completion. Generic scope fixture uses synthetic packages/provenance instead of copying the tenant registry.
 - [x] RUN 4 M3/M4: residual-memory and 40-second signed queue-wait tests failed first; atomic pre-grant memory validation and immutable authenticated queue entries now pass (55 tests).
 - [x] RUN 4 B1/B2: failing natural-exit and suspended-launch DELETE regressions now pass; confirm quiescence before retaining successful output and keep reservations through launch completion (54 tests pass).
