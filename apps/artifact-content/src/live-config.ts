@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { createHostAssertionLive, createLiveFences } from './live-assertion';
 import { CONTROL_HEADER, FENCE_HEADER, MIN_KEY_BYTES } from '@sentropic/artifacts/live-host';
 import { createLiveProxy, type LiveProxyPorts } from './live';
+import type { DataPlaneTransport } from './data-plane';
 
 /** Marks a replica-to-replica copy of an accepted push; a copy is applied, never relayed again. */
 export const RELAY_HEADER = 'x-live-relayed';
@@ -36,6 +37,16 @@ const VITE_PATH = /^\/(?:$|index\.html$|src\/|@vite\/(?:client|env)$|@react-refr
 const VITE_QUERY = new Set(['v', 't', 'import', 'direct', 'url', 'raw', 'inline', 'html-proxy', 'index']);
 export const viteAdmittedPath: LiveProxyPorts['admittedPath'] = async (_route, path, query) =>
   VITE_PATH.test(path) && [...query.keys()].every(name => VITE_QUERY.has(name));
+export const d7AdmittedPath: LiveProxyPorts['admittedPath'] = async (route, path, query) => {
+  if (query.has('worker_file')) return VITE_PATH.test(path)
+    && query.getAll('worker_file').length === 1 && query.get('worker_file') === ''
+    && query.getAll('type').length === 1 && ['module', 'classic'].includes(query.get('type') ?? '')
+    && [...query.keys()].every(name => ['worker_file', 'type'].includes(name) || VITE_QUERY.has(name));
+  if (!query.has('worker')) return viteAdmittedPath(route, path, query);
+  return VITE_PATH.test(path) && query.getAll('worker').length === 1 && query.get('worker') === ''
+    && query.getAll('url').length === 1 && query.get('url') === ''
+    && [...query.keys()].every(name => name === 'worker' || VITE_QUERY.has(name));
+};
 
 /** Socket peer address of each inbound request, recorded by the listener; never taken from a header. */
 const remoteAddresses = new WeakMap<Request, string>();
@@ -84,8 +95,10 @@ export const httpRelay = (port: number) => (peer: string, request: Request, head
  * Composes the live edge from configuration (README « Live edge »). Absent `APP_ARTIFACT_LIVE_ENABLED=1` there is no
  * live edge; an incomplete or inconsistent configuration refuses startup.
  */
-export function liveFromEnv(env: NodeJS.ProcessEnv, baseDomain: string) {
+export function liveFromEnv(env: NodeJS.ProcessEnv, baseDomain: string, dataPlane?: DataPlaneTransport) {
   if (env.APP_ARTIFACT_LIVE_ENABLED !== '1') return undefined;
+  const cspProfile = env.APP_ARTIFACT_LIVE_CSP_PROFILE ?? 'default';
+  if (cspProfile !== 'default' && cspProfile !== 'D7-A') throw new Error('Invalid APP_ARTIFACT_LIVE_CSP_PROFILE');
   const hostKeys = keyRing(env, 'APP_ARTIFACT_LIVE_HOST_KEYS');
   const controllerKeys = keyRing(env, 'APP_ARTIFACT_LIVE_CONTROLLER_KEYS');
   for (const host of hostKeys.values()) for (const controller of controllerKeys.values()) {
@@ -110,10 +123,11 @@ export function liveFromEnv(env: NodeJS.ProcessEnv, baseDomain: string) {
   const peers = env.APP_ARTIFACT_LIVE_PEERS?.trim();
   if (peers && !DOMAIN.test(peers)) throw new Error('APP_ARTIFACT_LIVE_PEERS must be a DNS name');
   const ports = createHostAssertionLive({ hosts, key: kid => hostKeys.get(kid), fences: createLiveFences(),
-    controller: { keyIds: controllerKeyIds, key: kid => controllerKeys.get(kid) }, admittedPath: viteAdmittedPath });
+    controller: { keyIds: controllerKeyIds, key: kid => controllerKeys.get(kid) },
+    admittedPath: cspProfile === 'D7-A' ? d7AdmittedPath : viteAdmittedPath });
   const port = Number(env.ARTIFACT_CONTENT_PORT ?? '8791');
   // Without peers there is no replica to relay to, so no relayed copy is ever accepted.
   const replicas = peers ? () => resolve4(peers) : async (): Promise<string[]> => [];
   return createLiveProxy(withFanOut(ports, { peers: replicas, send: httpRelay(port) }),
-    { builderNamespace: env.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE?.trim() || undefined });
+    { builderNamespace: env.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE?.trim() || undefined, dataPlane, cspProfile });
 }
