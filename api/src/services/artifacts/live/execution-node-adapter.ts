@@ -81,10 +81,11 @@ export class ExecutionNodeAdapter {
       throw new ExecutionNodeRefusal('invalid_node_session');
     }
     const body = Buffer.from(JSON.stringify({ ...fields, commandId, devScope }));
+    const issued = this.now();
     const ticket: ExecutionNodeTicket = { v: 1, tenantId: ownership.tenantId, commandId, method, path,
       bodySha256: nodeHash(body), targetNodeId: this.config.nodeId,
       expectedNodeInstanceId: this.config.nodeInstanceId, expectedNodeEpoch: this.config.nodeEpoch,
-      ownership, issuedAt: new Date(this.now()).toISOString(), deadlineAt: new Date(this.now() + 30_000).toISOString() };
+      ownership, issuedAt: new Date(issued).toISOString(), deadlineAt: new Date(issued + 30_000).toISOString() };
     const signature = sign(null, Buffer.from(canonicalNodeJson(ticket)), this.config.ticketKey).toString('base64url');
     return this.checked(await this.transport(method, path, body, { 'X-Tenant-Id': ownership.tenantId,
       'X-Execution-Ticket': Buffer.from(JSON.stringify({ ticket, signature })).toString('base64url'),
@@ -124,7 +125,7 @@ export class ExecutionNodeAdapter {
     return this.command(session, operation === 'delete' ? 'DELETE' : 'POST',
       `/v1/sandboxes/${session.physicalUid}${operation === 'delete' ? '' : `/${operation}`}`, commandId, fields);
   }
-  verifyExport(reply: NodeReply, session: NodeSession): Record<string, unknown> {
+  verifyExport(reply: NodeReply, session: NodeSession, expected?: { buildId: string; command: readonly string[] }): Record<string, unknown> {
     try {
       const token = reply.headers['x-artifact-provenance']; if (typeof token !== 'string') throw new Error();
       const parts = token.split('.'); if (parts.length !== 3) throw new Error();
@@ -132,7 +133,11 @@ export class ExecutionNodeAdapter {
       if (JSON.parse(Buffer.from(header, 'base64url').toString()).alg !== 'EdDSA'
         || !verify(null, Buffer.from(`${header}.${payload}`), this.config.provenanceKey, Buffer.from(signature, 'base64url'))) throw new Error();
       const claims = JSON.parse(Buffer.from(payload, 'base64url').toString()); this.identity(claims);
-      if (claims.tenantId !== session.ownership.tenantId || claims.archiveSha256 !== nodeHash(reply.bytes)) throw new Error();
+      if (claims.tenantId !== session.ownership.tenantId || claims.archiveSha256 !== nodeHash(reply.bytes)
+        || claims.physicalUid !== session.physicalUid || claims.attemptId !== session.ownership.attemptId
+        || canonicalNodeJson(claims.source) !== canonicalNodeJson(session.devScope.source)
+        || (expected && (claims.buildId !== expected.buildId
+          || canonicalNodeJson(claims.command) !== canonicalNodeJson(expected.command)))) throw new Error();
       return claims;
     } catch { throw new ExecutionNodeRefusal('invalid_node_provenance'); }
   }

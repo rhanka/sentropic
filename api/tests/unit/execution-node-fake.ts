@@ -46,7 +46,7 @@ export async function fakeExecutionNode() {
         ticket: encoded ? JSON.parse(Buffer.from(encoded, 'base64url').toString()) : undefined });
       if (Buffer.isBuffer(result.body)) {
         const header = Buffer.from(JSON.stringify({ alg: 'EdDSA' })).toString('base64url');
-        const claims = Buffer.from(JSON.stringify({ nodeInstanceId: 'instance', nodeEpoch: 2, tenantId: tenant,
+        const claims = Buffer.from(JSON.stringify({ ...result.provenance, nodeInstanceId: 'instance', nodeEpoch: 2, tenantId: tenant,
           archiveSha256: nodeHash(result.body), exportedAt: new Date(now()).toISOString() })).toString('base64url');
         const input = `${header}.${claims}`;
         res.writeHead(result.status, { 'x-artifact-provenance': `${input}.${sign(null, Buffer.from(input), provenance.privateKey).toString('base64url')}` }).end(result.body);

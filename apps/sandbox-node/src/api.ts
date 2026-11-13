@@ -15,7 +15,7 @@ export interface AgentRequest {
 export class AgentApi {
   constructor(private readonly node: Node, private readonly custody: CustodyGuard) {}
 
-  async dispatch(request: AgentRequest): Promise<{ status: number; body: unknown }> {
+  async dispatch(request: AgentRequest): Promise<{ status: number; body: unknown; provenance?: Record<string, unknown> }> {
     const { daemon } = this.node;
     const { path, method, tenantId, role, ticket } = request;
     if (role !== 'control-plane') throw new ExecutionNodeError('custody_revoked');
@@ -69,7 +69,11 @@ export class AgentApi {
     }
     if (operation === 'export') {
       const result = await daemon.exportArtifacts(tenantId, id, { ...body, commandId, ticket } as Parameters<typeof daemon.exportArtifacts>[2]);
-      return { status: 200, body: result.bytes };
+      return { status: 200, body: result.bytes, provenance: {
+        physicalUid: sandbox.id, attemptId: sandbox.ownership.attemptId,
+        buildId: (body.spec as { buildId: string }).buildId,
+        command: sandbox.command, source: sandbox.devScope.source,
+      } };
     }
     if (operation === 'renew') return { status: 200, body: daemon.renewSandbox(tenantId, id, { ...body, commandId, devScope, ticket }) };
     if (operation === 'write') {
