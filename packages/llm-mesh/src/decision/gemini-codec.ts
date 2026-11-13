@@ -4,7 +4,6 @@ import type { DecisionAdapterResult } from './adapter.js';
 import { encodeJevRequest } from './jev-codec.js';
 import { decodeJevResponse } from './jev-response.js';
 import { createDecisionError } from './errors.js';
-import { unreportedDecisionUsage } from './receipt.js';
 import { hasOnlyKeys, isRecord, snapshotBoundedJson } from './validation.js';
 
 /** One named question per mesh request; structured evidence remains JSON data. */
@@ -41,10 +40,14 @@ export function decodeGeminiDecisionsResponse(candidate: unknown, request: Decis
   descriptor: DecisionEvaluatorDescriptor, requestId?: unknown): DecisionAdapterResult {
   const snapshot = snapshotBoundedJson(candidate);
   const body = snapshot.ok && isRecord(snapshot.value) ? snapshot.value : null;
+  const identity = decodeJevResponse({ model: body?.model ?? null, answers: body?.answers, usage: {} },
+    request, descriptor, requestId);
+  const evidence = { usage: identity.usage, servedEvaluator: identity.servedEvaluator,
+    servedModelId: identity.servedModelId,
+    ...(identity.providerRequestId ? { providerRequestId: identity.providerRequestId } : {}) };
   const invalid = (code: 'USAGE_INVALID' | 'VERDICT_INVALID'): DecisionAdapterResult => ({ ok: false,
-    error: createDecisionError(code, 'parse'), usage: unreportedDecisionUsage('unknown'),
-    servedEvaluator: null, servedModelId: null });
-  if (!body || !hasOnlyKeys(body, ['model', 'answers', 'usage'])) return invalid('VERDICT_INVALID');
+    error: createDecisionError(code, 'parse'), ...evidence });
+  if (!body) return invalid('VERDICT_INVALID');
   const usage = body.usage;
   if (!isRecord(usage) || !hasOnlyKeys(usage, ['total_input_tokens', 'total_output_tokens', 'total_tokens', 'input_tokens_by_modality'])
     || !count(usage.total_input_tokens) || usage.total_output_tokens !== 0
@@ -58,6 +61,10 @@ export function decodeGeminiDecisionsResponse(candidate: unknown, request: Decis
     modalities.add(entry.modality); total += entry.tokens;
   }
   if (total !== usage.total_input_tokens) return invalid('USAGE_INVALID');
+  const normalized = { model: body.model ?? null, answers: body.answers,
+    usage: { input_tokens: usage.total_input_tokens, output_tokens: 0 } };
+  evidence.usage = decodeJevResponse(normalized, request, descriptor, requestId).usage;
+  if (!hasOnlyKeys(body, ['model', 'answers', 'usage'])) return invalid('VERDICT_INVALID');
   if (!isRecord(body.answers) || !hasOnlyKeys(body.answers, ['verdict']) || !isRecord(body.answers.verdict)) return invalid('VERDICT_INVALID');
   const answer = { ...body.answers.verdict };
   const encoded = encodeGeminiDecisionsRequest(request, descriptor);
@@ -75,6 +82,5 @@ export function decodeGeminiDecisionsResponse(candidate: unknown, request: Decis
       || typeof answer.confidence !== 'number'
       || Math.abs(answer.confidence - Math.max(...probabilities as number[])) > descriptor.probabilityTolerance) return invalid('VERDICT_INVALID');
   }
-  return decodeJevResponse({ model: body.model ?? null, answers: { verdict: answer },
-    usage: { input_tokens: usage.total_input_tokens, output_tokens: 0 } }, request, descriptor, requestId);
+  return decodeJevResponse({ ...normalized, answers: { verdict: answer } }, request, descriptor, requestId);
 }
