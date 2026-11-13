@@ -36,8 +36,9 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 revocation transport: signed regression reproduced rejection of the contractual minCustodyEpoch field; route now advances session ownership to the persisted epoch, rejects stale commands and accepts freshly signed renewal.
 - [x] RUN 3 lint: containerized API ESLint rules detected and removed one unused service import; existing warning-only console/constant-loop rules remain non-blocking.
-- [x] RUN 3 local validation: 52 regressions pass in pinned Node container; compiled archive 8415fd44723428ad534cf6d08fbc0618a3815f3c6694e5781ed687c2e160a227 built without publication/deployment.
+- [x] RUN 3 local validation: 52 regressions pass in pinned Node container; compiled archive de41d3f42f1502fc91fae79c14b1871bb60f88e9cd73a8e3efb05e5fe7d317f5 built without publication/deployment.
 - [ ] RUN 3 remaining host gate (owner: k8s, S1-K1): qualify create/start/write/stop/export/DELETE with pinned runsc, EROFS, overlayfs and systemd in isolation; this workstation has no runsc and does not expose EROFS. No VM isolation success is claimed.
 - [ ] RUN 3 review consensus unavailable: harness/review requires h2a_run and complementary hosts; no h2a/mesh tool is exposed in this session. Original Astra findings reconciled locally; no new peer verdict claimed.
 - [x] RUN 3 ticket queue fencing: failing regression reproduced execution after a queued ticket expired; admission revalidates freshness and releases an unused reservation on rejection.
