@@ -7,15 +7,26 @@ export function qualificationDeadline(value = process.env.QUALIFICATION_TIMEOUT_
   return timeout;
 }
 
+/** Cleanup has its own bounded grace after cancellation, including a stuck server close. */
+export async function qualificationCleanup(operation: () => Promise<void>, timeoutMs = 10_000): Promise<void> {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    await Promise.race([operation(), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('qualification cleanup deadline exceeded')), timeoutMs);
+    })]);
+  } finally { clearTimeout(timer!); }
+}
+
 export class QualificationDeadline {
   private readonly controller = new AbortController();
   readonly signal = this.controller.signal;
   private readonly timer: ReturnType<typeof setTimeout>;
   private watch?: ReturnType<typeof setInterval>;
-  private readonly interrupt = () => this.abort(new Error('qualification interrupted'));
+  cancelled = false;
+  private readonly interrupt = () => { this.cancelled = true; this.abort(new Error('qualification interrupted')); };
 
   constructor(timeoutMs = qualificationDeadline()) {
-    this.timer = setTimeout(() => this.abort(new Error('qualification global deadline exceeded')), timeoutMs);
+    this.timer = setTimeout(() => { this.cancelled = true; this.abort(new Error('qualification global deadline exceeded')); }, timeoutMs);
     process.once('SIGINT', this.interrupt); process.once('SIGTERM', this.interrupt);
   }
   abort(reason: unknown): void { this.controller.abort(reason); }

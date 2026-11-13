@@ -48,8 +48,8 @@
   - [x] Remove relay directories and refuse stale qualification resources; bases and bundles use private roots.
   - [x] Apply private fixture handling and leftovers inventory to isolation qualification.
 - [ ] **Lot 3 — Custody keys**
-  - [ ] Validate separate `CUSTODY_PUBLIC_KEY` / `ARTIFACT_CUSTODY_ED25519_KEY_B64`; cross-use refusal both ways.
-  - [ ] Update node/API custody tests and operator installation instructions.
+  - [x] Validate separate `CUSTODY_PUBLIC_KEY` / `ARTIFACT_CUSTODY_ED25519_KEY_B64`; API tests prove cross-use refusal both ways.
+  - [x] Update node/API custody tests and operator installation instructions; dossier §A.3 separates the three ticket/token keys.
 - [ ] **Lot 4 — Final validation**
   - [ ] Run scoped `make check-sandbox-node` with all ports, then relevant API checks.
   - [ ] Rebuild and verify archive through `docker-slot.sh`; record SHA-256 and internal sums.

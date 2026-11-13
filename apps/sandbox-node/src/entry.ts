@@ -8,7 +8,7 @@ if (process.argv.includes('--self-test')) {
   if (!isSea()) throw new Error('single executable application required');
   console.log('execution-node.v1 SEA self-test passed');
 } else if (process.argv.includes('--qualify-data-plane')) {
-  void qualifyDataPlane().catch(() => { console.error('FAIL data-plane qualification'); process.exitCode = 1; });
+  void qualifyDataPlane().catch(() => { console.error('FAIL data-plane qualification'); process.exit(1); });
 } else if (process.argv.includes('--qualify-isolation')) {
   void qualifyIsolation().catch(() => { console.error('FAIL isolation qualification'); process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-disk')) {

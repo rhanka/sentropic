@@ -11,8 +11,9 @@ describe('real custody RPC to real agent data plane', () => {
   const setup = async () => { const fixture = await custodyRpcFixture(); fixtures.push(fixture); return fixture; };
   afterEach(async () => { await Promise.all(fixtures.splice(0).map(f => f.close())); });
   it('should refuse the execution key as custody authority and the custody key as execution authority', async () => {
-    const f = await setup(); const lease = await (await f.call('issue')).json();
-    const [head, payload] = lease.token.split('.'); const input = `${head}.${payload}`;
+    const f = await setup();
+    const token = issueNodeCustody(f.fake.adapter, { ...session(), physicalUid: f.route.podUid }, 'principal', 1).headers['X-Custody-Token'];
+    const [head, payload] = token.split('.'); const input = `${head}.${payload}`;
     const forged = `${input}.${sign(null, Buffer.from(input), f.fake.config.ticketKey).toString('base64url')}`;
     const req = f.open(forged);
     const status = await new Promise<number>((resolve, reject) => {

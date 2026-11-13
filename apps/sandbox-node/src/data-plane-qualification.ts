@@ -11,7 +11,7 @@ import { createPublicKey } from 'node:crypto';
 import { qualificationCertificates } from './qualification-certificates.js';
 import { qualificationNode } from './data-plane-qualification-node.js';
 import { probeDataPlane } from './data-plane-qualification-probes.js';
-import { QualificationDeadline, qualificationDeadline } from './qualification-deadline.js';
+import { QualificationDeadline, qualificationDeadline, qualificationCleanup } from './qualification-deadline.js';
 import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
 
 function tcpListeners() {
@@ -73,10 +73,13 @@ export async function qualifyDataPlane(): Promise<void> {
   } catch { failed = true; console.error('FAIL real-host data-plane execution'); }
   finally {
     deadline.abort(new Error('qualification finished'));
-    for (const socket of sockets) socket.destroy();
-    if (server) await new Promise<void>(resolve => server!.close(() => resolve()));
+    deadline.stopMonitoring();
     try {
-      await fixture?.close();
+      for (const socket of sockets) socket.destroy();
+      // Start runtime cleanup even if the TLS listener refuses to finish closing.
+      const cleanup = [fixture?.close()];
+      if (server) cleanup.push(new Promise<void>(resolve => server!.close(() => resolve())));
+      await qualificationCleanup(async () => { await Promise.all(cleanup); });
       if (directory) {
         assertCleanStartup(directory);
         rmSync(directory, { recursive: true });
@@ -85,5 +88,5 @@ export async function qualifyDataPlane(): Promise<void> {
     } catch { failed = true; console.error('FAIL data-plane qualification cleanup'); }
     deadline.close(); unlock();
   }
-  if (failed) throw new Error('data-plane qualification failed');
+  if (failed || deadline.cancelled) throw new Error('data-plane qualification failed');
 }
