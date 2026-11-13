@@ -35,6 +35,11 @@ export function portsEnabled(binary?: string): boolean {
   } catch { return false; }
 }
 
+export function nodeCapabilities() {
+  return { supportedOps: ['node', 'quotas', 'bases', 'create', 'start', 'claim', 'stop', 'export', 'delete', 'renew',
+    'revoke-custody', 'write', ...(portsEnabled() ? ['ports'] : [])] };
+}
+
 /** Closed by default; only the qualified binary may expose live/standby ports. */
 export function requireNetworkPolicy(network: unknown, profile?: string, binary?: string, slot?: string): void {
   if (network !== undefined && network !== 'none' && network !== 'ports') {

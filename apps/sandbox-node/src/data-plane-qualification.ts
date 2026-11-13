@@ -114,14 +114,24 @@ export async function qualifyDataPlane(): Promise<void> {
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
     const socketPath = join(socketDirectory, 'tls.sock');
     await new Promise<void>((resolve, reject) => { server!.once('error', reject); server!.listen(socketPath, resolve); });
+    const group = readFileSync('/proc/self/cgroup', 'utf8').trim().split('::')[1];
+    assert.ok(group?.startsWith('/'), 'qualification must have a unified cgroup');
+    const value = (name: string) => Number(readFileSync(`/sys/fs/cgroup${group}/${name}`, 'utf8').trim());
+    const oomKills = () => Number(/^oom_kill (\d+)$/m.exec(readFileSync(`/sys/fs/cgroup${group}/memory.events`, 'utf8'))?.[1] ?? -1);
+    const beforeOOM = oomKills(); let taskPeak = value('pids.current');
+    const sample = setInterval(() => { taskPeak = Math.max(taskPeak, value('pids.current')); }, 5);
+    sample.unref();
+    try {
     await deadline.wait(probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp, signal: deadline.signal, diagnostic, stage,
       forwardUsage: () => runtime!.forwardUsage(), async verifyBurst() {
-        const group = readFileSync('/proc/self/cgroup', 'utf8').trim().split('::')[1];
-        assert.ok(group?.startsWith('/'), 'qualification must have a unified cgroup');
-        const value = (name: string) => Number(readFileSync(`/sys/fs/cgroup${group}/${name}`, 'utf8').trim());
         assert.equal(value('memory.max'), 192 * 1048576); assert.equal(value('pids.max'), 128);
-        assert.ok(value('memory.current') <= value('memory.max')); assert.ok(value('pids.current') <= value('pids.max'));
+        const helpers = await runtime!.forwardUsage();
+        assert.ok(helpers.peak >= 1 && helpers.peak <= helpers.limit && helpers.live <= helpers.limit);
+        assert.ok(value('memory.peak') <= value('memory.max')); assert.ok(taskPeak <= value('pids.max'));
+        assert.ok(beforeOOM >= 0); assert.equal(oomKills(), beforeOOM);
+        console.log(`RECEIPT burst helper_peak=${helpers.peak} helper_spawned=${helpers.spawned} cap=${helpers.limit} memory_peak=${value('memory.peak')} sampled_task_peak=${taskPeak} oom_kill_delta=0`);
       } }));
+    } finally { clearInterval(sample); }
     checkTcp(); report('no host TCP listener opened except explicit qualification witnesses');
     deadline.stopMonitoring();
     stage('authenticated lifecycle');

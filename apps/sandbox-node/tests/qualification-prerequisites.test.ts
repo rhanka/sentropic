@@ -14,6 +14,7 @@ describe('qualification receipt and hardened prerequisites', () => {
       ? 'CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN\nSystemCallFilter=@system-service unshare\n' : 'pinned runsc');
     vi.mocked(execFileSync).mockImplementation(file => {
       if (file === 'sh') return '/opt/gvisor/runsc';
+      if (file === '/opt/gvisor/runsc') return 'runsc version release-20261102.0';
       if (fail) throw new Error('operation denied');
       return '';
     });

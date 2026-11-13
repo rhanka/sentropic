@@ -82,6 +82,6 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
     return Buffer.from(await this.call<Uint8Array>('exportOutput', [id, path, max], id));
   }
   async destroySandbox(id: string) { await this.call<void>('destroySandbox', [id], id); this.launches.delete(id); this.exits.delete(id.split('-').slice(2).join('-')); }
-  forwardUsage() { return this.call<{ limit: number; inUse: number }>('forwardUsage', []); }
+  forwardUsage() { return this.call<{ limit: number; inUse: number; live: number; peak: number; spawned: number }>('forwardUsage', []); }
   async close() { this.dead = true; this.healthy = false; await this.worker.terminate(); }
 }

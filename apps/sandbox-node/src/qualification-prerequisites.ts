@@ -14,6 +14,9 @@ export function qualificationPrerequisites(release: string): void {
   const binary = run('sh', ['-ec', 'command -v runsc']);
   assert.ok(binary.startsWith('/'), 'absolute runsc path required');
   const binaryDigest = fileDigest(binary);
+  const version = run(binary, ['--version']);
+  assert.match(version, /\brunsc version release-20261102\.0\b/, 'qualification requires pinned runsc release-20261102.0');
+  console.log(`RECEIPT runsc_path=${binary} runsc_version=release-20261102.0`);
   console.log(`RECEIPT archive_sha256=${digest} runsc_sha256=${binaryDigest}`);
   const unit = readFileSync(join(release, 'execution-node.service'), 'utf8');
   const properties = ['CapabilityBoundingSet', 'SystemCallFilter'].map(name => {

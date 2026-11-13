@@ -5,6 +5,8 @@ import { dirname } from 'node:path';
 import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-diagnostics.js';
 import { forwardBudget, type ForwardBudget } from './forward-budget.js';
 
+export const forwardHelpers = { live: 0, peak: 0, spawned: 0 };
+
 /** runsc --stream connects once to a listening UDS and donates that connection
  * to the sentry. A private local relay creates one donation per HTTP/WS socket.
  * No host TCP listener or sandbox egress is enabled.
@@ -51,6 +53,11 @@ export function forwardSandboxPort(binary: string, rootArg: string, uid: string,
       if (stopped || local.destroyed) { close(); return; }
       try {
         child = launch(binary, [rootArg, 'port-forward', `--stream=${streamPath}`, `sandbox-${uid}`, String(port)]);
+        forwardHelpers.live++; forwardHelpers.spawned++;
+        forwardHelpers.peak = Math.max(forwardHelpers.peak, forwardHelpers.live);
+        let reaped = false;
+        const reap = () => { if (!reaped) { reaped = true; forwardHelpers.live--; } };
+        child.once('error', reap); child.once('exit', reap);
         diagnostic?.('port-forward spawn', `port=${port} stream=${stream}`);
         boundedRuntimeOutput(child.stderr, 'port-forward stderr', diagnostic);
         children.add(child); child.once('error', () => { children.delete(child!); diagnostic?.('port-forward spawn failure', `stream=${stream}`); close(); });
