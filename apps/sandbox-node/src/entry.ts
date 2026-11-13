@@ -1,4 +1,5 @@
 import { isSea } from 'node:sea';
+import { spawn } from 'node:child_process';
 import { qualifyDisk, quotaWriter } from './qualification.js';
 import { qualifyIsolation } from './isolation-qualification.js';
 import { qualifyDataPlane } from './data-plane-qualification.js';
@@ -12,8 +13,11 @@ if (process.argv.includes('--self-test')) {
   void qualifyDataPlane().catch(() => { process.exit(1); });
 } else if (process.argv.includes('--qualify-data-plane')) {
   void superviseQualification().catch(() => { console.error('FAIL step=supervisor data-plane qualification'); process.exitCode = 1; });
-} else if (process.argv.includes('--qualify-isolation')) {
+} else if (process.argv.includes('--qualify-isolation-worker')) {
   void qualifyIsolation().catch(() => { console.error('FAIL isolation qualification'); process.exitCode = 1; });
+} else if (process.argv.includes('--qualify-isolation')) {
+  void superviseQualification(undefined, () => spawn(process.execPath, ['--qualify-isolation-worker'], { stdio: 'inherit', detached: true }))
+    .catch(() => { console.error('FAIL isolation qualification'); process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-disk')) {
   qualifyDisk();
 } else if (process.argv.includes('--quota-writer')) {
