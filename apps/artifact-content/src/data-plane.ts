@@ -3,6 +3,7 @@ import { createSecureContext } from 'node:tls';
 import { X509Certificate } from 'node:crypto';
 import type { ClientRequest } from 'node:http';
 import type { LiveRoute } from './live';
+import { combineAbortSignals } from './abort-signals';
 
 /** Resolved by the API from authenticated host authority, never from browser headers. */
 export type CustodySubject = { kind: 'live'; route: LiveRoute } | { kind: 'supervisor'; podName: string };
@@ -61,7 +62,7 @@ export function dataPlaneFromEnv(env: NodeJS.ProcessEnv, issuer?: CustodyIssuer)
       const unwatch = issuer.watch(subject, revoke);
       let disposed = false;
       const dispose = () => { if (!disposed) { disposed = true; unwatch(); } };
-      const issuingSignal = AbortSignal.any([signal, issuance.signal]);
+      const issuingSignal = combineAbortSignals([signal, issuance.signal]);
       let lease: CustodyLease;
       let onAbort = () => {};
       try {

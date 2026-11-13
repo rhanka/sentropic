@@ -5,8 +5,16 @@ import { liveHeaders } from '../src/live';
 import { d7AdmittedPath, viteAdmittedPath, liveFromEnv } from '../src/live-config';
 import type { LiveRoute } from '../src/live';
 import { X509Certificate } from 'node:crypto';
+import { combineAbortSignals } from '../src/abort-signals';
 
 describe('data-plane and CSP configuration', () => {
+  it.each([0, 1])('should compose cancellation from source %s with its reason', index => {
+    const sources = [new AbortController(), new AbortController()];
+    const signal = combineAbortSignals(sources.map(source => source.signal));
+    sources[index].abort('cancelled'); expect(signal.aborted).toBe(true); expect(signal.reason).toBe('cancelled');
+    const alreadyAborted = combineAbortSignals(sources.map(source => source.signal));
+    expect(alreadyAborted.aborted).toBe(true); expect(alreadyAborted.reason).toBe('cancelled');
+  });
   it('should generate certificates with a valid X.509 time window', () => {
     const tls = testTls();
     expect(Date.parse(new X509Certificate(tls.ca).validTo)).toBeGreaterThan(Date.now());
