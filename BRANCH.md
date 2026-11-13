@@ -35,6 +35,7 @@
   - `api/**`
 
 ## Feedback Loop
+- [x] RUN 4 local qualification: Decisions suite passes 39 files / 656 tests; public consumer declarations and README examples pass. The rebuilt guarded mesh archive requires one selected-lock sha512 update; gateway bytes and all other fixture entries are unchanged. Full CI must complete on the pushed head; fresh review consensus is unavailable because h2a_run MCP is not exposed (root .tmp/rv/models-run4-review.md).
 - [x] RUN 4 omitted-answer coverage: normalize an absent answers field to null when projecting independent evidence; all 31 Gemini tests pass, and the public-surface regression passes 4/4 without timeout changes. Strict root lock dry-run passes.
 - [x] RUN 4 Astra MAJOR 2: six failing-first stream tests cover HTTP errors, status/observed redirects, non-JSON content and invalid/oversized declared lengths. Every unread-body refusal now cancels the stream without awaiting provider cleanup; transport regression suite passes 15 tests. Adapter remains opt-in, API-key only, never a default.
 - [x] RUN 4 Astra MAJOR 1: reproduced three verdict-only failures before the fix; retain independently validated usage, served identity and request ID. The host now settles 100 microUSD for 1000 input tokens even when the verdict is invalid; Gemini routing regression suite passes 15 tests.
