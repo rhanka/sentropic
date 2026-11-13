@@ -40,6 +40,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 5 B3/operator facts: no-push regression failed first; removed job-alerts client/config/timer completely. mTLS roles now derive from the exact k8s-installed certificate CNs, rather than an absent OU.
 - [x] RUN 5 AMD-27/M2/M6: transient-scope resource assertions and missing canonical unit failed first. Root execution-node.service has no file namespace, requires tenant mounts/zram, preserves runsc state; scope OOMPolicy/TasksMax and warm MemoryLow/CPUWeight protect sessions. Host syscall/capability qualification remains S1-K1.
 - [x] RUN 5 AMD-21/S3: reproduced residual-cache admission rejection and wrong-bucket import before correction. Reservations alone gate admission; telemetry retains full memory.current. Imports require sentropic-execution-bhs/tenants/<tenant>/<configured-env>/ before filesystem/network access.
 - [x] BR-SN1-EX10: CI shard 6 uploaded the pasted document successfully (201), but a concurrent deferred session selection cleared the attachment band. Fenced obsolete history hydration and stale session-list responses while creating an attachment target. Delayed-history regression fails on old CI image, passes rebuilt UI (1 expected, 0 unexpected/retries). Impact: session bootstrap concurrency only; rollback: revert the two declared chat UI/E2E files. Reuse the isolated EX9 test environment and ports.
