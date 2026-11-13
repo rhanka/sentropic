@@ -4,6 +4,8 @@ import { readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 let settings = () => process.env;
+let availability: (() => boolean) | undefined;
+export function usePortsAvailability(read: () => boolean) { availability = read; }
 let cached: { path: string; identity: string; digest: string } | undefined;
 export function runscDigest(binary = 'runsc'): string {
   const path = binary.includes('/') ? binary : execFileSync('sh', ['-ec', 'command -v runsc'],
@@ -24,6 +26,7 @@ export function useK8sPortsSwitch(path = '/etc/execution-node/agent.env'): void 
 }
 
 export function portsEnabled(binary?: string): boolean {
+  if (availability) return availability();
   try {
     const config = settings();
     return config.EXECUTION_NODE_PORTS_ENABLED === 'true'
