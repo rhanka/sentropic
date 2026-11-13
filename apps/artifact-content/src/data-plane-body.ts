@@ -14,7 +14,7 @@ export async function custodyResponse(hop: DataPlaneHop, response: Response, sig
   try { output = await Promise.race([consume(response), revoked]); }
   catch { hop.dispose(); throw new CustodyRevoked(); }
   finally { unguard(); signal.removeEventListener('abort', onAbort); }
-  if (!hop.valid() || output.status === 403) { hop.dispose(); return custodyRefused(); }
+  if (!hop.valid() || signal.aborted || output.status === 403) { hop.dispose(); return custodyRefused(); }
   if (!output.body) { hop.dispose(); return output; }
   const reader = output.body.getReader();
   let stopped = false; let chunk: Uint8Array | undefined; let offset = 0; let detach = () => {};
