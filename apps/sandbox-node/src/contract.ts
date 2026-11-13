@@ -127,6 +127,7 @@ export interface ExecutionNodeDevScope {
 }
 
 export interface ExecutionNodeSandboxSpec {
+  readonly command: readonly string[];
   readonly devScope: ExecutionNodeDevScope;
   readonly tenantId: ExecutionNodeTenantId;
   readonly physicalUid: string;
@@ -264,6 +265,7 @@ export const EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA: ExecutionNodeJsonSchema = {
   required: [
     'tenantId',
     'physicalUid',
+    'command',
     'devScope',
     'profile',
     'runtimeClass',
@@ -277,6 +279,7 @@ export const EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA: ExecutionNodeJsonSchema = {
   properties: {
     tenantId: { enum: ['sentropic', 'immo'] },
     physicalUid: { type: 'string', minLength: 1 },
+    command: { type: 'array', minItems: 1, items: { type: 'string' } },
     devScope: { type: 'object', required: ['kind', 'writable', 'refused', 'source'] },
     profile: { type: 'string', minLength: 1 },
     runtimeClass: { type: 'string', minLength: 1 },
