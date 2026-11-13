@@ -55,6 +55,10 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
         let value = await rows.read<Stored>(row(runtime)); const adopted = !!value;
         if (!value) {
           const prepared = await (inputs?.provision(key, runtime) ?? unavailable());
+          if (prepared.session.ownership.tenantId !== inputs!.tenant(key)
+            || prepared.session.ownership.principalId !== runtime.ownerId
+            || prepared.session.ownership.generation !== runtime.generation
+            || prepared.session.ownership.sessionId !== runtime.sessionId) throw new ExecutionNodeRefusal('invalid_node_session');
           const created = await node.create(prepared.session, prepared.spec, command(runtime, 'create'));
           if (typeof created.id !== 'string') throw new ExecutionNodeRefusal('invalid_node_response');
           value = { key, session: { ...prepared.session, physicalUid: created.id },
