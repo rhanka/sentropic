@@ -14,7 +14,19 @@
   - `BRANCH.md`
   - `package-lock.json`
   - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
   - `packages/llm-gateway/package.json`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `api/tests/unit/gateway-package-version.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -23,6 +35,10 @@
   - `api/**`
 
 ## Feedback Loop
+- [x] BRGD-EX4: carry the CI alignment proven on green #1013 forward to the approved Gemini tuple. Rationale: source and packed tests independently assert exact versions/ranges and verified fixture archives. Impact: train/speech/skew test literals, selected fixture tuple maps and archive integrity, API gateway expectation 0.23.2. Rollback: revert the RUN 3 alignment and EX3 commits. Assertions, gates and workflows stay intact.
+- [x] RUN 3 sequencing: rebased onto #1013 exact green head d83b08139 after run 43335882870 completed success (103 jobs). Ember catalog, council exclusion and CI alignment are inherited. Published versions after rebase: mesh 0.36.0, gateway 0.23.0, cluster 0.25.0, all below the proposed tuple.
+- [x] BRGD-EX3: owner-approved RUN 3 minimal release/runtime extension. Rationale: published gateway dependency-map guard and cluster runtime ceiling block CI. Impact: gateway 0.23.2, cluster 0.26.0-dev.26, matching root lock workspace versions, text/speech ceilings <0.39.0, and the four range regression tests listed above. Rollback: revert the RUN 3 extension commits; no gate or workflow change.
+- [ ] RUN 3: verify focused cluster range tests, strict lock, candidate guard and full CI on the exact head.
 - [x] BRGD-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.
 - [x] RUN 2: rebase onto origin/main required no replay; published llm-mesh remains 0.36.0, below this branch version. Candidate lock changes exactly two consumer range cells; strict npm ci --ignore-scripts --dry-run passed without force or legacy-peer-deps.
 - [x] RUN 2: README confirms API keys only, no consumer OAuth/agy, no default or fallback, and immo preprod/production remains disabled; routing tests pass 12/12, including four OAuth credential rejection cases before egress.
