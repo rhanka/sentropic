@@ -93,6 +93,12 @@ export async function probeDataPlane(options: {
       req.once('response', res => { res.resume(); resolve(res.statusCode!); }); req.end();
     })));
     assert.ok(responses.every(status => status === 429), 'burst must refuse saturated forwarding');
+    const upgrade = open(token(), { connection: 'Upgrade', upgrade: 'websocket' });
+    const wsStatus = await new Promise<number>((resolve, reject) => {
+      upgrade.once('error', reject); upgrade.once('upgrade', (_res, socket) => { socket.destroy(); resolve(101); });
+      upgrade.once('response', res => { res.resume(); resolve(res.statusCode!); }); upgrade.end();
+    });
+    assert.equal(wsStatus, 429, 'saturated WebSocket handshake must preserve typed refusal');
     assert.equal(forwardBudget.inUse, forwardBudget.limit);
     options.verifyBurst?.(); options.checkTcp();
     report('data-plane burst: capped helpers, bounded queue, 429 saturation under unit caps');
