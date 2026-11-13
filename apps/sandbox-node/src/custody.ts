@@ -1,4 +1,5 @@
-import { closeSync, existsSync, fsyncSync, ftruncateSync, openSync, readFileSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, ftruncateSync, openSync, readFileSync } from 'node:fs';
+import { open as openFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { ExecutionNodeTenantId } from './contract.js';
 import { ExecutionNodeError } from './errors.js';
@@ -14,6 +15,7 @@ export class CustodyGuard {
   private readonly epochs = new Map<string, number>();
   private readonly streams = new Map<string, Set<Stream>>();
   private heartbeatAt = Number.NEGATIVE_INFINITY;
+  private walWrite: Promise<void> = Promise.resolve();
 
   constructor(private readonly walPath: string, private readonly now = Date.now) {
     if (existsSync(walPath)) {
@@ -59,30 +61,25 @@ export class CustodyGuard {
     return () => { clearTimeout(timer); streams.delete(stream); };
   }
 
-  revoke(tenantId: ExecutionNodeTenantId, resourceId: string, received: number) {
+  async revoke(tenantId: ExecutionNodeTenantId, resourceId: string, received: number) {
     if (!Number.isSafeInteger(received) || received < 0) throw new ExecutionNodeError('command_id_payload_mismatch');
     const key = `${tenantId}:${resourceId}`;
     const epoch = Math.max(this.epochs.get(key) ?? 0, received);
-    const fd = openSync(this.walPath, 'a', 0o600);
-    try {
-      const bytes = Buffer.from(`${JSON.stringify({ key, epoch })}\n`);
-      let offset = 0;
-      while (offset < bytes.length) {
-        const written = writeSync(fd, bytes, offset, bytes.length - offset);
-        if (written === 0) throw new Error('custody WAL write interrupted');
-        offset += written;
-      }
-      fsyncSync(fd);
-    }
-    finally { closeSync(fd); }
-    const directory = openSync(dirname(this.walPath), 'r');
-    try { fsyncSync(directory); } finally { closeSync(directory); }
+    // Refuse/cut locally before disk I/O; only the acknowledgement waits for durability.
     this.epochs.set(key, epoch);
     let closedStreams = 0;
     for (const stream of this.streams.get(key) ?? []) {
       if (stream.epoch >= epoch) continue;
       clearTimeout(stream.timer); stream.close(1008, true); this.streams.get(key)!.delete(stream); closedStreams++;
     }
+    this.walWrite = this.walWrite.catch(() => {}).then(async () => {
+      const file = await openFile(this.walPath, 'a', 0o600);
+      try { await file.writeFile(`${JSON.stringify({ key, epoch })}\n`); await file.sync(); }
+      finally { await file.close(); }
+      const directory = await openFile(dirname(this.walPath), 'r');
+      try { await directory.sync(); } finally { await directory.close(); }
+    });
+    await this.walWrite;
     return { activeCustodyEpoch: epoch, closedStreams, ackedAt: new Date(this.now()).toISOString() };
   }
 }

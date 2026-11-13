@@ -74,7 +74,7 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
       await probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, checkTcp() {},
         ...(mode !== 'custody' ? { switchMode: mode, closeSwitch: () => { enabled = false; } } : {}),
         report: name => { results.push(name); }, node: { keys, get ownership() { return sandbox.ownership; },
-          async revoke() { custody.revoke('sentropic', sandbox.id, 2); sandbox.ownership = { ...sandbox.ownership, custodyEpoch: 2 }; } } });
+          async revoke() { await custody.revoke('sentropic', sandbox.id, 2); sandbox.ownership = { ...sandbox.ownership, custodyEpoch: 2 }; } } });
       if (mode === 'custody') {
         expect(results).toContain('mTLS refuses absent and untrusted client certificates');
         expect(results.filter(name => name.startsWith('refuse '))).toHaveLength(8);
