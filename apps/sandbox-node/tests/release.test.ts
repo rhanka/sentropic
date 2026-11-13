@@ -12,10 +12,10 @@ describe('pinned VM release startup', () => {
       expect(text).toContain('public revocation and rebuild on compromise');
     }
   });
-  it('should pin the current RUN 7 delivery instead of the superseded RUN 5 archive', () => {
+  it('should pin the current RUN 8 delivery instead of the superseded RUN 7 archive', () => {
     const pins = readFileSync(new URL('../k8s/PINS.md', import.meta.url), 'utf8');
-    expect(pins).toContain('## RUN 7 delivery (supersedes prior compiled releases)');
-    expect(pins).not.toContain('## RUN 5 delivery (supersedes prior compiled releases)');
+    expect(pins).toContain('## RUN 8 delivery (supersedes prior compiled releases)');
+    expect(pins).not.toContain('## RUN 7 delivery (supersedes prior compiled releases)');
   });
   it('should execute the shipped SEA without a host Node interpreter', () => {
     const start = readFileSync(new URL('../k8s/start.sh', import.meta.url), 'utf8');
