@@ -14,6 +14,7 @@ export async function qualifyIsolation(): Promise<void> {
   assert.ok(existsSync('/etc/execution-node/isolated-qualification'), 'isolated qualification marker required');
   const release = dirname(process.execPath), root = '/var/lib/builder/tenants';
   const run = (file: string, args: string[]) => execFileSync(file, args, { encoding: 'utf8', timeout: 10000 }).trim();
+  const releaseLock = await acquireNodeLock();
   let failed = false;
   const report = (name: string, ok: boolean) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if (!ok) failed = true; };
   let interrupted = false;
@@ -21,7 +22,6 @@ export async function qualifyIsolation(): Promise<void> {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const adapter = new RunscRuntimeAdapter();
   const boxes: Array<{ tenant: string; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string }> = [];
-  const releaseLock = await acquireNodeLock();
   try {
     assert.equal(run('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value']), 'inactive', 'service must be stopped');
     assertCleanStartup();
