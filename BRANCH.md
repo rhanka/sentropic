@@ -45,6 +45,7 @@
 - [ ] Lot 1: add shared closed types and AMD-ISO canonical re-exports without changing historical definitions.
   - [x] Define portable compile recipe, options, output and diagnostic types; npm view reports 0.25.0, local version bumped to 0.26.0-dev.27.
 - [ ] Lot 2: implement portable canonical encoding, path/base64 checks, recipe and output validation with closed effective options.
+  - [x] Add portable closed JSON schemas for recipe, effective options, manifest, descriptors and diagnostics.
 - [ ] Lot 3: packages/cluster-mesh/tests/compile/contract.spec.ts covers shared golden vectors, changes of identity, invalid paths/options, diagnostic codes, manifest/SRI identity and legacy preservation.
 - [ ] Lot 4: run scoped make test-cluster-mesh, typecheck-cluster-mesh and independent code review; resolve findings.
 - [ ] Lot 5: bump/export cluster-mesh after registry check; make scope-check before every commit.
