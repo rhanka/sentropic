@@ -56,25 +56,38 @@ export function dataPlaneFromEnv(env: NodeJS.ProcessEnv, issuer?: CustodyIssuer)
   return {
     async prepare(subject, signal = AbortSignal.timeout(10_000)) {
       let revoked = false; const listeners = new Set<() => void>();
-      const revoke = () => { revoked = true; for (const close of listeners) close(); };
+      const issuance = new AbortController();
+      const revoke = () => { revoked = true; issuance.abort(); for (const close of listeners) close(); };
       const unwatch = issuer.watch(subject, revoke);
+      let disposed = false;
+      const dispose = () => { if (!disposed) { disposed = true; unwatch(); } };
+      const issuingSignal = AbortSignal.any([signal, issuance.signal]);
       let lease: CustodyLease;
-      try { lease = await issuer.issue(subject, signal); } catch { unwatch(); throw new CustodyRevoked(); }
+      let onAbort = () => {};
+      try {
+        lease = await Promise.race([issuer.issue(subject, issuingSignal), new Promise<never>((_resolve, reject) => {
+          onAbort = () => reject(new CustodyRevoked());
+          issuingSignal.addEventListener('abort', onAbort, { once: true });
+          if (issuingSignal.aborted) onAbort();
+        })]);
+      } catch { dispose(); throw new CustodyRevoked(); }
+      finally { issuingSignal.removeEventListener('abort', onAbort); }
       const issued = Date.parse(lease.issuedAt), deadline = Date.parse(lease.deadlineAt);
       if (revoked || signal.aborted || !['sentropic', 'immo'].includes(lease.tenantId) || !lease.principalId
         || !/^[A-Za-z0-9-]{1,128}$/.test(lease.physicalUid) || !Number.isSafeInteger(lease.custodyEpoch) || lease.custodyEpoch < 0
         || !Number.isInteger(lease.port) || lease.port < 1 || lease.port > 65535
         || !lease.token || /[\r\n]/.test(lease.token) || !Number.isFinite(issued) || !Number.isFinite(deadline)
         || issued > Date.now() || deadline <= Date.now() || deadline <= issued || deadline - issued > 60_000) {
-        unwatch(); throw new CustodyRevoked();
+        dispose(); throw new CustodyRevoked();
       }
       return {
         valid: () => !revoked && Date.now() < deadline,
-        dispose: unwatch,
+        dispose,
         open(path, options) {
           if (revoked || Date.now() >= deadline) throw new CustodyRevoked();
           if (!path.startsWith('/') || path.startsWith('//') || /[\r\n#]/.test(path)) throw new CustodyRevoked();
           const url = new URL(base); url.pathname = `/v1/ports/${lease.port}${path.split('?')[0]}`;
+          if (!url.pathname.startsWith(`/v1/ports/${lease.port}/`)) throw new CustodyRevoked();
           url.search = path.includes('?') ? path.slice(path.indexOf('?')) : '';
           return request(url, { ...options, ...tls, agent: false, headers: { ...options.headers,
             'x-tenant-id': lease.tenantId, 'x-expected-physical-uid': lease.physicalUid, 'x-custody-token': lease.token } });
