@@ -339,6 +339,10 @@ Data-plane qualification defaults to `QUALIFICATION_TIMEOUT_MS=120000`; only
 integer overrides in `1..300000` are accepted. Each request must produce its
 first bytes or upgrade within 1 second. The global deadline and SIGTERM abort
 probes; cleanup has a separate 10-second grace and failure exits nonzero.
+A separate supervisor enforces this wall-clock bound even during synchronous
+host commands: SIGTERM goes only to the worker, preserving its flock helper;
+after the grace, SIGKILL covers the worker process group. A hard kill can leave
+mounts or scopes requiring the explicit startup reconciliation below.
 Sandbox state and systemd scope activity are checked before forwarding and
 throughout probes. A completed build may exit successfully; this server fixture
 must remain running until its probes finish.
