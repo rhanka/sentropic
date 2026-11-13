@@ -123,7 +123,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
     let forward = ports.get(port);
     if (!forward) {
-      forward = forwardSandboxPort(this.binary, this.rootArg, entry.uid, port, `${entry.bundle.path}/port-${port}.sock`);
+      forward = forwardSandboxPort(this.binary, this.rootArg, entry.uid, port, `/run/execution-node/ports/${entry.uid}/${port}.sock`);
       ports.set(port, forward);
     }
     try { return await forward.ready; } catch { ports.delete(port); throw new Error('sandbox_port_unavailable'); }
