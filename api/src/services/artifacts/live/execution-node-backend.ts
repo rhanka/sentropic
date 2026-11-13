@@ -28,7 +28,7 @@ export interface ExecutionNodeInputs {
 }
 type Stored = { session: NodeSession; key: LiveKey; nodeInstanceId: string; nodeEpoch: number;
   pendingSpec?: ExecutionNodeSandboxSpec; createCommandId: string; removalEpoch?: number;
-  revoking?: { epoch: number; commandId: string }; closed?: true };
+  revoking?: { epoch: number; commandId: string }; closed?: true; attempted?: true };
 const unavailable = (): never => { throw new ExecutionNodeRefusal('node_base_hydration_unconfigured'); };
 const row = (runtime: LiveRuntime) => JSON.stringify(['execution-node', runtime.sessionId, runtime.generation, runtime.leaseEpoch]);
 
@@ -45,11 +45,17 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       throw new ExecutionNodeRefusal('node_runtime_unreconciled');
     }
     if (value.pendingSpec) {
+      // Persist the dispatch boundary before I/O, including across crashes and replicas.
+      const replay = await rows.update<Stored, boolean>(row(runtime), current => {
+        if (!current) throw new ExecutionNodeRefusal('node_runtime_unreconciled');
+        return { next: { ...current, attempted: true }, result: current.attempted === true };
+      });
+      value = { ...value, attempted: true };
       let created;
       try { created = await node.create(value.session, value.pendingSpec, value.createCommandId); }
       catch (error) {
         // A closed HTTP refusal has not allocated this intent. Transport/5xx outcomes stay pending.
-        if (error instanceof ExecutionNodeRefusal && error.status >= 400 && error.status < 500) {
+        if (!replay && error instanceof ExecutionNodeRefusal && error.status >= 400 && error.status < 500) {
           const next: Stored = { ...value, pendingSpec: undefined, closed: true };
           await rows.update<Stored, void>(row(runtime), () => ({ next, result: undefined }));
         }
