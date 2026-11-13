@@ -36,13 +36,15 @@ export const hmrPath = (sessionId: string) => `/_live/${encodeURIComponent(sessi
 export const LIVE_CONTROL_PATH = '/_live-control/v1';
 export const LIVE_FENCE_PATH = '/_live-fence/v1';
 export const DEFAULT_BUILDER_NAMESPACE = 'sentropic-artifact-builders';
-export function liveHeaders(mime: string, size: number, origin: string, sessionId: string, scriptHashes: string[] = []) {
+export type LiveCspProfile = 'default' | 'D7-A';
+export function liveHeaders(mime: string, size: number, origin: string, sessionId: string, scriptHashes: string[] = [],
+  profile: LiveCspProfile = 'default') {
   const endpoint = new URL(hmrPath(sessionId), origin); endpoint.protocol = 'wss:';
   return { ...contentHeaders({ mimeType: mime, size, mode: 'application' }),
     'cache-control': 'private, no-store',
     'content-security-policy': ["default-src 'self'", `script-src 'self' ${scriptHashes.join(' ')}`.trim(), "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:", "font-src 'self'", "media-src 'self' blob:",
-      `connect-src 'self' ${endpoint.href}`, "worker-src 'none'", "child-src 'none'", "frame-src 'none'",
+      `connect-src 'self' ${endpoint.href}`, profile === 'D7-A' ? "worker-src 'self' blob:" : "worker-src 'none'", "child-src 'none'", "frame-src 'none'",
       "frame-ancestors 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"].join('; '),
   };
 }
@@ -56,7 +58,9 @@ function safePath(url: URL) {
       || /\.(?:pem|key|p12|pfx)$/.test(part));
 }
 /** `builderNamespace` is the per-environment worker namespace that serves the live pods' Vite port. */
-export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespace?: string; dataPlane?: DataPlaneTransport } = {}) {
+export function createLiveProxy(ports: LiveProxyPorts, options: {
+  builderNamespace?: string; dataPlane?: DataPlaneTransport; cspProfile?: LiveCspProfile;
+} = {}) {
   const now = ports.now ?? Date.now;
   const namespace = options.builderNamespace ?? DEFAULT_BUILDER_NAMESPACE;
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(namespace)) throw new Error('Invalid live builder namespace');
@@ -108,7 +112,7 @@ export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespa
       const hashes = mime === 'text/html' ? Array.from(bytes.toString('utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi),
         match => `'sha256-${createHash('sha256').update(match[1].replace(/\r\n?/g, '\n')).digest('base64')}'`) : [];
       return new Response(request.method === 'HEAD' ? null : bytes, {
-        status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId, hashes),
+        status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId, hashes, options.cspProfile),
       });
     },
   };
