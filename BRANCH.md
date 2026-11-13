@@ -36,6 +36,9 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 local validation: 52 regressions pass in pinned Node container; compiled archive 8415fd44723428ad534cf6d08fbc0618a3815f3c6694e5781ed687c2e160a227 built without publication/deployment.
+- [ ] RUN 3 remaining host gate (owner: k8s, S1-K1): qualify create/start/write/stop/export/DELETE with pinned runsc, EROFS, overlayfs and systemd in isolation; this workstation has no runsc and does not expose EROFS. No VM isolation success is claimed.
+- [ ] RUN 3 review consensus unavailable: harness/review requires h2a_run and complementary hosts; no h2a/mesh tool is exposed in this session. Original Astra findings reconciled locally; no new peer verdict claimed.
 - [x] RUN 3 ticket queue fencing: failing regression reproduced execution after a queued ticket expired; admission revalidates freshness and releases an unused reservation on rejection.
 - [x] RUN 3 documentation: frozen spec and README reflect AMD-13/14/15, TCP 8443, host-resolved devScope, implemented lifecycle and the unperformed real-host qualification.
 - [x] RUN 3 output confinement: a failing malicious-base test exposed a symlinked output ancestor; OCI preparation now rejects linked output ancestors before host mkdir.
