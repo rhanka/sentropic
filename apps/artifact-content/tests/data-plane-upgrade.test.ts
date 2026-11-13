@@ -10,12 +10,16 @@ import { podName } from '../../../api/src/services/artifacts/live/pods';
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
 const id = '11111111-1111-4111-8111-111111111111';
-async function fixture() {
+async function fixture(recheck?: { entered(): void; wait: Promise<void> }) {
   const f = await fakeDataPlane(); cleanup.push(() => f.close()); f.setTtl(700);
   const route: LiveRoute = { storageScopeId: 'scope', artifactId: id, sessionId: 'session',
     expiresAt: Date.now() + 60_000, podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, sourceRevision: 'rev' };
   route.podName = podName(route);
-  const live = createLiveProxy({ authorize: async () => route, current: async () => true,
+  let checks = 0;
+  const live = createLiveProxy({ authorize: async () => route, current: async () => {
+    if (++checks === 2 && recheck) { recheck.entered(); await recheck.wait; }
+    return true;
+  },
     admittedPath: async () => true, watch: () => () => {} }, { dataPlane: f.transport });
   const server = createServer(); const clients: Socket[] = [];
   server.on('upgrade', createLiveUpgrade({ live, baseDomain: 'content.example', enabled: () => true }));
@@ -45,5 +49,13 @@ describe('custody-bound HMR', () => {
   it('should refuse wrong physical UID during the WS handshake', async () => {
     const { f, open } = await fixture(); f.setUid('wrong-physical');
     expect((await open()).header).toContain('403 Forbidden'); expect(f.watchers).toBe(0);
+  });
+  it('should refuse an upgrade revoked while the asynchronous route recheck is pending', async () => {
+    let entered!: () => void; let release!: () => void;
+    const checking = new Promise<void>(resolve => { entered = resolve; });
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    const { f, open } = await fixture({ entered, wait });
+    const response = open(); await checking; f.revoke(); release();
+    expect((await response).header).toContain('403 Forbidden'); expect(f.watchers).toBe(0);
   });
 });
