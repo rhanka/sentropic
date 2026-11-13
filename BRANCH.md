@@ -24,6 +24,8 @@
   - `scripts/llm-model-equivalences/council.source.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -32,9 +34,11 @@
   - `api/src/services/llm-account-transports.ts`
 
 ## Feedback Loop
-- [x] BREM-EX4: necessary RUN 3 CI alignment. Rationale: equivalence-council rejects the new unclassified Ember model, and packaging tries to fetch the obsolete dev.24 fixture candidate. Impact: classify Ember as excluded from automatic equivalence without benchmark evidence; regenerate its council; synchronize only selected packaging fixture tuple versions, dependency maps and verified archive evidence. Rollback: revert the alignment commits together with EX3. Assertions, gates and workflows stay intact.
+- [x] BREM-EX4: necessary RUN 3 CI alignment. Rationale: equivalence-council rejects the new unclassified Ember model, packaging tries to fetch obsolete dev.24, and speech/train assertions retain the old tuple. Impact: classify Ember as excluded from automatic equivalence without benchmark evidence; regenerate its council; synchronize selected packaging tuple versions, dependency maps, verified archive evidence, and speech/train test literals. Rollback: revert the alignment commits together with EX3. Assertions, gates and workflows stay intact.
 - [x] BREM-EX3: owner-approved RUN 3 minimal release/runtime extension. Rationale: published gateway dependency-map guard and cluster runtime ceiling block CI. Impact: gateway 0.23.1, cluster 0.26.0-dev.25, matching root lock workspace versions, text/speech ceilings <0.38.0, and the four range regression tests listed above. Rollback: revert the RUN 3 extension commits; no gate or workflow change.
-- [ ] RUN 3: verify focused cluster range tests, strict lock, candidate guard and full CI on the exact head.
+- [x] RUN 3 local evidence: 99 module tests and 7 equivalence-council tests pass; strict root lock dry-run passes; all 12 candidate archives pass the unchanged manifest guard. Packaging fixture archive integrity comes from those guarded candidate bytes.
+- [x] RUN 3 API alignment: preserve the exact model projection assertion in lexical order and expect the approved gateway 0.23.1 release tuple; CI exposed both stale expectations.
+- [ ] RUN 3: verify full CI on the final exact head; first run 43329947429 completed with stale council, tuple, fixture and API assertions failing. No gates relaxed.
 - [x] BREM-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.
 - [x] RUN 2: rebase onto origin/main required no replay; published llm-mesh remains 0.36.0, below this branch version. Candidate lock changes exactly two consumer range cells; strict npm ci --ignore-scripts --dry-run passed without force or legacy-peer-deps.
 - [x] Local Muse provider catalog confirms muse-ember-1.0; transport model IDs are not enumerated.
