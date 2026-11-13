@@ -43,6 +43,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
 - [ ] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
+  - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
 - [ ] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
 - [ ] Lot 4: hermetic fake agent tests in api/tests/unit/execution-node*.test.ts; backend rollback regression.
 - [ ] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
