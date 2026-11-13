@@ -20,6 +20,7 @@ export interface SandboxMount {
 }
 
 export interface RunSandboxOptions {
+  readonly profile?: string;
   readonly network?: 'none' | 'ports';
   readonly diskQuotaMiB?: number;
   readonly quotaInodes?: number;
@@ -146,14 +147,14 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
-    requireNetworkPolicy(options.network);
+    requireNetworkPolicy(options.network, options.profile, this.binary);
     const args = [this.rootArg, `--network=${options.network === 'ports' ? 'sandbox' : 'none'}`, '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
 
   async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
-    requireNetworkPolicy(options.network);
+    requireNetworkPolicy(options.network, options.profile, this.binary);
     if (!this.hasRunsc()) failNoBinary();
     const bundle = this.bundles.prepare(options);
     const scope = `builder-sbx-${options.sandboxUid}.scope`;

@@ -20,6 +20,7 @@ import { SERVICE_TIMEOUT_MS, type HeavyProfile } from './build-queue.js';
 import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths, validateDevScope } from './mounts.js';
 
 export interface SandboxRecord {
+  readonly profile?: string;
   readonly network?: 'none' | 'ports';
   readonly diskQuotaMiB: number;
   readonly quotaInodes: number;
@@ -233,7 +234,7 @@ export class ExecutionNodeDaemon {
     compatibility?: ExecutionNodeClaimSpec['compatibility'];
   }): Promise<SandboxRecord> {
     input = structuredClone(input);
-    requireNetworkPolicy(input.spec.network);
+    requireNetworkPolicy(input.spec.network, input.spec.profile);
     validateDevScope(input.spec.devScope);
     validateDiskQuota(input.spec.quotaMiB, input.spec.quotaInodes);
     if (input.spec.tenantId !== input.ownership.tenantId) {
@@ -273,6 +274,7 @@ export class ExecutionNodeDaemon {
         diskQuotaMiB: input.spec.quotaMiB, quotaInodes: input.spec.quotaInodes,
         devScope: structuredClone(input.spec.devScope),
         network: input.spec.network,
+        profile: input.spec.profile,
         mounts,
         command: input.spec.command ?? ['/bin/sleep', 'infinity'],
         id,
@@ -346,6 +348,7 @@ export class ExecutionNodeDaemon {
         mounts: sandbox.mounts,
         command: sandbox.command,
         network: sandbox.network,
+        profile: sandbox.profile,
         onExit: code => {
           void Promise.resolve().then(() => this.runtimeExited(sandbox, code)).catch(error => {
             this.audit.record('sandbox.stop_failed', tenantId, id, String(error));

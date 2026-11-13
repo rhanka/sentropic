@@ -20,7 +20,7 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] BRDPF-EX1: align anticipated AMD-28 network contract in spec; documentation only; rollback the spec line with the network implementation.
+  - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
 
 ## Feedback Loop
 - [x] Request source: `.tmp/packets/s1-dataplane-qual-fix2.md`; Track import reserved for the conductor's single writer, as in PR #1023.
@@ -44,6 +44,7 @@
 - [x] Round 2c data plane: live peer witness, ports network probes, HTTP/WS and revocation share a real-host run.
 - [x] Round 2c regressions: hardened prerequisites receipt and actual child SIGKILL orchestration in Docker.
 - [ ] Round 2d: tests, archive rebuild/verification, exact-head green CI and receipt.
+- [ ] Co-signed AMD-28: qualified digest switch, profile fence, runtime audits, helper cap, UDP/raw/kernel witnesses and OOM qualification.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
