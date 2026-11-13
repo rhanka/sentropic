@@ -82,7 +82,7 @@ export class AgentApi {
       return { status: 200, body: { written: true } };
     }
     if (operation === 'revoke-custody') {
-      const result = this.custody.revoke(tenantId, id, Number(body.minCustodyEpoch));
+      const result = await this.custody.revoke(tenantId, id, Number(body.minCustodyEpoch));
       sandbox.ownership = { ...sandbox.ownership, custodyEpoch: result.activeCustodyEpoch };
       return { status: 200, body: result };
     }

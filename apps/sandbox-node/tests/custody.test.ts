@@ -20,19 +20,19 @@ describe('custody revocation for sandboxes and isolates', () => {
     } finally { vi.useRealTimers(); rmSync(dir, { recursive: true }); }
   });
 
-  it('should recover a torn tail, truncate it and preserve subsequent revocations', () => {
+  it('should recover a torn tail, truncate it and preserve subsequent revocations', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'torn-'));
     try {
       const wal = join(dir, 'wal');
-      new CustodyGuard(wal).revoke('immo', 'x', 3);
+      await new CustodyGuard(wal).revoke('immo', 'x', 3);
       appendFileSync(wal, '{"key":"immo:x","epoch":');
       const recovered = new CustodyGuard(wal);
-      expect(recovered.revoke('immo', 'x', 2).activeCustodyEpoch).toBe(3);
+      expect((await recovered.revoke('immo', 'x', 2)).activeCustodyEpoch).toBe(3);
       expect(readFileSync(wal, 'utf8').trim().split('\n').map(line => JSON.parse(line).epoch)).toEqual([3, 3]);
-      expect(new CustodyGuard(wal).revoke('immo', 'x', 1).activeCustodyEpoch).toBe(3);
+      expect((await new CustodyGuard(wal).revoke('immo', 'x', 1)).activeCustodyEpoch).toBe(3);
     } finally { rmSync(dir, { recursive: true }); }
   });
-  it('should persist epoch 2 before ack and reject epoch 1 after late notification and restart', () => {
+  it('should persist epoch 2 before ack and reject epoch 1 after late notification and restart', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'custody-'));
     try {
       let now = 100_000;
@@ -44,9 +44,10 @@ describe('custody revocation for sandboxes and isolates', () => {
           issuedAt: new Date(now).toISOString(), deadlineAt: new Date(now + 60_000).toISOString() };
         const closed: unknown[] = [];
         guard.attach(token, (...args) => { closed.push(args); });
-        expect(guard.revoke('immo', resourceId, 2)).toMatchObject({ activeCustodyEpoch: 2, closedStreams: 1 });
+        const revocation = guard.revoke('immo', resourceId, 2);
         expect(closed).toEqual([[1008, true]]);
-        expect(guard.revoke('immo', resourceId, 1).activeCustodyEpoch).toBe(2);
+        expect(await revocation).toMatchObject({ activeCustodyEpoch: 2, closedStreams: 1 });
+        expect((await guard.revoke('immo', resourceId, 1)).activeCustodyEpoch).toBe(2);
         expect(() => guard.attach(token, () => {})).toThrowError(/custody_revoked/);
         const restarted = new CustodyGuard(wal, () => now);
         expect(() => restarted.authorize(token, 'immo', resourceId)).toThrowError(/custody_revoked/);

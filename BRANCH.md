@@ -71,6 +71,7 @@
 - [x] Standalone scope-check uses the installed host harness C2 producer with the same staged/unstaged inventory, avoiding Docker for mechanical checks.
 - [x] Runtime worker transport: bounded async RPC preserves runtime errors, cleanup identity, process-exit notifications and binary identity off the revocation event loop.
 - [x] Production worker integration: async activation observation/hash, cached fail-closed admission and independent runtime worker embedded as a verified SEA asset.
+- [x] Custody disk I/O: cut streams before asynchronous serialized WAL persistence; acknowledge only after file/directory sync, preserving restart monotonicity.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
