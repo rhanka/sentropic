@@ -4,6 +4,7 @@ import { ExecutionNodeError } from './errors.js';
 export class ForwardBudget {
   private active = 0;
   private readonly queue: Array<() => void> = [];
+  get inUse() { return this.active; }
   constructor(readonly limit = Number(process.env.EXECUTION_NODE_PORT_FORWARD_MAX ?? 2), readonly queued = 8) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 8) throw new Error('EXECUTION_NODE_PORT_FORWARD_MAX must be 1..8');
   }

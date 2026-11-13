@@ -6,6 +6,7 @@ import { createPrivateKey, sign } from 'node:crypto';
 import { qualificationCertificates } from './qualification-certificates.js';
 import type { qualificationNode } from './data-plane-qualification-node.js';
 import type { RuntimeDiagnostic } from './qualification-diagnostics.js';
+import { forwardBudget } from './forward-budget.js';
 
 export async function probeDataPlane(options: {
   socketPath: string; certificates: ReturnType<typeof qualificationCertificates>;
@@ -14,6 +15,7 @@ export async function probeDataPlane(options: {
   signal?: AbortSignal;
   diagnostic?: RuntimeDiagnostic; stage?(name: string): void;
   switchMode?: 'switch-closed' | 'digest-mismatch'; closeSwitch?(): void;
+  verifyBurst?(): void;
 }) {
   const { certificates: tls, uid, node, report } = options;
   let probe = 0;
@@ -83,6 +85,23 @@ export async function probeDataPlane(options: {
   }
   report('mTLS HTTP through real runsc UDS to 5173'); options.checkTcp();
   if (!options.switchMode) {
+  const held: IncomingMessage[] = [];
+  try {
+    for (let i = 0; i < forwardBudget.limit; i++) held.push(await http(token()));
+    const responses = await Promise.all(Array.from({ length: 12 }, () => new Promise<number>((resolve, reject) => {
+      const req = open(token()); req.once('error', reject);
+      req.once('response', res => { res.resume(); resolve(res.statusCode!); }); req.end();
+    })));
+    assert.ok(responses.every(status => status === 429), 'burst must refuse saturated forwarding');
+    assert.equal(forwardBudget.inUse, forwardBudget.limit);
+    options.verifyBurst?.(); options.checkTcp();
+    report('data-plane burst: capped helpers, bounded queue, 429 saturation under unit caps');
+  } finally { for (const res of held) res.destroy(); }
+  const burstDeadline = Date.now() + 1000;
+  while (forwardBudget.inUse) {
+    assert.ok(Date.now() < burstDeadline, 'burst forwarding slots did not drain');
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
   options.stage?.('mTLS certificate refusals');
   for (const identity of [{}, qualificationCertificates().dataPlane]) {
     await assert.rejects(new Promise<void>((resolve, reject) => {

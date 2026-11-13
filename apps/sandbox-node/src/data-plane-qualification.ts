@@ -111,7 +111,14 @@ export async function qualifyDataPlane(): Promise<void> {
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
     const socketPath = join(socketDirectory, 'tls.sock');
     await new Promise<void>((resolve, reject) => { server!.once('error', reject); server!.listen(socketPath, resolve); });
-    await deadline.wait(probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp, signal: deadline.signal, diagnostic, stage }));
+    await deadline.wait(probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp, signal: deadline.signal, diagnostic, stage,
+      verifyBurst() {
+        const group = readFileSync('/proc/self/cgroup', 'utf8').trim().split('::')[1];
+        assert.ok(group?.startsWith('/'), 'qualification must have a unified cgroup');
+        const value = (name: string) => Number(readFileSync(`/sys/fs/cgroup${group}/${name}`, 'utf8').trim());
+        assert.equal(value('memory.max'), 192 * 1048576); assert.equal(value('pids.max'), 128);
+        assert.ok(value('memory.current') <= value('memory.max')); assert.ok(value('pids.current') <= value('pids.max'));
+      } }));
     checkTcp(); report('no host TCP listener opened except explicit qualification witnesses');
     deadline.stopMonitoring();
     stage('authenticated lifecycle');
