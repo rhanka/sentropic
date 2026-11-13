@@ -45,6 +45,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       throw new ExecutionNodeRefusal('node_runtime_unreconciled');
     }
     if (value.pendingSpec) {
+      const pendingSpec = value.pendingSpec;
       // Persist the dispatch boundary before I/O, including across crashes and replicas.
       const replay = await rows.update<Stored, boolean>(row(runtime), current => {
         if (!current) throw new ExecutionNodeRefusal('node_runtime_unreconciled');
@@ -52,7 +53,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       });
       value = { ...value, attempted: true };
       let created;
-      try { created = await node.create(value.session, value.pendingSpec, value.createCommandId); }
+      try { created = await node.create(value.session, pendingSpec, value.createCommandId); }
       catch (error) {
         // A closed HTTP refusal has not allocated this intent. Transport/5xx outcomes stay pending.
         if (!replay && error instanceof ExecutionNodeRefusal && error.status >= 400 && error.status < 500) {
