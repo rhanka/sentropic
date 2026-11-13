@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { dsRecipeKey } from '../src/recipe-key.js';
 import { EXECUTION_NODE_ISOLATE_POLICY, type ArtifactProvenanceV1, type DsRecipeKeyV1, type ExecutionNodeStopResult } from '../src/contract.js';
+import { EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA } from '../src/contract.js';
 
 describe('amended contracts', () => {
+  it('should publish the mandatory configurable development scope and provenance schema', () => {
+    expect(EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA.required).toContain('devScope');
+    expect(EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA.properties.devScope).toMatchObject({
+      required: ['kind', 'writable', 'refused', 'source'],
+      properties: { kind: { enum: ['ui', 'api', 'jobs', 'data', 'fullstack'] },
+        source: { required: ['repo', 'path', 'commit'] } },
+    });
+  });
   const recipe: DsRecipeKeyV1 = { schemaVersion: 'ds-recipe-key.v1', sources: { 'src/a.ts': 'a' },
     compilers: { vue: { version: '3.5.35', digest: 'sha256:vue' }, ts: { version: '5', digest: 'sha256:ts' } },
     compilerOptions: { urlRewriteMode: 'pinned' }, importMapManifestDigest: 'none' };
