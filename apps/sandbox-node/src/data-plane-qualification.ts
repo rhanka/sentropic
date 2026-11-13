@@ -94,6 +94,7 @@ export async function qualifyDataPlane(): Promise<void> {
     const networkResult = execFileSync('runsc', ['--root=/run/execution-node/runsc', 'exec', `sandbox-${uid}`,
       '/usr/local/bin/node', '-e', networkIsolationProbe(targets)], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
     requireIsolationResults(networkResult, (name, ok) => { assert.ok(ok, name); report(name); }, networkProbeCount(targets));
+    peer.verify(); report('peer TCP/UDP positive controls and zero cross-tenant datagram delivery');
     await assert.rejects(fixture.node.adapter.portTarget!(sandbox.runtimeId!, 5174));
     report('port other than 5173 refused');
     const tls = qualificationCertificates();

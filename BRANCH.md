@@ -23,6 +23,7 @@
   - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
 
 ## Feedback Loop
+- [x] R2c-4: controlled TCP/UDP tenant witnesses self-connect before/after cross-tenant probes and fail on any delivered probe datagram; host UDP witnesses bind alongside TCP controls.
 - [x] R2c-3: keep ownership aligned with the irreversible custody cut after WAL failure; fresh signed tickets at the GET-visible epoch retry persistence and retain stop/delete access.
 - [x] R2c-2: retain launch identities in the TLS parent; worker death closes admission and starts cleanup-only reconciliation, including launches in flight, without releasing reservations early.
 - [x] R2c-1: expire affirmative switch observations after 150ms on the monotonic clock; hanging config/stat and late results cannot keep streams authorized.
