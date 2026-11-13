@@ -76,6 +76,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Extend artifacts-live/product-builder.test.ts to assert configured-node composition does not initialize Kubernetes or query DB at boot.
   - [x] Concrete backend tests cover persisted physical identity, real agent lifecycle, tenant-bound provisioning and connected observeHead coalescing.
   - [x] Regress fresh wake replacement, absent-allocation cleanup, lost creation/revocation responses and 202 stop progression.
+  - [x] Keep fault-injection clients on the fake node's explicit clock so custody freshness is exercised deterministically.
 - [ ] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
   - [x] 17 hermetic tests pass; full API typecheck and scoped lint pass with workspace declarations built in an ephemeral container.
   - [x] Document preprod Secret names, heartbeat leadership, S1-C1 issuer and explicit S1-B1/agent handoffs in execution-node.md.

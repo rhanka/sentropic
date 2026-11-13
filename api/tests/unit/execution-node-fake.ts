@@ -59,6 +59,6 @@ export async function fakeExecutionNode() {
     nodeInstanceId: 'instance', nodeEpoch: 2, provenanceKey: provenance.publicKey, ticketKey: keys.privateKey,
     tls: { ca: Buffer.from(tls.ca), cert: Buffer.from(tls.client.cert), key: Buffer.from(tls.client.key) } };
   const transport = executionNodeTransport(config); const adapter = new ExecutionNodeAdapter(config, transport, now);
-  return { adapter, config, node, custody, calls, advance(ms: number) { clock += ms; },
+  return { adapter, config, node, custody, calls, now, advance(ms: number) { clock += ms; },
     async close() { transport.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(directory, { recursive: true }); } };
 }
