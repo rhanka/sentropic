@@ -11,12 +11,28 @@ PROBE = docker run --rm $(USER_ARGS) $(MOUNTS) -v "$(PROBE_VOLUME):/app:ro" $(PR
 .PHONY: install prepare build check-source check-geometry check-browser check-convergence check-performance check-content export-static check-static validate deliver checksums
 .PHONY: update-dependencies inspect-ds
 .PHONY: check-ecosystem
+.PHONY: compare-ecosystem check-ecosystem-comparison
+COMPARE_DIR ?= /home/antoinefa/src/sentropic/.tmp/rv/ecosystem-compare
+compare-ecosystem:
+	@mkdir -p .cache/ecosystem-compare "$(COMPARE_DIR)"
+	@git rev-parse origin/main > .cache/ecosystem-compare/baseline.txt
+	@ref=$$(cat .cache/ecosystem-compare/baseline.txt); for path in $$(git -C "$$(git rev-parse --show-toplevel)" ls-tree -r --name-only "$$ref" docs/governance/images/ | sed -n '/\.svg$$/p'); do git show "$$ref:$$path" > ".cache/ecosystem-compare/old-$$(basename "$$path")"; done
+	@$(PROBE) node scripts/compare-ecosystem.mjs
+	@cp .cache/ecosystem-compare/* "$(COMPARE_DIR)/"
+check-ecosystem-comparison: compare-ecosystem
+	@$(NODE) node --input-type=module -e 'import {readFileSync} from "node:fs"; const r=JSON.parse(readFileSync(".cache/ecosystem-compare/metrics.json")); if(r.status!=="passed")throw Error("DS refuses "+r.diagnostics.length+" slots; delivery blocked; inspect metrics.json");'
 check-ecosystem:
 	@$(NODE) node scripts/check-ecosystem.mjs
+.PHONY: build-portable
+build-portable:
+	@$(NODE) node scripts/build-portable.mjs
+.PHONY: check-portable
+check-portable:
+	@$(NODE) node --test scripts/portable.test.mjs
 update-dependencies:
 	@docker run --rm $(MOUNTS) $(NODE_IMAGE) npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 inspect-ds:
-	@$(NODE) sh -c 'head -n 180 node_modules/@sentropic/design-system-svelte/dist/DiagramSceneFigure.svelte; head -n 180 node_modules/@sentropic/design-system-svelte/dist/diagramCardModel.d.ts'
+	@$(NODE) sh -c 'npm view @sentropic/design-system-svelte version; cat node_modules/@sentropic/design-system-svelte/dist/diagramCardModel.d.ts; cat node_modules/@sentropic/design-system-svelte/dist/diagram-render/index.d.ts'
 install:
 	@docker run --rm $(MOUNTS) $(NODE_IMAGE) npm ci --no-audit --no-fund
 	@docker run --rm -v "$(PROBE_VOLUME):/app" $(PROBE_IMAGE) npm install --prefix /app --no-audit --no-fund playwright@1.63.0
@@ -69,13 +85,13 @@ check-performance:
 check-content:
 	@mkdir -p .cache
 	@$(PROBE) node scripts/check-content.mjs
-export-static:
+export-static: check-ecosystem-comparison
 	@mkdir -p .cache ../images
 	@$(PROBE) node scripts/export-static.mjs
 check-static:
 	@$(PROBE) node scripts/check-static.mjs
-validate: check-source check-geometry check-routing-budget check-card-parity check-convergence check-browser check-performance check-content check-static
-deliver:
+validate: check-ecosystem-comparison check-source check-geometry check-routing-budget check-card-parity check-convergence check-browser check-performance check-content check-static
+deliver: check-ecosystem-comparison
 	@$(NODE) node --input-type=module -e 'import {copyFileSync} from "node:fs"; import {portableName} from "./scripts/portable-path.mjs"; copyFileSync("dist/"+portableName, "../"+portableName);'
 checksums:
 	@$(NODE) node scripts/checksums.mjs

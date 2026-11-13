@@ -53,7 +53,12 @@ try {
         const box=Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(rect.getAttribute(k))]));
         const content=t=>t?.querySelector('tspan')
           ? [...t.querySelectorAll('tspan')].map(s=>s.textContent).join(' ') : t?.textContent;
-        const texts=card?[...card.querySelectorAll(':scope > text')].map(content):[
+        const lines=card?[...card.querySelectorAll(':scope > text')]:[];
+        const slots=lines.slice(1,-1),bold=t=>Number(t.getAttribute('font-weight'))>=600;
+        const secondary=t=>(t.getAttribute('fill')??'').includes('muted');
+        const join=items=>items.map(content).join(' ');
+        const texts=card?[content(lines[0]),join(slots.filter(bold)),
+          join(slots.filter(t=>!bold(t)&&!secondary(t))),join(slots.filter(t=>!bold(t)&&secondary(t))),content(lines.at(-1))]:[
           content(g.querySelector(':scope > .diagram-kicker'))??(g.dataset.group==='surfaces'?'ACCESS':'REPOSITORY'),
           content(g.querySelector(':scope > text:not(.diagram-detail):not(.diagram-kicker)')),
           content(g.querySelector(':scope > .diagram-detail'))];
