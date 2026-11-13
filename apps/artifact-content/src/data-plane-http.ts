@@ -30,7 +30,8 @@ export async function dataPlaneFetch(transport: DataPlaneTransport, subject: Cus
           if (!hop.valid()) { finish(custodyRefused()); return; }
           const status = incoming.statusCode ?? 502;
           finish(new Response(options.method === 'HEAD' || [204, 205, 304].includes(status) ? null : Buffer.concat(chunks), {
-            status, headers: { 'content-type': String(incoming.headers['content-type'] ?? 'application/octet-stream') },
+            status, headers: { 'content-type': String(incoming.headers['content-type'] ?? 'application/octet-stream'),
+              'cache-control': 'private, no-store' },
           }));
         });
       });

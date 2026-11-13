@@ -44,5 +44,6 @@
 - [ ] Lot 4: hermetic `data-plane.test.ts`, `data-plane-upgrade.test.ts`, `data-plane-config.test.ts`; existing live/relay/config regressions; typecheck and lint.
   - [x] Ephemeral certificates and fake signed-token issuer/server; no external service or credentials.
   - [x] HMR 1008/reconnect and handshake refusal; config and both CSP profiles.
+  - [x] Scoped data-plane checks: 15 passing tests; TLS fixture time encoding corrected with a focused regression.
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
