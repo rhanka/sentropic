@@ -16,7 +16,7 @@ export async function exportRetainedBuild(node: ExecutionNodeAdapter, session: N
   let stop = await node.status(session);
   if (!stop) throw new ExecutionNodeRefusal('sandbox_not_found', 404);
   if (stop.state === 'running' || stop.state === 'stopping') {
-    stop = nodeJson(await node.mutate(session, 'stop', intent.stopCommandId,
+    stop = nodeJson<Record<string, unknown>>(await node.mutate(session, 'stop', intent.stopCommandId,
       { stop: { retainOutput: true, outputSubPath: 'ui/dist', retentionTtlMs: 300_000 } }));
   }
   if (!['stopped-output-retained', 'exported'].includes(String(stop.state)) || stop.allProcessesExited !== true) {
