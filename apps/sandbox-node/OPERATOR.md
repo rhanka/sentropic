@@ -16,7 +16,7 @@ Rollback pool `artifact-builders` stays min/desired 0, max 2.
 | `builder-tenant-{sentropic,immo}.slice` | MemoryMax=2304M, MemoryHigh=2304M, MemoryLow=704M, MemorySwapMax=256M, CPUWeight=100, TasksMax=2048 |
 | warm scope | MemoryMax=704M, MemoryHigh=704M, MemoryLow=704M, CPUWeight=200, swap 0 |
 | build scope | MemoryMax=1536M, MemoryHigh=1408M, MemoryLow=0, CPUWeight=100, swap 256M |
-| all scopes | OOMPolicy=kill (sets memory.oom.group), TasksMax=256 |
+| all scopes | OOMPolicy=kill (sets memory.oom.group); TasksMax and OCI pids.limit=512 for sessions, 1024 for builds (AMD-20/27) |
 
 AMD-17: MemTotal=4,005,416,960 bytes, floor 3819 MiB;
 host 512 + agent 192 + parent 2944 + margin 171 = 3819 MiB.

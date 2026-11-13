@@ -6,6 +6,19 @@ import { prepareBundle, destroyBundle } from '../src/bundle.js';
 
 describe('OCI bundle lifecycle', () => {
   const owner = { uid: process.getuid!(), gid: process.getgid!() };
+  it.each([[704, 512], [1536, 1024]])('should apply the signed OCI task limit for %i MiB', (quotaMiB, limit) => {
+    const root = mkdtempSync(join(tmpdir(), 'bundle-pids-'));
+    try {
+      const bundle = prepareBundle({ tenantId: 'immo', sandboxUid: 'tasks', overlayUpper: join(root, 'upper'),
+        overlayWork: join(root, 'work'), quotaMiB, diskQuotaMiB: 8, quotaInodes: 32, ...owner,
+        command: ['/bin/true'], mounts: [
+          { source: '/root.erofs', target: '/bases/rootfs/r', readOnly: true },
+          { source: '/src.erofs', target: '/bases/source/s', readOnly: true }],
+      }, () => {});
+      expect(JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')).linux.resources.pids.limit).toBe(limit);
+      destroyBundle(bundle, () => {});
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   it('should install per-sandbox block and inode hard limits before mounting source', () => {
     const root = mkdtempSync(join(tmpdir(), 'disk-quota-'));
     const calls: string[][] = [];

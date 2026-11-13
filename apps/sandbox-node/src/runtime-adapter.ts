@@ -131,7 +131,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       `--property=MemoryHigh=${options.quotaMiB > 704 ? '1408M' : '704M'}`,
       `--property=MemoryLow=${options.quotaMiB > 704 ? '0' : '704M'}`,
       `--property=CPUWeight=${options.quotaMiB > 704 ? 100 : 200}`,
-      '--property=OOMPolicy=kill', '--property=TasksMax=256', this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
+      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
     let ready = false;
     try { await new Promise<void>((resolve, reject) => {
       const deadline = Date.now() + 5000;
