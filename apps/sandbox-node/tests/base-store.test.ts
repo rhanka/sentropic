@@ -4,8 +4,17 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ensureBase } from '../src/base-store.js';
 import { sha256Hex } from '../src/tickets.js';
+import { TenantBaseRegistry, resolveMounts } from '../src/mounts.js';
 
 describe('immutable base import', () => {
+  it('should resolve the shared rootfs from the release rather than tenant content', () => {
+    const digest = 'a'.repeat(64);
+    const registry = new TenantBaseRegistry({ path: '/release/rootfs.erofs', digest });
+    const base = { tenantId: 'immo' as const, baseId: 'shared-rootfs', kind: 'rootfs' as const, identityDigest: digest };
+    registry.register(base);
+    expect(resolveMounts('immo', [base], registry)[0]?.source).toBe('/release/rootfs.erofs');
+    expect(() => registry.register({ ...base, identityDigest: 'b'.repeat(64) })).toThrow();
+  });
   it('should reject other regions, tenants and ambiguous paths before fetching', async () => {
     const fetchBase = vi.fn(async () => new Response('bytes'));
     const root = mkdtempSync(join(tmpdir(), 'url-policy-'));

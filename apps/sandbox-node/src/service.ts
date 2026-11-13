@@ -28,6 +28,7 @@ const nodeEpoch = nextNodeEpoch();
 const custody = new CustodyGuard('/var/lib/builder/custody.wal');
 const { hostMemory, reservableMiB } = hostBudget(totalmem());
 const node = createExecutionNode({ useRunsc: true, nodeInstanceId, nodeEpoch,
+  sharedRootfs: { path: `${required('RELEASE_DIR')}/rootfs.erofs`, digest: required('ROOTFS_DIGEST') },
   reservableMiB,
   ticketPublicKeyPem: readFileSync(required('AGENT_TICKET_PUBLIC_KEY'), 'utf8') });
 const api = new AgentApi(node, custody);
@@ -56,6 +57,7 @@ const server = createAgentServer(tls, async (req, res, role) => {
     if (url.pathname === '/v1/node' && req.method === 'GET') {
       reply(200, { contractVersion: EXECUTION_NODE_CONTRACT_VERSION, nodeId: 'artifact-builder-vm-1',
         nodeInstanceId, nodeEpoch, provenancePublicKey, draining: control.draining, classes: ['sandbox'],
+        rootfs: { baseId: 'shared-rootfs', kind: 'rootfs', identityDigest: required('ROOTFS_DIGEST') },
         parentSlice: { name: 'builder.slice', memoryMaxMiB: reservableMiB, memoryLowMiB: 1408, memorySwapMaxMiB: 512 },
         intermediateSlice: { name: 'builder-tenant.slice', memoryLowMiB: 1408 }, hostMemory,
         metrics: nodeMetrics(node), tenantSlices: Object.fromEntries((['sentropic', 'immo'] as const).map(id =>
