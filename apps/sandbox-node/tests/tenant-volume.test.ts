@@ -31,7 +31,7 @@ describe('tenant volume exhaustion', () => {
     const failure = Object.assign(new Error('invalid mkfs options'), { status: 1, stderr: Buffer.from('invalid option') });
     expect(() => mountQuotaVolume(bundle, 16, 1024, () => { throw failure; })).toThrow(failure);
   });
-  it.each([{ code: 'ETIMEDOUT' }, { signal: 'SIGTERM' }, { killed: true }])
+  it.each([{ code: 'ETIMEDOUT' }, { code: 'UNKNOWN', errno: -110 }, { signal: 'SIGTERM' }, { killed: true }])
     ('should preserve timeout or termination even with quota evidence: %j', details => {
       vi.mocked(fs.statfsSync).mockReturnValue(capacity(82n * 256n));
       const failure = Object.assign(new Error('terminated'), details, { stderr: Buffer.from('No space left on device') });
