@@ -19,6 +19,15 @@ export class AgentApi {
     const { daemon } = this.node;
     const { path, method, tenantId, role, ticket } = request;
     if (role !== 'control-plane') throw new ExecutionNodeError('custody_revoked');
+    if (method === 'GET') {
+      const match = /^\/v1\/sandboxes\/([a-zA-Z0-9-]+)$/.exec(path);
+      if (!match) throw new ExecutionNodeError('command_id_payload_mismatch');
+      const sandbox = daemon.peekSandbox(tenantId, match[1]!);
+      if (!sandbox) return { status: 404, body: { error: 'sandbox_not_found' } };
+      return { status: 200, body: { tenantId, id: sandbox.id, physicalUid: sandbox.id,
+        state: sandbox.state, ownership: sandbox.ownership, allProcessesExited: sandbox.allProcessesExited,
+        nodeInstanceId: daemon.nodeInstanceId, nodeEpoch: daemon.nodeEpoch } };
+    }
     this.custody.requireHeartbeat();
     if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) throw new ExecutionNodeError('command_id_payload_mismatch');
     const body = request.body as Record<string, unknown>;

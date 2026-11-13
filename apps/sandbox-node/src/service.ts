@@ -71,6 +71,10 @@ export const server = createAgentServer(tls, async (req, res, role) => {
         `/builder.slice/builder-tenant.slice/builder-tenant-${scope.tenantId}.slice`)); return;
     }
     if (scope.scope !== 'tenant') { reply(404, { error: 'unknown_route' }); return; }
+    if (req.method === 'GET' && /^\/v1\/sandboxes\/[a-zA-Z0-9-]+$/.test(url.pathname)) {
+      const result = await api.dispatch({ path: url.pathname, method: 'GET', tenantId: scope.tenantId, role, body: {} });
+      reply(result.status, result.body); return;
+    }
     const encoded = req.headers['x-execution-ticket'];
     if (typeof encoded !== 'string') throw new ExecutionNodeError('custody_revoked', 'execution ticket required');
     const ticket = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as TicketEnvelope;

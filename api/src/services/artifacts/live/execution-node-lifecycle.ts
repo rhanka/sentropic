@@ -13,9 +13,13 @@ export async function exportRetainedBuild(node: ExecutionNodeAdapter, session: N
   if (!intent.buildId || !Number.isSafeInteger(intent.maxBytes) || intent.maxBytes < 1 || intent.maxBytes > 64 * 1024 * 1024) {
     throw new ExecutionNodeRefusal('invalid_export_intent');
   }
-  const stop = nodeJson(await node.mutate(session, 'stop', intent.stopCommandId,
-    { stop: { retainOutput: true, outputSubPath: 'ui/dist', retentionTtlMs: 300_000 } }));
-  if (stop.state !== 'stopped-output-retained' || stop.allProcessesExited !== true) {
+  let stop = await node.status(session);
+  if (!stop) throw new ExecutionNodeRefusal('sandbox_not_found', 404);
+  if (stop.state === 'running' || stop.state === 'stopping') {
+    stop = nodeJson(await node.mutate(session, 'stop', intent.stopCommandId,
+      { stop: { retainOutput: true, outputSubPath: 'ui/dist', retentionTtlMs: 300_000 } }));
+  }
+  if (!['stopped-output-retained', 'exported'].includes(String(stop.state)) || stop.allProcessesExited !== true) {
     throw new ExecutionNodeRefusal('sandbox_not_quiesced', 409, 250);
   }
   const exported = await node.mutate(session, 'export', intent.exportCommandId, { spec: { buildId: intent.buildId,
