@@ -43,5 +43,6 @@
 - [x] Lot 3: D7-A opt-in CSP and worker query admission.
 - [ ] Lot 4: hermetic `data-plane.test.ts`, `data-plane-upgrade.test.ts`, `data-plane-config.test.ts`; existing live/relay/config regressions; typecheck and lint.
   - [x] Ephemeral certificates and fake signed-token issuer/server; no external service or credentials.
+  - [x] HMR 1008/reconnect and handshake refusal; config and both CSP profiles.
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
