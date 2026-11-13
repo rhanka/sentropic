@@ -62,6 +62,7 @@
 - [x] AMD-28 documentation: co-signed k8s 3b042fd contract, exact switch keys, closed defaults, dependencies, helper caps and qualification receipt rules.
 - [x] Digest identity: resolve the actual runsc executable; test binary identities use an isolated PATH fixture without an alternate production digest target.
 - [x] Switch integration regressions: actual HTTP/WS teardown and slot destruction, atomic config replacement and binary replacement without restart.
+- [x] Archive smoke regression: isolation worker reports failure through its supervisor once, preserving the authorization-refusal smoke contract.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
