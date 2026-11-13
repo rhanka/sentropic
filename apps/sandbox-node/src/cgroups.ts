@@ -8,7 +8,7 @@ export interface CgroupIO {
   write(path: string, value: string): void;
 }
 const host: CgroupIO = {
-  controlGroup: scope => execFileSync('systemctl', ['show', scope, '--property=ControlGroup', '--value'], { encoding: 'utf8' }).trim(),
+  controlGroup: scope => execFileSync('systemctl', ['show', scope, '--property=ControlGroup', '--value'], { encoding: 'utf8', timeout: 1000 }).trim(),
   read: path => readFileSync(path, 'utf8'),
   write: (path, value) => writeFileSync(path, value),
 };

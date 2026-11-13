@@ -8,6 +8,21 @@ vi.mock('node:child_process', async importOriginal => {
 });
 
 describe('runtime adapters', () => {
+  it.each(['inactive', 'failed'])('should refuse forwarding when a running container has a %s scope', async active => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.mocked(execFileSync).mockImplementation(file => file === 'runsc' ? '{"status":"running"}' : active);
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter(); queueMicrotask(() => child.emit('spawn'));
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      const { runtimeId } = await adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'scope', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 });
+      expect(() => adapter.assertRunning(runtimeId)).toThrow('scope exited');
+      await expect(adapter.portTarget(runtimeId, 5173)).rejects.toThrow('scope exited');
+    } finally { vi.restoreAllMocks(); }
+  });
   it.each(['null', '[]', '{}', 'garbage'])('should normalize empty cleanup inventory and reject garbage (%s)', async inventory => {
     const destroy = vi.fn();
     const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy });
@@ -111,6 +126,8 @@ describe('runtime adapters', () => {
         overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 1536, uid: 1000, gid: 1000, onExit }))
         .resolves.toEqual({ runtimeId: 'runsc-immo-fast-success' });
       expect(onExit).toHaveBeenCalledExactlyOnceWith(0);
+      expect(() => adapter.assertRunning('runsc-immo-fast-success')).toThrow('exited');
+      await expect(adapter.portTarget('runsc-immo-fast-success', 5173)).rejects.toThrow('exited');
       // Successful termination still requires an independent scope-quiescence confirmation.
       await expect(adapter.exportOutput('runsc-immo-fast-success', 'ui/dist')).rejects.toThrow('sandbox_not_quiesced');
     } finally { vi.restoreAllMocks(); }
