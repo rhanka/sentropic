@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mountQuotaVolume } from './disk-quota.js';
 import { destroyBundle, type Bundle } from './bundle.js';
+import { isEdquot } from './filesystem-errors.js';
 
 export function quotaWriter(): void {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated');
@@ -12,11 +13,12 @@ export function quotaWriter(): void {
     if (process.argv.includes('blocks')) writeFileSync('large', Buffer.alloc(2 * 1048576));
     else for (let i = 0; i < 64; i++) writeFileSync(`file-${i}`, '');
     throw new Error('quota failed to reject write');
-  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EDQUOT') throw error; }
+  } catch (error) { if (!isEdquot(error)) throw error; }
 }
 
 export function qualifyDisk(): void {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
+  assert.equal(process.getuid?.(), 0, 'root required');
   const run = (command: string, args: string[]) => { execFileSync(command, args, { stdio: 'pipe', timeout: 10000 }); };
   for (const dimension of ['blocks', 'inodes']) {
     const path = mkdtempSync(join(tmpdir(), 'sandbox-quota-'));

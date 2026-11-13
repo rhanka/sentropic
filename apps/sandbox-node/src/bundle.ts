@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import type { RunSandboxOptions } from './runtime-adapter.js';
 import { assertUnlinkedPath } from './mounts.js';
 import { mountQuotaVolume } from './disk-quota.js';
+import { throwFilesystemError } from './filesystem-errors.js';
 
 export type HostCommand = (command: string, args: string[]) => void;
 const host: HostCommand = (command, args) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000 }); };
@@ -60,7 +61,7 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
           { path: '/dev/urandom', type: 'c', major: 1, minor: 9, fileMode: 438, uid: 0, gid: 0 }] },
     }), { mode: 0o600 });
     return bundle;
-  } catch (error) { destroyBundle(bundle, run); throw error; }
+  } catch (error) { destroyBundle(bundle, run); throwFilesystemError(error); }
 }
 
 export function destroyBundle(bundle: Bundle, run: HostCommand = host): void {
