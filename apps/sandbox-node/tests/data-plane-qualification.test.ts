@@ -1,6 +1,6 @@
-import { createServer } from 'node:http';
+import { createServer, type Server, type RequestListener } from 'node:http';
 import { createHash, createPublicKey } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import type { Duplex } from 'node:stream';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -13,6 +13,10 @@ import { createDataPlane } from '../src/data-plane.js';
 import { createAgentServer, agentRole } from '../src/transport.js';
 import { CustodyGuard } from '../src/custody.js';
 import type { SandboxRecord } from '../src/daemon.js';
+import { qualificationNode } from '../src/data-plane-qualification-node.js';
+import { FakeRuntimeAdapter, type RunSandboxOptions } from '../src/runtime-adapter.js';
+import { runInNewContext } from 'node:vm';
+import { once } from 'node:events';
 
 describe('data-plane qualification harness (hermetic; real-host gate remains operator-owned)', () => {
   it('should refuse to touch the host without isolated qualification authorization', async () => {
@@ -24,12 +28,28 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     const directory = mkdtempSync(join(tmpdir(), 'qd-'));
     const sockets = new Set<Duplex>();
     const track = (socket: Duplex) => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); };
-    const upstream = createServer((_req, res) => { res.writeHead(200); res.write('qualification-stream'); });
-    upstream.on('connection', track);
-    upstream.on('upgrade', (req, socket) => {
-      const accept = createHash('sha1').update(`${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
-      socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
-    });
+    let command: readonly string[] = [], upstream!: Server;
+    class Runtime extends FakeRuntimeAdapter {
+      override async runSandbox(input: RunSandboxOptions) { command = input.command!; return super.runSandbox(input); }
+    }
+    for (const image of ['rootfs.erofs', 'qualification.erofs']) writeFileSync(join(directory, image), 'fixture');
+    const fixture = qualificationNode(directory, directory, new Runtime());
+    await fixture.start();
+    // Execute the actual generated argv script, remapping only its filesystem and listen address.
+    runInNewContext(command[2]!, { require: (name: string) => {
+      if (name === 'crypto') return { createHash };
+      if (name === 'fs') return { writeFileSync: (path: string, bytes: string) => {
+        expect(path).toBe('/workspace/ui/dist/index.html'); writeFileSync(join(directory, 'index.html'), bytes);
+      } };
+      if (name === 'http') return { createServer: (handler: RequestListener) => {
+        upstream = createServer(handler); const listen = upstream.listen.bind(upstream);
+        upstream.listen = ((port: number, host: string) => {
+          expect([port, host]).toEqual([5173, '0.0.0.0']); return listen(join(directory, 'upstream'));
+        }) as typeof upstream.listen;
+        upstream.on('connection', track); return upstream;
+      } };
+      throw new Error('unexpected fixture module');
+    } });
     const tls = qualificationCertificates(), keys = generateTicketKeyPair();
     const custody = new CustodyGuard(join(directory, 'wal'));
     const sandbox = { id: 'qualification', tenantId: 'sentropic', state: 'running', network: 'ports', poolOwned: false,
@@ -40,7 +60,8 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     server.on('connection', track);
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
     try {
-      await new Promise<void>(resolve => upstream.listen(join(directory, 'upstream'), resolve));
+      if (!upstream.listening) await once(upstream, 'listening');
+      expect(readFileSync(join(directory, 'index.html'), 'utf8')).toBe('qualification');
       const socketPath = join(directory, 'tls');
       await new Promise<void>(resolve => server.listen(socketPath, resolve));
       const results: string[] = [];
@@ -50,10 +71,12 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
       expect(results).toContain('mTLS refuses absent and untrusted client certificates');
       expect(results.filter(name => name.startsWith('refuse '))).toHaveLength(8);
       expect(results.filter(name => name.includes('within 250 ms'))).toHaveLength(2);
+      expect(upstream.listening).toBe(true);
     } finally {
       for (const socket of sockets) socket.destroy();
       await Promise.all([new Promise<void>(resolve => server.close(() => resolve())),
         new Promise<void>(resolve => upstream.close(() => resolve()))]);
+      await fixture.close();
       rmSync(directory, { recursive: true });
     }
   });
