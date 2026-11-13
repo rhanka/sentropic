@@ -1,4 +1,4 @@
-import { createServer, request, type ServerOptions } from 'node:https';
+import { createServer, type ServerOptions } from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { TLSSocket } from 'node:tls';
 import { ExecutionNodeError } from './errors.js';
@@ -32,25 +32,14 @@ export function createAgentServer(tls: ServerOptions, handler: (req: IncomingMes
   return createServer({ ...tls, minVersion: 'TLSv1.3', requestCert: true, rejectUnauthorized: true }, (req, res) => {
     const socket = req.socket as TLSSocket;
     if (!socket.authorized) { res.writeHead(403).end(); return; }
-    const role = socket.getPeerCertificate().subject?.OU;
-    if (typeof role !== 'string' || !['operator', 'control-plane', 'data-plane'].includes(role)) {
+    const identity = socket.getPeerCertificate().subject?.CN;
+    const identities: Record<string, string> = { 'control-plane:sentropic-api': 'control-plane',
+      'data-plane:artifact-content': 'data-plane', 'operator:cluster-controller': 'operator' };
+    const role = typeof identity === 'string' ? identities[identity] : undefined;
+    if (!role) {
       res.writeHead(403).end(); return;
     }
     handler(req, res, role);
   });
 }
 
-/** Uses the same operator-managed CA and client credentials; never disables verification. */
-export function sendJobAlertHeartbeat(url: string, tls: ServerOptions, payload: unknown): Promise<void> {
-  if (!url.startsWith('https://')) return Promise.reject(new Error('job-alerts HTTPS required'));
-  return new Promise((resolve, reject) => {
-    const req = request(url, { ...tls, method: 'POST', rejectUnauthorized: true, timeout: 3000,
-      headers: { 'content-type': 'application/json' } }, res => {
-      res.resume();
-      if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) resolve();
-      else reject(new Error(`job-alerts heartbeat HTTP ${res.statusCode}`));
-    });
-    req.on('error', reject); req.on('timeout', () => req.destroy(new Error('heartbeat timeout')));
-    req.end(JSON.stringify(payload));
-  });
-}
