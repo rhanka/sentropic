@@ -4,13 +4,16 @@ import { bodyLimit } from 'hono/body-limit';
 import { canonicalNodeJson, nodeHash, type ExecutionNodeAdapter, type NodeSession } from './execution-node-adapter';
 import { issueNodeCustody } from './execution-node-custody';
 import type { ControllerFenceKey } from './live-fence';
-import type { LiveStore } from './ports';
+import type { LivePorts, LiveStore } from './ports';
 import type { LiveKey, LiveRuntime } from './records';
+import { liveRevision } from './records';
+import { liveRole } from './authorize';
 
 export const CUSTODY_RPC_BASE = '/api/v1/artifacts/builder/v1/custody';
 export const custodyRpcPath = (path: string) => path === `${CUSTODY_RPC_BASE}/issue` || path === `${CUSTODY_RPC_BASE}/watch`;
 type Route = LiveKey & { sessionId: string; generation: number; routeEpoch: number; podUid: string;
-  podName: string; sourceRevision: string; principalId?: string; expiresAt: number };
+  podName: string; sourceRevision: string; principalId?: string; expiresAt: number;
+  role?: string; invitationId?: string; invitationEpoch?: number; invitationExp?: number };
 export type CustodySubject = { kind: 'live'; route: Route } | { kind: 'supervisor'; podName: string };
 export function signCustodyRpc(key: ControllerFenceKey, path: string, body: string, now = Date.now()) {
   const timestamp = String(now);
@@ -31,6 +34,7 @@ export function createCustodyAuthority(options: {
   store: Pick<LiveStore, 'read' | 'active'>;
   session(runtime: LiveRuntime): Promise<NodeSession>;
   binding(key: LiveKey): Promise<{ generation: number; ownerId: string }>;
+  invitations: LivePorts['invitations'];
   now?: () => number;
 }) {
   return async (subject: CustodySubject) => {
@@ -44,6 +48,8 @@ export function createCustodyAuthority(options: {
       }
       if (found.length !== 1) return revoked(); key = found[0]!;
     } else return revoked();
+    const authority = async () => {
+    let expiresAt = subject.kind === 'live' ? subject.route.expiresAt : null;
     const runtime = (await options.store.read(key))?.runtime;
     const binding = await options.binding(key);
     if (!runtime || !runtime.podUid || binding.ownerId !== runtime.ownerId || binding.generation !== runtime.generation
@@ -51,17 +57,37 @@ export function createCustodyAuthority(options: {
     if (subject.kind === 'live') {
       const route = subject.route;
       if (runtime.phase !== 'LIVE' || !Number.isFinite(route.expiresAt) || route.expiresAt <= (options.now ?? Date.now)()
-        || route.principalId !== runtime.ownerId
-        || !['sessionId', 'generation', 'routeEpoch', 'podName', 'sourceRevision'].every(field =>
+        || !route.principalId || runtime.appliedRevision === null || route.sourceRevision !== liveRevision(runtime.appliedRevision)
+        || !['sessionId', 'generation', 'routeEpoch', 'podName'].every(field =>
           route[field as keyof Route] === runtime[field as keyof LiveRuntime]) || route.podUid !== runtime.podUid) return revoked();
+      const fence = await options.invitations.current(key, runtime.generation);
+      try {
+        const role = liveRole(runtime, binding as Parameters<typeof liveRole>[1], {
+          principalId: route.principalId,
+          invitation: route.role === 'invitee' && route.invitationId ? { id: route.invitationId,
+            epoch: route.invitationEpoch!, expiresAt: route.invitationExp! * 1000 } : undefined,
+        }, 'read', (options.now ?? Date.now)(), fence.epoch);
+        if (role === 'invitee' && (!Number.isFinite(route.invitationExp) || fence.expiresAt === null
+          || fence.expiresAt <= (options.now ?? Date.now)())) return revoked();
+      } catch { return revoked(); }
+      if (route.role === 'invitee') expiresAt = Math.min(expiresAt!, route.invitationExp! * 1000, fence.expiresAt!);
     }
+    const grant = subject.kind === 'live' ? subject.route : null;
+    return { runtime, value: { owner: binding.ownerId, principal: grant?.principalId ?? binding.ownerId,
+      role: grant?.role ?? 'binding_owner', invitationId: grant?.invitationId ?? '',
+      invitationEpoch: grant?.invitationEpoch ?? 0, invitationExp: grant?.invitationExp ?? 0,
+      sessionId: runtime.sessionId, generation: runtime.generation, routeEpoch: runtime.routeEpoch,
+      physicalUid: runtime.podUid, sourceRevision: runtime.appliedRevision, expiresAt } };
+    };
+    const { runtime, value } = await authority();
     const session = await options.session(runtime);
     if (session.physicalUid !== runtime.podUid || session.ownership.principalId !== runtime.ownerId
       || session.ownership.generation !== runtime.generation || session.ownership.sessionId !== runtime.sessionId) return revoked();
     // Read again after remote node I/O: stop/replacement racing resolution cannot mint an old lease.
-    if (canonicalNodeJson((await options.store.read(key))?.runtime) !== canonicalNodeJson(runtime)) return revoked();
+    if (canonicalNodeJson((await authority()).value) !== canonicalNodeJson(value)) return revoked();
     const port = 5173; // Existing bootstrap multiplexes supervisor frames and live on the worker service port.
-    return { session, port, version: nodeHash(canonicalNodeJson({ runtime, session, port })) };
+    return { session, port, expiresAt: value.expiresAt, version: nodeHash(canonicalNodeJson({ ...value, tenantId: session.ownership.tenantId,
+      custodyEpoch: session.ownership.custodyEpoch, port })) };
   };
 }
 export function createCustodyRpc(options: {
@@ -86,7 +112,7 @@ export function createCustodyRpc(options: {
       if (operation === 'watch') return c.json({ version: resolved.version });
       const { session, port } = resolved;
       const issuedAt = now();
-      const ttl = subject.kind === 'live' ? Math.min(60_000, subject.route.expiresAt - issuedAt) : 60_000;
+      const ttl = resolved.expiresAt === null ? 60_000 : Math.min(60_000, resolved.expiresAt - issuedAt);
       const signed = issueNodeCustody(options.node, session, session.ownership.principalId, session.ownership.custodyEpoch, ttl, issuedAt);
       return c.json({ tenantId: signed.claims.tenantId, principalId: signed.claims.principalId, physicalUid: session.physicalUid,
         custodyEpoch: signed.claims.custodyEpoch, port, token: signed.headers['X-Custody-Token'],

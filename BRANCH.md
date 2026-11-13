@@ -48,6 +48,8 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [x] Hermetic qualification only; Focus live/publish is S1-B1 and warm claim/L4 is S1-B2.
 
 ## Plan / Todo (lot-based)
+- [x] Round 3: reuse controller guest authorization and revocation; hash authority only, excluding access/activity counters.
+- [ ] Round 3: deliver guarded real-runsc data-plane qualification, archive, exact-head CI and report.
 - [ ] Round 2: publish Custody RPC contract, implement authoritative authenticated issue/watch-poll and agent HTTP/WS custody enforcement.
   - [x] Agent HTTP/WS proxy authenticates custody JWS, tenant, UID, principal, epoch and port; attaches revocable streams.
   - [x] Preserve frozen missing-tenant HTTP status and refuse execution-ticket header presence, including empty values.
