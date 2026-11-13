@@ -56,6 +56,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [ ] Round 2: fix review findings 2-7 with persisted controller export recovery and bounded heartbeat leadership.
   - [x] Capture ticket clock once; bind signed export to physical UID, attempt, source and command; restrict production agent copy to its type contract.
   - [x] Bound heartbeat pool acquisition/queries/node calls; destroy failed leadership connections and abort outstanding HTTPS requests on lock loss.
+  - [x] Add two-replica stalled-leader takeover, saturated-pool late-connect disposal and in-flight heartbeat cancellation regressions.
   - [x] Separate durable export destination from fresh upload authorization; checkpoint upload and reconcile lost DELETE responses.
   - [x] Persist export intent/progress/candidate in the backend; retain output and pending host job when export transport fails.
   - [x] Resume retained exports through controller reconcile after process replacement, preserving publication and source fences.
