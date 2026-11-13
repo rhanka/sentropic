@@ -68,6 +68,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Separate durable export destination from fresh upload authorization; checkpoint upload and reconcile lost DELETE responses.
   - [x] Persist export intent/progress/candidate in the backend; retain output and pending host job when export transport fails.
   - [x] Resume retained exports through controller reconcile after process replacement, preserving publication and source fences.
+  - [x] Limit post-export SAVING/DECOMMISSIONING continuation to the node backend's durable pending-build opt-in.
   - [x] Add composed controller/backend recreation tests after failed upload beyond URL TTL and lost successful DELETE response.
   - [x] Update lifecycle contracts/tests to durable destination and fresh control-plane upload authorization.
 - [ ] Round 2: hermetic real-agent/RPC E2E, archive SHA256SUMS, exact-head green CI and report.

@@ -54,7 +54,8 @@ export function createLiveController(ports: LivePorts) {
       }
       if (runtime.phase === 'BUILD_QUEUED') return queuedBuild(ports, key);
       if (runtime.phase === 'BUILDING' || runtime.phase === 'VERIFYING') return resumeRetainedExport(ports, key, runtime);
-      if (runtime.phase === 'SAVING' || runtime.phase === 'DECOMMISSIONING') return teardown(ports, key, runtime);
+      if ((runtime.phase === 'SAVING' || runtime.phase === 'DECOMMISSIONING')
+        && await ports.worker.pendingBuild?.(runtime)) return teardown(ports, key, runtime);
       // An interrupted teardown keeps progressing on the scheduler tick until the pod is gone (DORMANT).
       if (runtime.phase === 'RECOVERING') return recover(key);
       // An interrupted start whose pod is gone or failed is retried no more: the tick retires it to
