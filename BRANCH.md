@@ -16,12 +16,12 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - `api/tests/**`
   - `api/src/config*`
   - `api/Dockerfile` (BRB0A-EX1)
+  - `Makefile` (BRB0A-EX4: API_VERSION inputs only)
   - `apps/sandbox-node/src/api.ts` (BRB0A-EX2)
   - `apps/sandbox-node/src/service.ts` (BRB0A-EX2)
   - `apps/sandbox-node/src/daemon.ts` (BRB0A-EX3)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `apps/**`
@@ -31,6 +31,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Record BRB0A-EXn rationale, impact and rollback before an exception.
 
 ## Feedback Loop
+- [x] BRB0A-EX4: hash the sandbox-node source copied by BRB0A-EX1 into API_VERSION. CI run 43435868900 caught the omitted input. Impact: source changes now invalidate the API image tag; no workflow or runtime change. Rollback: remove this input together with the EX1 COPY.
 - [x] BRB0A-EX1: copy sandbox-node into the API tooling source stage so API type imports and hermetic contract tests use the actual normative agent code. Impact: one source COPY, no runtime activation or dependency change. Rollback: remove this COPY with the adapter tests/types.
 - [x] BRB0A-EX2: deliver the already-frozen sandbox GET needed to resume natural-stop/export/upload failures without mutating state blindly. Impact: authenticated control-plane tenant status only; k8s must deploy a new agent artifact before use. Rollback: revert these two agent-file changes and keep node backend disabled.
 - [x] BRB0A-EX3: allow an identical stop command returning 202 to recheck cgroup quiescence. Impact: the same authenticated method/path/body can progress stopping; mismatched replay still refuses before side effects. Rollback: revert daemon stop changes and keep node backend disabled pending agent correction.
