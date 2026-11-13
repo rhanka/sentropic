@@ -4,6 +4,17 @@ import type { TLSSocket } from 'node:tls';
 import { ExecutionNodeError } from './errors.js';
 import type { ExecutionNodeTenantId } from './contract.js';
 
+export async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = []; let length = 0;
+  for await (const chunk of req) {
+    const bytes = Buffer.from(chunk); length += bytes.length;
+    if (length > 1024 * 1024) throw new ExecutionNodeError('command_id_payload_mismatch', 'request exceeds 1 MiB');
+    chunks.push(bytes);
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { throw new ExecutionNodeError('command_id_payload_mismatch', 'invalid JSON request'); }
+}
+
 export function requestScope(path: string, tenantId: string | undefined, role: string) {
   const url = new URL(path, 'https://agent');
   const operator = url.pathname === '/v1/node' || url.pathname === '/v1/node/drain'
