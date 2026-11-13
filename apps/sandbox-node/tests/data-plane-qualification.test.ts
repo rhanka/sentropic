@@ -19,6 +19,7 @@ import { runInNewContext } from 'node:vm';
 import { once } from 'node:events';
 import { forwardSandboxPort } from '../src/port-forward.js';
 import { streamHelper } from './stream-helper.js';
+import { monitorPorts } from '../src/ports-monitor.js';
 
 describe('data-plane qualification harness (hermetic; real-host gate remains operator-owned)', () => {
   it('should refuse to touch the host without isolated qualification authorization', async () => {
@@ -26,7 +27,7 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     try { await expect(qualifyDataPlane()).rejects.toThrow('isolated qualification host required'); }
     finally { if (previous !== undefined) process.env.QUALIFICATION_ONLY = previous; }
   });
-  it('should exercise mTLS, HTTP/WS refusal matrix and bounded cuts using private test UDS', async () => {
+  it.each(['custody', 'switch-closed', 'digest-mismatch'] as const)('should exercise mTLS HTTP/WS cuts using private test UDS (%s)', async mode => {
     const directory = mkdtempSync(join(tmpdir(), 'qd-'));
     const sockets = new Set<Duplex>();
     const track = (socket: Duplex) => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); };
@@ -36,7 +37,7 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     }
     for (const image of ['rootfs.erofs', 'qualification.erofs']) writeFileSync(join(directory, image), 'fixture');
     const fixture = qualificationNode(directory, directory, new Runtime());
-    await fixture.start();
+    const created = await fixture.start();
     // Execute the actual generated argv script, remapping only its filesystem and listen address.
     runInNewContext(command[2]!, { console: { log() {}, error() {} }, process: { on() {} }, require: (name: string) => {
       if (name === 'crypto') return { createHash };
@@ -58,8 +59,10 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
       ownership: { principalId: 'qualification', custodyEpoch: 1 } } as SandboxRecord;
     const forward = forwardSandboxPort('runsc', '--root=/private', sandbox.id, 5173, join(directory, 'forward'),
       streamHelper('sandbox', join(directory, 'upstream'), sockets));
-    const data = createDataPlane({ custody, publicKey: createPublicKey(keys.publicKeyPem),
+    let enabled = true;
+    const data = createDataPlane({ custody, publicKey: createPublicKey(keys.publicKeyPem), portsEnabled: () => enabled,
       sandbox: () => sandbox, target: () => forward.ready });
+    const stopMonitor = monitorPorts(() => enabled, () => data.cutPorts(), () => fixture.node.daemon.disablePorts());
     const server = createAgentServer({ ca: tls.ca, ...tls.server }, (req, res, role) => { void data.http(req, res, role); });
     server.on('connection', track);
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
@@ -69,13 +72,17 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
       await new Promise<void>(resolve => server.listen(socketPath, resolve));
       const results: string[] = [];
       await probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, checkTcp() {},
+        ...(mode !== 'custody' ? { switchMode: mode, closeSwitch: () => { enabled = false; } } : {}),
         report: name => { results.push(name); }, node: { keys, get ownership() { return sandbox.ownership; },
           async revoke() { custody.revoke('sentropic', sandbox.id, 2); sandbox.ownership = { ...sandbox.ownership, custodyEpoch: 2 }; } } });
-      expect(results).toContain('mTLS refuses absent and untrusted client certificates');
-      expect(results.filter(name => name.startsWith('refuse '))).toHaveLength(8);
-      expect(results.filter(name => name.includes('within 250 ms'))).toHaveLength(2);
+      if (mode === 'custody') {
+        expect(results).toContain('mTLS refuses absent and untrusted client certificates');
+        expect(results.filter(name => name.startsWith('refuse '))).toHaveLength(8);
+      } else expect(created.state).toBe('destroyed');
+      expect(results.filter(name => name.includes('within 250 ms'))).toHaveLength(mode === 'custody' ? 2 : 1);
       expect(upstream.listening).toBe(true);
     } finally {
+      stopMonitor();
       forward.stop();
       for (const socket of sockets) socket.destroy();
       await Promise.all([new Promise<void>(resolve => server.close(() => resolve())),

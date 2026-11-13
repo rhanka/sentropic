@@ -5,8 +5,7 @@ import { execFileSync } from 'node:child_process';
 
 let settings = () => process.env;
 let cached: { path: string; identity: string; digest: string } | undefined;
-export function runscDigest(binary = process.env.EXECUTION_NODE_RUNSC ?? 'runsc'): string {
-  if (binary === 'runsc') binary = process.env.EXECUTION_NODE_RUNSC ?? binary;
+export function runscDigest(binary = 'runsc'): string {
   const path = binary.includes('/') ? binary : execFileSync('sh', ['-ec', 'command -v runsc'],
     { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }).trim();
   const s = statSync(path, { bigint: true });
