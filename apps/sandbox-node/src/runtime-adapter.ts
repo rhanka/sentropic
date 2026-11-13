@@ -9,6 +9,8 @@ import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
 import { rmSync } from 'node:fs';
+import { requireNetworkPolicy } from './network-policy.js';
+import { privateNetworkScript } from './private-network.js';
 import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-diagnostics.js';
 
 export interface SandboxMount {
@@ -144,12 +146,14 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
+    requireNetworkPolicy(options.network);
     const args = [this.rootArg, `--network=${options.network === 'ports' ? 'sandbox' : 'none'}`, '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
 
   async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
+    requireNetworkPolicy(options.network);
     if (!this.hasRunsc()) failNoBinary();
     const bundle = this.bundles.prepare(options);
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
@@ -158,7 +162,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     // NetworkSandbox is required by gVisor's forwarding API. Start in a fresh,
     // loopback-only namespace; never import the host's interfaces or routes.
     const command = options.network === 'ports'
-      ? ['unshare', '--net', '--', 'sh', '-ec', 'ip link set lo up; exec "$@"', 'sandbox-network', this.binary]
+      ? ['unshare', '--net', '--', 'sh', '-ec', privateNetworkScript, 'sandbox-network', this.binary]
       : [this.binary];
     // systemd-run uses PID 1's StartTransientUnit D-Bus method; Slice is explicit.
     const child = spawn('systemd-run', ['--scope', `--unit=${scope}`,

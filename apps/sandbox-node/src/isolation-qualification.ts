@@ -9,6 +9,7 @@ import { acquireNodeLock } from './node-lock.js';
 import { assertCleanStartup } from './restart.js';
 import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
 import { createQualificationDirectory, qualificationDiskMiB, qualificationInodes } from './qualification-storage.js';
+import { qualificationPrerequisites } from './qualification-prerequisites.js';
 
 export async function qualifyIsolation(): Promise<void> {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
@@ -29,6 +30,7 @@ export async function qualifyIsolation(): Promise<void> {
     assert.equal(run('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value']), 'inactive', 'service must be stopped');
     assertCleanStartup();
     assertNoQualificationLeftovers(release);
+    qualificationPrerequisites(release);
     directory = createQualificationDirectory(release, 'qi');
     // Consume the operator's authorization once, under the shared lock.
     rmSync('/etc/execution-node/isolated-qualification');

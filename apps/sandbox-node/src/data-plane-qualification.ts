@@ -17,6 +17,7 @@ import { createQualificationDirectory } from './qualification-storage.js';
 import { qualificationDiagnostics } from './qualification-diagnostics.js';
 import { waitForQualificationPort, qualificationFailureInventory } from './qualification-runtime.js';
 import { RunscRuntimeAdapter } from './runtime-adapter.js';
+import { qualificationPrerequisites } from './qualification-prerequisites.js';
 
 function tcpListeners() {
   return new Set(['/proc/net/tcp', '/proc/net/tcp6'].flatMap(path => readFileSync(path, 'utf8').trim().split('\n').slice(1)
@@ -46,6 +47,7 @@ export async function qualifyDataPlane(): Promise<void> {
     assert.equal(state, 'inactive', 'service must be stopped');
     assertCleanStartup();
     assertNoQualificationLeftovers(dirname(process.execPath));
+    qualificationPrerequisites(dirname(process.execPath));
     assert.match(execFileSync('findmnt', ['--noheadings', '--raw', '--output=SOURCE', '--mountpoint', '/var/lib/builder/tenants/sentropic'],
       { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).trim(), /^\/dev\/loop[0-9]+$/);
     rmSync(marker); // Consume operator authorization once, under the service's shared flock.

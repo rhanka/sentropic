@@ -58,7 +58,14 @@ The sandbox must opt into `network: ports`; gVisor uses `--network=sandbox`
 inside a fresh `unshare --net` namespace with only `lo` brought up. The OCI
 network namespace references `/proc/self/ns/net` of that private launcher.
 No host interface, veth, external route or host TCP listener is configured.
-The host needs `unshare`, `sh` and `ip`; a failure aborts launch without a fallback.
+Operator-provided prerequisites are `util-linux` (`unshare`), POSIX `sh`,
+`iproute2` (`ip`) and `awk`; they are not installed by this archive. Both gates
+fail fast by executing a private namespace/netlink probe in a transient unit
+with the shipped CapabilityBoundingSet and SystemCallFilter. The launch fence
+requires exactly UP `lo` and only local loopback IPv4/IPv6 routes, before
+runsc starts; any extra interface or external route aborts without fallback.
+Gates print the digest-named verified archive identity and SHA-256 of the
+resolved runsc binary. Verify SHA256SUMS before invoking the gate.
 `--network=none` rejects gVisor's port-forward RPC and remains for other workloads.
 The data-plane qualification first verifies loopback-only interfaces and a TCP
 accept on 5173 from inside the sandbox (5-second bound). Its numbered `STEP`
