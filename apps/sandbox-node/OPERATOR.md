@@ -1,5 +1,32 @@
 # Standalone sandbox-node VM operator contract
 
+## Round 2 data plane and export
+
+The updated archive adds authenticated `ANY /v1/ports/5173/*` and WebSocket
+upgrades. Only mTLS CN `data-plane:artifact-content` may use these routes.
+`X-Tenant-Id`, `X-Expected-Physical-Uid` and API-signed `X-Custody-Token` are
+mandatory; execution tickets are refused on this plane. The six custody claims
+are checked against the active sandbox owner/epoch, WAL revocation floor and
+60-second TTL. Expiry/revocation cuts HTTP and sends WS close 1008.
+
+The sandbox must opt into `network: ports`; gVisor still uses `--network=none`.
+The agent creates private UDS listeners under
+`/run/execution-node/ports/<physicalUid>/5173.sock`. Each connection is relayed
+through `runsc --root=/run/execution-node/runsc port-forward --stream=<uds>
+sandbox-<physicalUid> 5173`. This is gVisor stream mode: runsc connects once to
+the UDS and donates it to the sentry, then exits. No host TCP forwarding port.
+The existing worker bootstrap multiplexes live and supervisor traffic on 5173.
+Operator qualification must cover concurrent HTTP/HMR, revocation and expiry
+using the installed pinned runsc before G-A; hermetic fake-runtime tests do not
+qualify real gVisor forwarding.
+
+Export bodies carry a durable `destination`, not a presigned upload URL. The API
+obtains fresh upload authorization outside the agent idempotency body. Signed
+archive provenance now binds physicalUid, attemptId, buildId, command argv and
+devScope source as well as tenant, node identity/epoch and archive SHA-256.
+The API persists upload completion before DELETE, allowing a lost DELETE
+response to reconcile without exporting the destroyed sandbox again.
+
 Definition only: k8s owns deployment. Never deploy from this lane or touch
 prod/preprod. The VM is not a Kubernetes node; no DaemonSet applies.
 
