@@ -15,8 +15,9 @@ does not qualify Focus live or publish, and is not an activation instruction.
 The backend implements the controller's pods, worker, cache, heavy and admission
 ports. Existing `/v1/live/*` and `/v1/builds` routes keep their host authorization,
 durable state, draft fencing and SG4 publication. S1-B1 must invoke the stateless
-source coalescer and tenant queue from that composition; these helpers do not
-replace the node's cross-replica AdmissionLedger.
+source provider through `ExecutionNodeInputs.forge/source/tenant`; the composition
+applies head coalescing and the tenant queue. The node's cross-replica
+AdmissionLedger remains authoritative.
 
 ## Preprod Secret names
 
@@ -49,6 +50,9 @@ No values belong in this document or a lane report.
 
 The conductor supplies the registered public key for instance
 `7c710995-cfa9-4e2f-8cad-61706f83d933` from the operator handoff. No node identity
+The SPKI DER fingerprint is pinned in configuration validation:
+`74b5cd02287bead58bf4e27948dc7e2150d80ca5a20924d289325b95f6bc4aaa`.
+No node identity
 or epoch is discovered and adopted automatically. S3 prefixes are exactly
 `tenants/<tenant>/<environment>/`; keys never leave the API. Data-plane mTLS
 credentials belong to S1-C1, not this client.
@@ -78,10 +82,14 @@ uploads through the control-plane presigned PUT URL, then deletes the sandbox.
 Failed upload preserves retained output. A stopping response is an explicit
 retryable refusal, never permission to export. Persist all command ids and URL
 with the intent so retries keep identical method/path/body triples.
+Creation and revocation intents are persisted before remote mutations; a lost
+response is reconciled against that exact intent. Clean build/wake replaces a
+stopped physical sandbox and persists a new route fence before worker commands.
 
 The shipped agent does not upload the supplied URL or emit the full frozen
 ArtifactProvenanceV1. BRB0A-EX2 adds its frozen sandbox GET for lifecycle retries;
-k8s must release and deploy an updated agent before enabling this backend.
+k8s must release and deploy an updated agent (GET and 202-stop progression)
+before enabling this backend.
 Base GET and full provenance are agent-lane handoffs before complete status
 reconciliation or the full provenance/publication gate; no complete
 ArtifactProvenanceV1 qualification is claimed here.
