@@ -1,7 +1,7 @@
 # Feature: Bounded isolated data-plane qualification
 
 ## Objective
-- [ ] Repair the qualification workload, cancellation, private fixtures and custody verification roles.
+- [x] Repair the qualification workload, cancellation, private fixtures and custody verification roles.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/worktrees/sandbox-node-dpq`; branch: `fix/sandbox-node-data-plane-qual`; base: `origin/main`.
@@ -29,6 +29,7 @@
 - [x] Enforce the wall-clock deadline in a separate supervisor event loop: SIGTERM the worker alone to preserve flock during cleanup, then process-group SIGKILL after 10 seconds for a blocked worker.
 - [x] Astra closure review APPROVE after signal-routing regression; report `.tmp/rv/dpq-review-astra-closure.md`.
 - [x] Independent security review APPROVE; Argon APPROVE with umask finding accepted: force output-parent traversal under UMask=0077.
+- [x] Strict 250ms revoke test failed while the artifact build ran concurrently; isolated rerun passed all 185 tests without changing the threshold. The umask regression then failed before chmod and passed after it.
 - [x] Packet references merged #1022; fetched `origin/main` is `87485f912` (#1020). Use the actual origin/main ancestry.
 - [x] Track import is reserved for the conductor, the designated single writer; deliver the updated branch checklist for import.
 
@@ -57,8 +58,8 @@
   - [x] Update node/API custody tests and operator installation instructions; dossier §A.3 separates the three ticket/token keys.
 - [ ] **Lot 4 — Final validation**
   - [x] Local node checks: 185 tests, both TypeScript projects and memory check; API: 71 tests. Node/API source lint: zero errors.
-  - [ ] Rebuild and verify archive through `docker-slot.sh`; record SHA-256 and internal sums.
+  - [x] Rebuild and verify through `docker-slot.sh`: archive SHA-256 `4dbea87df4692edcc1522823fbf1af2cd7103e5221d198806c80f5e327fb6f74`; all internal sums and root/non-root SEA checks pass.
   - [x] Obtain independent code reviews and resolve findings; Astra closure and independent security review APPROVE, Argon umask finding accepted.
   - [ ] Push, open PR using this file and verify green CI on exact head; do not merge.
-  - [ ] Run `make down-volumes ENV=test-sandbox-dpq`.
+  - [x] Run `make down-volumes ENV=test-sandbox-dpq`; no branch stack remains.
   - [ ] Write French report and completion marker under `.tmp/rv/`.
