@@ -41,7 +41,10 @@ verify-sandbox-node-artifact:
 	  if output=$$(/release/execution-node --qualify-data-plane 2>&1); then exit 1; fi; \
 	  test "$$output" = "FAIL step=supervisor data-plane qualification"'; \
 	docker run --rm --user=65534:65534 --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
-	  --entrypoint /release/execution-node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e --self-test
+	  --entrypoint /release/execution-node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e --self-test; \
+	docker run --rm --user=65534:65534 --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
+	  -v "$(CURDIR)/apps/sandbox-node/tests/native-network-probe.mjs:/native-network-probe.mjs:ro" \
+	  --entrypoint node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e /native-network-probe.mjs
 
 check-sandbox-node:
 	@mkdir -p "$(SANDBOX_NODE_NPM_CACHE)"
