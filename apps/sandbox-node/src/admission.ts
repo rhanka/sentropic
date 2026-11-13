@@ -49,7 +49,7 @@ export class ExecutionNodeAdmission {
   private checkMemory(tenantId: ExecutionNodeTenantId, additionalMiB: number): void {
     const tenants = ['sentropic', 'immo'] as const;
     const usage = (id: ExecutionNodeTenantId) => Math.max(this.reservedMiB(id), this.options.memoryCurrentMiB?.(id) ?? 0);
-    if (usage(tenantId) + additionalMiB > 2560
+    if (usage(tenantId) + additionalMiB > 2304
       || tenants.reduce((sum, id) => sum + usage(id), 0) + additionalMiB > capacity.reservableMiB) {
       throw new ExecutionNodeError('tenant_quota_exceeded', 'memory reservation exhausted', 250);
     }
@@ -101,7 +101,7 @@ export class ExecutionNodeAdmission {
     }
   }
 
-  /** Transfer the existing 768 MiB reservation without double accounting. */
+  /** Transfer the existing 704 MiB reservation without double accounting. */
   claim(tenantId: ExecutionNodeTenantId): void {
     if (this.used[tenantId].standby !== 1) {
       throw new ExecutionNodeError('tenant_quota_exceeded', 'no standby reservation', 250);

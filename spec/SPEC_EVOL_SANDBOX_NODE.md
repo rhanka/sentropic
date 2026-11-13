@@ -14,12 +14,12 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 
 - Isolation key: every call and object carries a mandatory `tenantId`; sandbox isolation is keyed on `(tenantId, sessionId | jobId)`.
 - Warm standby pools are partitioned: `poolOwned = system:warm-pool:<tenantId>`. A cross-tenant claim is rejected (`403` / `409`).
-- Canonical hierarchy: `builder.slice/builder-tenant.slice/builder-tenant-<tenantId>.slice/builder-sbx-<physicalUid>.scope`. Parent MemoryMax=3456 MiB, MemorySwapMax=0, CPUQuota=180%. Each tenant: MemoryMax=2560 MiB, MemoryHigh=2304 MiB, MemoryLow=768 MiB, CPUWeight=100, TasksMax=4096; each scope has memory.oom.group=1. No burst fields or second build.
+- Canonical hierarchy: `builder.slice/builder-tenant.slice/builder-tenant-<tenantId>.slice/builder-sbx-<physicalUid>.scope`. Parent MemoryMax=2944 MiB, MemorySwapMax=0, CPUQuota=180%. Each tenant: MemoryMax=2304 MiB, MemoryHigh=2304 MiB, MemoryLow=704 MiB, CPUWeight=100, TasksMax=4096; each scope has memory.oom.group=1. No burst fields or second build.
 - NVMe layout (mode `0700`, no cross-tenant dedup or reads):
   `/var/lib/builder/tenants/<tenantId>/bases/<kind>/<identityDigest>.erofs` and
   `/var/lib/builder/tenants/<tenantId>/sandboxes/<uid>/{upper,work,retained}`.
 - Zero static secret on the VM: S3 access uses short-lived presigned URLs scoped to the `s3://.../tenants/<tenantId>/...` prefix, with BHS host validation.
-- AdmissionLedger: one warm live OR standby per tenant (768 MiB each), plus exactly one global publish build (1664 MiB), sum <=3200 MiB including gVisor/cache/slab. Read complete memory.current before reservation; reject 429 before OOM. Disk/project quota 16 GiB per tenant and inode quota required from S1-A1a. Claim transfers the standby reservation without double accounting.
+- AdmissionLedger: one warm live OR standby per tenant (704 MiB each), plus exactly one global publish build (1536 MiB), sum <=2944 MiB including gVisor/cache/slab. Read complete memory.current before reservation; reject 429 before OOM. Disk/project quota 16 GiB per tenant and inode quota required from S1-A1a. Claim transfers the standby reservation without double accounting.
 - Publish queue: bounded, non-preemptible, strict tenant alternation; at most one adverse service ahead when both tenants wait. No 5 s build wait guarantee. Live admission alone targets p95 <=2 s/max <=5 s outside the build slot. Queue-full 429 counts as qualification failure.
 - Observability: every audit row and metric carries `tenant_id` (+ `purpose`, `node_instance_id`); all evidence stays in BHS.
 
@@ -50,7 +50,7 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 
 ## 6. Endpoints (frozen surface)
 
-- OperatorScope: `GET /v1/node` has no tenantId; reports parentSlice `{ name: 'builder.slice', memoryMaxMiB: 3456 }` and capabilities.supportedOps for actually delivered operations. All TenantScope calls require tenantId or 400 missing_tenant_id. QuotaSnapshot contains limits, effective controlGroup, usage.memoryCurrentBytes/reservedMemoryBytes and globalBuildSlot `{ maxConcurrentBuildsGlobal: 1, holderTenantId?, queueDepth }`; no burst fields.
+- OperatorScope: `GET /v1/node` has no tenantId; reports parentSlice `{ name: 'builder.slice', memoryMaxMiB: 2944 }` and capabilities.supportedOps for actually delivered operations. All TenantScope calls require tenantId or 400 missing_tenant_id. QuotaSnapshot contains limits, effective controlGroup, usage.memoryCurrentBytes/reservedMemoryBytes and globalBuildSlot `{ maxConcurrentBuildsGlobal: 1, holderTenantId?, queueDepth }`; no burst fields.
 - `GET`/`PUT /v1/tenants/:tenantId/quotas`, `GET /v1/tenants/:tenantId/bases/:baseId` (`kind`: `rootfs | dependencies | source | prebundle | vendor-esm...`; cross-tenant base read -> `403 cross_tenant_base_forbidden`).
 - `POST /v1/sandboxes` (`SandboxSpec`: `tenantId`, `physicalUid`, `profile`, `runtimeClass`, `baseMounts` read-only, writable overlay on `/workspace`, `quotaMiB` + inodes, process `uid:gid`, `network` (`none` | ports allowlist), `exec`/`pty`/`snapshots` flags).
 - `POST /v1/sandboxes/:id/claim`, GET list/detail (scopeName and resources.memoryCurrentBytes/memoryPeakBytes), renew, stop, export and DELETE. Stop resolves systemd ControlGroup and validates tenant ancestry (500 cgroup_tenant_mismatch, no write otherwise); scope-only cgroup.kill and cgroup.events, never tenant kill. Within 5000 ms: 200 stopped-output-retained/destroyed with allProcessesExited:true; otherwise 202 stopping/allProcessesExited:false/retryAfterMs:250. Export requires buildId and confirmed quiescence (409 sandbox_not_quiesced), read-only symlink-safe reader.
