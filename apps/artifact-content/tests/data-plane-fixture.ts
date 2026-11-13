@@ -12,13 +12,13 @@ export async function fakeDataPlane(tls = testTls()) {
   const custody = fixtureCustody();
   const watchers = new Set<() => void>(); const sockets = new Set<Duplex>();
   const received: IncomingMessage[] = []; let epoch = 1; let issues = 0;
-  let tenant: 'sentropic' | 'immo' = 'sentropic'; let uid = 'physical-1'; let ttl = 1000;
+  let tenant: 'sentropic' | 'immo' = 'sentropic'; let uid = 'physical-1'; let ttl = 1000; let port = 5173;
   const issuer: CustodyIssuer = {
     async issue() {
       issues++;
       const issuedAt = new Date().toISOString();
       const lease: CustodyLease = { tenantId: tenant, principalId: 'principal', physicalUid: uid, custodyEpoch: epoch,
-        port: 5173, issuedAt, deadlineAt: new Date(Date.now() + ttl).toISOString(), token: '' };
+        port, issuedAt, deadlineAt: new Date(Date.now() + ttl).toISOString(), token: '' };
       lease.token = custody.sign(lease);
       return lease;
     },
@@ -33,7 +33,7 @@ export async function fakeDataPlane(tls = testTls()) {
       if (!(req.socket as TLSSocket).authorized
         || (req.socket as TLSSocket).getPeerCertificate().subject.CN !== 'data-plane:artifact-content'
         || !expectedUid || req.headers['x-expected-physical-uid'] !== expectedUid
-        || !/^\/v1\/ports\/5173\//.test(req.url ?? '')) return undefined;
+        || !new RegExp(`^/v1/ports/${port}/`).test(req.url ?? '')) return undefined;
       return custody.verify(String(req.headers['x-custody-token']), req.headers['x-tenant-id'] as 'sentropic' | 'immo', expectedUid);
     } catch { return false; }
   };
@@ -62,6 +62,7 @@ export async function fakeDataPlane(tls = testTls()) {
     get watchers() { return watchers.size; },
     setTtl(value: number) { ttl = value; }, setUid(value: string) { uid = value; },
     setTenant(value: 'sentropic' | 'immo') { tenant = value; },
+    setPort(value: number) { port = value; },
     answer(handler: typeof answer) { answer = handler; },
     revoke() {
       epoch++; for (const close of watchers) close();
