@@ -1,5 +1,69 @@
 # Standalone sandbox-node VM operator contract
 
+## Round 3 real-host data-plane qualification (required before G-A)
+
+The archive includes `qualify-data-plane.sh` and the SEA entry
+`--qualify-data-plane`. On the isolated qualification host, stop
+`execution-node.service`, verify the release's `SHA256SUMS`, and create the
+one-shot `/etc/execution-node/isolated-qualification` authorization marker.
+Run `QUALIFICATION_ONLY=isolated QUAL_RELEASE_DIR=<verified-release>
+sh <verified-release>/qualify-data-plane.sh`. From a source checkout the
+equivalent target is `make -f Makefile -f apps/sandbox-node/checks.mk
+qualify-sandbox-node-data-plane ENV=test-sandbox-node` with those same variables.
+Never run this on an active tenant host. It does not restart the service.
+
+The SEA requires root, the inactive service, the shared node flock, an empty
+runsc/scope/sandbox/mount inventory, and the installed tenant loop mount.
+It consumes the marker under the lock, starts a real runsc sandbox and uses
+the production daemon, API dispatch, custody guard, mTLS listener and UDS
+port-forward code. All certificate authorities, client/server certificates,
+signing keys and custody WAL are generated for this run only; production keys,
+node epoch and custody state are never opened. The fixture serves streaming
+HTTP and concurrent HMR on sandbox port 5173 and writes a retained output.
+
+PASS receipts cover absent/untrusted certificates, wrong CN/control-plane role,
+tenant, physical UID, port, epoch, principal and execution-ticket refusal for
+HTTP and WS; expiry and authenticated `revoke-custody` must cut concurrent HTTP
+and WS (1008) within 250 ms locally, also bounded by one second end to end.
+The agent listener itself uses a private UDS in this test; host TCP listeners
+are compared before sandbox creation, during forwarding and after the probes.
+The qualification then exercises authenticated GET, stop (including polling
+202 when returned), export and DELETE. Cleanup verifies empty inventories and
+removes only its own bases/state. Failure or interruption exits nonzero and
+must block G-A; investigate any cleanup failure before further qualification.
+
+`verify-sandbox-node-artifact` checks this script's archived bytes/digest and
+the SEA's refusal without isolated authorization. Local hermetic probes test
+the harness; **only a PASS on the installed runsc qualifies the real host**.
+k8s owns that execution, qualification receipts, installation and activation.
+
+## Round 2 data plane and export
+
+The updated archive adds authenticated `ANY /v1/ports/5173/*` and WebSocket
+upgrades. Only mTLS CN `data-plane:artifact-content` may use these routes.
+`X-Tenant-Id`, `X-Expected-Physical-Uid` and API-signed `X-Custody-Token` are
+mandatory; execution tickets are refused on this plane. The six custody claims
+are checked against the active sandbox owner/epoch, WAL revocation floor and
+60-second TTL. Expiry/revocation cuts HTTP and sends WS close 1008.
+
+The sandbox must opt into `network: ports`; gVisor still uses `--network=none`.
+The agent creates private UDS listeners under
+`/run/execution-node/ports/<physicalUid>/5173.sock`. Each connection is relayed
+through `runsc --root=/run/execution-node/runsc port-forward --stream=<uds>
+sandbox-<physicalUid> 5173`. This is gVisor stream mode: runsc connects once to
+the UDS and donates it to the sentry, then exits. No host TCP forwarding port.
+The existing worker bootstrap multiplexes live and supervisor traffic on 5173.
+Operator qualification must cover concurrent HTTP/HMR, revocation and expiry
+using the installed pinned runsc before G-A; hermetic fake-runtime tests do not
+qualify real gVisor forwarding.
+
+Export bodies carry a durable `destination`, not a presigned upload URL. The API
+obtains fresh upload authorization outside the agent idempotency body. Signed
+archive provenance now binds physicalUid, attemptId, buildId, command argv and
+devScope source as well as tenant, node identity/epoch and archive SHA-256.
+The API persists upload completion before DELETE, allowing a lost DELETE
+response to reconcile without exporting the destroyed sandbox again.
+
 Definition only: k8s owns deployment. Never deploy from this lane or touch
 prod/preprod. The VM is not a Kubernetes node; no DaemonSet applies.
 

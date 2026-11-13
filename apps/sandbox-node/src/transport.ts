@@ -29,14 +29,18 @@ export function requestScope(path: string, tenantId: string | undefined, role: s
   return { scope: 'tenant' as const, tenantId: tenantId as ExecutionNodeTenantId };
 }
 
-export function createAgentServer(tls: ServerOptions, handler: (req: IncomingMessage, res: ServerResponse, role: string) => void) {
-  return createServer({ ...tls, minVersion: 'TLSv1.3', requestCert: true, rejectUnauthorized: true }, (req, res) => {
+export function agentRole(req: IncomingMessage): string | undefined {
     const socket = req.socket as TLSSocket;
-    if (!socket.authorized) { res.writeHead(403).end(); return; }
+    if (!socket.authorized) return undefined;
     const identity = socket.getPeerCertificate().subject?.CN;
     const identities: Record<string, string> = { 'control-plane:sentropic-api': 'control-plane',
       'data-plane:artifact-content': 'data-plane', 'operator:cluster-controller': 'operator' };
     const role = typeof identity === 'string' ? identities[identity] : undefined;
+    return role;
+}
+export function createAgentServer(tls: ServerOptions, handler: (req: IncomingMessage, res: ServerResponse, role: string) => void) {
+  return createServer({ ...tls, minVersion: 'TLSv1.3', requestCert: true, rejectUnauthorized: true }, (req, res) => {
+    const role = agentRole(req);
     if (!role) {
       res.writeHead(403).end(); return;
     }

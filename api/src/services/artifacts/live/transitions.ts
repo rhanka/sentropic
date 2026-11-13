@@ -38,6 +38,16 @@ export async function checkpoint(ports: LivePorts, key: LiveKey, runtime: LiveRu
   await ports.drafts.checkpoint(key, draft);
   return draft;
 }
+/** An immutable node backend replaces the stopped physical sandbox for clean build/wake.
+ * Persist that new physical identity and route fence before any worker command uses it. */
+export async function cleanRuntime(ports: LivePorts, key: LiveKey, runtime: LiveRuntime) {
+  const cleaned = await ports.worker.clean(runtime);
+  if (!cleaned || cleaned.uid === runtime.podUid) return runtime;
+  return transition(ports, key, runtime, state => {
+    state.runtime.podUid = cleaned.uid; state.runtime.routeEpoch++;
+    if (state.runtime.attempt) state.runtime.attempt.routeEpoch = state.runtime.routeEpoch;
+  });
+}
 /** Always retain the old pod fence until its deletion has been confirmed. A stop or recover without its own detail
  * preserves the root cause instead of clearing it. */
 export async function teardown(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, detail?: string) {
@@ -87,6 +97,7 @@ export async function currentRuntime(ports: Pick<LivePorts, 'store'>, key: LiveK
   return next && next.generation === runtime.generation && next.sessionId === runtime.sessionId ? next : runtime;
 }
 export async function failed(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, error: unknown) {
+  if (error instanceof LiveError && error.reason === 'node_export_pending') return;
   const detail = error instanceof LiveError ? (error.reason ? `${error.code}:${error.reason}` : error.code)
     : 'builder_unavailable';
   // If checkpoint/deletion cannot be confirmed, RECOVERING retains the pod identity and blocks replacement.

@@ -19,6 +19,7 @@ import { SERVICE_TIMEOUT_MS, type HeavyProfile } from './build-queue.js';
 import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths, validateDevScope } from './mounts.js';
 
 export interface SandboxRecord {
+  readonly network?: 'none' | 'ports';
   readonly diskQuotaMiB: number;
   readonly quotaInodes: number;
   readonly devScope: ExecutionNodeDevScope;
@@ -266,6 +267,7 @@ export class ExecutionNodeDaemon {
       const record: SandboxRecord = {
         diskQuotaMiB: input.spec.quotaMiB, quotaInodes: input.spec.quotaInodes,
         devScope: structuredClone(input.spec.devScope),
+        network: input.spec.network,
         mounts,
         command: input.spec.command ?? ['/bin/sleep', 'infinity'],
         id,
@@ -428,6 +430,7 @@ export class ExecutionNodeDaemon {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs must be between 0 and 300s');
     }
     return this.idempotent(tenantId, input.commandId, 'POST', `/v1/sandboxes/${id}/stop`, body, () => this.transition(id, async () => {
+      if (['stopped-output-retained', 'exported', 'destroyed'].includes(sandbox.state)) return sandbox;
       if (sandbox.state !== 'running' && sandbox.state !== 'stopping') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
       }
@@ -445,7 +448,7 @@ export class ExecutionNodeDaemon {
       }
       this.audit.record('sandbox.stopped', tenantId, id, sandbox.state);
       return sandbox;
-    }));
+    }), false);
   }
 
   async writeFile(tenantId: ExecutionNodeTenantId, id: string, input: {

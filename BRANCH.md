@@ -1,66 +1,128 @@
-# Feature: Sandbox Node K1 — clean startup, quota errors and isolation qualification
+# Feature: S1-B0a ExecutionNodeV1 API adapter
 
 ## Objective
-Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/sandbox-node-k1; no merge, deployment or VM access.
+Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the Kubernetes rollback backend; no deployment or VM access.
 
 ## Scope / Guardrails
-- Scope: clean startup inventories, Linux quota outcomes, real-host isolation qualification and release packaging.
-- Make-only workflow, no direct Docker commands.
-- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/sandbox-node-k1` (verified mechanically with harness at base `6cc155d58`).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
+- [x] Worktree tmp/worktrees/s1-b0a; branch feat/s1-b0a-execution-node-adapter mechanically checked with harness.
+- [x] Approved design: .tmp/builder-dossier/dossier-consolide.md and spec/SPEC_EVOL_SANDBOX_NODE.md.
+- [x] Make-only, Docker-first; ENV=feat-s1-b0a last; API_PORT=9085 UI_PORT=5285 MAILDEV_UI_PORT=1185 checked free.
+- [x] No secrets printed; no VM, cluster, deployment or merge.
+- [x] Atomic commits below 150 changed lines, specific staging, make commit only.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `apps/sandbox-node/**`
-  - `spec/SPEC_EVOL_SANDBOX_NODE.md`
+  - `api/src/services/artifacts/**`
+  - `api/tests/**`
+  - `api/src/config*`
+  - `api/Dockerfile` (BRB0A-EX1)
+  - `Makefile` (BRB0A-EX4: API_VERSION inputs only)
+  - `apps/sandbox-node/**` (BRB0A-EX5)
   - `BRANCH.md`
-  - `.github/workflows/ci.yml` (BRK1-EX1: only add `apps/sandbox-node/**` to the global filter).
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/**`
+  - `apps/artifact-content/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] No scope exception required.
+  - [x] Record BRB0A-EXn rationale, impact and rollback before an exception.
 
 ## Feedback Loop
-- [x] RUN 9d exec-boundary coverage: child-locale.test.ts verifies C locales through both production launchers despite inherited French locale; tenant-volume.test.ts also preserves UNKNOWN/-110 timeouts. CI 43419074369 shard 2 passed all 28 browser tests but failed the provider receipt (Unexpected Responses evaluator request); retain this evidence without rerunning jobs or weakening the receipt.
-- [x] RUN 9d delivery: 28 files / 145 tests, both TypeScript projects, shell syntax and export GC pass; rebuilt archive 211487dbf3f379af4de95ca2537adc1c49e1d12a89bc801c17e91ae7ede96b43 and ten internal checksums verified, extracted mode 0755 and SEA root/uid65534 checks pass. Exact-head CI receipt follows in RUN 9d.
-- [x] RUN 9d: reproduce Astra timeout/concurrent ENOSPC findings; separate admission from evidence-based failure diagnosis, prioritize signal/timeout, pin child locale, use fixed 1 MiB/one inode secondary evidence; tenant-volume.test.ts covers both scenarios and threshold boundaries.
-- [x] RUN 9c final probe audit: retain directory-visibility checks in addition to sentinel file reads/writes; a visible host directory with no marker must fail qualification.
-- [x] RUN 9c local verification: 28 files / 131 tests pass, both TypeScript projects, shell syntax and export GC pass. Artifact verification passes with ten internal checksums and qualification.erofs; final CI evidence follows in RUN 9c.
-- [x] RUN 9c finding 4: plant foreign tenant sentinel files and attempt readFileSync/openSync(r+) on known paths, including traversal of the foreign tenant mount; non-listable directory regression detects accessible files.
-- [x] RUN 9c finding 3: statfs block/inode capacity checks before and after truncate/mkfs.ext4; preserve unrelated command errors. Base import maps filesystem quota errors including mkdir/open/write, with regressions.
-- [x] RUN 9c finding 2 regressions: refuse active service, held lock, surviving scope, sandbox directory, runsc container and malformed inventory before creation; real flock exclusion/release test. Operator guide documents single-use marker and service exclusion.
-- [x] RUN 9c finding 2 implementation: agent and qualification hold the same kernel lock; qualification requires inactive systemd service, clean inventory and consumes its marker. Regression coverage follows in the next atomic commit.
-- [x] RUN 9c finding 1: build and ship qualification.erofs with SHA256SUMS; artifact verification requires its EROFS magic and checksum entry. No runtime mkfs.erofs dependency.
-- [x] BRK1-EX1 authorized by conductor on 2026-11-13 05:50: add only `- 'apps/sandbox-node/**'` to the global filter in `.github/workflows/ci.yml`. Rationale: consumer-contracts requires every changed path to be classified; sandbox-node changes were unclassified. Impact: every sandbox-node change runs the full suite. Rollback: revert this single filter line.
-- [x] K1 qualification prerequisite: production bundle upper root was 0700, inherited by overlay cwd, excluding sandbox uid 1000. Set only upper root to 0755; host bundle remains 0700 and workspace bind remains read-only. bundle.test.ts asserts both modes for session/build.
-- [x] K1 final local verification: 27 files / 118 tests pass; both TypeScript projects, shell syntax and export GC pass on ENV=test-sandbox-node-k1. No API/UI stack started.
-- [x] K1 cleanup regressions: isolation-runner.test.ts covers success, partial launch failure, failed probe, wrong scope policy, leaked mount and SIGTERM; cleanup is restricted to generated paths and preserves bases after a mount leak.
-- [ ] K1 review limitation: harness/review requires h2a_run MCP and two complementary reviewer hosts; no matching tool is exposed. No peer consensus claimed; not a VM isolation acceptance.
-- [x] Common-rules fallback: independent Astra high review identified the marker umask defect. Explicit chmod 0666 and real-filesystem regressions under umask 0022/0077 address it; EACCES remains a failure. Reviewer closure at d327b599a confirms the correction and identifies no further blocker. Single review, no two-host consensus.
+- [x] BRB0A-EX5: Round 2 explicitly authorizes agent data-plane, provenance and tests. Impact: new agent archive requires operator qualification/install before G-A. Rollback: keep execution-node disabled and use Kubernetes.
+- [x] BRB0A-EX4: hash the sandbox-node source copied by BRB0A-EX1 into API_VERSION. CI run 43435868900 caught the omitted input. Impact: source changes now invalidate the API image tag; no workflow or runtime change. Rollback: remove this input together with the EX1 COPY.
+- [x] BRB0A-EX1: copy sandbox-node into the API tooling source stage so API type imports and hermetic contract tests use the actual normative agent code. Impact: one source COPY, no runtime activation or dependency change. Rollback: remove this COPY with the adapter tests/types.
+- [x] BRB0A-EX2: deliver the already-frozen sandbox GET needed to resume natural-stop/export/upload failures without mutating state blindly. Impact: authenticated control-plane tenant status only; k8s must deploy a new agent artifact before use. Rollback: revert these two agent-file changes and keep node backend disabled.
+- [x] BRB0A-EX3: allow an identical stop command returning 202 to recheck cgroup quiescence. Impact: the same authenticated method/path/body can progress stopping; mismatched replay still refuses before side effects. Rollback: revert daemon stop changes and keep node backend disabled pending agent correction.
+- [x] Track single writer: conductor imports this plan and lane report; this lane does not mutate the shared journal.
+- [x] Verify delivered agent wire format against freeze; document discrepancies and bounded consumer handoffs.
+  - [x] Fix explicit Content-Length for DELETE JSON; hermetic listener accepts both loopback families; sanitize synchronous TLS failures.
+
 ## AI Flaky tests
-- [x] No AI tests or flaky acceptance apply.
+- [x] No AI provider tests needed for the hermetic contract.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, independent read-only code review; no integration or cherry-pick.
+- [x] Mono-branch; independent code review after local validation.
 
 ## UAT Management (in orchestration context)
-- [x] No UI surface changes; memory and Postgres conformance qualify the behavior.
+- [x] Hermetic qualification only; Focus live/publish is S1-B1 and warm claim/L4 is S1-B2.
 
 ## Plan / Todo (lot-based)
-- [x] K1 Lot 0: verified existing branch with harness; ENV=test-sandbox-node-k1; no stack or ports started.
-- [x] K1 Fix 1: normalize literal null runsc lists only; restart/lost+found/garbage regressions in restart.test.ts and runtime cleanup coverage.
-- [x] K1 Fixes 4–5: shared code-or-errno recognition; qualification/source/runtime/export regressions. Audit: no EROFS/EXDEV/ELOOP/ENOTEMPTY branches exist; preserve their fail-closed failures.
-- [x] K1 Fix 2: real-adapter two-tenant isolation qualification, standalone SEA command, shipped shell wrapper and cleanup checks. Tests cover refusal guard and observable read/write/network failures; execution on VM remains the k8s-owned gate.
-  - [x] Real-adapter runner and in-sandbox probes; guards refuse non-isolated/non-root execution.
-- [x] K1 Fix 3: archive root 0755, verification and operator custody modes.
-- [x] K1 build/verify RUN 9c: archive fd1485b387325aab91028db93ead5779e0dfb09d741167631af0193d149f47a5; ten internal checksums, prebuilt fixture, extracted root 0755, SEA guard and uid 65534 self-test pass.
-- [x] K1 handoff preparation: local gates and review correction complete; exact-head PR/CI final outcome is maintained in .tmp/rv/s1-agent-core.md RUN 9 and the s1-agent-k1.done marker after push. No merge or deployment.
-- [ ] K1 Track handoff: designated conductor writer imports this BRANCH.md and RUN 9 evidence; this lane does not write the shared append-only journal.
+- [x] Round 3: reuse controller guest authorization and revocation; hash authority only, excluding access/activity counters.
+  - [x] Regress all authority fields and concurrent activity during node I/O (14 tests).
+- [ ] Round 3: deliver guarded real-runsc data-plane qualification, archive, exact-head CI and report.
+  - [x] Add isolated real-daemon fixture with ephemeral signing/X.509 keys and signed lifecycle/revoke calls.
+  - [x] Add shared HTTP/HMR probes for mTLS, refusal matrix and bounded concurrent expiry/revoke cuts.
+  - [x] Guard real-host entry with inactive service, flock, empty inventory and isolated one-shot marker; verify no host TCP listener.
+  - [x] Test the qualification harness over private UDS; ship and verify its operator script and document the real-host gate.
+  - [x] Hash qualification images with a bounded 1 MiB buffer rather than loading the full rootfs into memory.
+- [ ] Round 2: publish Custody RPC contract, implement authoritative authenticated issue/watch-poll and agent HTTP/WS custody enforcement.
+  - [x] Agent HTTP/WS proxy authenticates custody JWS, tenant, UID, principal, epoch and port; attaches revocable streams.
+  - [x] Preserve frozen missing-tenant HTTP status and refuse execution-ticket header presence, including empty values.
+  - [x] Wire real listener and sandbox-private runsc UDS forwarding, preserving network=none confinement.
+  - [x] Verify upstream runsc port-forward protocol; use one --stream UDS donation per connection with bounded setup and short /run paths.
+  - [x] Test UDS donation direction/concurrency/launcher exit and document exact operator qualification requirements.
+  - [x] Implement body-bound HMAC RPC and authoritative durable runtime/allocation resolution on issue and watch.
+  - [x] Bound issued custody by the live route expiry and reject absent/nonfinite route deadlines.
+  - [x] Mount RPC in selected-node API composition and reject allocations with pending creation, revocation or removal.
+  - [x] Preserve the builder Hono host context type on the custody wrapper.
+- [ ] Round 2: fix review findings 2-7 with persisted controller export recovery and bounded heartbeat leadership.
+  - [x] Capture ticket clock once; bind signed export to physical UID, attempt, source and command; restrict production agent copy to its type contract.
+  - [x] Regress advancing ticket clock and valid signed-envelope substitution across resource/attempt/command/source/build/hash.
+  - [x] Require expected build and command on every export-verification call and update the delivered lifecycle contract.
+  - [x] Bound heartbeat pool acquisition/queries/node calls; destroy failed leadership connections and abort outstanding HTTPS requests on lock loss.
+  - [x] Add two-replica stalled-leader takeover, saturated-pool late-connect disposal and in-flight heartbeat cancellation regressions.
+  - [x] Preserve WS close-frame flushing and reject stale identity completion after leadership loss.
+  - [x] Separate durable export destination from fresh upload authorization; checkpoint upload and reconcile lost DELETE responses.
+  - [x] Persist export intent/progress/candidate in the backend; retain output and pending host job when export transport fails.
+  - [x] Resume retained exports through controller reconcile after process replacement, preserving publication and source fences.
+  - [x] Limit post-export SAVING/DECOMMISSIONING continuation to the node backend's durable pending-build opt-in.
+  - [x] Add composed controller/backend recreation tests after failed upload beyond URL TTL and lost successful DELETE response.
+  - [x] Update lifecycle contracts/tests to durable destination and fresh control-plane upload authorization.
+- [ ] Round 2: hermetic real-agent/RPC E2E, archive SHA256SUMS, exact-head green CI and report.
+  - [x] Extend hermetic fixture with actual agent data-plane handlers and independent mTLS identities.
+  - [x] Add real HTTP custody RPC harness using production mount/authenticator and durable allocation authority.
+  - [x] E2E assertions cover usable three-segment token, HTTP/WS revocation, expiry and unauthorized reissue refusal.
+  - [x] Demonstrate watch-poll cuts streams on both independent edge replicas after an API-only route change, plus WS expiry 1008.
+  - [x] Align multiplexed supervisor port with existing 5173 service; translate changed agent ownership into revoked custody.
+- [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
+- [x] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
+  - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
+  - [x] Do not initialize the Kubernetes client when execution-node is selected.
+  - [x] Broad rollback regression identified relay validation precedence; retain the original relay refusal before Kubernetes client validation.
+  - [x] Concrete node backend implements lifecycle pods/renew/quiesce, persisted identities and deterministic command ids; B1 supplies sealed-base/W3 inputs.
+  - [x] Compose the concrete node backend by default; missing B1 hydration inputs refuse allocation without disabling the authenticated route mount.
+  - [x] Connect stateless forge/head coalescing and verified retained export into the selected backend; node mode never uses the codeload staging provider.
+  - [x] Preserve existing Kubernetes clean semantics while allowing a node clean to return a fresh physical UID, persisted with a new route fence before build/wake.
+  - [x] Persist create intent before dispatch and replay it to reconcile uncertain creation; missing allocation rows are safe to remove. Replace stopped physical sandboxes on clean.
+  - [x] Use explicit persisted closed tombstones (Postgres undefined means no write), and close definitive 4xx creation refusals; fake rows now match the real store semantics.
+  - [x] Persist the attempted-dispatch boundary atomically before I/O; a later 4xx cannot discard an allocation with an earlier uncertain outcome.
+  - [x] Preserve the narrowed immutable pending spec across the persisted dispatch-boundary write.
+  - [x] Persist revocation intent before the remote mutation; reconcile only that exact custody epoch and preserve stable removal command ids after lost responses.
+  - [x] Refuse provisioning whose tenant/principal/generation/session does not match authenticated runtime inputs.
+- [x] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
+  - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
+  - [x] Refuse incomplete ownership and verify configured node identity before the first heartbeat or tenant command.
+  - [x] Add tenant-checked presigned base import; transport deadlines cover frozen base/stop/admission operations without changing test timeouts.
+  - [x] Verify the supplied public provenance key's SPKI DER fingerprint against the operator handoff for instance 7c710995-cfa9-4e2f-8cad-61706f83d933.
+- [x] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
+  - [x] Dedicated Postgres advisory-lock heartbeat leadership and S1-C1 EdDSA custody issuing/revocation functions.
+  - [x] Product scheduler starts/stops selected-node leadership; identity mismatch latches an alarm and stops the loop.
+  - [x] Bounded quantum-one tenant queue, concurrent head-read coalescing and retained-export-upload-delete client cycle.
+  - [x] Tenant-specific BHS SigV4 presigned URLs; credentials remain in the API closure.
+- [x] Lot 4: hermetic fake agent tests in api/tests/unit/execution-node*.test.ts; backend rollback regression.
+  - [x] Native in-memory X.509 fixture and hermetic HTTPS server wrapping real agent dispatch/ticket/custody code.
+  - [x] Contract tests cover heartbeat expiry, replay, ownership, lifecycle, tenant/scope refusal, admission and custody.
+  - [x] Policy tests cover bounded alternation, fresh head coalescing, lazy rollback, BHS prefixes and heartbeat leadership.
+  - [x] Add regressions for natural build exit, retry after failed S3 upload, invalid ticket signatures, both tenants and failed lock acquisition.
+  - [x] Extend artifacts-live/product-builder.test.ts to assert configured-node composition does not initialize Kubernetes or query DB at boot.
+  - [x] Concrete backend tests cover persisted physical identity, real agent lifecycle, tenant-bound provisioning and connected observeHead coalescing.
+  - [x] Controller regression asserts replacement UID and route fence are durable before worker preparation and live exposure.
+  - [x] Regress fresh wake replacement, absent-allocation cleanup, lost creation/revocation responses and 202 stop progression.
+  - [x] Keep fault-injection clients on the fake node's explicit clock so custody freshness is exercised deterministically.
+- [x] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
+  - [x] Independent owner-routed Astra review findings reconciled in .tmp/rv/s1-b0a-review.md; no multi-host h2a consensus claimed.
+  - [x] Final local gates: 60 files / 512 live+rollback+adapter tests pass, including 31 hermetic adapter tests; 30 targeted agent tests pass. Full API typecheck and scoped lint pass in ephemeral containers.
+  - [x] Document preprod Secret names, heartbeat leadership, S1-C1 issuer and explicit S1-B1/agent handoffs in execution-node.md.
+- [ ] Lot 6: push, PR body from BRANCH.md, green exact-head CI; write .tmp/rv/s1-b0a-adapter.md and .done.
+- [x] Cleanup: down-volumes refused the packet's feat-* ENV by its test-only guard; make down succeeded. No Compose stack/volume was created; ephemeral --rm runners only. disk-hygiene reclaimed 0B. No merge/deployment.

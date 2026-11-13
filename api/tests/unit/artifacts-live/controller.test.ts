@@ -3,6 +3,15 @@ import { fixture, key, owner } from './fixture';
 import { LiveError, publicationBaseline } from '../../../src/services/artifacts/live/records';
 
 describe('artifact live controller', () => {
+  it('should persist a replacement sandbox identity and route fence before preparing or exposing live', async () => {
+    const f = fixture(); vi.mocked(f.ports.worker.clean).mockResolvedValueOnce({ uid: 'replacement-node-sandbox' });
+    const live = await f.controller.start(key);
+    expect(live.podUid).toBe('replacement-node-sandbox');
+    expect((await f.state())?.runtime).toMatchObject({ podUid: live.podUid, routeEpoch: live.routeEpoch, phase: 'LIVE' });
+    const prepared = vi.mocked(f.ports.worker.prepare).mock.calls[0]![0];
+    expect(prepared.podUid).toBe(live.podUid); expect(prepared.routeEpoch).toBe(live.routeEpoch);
+    expect(live.routeEpoch).toBeGreaterThan(1);
+  });
   it('should project only the current durable draft and ignore exact projection replay', async () => {
     const f = fixture(); const live = await f.controller.start(key); f.draft().revision = 'r2';
     const projected = await f.controller.project(key, 'r2');
