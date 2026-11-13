@@ -4,6 +4,8 @@ import type { TicketEnvelope } from './daemon.js';
 import { CustodyGuard } from './custody.js';
 import { ExecutionNodeError } from './errors.js';
 import { validateDevScope } from './mounts.js';
+import { ensureBase } from './base-store.js';
+import type { TenantBase } from './mounts.js';
 
 type Node = ReturnType<typeof createExecutionNode>;
 export interface AgentRequest {
@@ -21,6 +23,13 @@ export class AgentApi {
     const body = request.body as Record<string, unknown>;
     const commandId = body.commandId;
     if (typeof commandId !== 'string' || !commandId) throw new ExecutionNodeError('command_id_payload_mismatch', 'commandId required');
+    if (path === '/v1/bases/ensure' && method === 'POST') {
+      daemon.authorizeCommand(ticket, tenantId, commandId, body, method, path, body.ownership as ExecutionNodeOwnership);
+      const base = body.base as TenantBase;
+      if (base?.tenantId !== tenantId) throw new ExecutionNodeError('cross_tenant_base_forbidden');
+      await ensureBase(base, String(body.url)); this.node.bases.register(base);
+      return { status: 200, body: base };
+    }
     if (path === '/v1/sandboxes' && method === 'POST') {
       const input = body as unknown as Parameters<typeof daemon.createSandbox>[0];
       if (input.spec?.tenantId !== tenantId) throw new ExecutionNodeError('cross_tenant_base_forbidden');

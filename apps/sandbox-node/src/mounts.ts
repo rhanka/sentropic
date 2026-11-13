@@ -37,6 +37,8 @@ export class TenantBaseRegistry {
   private readonly bases = new Map<string, TenantBase>();
 
   register(base: TenantBase): void {
+    if (!['sentropic', 'immo'].includes(base.tenantId) || !/^[a-zA-Z0-9_-]+$/.test(base.baseId)
+      || !/^[a-zA-Z0-9:_-]+$/.test(base.identityDigest)) throw new ExecutionNodeError('command_id_payload_mismatch', 'invalid base identity');
     this.bases.set(`${base.tenantId}:${base.baseId}`, base);
   }
 
