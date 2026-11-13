@@ -54,6 +54,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Add isolated real-daemon fixture with ephemeral signing/X.509 keys and signed lifecycle/revoke calls.
   - [x] Add shared HTTP/HMR probes for mTLS, refusal matrix and bounded concurrent expiry/revoke cuts.
   - [x] Guard real-host entry with inactive service, flock, empty inventory and isolated one-shot marker; verify no host TCP listener.
+  - [x] Test the qualification harness over private UDS; ship and verify its operator script and document the real-host gate.
 - [ ] Round 2: publish Custody RPC contract, implement authoritative authenticated issue/watch-poll and agent HTTP/WS custody enforcement.
   - [x] Agent HTTP/WS proxy authenticates custody JWS, tenant, UID, principal, epoch and port; attaches revocable streams.
   - [x] Preserve frozen missing-tenant HTTP status and refuse execution-ticket header presence, including empty values.
