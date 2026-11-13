@@ -70,6 +70,11 @@ Before the pod is touched: pod name `artifact-<40 hex>`, `application/octet-stre
 
 `APP_ARTIFACT_SANDBOX_BACKEND=k8s` is the default and retains the existing pod HTTP/HMR and supervisor relay. Select `execution-node` to use the data-plane transport for both. Unknown selections refuse startup; an unavailable execution node never silently falls back to k8s. Returning the selector to `k8s` is the hot rollback.
 
+The API uses a separate selector: `ARTIFACT_SANDBOX_BACKEND=kubernetes` by default.
+The rollback mapping is therefore edge `k8s` ↔ API `kubernetes`; enabling the node
+requires `execution-node` in both services. Edge `SANDBOX_NODE_URL` and API
+`ARTIFACT_EXECUTION_NODE_URL` must address the same operator-qualified node.
+
 Execution-node configuration (names only):
 
 - `SANDBOX_NODE_URL`: HTTPS origin, no userinfo, path, query or fragment.
@@ -89,7 +94,7 @@ Every new HTTP hop and WS handshake obtains fresh custody. The edge sends only i
 
 HTTP is buffered within the existing size bound and the original token deadline. Expiry, issuer revocation or upstream 403 before response release returns `403 {"error":"custody_revoked"}` without upstream content. Custody remains active through live-response transformation and delivery under backpressure; after headers have been released, expiry/revocation terminates the body stream. An active WS is never extended beyond the token admitted at its handshake: close with 1008 on revocation and proactively before its deadline (20% of TTL, capped at one second). A reconnect through the same authorization path obtains fresh custody. This explicit reconnect avoids inventing an agent-side in-band token update protocol; automatic Vite/browser reconnection remains a browser qualification prerequisite. The agent independently enforces expiry and minCustodyEpoch; its 1008 frame passes through the tunnel.
 
-Agent integration prerequisite: the baseline `apps/sandbox-node/src/service.ts` does not yet serve `/v1/ports/:port/*` or verify signed custody tokens. The agent owner must implement that contract before enabling this backend. Local tests use an ephemeral mTLS fake and a separate fake signing/verifying issuer; they do not qualify the VM or an agent token wire format.
+Agent integration prerequisite: S1-B0a owns the real `/v1/ports/:port/*` HTTP/WS handlers and signed custody verifier. Local tests use an ephemeral mTLS fake with a compact three-segment EdDSA JWS carrying exactly the six custody claims and the real agent `CustodyGuard` for TTL, persistent epoch floors and attached stream revocation. Direct agent-side tests bypass the edge watchers to check HTTP/WS expiry and revocation. They do not qualify the deployed VM or browser reconnection.
 
 ## Live CSP D7-A
 
