@@ -22,6 +22,7 @@ import { qualificationPeer } from './qualification-peer.js';
 import { hostListeners, kernelNetworkWitness, networkProbeCount, hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost } from './qualification-network.js';
 import { requireIsolationResults } from './isolation-probe.js';
 import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
+import { qualifyPortsSwitch } from './qualification-switch.js';
 
 function tcpListeners() {
   return new Set(['/proc/net/tcp', '/proc/net/tcp6'].flatMap(path => readFileSync(path, 'utf8').trim().split('\n').slice(1)
@@ -115,6 +116,7 @@ export async function qualifyDataPlane(): Promise<void> {
     deadline.stopMonitoring();
     stage('authenticated lifecycle');
     await deadline.wait(fixture.lifecycle(deadline.signal)); report('authenticated GET / stop-202 progress / export / DELETE');
+    await deadline.wait(qualifyPortsSwitch(directory, socketDirectory, dirname(process.execPath), deadline.signal));
   } catch (error) {
     failed = true; console.error(`FAIL step=${step}:`, error instanceof Error ? error.message : 'unknown error');
     uid ??= fixture?.sandboxId;
