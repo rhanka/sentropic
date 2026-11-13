@@ -15,6 +15,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - `api/src/services/artifacts/**`
   - `api/tests/**`
   - `api/src/config*`
+  - `api/Dockerfile` (BRB0A-EX1)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -27,6 +28,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Record BRB0A-EXn rationale, impact and rollback before an exception.
 
 ## Feedback Loop
+- [x] BRB0A-EX1: copy sandbox-node into the API tooling source stage so API type imports and hermetic contract tests use the actual normative agent code. Impact: one source COPY, no runtime activation or dependency change. Rollback: remove this COPY with the adapter tests/types.
 - [x] Track single writer: conductor imports this plan and lane report; this lane does not mutate the shared journal.
 - [ ] Verify delivered agent wire format against freeze; document discrepancies and bounded consumer handoffs.
   - [x] Fix explicit Content-Length for DELETE JSON; hermetic listener accepts both loopback families; sanitize synchronous TLS failures.

@@ -333,6 +333,7 @@ COPY packages/skills ./packages/skills
 COPY packages/ubo-contracts ./packages/ubo-contracts
 COPY apps/auth-idp ./apps/auth-idp
 COPY apps/artifact-content ./apps/artifact-content
+COPY apps/sandbox-node ./apps/sandbox-node
 COPY apps/llm-gateway ./apps/llm-gateway
 COPY e2e/package.json e2e/package-lock.json ./e2e/
 COPY e2e/tests/fixtures ./e2e/tests/fixtures
