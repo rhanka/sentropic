@@ -1,15 +1,33 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as fs from 'node:fs';
 import { chownSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { qualificationNode } from '../src/data-plane-qualification-node.js';
-import { FakeRuntimeAdapter, type RunSandboxOptions } from '../src/runtime-adapter.js';
+import { FakeRuntimeAdapter, RunscRuntimeAdapter, type RunSandboxOptions } from '../src/runtime-adapter.js';
 import { prepareBundle, destroyBundle } from '../src/bundle.js';
 
 // The OCI owner is fixed at 1000:1000; the test runner need not own that identity.
 vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs')>(), chownSync: vi.fn() }));
 
 describe('qualification session spec', () => {
+  it('should clean copied fixtures after prepareBundle fails before runtime registration, twice', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'qualification-failure-'));
+    writeFileSync(join(directory, 'rootfs.erofs'), 'root');
+    writeFileSync(join(directory, 'qualification.erofs'), 'source');
+    const adapter = new RunscRuntimeAdapter();
+    const binary = vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    const capacity = vi.spyOn(fs, 'statfsSync').mockReturnValue({ bavail: 0n, bsize: 4096n, ffree: 4096n } as never);
+    const fixture = qualificationNode(directory, directory, adapter);
+    try {
+      await expect(fixture.start()).rejects.toThrow();
+      expect(capacity).toHaveBeenCalledWith(expect.stringContaining('/sandboxes/'), { bigint: true });
+      await expect(fixture.close()).resolves.toBeUndefined();
+      await expect(fixture.close()).resolves.toBeUndefined();
+      expect(fs.readdirSync(join(directory, 'tenants/sentropic/sandboxes'))).toEqual([]);
+      expect(fs.readdirSync(join(directory, 'tenants/sentropic/bases/source'))).toEqual([]);
+    } finally { capacity.mockRestore(); binary.mockRestore(); rmSync(directory, { recursive: true, force: true }); }
+  });
   it('should generate a UID 1000 HTTP/WS command with private bases and a traversable output parent', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'qualification-spec-'));
     let options: RunSandboxOptions | undefined;
@@ -24,6 +42,7 @@ describe('qualification session spec', () => {
       const box = await fixture.start();
       expect(box.network).toBe('ports');
       expect(options).toMatchObject({ uid: 1000, gid: 1000, command: ['/usr/local/bin/node', '-e', expect.any(String)] });
+      expect(options).toMatchObject({ diskQuotaMiB: 16, quotaInodes: 1024 });
       expect(options!.overlayUpper.startsWith(directory + '/')).toBe(true);
       expect(options!.mounts.every(mount => mount.source.startsWith(directory + '/'))).toBe(true);
       const bundle = prepareBundle(options!, () => {});

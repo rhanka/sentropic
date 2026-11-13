@@ -6,6 +6,8 @@ import { qualifyIsolation } from '../src/isolation-qualification.js';
 import { acquireNodeLock } from '../src/node-lock.js';
 
 vi.mock('../src/node-lock.js', () => ({ acquireNodeLock: vi.fn() }));
+vi.mock('../src/qualification-storage.js', async original => ({ ...await original<typeof import('../src/qualification-storage.js')>(),
+  createQualificationDirectory: () => fs.mkdtempSync('/var/lib/builder/qualification/qi-') }));
 vi.mock('node:child_process', async original => ({ ...await original<typeof import('node:child_process')>(), execFileSync: vi.fn() }));
 vi.mock('node:fs', async original => ({ ...await original<typeof fs>(), existsSync: vi.fn(), mkdtempSync: vi.fn(), mkdirSync: vi.fn(),
   copyFileSync: vi.fn(), readdirSync: vi.fn(), chmodSync: vi.fn(), writeFileSync: vi.fn(), rmSync: vi.fn(), readFileSync: vi.fn() }));
@@ -73,9 +75,9 @@ describe('real-host qualification orchestration', () => {
         }
         expect(cleaned).toContain(options.overlayUpper.replace(/\/upper$/, ''));
       }
-      expect(cleaned.every(path => path.startsWith('/run/execution-node/qi-fixture'))).toBe(true);
-      expect(fs.copyFileSync).toHaveBeenCalledWith(expect.any(String), expect.stringMatching(/^\/run\/execution-node\/qi-fixture\//));
-      expect(launched.every(options => options.overlayUpper.startsWith('/run/execution-node/qi-fixture/'))).toBe(true);
+      expect(cleaned.every(path => path.startsWith('/var/lib/builder/qualification/qi-fixture'))).toBe(true);
+      expect(fs.copyFileSync).toHaveBeenCalledWith(expect.any(String), expect.stringMatching(/^\/var\/lib\/builder\/qualification\/qi-fixture\//));
+      expect(launched.every(options => options.overlayUpper.startsWith('/var/lib/builder/qualification/qi-fixture/'))).toBe(true);
       if (mode === 'pass') expect(paths.size).toBe(0);
       if (mode === 'mount-leak') expect(paths.size).toBe(2); // Preserve the private root and the mounted sandbox's base.
       expect(log.mock.calls.some(([line]) => String(line).startsWith('FAIL'))).toBe(mode !== 'pass');
