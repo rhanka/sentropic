@@ -13,6 +13,13 @@ export interface CustodyLease {
   /** Opaque agent-verifiable signed token. The edge neither signs nor re-encodes it. */
   token: string; issuedAt: string; deadlineAt: string;
 }
+export function isCustodyLease(value: unknown): value is CustodyLease {
+  if (!value || typeof value !== 'object') return false;
+  const lease = value as Record<string, unknown>;
+  return ['tenantId', 'principalId', 'physicalUid', 'token', 'issuedAt', 'deadlineAt']
+    .every(name => typeof lease[name] === 'string')
+    && typeof lease.custodyEpoch === 'number' && typeof lease.port === 'number';
+}
 /** S1-B0a supplies authoritative resolution, signing and immediate revocation notification. */
 export interface CustodyIssuer {
   issue(subject: CustodySubject, signal: AbortSignal): Promise<CustodyLease>;
@@ -73,14 +80,18 @@ export function dataPlaneFromEnv(env: NodeJS.ProcessEnv, issuer?: CustodyIssuer)
         })]);
       } catch { dispose(); throw new CustodyRevoked(); }
       finally { issuingSignal.removeEventListener('abort', onAbort); }
-      const issued = Date.parse(lease.issuedAt), deadline = Date.parse(lease.deadlineAt);
-      if (revoked || signal.aborted || !['sentropic', 'immo'].includes(lease.tenantId) || !lease.principalId
+      let issued: number; let deadline: number;
+      try {
+        if (!isCustodyLease(lease)) throw new CustodyRevoked();
+        issued = Date.parse(lease.issuedAt); deadline = Date.parse(lease.deadlineAt);
+        if (revoked || signal.aborted || !['sentropic', 'immo'].includes(lease.tenantId) || !lease.principalId
         || !/^[A-Za-z0-9-]{1,128}$/.test(lease.physicalUid) || !Number.isSafeInteger(lease.custodyEpoch) || lease.custodyEpoch < 0
         || !Number.isInteger(lease.port) || lease.port < 1 || lease.port > 65535
         || !lease.token || /[\r\n]/.test(lease.token) || !Number.isFinite(issued) || !Number.isFinite(deadline)
         || issued > Date.now() || deadline <= Date.now() || deadline <= issued || deadline - issued > 60_000) {
-        dispose(); throw new CustodyRevoked();
-      }
+          throw new CustodyRevoked();
+        }
+      } catch { dispose(); throw new CustodyRevoked(); }
       return {
         valid: () => !revoked && Date.now() < deadline,
         dispose,
