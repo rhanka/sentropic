@@ -73,28 +73,33 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       }
       if (req.url === '/v1/responses') {
         const input = body.input;
-        const text = Array.isArray(input) && input.length === 1 && input[0].role === 'user'
+        const text = Array.isArray(input) && input.length === 1 && ['user', 'system'].includes(input[0].role)
           ? typeof input[0].content === 'string' ? input[0].content
             : Array.isArray(input[0].content) && input[0].content.every(part => part.type === 'input_text' && typeof part.text === 'string')
               ? input[0].content.map(part => part.text).join('\n') : ''
           : '';
-        if (body.model !== 'gpt-5.4-nano' || body.stream !== true || body.tools?.length
-          || !text.startsWith('Tu es un classificateur.') || !text.includes('EXACTEMENT UN SEUL TOKEN')) {
+        const title = input?.[0]?.role === 'system' && body.max_output_tokens === 32
+          && text.startsWith('Génère un titre court (3 à 6 mots) pour cette conversation.')
+          && text.includes('Réponds uniquement avec le titre.');
+        const evaluator = input?.[0]?.role === 'user'
+          && text.startsWith('Tu es un classificateur.') && text.includes('EXACTEMENT UN SEUL TOKEN');
+        if (body.model !== 'gpt-5.4-nano' || body.stream !== true || body.tools?.length || (!title && !evaluator)) {
           throw new Error('Unexpected Responses evaluator request');
         }
         receipt.calls++;
         receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
-        receipt.requests.push({ protocol: 'responses', model: body.model, stream: true, roles: ['user'] });
+        receipt.requests.push({ protocol: 'responses', model: body.model, stream: true, roles: [input[0].role] });
+        const outputText = title ? 'Conversation CI' : 'medium';
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
         let sequence_number = 0;
         const event = (type, fields) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, sequence_number: sequence_number++, ...fields })}\n\n`);
         const response = { id: 'ci-response', object: 'response', created_at: 1, model: body.model,
           status: 'completed', output: [{ id: 'ci-message', type: 'message', role: 'assistant', status: 'completed',
-            content: [{ type: 'output_text', text: 'medium', annotations: [] }] }],
+            content: [{ type: 'output_text', text: outputText, annotations: [] }] }],
           usage: { input_tokens: 20, output_tokens: 10, total_tokens: 30 } };
         event('response.created', { response: { ...response, status: 'in_progress', output: [], usage: null } });
-        event('response.output_text.delta', { item_id: 'ci-message', output_index: 0, content_index: 0, delta: 'medium' });
-        event('response.output_text.done', { item_id: 'ci-message', output_index: 0, content_index: 0, text: 'medium' });
+        event('response.output_text.delta', { item_id: 'ci-message', output_index: 0, content_index: 0, delta: outputText });
+        event('response.output_text.done', { item_id: 'ci-message', output_index: 0, content_index: 0, text: outputText });
         event('response.completed', { response });
         return res.end();
       }

@@ -58,6 +58,27 @@ test('should stream the real OpenAI Responses reasoning-evaluator protocol', asy
   assert.equal(receipt.failedRequests, 5);
 });
 
+test('should stream the real system-role session-title request without weakening evaluator guards', async t => {
+  const { url, receipt } = await fixture(t);
+  const body = { model: 'gpt-5.4-nano', stream: true, max_output_tokens: 32,
+    input: [{ type: 'message', role: 'system', content: 'Génère un titre court (3 à 6 mots) pour cette conversation.\nContexte: Aucun contexte\nMessage utilisateur: Restored session regression seed.\nRéponds uniquement avec le titre.' }] };
+  const post = payload => fetch(`${url}/v1/responses`, { method: 'POST',
+    headers: { authorization: `Bearer ${fixtureKey}` }, body: JSON.stringify(payload) });
+  const response = await post(body);
+  assert.equal(response.status, 200);
+  const wire = await response.text();
+  assert.match(wire, /Conversation CI/);
+  assert.match(wire, /response.completed/);
+  assert.deepEqual(receipt.requests[0].roles, ['system']);
+  for (const invalid of [{ ...body, max_output_tokens: 64 }, { ...body, model: 'unexpected' },
+    { ...body, input: [{ role: 'user', content: body.input[0].content }] },
+    { ...body, input: [{ role: 'system', content: 'Unrelated system instruction' }] }]) {
+    assert.equal((await post(invalid)).status, 400);
+  }
+  assert.equal(receipt.calls, 1);
+  assert.equal(receipt.failedRequests, 4);
+});
+
 test('should preserve complete Unicode code points in each streamed event', async t => {
   const content = `${'a'.repeat(79)}🧪suffix`;
   const { post } = await fixture(t, () => ({ content }));

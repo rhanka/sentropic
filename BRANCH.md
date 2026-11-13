@@ -20,6 +20,8 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - `BRANCH.md`
   - `package-lock.json` (restore published contracts version only)
   - `.github/workflows/ci.yml` (BR-SN1-EX7: sandbox qualification step only)
+  - `e2e/fixtures/provider-server.mjs` (BR-SN1-EX8: Responses session-title fixture only)
+  - `e2e/fixtures/provider-server.test.mjs` (BR-SN1-EX8 regression)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -34,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR-SN1-EX8`: CI shard 6 passed all 49 browser tests but provider receipt rejected the two legitimate session-title Responses calls from chat-service.generateSessionTitle (system prompt, gpt-5.4-nano, 32 tokens). Fixture currently accepts only user-role reasoning classifiers. Add that exact title protocol with regression tests; preserve unknown-request/host rejection. Impact: test fixture only, no application behavior. Rollback: revert these two fixture files.
 - RUN 2 CI `43329741351`: sandbox install failed with EACCES at /npm-cache/_cacache because Docker created a missing host cache as root. Fix: precreate a dedicated user-owned cache before mounting. E2E shard 6 fixture evaluator error is under evidence-first diagnosis.
 - `BR-SN1-EX7`: add sandbox container qualification to existing required typecheck-lint-api join. No new job/deployment permission; rollback removes that one step.
 - `BR-SN1-EX6`: owner-authorized RUN 2 restores published contracts 0.3.0 and its index/lock; the unreleased contract moves to apps/sandbox-node/src/contract.ts. No publication or consumer dependency changes. Rollback: revert relocation.
@@ -57,6 +60,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - No UI change, no UAT checkpoint for this step.
 
 ## Plan / Todo (lot-based)
+- [x] RUN 2 CI fixes: user-owned cache qualifies 31/31; exact Responses session-title regression reproduced red, then fixture amended without relaxing unknown-traffic rejection.
 - [x] RUN 2 build: compiled digest-addressed archive produced locally; reuse locked dependency download cache after observed registry ETIMEDOUT, without host node_modules.
 - [x] RUN 2: real adapter reads complete memory.current via validated systemd tenant slice; update local exports and standalone qualification instructions.
 - [x] RUN 2 AMD-3/6/7: compile-time incomplete provenance rejection, truthful stop union, strict isolate policy and canonical recipe digest/path collision regressions.
