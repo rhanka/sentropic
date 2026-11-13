@@ -1,14 +1,15 @@
 import { createServer } from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { TLSSocket } from 'node:tls';
 import type { Duplex } from 'node:stream';
 import { dataPlaneFromEnv, type CustodyIssuer, type CustodyLease } from '../src/data-plane';
 import { testTls } from './data-plane-tls';
+import { fixtureCustody } from './data-plane-custody';
 
 export const subject = { kind: 'supervisor' as const, podName: 'artifact-test' };
 export async function fakeDataPlane(tls = testTls()) {
-  const keys = generateKeyPairSync('ed25519');
+  const custody = fixtureCustody();
   const watchers = new Set<() => void>(); const sockets = new Set<Duplex>();
   const received: IncomingMessage[] = []; let epoch = 1; let issues = 0;
   let tenant: 'sentropic' | 'immo' = 'sentropic'; let uid = 'physical-1'; let ttl = 1000;
@@ -18,8 +19,7 @@ export async function fakeDataPlane(tls = testTls()) {
       const issuedAt = new Date().toISOString();
       const lease: CustodyLease = { tenantId: tenant, principalId: 'principal', physicalUid: uid, custodyEpoch: epoch,
         port: 5173, issuedAt, deadlineAt: new Date(Date.now() + ttl).toISOString(), token: '' };
-      const payload = Buffer.from(JSON.stringify({ ...lease, resourceId: uid })).toString('base64url');
-      lease.token = payload + '.' + sign(null, Buffer.from(payload), keys.privateKey).toString('base64url');
+      lease.token = custody.sign(lease);
       return lease;
     },
     watch(_subject, close) { watchers.add(close); return () => { watchers.delete(close); }; },
@@ -28,26 +28,29 @@ export async function fakeDataPlane(tls = testTls()) {
   const allowed = (req: IncomingMessage) => {
     received.push(req);
     try {
-      const [payload, signature] = String(req.headers['x-custody-token']).split('.');
-      const claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as CustodyLease & { resourceId: string };
       const expectedUid = req.headers['x-tenant-id'] === 'sentropic' ? 'physical-1'
         : req.headers['x-tenant-id'] === 'immo' ? 'physical-2' : undefined;
-      return (req.socket as TLSSocket).authorized
-        && (req.socket as TLSSocket).getPeerCertificate().subject.CN === 'data-plane:artifact-content'
-        && verify(null, Buffer.from(payload), keys.publicKey, Buffer.from(signature, 'base64url'))
-        && expectedUid !== undefined && claims.tenantId === req.headers['x-tenant-id']
-        && req.headers['x-expected-physical-uid'] === expectedUid && claims.resourceId === expectedUid
-        && claims.custodyEpoch >= epoch && Date.parse(claims.deadlineAt) > Date.now();
+      if (!(req.socket as TLSSocket).authorized
+        || (req.socket as TLSSocket).getPeerCertificate().subject.CN !== 'data-plane:artifact-content'
+        || !expectedUid || req.headers['x-expected-physical-uid'] !== expectedUid
+        || !/^\/v1\/ports\/5173\//.test(req.url ?? '')) return undefined;
+      return custody.verify(String(req.headers['x-custody-token']), req.headers['x-tenant-id'] as 'sentropic' | 'immo', expectedUid);
     } catch { return false; }
   };
   const server = createServer(tls.server, (req, res) => {
-    if (!allowed(req)) { res.writeHead(403).end('{"error":"custody_revoked"}'); return; }
+    const claims = allowed(req);
+    if (!claims) { res.writeHead(403).end('{"error":"custody_revoked"}'); return; }
+    const detach = custody.guard.attach(claims, () => res.destroy());
+    res.once('close', detach);
     answer(req, res);
   });
   server.on('secureConnection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   server.on('upgrade', (req, socket) => {
     sockets.add(socket);
-    if (!allowed(req)) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
+    const claims = allowed(req);
+    if (!claims) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
+    const detach = custody.guard.attach(claims, () => socket.end(Buffer.from([0x88, 0x02, 0x03, 0xf0])));
+    socket.once('close', detach);
     const accept = createHash('sha1').update(req.headers['sec-websocket-key'] +
       '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\nSec-WebSocket-Protocol: vite-hmr\r\n\r\n`);
@@ -60,7 +63,14 @@ export async function fakeDataPlane(tls = testTls()) {
     setTtl(value: number) { ttl = value; }, setUid(value: string) { uid = value; },
     setTenant(value: 'sentropic' | 'immo') { tenant = value; },
     answer(handler: typeof answer) { answer = handler; },
-    revoke() { epoch++; for (const close of watchers) close(); },
-    async close() { for (const socket of sockets) socket.destroy(); await new Promise<void>(resolve => server.close(() => resolve())); },
+    revoke() {
+      epoch++; for (const close of watchers) close();
+      custody.guard.revoke(tenant, uid, epoch);
+    },
+    revokeAgent() { epoch++; custody.guard.revoke(tenant, uid, epoch); },
+    async close() {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>(resolve => server.close(() => resolve())); custody.close();
+    },
   };
 }
