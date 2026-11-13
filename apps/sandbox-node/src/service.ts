@@ -82,7 +82,7 @@ export const server = createAgentServer(tls, async (req, res, role) => {
       role, body: await readJsonBody(req), ticket });
     if (Buffer.isBuffer(result.body)) {
       const protectedHeader = Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' })).toString('base64url');
-      const claims = Buffer.from(JSON.stringify({ nodeInstanceId, nodeEpoch, tenantId: scope.tenantId,
+      const claims = Buffer.from(JSON.stringify({ ...result.provenance, nodeInstanceId, nodeEpoch, tenantId: scope.tenantId,
         archiveSha256: createHash('sha256').update(result.body).digest('hex'), exportedAt: new Date().toISOString() })).toString('base64url');
       const signingInput = `${protectedHeader}.${claims}`;
       const jws = `${signingInput}.${sign(null, Buffer.from(signingInput), provenanceKey).toString('base64url')}`;
