@@ -41,6 +41,7 @@ describe('qualification session spec', () => {
     try {
       const box = await fixture.start();
       expect(box.network).toBe('ports');
+      expect(options!.network).toBe('ports');
       expect(options).toMatchObject({ uid: 1000, gid: 1000, command: ['/usr/local/bin/node', '-e', expect.any(String)] });
       expect(options).toMatchObject({ diskQuotaMiB: 16, quotaInodes: 1024 });
       expect(options!.overlayUpper.startsWith(directory + '/')).toBe(true);
@@ -60,6 +61,8 @@ describe('qualification session spec', () => {
         const spec = JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8'));
         expect(spec.process).toMatchObject({ args: box.command, cwd: '/workspace', user: { uid: 1000, gid: 1000 } });
         expect(spec.process.env).toContain('HOME=/tmp');
+        expect(spec.linux.namespaces.find((ns: { type: string }) => ns.type === 'network'))
+          .toEqual({ type: 'network', path: '/proc/self/ns/net' });
         expect(box.command[2]).toContain("s.listen(5173,'0.0.0.0')");
         expect(box.command[2]).toContain("s.on('upgrade'");
       } finally { destroyBundle(bundle, () => {}); }

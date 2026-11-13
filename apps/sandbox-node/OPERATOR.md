@@ -46,7 +46,12 @@ mandatory; execution tickets are refused on this plane. The six custody claims
 are checked against the active sandbox owner/epoch, WAL revocation floor and
 60-second TTL. Expiry/revocation cuts HTTP and sends WS close 1008.
 
-The sandbox must opt into `network: ports`; gVisor still uses `--network=none`.
+The sandbox must opt into `network: ports`; gVisor uses `--network=sandbox`
+inside a fresh `unshare --net` namespace with only `lo` brought up. The OCI
+network namespace references `/proc/self/ns/net` of that private launcher.
+No host interface, veth, external route or host TCP listener is configured.
+The host needs `unshare`, `sh` and `ip`; a failure aborts launch without a fallback.
+`--network=none` rejects gVisor's port-forward RPC and remains for other workloads.
 The agent creates private UDS listeners under
 `/run/execution-node/ports/<physicalUid>/5173.sock`. Each connection is relayed
 through `runsc --root=/run/execution-node/runsc port-forward --stream=<uds>
@@ -112,7 +117,8 @@ tenant ancestry before writing scope-only `cgroup.kill`. Require
 - Separate operator/control-plane/data-plane certificates; CA, cert and
   key paths are mandatory. No plaintext agent listener.
 - Pin runsc systrap release-20261102.0 under `/opt/gvisor/20261102`.
-  Sandboxes use runsc `--network=none`; crun is benchmark witness only.
+  Sandboxes use runsc `--network=none`, or private loopback-only `sandbox` for
+  explicit `network: ports`; crun is benchmark witness only.
 - EROFS/overlay support; `/var/lib/builder/tenants/<tenantId>` mode 0700.
   Enforce 16 GiB project quota and inode quota per tenant at S1-A1a.
 - Install `e2fsprogs`, `quota` and loop-device support. Before launch the agent
