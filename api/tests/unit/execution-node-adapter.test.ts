@@ -5,6 +5,7 @@ import { executionNodeTransport } from '../../src/services/artifacts/live/execut
 import { exportRetainedBuild } from '../../src/services/artifacts/live/execution-node-lifecycle';
 import { issueNodeCustody, revokeNodeCustody } from '../../src/services/artifacts/live/execution-node-custody';
 import { fakeExecutionNode, sandboxSpec, session } from './execution-node-fake';
+const authorizeUpload = async (destination: string) => destination;
 
 describe('ExecutionNodeV1 API control plane', () => {
   const servers: Awaited<ReturnType<typeof fakeExecutionNode>>[] = [];
@@ -33,9 +34,9 @@ describe('ExecutionNodeV1 API control plane', () => {
     const created = await fake.adapter.create(s, sandboxSpec(s), 'create'); s = { ...s, physicalUid: String(created.id) };
     await fake.adapter.mutate(s, 'start', 'start', { uid: 1000, gid: 1000 });
     const upload = vi.fn(async () => new Response(null, { status: 200 }));
-    const result = await exportRetainedBuild(fake.adapter, s, { buildId: 'build', stopCommandId: 'stop',
-      exportCommandId: 'export', deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 },
-    { validateUrl: vi.fn(), upload });
+    const result = await exportRetainedBuild(fake.adapter, s, { buildId: 'build', command: ['/bin/true'], stopCommandId: 'stop',
+      exportCommandId: 'export', deleteCommandId: 'delete', destination: 'https://s3.test/object', maxBytes: 1024 * 1024 },
+    { authorizeUpload, validateUrl: vi.fn(), upload });
     expect(result.provenance.tenantId).toBe('sentropic'); expect(upload).toHaveBeenCalledOnce();
     expect(fake.calls.slice(-3).map(c => c.path.split('/').pop())).toEqual(['stop', 'export', s.physicalUid]);
     expect(fake.node.daemon.getSandbox('sentropic', s.physicalUid)?.state).toBe('destroyed');
@@ -44,13 +45,13 @@ describe('ExecutionNodeV1 API control plane', () => {
     const fake = await setup(); await fake.adapter.heartbeat(); let s = session();
     const created = await fake.adapter.create(s, sandboxSpec(s), 'create'); s = { ...s, physicalUid: String(created.id) };
     await fake.adapter.mutate(s, 'start', 'start', { uid: 1000, gid: 1000 });
-    await expect(exportRetainedBuild(fake.adapter, s, { buildId: 'build', stopCommandId: 'stop', exportCommandId: 'export',
-      deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 },
-    { validateUrl() {}, upload: async () => new Response(null, { status: 503 }) })).rejects.toMatchObject({ code: 'artifact_upload_failed' });
+    await expect(exportRetainedBuild(fake.adapter, s, { buildId: 'build', command: ['/bin/true'], stopCommandId: 'stop', exportCommandId: 'export',
+      deleteCommandId: 'delete', destination: 'https://s3.test/object', maxBytes: 1024 * 1024 },
+    { authorizeUpload, validateUrl() {}, upload: async () => new Response(null, { status: 503 }) })).rejects.toMatchObject({ code: 'artifact_upload_failed' });
     expect(fake.node.daemon.getSandbox('sentropic', s.physicalUid)?.state).toBe('exported');
-    await exportRetainedBuild(fake.adapter, s, { buildId: 'build', stopCommandId: 'stop', exportCommandId: 'export',
-      deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 },
-    { validateUrl() {}, upload: async () => new Response(null, { status: 200 }) });
+    await exportRetainedBuild(fake.adapter, s, { buildId: 'build', command: ['/bin/true'], stopCommandId: 'stop', exportCommandId: 'export',
+      deleteCommandId: 'delete', destination: 'https://s3.test/object', maxBytes: 1024 * 1024 },
+    { authorizeUpload, validateUrl() {}, upload: async () => new Response(null, { status: 200 }) });
     expect(fake.node.daemon.getSandbox('sentropic', s.physicalUid)?.state).toBe('destroyed');
   });
   it('should export a naturally completed build without sending another stop', async () => {
@@ -62,9 +63,9 @@ describe('ExecutionNodeV1 API control plane', () => {
     const created = await fake.adapter.create(s, sandboxSpec(s), 'create'); s = { ...s, physicalUid: String(created.id) };
     await fake.adapter.mutate(s, 'start', 'start', { uid: 1000, gid: 1000 }); exited(0);
     await vi.waitFor(async () => expect((await fake.adapter.status(s))?.state).toBe('stopped-output-retained'));
-    await exportRetainedBuild(fake.adapter, s, { buildId: 'build', stopCommandId: 'stop', exportCommandId: 'export',
-      deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 },
-    { validateUrl() {}, upload: async () => new Response(null, { status: 200 }) });
+    await exportRetainedBuild(fake.adapter, s, { buildId: 'build', command: ['/bin/true'], stopCommandId: 'stop', exportCommandId: 'export',
+      deleteCommandId: 'delete', destination: 'https://s3.test/object', maxBytes: 1024 * 1024 },
+    { authorizeUpload, validateUrl() {}, upload: async () => new Response(null, { status: 200 }) });
     expect(fake.calls.some(call => call.path.endsWith('/stop'))).toBe(false);
   });
   it('should progress a replayed 202 stop once the runtime becomes quiescent', async () => {
@@ -73,9 +74,9 @@ describe('ExecutionNodeV1 API control plane', () => {
     await fake.adapter.mutate(s, 'start', 'start', { uid: 1000, gid: 1000 });
     const original = fake.node.adapter.stopSandbox.bind(fake.node.adapter);
     vi.spyOn(fake.node.adapter, 'stopSandbox').mockResolvedValueOnce(false).mockImplementation(original);
-    const intent = { buildId: 'build', stopCommandId: 'stop', exportCommandId: 'export',
-      deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 };
-    const options = { validateUrl() {}, upload: async () => new Response(null, { status: 200 }) };
+    const intent = { buildId: 'build', command: ['/bin/true'], stopCommandId: 'stop', exportCommandId: 'export',
+      deleteCommandId: 'delete', destination: 'https://s3.test/object', maxBytes: 1024 * 1024 };
+    const options = { authorizeUpload, validateUrl() {}, upload: async () => new Response(null, { status: 200 }) };
     await expect(exportRetainedBuild(fake.adapter, s, intent, options)).rejects.toMatchObject({ code: 'sandbox_not_quiesced' });
     await expect(exportRetainedBuild(fake.adapter, s, intent, options)).resolves.toMatchObject({ provenance: { tenantId: 'sentropic' } });
     expect(fake.node.adapter.stopSandbox).toHaveBeenCalledTimes(2);

@@ -63,7 +63,7 @@ describe('execution node API policies', () => {
     const leader = executionNodeHeartbeat(pool, node as unknown as ExecutionNodeAdapter, vi.fn());
     leader.start(); leader.start(); await sent.promise; await leader.stop();
     expect(node.heartbeat).toHaveBeenCalledOnce(); expect(client.release).toHaveBeenCalledOnce();
-    expect(query.mock.calls.at(-1)?.[0]).toContain('advisory_unlock');
+    expect(client.release).toHaveBeenCalledWith(true);
   });
   it('should release a candidate database connection when lock acquisition fails', async () => {
     const failed = deferred(); const release = vi.fn();
