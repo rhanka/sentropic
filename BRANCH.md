@@ -61,4 +61,4 @@
   - [x] Final commit changes this plan only; reviewed implementation and test bytes are unchanged.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
   - [x] No Compose stack started; isolated Docker test commands self-remove; `make down ENV=feat-s1-c1` completed.
-  - [x] CI classifies this path as API but does not explicitly run the artifact-content test/typecheck program; report the coverage boundary, do not edit CI.
+  - [x] CI classifies this path as API; app-cluster-mesh shards invoke test-artifact-content (tests, types, lint) through their Make dependency. No CI edits.
