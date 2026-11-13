@@ -40,7 +40,8 @@ export interface RunSandboxOptions {
 }
 
 export interface RuntimeAdapter {
-  assertRunning?(runtimeId: string): void;
+  assertRunning?(runtimeId: string): void | Promise<void>;
+  forwardUsage?(): Promise<{ limit: number; inUse: number }>;
   portTarget?(runtimeId: string, port: number): Promise<{ socketPath: string }>;
   writeFile(runtimeId: string, path: string, bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void>;
   readonly kind: string;
@@ -172,9 +173,11 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       args = this.runscArgs(options);
       auditNetworkSpec(args, JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')), options.network === 'ports');
     } catch (error) {
-      this.bundles.destroy(bundle); this.scopes.delete(runtimeId);
-      if (error instanceof ExecutionNodeError) throw error;
-      throw new ExecutionNodeError('network_isolation_violation');
+      const violation = error instanceof ExecutionNodeError ? error : new ExecutionNodeError('network_isolation_violation');
+      Object.assign(violation, { runtimeId });
+      try { this.bundles.destroy(bundle); this.scopes.delete(runtimeId); }
+      catch { Object.assign(violation, { cleanupFailed: true }); }
+      throw violation;
     }
     // NetworkSandbox is required by gVisor's forwarding API. Start in a fresh,
     // loopback-only namespace; never import the host's interfaces or routes.
@@ -229,8 +232,10 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       };
       child.once('spawn', () => { timer = setTimeout(poll, 0); });
     }); } catch (error) {
+      Object.assign(error as Error, { runtimeId });
       if (error instanceof ExecutionNodeError && ['network_isolation_violation', 'ports_disabled'].includes(error.code)) {
-        await this.destroySandbox(runtimeId);
+        try { await this.destroySandbox(runtimeId); }
+        catch { Object.assign(error, { cleanupFailed: true }); throw error; }
       }
       try { throwFilesystemError(error); }
       catch (mapped) { throw Object.assign(mapped as Error, { runtimeId }); }
@@ -239,7 +244,6 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async stopSandbox(runtimeId: string): Promise<boolean> {
-    if (!this.hasRunsc()) failNoBinary();
     const entry = this.scopes.get(runtimeId);
     if (!entry) throw new Error('unknown sandbox scope');
     if (entry.stopped) return true;
@@ -267,10 +271,11 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   async destroySandbox(runtimeId: string): Promise<void> {
     // prepareBundle can fail before any scope/runtime was registered; repeated cleanup is safe.
     if (!this.scopes.has(runtimeId)) return;
-    if (!this.hasRunsc()) failNoBinary();
-    if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     for (const forward of this.forwards.get(runtimeId)?.values() ?? []) forward.stop();
     this.forwards.delete(runtimeId);
+    if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
+    // cgroup termination and relay closure must work even after binary removal.
+    if (!this.hasRunsc()) throw Object.assign(new Error('runsc metadata cleanup unavailable; scope stopped'), { runtimeId });
     this.namespaces.delete(runtimeId); this.portsSandboxes.delete(runtimeId);
     const entry = this.scopes.get(runtimeId)!;
     const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));

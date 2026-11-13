@@ -10,6 +10,8 @@ const results = JSON.parse(raw.stdout);
 assert.equal(results.length, 2); assert.ok(results.every(result => result.ok));
 for (const host of ['127.0.0.1', '::1']) {
   assert.equal(spawnSync(binary, ['udp', host, '9'], { timeout: 1000 }).status, 0);
+  assert.equal(spawnSync(binary, ['udp-egress', host, '9'], { timeout: 1000 }).status, 1,
+    'a reachable closed UDP port must not pass an egress-isolation probe');
 }
 const witness = spawn(binary, ['witness'], { stdio: ['ignore', 'pipe', 'inherit'] });
 const exit = once(witness, 'exit');

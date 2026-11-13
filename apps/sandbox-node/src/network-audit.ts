@@ -24,6 +24,6 @@ export function auditStartedNetwork(pid: number, receipt: string, others: Iterab
   if (inode !== readFileSync(receipt, 'utf8').trim() || inode === String(statSync('/proc/1/ns/net').ino)
     || [...others].includes(inode)) throw new ExecutionNodeError('network_isolation_violation');
   execFileSync('nsenter', ['-t', String(pid), '-n', '--', 'sh', '-ec',
-    `${privateNetworkInventory}\ntest -z "$(ss -H -ltnup)"`], { timeout: 1000, killSignal: 'SIGKILL', stdio: 'pipe' });
+    `${privateNetworkInventory}\nlisteners=$(ss -H -ltnup) || exit 1\ntest -z "$listeners"`], { timeout: 1000, killSignal: 'SIGKILL', stdio: 'pipe' });
   return inode;
 }

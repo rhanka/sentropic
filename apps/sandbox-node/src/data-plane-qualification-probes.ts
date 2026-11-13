@@ -165,7 +165,7 @@ export async function probeDataPlane(options: {
       if (mode === 'revoke-custody') await node.revoke();
       if (mode === 'switch-closed' || mode === 'digest-mismatch') options.closeSwitch!();
       const ended = await bounded;
-      for (const at of ended) assert.ok(at - start <= 250, `${mode} must cut locally within 250 ms`);
+      for (const at of ended) assert.ok(at - start <= 250, `${mode} cut latency ${at - start}ms exceeds 250ms`);
       report(`${mode} concurrent HTTP + WS 1008 within 250 ms (and <=1s end-to-end)`);
     } finally { clearTimeout(timer); res.destroy(); socket.destroy(); }
   }

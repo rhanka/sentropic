@@ -9,7 +9,7 @@ describe('real-host network probes', () => {
     let output = '';
     const modules = {
       'node:child_process': { execFileSync: (_path: string, args: string[]) => {
-        if (args[0] === 'udp') { if (mode === 'udp') throw new Error('send accepted'); return ''; }
+        if (args[0]!.startsWith('udp')) { if (mode === 'udp') throw new Error('send accepted'); return ''; }
         return JSON.stringify([{ name: 'raw socket refused', ok: mode !== 'raw' }, { name: 'packet socket refused', ok: mode !== 'packet' }]);
       } },
       'node:net': { connect: () => {
