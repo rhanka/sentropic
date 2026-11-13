@@ -17,10 +17,11 @@ describe('agent lifecycle transport', () => {
       const api = new AgentApi(node, custody);
       const ownership = { tenantId: 'immo' as const, poolOwned: false as const, workspaceId: 'ws', principalId: 'u', attemptId: 'a', purpose: 'build', generation: 1, custodyEpoch: 1 };
       const call = (path: string, body: Record<string, unknown>, method = 'POST') => {
+        const issuedAt = Date.now();
         const ticket = issueTicket({ v: 1, tenantId: 'immo', commandId: String(body.commandId), method, path,
           bodySha256: sha256Hex(JSON.stringify(body)), targetNodeId: node.daemon.nodeId,
           expectedNodeInstanceId: 'instance', expectedNodeEpoch: 1, ownership,
-          issuedAt: new Date().toISOString(), deadlineAt: new Date(Date.now() + 30_000).toISOString() }, keys.privateKeyPem);
+          issuedAt: new Date(issuedAt).toISOString(), deadlineAt: new Date(issuedAt + 30_000).toISOString() }, keys.privateKeyPem);
         return api.dispatch({ path, body, method, tenantId: 'immo', role: 'control-plane', ticket });
       };
       const created = await call('/v1/sandboxes', { commandId: 'c', ownership, spec: { tenantId: 'immo', devScope,
