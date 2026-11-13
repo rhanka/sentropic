@@ -9,7 +9,7 @@ vi.mock('node:child_process', async importOriginal => {
 
 describe('runtime adapters', () => {
   it('should reject a launcher failure after spawn instead of reporting running', async () => {
-    const adapter = new RunscRuntimeAdapter();
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/workspace', output: '/tmp/output', mounted: [] }), destroy: () => {} });
     vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
     const child = new EventEmitter();
     vi.mocked(spawn).mockImplementation(() => {
