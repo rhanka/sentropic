@@ -53,7 +53,8 @@ The archive defaults to closed with no qualified digest: shipment alone cannot
 activate an unqualified data plane. After PASS, k8s records the receipt's runsc
 SHA-256 beside literal `true` in its versioned configuration and installs that
 file root-owned, non-writable by tenants. Do not quote values. Production reads
-this file directly, including atomic replacements, every 50ms and on admission;
+this file directly, including atomic replacements, every 50ms; admission uses
+the cached fail-closed result;
 no restart or new release is needed to close the switch. Missing, malformed or
 unreadable settings, false, or a different runsc digest remove `ports` from
 `GET /v1/node` supportedOps, refuse creation/start with `409 ports_disabled`,
@@ -61,6 +62,17 @@ cut open HTTP/WS within 250ms, and destroy ports sandboxes. Cleanup failures are
 retried. Any runsc upgrade requires a new qualification before k8s reopens it.
 The gate opens only its own in-memory switch, pinning the binary after hardened
 prerequisites succeed; it never edits the production file.
+
+The stream owner observes configuration/stat/hash asynchronously, and closes
+activation immediately when the runsc identity changes, before rehashing it.
+Blocking runsc, mounts, file writes and export commands run in a dedicated
+worker thread embedded in the SEA (not an operator-supplied script). Both
+threads and forwarding helpers share the agent's 192M/128-task cgroup. Fixed
+tenant cgroup paths are validated before TLS listen so admission does not
+execute systemctl while streams are open. Custody closes locally before
+asynchronous WAL persistence; acknowledgement still waits for file and directory
+sync. Hermetic regressions hold HTTP/WS streams open while a real worker blocks
+in a host command, then measure cuts.
 
 The updated archive adds authenticated `ANY /v1/ports/5173/*` and WebSocket
 upgrades. Only mTLS CN `data-plane:artifact-content` may use these routes.
@@ -117,7 +129,9 @@ refusals, slot drainage and effective cgroup limits. It also probes TCP/UDP
 public IPv4 (22/8443), metadata IPv4/IPv6, global IPv6, DNS, host loopback,
 the other tenant's 5173 and a positive witness on the private kernel lo.
 The shipped native `network-probe` uses direct raw/packet/UDP socket syscalls;
-timeouts never count as UDP/TCP refusal. Gates compare host `ss -ltnup` before
+timeouts never count as UDP/TCP refusal. For off-sandbox UDP targets, a successful
+send fails qualification even if a remote ICMP rejection subsequently arrives;
+only local connect/send refusal proves egress denial. Gates compare host `ss -ltnup` before
 and after, and reconcile scopes/processes/netns references after stop, failure,
 kernel-confirmed OOM and a real SIGKILL of the gate's disposable agent worker.
 The existing worker bootstrap multiplexes live and supervisor traffic on 5173.
