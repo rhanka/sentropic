@@ -10,14 +10,15 @@ export function draftConformance(name: string, fresh: () => Promise<LiveStore>) 
       let clock = Date.parse('2026-11-06T12:00:00Z');
       const keys: LiveKeyPort = { current: async () => ({ version: 'k1', key: Buffer.alloc(32, 7) }),
         resolve: async () => Buffer.alloc(32, 7) };
-      const vault = createLiveDraftVault({ store, keys, now: () => clock });
+      const now = () => clock;
+      const vault = createLiveDraftVault({ store, keys, now });
       const save = (revision: string | null, command = 'write-1', text = 'private source') => vault.write({
         identity: liveIdentity, expectedRevision: revision, baseHeadSha: 'a'.repeat(40),
         baseTreeSha: 'b'.repeat(40), liveTreeSha: 'c'.repeat(40),
         overlay: [{ path: 'ui/page.ts', text, mode: '100644' }],
         command: { actorId: 'alice', key: command, hash: command + text, operation: 'live_write' },
       });
-      return { store, vault, keys, save, advance: (ms: number) => { clock += ms; } };
+      return { store, vault, keys, save, now, advance: (ms: number) => { clock += ms; } };
     }
     it('should durably recover exact text through a fresh vault and isolate scope/generation', async () => {
       const { store, vault, keys, save } = await setup();
@@ -71,9 +72,9 @@ export function draftConformance(name: string, fresh: () => Promise<LiveStore>) 
       await expect(vault.read(liveIdentity)).rejects.toMatchObject({ kind: 'git_live_draft_expired' });
     });
     it('should preserve the complete revision when key access or transaction completion fails', async () => {
-      const { vault, save, store, keys } = await setup();
+      const { vault, save, store, keys, now } = await setup();
       const first = await save(null);
-      const failed = createLiveDraftVault({ store, keys: { ...keys, current: async () => { throw new Error('private key outage'); } } });
+      const failed = createLiveDraftVault({ store, now, keys: { ...keys, current: async () => { throw new Error('private key outage'); } } });
       await expect(failed.write({ identity: liveIdentity, expectedRevision: first.revision,
         baseHeadSha: first.baseHeadSha, baseTreeSha: first.baseTreeSha, liveTreeSha: first.liveTreeSha,
         overlay: [{ path: 'ui/a.ts', text: 'must not replace', mode: '100644' }] }))
