@@ -42,7 +42,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, source contracts, normative recipe, options and gate requirements; check branch mechanically.
-- [ ] Lot 1: add shared closed types and AMD-ISO canonical re-exports without changing historical definitions.
+- [x] Lot 1: add shared closed types and AMD-ISO canonical declaration without changing historical definitions.
   - [x] Define portable compile recipe, options, output and diagnostic types; npm view reports 0.25.0, local version bumped to 0.26.0-dev.27.
   - [x] Define host-authenticated execution context and validate success/refusal diagnostics without partial output leaks.
 - [ ] Lot 2: implement portable canonical encoding, path/base64 checks, recipe and output validation with closed effective options.
@@ -50,6 +50,7 @@
   - [x] Add RFC 8785 encoding, SHA-256/SRI, canonical base64/path checks and duplicate-key JSON parsing.
   - [x] Implement semantic recipe and manifest validation, exact output verification and distinct recipe/manifest identities.
 - [ ] Lot 3: packages/cluster-mesh/tests/compile/contract.spec.ts covers shared golden vectors, changes of identity, invalid paths/options, diagnostic codes, manifest/SRI identity and legacy preservation.
+  - [x] Publish reusable JCS/SHA-256/path/base64/JSON conformance corpus and canonical-profile checks.
 - [ ] Lot 4: run scoped make test-cluster-mesh, typecheck-cluster-mesh and independent code review; resolve findings.
 - [ ] Lot 5: bump/export cluster-mesh after registry check; make scope-check before every commit.
 - [ ] Lot 6: push, open PR with this plan, wait for exact-head green CI; do not merge.
