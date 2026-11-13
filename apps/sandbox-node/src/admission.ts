@@ -1,6 +1,6 @@
 import { EXECUTION_NODE_CAPACITY as capacity, EXECUTION_NODE_TENANT_SLICE_DEFAULTS, type ExecutionNodeTenantId } from './contract.js';
 import { ExecutionNodeError } from './errors.js';
-import { BuildQueue } from './build-queue.js';
+import { BuildQueue, type HeavyProfile } from './build-queue.js';
 
 export interface TenantSlotQuota {
   readonly maxLive: number;
@@ -55,8 +55,8 @@ export class ExecutionNodeAdmission {
     }
   }
 
-  async admitBuild(tenantId: ExecutionNodeTenantId): Promise<void> {
-    await this.builds.acquire(tenantId);
+  async admitBuild(tenantId: ExecutionNodeTenantId, profile?: HeavyProfile, onTimeout?: () => Promise<void>): Promise<void> {
+    await this.builds.acquire(tenantId, profile, onTimeout);
     try { this.checkMemory(tenantId, 0); }
     catch (error) { this.builds.release(tenantId); throw error; }
   }
