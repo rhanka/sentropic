@@ -16,7 +16,7 @@ import { createLiveScheduler } from './scheduler';
 import { readBuilderCacheStorage, type BuilderCacheStorage, type PrivateCacheBlobs } from './cache-storage';
 import { readInstallBudget } from './deadline';
 import { LiveError } from './records';
-import type { HostIdentity } from './host-build-api';
+import type { HostIdentity, HostBuildEnv } from './host-build-api';
 import { readWorkerSizing, type KubernetesCore } from './pods';
 import { installEnvironment, readInstallHeapMb } from './recipes';
 import type { LivePorts } from './ports';
@@ -161,7 +161,7 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });
   let running: { stop(): void } | null = null;
-  const api = custodyNode && custodyBackend ? new Hono().route('/', createCustodyRpc({ key: fenceKey, node: custodyNode, now,
+  const api = custodyNode && custodyBackend ? new Hono<HostBuildEnv>().route('/', createCustodyRpc({ key: fenceKey, node: custodyNode, now,
     resolve: createCustodyAuthority({ store: createPostgresLiveStore(deps.pool),
       binding, session: runtime => custodyBackend!.custody(runtime), now }) })).route('/', service.api) : service.api;
   return {
