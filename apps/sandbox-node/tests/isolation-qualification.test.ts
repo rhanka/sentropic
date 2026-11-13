@@ -11,11 +11,11 @@ describe('isolation qualification probes', () => {
     try { await expect(qualifyIsolation()).rejects.toThrow('isolated qualification host required'); }
     finally { if (previous !== undefined) process.env.QUALIFICATION_ONLY = previous; }
   });
-  it.each(['isolated', 'leak', 'writable', 'network', 'timeout'])('should report observed access and network failures (%s)', async mode => {
+  it.each(['isolated', 'leak', 'visible-directory', 'writable', 'network', 'timeout'])('should report observed access and network failures (%s)', async mode => {
     let output = '';
     const missing = () => { throw Object.assign(new Error('missing'), { code: 'ENOENT' }); };
     // Even a non-listable directory can contain a readable/writable known file.
-    const fs = { readdirSync: missing, accessSync: missing,
+    const fs = { readdirSync: mode === 'visible-directory' ? () => [] : missing, accessSync: missing,
       openSync: mode === 'leak' ? () => 3 : missing, closeSync: vi.fn(),
       readFileSync: (path: string) => {
         if (path.startsWith('/other') && mode !== 'leak') return missing();
