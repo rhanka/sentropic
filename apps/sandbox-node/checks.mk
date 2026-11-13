@@ -25,4 +25,4 @@ check-sandbox-node:
 	  ../../node_modules/.bin/tsc --project tsconfig.json; \
 	  ../../node_modules/.bin/tsc --project tsconfig.build.json; \
 	  node --expose-gc tests/export-memory.mjs; \
-	  ../../node_modules/.bin/vitest run --config vitest.config.ts'
+	  ../../node_modules/.bin/vitest run --config vitest.config.ts $(SCOPE)'
