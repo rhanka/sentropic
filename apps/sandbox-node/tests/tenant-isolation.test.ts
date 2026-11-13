@@ -20,6 +20,7 @@ function ownership(tenantId: 'sentropic' | 'immo'): ExecutionNodeOwnership {
 
 function spec(tenantId: 'sentropic' | 'immo'): ExecutionNodeSandboxSpec {
   return {
+    command: ['/bin/sleep', 'infinity'],
     tenantId,
     devScope: { kind: 'ui', writable: ['ui/**'], refused: ['ui/dist/**'], source: { repo: 'fixture', path: 'registry.ts', commit: 'abc' } },
     physicalUid: 'uid-1',

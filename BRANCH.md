@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 B3a: reproduced discarded mounts; daemon retains validated mounts and passes them with the session command into the runtime.
 - [x] RUN 3 M11: failing listener/operator regression fixed; the mTLS agent defaults to TCP 8443.
 - [x] RUN 3 M7: reproduced false running after launcher exit 1; start now waits for runsc running state and rejects post-spawn failures.
 - [x] RUN 3 M9: reproduced unlimited active-plus-pending and missing timeout; two outstanding per tenant and 60s/120s heavy-profile timers now stop/destroy before releasing the global slot.

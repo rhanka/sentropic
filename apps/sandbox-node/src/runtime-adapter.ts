@@ -8,6 +8,7 @@ export interface SandboxMount {
 }
 
 export interface RunSandboxOptions {
+  readonly command?: readonly string[];
   readonly tenantId: string;
   readonly sandboxUid: string;
   readonly mounts: readonly SandboxMount[];

@@ -11,7 +11,7 @@ import type {
 } from './contract.js';
 import { ExecutionNodeError } from './errors.js';
 import { checkTicket, sha256Hex, verifyTicketSignature } from './tickets.js';
-import type { RuntimeAdapter } from './runtime-adapter.js';
+import type { RuntimeAdapter, SandboxMount } from './runtime-adapter.js';
 import { ExecutionNodeAdmission } from './admission.js';
 import { AuditLog } from './audit.js';
 import { SERVICE_TIMEOUT_MS, type HeavyProfile } from './build-queue.js';
@@ -19,6 +19,8 @@ import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths, valida
 
 export interface SandboxRecord {
   readonly devScope: ExecutionNodeDevScope;
+  readonly mounts: readonly SandboxMount[];
+  readonly command: readonly string[];
   readonly id: string;
   readonly tenantId: ExecutionNodeTenantId;
   state: ExecutionNodeLifecycleState;
@@ -202,6 +204,8 @@ export class ExecutionNodeDaemon {
       const paths = sandboxPaths(input.spec.tenantId, id);
       const record: SandboxRecord = {
         devScope: structuredClone(input.spec.devScope),
+        mounts,
+        command: input.spec.command ?? ['/bin/sleep', 'infinity'],
         id,
         tenantId: input.spec.tenantId,
         state: input.warmStandby === true ? 'standby' : 'creating',
@@ -246,7 +250,8 @@ export class ExecutionNodeDaemon {
       const { runtimeId } = await this.adapter.runSandbox({
         tenantId,
         sandboxUid: id,
-        mounts: [],
+        mounts: sandbox.mounts,
+        command: sandbox.command,
         overlayUpper: paths.upper,
         overlayWork: paths.work,
         quotaMiB: sandbox.slot === 'build' ? 1536 : 704,
