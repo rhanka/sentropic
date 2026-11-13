@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 ticket queue fencing: failing regression reproduced execution after a queued ticket expired; admission revalidates freshness and releases an unused reservation on rejection.
 - [x] RUN 3 documentation: frozen spec and README reflect AMD-13/14/15, TCP 8443, host-resolved devScope, implemented lifecycle and the unperformed real-host qualification.
 - [x] RUN 3 output confinement: a failing malicious-base test exposed a symlinked output ancestor; OCI preparation now rejects linked output ancestors before host mkdir.
 - [x] RUN 3 operator alignment: bounded zram hierarchy, agent MemoryMin, swap usage, service deadlines, host-supplied scope and actual lifecycle protocol documented; real host qualification remains explicit.
