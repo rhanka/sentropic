@@ -14,6 +14,18 @@ vi.mock('node:child_process', async importOriginal => {
 });
 
 describe('runtime adapters', () => {
+  it('should register a lost worker launch without host I/O and stop its scope before recovery metadata', async () => {
+    const adapter = new RunscRuntimeAdapter();
+    const stop = vi.spyOn(SandboxCgroup.prototype, 'stop').mockResolvedValue(true);
+    const original = vi.mocked(execFileSync).getMockImplementation()!;
+    vi.mocked(execFileSync).mockImplementation(() => { throw new Error('metadata unavailable'); });
+    try {
+      adapter.recoverSandbox({ tenantId: 'immo', sandboxUid: 'worker-lost', overlayUpper: '/private/upper' } as never);
+      expect(execFileSync).not.toHaveBeenCalled();
+      await expect(adapter.stopSandbox('runsc-immo-worker-lost')).resolves.toBe(true);
+      expect(stop).toHaveBeenCalledWith('builder-sbx-worker-lost.scope', 'immo');
+    } finally { vi.mocked(execFileSync).mockImplementation(original); vi.restoreAllMocks(); }
+  });
   it('should stop the scope after runsc removal and retain deferred metadata cleanup', async () => {
     const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
     const available = vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);

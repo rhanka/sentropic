@@ -1,7 +1,7 @@
 # Fix: sandbox-node data-plane forwarding qualification
 
 ## Objective
-- [ ] Diagnose and fix the first real-host data-plane connection failure, preserving deadlines and cleanup.
+- [x] Diagnose and fix the first real-host data-plane connection failure, preserving deadlines and cleanup.
 
 ## Scope / Guardrails
 - [x] Worktree `tmp/worktrees/sandbox-node-dpf`, branch `fix/sandbox-node-data-plane-forward`, base `origin/main`.
@@ -23,6 +23,7 @@
   - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
 
 ## Feedback Loop
+- [x] Recovery ordering regression: register lost-worker scopes without host I/O and terminate them before fallible helper/mount/metadata inventories.
 - [x] R2 qualification-11 / recovery: OOM receipts include scope memory events and systemd result; worker recovery also kills exact-UID stream helpers outside tenant scopes before reconstructing mounted bundles.
 - [x] R2 qualification-2: real-host switch scenarios now use the production asynchronous file observer on private gate files, atomic switch/binary replacement and the shared GET-node capability builder.
 - [x] R2 qualification-3/5/7: gates verify the manifest and canonical PATH/pinned runsc version, pass the configured cap/timeout, start the burst concurrently from idle and receipt actual helper peaks/cgroup memory/tasks/OOM.
@@ -53,7 +54,7 @@
 - [x] Round 2c data plane: live peer witness, ports network probes, HTTP/WS and revocation share a real-host run.
 - [x] Round 2c regressions: hardened prerequisites receipt and actual child SIGKILL orchestration in Docker.
 - [ ] Round 2d: tests, archive rebuild/verification, exact-head green CI and receipt.
-- [ ] Co-signed AMD-28: qualified digest switch, profile fence, runtime audits, helper cap, UDP/raw/kernel witnesses and OOM qualification.
+- [x] Co-signed AMD-28: qualified digest switch, profile fence, runtime audits, helper cap, UDP/raw/kernel witnesses and OOM qualification.
 - [x] AMD-28 switch: live root-owned config, digest-gated discovery/admission, stream cut and sandbox destruction on closure.
 - [x] AMD-28 audits: strict addresses/all-table loopback routes and sentry namespace/flags/spec auditors.
 - [x] AMD-28 runtime: enforce audits at launch, destroy on violations, emit daemon audit event, forbid forwarding non-ports sandboxes.
