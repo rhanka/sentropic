@@ -3,7 +3,9 @@ import { ExecutionNodeAdapter, nodeJson, type NodeSession } from './execution-no
 import { ExecutionNodeRefusal } from './execution-node-transport';
 import { executionNodeQueue } from './execution-node-queue';
 import { revokeNodeCustody } from './execution-node-custody';
-import type { LiveKey, LiveRuntime } from './records';
+import { exportRetainedBuild } from './execution-node-lifecycle';
+import type { LiveAttempt, LiveKey, LiveRuntime } from './records';
+import type { SupervisorSources } from './supervisor';
 import type { LivePorts } from './ports';
 import type { RemoteRows } from './remote-live';
 import type { SandboxBackend } from './sandbox-backend';
@@ -14,7 +16,15 @@ import type { SandboxBackend } from './sandbox-backend';
 export interface ExecutionNodeInputs {
   provision(key: LiveKey, runtime: LiveRuntime): Promise<{ session: NodeSession; spec: ExecutionNodeSandboxSpec }>;
   cache: LivePorts['cache'];
-  worker: Omit<LivePorts['worker'], 'renew' | 'quiesce'>;
+  worker: Omit<LivePorts['worker'], 'renew' | 'quiesce' | 'build'>;
+  executeBuild(runtime: LiveRuntime, attempt: LiveAttempt): Promise<void>;
+  exportIntent(runtime: LiveRuntime, attempt: LiveAttempt): Promise<Parameters<typeof exportRetainedBuild>[2]>;
+  exportOptions: Parameters<typeof exportRetainedBuild>[3];
+  acceptExport(runtime: LiveRuntime, attempt: LiveAttempt, exported: Awaited<ReturnType<typeof exportRetainedBuild>>): Promise<{ candidateDigest: string }>;
+  /** Stateless D3-A forge reads; tenant is resolved from the authenticated binding, never caller JSON. */
+  tenant(key: LiveKey): 'sentropic' | 'immo';
+  forge: LivePorts['forge'];
+  source: SupervisorSources['source'];
 }
 type Stored = { session: NodeSession; key: LiveKey; nodeInstanceId: string; nodeEpoch: number };
 const unavailable = (): never => { throw new ExecutionNodeRefusal('node_base_hydration_unconfigured'); };
@@ -83,7 +93,13 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       restore: (runtime, draft) => inputs?.worker.restore(runtime, draft) ?? unavailable(),
       prebundle: runtime => inputs?.worker.prebundle(runtime) ?? unavailable(),
       async live(runtime) { await start(runtime); return inputs?.worker.live(runtime) ?? unavailable(); },
-      async build(runtime, attempt) { await start(runtime); return inputs?.worker.build(runtime, attempt) ?? unavailable(); },
+      async build(runtime, attempt) {
+        if (!inputs) return unavailable();
+        await start(runtime); await inputs.executeBuild(runtime, attempt);
+        const { session } = await stored(runtime);
+        const exported = await exportRetainedBuild(node, session, await inputs.exportIntent(runtime, attempt), inputs.exportOptions);
+        return inputs.acceptExport(runtime, attempt, exported);
+      },
       verify: (runtime, attempt) => inputs?.worker.verify(runtime, attempt) ?? unavailable(),
       async renew(runtime) { await node.mutate((await stored(runtime)).session, 'renew', `${command(runtime, 'renew')}:${runtime.rowVersion}`); },
       async quiesce(runtime) {
