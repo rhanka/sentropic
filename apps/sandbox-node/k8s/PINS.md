@@ -2,8 +2,8 @@
 
 ## Pinned now (verified in this branch)
 
-- Base image: `node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2`
-  (same pin as `api/Dockerfile` on this branch).
+- SEA/shared-rootfs build image (Linux x86_64/glibc): `node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e`.
+- Standalone test image: `node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2`.
 - Contract: `execution-node.v1` (`apps/sandbox-node/src/contract.ts`, unreleased/local).
 
 ## Pinned at provision time by the operator (S1-K1)
@@ -14,9 +14,8 @@ fabrication. The operator pins them at provision time and records the
 values below:
 
 - `runsc` (gVisor systrap, `--network=none` only):
-  version `____`, `sha256sum $(command -v runsc)` = `____`.
-- `crun` (OCI runtime for system containers):
-  version `____`, `sha256sum $(command -v crun)` = `____`.
+  k8s-installed release-20261102.0, `/opt/gvisor/20261102/runsc`; binary SHA-256 remains a k8s install receipt.
+- `crun` 1.30.1 is a host benchmark witness only, never an advertised agent runtime.
 - Agent release archive SHA-256 (`out/release.digest`): recorded by the
   build target; k8s pins this exact digest in cloud-init delivery and retains
   the previous digest. No publication is needed for this PR.
@@ -33,5 +32,14 @@ values below:
 
 - `sha256sum -c apps/sandbox-node/k8s/out/SHA256SUMS` (source tarball).
 - Verify the archive against `out/SHA256SUMS` before extraction; install
-  under `/opt/sandbox-node/releases/<release.digest>`. Startup verifies
+  under `/opt/execution-node/releases/<release.digest>`. Startup verifies
   the extracted file manifest. Image tags are build handles only.
+
+## RUN 5 delivery (supersedes prior compiled releases)
+
+- Archive SHA-256: `2206040078562ddf4c32d0d9d34825fc1dee3abba7cc76ef45ce8b6bee3eed6e`.
+- SEA executable SHA-256: `a182bd96f1552b5ce5cb55f3c19d3c8e6db3009c2b7a3e731d4441dba6b227c0`.
+- Shared EROFS rootfs SHA-256: `ba0fd2d63126d1dc7305420dee270ade19e629dc767224d65735807d32353fa7`.
+- Configuration/unit/operator key/startup/README/restart B-test are covered by the archive's SHA256SUMS.
+- Built and verified locally 2026-11-13, SEA self-test passed from extracted release. No publication/deployment.
+- Full runsc/EROFS/EDQUOT and live-mount restart qualification: k8s S1-K1 on an isolated host; not claimed here.
