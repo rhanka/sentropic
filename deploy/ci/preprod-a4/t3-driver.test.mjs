@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -9,6 +9,7 @@ import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
 import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
+import { probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
 
 const CANDIDATE = 'ghcr.io/rhanka/sentropic-api@sha256:candidate';
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
@@ -145,12 +146,13 @@ export function makeCtx(overrides = {}) {
       print: line => printed.push(line),
       dryRun: false, probeReadOnly: false, tier: 'preprod', postgresPod: 'postgres-0',
       stateDir: mkdtempSync(join(tmpdir(), 't3-test-')),
-      probe: async () => ({ status: 200, body: { cancel: async () => {} } }),
+      probe: async url => probeReply(url),
       delivered: async () => '',
       config: {
         kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod', tier: 'preprod',
         candidateImage: CANDIDATE, revisions: { api: '12', 'auth-idp': '9', ui: '4' },
         images: { candidate: CANDIDATE, ui: UI_IMAGE },
+        endpoints: probeEndpoints(),
         request: { format: 'x', operationId: 'test' },
         rotationKeyFiles: defaultKeys,
         ...(overrides.config ?? {}),
@@ -570,7 +572,7 @@ test('finishOpen patches an existing middleware instead of recreating it', async
   const state = { namespace: 'sentropic-preprod', middlewareSpec: ctx.config.middlewareSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
   await finishOpen({ call: ctx.call, probe: ctx.probe, state,
-    save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
+    save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
   const joined = calls.join('\n');
   assert.ok(!joined.includes('create -f -'), 'no create over the existing middleware (no AlreadyExists)');
   assert.ok(joined.includes('patch middleware a4-verification'), 'middleware patched in place');
@@ -764,7 +766,7 @@ test('emergency classifies after stopping api and passes pre-cm-dir to rollback'
   assert.ok(out.includes('/pre-cm'), 'pre-cm-dir wired into rollback');
 });
 
-test('emergency converges post-commit instead of legacy rollback', () => {
+test('emergency converges post-commit instead of legacy rollback', async () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const fakeBin = mkdtempSync(join(tmpdir(), 't3-fakebin-'));
   const fakeState = mkdtempSync(join(tmpdir(), 't3-fakestate-'));
@@ -789,14 +791,21 @@ case "$A" in
 esac
 `);
   chmodSync(join(fakeBin, 'kubectl'), 0o755);
+  const http = spawn(process.execPath, [new URL('./t3-probe-fixture.mjs', import.meta.url).pathname, join(dir, 'port')], { stdio: 'ignore' });
+  const deadline = Date.now() + 5000;
+  while (!existsSync(join(dir, 'port')) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+  assert.ok(existsSync(join(dir, 'port')), 'local probe server starts');
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
+    endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`),
     revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
     middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } },
     images: { candidate: 'candidate-img', ui: 'ui-img' } }));
-  const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
+  let out;
+  try { out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
     '--state-dir', dir, '--config', cfg],
   { encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, FAKE_KUBECTL_STATE: fakeState } });
+  } finally { http.kill('SIGKILL'); }
   assert.ok(out.includes('classified committed=true'), 'classified post-commit');
   assert.ok(out.includes('finish_open_ok substate=TWO_HOSTS_OPEN'), 'converged forward');
   assert.ok(!out.includes('rollout undo'), 'no legacy boot after commit');
@@ -842,7 +851,7 @@ test('finishOpen restarts a stopped api before opening traffic', async () => {
   const state = { namespace: 'sentropic-preprod', middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
   await finishOpen({ call: ctx.call, probe: ctx.probe, state,
-    save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
+    save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
   const joined = calls.join('\n');
   assert.ok(joined.includes('scale deployment/api --replicas=1'), 'stopped api restarted before open');
   assert.equal(state.substate, 'TWO_HOSTS_OPEN');

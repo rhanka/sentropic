@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, openSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { probeEndpoints } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -29,8 +30,11 @@ for (const { mode, step, operation, substate, committed = false } of cases) {
   test(`RUN6 actual driver child watchdog eliminates TERM-resistant descendants: ${mode} ${operation ?? step} ${substate ?? ''}`, async () => {
     const dir = mkdtempSync(join(tmpdir(), 't3-process-'));
     const config = join(dir, 'config.json');
+    const http = spawn(process.execPath, [`${here}t3-probe-fixture.mjs`, join(dir, 'port')], { stdio: 'ignore' });
+    await until(() => existsSync(join(dir, 'port')));
+    const endpoints = probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`);
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-      images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
+      endpoints, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
     writeFileSync(join(dir, 'kubectl'), `#!/usr/bin/env node
 const fs = require('node:fs'), a = process.argv.join(' ');
 fs.appendFileSync('${dir}/commands', a+'\\n');
@@ -66,7 +70,7 @@ else console.log('{}');
       import { saveState, monoMs, runKubectl } from '${here}t3-lib.mjs';
       import { delivered, drive } from '${here}t3-window-driver.mjs';
       const dir = ${JSON.stringify(dir)};
-      saveState(dir, { step:${JSON.stringify(step ?? 'W0')}, substate:${JSON.stringify(substate ?? null)},
+      if (!${JSON.stringify(operation ?? null)}) saveState(dir, { step:${JSON.stringify(step ?? 'W0')}, substate:${JSON.stringify(substate ?? null)},
         middlewareSpec:{ipAllowList:{sourceRange:['9.9.9.9/32']}}, namespace:'sentropic-preprod', driverPid:process.pid, childPid:process.pid,
         heartbeatMonoMs:monoMs(), t0MonoMs:monoMs(), stepDeadlineMonoMs:monoMs()+${mode === 'emergency' ? 30000 : 500} });
       const w = spawn(process.execPath, ['${here}t3-watchdog.mjs','--state-dir',dir,'--config','${config}'],
@@ -91,7 +95,7 @@ else console.log('{}');
       if (mode === 'emergency') {
         const out = spawnSync('sh', [`${here}t3-emergency.sh`, '--state-dir', dir, '--config', config],
           { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: 'utf8', timeout: 5000 });
-        assert.equal(out.status, 0, out.stderr);
+        assert.equal(out.status, 0, `${out.error?.message ?? ''}\n${out.stderr}\n${out.stdout}`);
         assert.match(out.stdout, /rollback_ok/);
       }
       await until(() => existsSync(join(dir, 'recovery')));
@@ -105,6 +109,7 @@ else console.log('{}');
         assert.equal(JSON.parse(readFileSync(join(dir, 't3-window-state.json'))).substate, 'TWO_HOSTS_OPEN');
       }
     } finally {
+      http?.kill('SIGKILL');
       driver.kill('SIGKILL');
       for (const name of ['worker', 'grandchild', 'watchdog']) {
         try { process.kill(Number(readFileSync(join(dir, name))), 'SIGKILL'); } catch {}
