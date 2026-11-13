@@ -9,8 +9,11 @@ import type { LiveRuntime } from '../../src/services/artifacts/live/records';
 import { authorizeLive, type LiveActor } from '../../src/services/artifacts/live/authorize';
 import type { LivePorts } from '../../src/services/artifacts/live/ports';
 import { fakeExecutionNode, sandboxSpec, session } from './execution-node-fake';
+import { usePortsAvailability } from '../../../apps/sandbox-node/src/network-policy';
 
 export async function custodyRpcFixture() {
+  // This fake runtime has no runsc binary; explicitly enable its transport tests.
+  usePortsAvailability(() => true);
   const sockets = new Set<Socket>();
   const upstream = createServer((_req, res) => { res.writeHead(200); res.write('sandbox-stream'); });
   upstream.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
@@ -78,6 +81,7 @@ export async function custodyRpcFixture() {
     activity() { runtime = { ...runtime, rowVersion: runtime.rowVersion + 1, lastAccessAt: Date.now() }; },
     stop() { runtime = { ...runtime, phase: 'QUIESCING', routeEpoch: runtime.routeEpoch + 1 }; },
     async close() {
+      usePortsAvailability(() => false);
       for (const socket of sockets) socket.destroy(); api.closeAllConnections();
       await Promise.all([fake.close(), new Promise<void>(resolve => upstream.close(() => resolve())),
         new Promise<void>(resolve => api.close(() => resolve()))]);
