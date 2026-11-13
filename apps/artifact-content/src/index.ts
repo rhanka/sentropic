@@ -12,11 +12,13 @@ import { liveFromEnv, withRemoteAddress } from './live-config';
 import type { LiveProxy } from './live';
 import { createSupervisorRoute } from './host';
 import { supervisorRelayFromEnv, type SupervisorRelay } from './supervisor-relay';
+import { dataPlaneFromEnv, type CustodyIssuer } from './data-plane';
 
 /** TLS terminates at the dedicated W3.d ingress; Host is validated, forwarded identity is ignored. */
 export async function startContentServer(options: {
   env?: NodeJS.ProcessEnv; hostname?: string; port?: number;
   live?: LiveProxy; supervisorRelay?: SupervisorRelay;
+  custodyIssuer?: CustodyIssuer;
 } = {}): Promise<Server> {
   const env = options.env ?? process.env;
   const enabled = () => env.APP_ARTIFACT_CONTENT_ENABLED === '1';
@@ -29,8 +31,9 @@ export async function startContentServer(options: {
     status: 404, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
   });
   try {
+    const dataPlane = dataPlaneFromEnv(env, options.custodyIssuer);
     // The supervisor relay is the workers' only ingress (A-LIVE §8.1): its own flag, independent of content and live.
-    const supervisor = createSupervisorRoute({ relay: options.supervisorRelay ?? supervisorRelayFromEnv(env),
+    const supervisor = createSupervisorRoute({ relay: options.supervisorRelay ?? supervisorRelayFromEnv(env, dataPlane),
       baseDomain: env.APP_ARTIFACT_CONTENT_BASE_DOMAIN });
     if (enabled()) {
       const required = (name: string) => {
@@ -41,7 +44,7 @@ export async function startContentServer(options: {
       const connectionString = required('DATABASE_URL');
       const baseDomain = required('APP_ARTIFACT_CONTENT_BASE_DOMAIN');
       const keyFile = required('APP_ARTIFACT_CONTENT_SIGNING_KEY_FILE');
-      live ??= liveFromEnv(env, baseDomain);
+      live ??= liveFromEnv(env, baseDomain, dataPlane);
       const signingSecret = () => readFileSync(keyFile);
       if (signingSecret().length < 32) throw new Error('Dedicated content signing key must contain at least 32 bytes');
       const bucket = required('APP_ARTIFACT_S3_BUCKET');
