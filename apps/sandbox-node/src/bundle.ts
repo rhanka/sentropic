@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, rmSync, chownSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { RunSandboxOptions } from './runtime-adapter.js';
+import { assertUnlinkedPath } from './mounts.js';
 
 export type HostCommand = (command: string, args: string[]) => void;
 const host: HostCommand = (command, args) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000 }); };
@@ -38,6 +39,7 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
       mounts.push({ destination, type: 'bind', source: target, options: ['rbind', 'ro', 'nosuid', 'nodev'] });
     }
     if (options.quotaMiB > 704) {
+      assertUnlinkedPath(bundle.workspace, 'ui/dist');
       mkdir(join(bundle.workspace, 'ui/dist')); chownSync(bundle.output, options.uid, options.gid);
       mounts.push({ destination: '/workspace/ui/dist', type: 'bind', source: bundle.output, options: ['rbind', 'rw', 'nosuid', 'nodev', 'noexec'] });
     }

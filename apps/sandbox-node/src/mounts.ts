@@ -72,16 +72,20 @@ export function checkWritePath(workspacePath: string, scope?: ExecutionNodeDevSc
   if (!scope!.writable.some(glob => matchesGlob(relative, glob))
     || scope!.refused.some(glob => matchesGlob(relative, glob) || glob.endsWith('/**') && relative === glob.slice(0, -3))) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'devScope write denied');
   if (root) {
-    let current = root;
-    for (const segment of relative.split('/')) {
-      current = join(current, segment);
-      try {
-        const stat = lstatSync(current);
-        if (stat.isSymbolicLink() || stat.isFile() && stat.nlink > 1) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'linked write denied');
-      } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-    }
+    assertUnlinkedPath(root, relative);
   }
   return relative;
+}
+
+export function assertUnlinkedPath(root: string, relative: string): void {
+  let current = root;
+  for (const segment of relative.split('/')) {
+    current = join(current, segment);
+    try {
+      const stat = lstatSync(current);
+      if (stat.isSymbolicLink() || stat.isFile() && stat.nlink > 1) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'linked write denied');
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  }
 }
 
 export function validateDevScope(scope: ExecutionNodeDevScope | undefined): asserts scope is ExecutionNodeDevScope {
