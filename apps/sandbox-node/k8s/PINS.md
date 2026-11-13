@@ -13,7 +13,7 @@ branch nor in CI, so their SHA-256 digests cannot be pinned here without
 fabrication. The operator pins them at provision time and records the
 values below:
 
-- `runsc` (gVisor systrap, `--network=none` only):
+- `runsc` (gVisor systrap, `--network=none`, or private loopback-only `sandbox` for `network: ports`):
   k8s-installed release-20261102.0, `/opt/gvisor/20261102/runsc`; binary SHA-256 remains a k8s install receipt.
 - `crun` 1.30.1 is a host benchmark witness only, never an advertised agent runtime.
 - Agent release archive SHA-256 (`out/release.digest`): recorded by the

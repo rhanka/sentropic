@@ -18,6 +18,24 @@ describe('runtime adapters', () => {
     expect(adapter.runscArgs({ ...input, network: 'none' })).toContain('--network=none');
     expect(adapter.runscArgs(input)).toContain('--network=none');
   });
+  it('should create and configure a fresh loopback namespace before executing a ports sandbox', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter(); queueMicrotask(() => child.emit('error', new Error('stop after recording argv')));
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'private', mounts: [], overlayUpper: '/tmp/upper',
+        overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000, network: 'ports' })).rejects.toThrow();
+      const args = vi.mocked(spawn).mock.calls[0]![1] as string[];
+      const offset = args.indexOf('unshare');
+      expect(offset).toBeGreaterThan(0);
+      expect(args.slice(offset, offset + 9)).toEqual(['unshare', '--net', '--', 'sh', '-ec',
+        'ip link set lo up; exec "$@"', 'sandbox-network', 'runsc', '--root=/run/execution-node/runsc']);
+      expect(args).toContain('--network=sandbox');
+    } finally { vi.restoreAllMocks(); }
+  });
   it('should hard-bound the runtime version subprocess', () => {
     vi.mocked(execFileSync).mockImplementation(() => { throw new Error('version timeout'); });
     try {

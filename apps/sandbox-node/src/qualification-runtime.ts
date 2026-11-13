@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-diagnostics.js';
 
 export const qualificationReadyScript = `const n=require('net'),end=Date.now()+4500;
+if(Object.keys(require('os').networkInterfaces()).some(name=>name!=='lo'))process.exit(2);
 function probe(){const s=n.connect(5173,'127.0.0.1');s.setTimeout(200,()=>s.destroy());
 s.once('connect',()=>{s.destroy();console.log('5173 accepted');process.exit(0)});
 s.once('close',()=>{if(Date.now()>=end)process.exit(1);else setTimeout(probe,25)});

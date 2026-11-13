@@ -52,6 +52,14 @@ network namespace references `/proc/self/ns/net` of that private launcher.
 No host interface, veth, external route or host TCP listener is configured.
 The host needs `unshare`, `sh` and `ip`; a failure aborts launch without a fallback.
 `--network=none` rejects gVisor's port-forward RPC and remains for other workloads.
+The data-plane qualification first verifies loopback-only interfaces and a TCP
+accept on 5173 from inside the sandbox (5-second bound). Its numbered `STEP`
+lines carry UTC timestamps and identify each probe: TLS/CN, custody, UDS,
+port-forward spawn/donation/exit, first byte, HTTP status and WS upgrade.
+Runtime stdout/stderr is drained and limited to 4096 bytes per stream/helper;
+request headers, custody tokens and keys are never included. On failure, the
+gate prints the selected runsc state fields and systemd scope result before
+cleanup. Each `FAIL` names its step; the final supervisor failure is a summary.
 The agent creates private UDS listeners under
 `/run/execution-node/ports/<physicalUid>/5173.sock`. Each connection is relayed
 through `runsc --root=/run/execution-node/runsc port-forward --stream=<uds>
