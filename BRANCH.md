@@ -58,7 +58,7 @@
 - [ ] **Lot 1 — Preview probe first (Q6)**
   - [x] Add `e2e/tests/harness/v8-preview.spec.ts` and isolated runner.
   - [x] Load exact MapLibre 6.4.1, 6.14.0 and PDF.js 4.10.38 closures.
-  - [ ] Measure real module workers in Chromium, Firefox and WebKit.
+  - [x] Measure real module workers in Chromium, Firefox and WebKit.
   - [ ] Assert worker-relative imports, import-map control and opaque-frame control.
 - [ ] **Lot 2 — Compiler and isolate (Q1–5, Q8, Q11–14)**
   - [ ] Commit F-LIVE-S/M/L and block dependency edit matrix.
