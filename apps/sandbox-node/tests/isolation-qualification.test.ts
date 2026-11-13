@@ -40,5 +40,7 @@ describe('isolation qualification probes', () => {
     for (const text of ['null', '[]', '{}', 'garbage', '[{}]', '[{"name":"check","ok":1}]']) {
       expect(() => requireIsolationResults(text, vi.fn())).toThrow();
     }
+    expect(() => requireIsolationResults('[{"name":"check","ok":true}]', vi.fn(), 23)).toThrow('incomplete');
+    expect(() => requireIsolationResults('[{"name":"check","ok":true},{"name":"check","ok":true}]', vi.fn())).toThrow('duplicate');
   });
 });

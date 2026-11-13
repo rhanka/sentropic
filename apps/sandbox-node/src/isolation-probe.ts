@@ -39,11 +39,15 @@ async function unreachable(host, port) {
 `;
 }
 
-export function requireIsolationResults(text: string, report: (name: string, ok: boolean) => void): void {
+export function requireIsolationResults(text: string, report: (name: string, ok: boolean) => void, expectedCount?: number): void {
   const checks: unknown = JSON.parse(text);
   if (!Array.isArray(checks) || checks.length === 0) throw new Error('missing isolation probe results');
+  if (expectedCount !== undefined && checks.length !== expectedCount) throw new Error('incomplete isolation probe results');
+  const names = new Set<string>();
   for (const check of checks) {
     if (!check || typeof check.name !== 'string' || typeof check.ok !== 'boolean') throw new Error('invalid isolation probe result');
+    if (names.has(check.name)) throw new Error('duplicate isolation probe result');
+    names.add(check.name);
     report(check.name, check.ok);
   }
 }
