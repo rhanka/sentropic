@@ -17,10 +17,11 @@ export async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 
 export function requestScope(path: string, tenantId: string | undefined, role: string) {
   const url = new URL(path, 'https://agent');
-  const operator = url.pathname === '/v1/node' || url.pathname === '/v1/node/drain'
+  const operator = ['/v1/node', '/v1/node/drain', '/v1/node/undrain', '/v1/node/status'].includes(url.pathname)
     || (url.pathname === '/v1/events' && url.searchParams.get('scope') === 'node');
   if (operator) {
-    if (role !== 'operator' || tenantId || url.searchParams.has('tenantId')) throw new ExecutionNodeError('custody_revoked');
+    if (!(role === 'operator' || (role === 'control-plane' && url.pathname === '/v1/node'))
+      || tenantId || url.searchParams.has('tenantId')) throw new ExecutionNodeError('custody_revoked');
     return { scope: 'node' as const };
   }
   if (!tenantId) throw new ExecutionNodeError('missing_tenant_id');

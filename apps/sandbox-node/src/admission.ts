@@ -19,6 +19,10 @@ export interface AdmissionSnapshot {
  * Excess live requests are rejected before allocating memory.
  */
 export class ExecutionNodeAdmission {
+  draining = false;
+  requireAccepting(): void {
+    if (this.draining) throw new ExecutionNodeError('control_plane_unavailable', 'node draining');
+  }
   private readonly quotas: Record<ExecutionNodeTenantId, TenantSlotQuota>;
   private readonly globalMaxLive: number;
   private readonly retryAfterMs: number;
@@ -48,6 +52,7 @@ export class ExecutionNodeAdmission {
   }
 
   private checkMemory(tenantId: ExecutionNodeTenantId, additionalMiB: number): void {
+    this.requireAccepting();
     const tenants = ['sentropic', 'immo'] as const;
     // AMD-21: destroyed-scope file cache is telemetry, never an admission charge.
     const usage = (id: ExecutionNodeTenantId) => this.reservedMiB(id);
