@@ -6,7 +6,7 @@ lock-sandbox-node-build-tools:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/apps/sandbox-node/k8s/build-tools:/tools" -w /tools $(SANDBOX_NODE_IMAGE) sh -ec 'npm install --package-lock-only --ignore-scripts --no-audit --no-fund; node -e '\''const fs=require("node:fs");fs.writeFileSync("package-lock.json", JSON.stringify(JSON.parse(fs.readFileSync("package-lock.json")))+"\n")'\'''
 qualify-sandbox-node-disk:
 	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac
-	@node apps/sandbox-node/k8s/qualify-disk.mjs
+	@"$${QUAL_RELEASE_DIR:?verified qualification release required}/execution-node" --qualify-disk
 
 build-sandbox-node-artifact:
 	@sh apps/sandbox-node/k8s/build-artifact.sh
@@ -19,7 +19,6 @@ check-sandbox-node:
 	  node /source/scripts/ci/locked-tools.mjs --prefix /tmp/qualification --ignore-scripts --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
 	  cd /tmp/qualification/apps/sandbox-node; \
 	  sh -n k8s/start.sh k8s/build-artifact.sh; \
-	  node --check k8s/qualify-disk.mjs; \
 	  ../../node_modules/.bin/tsc --project tsconfig.json; \
 	  ../../node_modules/.bin/tsc --project tsconfig.build.json; \
 	  node --expose-gc tests/export-memory.mjs; \
