@@ -21,6 +21,7 @@ function ownership(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeO
 
 function spec(): ExecutionNodeSandboxSpec {
   return {
+    command: ['/bin/sleep', 'infinity'],
     tenantId: 'sentropic',
     devScope: { kind: 'ui', writable: ['ui/**'], refused: ['ui/dist/**'], source: { repo: 'fixture', path: 'registry.ts', commit: 'abc' } },
     physicalUid: 'uid-1',
@@ -52,6 +53,21 @@ function compat(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeClai
 }
 
 describe('lifecycle', () => {
+  it('should pass validated base mounts and session command to the runtime', async () => {
+    class CaptureAdapter extends FakeRuntimeAdapter {
+      options?: Parameters<FakeRuntimeAdapter['runSandbox']>[0];
+      override async runSandbox(options: Parameters<FakeRuntimeAdapter['runSandbox']>[0]) {
+        this.options = options; return super.runSandbox(options);
+      }
+    }
+    const adapter = new CaptureAdapter();
+    const { daemon, bases } = createExecutionNode({ adapter });
+    const base = { baseId: 'root', kind: 'rootfs' as const, identityDigest: 'abc' };
+    bases.register({ ...base, tenantId: 'sentropic' });
+    const box = await daemon.createSandbox({ spec: { ...spec(), baseMounts: [base] }, ownership: ownership(), commandId: 'mount-create' });
+    await daemon.promoteToRunning('sentropic', box.id, { commandId: 'mount-start', uid: 1000, gid: 1000, quotaMiB: 704 });
+    expect(adapter.options?.mounts).toHaveLength(1);
+  });
   it('should require signed tickets bound to executed spec, owner, command and node', async () => {
     const keys = generateTicketKeyPair();
     const { daemon } = createExecutionNode({ ticketPublicKeyPem: keys.publicKeyPem, nodeInstanceId: 'instance', now: () => 100_000 });
