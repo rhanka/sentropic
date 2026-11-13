@@ -369,9 +369,13 @@ export class ExecutionNodeDaemon {
         diskQuotaMiB: sandbox.diskQuotaMiB, quotaInodes: sandbox.quotaInodes,
         uid: input.uid,
         gid: input.gid,
-      }).catch(error => {
+      }).catch(async error => {
         if (error instanceof ExecutionNodeError && error.code === 'network_isolation_violation') {
           this.audit.record('sandbox.network_isolation_violation', tenantId, id);
+          const runtimeId = (error as { runtimeId?: string }).runtimeId;
+          if (runtimeId) await this.adapter.destroySandbox(runtimeId);
+          sandbox.runtimeId = undefined; sandbox.state = 'destroyed'; sandbox.allProcessesExited = true;
+          this.releaseSlot(sandbox); throw error;
         }
         sandbox.runtimeId = (error as { runtimeId?: string }).runtimeId;
         sandbox.state = 'failed'; throw error;

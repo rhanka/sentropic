@@ -167,10 +167,13 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
     this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle, stopped: false });
-    const args = this.runscArgs(options);
-    try { auditNetworkSpec(args, JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')), options.network === 'ports'); }
-    catch {
+    let args: string[];
+    try {
+      args = this.runscArgs(options);
+      auditNetworkSpec(args, JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')), options.network === 'ports');
+    } catch (error) {
       this.bundles.destroy(bundle); this.scopes.delete(runtimeId);
+      if (error instanceof ExecutionNodeError) throw error;
       throw new ExecutionNodeError('network_isolation_violation');
     }
     // NetworkSandbox is required by gVisor's forwarding API. Start in a fresh,
@@ -200,9 +203,10 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
         clearTimeout(timer);
         const entry = this.scopes.get(runtimeId);
         if (entry) entry.exited = true;
-        if (code === 0) resolve();
+        if (code === 0 && (options.network !== 'ports' || ready)) resolve();
+        else if (code === 0) reject(new ExecutionNodeError('network_isolation_violation'));
         else reject(code === 78 ? new ExecutionNodeError('network_isolation_violation') : new Error(`sandbox launcher exited: ${code}`));
-        if (ready || code === 0) options.onExit?.(code);
+        if (ready || (code === 0 && options.network !== 'ports')) options.onExit?.(code);
       });
       const poll = () => {
         try {

@@ -8,8 +8,16 @@ import { acquireNodeLock } from '../src/node-lock.js';
 import { createAgentServer } from '../src/transport.js';
 import { rmSync } from 'node:fs';
 import { waitForQualificationPort } from '../src/qualification-runtime.js';
+import { networkProbeCount, networkTargets } from '../src/qualification-network.js';
 
 vi.mock('../src/node-lock.js', () => ({ acquireNodeLock: vi.fn() }));
+vi.mock('../src/qualification-prerequisites.js', () => ({ qualificationPrerequisites: vi.fn() }));
+vi.mock('../src/qualification-switch.js', () => ({ qualifyPortsSwitch: vi.fn() }));
+vi.mock('../src/qualification-peer.js', () => ({ qualificationPeer: () => ({ start: async () => {}, close: async () => {} }) }));
+vi.mock('../src/qualification-processes.js', () => ({ qualificationProcesses: () => ({}), assertQualificationProcessesGone: vi.fn() }));
+vi.mock('../src/qualification-network.js', async original => ({ ...await original<typeof import('../src/qualification-network.js')>(),
+  hostListeners: () => '', kernelNetworkWitness: async () => ({ close: async () => {} }),
+  qualificationHostAddresses: () => ['15.235.44.193'], hostNetworkWitnesses: async () => ({ close: async () => {} }) }));
 vi.mock('../src/restart.js', () => ({ assertCleanStartup: vi.fn() }));
 vi.mock('../src/qualification-leftovers.js', () => ({ assertNoQualificationLeftovers: vi.fn() }));
 vi.mock('../src/qualification-storage.js', () => ({ createQualificationDirectory: () => '/var/lib/builder/qualification/qd-test' }));
@@ -18,7 +26,9 @@ vi.mock('../src/data-plane-qualification-probes.js', () => ({ probeDataPlane: vi
 vi.mock('../src/qualification-runtime.js', () => ({ waitForQualificationPort: vi.fn(), qualificationFailureInventory: vi.fn() }));
 vi.mock('../src/qualification-certificates.js', () => ({ qualificationCertificates: () => ({}) }));
 vi.mock('../src/transport.js', () => ({ createAgentServer: vi.fn() }));
-vi.mock('node:child_process', () => ({ execFileSync: (_file: string, args: string[]) => args.includes('execution-node.service') ? 'inactive' : '/dev/loop7' }));
+vi.mock('node:child_process', () => ({ execFileSync: (file: string, args: string[]) => args.includes('execution-node.service') ? 'inactive'
+  : file === 'runsc' ? JSON.stringify(Array.from({ length: networkProbeCount(networkTargets(['15.235.44.193'], '127.77.0.3')) },
+    (_, i) => ({ name: `network-${i}`, ok: true }))) : '/dev/loop7' }));
 vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs')>(),
   existsSync: () => true, readFileSync: () => 'header\n', mkdtempSync: () => '/run/execution-node/qd-test', rmSync: vi.fn() }));
 
@@ -42,7 +52,7 @@ describe('real-host qualification finalization with fake runtime', () => {
       if (cause === 'prepare-failure') throw new Error('tenant volume capacity exhausted');
       return sandbox;
     },
-      node: { adapter: { assertRunning() {} } }, close, lifecycle } as never);
+      node: { adapter: { assertRunning() {}, portTarget: async () => { throw new Error('wrong port'); } } }, close, lifecycle } as never);
     vi.mocked(probeDataPlane).mockImplementation(async () => {
       if (cause === 'SIGTERM') process.emit('SIGTERM');
       if (cause === 'probe-failure') throw new Error('probe failed');

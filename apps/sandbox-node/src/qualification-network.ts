@@ -21,7 +21,10 @@ export async function kernelNetworkWitness(uid: string, release: string) {
   try {
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('kernel witness readiness deadline')), 1000);
-      child.stdout.once('data', data => { clearTimeout(timer); assert.match(String(data), /^READY kernel/); resolve(); });
+      child.stdout.once('data', data => {
+        clearTimeout(timer);
+        if (String(data).startsWith('READY kernel')) resolve(); else reject(new Error('invalid kernel witness readiness'));
+      });
       child.once('error', error => { clearTimeout(timer); reject(error); });
       child.once('exit', () => { clearTimeout(timer); reject(new Error('kernel witness exited')); });
     });
