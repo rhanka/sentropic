@@ -1,13 +1,32 @@
 import { describe, expect, it, vi } from 'vitest';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { FakeRuntimeAdapter, RunscRuntimeAdapter } from '../src/index.js';
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
-  return { ...actual, spawn: vi.fn(actual.spawn) };
+  return { ...actual, spawn: vi.fn(actual.spawn), execFileSync: vi.fn(actual.execFileSync) };
 });
 
 describe('runtime adapters', () => {
+  it('should retain a successful exit before the first runsc running observation', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy: () => {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    const onExit = vi.fn();
+    vi.mocked(execFileSync).mockImplementation(() => { throw new Error('no running state observed'); });
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0, null); });
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'fast-success', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 1536, uid: 1000, gid: 1000, onExit }))
+        .resolves.toEqual({ runtimeId: 'runsc-immo-fast-success' });
+      expect(onExit).toHaveBeenCalledExactlyOnceWith(0);
+      // Successful termination still requires an independent scope-quiescence confirmation.
+      await expect(adapter.exportOutput('runsc-immo-fast-success', 'ui/dist')).rejects.toThrow('sandbox_not_quiesced');
+    } finally { vi.restoreAllMocks(); }
+  });
   it('should reject a launcher failure after spawn instead of reporting running', async () => {
     const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/workspace', output: '/tmp/output', mounted: [] }), destroy: () => {} });
     vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);

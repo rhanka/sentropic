@@ -138,7 +138,12 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       let timer: ReturnType<typeof setTimeout>;
       const fail = (error: Error) => { clearTimeout(timer); reject(error); };
       child.once('error', fail);
-      child.once('exit', code => { fail(new Error(`sandbox launcher exited: ${code}`)); if (ready) options.onExit?.(code); });
+      child.once('exit', code => {
+        clearTimeout(timer);
+        if (code === 0) resolve();
+        else reject(new Error(`sandbox launcher exited: ${code}`));
+        if (ready || code === 0) options.onExit?.(code);
+      });
       const poll = () => {
         try {
           const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000 }));
