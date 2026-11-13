@@ -25,7 +25,7 @@
 - [x] README scope limited to image references.
 - [x] Track single-writer reservation: conductor records this request and deliverable.
 - [x] npm confirms DS 0.40.0; standard renderer reproduces footer overflow with the required full npm names. No truncation or gate relaxation.
-- [x] Original-geometry fallback preflight: 11 side-by-side SVG pairs and measured differences; 62 DS diagnostics block delivery.
+- [x] Original-geometry fallback preflight: 11 side-by-side SVG pairs and measured differences; 73 DS diagnostics block delivery.
 - [ ] DS owner: support the required complete footer/content at original dimensions; verify zero diagnostics before delivery.
 
 ## AI Flaky tests
@@ -44,4 +44,5 @@
 - [ ] Lot 3: prepare/build/export-static/validate/deliver; inspect output; independent code review.
 - [x] Lot 4a: produce .tmp/rv/ecosystem-compare/compare.html before any PR; stop for conductor/owner review.
 - [x] Reproducible preflight uses published DS static card/zone renderers and the embedded font metrics.
+- [x] Export, validate and deliver refuse the diagnostic candidate; portable build and four portability tests pass.
 - [ ] Lot 4b: after accepted comparison and passing local gates, push, open PR and verify exact-head CI; conductor merges.
