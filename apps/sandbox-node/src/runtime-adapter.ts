@@ -128,7 +128,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const child = spawn('systemd-run', ['--scope', `--unit=${scope}`,
       `--slice=builder-tenant-${options.tenantId}.slice`,
       `--property=MemoryMax=${options.quotaMiB}M`, `--property=MemorySwapMax=${options.quotaMiB > 704 ? '256M' : '0'}`,
-      `--property=MemoryHigh=${options.quotaMiB > 704 ? '1280M' : 'infinity'}`,
+      `--property=MemoryHigh=${options.quotaMiB > 704 ? '1408M' : '704M'}`,
       `--property=MemoryLow=${options.quotaMiB > 704 ? '0' : '704M'}`,
       `--property=CPUWeight=${options.quotaMiB > 704 ? 100 : 200}`,
       '--property=OOMPolicy=kill', '--property=TasksMax=256', this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });

@@ -36,7 +36,7 @@ describe('runtime adapters', () => {
         mounts: [], overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB, uid: 1000, gid: 1000 })).rejects.toThrow();
       expect(calls[0]).toEqual(expect.arrayContaining(['--scope', '--slice=builder-tenant-immo.slice',
         '--property=MemoryLow=704M', '--property=CPUWeight=200', '--property=OOMPolicy=kill', '--property=TasksMax=256']));
-      expect(calls[1]).toEqual(expect.arrayContaining(['--property=MemoryHigh=1280M', '--property=CPUWeight=100', '--property=MemoryLow=0']));
+      expect(calls[1]).toEqual(expect.arrayContaining(['--property=MemoryHigh=1408M', '--property=CPUWeight=100', '--property=MemoryLow=0']));
       expect(calls.flat()).not.toContain('--property=MemoryOOMGroup=yes');
       expect(calls.flat()).toContain('--root=/run/execution-node/runsc');
     } finally { vi.restoreAllMocks(); }

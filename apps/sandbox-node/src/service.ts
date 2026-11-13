@@ -8,6 +8,7 @@ import { AgentApi } from './api.js';
 import type { TicketEnvelope } from './daemon.js';
 import { readJsonBody } from './transport.js';
 import { totalmem } from 'node:os';
+import { nextNodeEpoch, hostBudget } from './node-state.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -17,13 +18,11 @@ function required(name: string): string {
 
 const tls = { ca: readFileSync(required('AGENT_CA')), cert: readFileSync(required('AGENT_CERT')),
   key: readFileSync(required('AGENT_KEY')) };
-const nodeInstanceId = required('NODE_INSTANCE_ID');
-const nodeEpoch = Number(required('NODE_EPOCH'));
-if (!Number.isSafeInteger(nodeEpoch) || nodeEpoch < 1) throw new Error('invalid NODE_EPOCH');
+const nodeInstanceId = readFileSync('/var/lib/builder/node-instance-id', 'utf8').trim();
+if (!nodeInstanceId) throw new Error('node-instance-id required');
+const nodeEpoch = nextNodeEpoch();
 const custody = new CustodyGuard('/var/lib/builder/custody.wal');
-const hostMemory = { memTotalBytes: totalmem(), memTotalFloorMiB: Math.floor(totalmem() / 1048576),
-  hostBaseMiB: 512, agentMemoryMaxMiB: 192, unallocatedMarginMiB: 172, zramNominalMiB: 1024 } as const;
-const reservableMiB = Math.min(2944, Math.max(0, hostMemory.memTotalFloorMiB - 876));
+const { hostMemory, reservableMiB } = hostBudget(totalmem());
 const node = createExecutionNode({ useRunsc: true, nodeInstanceId, nodeEpoch,
   reservableMiB,
   ticketPublicKeyPem: readFileSync(required('AGENT_TICKET_PUBLIC_KEY'), 'utf8') });
