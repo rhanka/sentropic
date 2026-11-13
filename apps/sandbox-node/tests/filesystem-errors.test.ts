@@ -31,6 +31,7 @@ describe('Linux errno mapping', () => {
   });
   it.each(['EDQUOT', 'ENOSPC'] as const)('should map UNKNOWN/%s in source, bundle and export paths', code => {
     const failure = Object.assign(new Error('UNKNOWN'), { code: 'UNKNOWN', errno: -constants.errno[code] });
+    vi.mocked(fs.lstatSync).mockImplementation(() => { throw Object.assign(new Error('missing'), { code: 'ENOENT' }); });
     vi.mocked(fs.mkdirSync).mockImplementation(() => { throw failure; });
     const scope = { kind: 'ui' as const, writable: ['ui/**'], refused: [], source: { repo: 'r', path: 'r.ts', commit: 'a' } };
     expect(() => writeSource('/tmp', '/workspace/ui/a.ts', Buffer.from('a'), scope)).toThrow('tenant_quota_exceeded');
