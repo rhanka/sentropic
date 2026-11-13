@@ -6,7 +6,9 @@ import { createExecutionNode } from '../../../apps/sandbox-node/src/index';
 import { AgentApi } from '../../../apps/sandbox-node/src/api';
 import { CustodyGuard } from '../../../apps/sandbox-node/src/custody';
 import { NodeControl } from '../../../apps/sandbox-node/src/node-control';
-import { createAgentServer, readJsonBody } from '../../../apps/sandbox-node/src/transport';
+import { createAgentServer, readJsonBody, agentRole } from '../../../apps/sandbox-node/src/transport';
+import { createDataPlane } from '../../../apps/sandbox-node/src/data-plane';
+import type { RequestOptions } from 'node:http';
 import { ExecutionNodeAdapter, nodeHash, type NodeSession } from '../../src/services/artifacts/live/execution-node-adapter';
 import { executionNodeTransport, type ExecutionNodeConfig } from '../../src/services/artifacts/live/execution-node-transport';
 import { nodeCertificates } from './execution-node-certificates';
@@ -20,7 +22,7 @@ export const sandboxSpec = (s: NodeSession) => ({ tenantId: s.ownership.tenantId
   profile: 'artifact-build', runtimeClass: 'runsc', command: ['/bin/true'], baseMounts: [], quotaMiB: 512, quotaInodes: 1000,
   uid: 1000, gid: 1000, network: 'none' as const, allowExec: false, allowPty: false, allowSnapshots: false });
 
-export async function fakeExecutionNode() {
+export async function fakeExecutionNode(target?: (port: number) => Promise<RequestOptions>) {
   const directory = mkdtempSync(join(tmpdir(), 'api-node-contract-'));
   const keys = generateKeyPairSync('ed25519'); const provenance = generateKeyPairSync('ed25519');
   let clock = Date.now(); const now = () => clock;
@@ -29,10 +31,14 @@ export async function fakeExecutionNode() {
   const custody = new CustodyGuard(join(directory, 'wal'), now); const api = new AgentApi(node, custody);
   const control = new NodeControl('instance', 2, custody, { authorize() {} }, now);
   const tls = nodeCertificates(); const calls: Array<{ path: string; tenant?: string; body?: unknown }> = [];
+  const data = createDataPlane({ publicKey: keys.publicKey, custody,
+    sandbox: (tenant, uid) => node.daemon.peekSandbox(tenant, uid),
+    target: async (_sandbox, port) => { if (!target) throw new Error('unconfigured'); return target(port); } });
   const server = createAgentServer({ ca: tls.ca, ...tls.server }, async (req, res, role) => {
     const path = req.url!; const tenant = req.headers['x-tenant-id'] as 'sentropic' | 'immo' | undefined;
     const reply = (status: number, value: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(value));
     try {
+      if (path.startsWith('/v1/ports/')) { await data.http(req, res, role); return; }
       if (path === '/v1/node') { calls.push({ path, tenant }); reply(200, { contractVersion: 'execution-node.v1',
         nodeId: node.daemon.nodeId, nodeInstanceId: 'instance', nodeEpoch: 2,
         provenancePublicKey: provenance.publicKey.export({ type: 'spki', format: 'pem' }).toString() }); return; }
@@ -53,12 +59,13 @@ export async function fakeExecutionNode() {
       } else reply(result.status, result.body);
     } catch (error) { const e = error as { status?: number; code?: string }; reply(e.status ?? 500, { error: e.code ?? 'internal_error' }); }
   });
+  server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
   await new Promise<void>(resolve => server.listen(0, resolve));
   const address = server.address() as { port: number };
   const config: ExecutionNodeConfig = { url: new URL(`https://localhost:${address.port}`), nodeId: node.daemon.nodeId,
     nodeInstanceId: 'instance', nodeEpoch: 2, provenanceKey: provenance.publicKey, ticketKey: keys.privateKey,
     tls: { ca: Buffer.from(tls.ca), cert: Buffer.from(tls.client.cert), key: Buffer.from(tls.client.key) } };
   const transport = executionNodeTransport(config); const adapter = new ExecutionNodeAdapter(config, transport, now);
-  return { adapter, config, node, custody, calls, now, advance(ms: number) { clock += ms; },
+  return { adapter, config, node, custody, calls, now, tls, keys, server, advance(ms: number) { clock += ms; },
     async close() { transport.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(directory, { recursive: true }); } };
 }
