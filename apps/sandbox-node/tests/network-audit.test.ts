@@ -5,10 +5,20 @@ import { auditNetworkSpec, auditStartedNetwork } from '../src/network-audit.js';
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
 vi.mock('node:fs', () => ({ readFileSync: vi.fn(), statSync: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
-const flags = ['--network=sandbox', '--host-uds=none', '--host-fifo=none'];
+const flags = ['--network=sandbox', '--platform=systrap', '--host-uds=none', '--host-fifo=none'];
 const spec = () => ({ process: { capabilities: { bounding: [], effective: [], permitted: [], inheritable: [], ambient: [] } },
   linux: { devices: [], namespaces: [{ type: 'network', path: '/proc/self/ns/net' }] } });
 describe('AMD-28 launch audits', () => {
+  it('should require all capability sets and the exact network namespace in both modes', () => {
+    const missing = spec(); delete (missing.process.capabilities as any).ambient;
+    expect(() => auditNetworkSpec(flags, missing, true)).toThrow();
+    const noneFlags = flags.map(flag => flag === '--network=sandbox' ? '--network=none' : flag);
+    expect(() => auditNetworkSpec(noneFlags, spec(), false)).toThrow();
+    const none = spec(); none.linux.namespaces = [{ type: 'network' }] as never;
+    expect(() => auditNetworkSpec(noneFlags, none, false)).not.toThrow();
+    none.linux.namespaces.push({ type: 'network' } as never);
+    expect(() => auditNetworkSpec(noneFlags, none, false)).toThrow();
+  });
   it.each(['--net-raw', '--network-proxy-path=/tmp/proxy', '--EXPERIMENTAL-xdp=on', '--reproduce-nat',
     '--reproduce-nftables', '--pcap-log=/tmp/capture', '--allow-packet-socket-write', '--allow-flag-override',
     '--host-uds=all', '--host-fifo=open', '--network=host'])('should reject dangerous runsc flag %s', flag => {

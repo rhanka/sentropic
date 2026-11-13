@@ -10,7 +10,7 @@ export function createQualificationDirectory(release: string, kind: 'qd' | 'qi')
   mkdirSync(qualificationStorage, { recursive: true, mode: 0o700 });
   chmodSync(qualificationStorage, 0o700);
   const fs = statfsSync(qualificationStorage, { bigint: true });
-  const count = kind === 'qi' ? 2 : 1;
+  const count = kind === 'qi' ? 4 : 2;
   // 16 MiB quota + 65 MiB ext4 overhead per sandbox, copied base, 16 MiB headroom.
   const required = BigInt(count) * (81n * 1048576n + BigInt(statSync(join(release, 'qualification.erofs')).size)) + 16n * 1048576n;
   if (fs.type === 0x01021994n || fs.bavail * fs.bsize < required || fs.ffree < BigInt(count * 2048)) {

@@ -36,14 +36,15 @@ export function portsEnabled(binary?: string): boolean {
 }
 
 /** Closed by default; only the qualified binary may expose live/standby ports. */
-export function requireNetworkPolicy(network: unknown, profile?: string, binary?: string): void {
+export function requireNetworkPolicy(network: unknown, profile?: string, binary?: string, slot?: string): void {
   if (network !== undefined && network !== 'none' && network !== 'ports') {
     throw new ExecutionNodeError('command_id_payload_mismatch', 'network must be none or ports');
   }
   if (network === 'ports' && !portsEnabled(binary)) {
     throw new ExecutionNodeError('ports_disabled');
   }
-  if (network === 'ports' && !['live', 'standby'].includes(profile ?? '')) {
+  const session = slot ?? (profile === 'live' || profile === 'standby' ? profile : undefined);
+  if (network === 'ports' && (!['live', 'standby'].includes(session ?? '') || !['live', 'standby', 'node-22'].includes(profile ?? ''))) {
     throw new ExecutionNodeError('command_id_payload_mismatch', 'ports requires live or standby profile');
   }
 }

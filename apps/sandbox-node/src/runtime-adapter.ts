@@ -23,6 +23,7 @@ export interface SandboxMount {
 }
 
 export interface RunSandboxOptions {
+  readonly slot?: 'live' | 'standby' | 'build';
   readonly profile?: string;
   readonly network?: 'none' | 'ports';
   readonly diskQuotaMiB?: number;
@@ -167,7 +168,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
-    requireNetworkPolicy(options.network, options.profile, this.binary);
+    requireNetworkPolicy(options.network, options.profile, this.binary, options.slot);
     const args = [this.rootArg, `--network=${options.network === 'ports' ? 'sandbox' : 'none'}`, '--platform=systrap',
       '--host-uds=none', '--host-fifo=none', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
@@ -175,7 +176,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
-    requireNetworkPolicy(options.network, options.profile, this.binary);
+    requireNetworkPolicy(options.network, options.profile, this.binary, options.slot);
     if (!this.hasRunsc()) failNoBinary();
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
@@ -240,7 +241,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
           if (state.status === 'running') {
             if (options.network === 'ports') {
               try {
-                requireNetworkPolicy('ports', options.profile, this.binary);
+                requireNetworkPolicy('ports', options.profile, this.binary, options.slot);
                 this.namespaces.set(runtimeId, auditStartedNetwork(state.pid, join(bundle.path, 'netns.inode'), this.namespaces.values()));
                 this.portsSandboxes.add(runtimeId);
               } catch (error) {
