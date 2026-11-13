@@ -6,7 +6,7 @@ describe('isolation violation cleanup retention', () => {
   it('should audit immediately and retain identity/capacity until physical cleanup succeeds', async () => {
     let blocked = true;
     class Runtime extends FakeRuntimeAdapter {
-      override async runSandbox(options: RunSandboxOptions) {
+      override async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
         const { runtimeId } = await super.runSandbox(options);
         throw Object.assign(new ExecutionNodeError('network_isolation_violation'), { runtimeId, cleanupFailed: true });
       }

@@ -67,7 +67,13 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
           { path: '/dev/urandom', type: 'c', major: 1, minor: 9, fileMode: 438, uid: 0, gid: 0 }] },
     }), { mode: 0o600 });
     return bundle;
-  } catch (error) { destroyBundle(bundle, run); throwFilesystemError(error); }
+  } catch (error) {
+    let failure: Error;
+    try { throwFilesystemError(error); } catch (mapped) { failure = mapped as Error; }
+    try { destroyBundle(bundle, run); }
+    catch { Object.assign(failure!, { bundle, cleanupFailed: true }); }
+    throw failure!;
+  }
 }
 
 export function destroyBundle(bundle: Bundle, run: HostCommand = host): void {

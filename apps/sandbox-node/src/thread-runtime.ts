@@ -13,6 +13,7 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
   private readonly pending = new Map<number, { resolve(value: any): void; reject(error: Error): void }>();
   private readonly exits = new Map<string, (code: number | null) => void>();
   healthy = true;
+  private dead = false;
   constructor(binary: string, production = false, diagnostic?: RuntimeDiagnostic) {
     this.worker = isSea()
       ? new Worker(getAsset('runtime-worker', 'utf8'), { eval: true, workerData: { binary, production } })
@@ -30,7 +31,7 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
       } else call.resolve(message.result);
     });
     const failed = () => {
-      this.healthy = false;
+      this.healthy = false; this.dead = true;
       for (const call of this.pending.values()) call.reject(new Error('runtime worker unavailable'));
       this.pending.clear();
     };
@@ -39,7 +40,8 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
   }
   hasRunsc() { return this.healthy; }
   private call<T>(method: string, args: unknown[], runtimeId?: string): Promise<T> {
-    if (!this.healthy || this.pending.size >= 8) return Promise.reject(Object.assign(new Error('runtime worker unavailable or busy'), { runtimeId }));
+    const cleanup = method === 'stopSandbox' || method === 'destroySandbox';
+    if (this.dead || (!this.healthy && !cleanup) || this.pending.size >= 8) return Promise.reject(Object.assign(new Error('runtime worker unavailable or busy'), { runtimeId }));
     return new Promise<T>((resolve, reject) => {
       const id = ++this.next;
       const timer = setTimeout(() => {

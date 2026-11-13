@@ -77,6 +77,9 @@
 - [x] Revocation-under-load regression: a real runtime worker blocks in a host command while existing HTTP/WS streams are cut within 250ms on the independent TLS loop.
 - [x] Cleanup and ss regressions: actual failing/positive ss executables, audit emission and retained runtime identity/capacity across failed destruction and retry.
 - [x] Missing-binary regression: cgroup stop succeeds independently of runsc availability; metadata cleanup retains its retry identity.
+- [x] Async activation regression: atomic config/binary replacements close under 250ms, duplicate settings refuse activation, and shutdown cannot reopen an in-flight refresh.
+- [x] Partial bundle failures retain cleanup ownership in the worker before launch; incomplete unmounts cannot disappear behind an unregistered runtime.
+- [x] Admission event loop: validate/cache fixed tenant cgroup paths before TLS listen; memory/quota reads no longer execute synchronous systemctl while streams are open.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.

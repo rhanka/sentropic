@@ -6,6 +6,24 @@ import { prepareBundle, destroyBundle } from '../src/bundle.js';
 
 describe('OCI bundle lifecycle', () => {
   const owner = { uid: process.getuid!(), gid: process.getgid!() };
+  it('should preserve a partially mounted bundle when unmount fails, for registered retry cleanup', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bundle-retry-'));
+    try {
+      let failure: any;
+      try {
+        prepareBundle({ tenantId: 'immo', sandboxUid: 'retry', overlayUpper: join(root, 'upper'), overlayWork: join(root, 'work'),
+          quotaMiB: 704, diskQuotaMiB: 8, quotaInodes: 32, ...owner, command: ['/bin/true'],
+          mounts: [{ source: '/root.erofs', target: '/bases/rootfs/r', readOnly: true },
+            { source: '/src.erofs', target: '/bases/source/s', readOnly: true }] }, (command, args) => {
+          if (command === 'mount' && args.includes('overlay')) throw new Error('mount failure');
+          if (command === 'umount') throw new Error('busy');
+        });
+      } catch (error) { failure = error; }
+      expect(failure.message).toBe('mount failure'); expect(failure.cleanupFailed).toBe(true);
+      expect(failure.bundle.path).toBe(root); expect(failure.bundle.mounted.length).toBeGreaterThan(0);
+      destroyBundle(failure.bundle, () => {}); expect(existsSync(root)).toBe(false);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   it.each([[704, 512], [1536, 1024]])('should apply the signed OCI task limit for %i MiB', (quotaMiB, limit) => {
     const root = mkdtempSync(join(tmpdir(), 'bundle-pids-'));
     const previousMask = process.umask(0o077);

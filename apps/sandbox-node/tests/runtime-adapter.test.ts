@@ -51,7 +51,7 @@ describe('runtime adapters', () => {
     try {
       await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'private', mounts: [], overlayUpper: '/tmp/upper',
         overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000, network: 'ports', profile: 'live' })).rejects.toThrow();
-      const args = vi.mocked(spawn).mock.calls[0]![1] as string[];
+      const args = vi.mocked(spawn).mock.calls.at(-1)![1] as string[];
       const offset = args.indexOf('unshare');
       expect(offset).toBeGreaterThan(0);
       expect(args.slice(offset, offset + 10)).toEqual(['unshare', '--net', '--', 'sh', '-ec',

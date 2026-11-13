@@ -8,13 +8,14 @@ export class PortsActivation {
   private fingerprint = '';
   private digest = '';
   private refreshing = false;
+  private closed = false;
   private readonly timer: ReturnType<typeof setInterval>;
   constructor(private readonly config: string, private readonly binary: string) {
     this.timer = setInterval(() => { void this.refresh(); }, 50); this.timer.unref();
     void this.refresh();
   }
   async refresh(): Promise<void> {
-    if (this.refreshing) return;
+    if (this.refreshing || this.closed) return;
     this.refreshing = true;
     try {
       const text = await readFile(this.config, 'utf8');
@@ -32,9 +33,9 @@ export class PortsActivation {
         this.digest = hash.digest('hex'); this.fingerprint = fingerprint;
         return; // Re-read config and identity before activation, including during replacement.
       }
-      this.enabled = this.digest === expected;
+      this.enabled = !this.closed && this.digest === expected;
     } catch { this.enabled = false; }
     finally { this.refreshing = false; }
   }
-  close() { clearInterval(this.timer); this.enabled = false; }
+  close() { this.closed = true; clearInterval(this.timer); this.enabled = false; }
 }

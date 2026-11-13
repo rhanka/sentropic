@@ -164,15 +164,25 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
     requireNetworkPolicy(options.network, options.profile, this.binary);
     if (!this.hasRunsc()) failNoBinary();
-    const bundle = this.bundles.prepare(options);
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
+    let bundle: Bundle;
+    try { bundle = this.bundles.prepare(options); }
+    catch (error) {
+      const partial = (error as { bundle?: Bundle }).bundle;
+      if (partial) {
+        this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle: partial, stopped: true });
+        Object.assign(error as Error, { runtimeId });
+      }
+      throw error;
+    }
     this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle, stopped: false });
     let args: string[];
     try {
       args = this.runscArgs(options);
       auditNetworkSpec(args, JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')), options.network === 'ports');
     } catch (error) {
+      this.scopes.get(runtimeId)!.stopped = true; // No scope was launched.
       const violation = error instanceof ExecutionNodeError ? error : new ExecutionNodeError('network_isolation_violation');
       Object.assign(violation, { runtimeId });
       try { this.bundles.destroy(bundle); this.scopes.delete(runtimeId); }
