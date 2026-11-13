@@ -73,9 +73,11 @@ describe('real-host qualification orchestration', () => {
         }
         expect(cleaned).toContain(options.overlayUpper.replace(/\/upper$/, ''));
       }
-      expect(cleaned.every(path => /^\/var\/lib\/builder\/tenants\/(sentropic|immo)\/(sandboxes|bases)\/qual-isolation-/.test(path))).toBe(true);
+      expect(cleaned.every(path => path.startsWith('/run/execution-node/qi-fixture'))).toBe(true);
+      expect(fs.copyFileSync).toHaveBeenCalledWith(expect.any(String), expect.stringMatching(/^\/run\/execution-node\/qi-fixture\//));
+      expect(launched.every(options => options.overlayUpper.startsWith('/run/execution-node/qi-fixture/'))).toBe(true);
       if (mode === 'pass') expect(paths.size).toBe(0);
-      if (mode === 'mount-leak') expect(paths.size).toBe(1); // Preserve that sandbox's bases for reconciliation.
+      if (mode === 'mount-leak') expect(paths.size).toBe(2); // Preserve the private root and the mounted sandbox's base.
       expect(log.mock.calls.some(([line]) => String(line).startsWith('FAIL'))).toBe(mode !== 'pass');
     });
   it.each(['service', 'lock', 'scope', 'directory', 'container', 'garbage', 'mount'])
