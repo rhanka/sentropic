@@ -10,6 +10,17 @@ const open: Awaited<ReturnType<typeof fakeDataPlane>>[] = [];
 afterEach(async () => { for (const f of open.splice(0)) await f.close(); });
 const fixture = async () => { const f = await fakeDataPlane(); open.push(f); return f; };
 describe('data-plane receiving integrations', () => {
+  it.each([201, 500])('should discard upstream status %s HTML and preserve the live refusal policy', async status => {
+    const f = await fixture();
+    const route: LiveRoute = { storageScopeId: 'scope', artifactId: 'artifact', sessionId: 'session',
+      expiresAt: Date.now() + 30_000, podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, sourceRevision: 'rev' };
+    route.podName = podName(route);
+    f.answer((_req, res) => { res.writeHead(status, { 'content-type': 'text/html' }); res.end('<script>unsafe()</script>'); });
+    const live = createLiveProxy({ authorize: async () => route, current: async () => true,
+      watch: () => () => {}, admittedPath: async () => true }, { dataPlane: f.transport });
+    const response = await live.fetch(new Request('https://artifact.example/'), 'artifact');
+    expect(response?.status).toBe(404); expect(await response?.text()).toBe(''); expect(f.watchers).toBe(0);
+  });
   it.each(['expiry', 'revocation'] as const)('should refuse live bytes when custody changes on %s during a post-fetch route check', async kind => {
     const f = await fixture(); f.setTtl(200);
     const route: LiveRoute = { storageScopeId: 'scope', artifactId: 'artifact', sessionId: 'session',
