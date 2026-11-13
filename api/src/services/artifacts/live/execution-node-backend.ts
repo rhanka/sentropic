@@ -27,7 +27,8 @@ export interface ExecutionNodeInputs {
   source: SupervisorSources['source'];
 }
 type Stored = { session: NodeSession; key: LiveKey; nodeInstanceId: string; nodeEpoch: number;
-  pendingSpec?: ExecutionNodeSandboxSpec; createCommandId: string; revoking?: { epoch: number; commandId: string } };
+  pendingSpec?: ExecutionNodeSandboxSpec; createCommandId: string; removalEpoch?: number;
+  revoking?: { epoch: number; commandId: string } };
 const unavailable = (): never => { throw new ExecutionNodeRefusal('node_base_hydration_unconfigured'); };
 const row = (runtime: LiveRuntime) => JSON.stringify(['execution-node', runtime.sessionId, runtime.generation, runtime.leaseEpoch]);
 
@@ -48,6 +49,15 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       if (typeof created.id !== 'string') throw new ExecutionNodeRefusal('invalid_node_response');
       value = { ...value, session: { ...value.session, physicalUid: created.id }, pendingSpec: undefined };
       const next = value;
+      await rows.update<Stored, void>(row(runtime), () => ({ next, result: undefined }));
+    }
+    if (value.revoking) {
+      const intent = value.revoking; const status = await node.status(value.session, intent.epoch);
+      const activeEpoch = Number((status?.ownership as Record<string, unknown> | undefined)?.custodyEpoch);
+      const session = activeEpoch === intent.epoch ? { ...value.session,
+        ownership: { ...value.session.ownership, custodyEpoch: intent.epoch } }
+        : await revokeNodeCustody(node, value.session, intent.epoch, 'runtime_removed', intent.commandId);
+      value = { ...value, session, revoking: undefined }; const next = value;
       await rows.update<Stored, void>(row(runtime), () => ({ next, result: undefined }));
     }
     subjects.set(runtime.podName, value.session); return value;
@@ -87,15 +97,19 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       async describe() { return undefined; },
       async remove(_key, runtime) {
         if (!await rows.read<Stored>(row(runtime))) return;
-        const value = await stored(runtime); let session = value.session; const status = await node.status(session);
+        let value = await stored(runtime); let session = value.session; const status = await node.status(session);
         if (!status || status.state === 'destroyed') return;
-        session = await revokeNodeCustody(node, session, session.ownership.custodyEpoch + 1, 'runtime_removed', command(runtime, 'revoke'));
-        await rows.update<Stored, void>(row(runtime), () => ({ next: { ...value, session }, result: undefined }));
+        if (value.removalEpoch === undefined) {
+          const epoch = session.ownership.custodyEpoch + 1;
+          value = { ...value, removalEpoch: epoch, revoking: { epoch, commandId: `${value.createCommandId}:revoke` } };
+          const next = value; await rows.update<Stored, void>(row(runtime), () => ({ next, result: undefined }));
+          session = (await stored(runtime)).session;
+        }
         if (status.state === 'running' || status.state === 'stopping') {
-          const stopped = nodeJson(await node.mutate(session, 'stop', command(runtime, 'remove-stop'), { stop: { retainOutput: false } }));
+          const stopped = nodeJson(await node.mutate(session, 'stop', `${value.createCommandId}:remove-stop`, { stop: { retainOutput: false } }));
           if (stopped.allProcessesExited !== true) throw new ExecutionNodeRefusal('sandbox_not_quiesced', 409, 250);
         }
-        await node.mutate(session, 'delete', command(runtime, 'delete')); subjects.delete(runtime.podName);
+        await node.mutate(session, 'delete', `${value.createCommandId}:delete`); subjects.delete(runtime.podName);
       },
     },
     cache: { acquire: (source, runtime) => inputs?.cache.acquire(source, runtime) ?? unavailable() },
