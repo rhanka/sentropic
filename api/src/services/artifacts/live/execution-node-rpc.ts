@@ -50,7 +50,7 @@ export function createCustodyAuthority(options: {
       || !['REVIVING', 'LIVE', 'BUILD_PROVISIONING', 'BUILD_QUEUED', 'BUILDING'].includes(runtime.phase)) return revoked();
     if (subject.kind === 'live') {
       const route = subject.route;
-      if (runtime.phase !== 'LIVE' || route.expiresAt <= (options.now ?? Date.now)()
+      if (runtime.phase !== 'LIVE' || !Number.isFinite(route.expiresAt) || route.expiresAt <= (options.now ?? Date.now)()
         || route.principalId !== runtime.ownerId
         || !['sessionId', 'generation', 'routeEpoch', 'podName', 'sourceRevision'].every(field =>
           route[field as keyof Route] === runtime[field as keyof LiveRuntime]) || route.podUid !== runtime.podUid) return revoked();
@@ -85,7 +85,9 @@ export function createCustodyRpc(options: {
       const resolved = await options.resolve(subject);
       if (operation === 'watch') return c.json({ version: resolved.version });
       const { session, port } = resolved;
-      const signed = issueNodeCustody(options.node, session, session.ownership.principalId, session.ownership.custodyEpoch, 60_000, now());
+      const issuedAt = now();
+      const ttl = subject.kind === 'live' ? Math.min(60_000, subject.route.expiresAt - issuedAt) : 60_000;
+      const signed = issueNodeCustody(options.node, session, session.ownership.principalId, session.ownership.custodyEpoch, ttl, issuedAt);
       return c.json({ tenantId: signed.claims.tenantId, principalId: signed.claims.principalId, physicalUid: session.physicalUid,
         custodyEpoch: signed.claims.custodyEpoch, port, token: signed.headers['X-Custody-Token'],
         issuedAt: signed.claims.issuedAt, deadlineAt: signed.claims.deadlineAt });

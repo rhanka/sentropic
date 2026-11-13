@@ -54,6 +54,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Verify upstream runsc port-forward protocol; use one --stream UDS donation per connection with bounded setup and short /run paths.
   - [x] Test UDS donation direction/concurrency/launcher exit and document exact operator qualification requirements.
   - [x] Implement body-bound HMAC RPC and authoritative durable runtime/allocation resolution on issue and watch.
+  - [x] Bound issued custody by the live route expiry and reject absent/nonfinite route deadlines.
   - [x] Mount RPC in selected-node API composition and reject allocations with pending creation, revocation or removal.
   - [x] Preserve the builder Hono host context type on the custody wrapper.
 - [ ] Round 2: fix review findings 2-7 with persisted controller export recovery and bounded heartbeat leadership.
