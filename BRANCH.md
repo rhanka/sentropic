@@ -42,6 +42,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 6 tasks: failing-first systemd and OCI assertions reproduced 256 instead of signed 512/session and 1024/build; both enforcement layers and operator guide aligned with AMD-20/27.
 - [x] BR-SN1-EX12: CI 43380543080 attempt 2 passed the API suite but receipt capture failed on GitHub HTTP 502 for per_page=100; independent reads reproduced 502 while pages of 30 succeeded. Bound all current-attempt job-list requests to 30, keeping Octokit full pagination and fail-closed errors. Impact: request size only, no skipped receipts/checks/retries/timeout change; rollback: restore page size 100 after provider repair.
 - [x] RUN 5 CI 43379755991 lock-policy failure: removed the one-shot lock-generation make target after the guard flagged its npm install --package-lock-only path. SEA build continues to use committed exact lock + npm ci; no policy relaxation, no runtime/archive change.
 - [x] RUN 5 final artifact: 2206040078562ddf4c32d0d9d34825fc1dee3abba7cc76ef45ce8b6bee3eed6e (Node SEA + shared rootfs + public config/unit/README/B-test). Archive and all file checksums verified, extracted SEA self-test passes. 75 standalone regressions and 14 SCA inventory regressions pass; scoped lint has zero errors.
