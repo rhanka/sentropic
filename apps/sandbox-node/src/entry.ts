@@ -1,5 +1,6 @@
 import { isSea } from 'node:sea';
 import { spawn } from 'node:child_process';
+import { qualificationCrashWorker } from './qualification-crash.js';
 import { qualifyDisk, quotaWriter } from './qualification.js';
 import { qualifyIsolation } from './isolation-qualification.js';
 import { qualifyDataPlane } from './data-plane-qualification.js';
@@ -9,6 +10,8 @@ import { superviseQualification } from './qualification-supervisor.js';
 if (process.argv.includes('--self-test')) {
   if (!isSea()) throw new Error('single executable application required');
   console.log('execution-node.v1 SEA self-test passed');
+} else if (process.argv.includes('--qualify-crash-worker')) {
+  void qualificationCrashWorker(process.argv[process.argv.indexOf('--qualify-crash-worker') + 1]!).catch(() => process.exit(1));
 } else if (process.argv.includes('--qualify-data-plane-worker')) {
   void qualifyDataPlane().catch(() => { process.exit(1); });
 } else if (process.argv.includes('--qualify-data-plane')) {

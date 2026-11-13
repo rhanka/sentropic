@@ -37,7 +37,7 @@
 ## Plan / Todo (lot-based)
 - [x] Round 2a: explicit network refusal and disabled-by-default ports kill switch (409), including adapter enforcement.
 - [x] Round 2b: verify private namespace, hardening prerequisites and receipt digests; extra interface and IPv4/IPv6 route refusals tested.
-- [ ] Round 2c: both network modes, two tenants, network witnesses and crash reconciliation qualification.
+- [x] Round 2c: both network modes, two tenants, network witnesses and crash reconciliation qualification.
 - [x] Round 2c probes: host/public/metadata/IPv6/tenant TCP refusal, DNS refusal and positive host loopback listeners.
 - [x] Round 2c matrix: both modes and tenants simultaneous; scripts run under shipped unit hardening with bounded supervisors.
 - [x] Round 2c inventory: scope processes and private netns references (including host FDs) checked after cleanup.
