@@ -99,6 +99,10 @@ export class ExecutionNodeDaemon {
   private key(tenantId: ExecutionNodeTenantId, id: string): string {
     return `${tenantId}:${id}`;
   }
+  private requireScope(sandbox: SandboxRecord, scope: ExecutionNodeDevScope): void {
+    validateDevScope(scope);
+    if (JSON.stringify(scope) !== JSON.stringify(sandbox.devScope)) throw new ExecutionNodeError('command_id_payload_mismatch', 'session devScope mismatch');
+  }
 
   authorizeCommand(envelope: TicketEnvelope | undefined, tenantId: ExecutionNodeTenantId,
     commandId: string, body: unknown, method: string, path: string, ownership: ExecutionNodeOwnership): void {
@@ -225,6 +229,7 @@ export class ExecutionNodeDaemon {
   }
 
   async promoteToRunning(tenantId: ExecutionNodeTenantId, id: string, input: {
+    devScope: ExecutionNodeDevScope;
     commandId: string;
     quotaMiB: number;
     uid: number;
@@ -233,6 +238,7 @@ export class ExecutionNodeDaemon {
   }): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/start`, sandbox.ownership);
     return this.idempotent(tenantId, input.commandId, body, () => this.startRuntime(sandbox, input));
@@ -270,6 +276,7 @@ export class ExecutionNodeDaemon {
   }
 
   async claimSandbox(input: {
+    devScope: ExecutionNodeDevScope;
     claim: ExecutionNodeClaimSpec;
     commandId: string;
     standbyId: string;
@@ -285,6 +292,7 @@ export class ExecutionNodeDaemon {
     this.authorizeCommand(ticket, input.claim.tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${standbyId}/claim`, input.claim.ownership);
     const sandbox = this.getSandbox(input.claim.tenantId, input.standbyId);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${input.standbyId}`);
+    this.requireScope(sandbox, input.devScope);
     return this.idempotent(input.claim.tenantId, input.commandId, body, async () => {
       if (sandbox.state !== 'standby') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${sandbox.id} in state ${sandbox.state}`);
@@ -307,9 +315,12 @@ export class ExecutionNodeDaemon {
     });
   }
 
-  renewSandbox(tenantId: ExecutionNodeTenantId, id: string): SandboxRecord {
+  renewSandbox(tenantId: ExecutionNodeTenantId, id: string, input: { devScope: ExecutionNodeDevScope; commandId: string; ticket?: TicketEnvelope }): SandboxRecord {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    this.requireScope(sandbox, input.devScope);
+    const { ticket, ...body } = input;
+    this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/renew`, sandbox.ownership);
     if (TERMINAL.has(sandbox.state)) {
       throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}`);
     }
@@ -318,12 +329,14 @@ export class ExecutionNodeDaemon {
   }
 
   async stopSandbox(tenantId: ExecutionNodeTenantId, id: string, input: {
+    devScope: ExecutionNodeDevScope;
     stop: ExecutionNodeStopSpec;
     commandId: string;
     ticket?: TicketEnvelope;
   }): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/stop`, sandbox.ownership);
     if (input.stop.retentionTtlMs !== undefined && input.stop.retentionTtlMs > 300_000) {
@@ -369,12 +382,14 @@ export class ExecutionNodeDaemon {
   }
 
   async exportArtifacts(tenantId: ExecutionNodeTenantId, id: string, input: {
+    devScope: ExecutionNodeDevScope;
     spec: ExecutionNodeExportSpec;
     commandId: string;
     ticket?: TicketEnvelope;
   }): Promise<{ bytes: Buffer; sandbox: SandboxRecord }> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/export`, sandbox.ownership);
     if (input.spec.maxBytes <= 0) {
@@ -402,11 +417,13 @@ export class ExecutionNodeDaemon {
   }
 
   async deleteSandbox(tenantId: ExecutionNodeTenantId, id: string, input: {
+    devScope: ExecutionNodeDevScope;
     commandId: string;
     ticket?: TicketEnvelope;
   }): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'DELETE', `/v1/sandboxes/${id}`, sandbox.ownership);
     return this.idempotent(tenantId, input.commandId, { id }, async () => {
