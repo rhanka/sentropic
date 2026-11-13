@@ -70,13 +70,14 @@ export function checkWritePath(workspacePath: string, scope?: ExecutionNodeDevSc
   }
   const relative = normalized.slice('/workspace/'.length);
   if (!scope!.writable.some(glob => matchesGlob(relative, glob))
-    || scope!.refused.some(glob => matchesGlob(relative, glob))) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'devScope write denied');
+    || scope!.refused.some(glob => matchesGlob(relative, glob) || glob.endsWith('/**') && relative === glob.slice(0, -3))) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'devScope write denied');
   if (root) {
     let current = root;
     for (const segment of relative.split('/')) {
       current = join(current, segment);
       try {
-        if (lstatSync(current).isSymbolicLink()) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'symlink write denied');
+        const stat = lstatSync(current);
+        if (stat.isSymbolicLink() || stat.isFile() && stat.nlink > 1) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'linked write denied');
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     }
   }
