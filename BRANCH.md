@@ -26,6 +26,8 @@
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/cluster-mesh/tests/fixtures/train.ts`
   - `packages/cluster-mesh/tests/speech-peer.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -38,6 +40,7 @@
 - [x] BREM-EX3: owner-approved RUN 3 minimal release/runtime extension. Rationale: published gateway dependency-map guard and cluster runtime ceiling block CI. Impact: gateway 0.23.1, cluster 0.26.0-dev.25, matching root lock workspace versions, text/speech ceilings <0.38.0, and the four range regression tests listed above. Rollback: revert the RUN 3 extension commits; no gate or workflow change.
 - [x] RUN 3 local evidence: 99 module tests and 7 equivalence-council tests pass; strict root lock dry-run passes; all 12 candidate archives pass the unchanged manifest guard. Packaging fixture archive integrity comes from those guarded candidate bytes.
 - [x] RUN 3 API alignment: preserve the exact model projection assertion in lexical order and expect the approved gateway 0.23.1 release tuple; CI exposed both stale expectations.
+- [x] BREM-EX4 follow-through: packed skew qualification correctly refuses the old tuple, but its independent exact-message helper retained <0.37.0. Align only that helper and its synthetic fixture to <0.38.0; preserve every refusal invariant. Rollback with EX3/EX4.
 - [ ] RUN 3: verify full CI on the final exact head; first run 43329947429 completed with stale council, tuple, fixture and API assertions failing. No gates relaxed.
 - [x] BREM-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.
 - [x] RUN 2: rebase onto origin/main required no replay; published llm-mesh remains 0.36.0, below this branch version. Candidate lock changes exactly two consumer range cells; strict npm ci --ignore-scripts --dry-run passed without force or legacy-peer-deps.
