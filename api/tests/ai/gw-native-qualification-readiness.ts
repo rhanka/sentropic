@@ -9,7 +9,8 @@ import { gatewayNativeMessagesEnabled } from '../../src/services/llm-runtime/gat
 export const requireQualification = (ok: unknown): void => { if (!ok) throw new Error('Qualification prerequisite or case failed'); };
 export const qualificationListener = 'http://ui:5173/api/v1/gw';
 export const qualificationEnvironment = () => {
-  requireQualification(qualificationUatMode() && gatewayNativeMessagesEnabled(process.env.LLM_GATEWAY_NATIVE_MESSAGES)
+  if (!qualificationUatMode()) throw new Error('Qualification prerequisite failed: operator UAT mode is not armed');
+  requireQualification(gatewayNativeMessagesEnabled(process.env.LLM_GATEWAY_NATIVE_MESSAGES)
     && process.env.DISABLE_AUTH === '0' && process.env.CHAT_TRACE_ENABLED === 'false'
     && process.env.ANTHROPIC_API_KEY?.trim() && process.env.LLM_GATEWAY_UAT_SESSION_TOKEN?.trim());
   const provider = new URL(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
