@@ -6,6 +6,7 @@ import { CustodyGuard } from './custody.js';
 import type { ExecutionNodeSignedCustodyToken } from './contract.js';
 import type { SandboxRecord } from './daemon.js';
 import { ExecutionNodeError } from './errors.js';
+import type { RuntimeDiagnostic } from './qualification-diagnostics.js';
 
 /** Only these runtime services are reachable; no host TCP destination comes from a request. */
 export const DATA_PLANE_PORTS = new Set([5173]);
@@ -13,6 +14,7 @@ export function createDataPlane(options: {
   publicKey: KeyObject; custody: CustodyGuard;
   sandbox(tenant: ExecutionNodeSignedCustodyToken['tenantId'], uid: string): SandboxRecord | undefined;
   target(sandbox: SandboxRecord, port: number): Promise<RequestOptions>;
+  diagnostic?: RuntimeDiagnostic;
 }) {
   function authorize(req: IncomingMessage, role: string) {
     if (role !== 'data-plane' || req.headers['x-execution-ticket'] !== undefined) throw new ExecutionNodeError('custody_revoked');
@@ -37,6 +39,7 @@ export function createDataPlane(options: {
     if (!sandbox || sandbox.state !== 'running' || sandbox.poolOwned || sandbox.network !== 'ports'
       || sandbox.ownership.principalId !== claims.principalId
       || sandbox.ownership.custodyEpoch !== claims.custodyEpoch) throw new ExecutionNodeError('custody_revoked');
+    options.diagnostic?.('custody verification', `accepted role=${role} port=${match[1]}`);
     return { claims, sandbox, port: Number(match[1]), path: match[2]! };
   }
   const headers = (req: IncomingMessage) => Object.fromEntries(Object.entries(req.headers).filter(([name]) =>
@@ -51,14 +54,18 @@ export function createDataPlane(options: {
         const target = await options.target(admitted.sandbox, admitted.port);
         authorize(req, role);
         outgoing = request({ ...target, path: admitted.path, method: req.method, headers: headers(req), agent: false }, upstream => {
+          options.diagnostic?.('upstream HTTP status', String(upstream.statusCode));
           res.writeHead(upstream.statusCode ?? 502, upstream.headers); upstream.pipe(res);
           upstream.on('error', () => res.destroy());
         });
-        outgoing.on('error', () => res.destroy());
+        outgoing.on('error', () => { options.diagnostic?.('upstream HTTP failure', 'UDS/port-forward/5173 request failed'); res.destroy(); });
         detach = options.custody.attach(admitted.claims, () => { outgoing?.destroy(); res.destroy(); });
         res.once('close', () => { detach(); outgoing?.destroy(); });
         req.pipe(outgoing);
-      } catch (error) { detach(); outgoing?.destroy(); res.writeHead(error instanceof ExecutionNodeError ? error.status : 502).end(); }
+      } catch (error) {
+        options.diagnostic?.('HTTP authorization/target failure', error instanceof ExecutionNodeError ? error.code : 'target unavailable');
+        detach(); outgoing?.destroy(); res.writeHead(error instanceof ExecutionNodeError ? error.status : 502).end();
+      }
     },
     async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, role: string) {
       let outgoing: ReturnType<typeof request> | undefined;
@@ -79,6 +86,7 @@ export function createDataPlane(options: {
         detach = options.custody.attach(admitted.claims, close);
         socket.once('close', () => { detach(); upstreamSocket?.destroy(); outgoing?.destroy(); });
         outgoing.once('upgrade', (response, upstream, upstreamHead) => {
+          options.diagnostic?.('upstream WS upgrade', String(response.statusCode));
           try { authorize(req, role); } catch { upstream.destroy(); close(); return; }
           upstreamSocket = upstream;
           socket.write(`HTTP/1.1 101 Switching Protocols\r\n${response.rawHeaders.reduce((s, v, i) => s + v + (i % 2 ? '\r\n' : ': '), '')}\r\n`);
