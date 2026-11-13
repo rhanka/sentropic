@@ -41,6 +41,7 @@ export interface SandboxRecord {
 }
 
 export interface DaemonOptions {
+  readonly stateRoot?: string;
   readonly nodeId: string;
   readonly nodeInstanceId: string;
   nodeEpoch: number;
@@ -76,6 +77,7 @@ function compatEqual(
 const TERMINAL: ReadonlySet<ExecutionNodeLifecycleState> = new Set(['destroyed']);
 
 export class ExecutionNodeDaemon {
+  private readonly stateRoot?: string;
   readonly nodeId: string;
   readonly nodeInstanceId: string;
   nodeEpoch: number;
@@ -92,6 +94,7 @@ export class ExecutionNodeDaemon {
   private readonly idempotence = new Map<string, { method: string; path: string; bodySha256: string; result: unknown }>();
 
   constructor(options: DaemonOptions) {
+    this.stateRoot = options.stateRoot;
     this.nodeId = options.nodeId;
     this.nodeInstanceId = options.nodeInstanceId;
     this.nodeEpoch = options.nodeEpoch;
@@ -263,7 +266,7 @@ export class ExecutionNodeDaemon {
         else this.admission.release(input.spec.tenantId, slot);
         throw error;
       }
-      const paths = sandboxPaths(input.spec.tenantId, id);
+      const paths = sandboxPaths(input.spec.tenantId, id, this.stateRoot);
       const record: SandboxRecord = {
         diskQuotaMiB: input.spec.quotaMiB, quotaInodes: input.spec.quotaInodes,
         devScope: structuredClone(input.spec.devScope),
@@ -334,7 +337,7 @@ export class ExecutionNodeDaemon {
       if (sandbox.state !== 'creating' && sandbox.state !== 'standby') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
       }
-      const paths = sandboxPaths(tenantId, id);
+      const paths = sandboxPaths(tenantId, id, this.stateRoot);
       const { runtimeId } = await this.adapter.runSandbox({
         tenantId,
         sandboxUid: id,

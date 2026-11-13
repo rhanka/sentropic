@@ -3,12 +3,15 @@ import { qualifyDisk, quotaWriter } from './qualification.js';
 import { qualifyIsolation } from './isolation-qualification.js';
 import { qualifyDataPlane } from './data-plane-qualification.js';
 import { acquireNodeLock } from './node-lock.js';
+import { superviseQualification } from './qualification-supervisor.js';
 
 if (process.argv.includes('--self-test')) {
   if (!isSea()) throw new Error('single executable application required');
   console.log('execution-node.v1 SEA self-test passed');
+} else if (process.argv.includes('--qualify-data-plane-worker')) {
+  void qualifyDataPlane().catch(() => { process.exit(1); });
 } else if (process.argv.includes('--qualify-data-plane')) {
-  void qualifyDataPlane().catch(() => { console.error('FAIL data-plane qualification'); process.exitCode = 1; });
+  void superviseQualification().catch(() => { console.error('FAIL data-plane qualification'); process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-isolation')) {
   void qualifyIsolation().catch(() => { console.error('FAIL isolation qualification'); process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-disk')) {

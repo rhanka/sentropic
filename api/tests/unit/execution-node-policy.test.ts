@@ -49,7 +49,8 @@ describe('execution node API policies', () => {
   it('should refuse altered archive bytes even with a valid response envelope', () => {
     const keys = generateKeyPairSync('ed25519');
     const node = new ExecutionNodeAdapter({ url: new URL('https://localhost'), nodeId: 'n', nodeInstanceId: 'i', nodeEpoch: 1,
-      provenanceKey: keys.publicKey, ticketKey: keys.privateKey, tls: { ca: Buffer.alloc(0), cert: Buffer.alloc(0), key: Buffer.alloc(0) } },
+      provenanceKey: keys.publicKey, ticketKey: keys.privateKey, custodyKey: generateKeyPairSync('ed25519').privateKey,
+      tls: { ca: Buffer.alloc(0), cert: Buffer.alloc(0), key: Buffer.alloc(0) } },
     async () => { throw new Error('must not connect'); });
     expect(nodeHash('one')).not.toBe(nodeHash('two'));
     expect(() => node.verifyExport({ status: 200, headers: {}, bytes: Buffer.from('tampered') }, {

@@ -10,6 +10,7 @@ export async function probeDataPlane(options: {
   socketPath: string; certificates: ReturnType<typeof qualificationCertificates>;
   node: Pick<ReturnType<typeof qualificationNode>, 'keys' | 'ownership' | 'revoke'>; uid: string;
   report(name: string): void; checkTcp(): void;
+  signal?: AbortSignal;
 }) {
   const { certificates: tls, uid, node, report } = options;
   const signingKey = createPrivateKey(node.keys.privateKeyPem);
@@ -24,14 +25,31 @@ export async function probeDataPlane(options: {
   };
   const open = (signed: string, headers = {}, path = '/v1/ports/5173/', identity: Pick<RequestOptions, 'cert' | 'key'> = tls.dataPlane) => {
     const req = request({ socketPath: options.socketPath, servername: 'localhost', ca: tls.ca, ...identity,
+      signal: options.signal,
       path, agent: false, headers: { 'x-tenant-id': 'sentropic', 'x-expected-physical-uid': uid, 'x-custody-token': signed, ...headers } });
     req.setTimeout(1000, () => req.destroy(new Error('qualification request timeout')));
+    const timer = setTimeout(() => req.destroy(new Error('qualification probe deadline exceeded')), 1000);
+    const clear = () => clearTimeout(timer);
+    req.once('error', clear); req.once('close', clear);
+    req.once('response', res => {
+      for (const event of ['data', 'end', 'error', 'aborted', 'close']) res.once(event, clear);
+    });
+    req.once('upgrade', (_res, socket) => {
+      clear();
+      const abort = () => socket.destroy();
+      options.signal?.addEventListener('abort', abort, { once: true });
+      socket.once('close', () => options.signal?.removeEventListener('abort', abort));
+    });
     req.on('error', () => {}); return req;
   };
   const http = (signed: string) => new Promise<IncomingMessage>((resolve, reject) => {
     const req = open(signed); req.once('error', reject); req.once('response', res => {
-      req.setTimeout(0); res.once('error', () => {});
+      req.setTimeout(0);
+      let received = false;
+      const ended = () => { if (!received) reject(new Error('qualification response ended before first bytes')); };
+      res.once('error', reject); res.once('end', ended); res.once('aborted', ended); res.once('close', ended);
       res.once('data', data => {
+        received = true;
         try { assert.equal(res.statusCode, 200); assert.equal(data.toString(), 'qualification-stream'); resolve(res); }
         catch (error) { res.destroy(); reject(error); }
       });
@@ -46,6 +64,7 @@ export async function probeDataPlane(options: {
   // The process being running does not imply its application has called listen yet.
   const deadline = Date.now() + 5000;
   for (;;) {
+    options.signal?.throwIfAborted();
     try { const res = await http(token()); res.destroy(); break; }
     catch (error) { if (Date.now() >= deadline) throw error; await new Promise(resolve => setTimeout(resolve, 25)); }
   }
