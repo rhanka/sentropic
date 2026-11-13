@@ -54,6 +54,7 @@
 - [x] AMD-28 qualification authorization: in-memory digest pin after hardened prerequisites; no production switch write.
 - [x] AMD-28 gate coverage: kernel witnesses in ports namespaces, exact host TCP/UDP inventory, fixed-port refusal and kernel-confirmed OOM cleanup in both modes.
 - [x] AMD-28 revocation regressions: shared 50ms monitor, local cut before asynchronous stop, retry and reservation release.
+- [x] AMD-28 audit regressions: every forbidden flag, UDS/FIFO requirements, OCI annotations/capabilities/devices, sentry inode/host/peer/listener failures and profile/digest refusals.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
