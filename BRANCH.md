@@ -32,6 +32,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
 - [x] K1 scoped verification: 31 tests pass; both TypeScript projects and export GC pass on ENV=test-sandbox-node-k1.
 - [x] K1 cleanup regressions: isolation-runner.test.ts covers success, partial launch failure, failed probe, wrong scope policy, leaked mount and SIGTERM; cleanup is restricted to generated paths and preserves bases after a mount leak.
 - [ ] K1 review limitation: harness/review requires h2a_run MCP and two complementary reviewer hosts; no matching tool is exposed. No peer consensus claimed; not a VM isolation acceptance.
+- [x] Common-rules fallback: independent Astra high code review identified an umask-induced false failure in own-base EROFS checks. Explicit chmod of marker to 0666 and real-filesystem regressions under umask 0022/0077 address it; EACCES remains a failure.
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance apply.
 
