@@ -2,6 +2,9 @@ import { execFileSync, spawn } from 'node:child_process';
 import { SandboxCgroup } from './cgroups.js';
 import { prepareBundle, destroyBundle, type Bundle } from './bundle.js';
 import { readOutput } from './output.js';
+import { writeSource } from './source-write.js';
+import { checkWritePath } from './mounts.js';
+import type { ExecutionNodeDevScope } from './contract.js';
 
 export interface SandboxMount {
   readonly source: string;
@@ -22,6 +25,7 @@ export interface RunSandboxOptions {
 }
 
 export interface RuntimeAdapter {
+  writeFile(runtimeId: string, path: string, bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void>;
   readonly kind: string;
   hasRunsc(): boolean;
   runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }>;
@@ -42,6 +46,10 @@ export class FakeRuntimeAdapter implements RuntimeAdapter {
 
   hasRunsc(): boolean {
     return false;
+  }
+  async writeFile(runtimeId: string, path: string, _bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void> {
+    if (!this.live.has(runtimeId)) throw new Error('sandbox not running');
+    checkWritePath(path, scope);
   }
 
   async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
@@ -93,6 +101,11 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     } catch {
       return false;
     }
+  }
+  async writeFile(runtimeId: string, path: string, bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void> {
+    const entry = this.scopes.get(runtimeId);
+    if (!entry || entry.stopped) throw new Error('sandbox not running');
+    writeSource(entry.bundle.workspace, path, bytes, scope);
   }
 
   runscArgs(options: RunSandboxOptions): string[] {

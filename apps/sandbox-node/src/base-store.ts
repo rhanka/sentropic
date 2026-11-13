@@ -23,7 +23,10 @@ export async function ensureBase(base: TenantBase, url: string,
     const response = await (options.fetchBase ?? fetch)(url, { redirect: 'error', signal: AbortSignal.timeout(120_000) });
     if (!response.ok || !response.body) throw new Error('base download failed');
     const hash = createHash('sha256'); let size = 0;
-    for await (const chunk of response.body) {
+    const reader = response.body.getReader();
+    while (true) {
+      const { value: chunk, done } = await reader.read();
+      if (done) break;
       size += chunk.length;
       if (size > 1024 * 1024 * 1024) throw new Error('base exceeds 1 GiB');
       hash.update(chunk); await file.writeFile(chunk);
