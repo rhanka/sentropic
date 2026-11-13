@@ -47,7 +47,7 @@
   - [x] Remove relay directories and refuse stale qualification resources; bases and bundles use private roots.
   - [x] Apply private fixture handling and leftovers inventory to isolation qualification.
 - [ ] **Lot 3 — Custody keys**
-  - [ ] Separate custody verification/signing configuration and enforce cross-use refusal both ways.
+  - [ ] Validate separate `CUSTODY_PUBLIC_KEY` / `ARTIFACT_CUSTODY_ED25519_KEY_B64`; cross-use refusal both ways.
   - [ ] Update node/API custody tests and operator installation instructions.
 - [ ] **Lot 4 — Final validation**
   - [ ] Run scoped `make check-sandbox-node` with all ports, then relevant API checks.
