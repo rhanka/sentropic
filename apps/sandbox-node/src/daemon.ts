@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { validateDiskQuota } from './disk-quota.js';
 import type {
   ExecutionNodeClaimSpec,
   ExecutionNodeDevScope,
@@ -18,6 +19,8 @@ import { SERVICE_TIMEOUT_MS, type HeavyProfile } from './build-queue.js';
 import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths, validateDevScope } from './mounts.js';
 
 export interface SandboxRecord {
+  readonly diskQuotaMiB: number;
+  readonly quotaInodes: number;
   readonly devScope: ExecutionNodeDevScope;
   readonly mounts: readonly SandboxMount[];
   readonly command: readonly string[];
@@ -190,6 +193,7 @@ export class ExecutionNodeDaemon {
   }): Promise<SandboxRecord> {
     input = structuredClone(input);
     validateDevScope(input.spec.devScope);
+    validateDiskQuota(input.spec.quotaMiB, input.spec.quotaInodes);
     if (input.spec.tenantId !== input.ownership.tenantId) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', 'spec/ownership tenant mismatch');
     }
@@ -218,6 +222,7 @@ export class ExecutionNodeDaemon {
       }
       const paths = sandboxPaths(input.spec.tenantId, id);
       const record: SandboxRecord = {
+        diskQuotaMiB: input.spec.quotaMiB, quotaInodes: input.spec.quotaInodes,
         devScope: structuredClone(input.spec.devScope),
         mounts,
         command: input.spec.command ?? ['/bin/sleep', 'infinity'],
@@ -297,6 +302,7 @@ export class ExecutionNodeDaemon {
         overlayUpper: paths.upper,
         overlayWork: paths.work,
         quotaMiB: sandbox.slot === 'build' ? 1536 : 704,
+        diskQuotaMiB: sandbox.diskQuotaMiB, quotaInodes: sandbox.quotaInodes,
         uid: input.uid,
         gid: input.gid,
       }).catch(error => {

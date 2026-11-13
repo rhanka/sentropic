@@ -13,6 +13,8 @@ export interface SandboxMount {
 }
 
 export interface RunSandboxOptions {
+  readonly diskQuotaMiB?: number;
+  readonly quotaInodes?: number;
   readonly onExit?: (code: number | null) => void;
   readonly command?: readonly string[];
   readonly tenantId: string;
