@@ -75,6 +75,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN8 local gates: 164/164 operator tests (including 19 RUN8 regressions), then 18/18 focused HTTP/refusal tests including one added streamed-body deadline case; 6/6 SQL tests on separately migrated PostgreSQL 17 databases. No application package source changed.
 - [x] RUN8 integration strengthens annex refusal with valid authorization and tests a real HTTP body stalled after 200 headers within the shared deadline.
 - [x] RUN8 M4: fence child records mutation intent only after delivered authorization checks; pre-fence RBAC/annex refusal disarms recovery with zero mutations; both regressions failed first.
 - [x] RUN8 M3: persist W0 before detached spawn and require IPC arm acknowledgment before driving; real suspended-parent and failed-supervisor regressions failed first.
