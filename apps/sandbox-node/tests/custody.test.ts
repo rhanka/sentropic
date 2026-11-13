@@ -1,10 +1,37 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, appendFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CustodyGuard } from '../src/custody.js';
 
 describe('custody revocation for sandboxes and isolates', () => {
+  it('should close attached streams at their deadline without a revocation', () => {
+    vi.useFakeTimers();
+    const dir = mkdtempSync(join(tmpdir(), 'expiry-'));
+    try {
+      const guard = new CustodyGuard(join(dir, 'wal'));
+      const close = vi.fn();
+      guard.attach({ tenantId: 'immo', resourceId: 'x', custodyEpoch: 1,
+        issuedAt: new Date().toISOString(), deadlineAt: new Date(Date.now() + 60_000).toISOString() }, close);
+      vi.advanceTimersByTime(59_999);
+      expect(close).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(close).toHaveBeenCalledExactlyOnceWith(1008, true);
+    } finally { vi.useRealTimers(); rmSync(dir, { recursive: true }); }
+  });
+
+  it('should recover a torn tail, truncate it and preserve subsequent revocations', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'torn-'));
+    try {
+      const wal = join(dir, 'wal');
+      new CustodyGuard(wal).revoke('immo', 'x', 3);
+      appendFileSync(wal, '{"key":"immo:x","epoch":');
+      const recovered = new CustodyGuard(wal);
+      expect(recovered.revoke('immo', 'x', 2).activeCustodyEpoch).toBe(3);
+      expect(readFileSync(wal, 'utf8').trim().split('\n').map(line => JSON.parse(line).epoch)).toEqual([3, 3]);
+      expect(new CustodyGuard(wal).revoke('immo', 'x', 1).activeCustodyEpoch).toBe(3);
+    } finally { rmSync(dir, { recursive: true }); }
+  });
   it('should persist epoch 2 before ack and reject epoch 1 after late notification and restart', () => {
     const dir = mkdtempSync(join(tmpdir(), 'custody-'));
     try {
