@@ -39,6 +39,10 @@
 ## Plan / Todo (lot-based)
 - [x] Round 3: fixed 250 ms polling and independent 900 ms request-send freshness bound; delayed stale OK regressions across two replicas.
 - [x] Round 3: fake agent rejects execution tickets, mismatched active principal/epoch and ports other than 5173; compact JWS verification mirrors B0a.
+- [x] Round 3: README and supervisor RPC fixture use 5173; 228 tests in 17 files, TypeScript 5.4.5 and lint pass (one existing console warning).
+- [x] Round 3: independent Astra high review APPROVE at `2f1de05fb`; `.h2a/reviews/pr-1020-astra.r3.md`; final commit changes this plan only.
+- [x] Round 3: B0a guest authority resolves to the active owner's signed principal; unchanged agent data-plane checks remain aligned with the fake.
+- [ ] Round 3: exact-head CI and report/done marker; conductor imports this result after CI, avoiding a post-CI source-only commit.
 - [x] Round 2: compact EdDSA fixture, faithful agent custody guard, authenticated RPC client and replica-wide watch.
   - [x] Compact six-claim EdDSA JWS and real CustodyGuard WAL/stream lifecycle replace the two-segment fake and watcher-only revocation.
   - [x] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
