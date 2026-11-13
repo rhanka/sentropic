@@ -12,6 +12,36 @@ describe('ExecutionNodeV1 API control plane', () => {
   const setup = async () => { const fake = await fakeExecutionNode(); servers.push(fake); return fake; };
   afterEach(async () => { await Promise.all(servers.splice(0).map(server => server.close())); });
 
+  it('should sign exactly a 30000ms ticket even when the clock advances on every read', async () => {
+    const fake = await setup(); await fake.adapter.heartbeat(); let reads = 0; let ttl = 0;
+    const adapter = new ExecutionNodeAdapter(fake.config, async (method, path, body, headers) => {
+      if (headers?.['X-Execution-Ticket']) {
+        const { ticket } = JSON.parse(Buffer.from(headers['X-Execution-Ticket'], 'base64url').toString());
+        ttl = Date.parse(ticket.deadlineAt) - Date.parse(ticket.issuedAt);
+      }
+      return fake.adapter.transport(method, path, body, headers);
+    }, () => fake.now() - 100 + reads++);
+    await adapter.create(session(), sandboxSpec(session()), 'advancing-clock');
+    expect(reads).toBe(1); expect(ttl).toBe(30_000);
+  });
+  it('should reject substitution of a signed archive from another resource, attempt, command or source', async () => {
+    const fake = await setup(); await fake.adapter.heartbeat(); let s = session();
+    const created = await fake.adapter.create(s, sandboxSpec(s), 'create'); s = { ...s, physicalUid: String(created.id) };
+    await fake.adapter.mutate(s, 'start', 'start');
+    await fake.adapter.mutate(s, 'stop', 'stop', { stop: { retainOutput: true, outputSubPath: 'ui/dist' } });
+    const reply = await fake.adapter.mutate(s, 'export', 'export', { spec: {
+      buildId: 'build', destination: 'https://s3.test/object', subPath: 'ui/dist', maxBytes: 1024 * 1024 } });
+    const expected = { buildId: 'build', command: ['/bin/true'] };
+    expect(fake.adapter.verifyExport(reply, s, expected)).toMatchObject({ physicalUid: s.physicalUid, attemptId: 'attempt' });
+    for (const changed of [ { ...s, physicalUid: 'other' }, { ...s, ownership: { ...s.ownership, attemptId: 'other' } },
+      { ...s, devScope: { ...s.devScope, source: { ...s.devScope.source, commit: 'other' } } } ]) {
+      expect(() => fake.adapter.verifyExport(reply, changed, expected)).toThrow(/invalid_node_provenance/);
+    }
+    expect(() => fake.adapter.verifyExport(reply, s, { ...expected, command: ['/bin/false'] })).toThrow(/invalid_node_provenance/);
+    expect(() => fake.adapter.verifyExport(reply, s, { ...expected, buildId: 'other' })).toThrow(/invalid_node_provenance/);
+    expect(() => fake.adapter.verifyExport({ ...reply, bytes: Buffer.from('tampered') }, s, expected)).toThrow(/invalid_node_provenance/);
+  });
+
   it('should refuse mutations without heartbeat and after five seconds without it', async () => {
     const fake = await setup(); const s = session();
     await expect(fake.adapter.create(s, sandboxSpec(s), 'create')).rejects.toMatchObject({ code: 'control_plane_unavailable' });
