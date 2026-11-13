@@ -9,7 +9,7 @@ import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
 import { rmSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { auditNetworkSpec, auditStartedNetwork } from './network-audit.js';
 import { ExecutionNodeError } from './errors.js';
 import { requireNetworkPolicy } from './network-policy.js';
@@ -115,6 +115,19 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle },
     private readonly diagnostic?: RuntimeDiagnostic) {
     this.binary = binary;
+  }
+
+  /** Recover only parent-retained launches after thread death; never launch again. */
+  recoverSandbox(options: RunSandboxOptions): void {
+    const path = dirname(options.overlayUpper);
+    const mounted = readFileSync('/proc/self/mountinfo', 'utf8').trim().split('\n')
+      .map(line => line.split(' ')[4]?.replace(/\\([0-7]{3})/g, (_, octal) => String.fromCharCode(parseInt(octal, 8))))
+      .filter((target): target is string => !!target && target.startsWith(`${path}/`))
+      .sort((a, b) => a.split('/').length - b.split('/').length);
+    this.scopes.set(`runsc-${options.tenantId}-${options.sandboxUid}`, {
+      scope: `builder-sbx-${options.sandboxUid}.scope`, tenantId: options.tenantId, uid: options.sandboxUid,
+      bundle: { path, mounted, workspace: join(path, 'workspace'), output: join(path, 'quota/output') }, stopped: false,
+    });
   }
 
   hasRunsc(): boolean {
