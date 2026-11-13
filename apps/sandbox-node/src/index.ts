@@ -36,6 +36,7 @@ export * from './custody.js';
 export * from './recipe-key.js';
 
 export interface ExecutionNodeConfig {
+  readonly sharedRootfs?: { path: string; digest: string };
   readonly reservableMiB?: number;
   readonly nodeId?: string;
   readonly nodeInstanceId?: string;
@@ -73,7 +74,12 @@ export function createExecutionNode(config: ExecutionNodeConfig = {}): {
     memoryCurrentMiB: config.memoryCurrentMiB
     ?? (adapter.kind === 'runsc-systrap' ? tenantId => new SandboxCgroup().tenantMemoryMiB(tenantId) : undefined) });
   const audit = new AuditLog(nodeInstanceId, config.now);
-  const bases = new TenantBaseRegistry();
+  const bases = new TenantBaseRegistry(config.sharedRootfs);
+  if (config.sharedRootfs) {
+    if (!/^[a-f0-9]{64}$/.test(config.sharedRootfs.digest)) throw new Error('invalid shared rootfs digest');
+    for (const tenantId of ['sentropic', 'immo'] as const) bases.register({ tenantId,
+      baseId: 'shared-rootfs', kind: 'rootfs', identityDigest: config.sharedRootfs.digest });
+  }
   const daemon = new ExecutionNodeDaemon({
     nodeId: config.nodeId ?? 'artifact-builder-vm-1',
     nodeInstanceId,
