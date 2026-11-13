@@ -18,6 +18,10 @@ import { qualificationDiagnostics } from './qualification-diagnostics.js';
 import { waitForQualificationPort, qualificationFailureInventory } from './qualification-runtime.js';
 import { RunscRuntimeAdapter } from './runtime-adapter.js';
 import { qualificationPrerequisites } from './qualification-prerequisites.js';
+import { qualificationPeer } from './qualification-peer.js';
+import { hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost } from './qualification-network.js';
+import { requireIsolationResults } from './isolation-probe.js';
+import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
 
 function tcpListeners() {
   return new Set(['/proc/net/tcp', '/proc/net/tcp6'].flatMap(path => readFileSync(path, 'utf8').trim().split('\n').slice(1)
@@ -36,6 +40,9 @@ export async function qualifyDataPlane(): Promise<void> {
   const deadline = new QualificationDeadline(timeout);
   let directory: string | undefined, socketDirectory: string | undefined, fixture: ReturnType<typeof qualificationNode> | undefined;
   let server: ReturnType<typeof createAgentServer> | undefined;
+  let witnesses: Awaited<ReturnType<typeof hostNetworkWitnesses>> | undefined;
+  let peer: ReturnType<typeof qualificationPeer> | undefined;
+  let processes: ReturnType<typeof qualificationProcesses> | undefined;
   const sockets = new Set<Duplex>();
   let failed = false;
   let step = 'startup'; let uid: string | undefined;
@@ -55,12 +62,19 @@ export async function qualifyDataPlane(): Promise<void> {
     process.env.EXECUTION_NODE_PORTS_ENABLED = 'true'; // Isolated qualification only.
     const baseline = tcpListeners();
     const checkTcp = () => { for (const listener of tcpListeners()) assert.ok(baseline.has(listener), 'new host TCP listener'); };
+    const hosts = qualificationHostAddresses(); console.log(`RECEIPT host_public_ips=${hosts.join(',')}`);
+    witnesses = await hostNetworkWitnesses();
+    // Explicit qualification witnesses are the only permitted TCP additions.
+    for (const listener of tcpListeners()) baseline.add(listener);
     directory = createQualificationDirectory(dirname(process.execPath), 'qd');
+    peer = qualificationPeer(directory, dirname(process.execPath));
+    await deadline.wait(peer.start(deadline.signal));
     socketDirectory = mkdtempSync('/run/execution-node/qd-');
     stage('sandbox launch');
     fixture = qualificationNode(directory, dirname(process.execPath), new RunscRuntimeAdapter('runsc', undefined, diagnostic));
     const sandbox = await fixture.start();
     uid = sandbox.id;
+    processes = qualificationProcesses(uid);
     deadline.monitor(() => {
       assert.equal(sandbox.state, 'running', 'sandbox exited before probes finished');
       assert.ok(sandbox.runtimeId); fixture!.node.adapter.assertRunning?.(sandbox.runtimeId);
@@ -68,6 +82,11 @@ export async function qualifyDataPlane(): Promise<void> {
     report('real runsc sandbox started');
     stage('5173 readiness');
     await deadline.wait(waitForQualificationPort(uid, deadline.signal, diagnostic));
+    stage('ports sandbox network isolation');
+    const targets = networkTargets(hosts, tenantWitnessHost('immo'));
+    const networkResult = execFileSync('runsc', ['--root=/run/execution-node/runsc', 'exec', `sandbox-${uid}`,
+      '/usr/local/bin/node', '-e', networkIsolationProbe(targets)], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    requireIsolationResults(networkResult, (name, ok) => { assert.ok(ok, name); report(name); }, targets.length + 4);
     const tls = qualificationCertificates();
     const data = createDataPlane({ diagnostic, custody: fixture.custody, publicKey: createPublicKey(fixture.keys.publicKeyPem),
       sandbox: (tenant, uid) => fixture!.node.daemon.peekSandbox(tenant, uid),
@@ -86,7 +105,7 @@ export async function qualifyDataPlane(): Promise<void> {
     const socketPath = join(socketDirectory, 'tls.sock');
     await new Promise<void>((resolve, reject) => { server!.once('error', reject); server!.listen(socketPath, resolve); });
     await deadline.wait(probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp, signal: deadline.signal, diagnostic, stage }));
-    checkTcp(); report('no host TCP listener opened');
+    checkTcp(); report('no host TCP listener opened except explicit qualification witnesses');
     deadline.stopMonitoring();
     stage('authenticated lifecycle');
     await deadline.wait(fixture.lifecycle(deadline.signal)); report('authenticated GET / stop-202 progress / export / DELETE');
@@ -104,13 +123,14 @@ export async function qualifyDataPlane(): Promise<void> {
     try {
       for (const socket of sockets) socket.destroy();
       // Start runtime cleanup even if the TLS listener refuses to finish closing.
-      const cleanup = [fixture?.close()];
+      const cleanup = [fixture?.close(), peer?.close(), witnesses?.close()];
       if (server) cleanup.push(new Promise<void>(resolve => server!.close(() => resolve())));
       try { await qualificationCleanup(async () => { await Promise.all(cleanup); }); }
       finally {
         if (socketDirectory) rmSync(socketDirectory, { recursive: true, force: true });
         if (directory) {
           assertCleanStartup(directory);
+          if (processes) assertQualificationProcessesGone(processes);
           rmSync(directory, { recursive: true, force: true });
           console.log('PASS empty runtime, scope and mount inventory after cleanup');
         }
