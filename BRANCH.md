@@ -75,6 +75,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN7 process matrix supplies actual HTTP authentication responses through a local server, including pre-commit health verification; preview matrices start with an unused directory.
 - [x] RUN7 M2: require all S-3..S-9 probes before fence and acceptance; S-6 requires same-origin login Location without OAuth error. Six negative regressions failed first.
 - [x] RUN7 B2/B7: emergency and every real CLI share the original monotonic deadline; expired windows refuse writes; four latency regressions failed first.
 - [x] RUN7 B1/B7: terminate and verify an expired recovery owner before lock takeover; reserve 65 s for watchdog takeover inside original fence. SIGSTOP-in-recover regression failed first.
