@@ -13,6 +13,7 @@ import { qualificationPrerequisites } from './qualification-prerequisites.js';
 import { hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost, tenantWitnessScript } from './qualification-network.js';
 import { waitForQualificationPort } from './qualification-runtime.js';
 import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
+import { qualifyCrashAndFailure } from './qualification-crash.js';
 
 export async function qualifyIsolation(): Promise<void> {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
@@ -119,7 +120,11 @@ export async function qualifyIsolation(): Promise<void> {
       } catch { cleanupFailed = true; report(`${box.tenant} cleanup`, false); }
     }
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
-    if (directory && !cleanupFailed) rmSync(directory, { recursive: true, force: true });
+    if (directory && !cleanupFailed) {
+      try { if (!failed) await qualifyCrashAndFailure(directory, release); }
+      catch (error) { cleanupFailed = true; report(`crash/failure reconciliation: ${(error as Error).message}`, false); }
+      if (!cleanupFailed) rmSync(directory, { recursive: true, force: true });
+    }
     releaseLock();
   }
   if (failed) throw new Error('isolation qualification failed');

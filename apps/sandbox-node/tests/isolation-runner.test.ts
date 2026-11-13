@@ -8,6 +8,7 @@ import { acquireNodeLock } from '../src/node-lock.js';
 vi.mock('../src/node-lock.js', () => ({ acquireNodeLock: vi.fn() }));
 vi.mock('../src/qualification-prerequisites.js', () => ({ qualificationPrerequisites: vi.fn() }));
 vi.mock('../src/qualification-processes.js', () => ({ qualificationProcesses: () => ({ pids: ['123'], namespaces: ['net:[123]'] }), assertQualificationProcessesGone: vi.fn() }));
+vi.mock('../src/qualification-crash.js', () => ({ qualifyCrashAndFailure: vi.fn() }));
 vi.mock('../src/qualification-runtime.js', () => ({ waitForQualificationPort: vi.fn() }));
 vi.mock('../src/qualification-network.js', async original => ({ ...await original<typeof import('../src/qualification-network.js')>(),
   qualificationHostAddresses: () => ['15.235.44.193'], hostNetworkWitnesses: async () => ({ close: async () => {} }) }));
