@@ -6,6 +6,10 @@ import { qualifyIsolation } from '../src/isolation-qualification.js';
 import { acquireNodeLock } from '../src/node-lock.js';
 
 vi.mock('../src/node-lock.js', () => ({ acquireNodeLock: vi.fn() }));
+vi.mock('../src/qualification-prerequisites.js', () => ({ qualificationPrerequisites: vi.fn() }));
+vi.mock('../src/qualification-runtime.js', () => ({ waitForQualificationPort: vi.fn() }));
+vi.mock('../src/qualification-network.js', async original => ({ ...await original<typeof import('../src/qualification-network.js')>(),
+  qualificationHostAddresses: () => ['15.235.44.193'], hostNetworkWitnesses: async () => ({ close: async () => {} }) }));
 vi.mock('../src/qualification-storage.js', async original => ({ ...await original<typeof import('../src/qualification-storage.js')>(),
   createQualificationDirectory: () => fs.mkdtempSync('/var/lib/builder/qualification/qi-') }));
 vi.mock('node:child_process', async original => ({ ...await original<typeof import('node:child_process')>(), execFileSync: vi.fn() }));
@@ -24,8 +28,9 @@ describe('real-host qualification orchestration', () => {
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
       const paths = new Set<string>(), launched: RunSandboxOptions[] = [], cleaned: string[] = [];
       let marker = true;
+      let sequence = 0;
       vi.mocked(fs.existsSync).mockImplementation(path => (path === '/etc/execution-node/isolated-qualification' && marker) || paths.has(String(path)));
-      vi.mocked(fs.mkdtempSync).mockImplementation(prefix => { const path = `${prefix}fixture`; paths.add(path); return path; });
+      vi.mocked(fs.mkdtempSync).mockImplementation(prefix => { const path = `${prefix}fixture${sequence++ || ''}`; paths.add(path); return path; });
       vi.mocked(fs.rmSync).mockImplementation(path => {
         if (path !== '/etc/execution-node/isolated-qualification') cleaned.push(String(path));
         else marker = false;
@@ -49,10 +54,10 @@ describe('real-host qualification orchestration', () => {
         if (file === 'losetup') return '/var/lib/builder/tenant.ext4';
         if (file === 'systemctl' && args?.[1] === 'execution-node.service') return 'inactive';
         if (file === 'runsc' && args?.[1] === 'list') return 'null';
-        if (file === 'runsc') return JSON.stringify(Array.from({ length: 23 }, (_, i) => ({ name: `probe-${i}`, ok: mode !== 'probe-failure' })));
+        if (file === 'runsc') return JSON.stringify(Array.from({ length: String(args?.at(-1)).includes('no default DNS') ? 13 : 23 }, (_, i) => ({ name: `probe-${i}`, ok: mode !== 'probe-failure' })));
         if (file === 'systemctl' && args?.[0] === 'list-units') return '';
         if (file === 'systemctl') {
-          const tenant = String(args?.[1]).includes(launched[0]!.sandboxUid) ? launched[0]!.tenantId : launched[1]!.tenantId;
+          const tenant = launched.find(box => String(args?.[1]).includes(box.sandboxUid))!.tenantId;
           const values: Record<string, string> = { Slice: `builder-tenant-${tenant}.slice`, MemoryHigh: '738197504',
             MemoryLow: '738197504', CPUWeight: mode === 'scope-failure' ? '100' : '200', TasksMax: '512', OOMPolicy: 'kill',
             ControlGroup: `/builder.slice/builder-tenant.slice/builder-tenant-${tenant}.slice/${args?.[1]}` };
@@ -63,6 +68,8 @@ describe('real-host qualification orchestration', () => {
       if (mode === 'pass') await expect(qualifyIsolation()).resolves.toBeUndefined();
       else await expect(qualifyIsolation()).rejects.toThrow('isolation qualification failed');
       expect(launched.length).toBeGreaterThan(0);
+      if (mode === 'pass') expect(launched.map(({ tenantId, network }) => [tenantId, network]))
+        .toEqual([['sentropic', 'none'], ['immo', 'none'], ['sentropic', 'ports'], ['immo', 'ports']]);
       expect(release).toHaveBeenCalledOnce();
       expect(marker).toBe(false);
       if (mode === 'pass') await expect(qualifyIsolation()).rejects.toThrow('marker required');

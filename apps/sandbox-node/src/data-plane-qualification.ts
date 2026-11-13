@@ -32,6 +32,7 @@ export async function qualifyDataPlane(): Promise<void> {
   assert.ok(existsSync(marker), 'isolated qualification marker required');
   const timeout = qualificationDeadline();
   const unlock = await acquireNodeLock();
+  const previousPorts = process.env.EXECUTION_NODE_PORTS_ENABLED;
   const deadline = new QualificationDeadline(timeout);
   let directory: string | undefined, socketDirectory: string | undefined, fixture: ReturnType<typeof qualificationNode> | undefined;
   let server: ReturnType<typeof createAgentServer> | undefined;
@@ -51,6 +52,7 @@ export async function qualifyDataPlane(): Promise<void> {
     assert.match(execFileSync('findmnt', ['--noheadings', '--raw', '--output=SOURCE', '--mountpoint', '/var/lib/builder/tenants/sentropic'],
       { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).trim(), /^\/dev\/loop[0-9]+$/);
     rmSync(marker); // Consume operator authorization once, under the service's shared flock.
+    process.env.EXECUTION_NODE_PORTS_ENABLED = 'true'; // Isolated qualification only.
     const baseline = tcpListeners();
     const checkTcp = () => { for (const listener of tcpListeners()) assert.ok(baseline.has(listener), 'new host TCP listener'); };
     directory = createQualificationDirectory(dirname(process.execPath), 'qd');
@@ -94,6 +96,8 @@ export async function qualifyDataPlane(): Promise<void> {
     if (uid) qualificationFailureInventory(uid, diagnostic);
   }
   finally {
+    if (previousPorts === undefined) delete process.env.EXECUTION_NODE_PORTS_ENABLED;
+    else process.env.EXECUTION_NODE_PORTS_ENABLED = previousPorts;
     deadline.abort(new Error('qualification finished'));
     deadline.stopMonitoring();
     diagnostic('cleanup', 'stopping qualification scope and removing private resources');
