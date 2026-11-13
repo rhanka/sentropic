@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 4 early exit: failing callback-before-launch-return regression left a finished process marked running; defer exit handling until the launch promise is registered, then confirm stop and retain output (60 tests).
 - [x] RUN 4 local verification: 59 regressions, TypeScript and shell/script syntax pass; compiled archive 01ffb345448177c33b6ecd7fe76a463026496c7817c8793ffbf71b29e1450bdb built without publication/deployment. Rebasing touched no public package source/version.
 - [ ] RUN 4 real host gate (k8s/S1-K1): provide isolated runsc/EROFS host access for lifecycle and real EDQUOT tests. Local disk qualification refuses execution without explicit isolated-host configuration; no kernel isolation success claimed.
 - [x] RUN 4 launch timeout: failing suspended-launch timeout regression demonstrated false quiescence; stop/export/delete/failure transitions now serialize per sandbox and await pending runtime launch.

@@ -310,7 +310,7 @@ export class ExecutionNodeDaemon {
         mounts: sandbox.mounts,
         command: sandbox.command,
         onExit: code => {
-          void this.runtimeExited(sandbox, code).catch(error => {
+          void Promise.resolve().then(() => this.runtimeExited(sandbox, code)).catch(error => {
             this.audit.record('sandbox.stop_failed', tenantId, id, String(error));
           });
         },
