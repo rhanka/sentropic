@@ -25,6 +25,7 @@ function fileHash(path: string) {
 // A real daemon and adapter, with keys and state belonging only to this qualification.
 export function qualificationNode(directory: string, release: string, adapter?: RuntimeAdapter) {
   const keys = generateTicketKeyPair();
+  const custodyKeys = generateTicketKeyPair();
   const rootfs = join(release, 'rootfs.erofs');
   const rootDigest = fileHash(rootfs);
   const node = createExecutionNode({ useRunsc: true, adapter, stateRoot: directory, ticketPublicKeyPem: keys.publicKeyPem,
@@ -48,7 +49,7 @@ export function qualificationNode(directory: string, release: string, adapter?: 
     }, keys.privateKeyPem);
     return api.dispatch({ path, body, method, tenantId: 'sentropic', role: 'control-plane', ticket });
   };
-  return { node, custody, keys, get ownership() { return ownership; },
+  return { node, custody, keys: custodyKeys, get ownership() { return ownership; },
     async start() {
       const identityDigest = fileHash(join(release, 'qualification.erofs'));
       const base = { tenantId: 'sentropic' as const, kind: 'source' as const, baseId: 'qualification', identityDigest };
@@ -81,15 +82,18 @@ export function qualificationNode(directory: string, release: string, adapter?: 
       assert.equal((result.body as { activeCustodyEpoch: number }).activeCustodyEpoch, 2);
       ownership = { ...ownership, custodyEpoch: 2 };
     },
-    async lifecycle() {
+    async lifecycle(signal?: AbortSignal) {
+      signal?.throwIfAborted();
       assert.ok(sandbox); const path = `/v1/sandboxes/${sandbox.id}`;
       assert.equal((await call(path, {}, 'GET')).status, 200);
       const stop = () => call(`${path}/stop`, { commandId: 'qualification-stop', devScope, stop: { retainOutput: true } });
       let result = await stop(); const deadline = Date.now() + 5000;
       while (result.status === 202 && Date.now() < deadline) {
+        signal?.throwIfAborted();
         await new Promise(resolve => setTimeout(resolve, 25)); result = await stop();
       }
       assert.equal(result.status, 200);
+      signal?.throwIfAborted();
       const output = await call(`${path}/export`, { commandId: 'qualification-export', devScope,
         spec: { buildId: 'qualification', subPath: 'ui/dist', maxBytes: 1024 * 1024 } });
       assert.equal(output.status, 200); assert.ok(Buffer.isBuffer(output.body) && output.body.length > 0);
