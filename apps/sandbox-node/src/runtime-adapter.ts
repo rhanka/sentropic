@@ -1,5 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { SandboxCgroup } from './cgroups.js';
+import { prepareBundle, destroyBundle, type Bundle } from './bundle.js';
+import { readOutput } from './output.js';
 
 export interface SandboxMount {
   readonly source: string;
@@ -24,7 +26,7 @@ export interface RuntimeAdapter {
   hasRunsc(): boolean;
   runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }>;
   stopSandbox(runtimeId: string): Promise<boolean>;
-  exportOutput(runtimeId: string, subPath: string): Promise<Buffer>;
+  exportOutput(runtimeId: string, subPath: string, maxBytes?: number): Promise<Buffer>;
   destroySandbox(runtimeId: string): Promise<void>;
 }
 
@@ -78,9 +80,9 @@ export class FakeRuntimeAdapter implements RuntimeAdapter {
 export class RunscRuntimeAdapter implements RuntimeAdapter {
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
-  private readonly scopes = new Map<string, { scope: string; tenantId: string }>();
+  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean }>();
 
-  constructor(binary = 'runsc') {
+  constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle }) {
     this.binary = binary;
   }
 
@@ -94,19 +96,22 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
-    const args = ['--network=none', '--platform=systrap', 'run', '--bundle', options.overlayUpper];
+    const args = ['--network=none', '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
 
   async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
     if (!this.hasRunsc()) failNoBinary();
+    const bundle = this.bundles.prepare(options);
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
+    const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
+    this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle, stopped: false });
     const child = spawn('systemd-run', ['--scope', `--unit=${scope}`,
       `--slice=builder-tenant-${options.tenantId}.slice`,
       `--property=MemoryMax=${options.quotaMiB}M`, '--property=MemorySwapMax=0',
       '--property=MemoryOOMGroup=yes', this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
-    await new Promise<void>((resolve, reject) => {
+    try { await new Promise<void>((resolve, reject) => {
       const deadline = Date.now() + 5000;
       let timer: ReturnType<typeof setTimeout>;
       const fail = (error: Error) => { clearTimeout(timer); reject(error); };
@@ -121,9 +126,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
         timer = setTimeout(poll, 25);
       };
       child.once('spawn', () => { timer = setTimeout(poll, 0); });
-    });
-    const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
-    this.scopes.set(runtimeId, { scope, tenantId: options.tenantId });
+    }); } catch (error) { throw Object.assign(error as Error, { runtimeId }); }
     return { runtimeId };
   }
 
@@ -131,18 +134,24 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     if (!this.hasRunsc()) failNoBinary();
     const entry = this.scopes.get(runtimeId);
     if (!entry) throw new Error('unknown sandbox scope');
-    return new SandboxCgroup().stop(entry.scope, entry.tenantId);
+    entry.stopped = await new SandboxCgroup().stop(entry.scope, entry.tenantId);
+    return entry.stopped;
   }
 
-  async exportOutput(runtimeId: string, subPath: string): Promise<Buffer> {
+  async exportOutput(runtimeId: string, subPath: string, maxBytes?: number): Promise<Buffer> {
     if (!this.hasRunsc()) failNoBinary();
-    void subPath;
-    throw new Error('read-only artifact reader is not installed; export fails closed');
+    const entry = this.scopes.get(runtimeId);
+    if (!entry?.stopped) throw new Error('sandbox_not_quiesced');
+    return readOutput(entry.bundle.output, subPath, maxBytes);
   }
 
   async destroySandbox(runtimeId: string): Promise<void> {
     if (!this.hasRunsc()) failNoBinary();
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
+    const entry = this.scopes.get(runtimeId)!;
+    execFileSync(this.binary, ['delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000 });
+    execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000 });
+    this.bundles.destroy(entry.bundle);
     this.scopes.delete(runtimeId);
   }
 }
