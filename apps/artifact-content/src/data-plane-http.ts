@@ -47,8 +47,11 @@ export async function dataPlaneFetch(transport: DataPlaneTransport, subject: Cus
       else if (options.signal.aborted) abort();
       else outgoing.end(options.body);
     });
-    if (response.status !== 200) return response;
-    const output = await custodyResponse(hop, response, options.signal, options.consume);
+    if (response.status === 403) return response;
+    // Never expose an upstream error document without the live isolation/refusal policy.
+    const safe = response.status === 200 ? response : new Response(null, { status: 502 });
+    if (response.status !== 200 && !options.consume) return safe;
+    const output = await custodyResponse(hop, safe, options.signal, options.consume);
     transferred = true; return output;
   } catch { return hop.valid() ? new Response(null, { status: 502 }) : custodyRefused(); }
   finally { if (!transferred) hop.dispose(); }
