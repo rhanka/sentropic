@@ -200,6 +200,10 @@ describe('lifecycle', () => {
     expect(bytes.length).toBeGreaterThan(0);
     const destroyed = await daemon.deleteSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'delete-1' });
     expect(destroyed.state).toBe('destroyed');
+    await expect(daemon.exportArtifacts('sentropic', created.id, {
+      devScope: spec().devScope, commandId: 'export-1',
+      spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1_000_000 },
+    })).rejects.toMatchObject({ code: 'sandbox_not_quiesced' });
     for (const type of ['sandbox.created', 'sandbox.running', 'sandbox.stopped', 'sandbox.exported', 'sandbox.destroyed']) {
       expect(audit.list({ tenantId: 'sentropic' }).some(event => event.type === type)).toBe(true);
     }
