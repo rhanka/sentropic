@@ -60,7 +60,6 @@ export function qualificationNode(directory: string, release: string, adapter?: 
       node.bases.register(base);
       // HTTP streaming and HMR run inside gVisor's network namespace, on the production service port.
       const script = `const h=require('http'),c=require('crypto'),f=require('fs');
-        f.writeFileSync('/workspace/ui/dist/index.html','qualification');
         const s=h.createServer((q,r)=>{r.writeHead(200);r.write('qualification-stream')});
         s.on('upgrade',(q,x)=>{const a=c.createHash('sha1').update(q.headers['sec-websocket-key']+
         '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
@@ -69,7 +68,7 @@ export function qualificationNode(directory: string, release: string, adapter?: 
         s.listen(5173,'127.0.0.1',()=>console.log('fixture listening 5173'));
         process.on('exit',code=>console.log('fixture exit',code));`;
       const created = await call('/v1/sandboxes', { commandId: 'qualification-create', ownership,
-        spec: { tenantId: 'sentropic', devScope, profile: 'artifact-build', network: 'ports',
+        spec: { tenantId: 'sentropic', devScope, profile: 'live', network: 'ports',
           command: ['/usr/local/bin/node', '-e', script], uid: 1000, gid: 1000, quotaMiB: qualificationDiskMiB, quotaInodes: qualificationInodes,
           baseMounts: [{ baseId: 'shared-rootfs', kind: 'rootfs', identityDigest: rootDigest }, base] } });
       assert.equal(created.status, 201);

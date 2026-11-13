@@ -52,6 +52,7 @@
 - [x] AMD-28 regressions: address and host-namespace refusal, kernel main IPv6 loopback compatibility, qualified binary fixtures.
 - [x] AMD-28 native probes: raw/packet socket refusals, UDP refusal and positive private-kernel TCP/UDP witnesses shipped in the archive/rootfs.
 - [x] AMD-28 qualification authorization: in-memory digest pin after hardened prerequisites; no production switch write.
+- [x] AMD-28 gate coverage: kernel witnesses in ports namespaces, exact host TCP/UDP inventory, fixed-port refusal and kernel-confirmed OOM cleanup in both modes.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
