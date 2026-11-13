@@ -77,6 +77,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN9 local gates: 169/169 operator tests, including shared-quota HTTP response-loss and crash-before-save recovery; 6/6 classifier tests on separately migrated PostgreSQL 17 databases (5.61 s). No package release delta; CI pending on the final rebased head.
 - [x] RUN9 rebase onto origin/main; retain T3 plan when resolving the sole BRANCH.md conflict; no package source changes.
 - [x] RUN9 B1: fresh 96-bit recipient tag per email POST attempt, including response-loss recovery; three HTTP/quota/input regressions failed first, then passed.
 - [x] RUN8 CI blocker T3-EX2: exact completed viewer fixture detail and heading/API assertions; complete organizations E2E file passed locally 11/11, zero retries, using receipt-verified CI runtime images; existing list-click coverage retained.
