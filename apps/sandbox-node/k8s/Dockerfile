@@ -11,7 +11,8 @@ COPY package.json package-lock.json ./
 COPY scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json scripts/ci/
 # Lockfile-exact dependency closure (no re-resolution).
 RUN node scripts/ci/locked-tools.mjs --prefix /workspace --ignore-scripts --no-audit --no-fund typescript@5.4.5 @types/node
-COPY apps/sandbox-node apps/sandbox-node
+COPY apps/sandbox-node/src apps/sandbox-node/src
+COPY apps/sandbox-node/tsconfig.json apps/sandbox-node/tsconfig.build.json apps/sandbox-node/
 # Emit compiled daemon (tsconfig is noEmit by default for checks).
 RUN npx --no-install tsc --project apps/sandbox-node/tsconfig.build.json
 COPY apps/sandbox-node/k8s/build-tools /tools
@@ -24,7 +25,7 @@ RUN /tools/node_modules/.bin/esbuild apps/sandbox-node/src/entry.ts --bundle --p
  && ./execution-node --self-test
 RUN apt-get update && apt-get install -y --no-install-recommends erofs-utils && rm -rf /var/lib/apt/lists/*
 COPY --from=rootfs / /sandbox-rootfs/
-RUN mkfs.erofs -T 1767225600 --all-root rootfs.erofs /sandbox-rootfs
+RUN mkfs.erofs -q -T 1767225600 --all-root rootfs.erofs /sandbox-rootfs
 
 FROM scratch AS runtime
 WORKDIR /srv/sandbox-node
