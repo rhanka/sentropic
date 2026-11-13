@@ -23,6 +23,8 @@ values below:
 - RUN 2 compiled agent release: `sha256:7ae14562ae32724524909f04aa39c066847e09a706bbabc35ece08f3726a0508`.
   Built locally on 2026-11-12; not published or deployed. k8s verifies the
   archive and its file manifest before selecting this digest.
+- RUN 3 compiled agent release (local build, not published/deployed):
+  `sha256:8415fd44723428ad534cf6d08fbc0618a3815f3c6694e5781ed687c2e160a227`.
 
 ## Verify
 
