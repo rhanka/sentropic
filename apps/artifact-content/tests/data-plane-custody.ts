@@ -2,10 +2,10 @@ import { generateKeyPairSync, sign, verify } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CustodyGuard, type CustodyToken } from '../../sandbox-node/src/custody';
+import { CustodyGuard, type CustodyToken } from './data-plane-agent-custody';
 import type { CustodyLease } from '../src/data-plane';
 
-/** Main has no signed custody verifier yet; mirror the compact EdDSA contract and use its real epoch/stream guard. */
+/** Mirror the compact EdDSA contract and the agent's epoch/stream guard within the CI-delivered fixture. */
 export function fixtureCustody() {
   const keys = generateKeyPairSync('ed25519');
   const directory = mkdtempSync(join(tmpdir(), 'content-custody-'));
