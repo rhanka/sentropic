@@ -25,7 +25,7 @@ describe('agent lifecycle transport', () => {
         return api.dispatch({ path, body, method, tenantId: 'immo', role: 'control-plane', ticket });
       };
       const created = await call('/v1/sandboxes', { commandId: 'c', ownership, spec: { tenantId: 'immo', devScope,
-        command: ['/bin/sleep', 'infinity'], profile: 'artifact-build', baseMounts: [], uid: 1000, gid: 1000 } });
+        command: ['/bin/sleep', 'infinity'], profile: 'artifact-build', baseMounts: [], uid: 1000, gid: 1000, quotaMiB: 512, quotaInodes: 1000 } });
       const path = `/v1/sandboxes/${(created.body as { id: string }).id}`;
       await expect(call(`${path}/start`, { commandId: 'missing' })).rejects.toThrow(/devScope/);
       await expect(call(`${path}/start`, { commandId: 'changed', devScope: { ...devScope, writable: ['**'] } })).rejects.toThrow(/devScope/);
@@ -50,7 +50,7 @@ describe('agent lifecycle transport', () => {
       const call = (path: string, body: unknown, method = 'POST') => api.dispatch({ path, method, tenantId: 'immo', role: 'control-plane', body });
       const owner = { tenantId: 'immo', poolOwned: false, workspaceId: 'ws', principalId: 'u', attemptId: 'a', purpose: 'build', generation: 1, custodyEpoch: 1 };
       const created = await call('/v1/sandboxes', { commandId: 'create', ownership: owner, spec: { tenantId: 'immo', devScope,
-        command: ['/bin/sleep', 'infinity'], profile: 'artifact-build', baseMounts: [], uid: 1000, gid: 1000 } });
+        command: ['/bin/sleep', 'infinity'], profile: 'artifact-build', baseMounts: [], uid: 1000, gid: 1000, quotaMiB: 512, quotaInodes: 1000 } });
       const id = (created.body as { id: string }).id;
       expect(created.status).toBe(201);
       expect((await call(`/v1/sandboxes/${id}/start`, { commandId: 'run', devScope, uid: 1000, gid: 1000 })).status).toBe(200);

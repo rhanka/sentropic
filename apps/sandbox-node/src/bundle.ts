@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, chownSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { RunSandboxOptions } from './runtime-adapter.js';
 import { assertUnlinkedPath } from './mounts.js';
+import { mountQuotaVolume } from './disk-quota.js';
 
 export type HostCommand = (command: string, args: string[]) => void;
 const host: HostCommand = (command, args) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000 }); };
@@ -22,9 +23,13 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
     mkdir(target); run('mount', ['-t', 'erofs', '-o', 'loop,ro,nosuid,nodev', image, target]); bundle.mounted.push(target);
   };
   try {
-    mkdir(path); mkdir(options.overlayUpper); mkdir(options.overlayWork); mkdir(bundle.workspace); mkdir(bundle.output);
+    mkdir(path);
+    const volume = mountQuotaVolume(bundle, options.diskQuotaMiB, options.quotaInodes, run);
+    const upper = join(volume, 'upper'), work = join(volume, 'work');
+    bundle.output = join(volume, 'output');
+    mkdir(upper); mkdir(work); mkdir(bundle.workspace); mkdir(bundle.output);
     mountImage(root.source, rootfs); mountImage(source.source, lower);
-    run('mount', ['-t', 'overlay', 'overlay', '-o', `lowerdir=${lower},upperdir=${options.overlayUpper},workdir=${options.overlayWork}`, bundle.workspace]);
+    run('mount', ['-t', 'overlay', 'overlay', '-o', `lowerdir=${lower},upperdir=${upper},workdir=${work}`, bundle.workspace]);
     bundle.mounted.push(bundle.workspace);
     const mounts: Array<{ destination: string; type: string; source: string; options: string[] }> = [
       { destination: '/proc', type: 'proc', source: 'proc', options: ['nosuid', 'nodev', 'noexec'] },
