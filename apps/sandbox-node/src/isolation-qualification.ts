@@ -10,7 +10,7 @@ import { assertCleanStartup } from './restart.js';
 import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
 import { createQualificationDirectory, qualificationDiskMiB, qualificationInodes } from './qualification-storage.js';
 import { qualificationPrerequisites } from './qualification-prerequisites.js';
-import { hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost, tenantWitnessScript } from './qualification-network.js';
+import { hostListeners, kernelNetworkWitness, networkProbeCount, hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost, tenantWitnessScript } from './qualification-network.js';
 import { waitForQualificationPort } from './qualification-runtime.js';
 import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
 import { qualifyCrashAndFailure } from './qualification-crash.js';
@@ -30,6 +30,8 @@ export async function qualifyIsolation(): Promise<void> {
   const adapter = new RunscRuntimeAdapter();
   const boxes: Array<{ tenant: string; network: 'none' | 'ports'; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string; processes?: ReturnType<typeof qualificationProcesses> }> = [];
   let witnesses: Awaited<ReturnType<typeof hostNetworkWitnesses>> | undefined;
+  const kernels: Awaited<ReturnType<typeof kernelNetworkWitness>>[] = [];
+  let listeners: string | undefined;
   const previousPorts = process.env.EXECUTION_NODE_PORTS_ENABLED;
   let directory: string | undefined, cleanupFailed = false;
   try {
@@ -37,6 +39,7 @@ export async function qualifyIsolation(): Promise<void> {
     assertCleanStartup();
     assertNoQualificationLeftovers(release);
     qualificationPrerequisites(release);
+    listeners = hostListeners();
     directory = createQualificationDirectory(release, 'qi');
     // Consume the operator's authorization once, under the shared lock.
     rmSync('/etc/execution-node/isolated-qualification');
@@ -55,7 +58,7 @@ export async function qualifyIsolation(): Promise<void> {
       const image = join(base, 'source.erofs');
       boxes.push({ tenant, network, uid, path, base, image, loop });
       copyFileSync(join(release, 'qualification.erofs'), image);
-      const { runtimeId } = await adapter.runSandbox({ tenantId: tenant, sandboxUid: uid, network,
+      const { runtimeId } = await adapter.runSandbox({ tenantId: tenant, sandboxUid: uid, network, profile: 'live',
         overlayUpper: join(path, 'upper'), overlayWork: join(path, 'work'), quotaMiB: 704,
         diskQuotaMiB: qualificationDiskMiB, quotaInodes: qualificationInodes, uid: 1000, gid: 1000,
         command: ['/usr/local/bin/node', '-e', tenantWitnessScript(tenant)],
@@ -65,6 +68,7 @@ export async function qualifyIsolation(): Promise<void> {
       boxes[boxes.length - 1]!.runtimeId = runtimeId;
       boxes[boxes.length - 1]!.processes = qualificationProcesses(uid);
       if (network === 'ports') assert.ok(boxes[boxes.length - 1]!.processes!.namespaces.length, 'private netns missing');
+      if (network === 'ports') kernels.push(await kernelNetworkWitness(uid, release));
       await waitForQualificationPort(uid, AbortSignal.timeout(5000), () => {});
       for (const directory of [path, base]) {
         const sentinel = join(directory, 'isolation-marker');
@@ -79,7 +83,7 @@ export async function qualifyIsolation(): Promise<void> {
       const targets = networkTargets(hosts, tenantWitnessHost(other.tenant));
       const networkResult = run('runsc', ['--root=/run/execution-node/runsc', 'exec', `sandbox-${box.uid}`,
         '/usr/local/bin/node', '-e', networkIsolationProbe(targets)]);
-      requireIsolationResults(networkResult, (name, ok) => report(`${box.tenant} ${box.network} ${name}`, ok), targets.length + 4);
+      requireIsolationResults(networkResult, (name, ok) => report(`${box.tenant} ${box.network} ${name}`, ok), networkProbeCount(targets));
       const paths = [{ path: other.path, directory: true }, { path: other.base, directory: true },
         { path: other.loop, directory: false }, { path: join(root, other.tenant), directory: true,
           file: join(other.path, 'isolation-marker') },
@@ -97,6 +101,7 @@ export async function qualifyIsolation(): Promise<void> {
     }
   } catch (error) { console.error(error instanceof Error ? error.message : 'isolation execution failed'); report('real-host isolation execution', false); }
   finally {
+    for (const kernel of kernels) await kernel.close();
     if (previousPorts === undefined) delete process.env.EXECUTION_NODE_PORTS_ENABLED;
     else process.env.EXECUTION_NODE_PORTS_ENABLED = previousPorts;
     try { await witnesses?.close(); } catch { failed = true; report('host witnesses cleanup', false); }
@@ -126,6 +131,10 @@ export async function qualifyIsolation(): Promise<void> {
       if (!cleanupFailed) rmSync(directory, { recursive: true, force: true });
     }
     releaseLock();
+    if (listeners !== undefined) {
+      try { assert.equal(hostListeners(), listeners); report('host ss -ltnup unchanged', true); }
+      catch { report('host ss -ltnup changed', false); }
+    }
   }
   if (failed) throw new Error('isolation qualification failed');
 }

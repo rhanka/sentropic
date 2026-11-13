@@ -31,15 +31,20 @@ export async function qualificationCrashWorker(path: string) {
 export async function qualifyCrashAndFailure(directory: string, release: string): Promise<void> {
   const run = (file: string, args: string[]) => execFileSync(file, args,
     { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-  for (const network of ['none', 'ports'] as const) for (const failure of [false, true]) {
+  for (const network of ['none', 'ports'] as const) for (const failure of [false, true, 'oom'] as const) {
     assertCleanStartup();
     const uid = `qual-crash-${randomUUID()}`, path = join(directory, uid);
     mkdirSync(path, { mode: 0o700 });
     copyFileSync(join(release, 'qualification.erofs'), join(path, 'source.erofs'));
-    const options: RunSandboxOptions = { network, tenantId: 'sentropic', sandboxUid: uid,
+    const memoryEvents = '/sys/fs/cgroup/builder.slice/builder-tenant.slice/builder-tenant-sentropic.slice/memory.events';
+    const oomKills = () => Number(/^oom_kill (\d+)$/m.exec(readFileSync(memoryEvents, 'utf8'))?.[1] ?? -1);
+    const beforeOOM = failure === 'oom' ? oomKills() : 0;
+    const options: RunSandboxOptions = { network, profile: 'live', tenantId: 'sentropic', sandboxUid: uid,
       overlayUpper: join(path, 'box/upper'), overlayWork: join(path, 'box/work'),
       quotaMiB: 704, diskQuotaMiB: qualificationDiskMiB, quotaInodes: qualificationInodes, uid: 1000, gid: 1000,
-      command: ['/usr/local/bin/node', '-e', failure ? 'setTimeout(()=>process.exit(1),1500)' : 'setInterval(()=>{},1000)'],
+      command: ['/usr/local/bin/node', '-e', failure === 'oom'
+        ? 'const buffers=[];setTimeout(()=>{setInterval(()=>{for(let i=0;i<32;i++)buffers.push(Buffer.alloc(1024*1024,1))},1)},1500)'
+        : failure ? 'setTimeout(()=>process.exit(1),1500)' : 'setInterval(()=>{},1000)'],
       mounts: [{ source: join(release, 'rootfs.erofs'), target: '/bases/rootfs/release', readOnly: true },
         { source: join(path, 'source.erofs'), target: '/bases/source/qualification', readOnly: true }] };
     writeFileSync(join(path, 'options.json'), JSON.stringify(options), { mode: 0o600 });
@@ -59,6 +64,7 @@ export async function qualifyCrashAndFailure(directory: string, release: string)
         const timer = setTimeout(() => reject(new Error('crash worker exit deadline')), 5000); timer.unref();
       })]);
       if (failure) assert.equal(result.code, 7); else assert.equal(result.signal, 'SIGKILL');
+      if (failure === 'oom') assert.ok(oomKills() > beforeOOM && beforeOOM >= 0, 'kernel OOM kill not observed');
       assert.throws(() => assertCleanStartup(), /surviving sandbox/);
     } finally {
       child.kill('SIGKILL'); await exited;
@@ -74,6 +80,6 @@ export async function qualifyCrashAndFailure(directory: string, release: string)
       assert.ok(!readFileSync('/proc/self/mountinfo', 'utf8').split('\n').some(line => line.split(' ')[4]?.startsWith(`${path}/`)));
       rmSync(path, { recursive: true });
     }
-    console.log(`PASS ${network} ${failure ? 'failure' : 'SIGKILL gate crash'} reconciled: no scope, runtime, mount, process or netns`);
+    console.log(`PASS ${network} ${failure === 'oom' ? 'OOM' : failure ? 'failure' : 'SIGKILL gate crash'} reconciled: no scope, runtime, mount, process or netns`);
   }
 }

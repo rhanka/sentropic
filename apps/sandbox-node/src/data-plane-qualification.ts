@@ -19,7 +19,7 @@ import { waitForQualificationPort, qualificationFailureInventory } from './quali
 import { RunscRuntimeAdapter } from './runtime-adapter.js';
 import { qualificationPrerequisites } from './qualification-prerequisites.js';
 import { qualificationPeer } from './qualification-peer.js';
-import { hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost } from './qualification-network.js';
+import { hostListeners, kernelNetworkWitness, networkProbeCount, hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost } from './qualification-network.js';
 import { requireIsolationResults } from './isolation-probe.js';
 import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
 
@@ -42,6 +42,8 @@ export async function qualifyDataPlane(): Promise<void> {
   let server: ReturnType<typeof createAgentServer> | undefined;
   let witnesses: Awaited<ReturnType<typeof hostNetworkWitnesses>> | undefined;
   let peer: ReturnType<typeof qualificationPeer> | undefined;
+  let kernel: Awaited<ReturnType<typeof kernelNetworkWitness>> | undefined;
+  let listeners: string | undefined;
   let processes: ReturnType<typeof qualificationProcesses> | undefined;
   const sockets = new Set<Duplex>();
   let failed = false;
@@ -56,6 +58,7 @@ export async function qualifyDataPlane(): Promise<void> {
     assertCleanStartup();
     assertNoQualificationLeftovers(dirname(process.execPath));
     qualificationPrerequisites(dirname(process.execPath));
+    listeners = hostListeners();
     assert.match(execFileSync('findmnt', ['--noheadings', '--raw', '--output=SOURCE', '--mountpoint', '/var/lib/builder/tenants/sentropic'],
       { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).trim(), /^\/dev\/loop[0-9]+$/);
     rmSync(marker); // Consume operator authorization once, under the service's shared flock.
@@ -74,6 +77,7 @@ export async function qualifyDataPlane(): Promise<void> {
     fixture = qualificationNode(directory, dirname(process.execPath), new RunscRuntimeAdapter('runsc', undefined, diagnostic));
     const sandbox = await fixture.start();
     uid = sandbox.id;
+    kernel = await kernelNetworkWitness(uid, dirname(process.execPath));
     processes = qualificationProcesses(uid);
     deadline.monitor(() => {
       assert.equal(sandbox.state, 'running', 'sandbox exited before probes finished');
@@ -86,7 +90,9 @@ export async function qualifyDataPlane(): Promise<void> {
     const targets = networkTargets(hosts, tenantWitnessHost('immo'));
     const networkResult = execFileSync('runsc', ['--root=/run/execution-node/runsc', 'exec', `sandbox-${uid}`,
       '/usr/local/bin/node', '-e', networkIsolationProbe(targets)], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-    requireIsolationResults(networkResult, (name, ok) => { assert.ok(ok, name); report(name); }, targets.length + 4);
+    requireIsolationResults(networkResult, (name, ok) => { assert.ok(ok, name); report(name); }, networkProbeCount(targets));
+    await assert.rejects(fixture.node.adapter.portTarget!(sandbox.runtimeId!, 5174));
+    report('port other than 5173 refused');
     const tls = qualificationCertificates();
     const data = createDataPlane({ diagnostic, custody: fixture.custody, publicKey: createPublicKey(fixture.keys.publicKeyPem),
       sandbox: (tenant, uid) => fixture!.node.daemon.peekSandbox(tenant, uid),
@@ -123,6 +129,7 @@ export async function qualifyDataPlane(): Promise<void> {
     try {
       for (const socket of sockets) socket.destroy();
       // Start runtime cleanup even if the TLS listener refuses to finish closing.
+      await kernel?.close();
       const cleanup = [fixture?.close(), peer?.close(), witnesses?.close()];
       if (server) cleanup.push(new Promise<void>(resolve => server!.close(() => resolve())));
       try { await qualificationCleanup(async () => { await Promise.all(cleanup); }); }
@@ -135,6 +142,7 @@ export async function qualifyDataPlane(): Promise<void> {
           console.log('PASS empty runtime, scope and mount inventory after cleanup');
         }
       }
+      if (listeners !== undefined) { assert.equal(hostListeners(), listeners); console.log('PASS host ss -ltnup unchanged'); }
     } catch { failed = true; console.error('FAIL step=cleanup data-plane qualification cleanup'); }
     deadline.close(); unlock();
   }
