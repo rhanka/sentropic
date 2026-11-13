@@ -5,6 +5,7 @@ import { readOutput } from './output.js';
 import { writeSource } from './source-write.js';
 import { checkWritePath } from './mounts.js';
 import { parseRunscList } from './runsc-inventory.js';
+import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 
 export interface SandboxMount {
@@ -154,7 +155,10 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
         timer = setTimeout(poll, 25);
       };
       child.once('spawn', () => { timer = setTimeout(poll, 0); });
-    }); } catch (error) { throw Object.assign(error as Error, { runtimeId }); }
+    }); } catch (error) {
+      try { throwFilesystemError(error); }
+      catch (mapped) { throw Object.assign(mapped as Error, { runtimeId }); }
+    }
     return { runtimeId };
   }
 
