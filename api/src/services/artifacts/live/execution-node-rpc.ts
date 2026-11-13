@@ -49,35 +49,35 @@ export function createCustodyAuthority(options: {
       if (found.length !== 1) return revoked(); key = found[0]!;
     } else return revoked();
     const authority = async () => {
-    let expiresAt = subject.kind === 'live' ? subject.route.expiresAt : null;
-    const runtime = (await options.store.read(key))?.runtime;
-    const binding = await options.binding(key);
-    if (!runtime || !runtime.podUid || binding.ownerId !== runtime.ownerId || binding.generation !== runtime.generation
-      || !['REVIVING', 'LIVE', 'BUILD_PROVISIONING', 'BUILD_QUEUED', 'BUILDING'].includes(runtime.phase)) return revoked();
-    if (subject.kind === 'live') {
-      const route = subject.route;
-      if (runtime.phase !== 'LIVE' || !Number.isFinite(route.expiresAt) || route.expiresAt <= (options.now ?? Date.now)()
-        || !route.principalId || runtime.appliedRevision === null || route.sourceRevision !== liveRevision(runtime.appliedRevision)
-        || !['sessionId', 'generation', 'routeEpoch', 'podName'].every(field =>
-          route[field as keyof Route] === runtime[field as keyof LiveRuntime]) || route.podUid !== runtime.podUid) return revoked();
-      const fence = await options.invitations.current(key, runtime.generation);
-      try {
-        const role = liveRole(runtime, binding as Parameters<typeof liveRole>[1], {
-          principalId: route.principalId,
-          invitation: route.role === 'invitee' && route.invitationId ? { id: route.invitationId,
-            epoch: route.invitationEpoch!, expiresAt: route.invitationExp! * 1000 } : undefined,
-        }, 'read', (options.now ?? Date.now)(), fence.epoch);
-        if (role === 'invitee' && (!Number.isFinite(route.invitationExp) || fence.expiresAt === null
-          || fence.expiresAt <= (options.now ?? Date.now)())) return revoked();
-      } catch { return revoked(); }
-      if (route.role === 'invitee') expiresAt = Math.min(expiresAt!, route.invitationExp! * 1000, fence.expiresAt!);
-    }
-    const grant = subject.kind === 'live' ? subject.route : null;
-    return { runtime, value: { owner: binding.ownerId, principal: grant?.principalId ?? binding.ownerId,
-      role: grant?.role ?? 'binding_owner', invitationId: grant?.invitationId ?? '',
-      invitationEpoch: grant?.invitationEpoch ?? 0, invitationExp: grant?.invitationExp ?? 0,
-      sessionId: runtime.sessionId, generation: runtime.generation, routeEpoch: runtime.routeEpoch,
-      physicalUid: runtime.podUid, sourceRevision: runtime.appliedRevision, expiresAt } };
+      let expiresAt = subject.kind === 'live' ? subject.route.expiresAt : null;
+      const runtime = (await options.store.read(key))?.runtime;
+      const binding = await options.binding(key);
+      if (!runtime || !runtime.podUid || binding.ownerId !== runtime.ownerId || binding.generation !== runtime.generation
+        || !['REVIVING', 'LIVE', 'BUILD_PROVISIONING', 'BUILD_QUEUED', 'BUILDING'].includes(runtime.phase)) return revoked();
+      if (subject.kind === 'live') {
+        const route = subject.route;
+        if (runtime.phase !== 'LIVE' || !Number.isFinite(route.expiresAt) || route.expiresAt <= (options.now ?? Date.now)()
+          || !route.principalId || runtime.appliedRevision === null || route.sourceRevision !== liveRevision(runtime.appliedRevision)
+          || !['sessionId', 'generation', 'routeEpoch', 'podName'].every(field =>
+            route[field as keyof Route] === runtime[field as keyof LiveRuntime]) || route.podUid !== runtime.podUid) return revoked();
+        const fence = await options.invitations.current(key, runtime.generation);
+        try {
+          const role = liveRole(runtime, binding as Parameters<typeof liveRole>[1], {
+            principalId: route.principalId,
+            invitation: route.role === 'invitee' && route.invitationId ? { id: route.invitationId,
+              epoch: route.invitationEpoch!, expiresAt: route.invitationExp! * 1000 } : undefined,
+          }, 'read', (options.now ?? Date.now)(), fence.epoch);
+          if (role === 'invitee' && (!Number.isFinite(route.invitationExp) || fence.expiresAt === null
+            || fence.expiresAt <= (options.now ?? Date.now)())) return revoked();
+        } catch { return revoked(); }
+        if (route.role === 'invitee') expiresAt = Math.min(expiresAt!, route.invitationExp! * 1000, fence.expiresAt!);
+      }
+      const grant = subject.kind === 'live' ? subject.route : null;
+      return { runtime, value: { owner: binding.ownerId, principal: grant?.principalId ?? binding.ownerId,
+        role: grant?.role ?? 'binding_owner', invitationId: grant?.invitationId ?? '',
+        invitationEpoch: grant?.invitationEpoch ?? 0, invitationExp: grant?.invitationExp ?? 0,
+        sessionId: runtime.sessionId, generation: runtime.generation, routeEpoch: runtime.routeEpoch,
+        physicalUid: runtime.podUid, sourceRevision: runtime.appliedRevision, expiresAt } };
     };
     const { runtime, value } = await authority();
     const session = await options.session(runtime);
