@@ -6,6 +6,7 @@ export type HeavyProfile = keyof typeof SERVICE_TIMEOUT_MS;
 
 /** One non-preemptible publish slot; the opposite tenant gets the next turn. */
 export class BuildQueue {
+  readonly waitMs = { sentropic: 0, immo: 0 };
   private holder?: ExecutionNodeTenantId;
   private last?: ExecutionNodeTenantId;
   private timer?: ReturnType<typeof setTimeout>;
@@ -24,6 +25,7 @@ export class BuildQueue {
   }
 
   acquire(tenantId: ExecutionNodeTenantId, profile: HeavyProfile = 'artifact-build', onTimeout?: () => Promise<void>, validate?: () => void): Promise<void> {
+    const enqueuedAt = Date.now();
     const queue = this.pending.get(tenantId)!;
     if (queue.length + Number(this.holder === tenantId) >= this.maxOutstandingPerTenant) {
       return Promise.reject(new ExecutionNodeError('tenant_quota_exceeded', 'publish queue full', 250));
@@ -32,6 +34,7 @@ export class BuildQueue {
       queue.push(() => {
         try { validate?.(); } catch (error) { reject(error); return false; }
         this.holder = this.last = tenantId;
+        this.waitMs[tenantId] += Date.now() - enqueuedAt;
         this.timer = setTimeout(() => { void onTimeout?.().catch(() => { /* Keep capacity until cleanup succeeds. */ }); }, SERVICE_TIMEOUT_MS[profile]);
         this.timer.unref();
         resolve();

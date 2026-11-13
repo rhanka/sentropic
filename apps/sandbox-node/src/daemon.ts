@@ -168,6 +168,10 @@ export class ExecutionNodeDaemon {
   getSandbox(tenantId: ExecutionNodeTenantId, id: string): SandboxRecord | undefined {
     return this.sandboxes.get(this.key(tenantId, id));
   }
+  activeCount(tenantId: ExecutionNodeTenantId): number {
+    return [...this.sandboxes.values()].filter(sandbox => sandbox.tenantId === tenantId
+      && ['creating', 'standby', 'running', 'stopping'].includes(sandbox.state)).length;
+  }
 
   private releaseSlot(sandbox: SandboxRecord): void {
     if (sandbox.slot) {
