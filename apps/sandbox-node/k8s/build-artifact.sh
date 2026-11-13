@@ -11,9 +11,11 @@ docker buildx build --load --file "$HERE/Dockerfile" --tag "$IMAGE_TAG" .
 container=$(docker create "$IMAGE_TAG")
 trap 'docker rm "$container" >/dev/null' EXIT
 release=$(mktemp -d "$OUT/release.XXXXXX")
-docker cp "$container:/srv/sandbox-node/dist" "$release/dist"
-docker cp "$container:/srv/sandbox-node/package.json" "$release/package.json"
-(cd "$release"; find dist package.json -type f -print | LC_ALL=C sort | xargs sha256sum > SHA256SUMS)
+docker cp "$container:/srv/sandbox-node/execution-node" "$release/execution-node"
+docker cp "$container:/srv/sandbox-node/rootfs.erofs" "$release/rootfs.erofs"
+cp "$HERE/execution-node.service" "$HERE/start.sh" "$HERE/agent.env" "$HERE/operator-ticket.ed25519.pub.pem" "$release/"
+chmod 0755 "$release/execution-node" "$release/start.sh"
+(cd "$release"; find . -type f ! -name SHA256SUMS -print | LC_ALL=C sort | xargs sha256sum > SHA256SUMS)
 tar --sort=name --mtime='2026-01-01' --owner=0 --group=0 --numeric-owner \
   -cf "$OUT/sandbox-node.tar" -C "$release" .
 digest=$(sha256sum "$OUT/sandbox-node.tar" | cut -d' ' -f1)
