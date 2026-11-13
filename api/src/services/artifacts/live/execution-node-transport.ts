@@ -3,7 +3,7 @@ import { createHash, createPrivateKey, createPublicKey, type KeyObject } from 'n
 
 export interface NodeReply { status: number; headers: Record<string, string | string[] | undefined>; bytes: Buffer }
 export type NodeTransport = (method: string, path: string, body?: Buffer,
-  headers?: Record<string, string>) => Promise<NodeReply>;
+  headers?: Record<string, string>, signal?: AbortSignal) => Promise<NodeReply>;
 export interface ExecutionNodeConfig {
   url: URL; nodeId: string; nodeInstanceId: string; nodeEpoch: number;
   provenanceKey: KeyObject; ticketKey: KeyObject;
@@ -54,9 +54,9 @@ export function executionNodeConfig(env: Env): ExecutionNodeConfig {
 /** Bounded binary export, no redirects, normal hostname verification, TLS 1.3 + control-plane certificate. */
 export function executionNodeTransport(config: ExecutionNodeConfig): NodeTransport & { close(): void } {
   const agent = new Agent({ ...config.tls, minVersion: 'TLSv1.3', keepAlive: true, rejectUnauthorized: true });
-  const call: NodeTransport = (method, path, body, headers = {}) => new Promise<NodeReply>((resolve, reject) => {
+  const call: NodeTransport = (method, path, body, headers = {}, signal) => new Promise<NodeReply>((resolve, reject) => {
     if (!path.startsWith('/v1/') || path.includes('://')) { reject(new ExecutionNodeRefusal('invalid_node_path')); return; }
-    const req = request(new URL(path, config.url), { method, agent,
+    const req = request(new URL(path, config.url), { method, agent, signal,
       headers: { 'content-type': 'application/json', ...(body ? { 'content-length': String(body.length) } : {}), ...headers } }, res => {
       let length = 0; const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => {
