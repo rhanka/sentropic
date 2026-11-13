@@ -25,7 +25,9 @@
 
 ## Feedback Loop
 - [x] Round 3 tests: 193 tests pass, including real prepareBundle capacity failure, repeated cleanup, simulated 384 MiB `/run`, and both gate orchestrations; both TypeScript projects and memory check pass.
+- [x] Round 3 capacity regression also exercises the actual generated spec through prepareBundle at 384 MiB free and asserts an 81 MiB loop image.
 - [ ] Round 3 delivery: rebuild/verify archive, push and exact-head CI; update report and recreate completion marker.
+- [x] Round 3 archive rebuilt and verified: SHA-256 `7400cffa2c788629119757fb749980038722e9a75eabfd5a35dc9f7f6e86b1f6`; 11 internal sums, shipped-file comparisons and SEA root/non-root checks pass.
 - [x] Round 3: move qualification images/bundles to disk-backed `/var/lib/builder/qualification`; preflight both gates, use 16 MiB/1024-inode fixtures, and make unregistered runtime cleanup idempotent.
 - [x] Round 2: reproduce CI EPERM under UID/GID 1001:1001; stub only test chown, assert 1000:1000 ownership and real modes under umask 077; all 185 tests pass unprivileged. Production chown and archive bytes are unchanged.
 - [x] Astra review: guard delayed launcher exit after scope-map teardown; add regression before archive rebuild.

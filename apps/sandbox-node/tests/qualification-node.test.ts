@@ -45,7 +45,12 @@ describe('qualification session spec', () => {
       expect(options).toMatchObject({ diskQuotaMiB: 16, quotaInodes: 1024 });
       expect(options!.overlayUpper.startsWith(directory + '/')).toBe(true);
       expect(options!.mounts.every(mount => mount.source.startsWith(directory + '/'))).toBe(true);
-      const bundle = prepareBundle(options!, () => {});
+      const commands: Array<[string, string[]]> = [];
+      const capacity = vi.spyOn(fs, 'statfsSync').mockReturnValue({ bavail: 384n, bsize: 1048576n, ffree: 4096n } as never);
+      let bundle: ReturnType<typeof prepareBundle>;
+      try { bundle = prepareBundle(options!, (command, args) => { commands.push([command, args]); }); }
+      finally { capacity.mockRestore(); }
+      expect(commands).toContainEqual(['truncate', ['-s', '81M', join(bundle.path, 'writable.ext4')]]);
       try {
         expect(chownSync).toHaveBeenCalledExactlyOnceWith(bundle.output, 1000, 1000);
         expect(statSync(bundle.path).mode & 0o777).toBe(0o700);
