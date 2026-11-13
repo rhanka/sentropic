@@ -35,6 +35,7 @@
   - `api/**`
 
 ## Feedback Loop
+- [x] RUN 4 omitted-answer coverage: normalize an absent answers field to null when projecting independent evidence; all 31 Gemini tests pass, and the public-surface regression passes 4/4 without timeout changes. Strict root lock dry-run passes.
 - [x] RUN 4 Astra MAJOR 2: six failing-first stream tests cover HTTP errors, status/observed redirects, non-JSON content and invalid/oversized declared lengths. Every unread-body refusal now cancels the stream without awaiting provider cleanup; transport regression suite passes 15 tests. Adapter remains opt-in, API-key only, never a default.
 - [x] RUN 4 Astra MAJOR 1: reproduced three verdict-only failures before the fix; retain independently validated usage, served identity and request ID. The host now settles 100 microUSD for 1000 input tokens even when the verdict is invalid; Gemini routing regression suite passes 15 tests.
 - [x] BRGD-EX5: owner-approved RUN 4 rebase onto merged #1013 at origin/main bc8770982. Rationale: derive the smallest Gemini release delta from merged Ember. Impact: retain mesh 0.37.0 -> 0.38.0, gateway 0.23.1 -> 0.23.2, cluster dev.25 -> dev.26, and only text/speech mesh ceilings <0.38.0 -> <0.39.0 with matching locks/fixtures/assertions. Registry after rebase: mesh 0.37.0, gateway 0.23.1, cluster 0.25.0, all below candidates. Rollback: revert the Gemini release/range delta; do not alter inherited Ember or gates.
