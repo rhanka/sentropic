@@ -71,6 +71,17 @@ describe('Gemini Decisions host integration', () => {
     expect(adapter.listModels()).toEqual([]);
     expect(f.fetch).not.toHaveBeenCalled();
   });
+  it.each(['gemini', 'agy', 'cloud-code', 'antigravity'])('should reject %s consumer OAuth before egress', async (provider) => {
+    const f = setup();
+    const material = { type: 'account-transport' as const, provider, accessToken: 'synthetic-oauth-canary' };
+    expect(f.adapter.validateAuth(material).ok).toBe(false);
+    expect(await f.adapter.decision(f.request, { auth: material }))
+      .toMatchObject({ ok: false, error: { code: 'CREDENTIAL_MISSING' } });
+    expect(await createDecisionService({ ...f.options, resolveAuth: async () => ({ material,
+      descriptor: { sourceType: 'account-transport' as const } }) }).decide(f.request))
+      .toMatchObject({ ok: false, error: { code: 'CREDENTIAL_MISSING' }, receipt: { attempts: 0 } });
+    expect(f.fetch).not.toHaveBeenCalled();
+  });
   it('should retain liability when the documented response has no served identity', async () => {
     const f = setup(); delete f.body.model;
     expect(await createDecisionService(f.options).decide(f.request)).toMatchObject({ ok: false,
