@@ -96,6 +96,17 @@ export class ExecutionNodeAdapter {
     }
     return nodeJson(await this.command(session, 'POST', '/v1/sandboxes', commandId, { spec, ownership: session.ownership }));
   }
+  async status(session: NodeSession) {
+    this.active(); if (!this.verified) await this.inspect();
+    if (!/^[a-zA-Z0-9-]+$/.test(session.physicalUid)) throw new ExecutionNodeRefusal('invalid_node_session');
+    const reply = await this.transport('GET', `/v1/sandboxes/${session.physicalUid}`,
+      undefined, { 'X-Tenant-Id': session.ownership.tenantId, 'X-Expected-Physical-Uid': session.physicalUid });
+    if (reply.status === 404) return undefined;
+    const status = nodeJson(this.checked(reply)); this.identity(status);
+    if (status.tenantId !== session.ownership.tenantId || status.physicalUid !== session.physicalUid
+      || JSON.stringify(status.ownership) !== JSON.stringify(session.ownership)) throw new ExecutionNodeRefusal('invalid_node_session');
+    return status;
+  }
   async mutate(session: NodeSession, operation: string, commandId: string, fields: Record<string, unknown> = {}) {
     if (!/^[a-zA-Z0-9-]+$/.test(session.physicalUid)
       || !['start', 'claim', 'stop', 'export', 'renew', 'revoke-custody', 'write', 'delete'].includes(operation)) {

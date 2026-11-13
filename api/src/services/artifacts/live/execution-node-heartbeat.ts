@@ -19,7 +19,9 @@ export function executionNodeHeartbeat(pool: Pool, node: ExecutionNodeAdapter, a
         const candidate = await pool.connect();
         if (stopped) { candidate.release(); return; }
         candidate.on('error', discard);
-        const result = await candidate.query<{ held: boolean }>('SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS held', [lock]);
+        let result;
+        try { result = await candidate.query<{ held: boolean }>('SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS held', [lock]); }
+        catch (error) { candidate.removeListener('error', discard); candidate.release(true); throw error; }
         if (!result.rows[0]?.held) { candidate.removeListener('error', discard); candidate.release(); return; }
         client = candidate;
       }
