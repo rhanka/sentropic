@@ -3,6 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { createHostAssertionLive, createLiveFences } from './live-assertion';
 import { CONTROL_HEADER, FENCE_HEADER, MIN_KEY_BYTES } from '@sentropic/artifacts/live-host';
 import { createLiveProxy, type LiveProxyPorts } from './live';
+import type { DataPlaneTransport } from './data-plane';
 
 /** Marks a replica-to-replica copy of an accepted push; a copy is applied, never relayed again. */
 export const RELAY_HEADER = 'x-live-relayed';
@@ -84,7 +85,7 @@ export const httpRelay = (port: number) => (peer: string, request: Request, head
  * Composes the live edge from configuration (README « Live edge »). Absent `APP_ARTIFACT_LIVE_ENABLED=1` there is no
  * live edge; an incomplete or inconsistent configuration refuses startup.
  */
-export function liveFromEnv(env: NodeJS.ProcessEnv, baseDomain: string) {
+export function liveFromEnv(env: NodeJS.ProcessEnv, baseDomain: string, dataPlane?: DataPlaneTransport) {
   if (env.APP_ARTIFACT_LIVE_ENABLED !== '1') return undefined;
   const hostKeys = keyRing(env, 'APP_ARTIFACT_LIVE_HOST_KEYS');
   const controllerKeys = keyRing(env, 'APP_ARTIFACT_LIVE_CONTROLLER_KEYS');
@@ -115,5 +116,5 @@ export function liveFromEnv(env: NodeJS.ProcessEnv, baseDomain: string) {
   // Without peers there is no replica to relay to, so no relayed copy is ever accepted.
   const replicas = peers ? () => resolve4(peers) : async (): Promise<string[]> => [];
   return createLiveProxy(withFanOut(ports, { peers: replicas, send: httpRelay(port) }),
-    { builderNamespace: env.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE?.trim() || undefined });
+    { builderNamespace: env.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE?.trim() || undefined, dataPlane });
 }
