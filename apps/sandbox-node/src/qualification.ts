@@ -4,7 +4,7 @@ import { mkdtempSync, chmodSync, chownSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mountQuotaVolume } from './disk-quota.js';
-import { destroyBundle, type Bundle } from './bundle.js';
+import { destroyBundle, type Bundle, type HostCommand } from './bundle.js';
 import { isEdquot } from './filesystem-errors.js';
 
 export function quotaWriter(): void {
@@ -19,7 +19,7 @@ export function quotaWriter(): void {
 export function qualifyDisk(): void {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
   assert.equal(process.getuid?.(), 0, 'root required');
-  const run = (command: string, args: string[]) => { execFileSync(command, args, { stdio: 'pipe', timeout: 10000 }); };
+  const run: HostCommand = (command, args, options) => { execFileSync(command, args, { stdio: 'pipe', timeout: 10000, ...options }); };
   for (const dimension of ['blocks', 'inodes']) {
     const path = mkdtempSync(join(tmpdir(), 'sandbox-quota-'));
     chmodSync(path, 0o755);

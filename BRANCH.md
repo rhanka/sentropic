@@ -29,6 +29,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - [x] No scope exception required.
 
 ## Feedback Loop
+- [x] RUN 9d: reproduce Astra timeout/concurrent ENOSPC findings; separate admission from evidence-based failure diagnosis, prioritize signal/timeout, pin child locale, use fixed 1 MiB/one inode secondary evidence; tenant-volume.test.ts covers both scenarios and threshold boundaries.
 - [x] RUN 9c final probe audit: retain directory-visibility checks in addition to sentinel file reads/writes; a visible host directory with no marker must fail qualification.
 - [x] RUN 9c local verification: 28 files / 131 tests pass, both TypeScript projects, shell syntax and export GC pass. Artifact verification passes with ten internal checksums and qualification.erofs; final CI evidence follows in RUN 9c.
 - [x] RUN 9c finding 4: plant foreign tenant sentinel files and attempt readFileSync/openSync(r+) on known paths, including traversal of the foreign tenant mount; non-listable directory regression detects accessible files.

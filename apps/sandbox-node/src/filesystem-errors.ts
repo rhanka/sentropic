@@ -17,23 +17,26 @@ export function throwFilesystemError(error: unknown): never {
   throw error;
 }
 
-/** Child exit statuses do not carry the errno of truncate/mkfs's failing syscall.
- * Reserve enough tenant blocks for the complete image (including ext4 overhead),
- * and recheck on failure to catch concurrent exhaustion without localized stderr.
- */
+/** Admission checks capacity, without reserving it or diagnosing later failures. */
 export function tenantFilesystemCommand(path: string, bytes: number, execute: () => void): void {
-  const exhausted = () => {
-    const fs = statfsSync(path, { bigint: true });
-    return fs.bavail * fs.bsize < BigInt(bytes) || fs.ffree === 0n;
-  };
   const quota = () => new ExecutionNodeError('tenant_quota_exceeded', 'tenant volume capacity exhausted');
-  if (exhausted()) throw quota();
+  const fs = statfsSync(path, { bigint: true });
+  if (fs.bavail * fs.bsize < BigInt(bytes) || fs.ffree === 0n) throw quota();
   try { execute(); }
   catch (error) {
-    // Preserve the original command error if the volume cannot be inspected.
+    const child = error as (NodeJS.ErrnoException & { signal?: string; killed?: boolean; stderr?: string | Buffer }) | undefined;
+    if (child?.signal || child?.killed || child?.code === 'ETIMEDOUT'
+      || child?.errno === -constants.errno.ETIMEDOUT) throw error;
+    // Children run in the C locale; exit status alone has no syscall errno.
+    if (/No space left on device|Disk quota exceeded/.test(child?.stderr?.toString() ?? '')) throw quota();
+    if (isEdquot(error) || child?.code === 'ENOSPC' || child?.errno === -constants.errno.ENOSPC) throw quota();
+    // Secondary evidence only: fixed 1 MiB / one inode, independent of image size.
     let full = false;
-    try { full = exhausted(); } catch { /* no capacity evidence */ }
+    try {
+      const remaining = statfsSync(path, { bigint: true });
+      full = remaining.bavail * remaining.bsize <= 1048576n || remaining.ffree <= 1n;
+    } catch { /* no capacity evidence; preserve the command error */ }
     if (full) throw quota();
-    throwFilesystemError(error);
+    throw error;
   }
 }
