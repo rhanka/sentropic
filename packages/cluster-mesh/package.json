@@ -12,6 +12,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./compile/contract": {
+      "types": "./dist/compile/contract/index.d.ts",
+      "import": "./dist/compile/contract/index.js"
+    },
     "./ui/WorkspaceMembersScreen.svelte": {
       "types": "./ui/WorkspaceMembersScreen.svelte.d.ts", "svelte": "./ui/WorkspaceMembersScreen.svelte", "import": "./ui/WorkspaceMembersScreen.svelte"
     },
