@@ -29,6 +29,7 @@ export class ExecutionNodeAdmission {
   constructor(
     quotas: Record<ExecutionNodeTenantId, TenantSlotQuota>,
     private readonly options: { globalMaxLive?: number; retryAfterMs?: number; reservableMiB?: number;
+      memorySwapCurrentMiB?: (tenantId: ExecutionNodeTenantId) => number;
       memoryCurrentMiB?: (tenantId: ExecutionNodeTenantId) => number } = {},
   ) {
     this.quotas = quotas;
@@ -64,6 +65,7 @@ export class ExecutionNodeAdmission {
   quotaSnapshot(tenantId: ExecutionNodeTenantId, controlGroup: string) {
     return { tenantId, limits: EXECUTION_NODE_TENANT_SLICE_DEFAULTS[tenantId], controlGroup,
       usage: { memoryCurrentBytes: (this.options.memoryCurrentMiB?.(tenantId) ?? 0) * 1048576,
+        memorySwapCurrentBytes: (this.options.memorySwapCurrentMiB?.(tenantId) ?? 0) * 1048576,
         reservedMemoryBytes: this.reservedMiB(tenantId) * 1048576 }, globalBuildSlot: this.builds.snapshot() };
   }
 

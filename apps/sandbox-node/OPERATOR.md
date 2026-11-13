@@ -11,16 +11,25 @@ Rollback pool `artifact-builders` stays min/desired 0, max 2.
 
 | systemd resource | Required value |
 | --- | --- |
-| `builder.slice` | MemoryMax=2944M, MemorySwapMax=0, CPUQuota=180% |
+| `builder.slice` | MemoryMax=2944M, MemorySwapMax=512M, CPUQuota=180% |
 | `builder-tenant.slice` | Intermediate parent required by systemd naming |
-| `builder-tenant-{sentropic,immo}.slice` | MemoryMax=2304M, MemoryHigh=2304M, MemoryLow=704M, CPUWeight=100, TasksMax=4096 |
-| `builder-sbx-<physicalUid>.scope` | 704M warm OR 1536M build, MemorySwapMax=0, MemoryOOMGroup=yes |
+| `builder-tenant-{sentropic,immo}.slice` | MemoryMax=2304M, MemoryHigh=2048M, MemoryLow=704M, MemorySwapMax=256M, CPUWeight=100, TasksMax=4096 |
+| `builder-sbx-<physicalUid>.scope` | 704M warm (swap 0) OR 1536M build (swap <=256M), MemoryOOMGroup=yes |
+
+Measured identity: host 512 + agent 192 + parent 2944 + margin 172 = 3820 MiB.
+The agent has MemoryMin=64M. k8s provides 1 GiB zram (zstd) only as a peak
+absorber; it never increases RAM admission. A lower MemTotal reduces admission
+and requires k8s to reduce the parent ceiling before routing traffic.
 
 Admission reserves at most 2944 MiB including runsc sentry, cache, slab
 and overlays: one warm live OR standby per tenant plus one global build.
-A bounded non-preemptible queue alternates tenants strictly; full queues
+A queue of at most two outstanding heavy jobs per tenant (active included)
+alternates eligible heads strictly; full queues
 or capacity return 429 before allocation. Claim transfers the standby
-reservation. The 2 s/5 s live admission goal is not a build queue deadline.
+reservation. Service deadlines are 60 s for artifact-build and 120 s for
+prebundle/cold-materialize; timeout kills and destroys before releasing the slot.
+The 2 s/5 s live admission goal is not a build queue deadline.
+Warm replacement requires complete destruction, including upperdir cleanup.
 
 Resolve the scope's effective `ControlGroup` using systemd and verify its
 tenant ancestry before writing scope-only `cgroup.kill`. Require
@@ -53,7 +62,8 @@ k8s verifies the release archive SHA-256, extracts to
 forbidden deployment references. Keep the previous verified digest.
 
 `agent.env` requires `AGENT_CA`, `AGENT_CERT`, `AGENT_KEY`,
-`NODE_INSTANCE_ID`, `NODE_EPOCH` and HTTPS `JOB_ALERTS_URL`;
+`NODE_INSTANCE_ID`, `NODE_EPOCH`, `AGENT_TICKET_PUBLIC_KEY` (Ed25519 public-key
+file) and HTTPS `JOB_ALERTS_URL`;
 `AGENT_PORT` defaults to 8443. Persist node identity/monotone epoch and
 custody WAL across restarts; environment/cert files are mode 0600.
 The cluster probes `/v1/node` using an operator certificate. The agent
@@ -67,8 +77,24 @@ mutations independently of monitoring heartbeats.
 checks local types and regressions without a stack; the same makefile's
 `build-sandbox-node-artifact` target builds the release.
 
-Bootstrap supportedOps is limited to node/quotas. Real OCI bundle creation,
-retained-output reader, lifecycle route wiring/recovery and host isolation
-remain S1-A1a/S1-K1 qualification work. Do not route live/publish until
-supportedOps and host tests prove those operations. Fake unit tests are
-not VM benchmark evidence. Removal requires at least 7 days notice (D8).
+The listener wires bases/create/start/claim/stop/export/delete/renew/revoke/write.
+Before routing traffic, k8s must qualify the complete lifecycle on an isolated
+host with pinned runsc, EROFS, overlayfs, systemd and tenant cgroups. Local
+dispatcher/bundle/filesystem regressions do not prove kernel isolation.
+Removal requires at least 7 days notice (D8).
+
+The host supplies devScope per session: `{kind,writable[],refused[],source:{repo,path,commit}}`.
+The agent contains no tenant-specific allowlist. Every session mutation repeats
+this exact policy; source writes go through `/write`, while sandbox processes
+see source read-only. Build output `ui/dist` is a separate writable bind and
+must be refused by the host's source policy.
+
+`X-Execution-Ticket` is base64url JSON `{ticket,signature}`. Its body hash covers
+`JSON.stringify(requestBody)` and binds commandId, route, owner and node identity.
+Each session request includes devScope; creation carries it in spec.
+`POST /v1/bases/ensure` takes `{commandId,ownership,base,url}` (HTTPS, SHA-256);
+creation requires rootfs/source bases and an absolute argv command, with no shell.
+`POST /v1/sandboxes/:id/start` starts a created record. `/write` takes
+`{commandId,devScope,path,contentBase64}`. `/stop` takes `stop`; `/export` takes
+`spec` and returns gzip bytes after quiescence; DELETE releases capacity only
+after runtime state, scope, mounts and private directories are removed.
