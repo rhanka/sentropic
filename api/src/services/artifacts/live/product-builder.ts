@@ -141,7 +141,8 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const schedule = (work: () => Promise<void>) => { void work().catch(error => deps.log('artifact_builder_job_failed', error)); };
   service = createBuilderService({ pool: deps.pool, cacheBlobs: deps.cacheBlobs(cacheStorage), placement, supervisorKey: signer,
     sandboxBackend,
-    relayUrl, kubernetes: deps.kubernetes(placement), host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
+    relayUrl, kubernetes: kind === 'kubernetes' ? deps.kubernetes(placement) : undefined,
+    host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
     authenticate: deps.authenticate, schedule, liveWaitMs: PRODUCT_LIVE_WAIT_MS, now, id, binding,
     installBudget: readInstallBudget(env), sizing: readWorkerSizing(env),
     installEnv: installEnvironment(readInstallHeapMb(env)),
