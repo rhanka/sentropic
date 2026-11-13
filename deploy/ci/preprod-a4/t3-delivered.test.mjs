@@ -7,7 +7,7 @@ import { drive } from './t3-window-driver.mjs';
 import { ops } from './ops.mjs';
 import { digest } from './guards.mjs';
 import { approvedRequest } from './fixtures.mjs';
-import { probeEndpoints } from './t3-probe-fixture.mjs';
+import { emailProbe, probeEndpoints } from './t3-probe-fixture.mjs';
 
 test('RUN6 delivered ops create required pod Secret and stage checkpoint files on an empty PVC', async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 't3-delivered-'));
@@ -48,7 +48,7 @@ test('RUN6 delivered ops create required pod Secret and stage checkpoint files o
     return '';
   };
   const code = await drive({ stateDir, dryRun: true, print: () => {}, call: () => '', tier: 'preprod',
-    config: { request, endpoints: probeEndpoints(), namespace: 'sentropic-preprod', kubeconfigFile: '/kube', budgetsFile: '/budgets',
+    config: { request, endpoints: probeEndpoints(), emailProbe, namespace: 'sentropic-preprod', kubeconfigFile: '/kube', budgetsFile: '/budgets',
       remoteFile: '/remote', rehearsalFile: '/rehearsal', images: { candidate: 'c', ui: 'u' } },
     delivered: (_ctx, _script, env) => {
       if (['budgets', 'custodian', 'stage'].includes(env.A4_OPERATION)) {
