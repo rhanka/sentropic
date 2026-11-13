@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { createAgentServer, requestScope, sendJobAlertHeartbeat } from './transport.js';
+import { createAgentServer, requestScope } from './transport.js';
 import { EXECUTION_NODE_CONTRACT_VERSION } from './contract.js';
 import { CustodyGuard } from './custody.js';
 import { ExecutionNodeError } from './errors.js';
@@ -20,8 +20,6 @@ const tls = { ca: readFileSync(required('AGENT_CA')), cert: readFileSync(require
 const nodeInstanceId = required('NODE_INSTANCE_ID');
 const nodeEpoch = Number(required('NODE_EPOCH'));
 if (!Number.isSafeInteger(nodeEpoch) || nodeEpoch < 1) throw new Error('invalid NODE_EPOCH');
-const jobAlerts = required('JOB_ALERTS_URL');
-if (!jobAlerts.startsWith('https://')) throw new Error('JOB_ALERTS_URL must use HTTPS');
 const custody = new CustodyGuard('/var/lib/builder/custody.wal');
 const hostMemory = { memTotalBytes: totalmem(), memTotalFloorMiB: Math.floor(totalmem() / 1048576),
   hostBaseMiB: 512, agentMemoryMaxMiB: 192, unallocatedMarginMiB: 172, zramNominalMiB: 1024 } as const;
@@ -64,8 +62,4 @@ const server = createAgentServer(tls, async (req, res, role) => {
 server.requestTimeout = 5000;
 server.maxHeadersCount = 64;
 server.listen(Number(process.env.AGENT_PORT ?? 8443), '0.0.0.0');
-const heartbeat = () => sendJobAlertHeartbeat(jobAlerts, tls, { source: 'sandbox-node', nodeInstanceId, nodeEpoch,
-  timestamp: new Date().toISOString() }).catch(error => { console.error('job-alerts heartbeat failed', String(error)); });
-void heartbeat();
-const timer = setInterval(() => { void heartbeat(); }, 15_000);
-process.on('SIGTERM', () => { clearInterval(timer); server.close(); });
+process.on('SIGTERM', () => { server.close(); });
