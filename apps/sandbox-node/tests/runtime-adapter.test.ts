@@ -1,7 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { FakeRuntimeAdapter, RunscRuntimeAdapter } from '../src/index.js';
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
 describe('runtime adapters', () => {
+  it('should reject a launcher failure after spawn instead of reporting running', async () => {
+    const adapter = new RunscRuntimeAdapter();
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    const child = new EventEmitter();
+    vi.mocked(spawn).mockImplementation(() => {
+      queueMicrotask(() => { child.emit('spawn'); queueMicrotask(() => child.emit('exit', 1, null)); });
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'bad-start', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 }))
+        .rejects.toThrow();
+    } finally { vi.restoreAllMocks(); }
+  });
   it('runs, stops, exports and destroys with the fake adapter', async () => {
     const adapter = new FakeRuntimeAdapter();
     expect(adapter.hasRunsc()).toBe(false);
