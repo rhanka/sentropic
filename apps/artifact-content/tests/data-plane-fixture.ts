@@ -30,11 +30,13 @@ export async function fakeDataPlane(tls = testTls()) {
     try {
       const [payload, signature] = String(req.headers['x-custody-token']).split('.');
       const claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as CustodyLease & { resourceId: string };
+      const expectedUid = req.headers['x-tenant-id'] === 'sentropic' ? 'physical-1'
+        : req.headers['x-tenant-id'] === 'immo' ? 'physical-2' : undefined;
       return (req.socket as TLSSocket).authorized
         && (req.socket as TLSSocket).getPeerCertificate().subject.CN === 'data-plane:artifact-content'
         && verify(null, Buffer.from(payload), keys.publicKey, Buffer.from(signature, 'base64url'))
-        && req.headers['x-tenant-id'] === 'sentropic' && claims.tenantId === 'sentropic'
-        && req.headers['x-expected-physical-uid'] === 'physical-1' && claims.resourceId === 'physical-1'
+        && expectedUid !== undefined && claims.tenantId === req.headers['x-tenant-id']
+        && req.headers['x-expected-physical-uid'] === expectedUid && claims.resourceId === expectedUid
         && claims.custodyEpoch >= epoch && Date.parse(claims.deadlineAt) > Date.now();
     } catch { return false; }
   };

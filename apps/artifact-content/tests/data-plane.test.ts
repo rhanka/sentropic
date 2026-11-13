@@ -36,6 +36,14 @@ describe('execution-node data plane', () => {
   it('should obtain a fresh token for each new HTTP hop', async () => {
     const f = await fixture(); await (await get(f)).text(); await (await get(f)).text(); expect(f.issues).toBe(2);
   });
+  it('should keep custody headers separate for two admitted tenant resources', async () => {
+    const f = await fixture(); expect(await (await get(f)).text()).toBe('live');
+    f.setTenant('immo'); f.setUid('physical-2'); expect(await (await get(f)).text()).toBe('live');
+    expect(f.received.map(req => [req.headers['x-tenant-id'], req.headers['x-expected-physical-uid']]))
+      .toEqual([['sentropic', 'physical-1'], ['immo', 'physical-2']]);
+    expect(f.received[0].headers['x-custody-token']).not.toBe(f.received[1].headers['x-custody-token']);
+    expect(f.watchers).toBe(0);
+  });
   it('should contain an invalid upstream status and continue serving subsequent requests', async () => {
     const f = await fixture(); f.answer((_req, res) => { res.writeHead(600).end('invalid'); });
     expect((await get(f)).status).toBe(502); expect(f.watchers).toBe(0);
