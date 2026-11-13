@@ -8,6 +8,7 @@ import { parseRunscList } from './runsc-inventory.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
+import { rmSync } from 'node:fs';
 
 export interface SandboxMount {
   readonly source: string;
@@ -31,6 +32,7 @@ export interface RunSandboxOptions {
 }
 
 export interface RuntimeAdapter {
+  assertRunning?(runtimeId: string): void;
   portTarget?(runtimeId: string, port: number): Promise<{ socketPath: string }>;
   writeFile(runtimeId: string, path: string, bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void>;
   readonly kind: string;
@@ -97,7 +99,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
   private readonly rootArg = '--root=/run/execution-node/runsc';
-  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean }>();
+  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean; exited?: boolean }>();
 
   constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle }) {
     this.binary = binary;
@@ -118,6 +120,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async portTarget(runtimeId: string, port: number): Promise<{ socketPath: string }> {
+    this.assertRunning(runtimeId);
     const entry = this.scopes.get(runtimeId);
     if (!entry || entry.stopped || port !== 5173) throw new Error('sandbox_port_unavailable');
     const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
@@ -127,6 +130,14 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       ports.set(port, forward);
     }
     try { return await forward.ready; } catch { ports.delete(port); throw new Error('sandbox_port_unavailable'); }
+  }
+
+  assertRunning(runtimeId: string): void {
+    const entry = this.scopes.get(runtimeId);
+    if (!entry || entry.stopped || entry.exited) throw new Error('sandbox exited before probes finished');
+    const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${entry.uid}`], { encoding: 'utf8', timeout: 1000 }));
+    const active = execFileSync('systemctl', ['show', entry.scope, '--property=ActiveState', '--value'], { encoding: 'utf8', timeout: 1000 }).trim();
+    if (state.status !== 'running' || active !== 'active') throw new Error('sandbox or scope exited before probes finished');
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
@@ -157,6 +168,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       child.once('error', fail);
       child.once('exit', code => {
         clearTimeout(timer);
+        this.scopes.get(runtimeId)!.exited = true;
         if (code === 0) resolve();
         else reject(new Error(`sandbox launcher exited: ${code}`));
         if (ready || code === 0) options.onExit?.(code);
@@ -214,6 +226,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     try { execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000 }); }
     catch (error) { if (!this.scopeQuiescent(entry.scope)) throw error; }
     this.bundles.destroy(entry.bundle);
+    rmSync(`/run/execution-node/ports/${entry.uid}`, { recursive: true, force: true });
     this.scopes.delete(runtimeId);
   }
 }

@@ -41,7 +41,7 @@
 - [ ] **Lot 1 — Workload and runtime readiness**
   - [x] Reproduce missing source parent permissions in `tests/bundle.test.ts`; failed before fix (0700), corrected to 0755.
   - [ ] Test actual generated qualification spec and long-lived HTTP/WS fixture.
-  - [ ] Reject early launcher exit and unavailable port targets in `tests/runtime-adapter.test.ts`.
+  - [x] Detect early workload/scope exit and refuse unavailable port targets; preserve legitimate short build completion.
 - [ ] **Lot 2 — Bounded execution and cleanup**
   - [ ] Test deadline, signal interruption, scope/sandbox exit, hanging probes and finalization.
   - [ ] Remove relay directories and refuse stale qualification resources; bases and bundles now use private roots.
