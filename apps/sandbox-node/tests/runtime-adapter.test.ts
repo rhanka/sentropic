@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { spawn, execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { privateNetworkScript } from '../src/private-network.js';
+vi.mock('../src/network-audit.js', () => ({ auditNetworkSpec: vi.fn(), auditStartedNetwork: vi.fn(() => '123') }));
+vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs')>(),
+  readFileSync: (path: string, ...args: any[]) => path === '/tmp/config.json' ? '{}' :
+    require('node:fs').readFileSync(path, ...args) }));
 import { FakeRuntimeAdapter, RunscRuntimeAdapter, createExecutionNode, ExecutionNodeDaemon } from '../src/index.js';
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
@@ -15,7 +19,7 @@ describe('runtime adapters', () => {
       overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 };
     // release-20261102.0 Loader.portForward rejects NetworkNone; NetworkSandbox
     // uses the OCI private network namespace (loopback only, no supplied path).
-    expect(adapter.runscArgs({ ...input, network: 'ports' })).toContain('--network=sandbox');
+    expect(adapter.runscArgs({ ...input, network: 'ports', profile: 'live' })).toContain('--network=sandbox');
     expect(adapter.runscArgs({ ...input, network: 'none' })).toContain('--network=none');
     expect(adapter.runscArgs(input)).toContain('--network=none');
   });
@@ -28,12 +32,12 @@ describe('runtime adapters', () => {
     });
     try {
       await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'private', mounts: [], overlayUpper: '/tmp/upper',
-        overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000, network: 'ports' })).rejects.toThrow();
+        overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000, network: 'ports', profile: 'live' })).rejects.toThrow();
       const args = vi.mocked(spawn).mock.calls[0]![1] as string[];
       const offset = args.indexOf('unshare');
       expect(offset).toBeGreaterThan(0);
-      expect(args.slice(offset, offset + 9)).toEqual(['unshare', '--net', '--', 'sh', '-ec',
-        privateNetworkScript, 'sandbox-network', 'runsc', '--root=/run/execution-node/runsc']);
+      expect(args.slice(offset, offset + 10)).toEqual(['unshare', '--net', '--', 'sh', '-ec',
+        privateNetworkScript, 'sandbox-network', '/tmp/netns.inode', 'runsc', '--root=/run/execution-node/runsc']);
       expect(args).toContain('--network=sandbox');
     } finally { vi.restoreAllMocks(); }
   });

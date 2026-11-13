@@ -17,8 +17,8 @@ describe('AMD-28 admission', () => {
   it.each([undefined, 'false', 'true', '1'])('should require explicit operator enablement (%s)', async enabled => {
     vi.stubEnv('EXECUTION_NODE_PORTS_ENABLED', enabled);
     if (enabled === 'true') {
-      expect(() => requireNetworkPolicy('ports')).not.toThrow();
-      expect(new RunscRuntimeAdapter().runscArgs({ ...input, network: 'ports' })).toContain('--network=sandbox');
+      expect(() => requireNetworkPolicy('ports', 'live')).not.toThrow();
+      expect(new RunscRuntimeAdapter().runscArgs({ ...input, network: 'ports', profile: 'live' })).toContain('--network=sandbox');
     } else {
       expect(() => requireNetworkPolicy('ports')).toThrow(expect.objectContaining({ code: 'ports_disabled', status: 409 }));
       await expect(createExecutionNode().daemon.createSandbox({ spec: { network: 'ports' } } as never))
