@@ -49,6 +49,7 @@
 - [x] AMD-28 audits: strict addresses/all-table loopback routes and sentry namespace/flags/spec auditors.
 - [x] AMD-28 runtime: enforce audits at launch, destroy on violations, emit daemon audit event, forbid forwarding non-ports sandboxes.
 - [x] AMD-28 helpers: global configurable 1..8 cap (default 2), bounded queue and typed 429 saturation; burst regression.
+- [x] AMD-28 regressions: address and host-namespace refusal, kernel main IPv6 loopback compatibility, qualified binary fixtures.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
