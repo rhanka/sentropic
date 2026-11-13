@@ -16,7 +16,7 @@ export function qualificationPeer(directory: string, release: string) {
     async start(signal: AbortSignal) {
       mkdirSync(base, { mode: 0o700 });
       copyFileSync(join(release, 'qualification.erofs'), join(base, 'source.erofs'));
-      await adapter.runSandbox({ tenantId: 'immo', sandboxUid: uid, network: 'ports',
+      await adapter.runSandbox({ tenantId: 'immo', sandboxUid: uid, network: 'ports', profile: 'live',
         overlayUpper: join(path, 'upper'), overlayWork: join(path, 'work'), quotaMiB: 704,
         diskQuotaMiB: qualificationDiskMiB, quotaInodes: qualificationInodes, uid: 1000, gid: 1000,
         command: ['/usr/local/bin/node', '-e', tenantWitnessScript('immo')],
