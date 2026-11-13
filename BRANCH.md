@@ -29,6 +29,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - [x] No scope exception required.
 
 ## Feedback Loop
+- [x] RUN 9d delivery: 28 files / 145 tests, both TypeScript projects, shell syntax and export GC pass; rebuilt archive 211487dbf3f379af4de95ca2537adc1c49e1d12a89bc801c17e91ae7ede96b43 and ten internal checksums verified, extracted mode 0755 and SEA root/uid65534 checks pass. Exact-head CI receipt follows in RUN 9d.
 - [x] RUN 9d: reproduce Astra timeout/concurrent ENOSPC findings; separate admission from evidence-based failure diagnosis, prioritize signal/timeout, pin child locale, use fixed 1 MiB/one inode secondary evidence; tenant-volume.test.ts covers both scenarios and threshold boundaries.
 - [x] RUN 9c final probe audit: retain directory-visibility checks in addition to sentinel file reads/writes; a visible host directory with no marker must fail qualification.
 - [x] RUN 9c local verification: 28 files / 131 tests pass, both TypeScript projects, shell syntax and export GC pass. Artifact verification passes with ten internal checksums and qualification.erofs; final CI evidence follows in RUN 9c.
