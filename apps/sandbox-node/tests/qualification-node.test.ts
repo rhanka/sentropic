@@ -63,7 +63,7 @@ describe('qualification session spec', () => {
         expect(spec.process.env).toContain('HOME=/tmp');
         expect(spec.linux.namespaces.find((ns: { type: string }) => ns.type === 'network'))
           .toEqual({ type: 'network', path: '/proc/self/ns/net' });
-        expect(box.command[2]).toContain("s.listen(5173,'0.0.0.0')");
+        expect(box.command[2]).toContain("s.listen(5173,'0.0.0.0',");
         expect(box.command[2]).toContain("s.on('upgrade'");
       } finally { destroyBundle(bundle, () => {}); }
       await fixture.lifecycle();

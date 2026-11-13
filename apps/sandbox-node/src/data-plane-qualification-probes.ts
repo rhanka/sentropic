@@ -5,14 +5,17 @@ import type { Duplex } from 'node:stream';
 import { createPrivateKey, sign } from 'node:crypto';
 import { qualificationCertificates } from './qualification-certificates.js';
 import type { qualificationNode } from './data-plane-qualification-node.js';
+import type { RuntimeDiagnostic } from './qualification-diagnostics.js';
 
 export async function probeDataPlane(options: {
   socketPath: string; certificates: ReturnType<typeof qualificationCertificates>;
   node: Pick<ReturnType<typeof qualificationNode>, 'keys' | 'ownership' | 'revoke'>; uid: string;
   report(name: string): void; checkTcp(): void;
   signal?: AbortSignal;
+  diagnostic?: RuntimeDiagnostic; stage?(name: string): void;
 }) {
   const { certificates: tls, uid, node, report } = options;
+  let probe = 0;
   const signingKey = createPrivateKey(node.keys.privateKeyPem);
   const token = (ttl = 10000, overrides = {}) => {
     const now = Date.now();
@@ -24,9 +27,17 @@ export async function probeDataPlane(options: {
     return `${input}.${sign(null, Buffer.from(input), signingKey).toString('base64url')}`;
   };
   const open = (signed: string, headers = {}, path = '/v1/ports/5173/', identity: Pick<RequestOptions, 'cert' | 'key'> = tls.dataPlane) => {
+    const name = `probe ${++probe}`;
+    options.diagnostic?.(name, 'TLS -> custody -> UDS -> port-forward -> 5173');
     const req = request({ socketPath: options.socketPath, servername: 'localhost', ca: tls.ca, ...identity,
       signal: options.signal,
       path, agent: false, headers: { 'x-tenant-id': 'sentropic', 'x-expected-physical-uid': uid, 'x-custody-token': signed, ...headers } });
+    req.once('response', res => {
+      options.diagnostic?.(name, `HTTP status=${res.statusCode}`);
+      res.once('data', () => options.diagnostic?.(name, 'HTTP first byte'));
+    });
+    req.once('upgrade', res => options.diagnostic?.(name, `WS upgrade=${res.statusCode}`));
+    req.once('error', () => options.diagnostic?.(name, 'FAIL request before completion (TLS/UDS/5173)'));
     req.setTimeout(1000, () => req.destroy(new Error('qualification request timeout')));
     const timer = setTimeout(() => req.destroy(new Error('qualification probe deadline exceeded')), 1000);
     const clear = () => clearTimeout(timer);
@@ -63,12 +74,14 @@ export async function probeDataPlane(options: {
   });
   // The process being running does not imply its application has called listen yet.
   const deadline = Date.now() + 5000;
+  options.stage?.('HTTP first byte from 5173');
   for (;;) {
     options.signal?.throwIfAborted();
     try { const res = await http(token()); res.destroy(); break; }
     catch (error) { if (Date.now() >= deadline) throw error; await new Promise(resolve => setTimeout(resolve, 25)); }
   }
   report('mTLS HTTP through real runsc UDS to 5173'); options.checkTcp();
+  options.stage?.('mTLS certificate refusals');
   for (const identity of [{}, qualificationCertificates().dataPlane]) {
     await assert.rejects(new Promise<void>((resolve, reject) => {
       const req = open(token(), {}, '/v1/ports/5173/', identity);
@@ -86,6 +99,7 @@ export async function probeDataPlane(options: {
     ['wrong principal', {}, '/v1/ports/5173/', tls.dataPlane, token(10000, { principalId: 'other' })],
     ['execution ticket', { 'x-execution-ticket': 'forbidden' }, '/v1/ports/5173/', tls.dataPlane, token()],
   ] as const) {
+    options.stage?.(`HTTP/WS refuse ${name}`);
     const req = open(signed, headers, path, identity);
     const status = await new Promise<number>((resolve, reject) => {
       req.once('error', reject); req.once('response', res => { res.resume(); resolve(res.statusCode!); }); req.end();
@@ -99,6 +113,7 @@ export async function probeDataPlane(options: {
     assert.equal(wsStatus, 403, `${name} WS`);
   }
   for (const mode of ['expiry', 'revoke-custody'] as const) {
+    options.stage?.(`HTTP/WS ${mode}`);
     const ttl = mode === 'expiry' ? 1500 : 10000;
     const issuedAt = Date.now(), signed = token(ttl);
     const [res, socket] = await Promise.all([http(signed), ws(signed)]);

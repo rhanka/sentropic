@@ -36,7 +36,7 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     const fixture = qualificationNode(directory, directory, new Runtime());
     await fixture.start();
     // Execute the actual generated argv script, remapping only its filesystem and listen address.
-    runInNewContext(command[2]!, { require: (name: string) => {
+    runInNewContext(command[2]!, { console: { log() {}, error() {} }, process: { on() {} }, require: (name: string) => {
       if (name === 'crypto') return { createHash };
       if (name === 'fs') return { writeFileSync: (path: string, bytes: string) => {
         expect(path).toBe('/workspace/ui/dist/index.html'); writeFileSync(join(directory, 'index.html'), bytes);

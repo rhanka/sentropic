@@ -35,7 +35,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
-- [ ] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories.
+- [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
 - [ ] Lot 2b: reproduce stream-helper semantics and verify readiness with bounded retries in qualification tests.
 - [ ] Lot 3: run `check-sandbox-node`, TypeScript and memory checks; review the final diff.

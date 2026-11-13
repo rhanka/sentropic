@@ -50,7 +50,7 @@ export function qualificationNode(directory: string, release: string, adapter?: 
     }, keys.privateKeyPem);
     return api.dispatch({ path, body, method, tenantId: 'sentropic', role: 'control-plane', ticket });
   };
-  return { node, custody, keys: custodyKeys, get ownership() { return ownership; },
+  return { node, custody, keys: custodyKeys, get ownership() { return ownership; }, get sandboxId() { return sandbox?.id; },
     async start() {
       const identityDigest = fileHash(join(release, 'qualification.erofs'));
       const base = { tenantId: 'sentropic' as const, kind: 'source' as const, baseId: 'qualification', identityDigest };
@@ -65,7 +65,9 @@ export function qualificationNode(directory: string, release: string, adapter?: 
         s.on('upgrade',(q,x)=>{const a=c.createHash('sha1').update(q.headers['sec-websocket-key']+
         '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
         x.write('HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Accept: '+a+'\\r\\n\\r\\n')});
-        s.listen(5173,'0.0.0.0');`;
+        s.on('error',e=>console.error('fixture server error',e.code));
+        s.listen(5173,'0.0.0.0',()=>console.log('fixture listening 5173'));
+        process.on('exit',code=>console.log('fixture exit',code));`;
       const created = await call('/v1/sandboxes', { commandId: 'qualification-create', ownership,
         spec: { tenantId: 'sentropic', devScope, profile: 'artifact-build', network: 'ports',
           command: ['/usr/local/bin/node', '-e', script], uid: 1000, gid: 1000, quotaMiB: qualificationDiskMiB, quotaInodes: qualificationInodes,
