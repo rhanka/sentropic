@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { lstatSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { throwFilesystemError } from './filesystem-errors.js';
 
 /** Called only after the complete sandbox cgroup has become empty. No dereferencing. */
 export function readOutput(root: string, subPath: string, maxBytes = 64 * 1024 * 1024): Buffer {
+  try {
   if (subPath !== 'ui/dist' || !Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > 64 * 1024 * 1024) {
     throw new Error('invalid output path or byte limit');
   }
@@ -18,4 +20,5 @@ export function readOutput(root: string, subPath: string, maxBytes = 64 * 1024 *
   };
   inspect(root);
   return execFileSync('tar', ['-czf', '-', '-C', root, '.'], { maxBuffer: maxBytes, timeout: 5000 });
+  } catch (error) { throwFilesystemError(error); }
 }

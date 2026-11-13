@@ -386,6 +386,7 @@ jobs:
               - '.github/workflows/idp-workload-secret.yml'
               - '.github/workflows/ci.yml'
             global:
+              - 'apps/sandbox-node/**'
               - 'Makefile'
               - 'docker-compose.yml'
               - 'docker-compose.test.yml'

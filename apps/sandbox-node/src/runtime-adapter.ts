@@ -4,6 +4,8 @@ import { prepareBundle, destroyBundle, type Bundle } from './bundle.js';
 import { readOutput } from './output.js';
 import { writeSource } from './source-write.js';
 import { checkWritePath } from './mounts.js';
+import { parseRunscList } from './runsc-inventory.js';
+import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 
 export interface SandboxMount {
@@ -153,7 +155,10 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
         timer = setTimeout(poll, 25);
       };
       child.once('spawn', () => { timer = setTimeout(poll, 0); });
-    }); } catch (error) { throw Object.assign(error as Error, { runtimeId }); }
+    }); } catch (error) {
+      try { throwFilesystemError(error); }
+      catch (mapped) { throw Object.assign(mapped as Error, { runtimeId }); }
+    }
     return { runtimeId };
   }
 
@@ -187,7 +192,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     if (!this.hasRunsc()) failNoBinary();
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     const entry = this.scopes.get(runtimeId)!;
-    const runtimes = JSON.parse(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000 })) as Array<{ id: string }>;
+    const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000 }));
     if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000 });
     try { execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000 }); }
     catch (error) { if (!this.scopeQuiescent(entry.scope)) throw error; }

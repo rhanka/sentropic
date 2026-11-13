@@ -8,6 +8,44 @@ vi.mock('node:child_process', async importOriginal => {
 });
 
 describe('runtime adapters', () => {
+  it.each(['null', '[]', '{}', 'garbage'])('should normalize empty cleanup inventory and reject garbage (%s)', async inventory => {
+    const destroy = vi.fn();
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.mocked(execFileSync).mockImplementation((file, args) => {
+      if (file === 'runsc') return inventory;
+      if (args?.includes('--property=ControlGroup')) return '';
+      if (args?.includes('--property=ActiveState')) return 'inactive';
+      if (args?.[0] === 'stop') return '';
+      throw new Error('scope collected');
+    });
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter(); queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0, null); });
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      const { runtimeId } = await adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'inventory', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 });
+      vi.spyOn(adapter, 'stopSandbox').mockResolvedValue(true);
+      if (['null', '[]'].includes(inventory)) {
+        await adapter.destroySandbox(runtimeId); expect(destroy).toHaveBeenCalledOnce();
+      } else { await expect(adapter.destroySandbox(runtimeId)).rejects.toThrow(); expect(destroy).not.toHaveBeenCalled(); }
+    } finally { vi.restoreAllMocks(); }
+  });
+  it('should map UNKNOWN/-122 launcher failures to quota errors with a cleanup identity', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy: () => {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('error', Object.assign(new Error('UNKNOWN'), { code: 'UNKNOWN', errno: -122 })));
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'quota', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 }))
+        .rejects.toMatchObject({ code: 'tenant_quota_exceeded', runtimeId: 'runsc-immo-quota' });
+    } finally { vi.restoreAllMocks(); }
+  });
   it.each(['delete', 'expiry'])('should release capacity after exit and collected scope cleanup (%s)', async mode => {
     vi.useFakeTimers();
     const destroy = vi.fn();

@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { HostCommand, Bundle } from './bundle.js';
+import { tenantFilesystemCommand } from './filesystem-errors.js';
 
 export function validateDiskQuota(mib: number | undefined, inodes: number | undefined): void {
   if (!Number.isSafeInteger(mib) || mib! < 1 || mib! > 16384
@@ -13,8 +14,11 @@ export function mountQuotaVolume(bundle: Bundle, mib: number | undefined, inodes
   const image = join(bundle.path, 'writable.ext4'), volume = join(bundle.path, 'writable');
   mkdirSync(volume, { recursive: true, mode: 0o700 });
   const overheadMiB = 64 + Math.ceil(inodes! * 256 / 1048576);
-  run('truncate', ['-s', `${mib! + overheadMiB}M`, image]);
-  run('mkfs.ext4', ['-F', '-q', '-m', '0', '-N', String(inodes! + 1024), '-O', 'quota,project', '-E', 'quotatype=prjquota', image]);
+  const imageBytes = (mib! + overheadMiB) * 1048576;
+  const options = { env: { ...process.env, LC_ALL: 'C', LANG: 'C' } };
+  tenantFilesystemCommand(bundle.path, imageBytes, () => run('truncate', ['-s', `${mib! + overheadMiB}M`, image], options));
+  tenantFilesystemCommand(bundle.path, imageBytes, () => run('mkfs.ext4',
+    ['-F', '-q', '-m', '0', '-N', String(inodes! + 1024), '-O', 'quota,project', '-E', 'quotatype=prjquota', image], options));
   run('mount', ['-t', 'ext4', '-o', 'loop,prjquota,nosuid,nodev', image, volume]);
   bundle.mounted.push(volume);
   run('chattr', ['-p', '1', '+P', volume]);

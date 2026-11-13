@@ -1,18 +1,23 @@
-# Feature: Fix retained live-draft outage qualification
+# Feature: Sandbox Node K1 — clean startup, quota errors and isolation qualification
 
 ## Objective
-- [x] Make the retained encrypted draft outage conformance deterministic across calendar dates while preserving the specified unavailable and expiry outcomes.
+Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/sandbox-node-k1; no merge, deployment or VM access.
 
 ## Scope / Guardrails
-- [x] Isolated worktree `tmp/worktrees/artifacts-live-drafts`, branch `fix/artifacts-live-drafts-outcome`, base `12af1431a2b4b6e80b08ae3f997bd51b34da612a`.
-- [x] Make-only, Docker-first; Docker commands use the shared docker-slot wrapper; no timeout increases.
-- [x] Environment `test-artifacts-drafts`; API_PORT=9685, UI_PORT=5885, MAILDEV_UI_PORT=1785 checked free with `ss -ltn`.
-- [x] No dev environment, clean-all, merge, or unrelated changes.
+- Scope: clean startup inventories, Linux quota outcomes, real-host isolation qualification and release packaging.
+- Make-only workflow, no direct Docker commands.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/worktrees/sandbox-node-k1` (verified mechanically with harness at base `6cc155d58`).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/artifacts/**`
+  - `apps/sandbox-node/**`
+  - `spec/SPEC_EVOL_SANDBOX_NODE.md`
   - `BRANCH.md`
+  - `.github/workflows/ci.yml` (BRK1-EX1: only add `apps/sandbox-node/**` to the global filter).
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -24,8 +29,22 @@
   - [x] No scope exception required.
 
 ## Feedback Loop
-- [x] Track source is this branch file; import remains with the conductor as designated single writer; no concurrent `.track` writes.
-
+- [x] RUN 9d exec-boundary coverage: child-locale.test.ts verifies C locales through both production launchers despite inherited French locale; tenant-volume.test.ts also preserves UNKNOWN/-110 timeouts. CI 43419074369 shard 2 passed all 28 browser tests but failed the provider receipt (Unexpected Responses evaluator request); retain this evidence without rerunning jobs or weakening the receipt.
+- [x] RUN 9d delivery: 28 files / 145 tests, both TypeScript projects, shell syntax and export GC pass; rebuilt archive 211487dbf3f379af4de95ca2537adc1c49e1d12a89bc801c17e91ae7ede96b43 and ten internal checksums verified, extracted mode 0755 and SEA root/uid65534 checks pass. Exact-head CI receipt follows in RUN 9d.
+- [x] RUN 9d: reproduce Astra timeout/concurrent ENOSPC findings; separate admission from evidence-based failure diagnosis, prioritize signal/timeout, pin child locale, use fixed 1 MiB/one inode secondary evidence; tenant-volume.test.ts covers both scenarios and threshold boundaries.
+- [x] RUN 9c final probe audit: retain directory-visibility checks in addition to sentinel file reads/writes; a visible host directory with no marker must fail qualification.
+- [x] RUN 9c local verification: 28 files / 131 tests pass, both TypeScript projects, shell syntax and export GC pass. Artifact verification passes with ten internal checksums and qualification.erofs; final CI evidence follows in RUN 9c.
+- [x] RUN 9c finding 4: plant foreign tenant sentinel files and attempt readFileSync/openSync(r+) on known paths, including traversal of the foreign tenant mount; non-listable directory regression detects accessible files.
+- [x] RUN 9c finding 3: statfs block/inode capacity checks before and after truncate/mkfs.ext4; preserve unrelated command errors. Base import maps filesystem quota errors including mkdir/open/write, with regressions.
+- [x] RUN 9c finding 2 regressions: refuse active service, held lock, surviving scope, sandbox directory, runsc container and malformed inventory before creation; real flock exclusion/release test. Operator guide documents single-use marker and service exclusion.
+- [x] RUN 9c finding 2 implementation: agent and qualification hold the same kernel lock; qualification requires inactive systemd service, clean inventory and consumes its marker. Regression coverage follows in the next atomic commit.
+- [x] RUN 9c finding 1: build and ship qualification.erofs with SHA256SUMS; artifact verification requires its EROFS magic and checksum entry. No runtime mkfs.erofs dependency.
+- [x] BRK1-EX1 authorized by conductor on 2026-11-13 05:50: add only `- 'apps/sandbox-node/**'` to the global filter in `.github/workflows/ci.yml`. Rationale: consumer-contracts requires every changed path to be classified; sandbox-node changes were unclassified. Impact: every sandbox-node change runs the full suite. Rollback: revert this single filter line.
+- [x] K1 qualification prerequisite: production bundle upper root was 0700, inherited by overlay cwd, excluding sandbox uid 1000. Set only upper root to 0755; host bundle remains 0700 and workspace bind remains read-only. bundle.test.ts asserts both modes for session/build.
+- [x] K1 final local verification: 27 files / 118 tests pass; both TypeScript projects, shell syntax and export GC pass on ENV=test-sandbox-node-k1. No API/UI stack started.
+- [x] K1 cleanup regressions: isolation-runner.test.ts covers success, partial launch failure, failed probe, wrong scope policy, leaked mount and SIGTERM; cleanup is restricted to generated paths and preserves bases after a mount leak.
+- [ ] K1 review limitation: harness/review requires h2a_run MCP and two complementary reviewer hosts; no matching tool is exposed. No peer consensus claimed; not a VM isolation acceptance.
+- [x] Common-rules fallback: independent Astra high review identified the marker umask defect. Explicit chmod 0666 and real-filesystem regressions under umask 0022/0077 address it; EACCES remains a failure. Reviewer closure at d327b599a confirms the correction and identifies no further blocker. Single review, no two-host consensus.
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance apply.
 
@@ -36,21 +55,12 @@
 - [x] No UI surface changes; memory and Postgres conformance qualify the behavior.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Reproduce and establish contract**
-  - [x] Read master, workflow, testing, common packet, draft source, conformance fixture and live-tools contract.
-  - [x] Mechanical `harness check branch` passes.
-  - [x] Reproduced memory (8 pass, 1 fail) and Postgres (10 pass, 1 fail) on origin/main through scoped make targets.
-  - [x] `391c2fa76cdc9b55c29e71465ae3393979e28fc0` introduced the key-outage vault without the fixture clock; its real clock expires the November 6 draft on November 13 at 12:00 UTC before key access.
-  - [x] `docs/live-tools.md:51` specifies seven-day retention and prior revision preservation on save failure; production expiry precedence is correct.
-- [x] **Lot 1 — Minimal deterministic qualification fix**
-  - [x] Share the injected fixture clock with the key-outage vault in `packages/artifacts/tests/fixtures/live-draft-conformance.ts`.
-  - [x] Preserve exact unavailable assertion and revision rollback checks; keep expiry conformance unchanged.
-  - [x] `make test-artifacts -o build-artifacts SCOPE=tests/live-drafts.test.ts API_PORT=9685 UI_PORT=5885 MAILDEV_UI_PORT=1785 ENV=test-artifacts-drafts`: 9 passed; reused unchanged build produced during baseline reproduction.
-  - [x] `make test-artifacts-integration -o build-artifacts SCOPE=tests/live-drafts.integration.test.ts API_PORT=9685 UI_PORT=5885 MAILDEV_UI_PORT=1785 ENV=test-artifacts-drafts`: 11 passed.
-- [ ] **Lot 2 — Final validation and handoff**
-  - [x] Two independent Astra high code reviews (contract/root cause and regression/minimality): APPROVE, no blocking findings; assertions and production behavior unchanged.
-  - [x] Package source unchanged; version bump not applicable.
-  - [x] Mechanical `make scope-check` passes C2; `git diff --check` passes before atomic `make commit`.
-  - [ ] Push and open PR with this file as body; CI green on exact head; do not merge.
-  - [x] `make down-volumes API_PORT=9685 UI_PORT=5885 MAILDEV_UI_PORT=1785 ENV=test-artifacts-drafts`; `make ps` confirms no remaining services.
-  - [ ] Write French report and completion marker under `.tmp/rv/artifacts-live-drafts-fix`.
+- [x] K1 Lot 0: verified existing branch with harness; ENV=test-sandbox-node-k1; no stack or ports started.
+- [x] K1 Fix 1: normalize literal null runsc lists only; restart/lost+found/garbage regressions in restart.test.ts and runtime cleanup coverage.
+- [x] K1 Fixes 4–5: shared code-or-errno recognition; qualification/source/runtime/export regressions. Audit: no EROFS/EXDEV/ELOOP/ENOTEMPTY branches exist; preserve their fail-closed failures.
+- [x] K1 Fix 2: real-adapter two-tenant isolation qualification, standalone SEA command, shipped shell wrapper and cleanup checks. Tests cover refusal guard and observable read/write/network failures; execution on VM remains the k8s-owned gate.
+  - [x] Real-adapter runner and in-sandbox probes; guards refuse non-isolated/non-root execution.
+- [x] K1 Fix 3: archive root 0755, verification and operator custody modes.
+- [x] K1 build/verify RUN 9c: archive fd1485b387325aab91028db93ead5779e0dfb09d741167631af0193d149f47a5; ten internal checksums, prebuilt fixture, extracted root 0755, SEA guard and uid 65534 self-test pass.
+- [x] K1 handoff preparation: local gates and review correction complete; exact-head PR/CI final outcome is maintained in .tmp/rv/s1-agent-core.md RUN 9 and the s1-agent-k1.done marker after push. No merge or deployment.
+- [ ] K1 Track handoff: designated conductor writer imports this BRANCH.md and RUN 9 evidence; this lane does not write the shared append-only journal.
