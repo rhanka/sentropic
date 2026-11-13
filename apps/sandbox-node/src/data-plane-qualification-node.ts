@@ -102,10 +102,12 @@ export function qualificationNode(directory: string, release: string, adapter?: 
     },
     async close() {
       // Also recover bundles registered by a partially failed launcher, without touching foreign resources.
-      try { if (sandbox && sandbox.state !== 'destroyed') {
-        const runtimeId = sandbox.runtimeId ?? `runsc-sentropic-${sandbox.id}`;
-        await node.adapter.destroySandbox(runtimeId);
-      } } finally {
+      try {
+        if (sandbox && sandbox.state !== 'destroyed') {
+          const runtimeId = sandbox.runtimeId ?? `runsc-sentropic-${sandbox.id}`;
+          await node.adapter.destroySandbox(runtimeId);
+        }
+      } finally {
         for (const path of createdBases) rmSync(path, { force: true });
       }
     },

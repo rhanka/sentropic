@@ -348,8 +348,19 @@ throughout probes. A completed build may exit successfully; this server fixture
 must remain running until its probes finish.
 
 Both qualification lanes keep copied fixtures and sandbox bundles below their
-own `/run/execution-node/qd-*` or `qi-*` directory. They never publish fixtures
-into tenant bases. Startup refuses surviving qualification directories, relay
+own `/var/lib/builder/qualification/qd-*` or `qi-*` directory, outside tenant
+data. The parent is root-owned mode 0700 on disk; tmpfs is refused. Only the
+data-plane TLS socket uses `/run/execution-node/qd-*`; relays remain under
+`/run/execution-node/ports/<uid>`. A 384 MiB `/run` needs no enlargement for images.
+Each fixture has a 16 MiB writable quota and 1024 quota inodes; its ext4 image
+is 81 MiB including overhead. Before creating a private directory, both gates
+require free disk bytes of `16 MiB + N * (81 MiB + qualification.erofs size)`,
+with N=1 for data-plane and N=2 for isolation, plus N*2048 free host inodes.
+This includes copied bases and 16 MiB headroom for private state/metadata.
+The shared rootfs remains in the verified release, without another copy.
+Insufficient space, inodes or tmpfs produces an explicit error and nonzero exit.
+They never publish fixtures into tenant bases. Startup refuses surviving
+qualification directories on disk or under `/run`, relay
 directories, old isolation bases or the legacy copied fixture digest. It prints
 the exact paths requiring reconciliation and preserves the authorization marker.
 

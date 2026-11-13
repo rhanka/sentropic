@@ -24,7 +24,8 @@
   - [x] No exceptions declared.
 
 ## Feedback Loop
-- [ ] Round 3 verification: capacity refusal before runtime registration, repeated real cleanup, disk admission with simulated 384 MiB `/run`, both gate orchestrations, archive rebuild and exact-head CI.
+- [x] Round 3 tests: 193 tests pass, including real prepareBundle capacity failure, repeated cleanup, simulated 384 MiB `/run`, and both gate orchestrations; both TypeScript projects and memory check pass.
+- [ ] Round 3 delivery: rebuild/verify archive, push and exact-head CI; update report and recreate completion marker.
 - [x] Round 3: move qualification images/bundles to disk-backed `/var/lib/builder/qualification`; preflight both gates, use 16 MiB/1024-inode fixtures, and make unregistered runtime cleanup idempotent.
 - [x] Round 2: reproduce CI EPERM under UID/GID 1001:1001; stub only test chown, assert 1000:1000 ownership and real modes under umask 077; all 185 tests pass unprivileged. Production chown and archive bytes are unchanged.
 - [x] Astra review: guard delayed launcher exit after scope-map teardown; add regression before archive rebuild.
