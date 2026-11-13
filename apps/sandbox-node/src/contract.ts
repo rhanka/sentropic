@@ -228,7 +228,7 @@ export interface ExecutionNodeQuotaSnapshot {
   readonly tenantId: ExecutionNodeTenantId;
   readonly limits: ExecutionNodeQuota;
   readonly controlGroup: string;
-  readonly usage: { readonly memoryCurrentBytes: number; readonly reservedMemoryBytes: number };
+  readonly usage: { readonly memoryCurrentBytes: number; readonly memorySwapCurrentBytes: number; readonly reservedMemoryBytes: number };
   readonly globalBuildSlot: {
     readonly maxConcurrentBuildsGlobal: 1;
     readonly holderTenantId?: ExecutionNodeTenantId;

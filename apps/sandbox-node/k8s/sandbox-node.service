@@ -18,6 +18,7 @@ ReadWritePaths=/var/lib/builder /run
 ProtectHome=yes
 # Tenant scopes are siblings managed through systemd, never inside this unit.
 MemoryMax=192M
+MemoryMin=64M
 MemorySwapMax=0
 CPUWeight=50
 TasksMax=128

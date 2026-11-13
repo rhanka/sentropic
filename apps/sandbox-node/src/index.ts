@@ -68,7 +68,9 @@ export function createExecutionNode(config: ExecutionNodeConfig = {}): {
   void EXECUTION_NODE_TENANT_SLICE_DEFAULTS;
   const adapter = config.adapter ?? (config.useRunsc === true ? new RunscRuntimeAdapter() : new FakeRuntimeAdapter());
   if (adapter.kind === 'runsc-systrap' && !config.ticketPublicKeyPem) throw new Error('runsc requires an execution ticket verification key');
-  const admission = new ExecutionNodeAdmission(quotas, { reservableMiB: config.reservableMiB, memoryCurrentMiB: config.memoryCurrentMiB
+  const admission = new ExecutionNodeAdmission(quotas, { reservableMiB: config.reservableMiB,
+    memorySwapCurrentMiB: adapter.kind === 'runsc-systrap' ? tenantId => new SandboxCgroup().tenantMemoryMiB(tenantId, true) : undefined,
+    memoryCurrentMiB: config.memoryCurrentMiB
     ?? (adapter.kind === 'runsc-systrap' ? tenantId => new SandboxCgroup().tenantMemoryMiB(tenantId) : undefined) });
   const audit = new AuditLog(nodeInstanceId, config.now);
   const bases = new TenantBaseRegistry();
