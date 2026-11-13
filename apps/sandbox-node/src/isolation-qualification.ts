@@ -6,6 +6,16 @@ import { randomUUID } from 'node:crypto';
 import { RunscRuntimeAdapter } from './runtime-adapter.js';
 import { isolationProbe, requireIsolationResults } from './isolation-probe.js';
 
+export function prepareIsolationFixture(base: string): string {
+  const fixture = join(base, 'fixture'), marker = join(fixture, 'isolation-marker');
+  mkdirSync(join(fixture, 'node_modules'), { recursive: true });
+  chmodSync(fixture, 0o777);
+  writeFileSync(marker, 'isolation fixture', { mode: 0o666 });
+  // Defeat the host umask: a DAC denial must not substitute for the EROFS check.
+  chmodSync(marker, 0o666);
+  return fixture;
+}
+
 export async function qualifyIsolation(): Promise<void> {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
   assert.equal(process.getuid?.(), 0, 'root required');
@@ -31,9 +41,7 @@ export async function qualifyIsolation(): Promise<void> {
       const base = mkdtempSync(join(root, tenant, 'bases', 'qual-isolation-'));
       const image = join(base, 'source.erofs');
       boxes.push({ tenant, uid, path, base, image, loop });
-      const fixture = join(base, 'fixture'); mkdirSync(join(fixture, 'node_modules'), { recursive: true });
-      chmodSync(fixture, 0o777);
-      writeFileSync(join(fixture, 'isolation-marker'), 'isolation fixture', { mode: 0o666 });
+      const fixture = prepareIsolationFixture(base);
       run('mkfs.erofs', ['--quiet', '--all-root', '-T', '1767225600', image, fixture]);
       const { runtimeId } = await adapter.runSandbox({ tenantId: tenant, sandboxUid: uid,
         overlayUpper: join(path, 'upper'), overlayWork: join(path, 'work'), quotaMiB: 704,
