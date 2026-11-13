@@ -168,3 +168,28 @@ test('RUN8 JSON response consumption remains inside the shared HTTP deadline', a
     assert.equal(writes.length, 0);
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });
+
+test('RUN8 authorized fence read failure before its first mutation cannot arm recovery', async () => {
+  const { ctx, writes } = acceptanceContext();
+  ctx.stateDir = mkdtempSync(join(tmpdir(), 't3-fence-read-'));
+  const state = { ...ctx.state, step: 'W1', fenceStarted: false };
+  saveState(ctx.stateDir, state);
+  const authorization = { ...approvedRequest, format: 'preprod-a4-authorization/1' };
+  const annex = JSON.stringify({ ...authorization, format: 'preprod-a4-execution/1', actions: { fence: [
+    ['rollout', 'status', 'deployment/api', '--timeout=180s'], ['scale', 'deployment/api', '--replicas=0'],
+  ] } });
+  const env = { A4_TIER: 'preprod', A4_ACTION: 'fence', A4_DRY_RUN: '0',
+    T3_STATE_DIR: ctx.stateDir, A4_EXECUTION_SHA256: digest(annex) };
+  for (const [key, bytes] of [['A4_KUBECONFIG_FILE', 'synthetic'],
+    ['A4_AUTHORIZATION_FILE', JSON.stringify(authorization)], ['A4_EXECUTION_FILE', annex]]) {
+    env[key] = join(ctx.stateDir, key);
+    writeFileSync(env[key], bytes, { mode: 0o600 });
+  }
+  assert.throws(() => fence(env, (_kube, args) => {
+    assert.equal(args[0], 'rollout');
+    throw new Error('read_denied');
+  }), /read_denied/);
+  assert.equal(loadState(ctx.stateDir).fenceStarted, false);
+  assert.equal(await recover(ctx, state, 'read-denied'), 1);
+  assert.deepEqual(writes, []);
+});
