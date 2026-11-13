@@ -4,19 +4,21 @@ import { mkdtempSync, mkdirSync, symlinkSync, rmSync, writeFileSync, linkSync } 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export const scope = { kind: 'ui' as const, writable: ['ui/**', 'packages/radar-{domain,scoring,sources}/src/**'],
-  refused: ['.github/**', 'deploy/**', 'api/**', '.track/**', 'packages/immo-mcp/**', 'package*.json',
-    '**/package*.json', '.npmrc', '**/.npmrc', '.yarnrc*', '**/.yarnrc*', 'ui/dist/**', 'artifact-build/gb1-qualification.json'],
-  source: { repo: 'fixture', path: 'registry.ts', commit: 'abc123' } };
+export const scope = { kind: 'ui' as const, writable: ['ui/**', 'packages/{editor,theme}/src/**'],
+  refused: ['api/**', '**/package*.json', '**/.npmrc', '**/.yarnrc*', 'ui/dist/**'],
+  source: { repo: 'synthetic-test-policy', path: 'tests/scope.test.ts', commit: 'fixture-v1' } };
 
 describe('host-supplied development scope', () => {
+  it('should keep generic fixtures independent of tenant registry packages', () => {
+    expect(() => checkWritePath('/workspace/packages/editor/src/index.ts', scope)).not.toThrow();
+  });
   it('should enforce the registry allowlist and refusals after normalization', () => {
     const check = checkWritePath as (...args: unknown[]) => void;
-    for (const path of ['ui/App.ts', 'packages/radar-domain/src/index.ts']) {
+    for (const path of ['ui/App.ts', 'packages/theme/src/index.ts']) {
       expect(() => check(`/workspace/${path}`, scope)).not.toThrow();
     }
     for (const path of ['../etc/passwd', 'api/a.ts', 'ui/../api/a.ts', 'ui/dist', 'ui/dist/a.js',
-      'ui/package-lock.json', 'ui/.npmrc', 'ui/.yarnrc.yml', '.github/workflows/x.yml', 'packages/immo-mcp/src/a.ts']) {
+      'ui/package-lock.json', 'ui/.npmrc', 'ui/.yarnrc.yml', '.github/workflows/x.yml', 'packages/other/src/a.ts']) {
       expect(() => check(`/workspace/${path}`, scope)).toThrow();
     }
   });
