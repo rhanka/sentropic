@@ -48,9 +48,9 @@ export class ExecutionNodeAdapter {
     throw new ExecutionNodeRefusal(code, reply.status,
       reply.status === 429 ? (Number.isFinite(delay) && delay > 0 ? Math.min(delay * 1000, 30_000) : 1000) : undefined);
   }
-  async inspect() {
+  async inspect(signal?: AbortSignal) {
     this.active();
-    const info = nodeJson(this.checked(await this.transport('GET', '/v1/node')));
+    const info = nodeJson(this.checked(await this.transport('GET', '/v1/node', undefined, undefined, signal)));
     this.identity(info);
     try {
       const key = createPublicKey(String(info.provenancePublicKey)).export({ type: 'spki', format: 'der' });
@@ -59,12 +59,12 @@ export class ExecutionNodeAdapter {
     } catch { this.refuseIdentity(); }
     this.verified = true; return info;
   }
-  async heartbeat() {
+  async heartbeat(signal?: AbortSignal) {
     this.active();
-    if (!this.verified) await this.inspect();
+    if (!this.verified) await this.inspect(signal);
     const body = Buffer.from(JSON.stringify({ expectedNodeInstanceId: this.config.nodeInstanceId,
       expectedNodeEpoch: this.config.nodeEpoch, sentAt: new Date(this.now()).toISOString() }));
-    const result = nodeJson(this.checked(await this.transport('POST', '/v1/node/heartbeat', body)));
+    const result = nodeJson(this.checked(await this.transport('POST', '/v1/node/heartbeat', body, undefined, signal)));
     this.identity(result); return result;
   }
   /** Caller persists commandId with its intent; retries re-sign the same method/path/body triple. No blind 429 retry. */
