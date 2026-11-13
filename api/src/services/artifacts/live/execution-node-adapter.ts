@@ -14,11 +14,16 @@ export function canonicalNodeJson(value: unknown): string {
     .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalNodeJson(entry)}`).join(',')}}`;
 }
 export function nodeJson<T = Record<string, unknown>>(reply: NodeReply): T {
-  try { return JSON.parse(reply.bytes.toString()) as T; } catch { throw new ExecutionNodeRefusal('invalid_node_response'); }
+  try {
+    const value = JSON.parse(reply.bytes.toString());
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
+    return value as T;
+  } catch { throw new ExecutionNodeRefusal('invalid_node_response'); }
 }
 /** Control-plane client only. The immutable configuration is the operator-approved identity fence. */
 export class ExecutionNodeAdapter {
   private fenced = false;
+  private verified = false;
   readonly transport: NodeTransport;
   constructor(readonly config: ExecutionNodeConfig, transport?: NodeTransport,
     private readonly now = Date.now, private readonly alarm: (code: string) => void = () => {}) {
@@ -52,10 +57,11 @@ export class ExecutionNodeAdapter {
       if (info.contractVersion !== 'execution-node.v1' || info.nodeId !== this.config.nodeId
         || !key.equals(this.config.provenanceKey.export({ type: 'spki', format: 'der' }))) this.refuseIdentity();
     } catch { this.refuseIdentity(); }
-    return info;
+    this.verified = true; return info;
   }
   async heartbeat() {
     this.active();
+    if (!this.verified) await this.inspect();
     const body = Buffer.from(JSON.stringify({ expectedNodeInstanceId: this.config.nodeInstanceId,
       expectedNodeEpoch: this.config.nodeEpoch, sentAt: new Date(this.now()).toISOString() }));
     const result = nodeJson(this.checked(await this.transport('POST', '/v1/node/heartbeat', body)));
@@ -64,8 +70,16 @@ export class ExecutionNodeAdapter {
   /** Caller persists commandId with its intent; retries re-sign the same method/path/body triple. No blind 429 retry. */
   async command(session: NodeSession, method: string, path: string, commandId: string, fields: Record<string, unknown>) {
     this.active();
+    if (!this.verified) await this.inspect();
     const { ownership, devScope } = session;
-    if (!['sentropic', 'immo'].includes(ownership.tenantId) || !commandId) throw new ExecutionNodeRefusal('invalid_node_session');
+    if (!['sentropic', 'immo'].includes(ownership.tenantId) || !commandId
+      || !['workspaceId', 'principalId', 'sessionId', 'buildId', 'jobId', 'attemptId', 'purpose']
+        .every(key => typeof ownership[key as keyof typeof ownership] === 'string')
+      || !Number.isSafeInteger(ownership.generation) || ownership.generation < 0
+      || !Number.isSafeInteger(ownership.custodyEpoch) || ownership.custodyEpoch < 0
+      || (ownership.poolOwned !== false && ownership.poolOwned !== `system:warm-pool:${ownership.tenantId}`)) {
+      throw new ExecutionNodeRefusal('invalid_node_session');
+    }
     const body = Buffer.from(JSON.stringify({ ...fields, commandId, devScope }));
     const ticket: ExecutionNodeTicket = { v: 1, tenantId: ownership.tenantId, commandId, method, path,
       bodySha256: nodeHash(body), targetNodeId: this.config.nodeId,
