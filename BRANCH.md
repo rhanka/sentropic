@@ -24,6 +24,7 @@
 - [x] Binding DS specification supplied by owner; no new design decisions.
 - [x] README scope limited to image references.
 - [x] Track single-writer reservation: conductor records this request and deliverable.
+- [x] npm confirms DS 0.40.0; standard renderer reproduces footer overflow with the required full npm names. Owner clarification pending; no truncation or gate relaxation.
 
 ## AI Flaky tests
 - [x] No provider calls required.
