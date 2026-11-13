@@ -17,6 +17,10 @@ qualify-sandbox-node-isolation:
 build-sandbox-node-artifact:
 	@sh apps/sandbox-node/k8s/build-artifact.sh
 
+qualify-sandbox-node-data-plane:
+	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac
+	@sh apps/sandbox-node/k8s/qualify-data-plane.sh
+
 verify-sandbox-node-artifact:
 	@set -eu; out=apps/sandbox-node/k8s/out; digest=$$(cat "$$out/release.digest"); \
 	sha256sum -c "$$out/SHA256SUMS"; \
@@ -27,13 +31,15 @@ verify-sandbox-node-artifact:
 	test "$$(od -An -tx4 -j1024 -N4 "$$release/qualification.erofs" | tr -d ' ')" = e0f5e1e2; \
 	(cd "$$release"; grep -Eq '^[a-f0-9]{64}  ./qualification.erofs$$' SHA256SUMS); \
 	cmp "$$release/OPERATOR.md" apps/sandbox-node/OPERATOR.md; \
-	for name in agent.env execution-node.service operator-ticket.ed25519.pub.pem qualify-restart-mounts.sh qualify-isolation.sh start.sh; do \
+	for name in agent.env execution-node.service operator-ticket.ed25519.pub.pem qualify-restart-mounts.sh qualify-isolation.sh qualify-data-plane.sh start.sh; do \
 	  cmp "$$release/$$name" "apps/sandbox-node/k8s/$$name"; done; \
 	docker run --rm --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
 	  --entrypoint /bin/sh node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e -ec '\
 	  /release/execution-node --self-test; \
 	  if output=$$(/release/execution-node --qualify-isolation 2>&1); then exit 1; fi; \
-	  test "$$output" = "FAIL isolation qualification"'; \
+	  test "$$output" = "FAIL isolation qualification"; \
+	  if output=$$(/release/execution-node --qualify-data-plane 2>&1); then exit 1; fi; \
+	  test "$$output" = "FAIL data-plane qualification"'; \
 	docker run --rm --user=65534:65534 --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
 	  --entrypoint /release/execution-node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e --self-test
 
@@ -46,7 +52,7 @@ check-sandbox-node:
 	  mkdir -p /tmp/qualification/spec; cp /source/spec/SPEC_EVOL_SANDBOX_NODE.md /tmp/qualification/spec/; \
 	  node /source/scripts/ci/locked-tools.mjs --prefix /tmp/qualification --ignore-scripts --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
 	  cd /tmp/qualification/apps/sandbox-node; \
-	  sh -n k8s/start.sh k8s/build-artifact.sh k8s/qualify-restart-mounts.sh k8s/qualify-isolation.sh; \
+	  sh -n k8s/start.sh k8s/build-artifact.sh k8s/qualify-restart-mounts.sh k8s/qualify-isolation.sh k8s/qualify-data-plane.sh; \
 	  ../../node_modules/.bin/tsc --project tsconfig.json; \
 	  ../../node_modules/.bin/tsc --project tsconfig.build.json; \
 	  node --expose-gc tests/export-memory.mjs; \
