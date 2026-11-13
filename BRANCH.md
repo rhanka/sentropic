@@ -50,6 +50,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 ## Plan / Todo (lot-based)
 - [ ] Round 2: publish Custody RPC contract, implement authoritative authenticated issue/watch-poll and agent HTTP/WS custody enforcement.
   - [x] Agent HTTP/WS proxy authenticates custody JWS, tenant, UID, principal, epoch and port; attaches revocable streams.
+  - [x] Preserve frozen missing-tenant HTTP status and refuse execution-ticket header presence, including empty values.
   - [x] Wire real listener and sandbox-private runsc UDS forwarding, preserving network=none confinement.
   - [x] Verify upstream runsc port-forward protocol; use one --stream UDS donation per connection with bounded setup and short /run paths.
   - [x] Test UDS donation direction/concurrency/launcher exit and document exact operator qualification requirements.
