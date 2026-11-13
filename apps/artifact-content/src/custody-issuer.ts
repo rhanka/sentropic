@@ -14,27 +14,34 @@ export function createRpcCustodyIssuer(rpc: CustodyRpc): CustodyIssuer {
   return {
     watch(subject, revoke) {
       const controller = new AbortController(); let stopped = false; let version: string | undefined;
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      let freshness: ReturnType<typeof setTimeout>;
+      let lastVerifiedSent = performance.now();
       const fail = () => {
         if (!stopped) { watch.revoked = true; stop(); revoke(); }
       };
       const stop = () => {
-        stopped = true; clearTimeout(timer); controller.abort();
+        stopped = true; clearInterval(poll); clearTimeout(freshness); controller.abort();
         const set = watches.get(subject); set?.delete(watch); if (!set?.size) watches.delete(subject);
       };
       const check = async () => {
+        const sent = performance.now();
         const current = versionOf(await rpc('watch', subject, controller.signal));
-        if (stopped || (version !== undefined && current !== version)) throw new CustodyRevoked();
+        if (stopped || performance.now() - sent >= 900
+          || (version !== undefined && current !== version)) throw new CustodyRevoked();
+        // An old response can never move the authoritative freshness window forward.
+        lastVerifiedSent = Math.max(lastVerifiedSent, sent);
+        clearTimeout(freshness);
+        freshness = setTimeout(fail, Math.max(0, lastVerifiedSent + 900 - performance.now())); freshness.unref();
         version = current; return current;
       };
       // Defer network work until the watch is registered, including synchronous transport failures.
       const ready = Promise.resolve().then(check);
       const watch: Watch = { ready, check, stop, revoked: false };
       const set = watches.get(subject) ?? new Set<Watch>(); set.add(watch); watches.set(subject, set);
-      const schedule = () => {
-        if (!stopped) { timer = setTimeout(() => { void check().then(schedule, fail); }, 250); timer.unref(); }
-      };
-      void ready.then(schedule, fail);
+      // Fixed cadence overlaps bounded RPCs; the independent watchdog includes response latency.
+      const poll = setInterval(() => { void check().catch(fail); }, 250); poll.unref();
+      freshness = setTimeout(fail, 900); freshness.unref();
+      void ready.catch(fail);
       return stop;
     },
     async issue(subject, signal) {

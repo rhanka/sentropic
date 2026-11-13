@@ -37,6 +37,7 @@
 - [x] Hermetic contract qualification only; no production or browser UAT claim.
 
 ## Plan / Todo (lot-based)
+- [x] Round 3: fixed 250 ms polling and independent 900 ms request-send freshness bound; delayed stale OK regressions across two replicas.
 - [x] Round 2: compact EdDSA fixture, faithful agent custody guard, authenticated RPC client and replica-wide watch.
   - [x] Compact six-claim EdDSA JWS and real CustodyGuard WAL/stream lifecycle replace the two-segment fake and watcher-only revocation.
   - [x] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
