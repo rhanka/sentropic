@@ -199,3 +199,64 @@ port ownership), restart it, and switch the probe to GET /v1/node. Drain
 before planned replacement. Rollback: stop/disable execution-node.service,
 re-enable/start execution-node-stub.service, restore the previous verified
 agent/rootfs digest when ready. No install/restart is performed by this lane.
+
+## Verification key custody and operator tickets
+
+| Key | Holder / VM path | Rotation |
+| --- | --- | --- |
+| Execution ticket/token Ed25519 | Sentropic control plane private key; VM public SPKI only at `/etc/execution-node/keys/execution-ticket.ed25519.pub.pem` (`AGENT_TICKET_PUBLIC_KEY`) | Control plane supplies the public key before installation; replace config and restart on rotation |
+| Operator ticket Ed25519 | k8s private key; shipped SPKI `/etc/execution-node/keys/operator-ticket.ed25519.pub.pem` | 365 days; `AGENT_OPERATOR_PUBLIC_KEYS` accepts one or two comma-separated public-key paths for overlap; restart config, then retire old key after 60 s |
+| Node provenance Ed25519 | k8s generates at install; PKCS#8 PEM `/etc/execution-node/keys/node-provenance.ed25519`, root 0600 | k8s coordinates rotation and control-plane pin registration; never copied to an `.env` or release |
+
+The N1 shipped operator key is:
+
+```pem
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEArfMfag+AHpptmfGgO1z/DZGXaj3XwaufBbomkwqdtho=
+-----END PUBLIC KEY-----
+```
+
+GET /v1/node returns `provenancePublicKey` (SPKI PEM). k8s sends that public
+key after install; the control plane pins it per nodeInstanceId before trusting
+`X-Artifact-Provenance` (compact EdDSA JWS over archiveSha256, tenantId,
+nodeInstanceId, nodeEpoch, exportedAt). Verify archive digest and pinned key.
+The shared rootfs is built by sentropic, shipped beside the agent, registered
+as `shared-rootfs` and advertised by GET node. Tenant source/dependency bases
+arrive only through PUT bases. PUT refuses rootfs replacement.
+
+`X-Operator-Ticket` is a compact JWS `base64url(header).base64url(claims).base64url(signature)`
+(unpadded, signing bytes are the ASCII first two segments joined by `.`).
+Protected header: `{"alg":"EdDSA"}`; signature algorithm Ed25519.
+Signed claims: `{op,nodeInstanceId,nodeEpoch,iat,exp,jti,aud}`. Operations:
+`drain|undrain|status`; audience exactly `execution-node`; `iat`/`exp` are
+integer Unix seconds, `0 < exp-iat <= 60`, no future iat, exp strictly after now.
+Node identity/epoch must match GET node. A bounded jti cache rejects reuse
+until exp; restart advances the durable epoch, invalidating all old tickets.
+Operator mTLS is required in addition to the ticket. The header is required
+on `POST /v1/node/{drain,undrain,status}`; GET node requires no ticket.
+Drain refuses new reservations/start/claim; existing stop/export/delete stay
+available. This S1 endpoint drains the whole node; use a fresh JWS for undrain.
+
+Worked example on the **k8s operator workstation**, with its existing private
+key file (never copy it to the VM). Read NODE_INSTANCE_ID/NODE_EPOCH from
+authenticated GET node, export those and OPERATOR_KEY_FILE/AGENT_URL, then:
+
+```sh
+# If creating a rotation key: openssl genpkey -algorithm ED25519 -out operator-next.pem
+TICKET=$(node --input-type=commonjs <<'NODE'
+const { readFileSync } = require('node:fs');
+const { sign, randomUUID } = require('node:crypto');
+const enc = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+const now = Math.floor(Date.now() / 1000);
+const claims = { op: 'drain', nodeInstanceId: process.env.NODE_INSTANCE_ID,
+  nodeEpoch: Number(process.env.NODE_EPOCH), iat: now, exp: now + 60,
+  jti: randomUUID(), aud: 'execution-node' };
+const input = enc({ alg: 'EdDSA' }) + '.' + enc(claims);
+const signature = sign(null, Buffer.from(input), readFileSync(process.env.OPERATOR_KEY_FILE));
+process.stdout.write(input + '.' + signature.toString('base64url'));
+NODE
+)
+curl --fail-with-body --tlsv1.3 --cacert ca.crt --cert operator.crt --key operator.key \
+  -X POST -H "X-Operator-Ticket: $TICKET" "$AGENT_URL/v1/node/drain"
+unset TICKET
+```
