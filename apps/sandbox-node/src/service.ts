@@ -39,7 +39,7 @@ const control = new NodeControl(nodeInstanceId, nodeEpoch, custody, operator);
 const provenanceKey = createPrivateKey(readFileSync('/etc/execution-node/keys/node-provenance.ed25519'));
 if (provenanceKey.asymmetricKeyType !== 'ed25519') throw new Error('Ed25519 node provenance key required');
 const provenancePublicKey = createPublicKey(provenanceKey).export({ type: 'spki', format: 'pem' }).toString();
-const server = createAgentServer(tls, async (req, res, role) => {
+export const server = createAgentServer(tls, async (req, res, role) => {
   const reply = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body)); };
   try {
     const url = new URL(req.url ?? '/', 'https://agent');

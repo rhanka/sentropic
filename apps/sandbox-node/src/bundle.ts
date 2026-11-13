@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, chownSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, chownSync, chmodSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { RunSandboxOptions } from './runtime-adapter.js';
 import { assertUnlinkedPath } from './mounts.js';
 import { mountQuotaVolume } from './disk-quota.js';
+import { throwFilesystemError } from './filesystem-errors.js';
 
-export type HostCommand = (command: string, args: string[]) => void;
-const host: HostCommand = (command, args) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000 }); };
+export type HostCommand = (command: string, args: string[], options?: { env: NodeJS.ProcessEnv }) => void;
+const host: HostCommand = (command, args, options) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000, ...options }); };
 export interface Bundle { path: string; workspace: string; output: string; mounted: string[] }
 
 /** Only the agent writes source. Untrusted processes see a read-only workspace. */
@@ -28,6 +29,9 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
     const upper = join(volume, 'upper'), work = join(volume, 'work');
     bundle.output = join(volume, 'output');
     mkdir(upper); mkdir(work); mkdir(bundle.workspace); mkdir(bundle.output);
+    // Overlay root permissions come from upper; the sandbox uid must traverse its cwd.
+    // The enclosing host bundle stays 0700 and the OCI workspace bind stays read-only.
+    chmodSync(upper, 0o755);
     mountImage(root.source, rootfs); mountImage(source.source, lower);
     run('mount', ['-t', 'overlay', 'overlay', '-o', `lowerdir=${lower},upperdir=${upper},workdir=${work}`, bundle.workspace]);
     bundle.mounted.push(bundle.workspace);
@@ -60,7 +64,7 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
           { path: '/dev/urandom', type: 'c', major: 1, minor: 9, fileMode: 438, uid: 0, gid: 0 }] },
     }), { mode: 0o600 });
     return bundle;
-  } catch (error) { destroyBundle(bundle, run); throw error; }
+  } catch (error) { destroyBundle(bundle, run); throwFilesystemError(error); }
 }
 
 export function destroyBundle(bundle: Bundle, run: HostCommand = host): void {

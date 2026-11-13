@@ -1,0 +1,61 @@
+/** Executed by the release rootfs's Node inside runsc, never on the host. */
+export function isolationProbe(paths: readonly { path: string; directory: boolean; file?: string }[]): string {
+  return `
+const fs = require('node:fs'), net = require('node:net'), os = require('node:os');
+const checks = [];
+function check(name, ok) { checks.push({ name, ok }); }
+for (const {path, directory, file} of ${JSON.stringify(paths)}) {
+  const target = file || (directory ? path + '/isolation-marker' : path);
+  let denied = false;
+  try { fs.readFileSync(target); }
+  catch (e) { denied = ['ENOENT', 'EACCES', 'EROFS'].includes(e.code); }
+  if (directory) {
+    // Host directories have no fixture sentinel: listing them must also fail.
+    let hidden = false;
+    try { fs.readdirSync(path); }
+    catch (e) { hidden = ['ENOENT', 'EACCES'].includes(e.code); }
+    denied = denied && hidden;
+  }
+  check('zero read ' + path, denied);
+  denied = false;
+  try {
+    fs.closeSync(fs.openSync(target, 'r+'));
+  } catch (e) { denied = ['ENOENT', 'EACCES', 'EROFS'].includes(e.code); }
+  check('zero write ' + path, denied);
+}
+for (const path of ['/workspace/isolation-marker', '/workspace/node_modules/isolation-marker']) {
+  check('own base readable ' + path, fs.readFileSync(path, 'utf8') === 'isolation fixture');
+  let readonly = false;
+  try { fs.writeFileSync(path, 'forbidden'); } catch (e) { readonly = e.code === 'EROFS' || e.errno === -30; }
+  check('own base read-only ' + path, readonly);
+}
+check('network interfaces loopback only', Object.keys(os.networkInterfaces()).every(name => name === 'lo'));
+async function unreachable(host, port) {
+  return new Promise(resolve => {
+    const socket = net.connect({host, port});
+    socket.once('connect', () => { socket.destroy(); resolve(false); });
+    socket.once('error', () => { socket.destroy(); resolve(true); });
+    socket.setTimeout(1000, () => { socket.destroy(); resolve(false); });
+  });
+}
+(async () => {
+  for (const [host, port] of [['1.1.1.1',443], ['169.254.169.254',80], ['127.0.0.1',8443], ['::1',8443]]) {
+    check('network none ' + host + ':' + port, await unreachable(host, port));
+  }
+  process.stdout.write(JSON.stringify(checks));
+})().catch(() => process.exitCode = 1);
+`;
+}
+
+export function requireIsolationResults(text: string, report: (name: string, ok: boolean) => void, expectedCount?: number): void {
+  const checks: unknown = JSON.parse(text);
+  if (!Array.isArray(checks) || checks.length === 0) throw new Error('missing isolation probe results');
+  if (expectedCount !== undefined && checks.length !== expectedCount) throw new Error('incomplete isolation probe results');
+  const names = new Set<string>();
+  for (const check of checks) {
+    if (!check || typeof check.name !== 'string' || typeof check.ok !== 'boolean') throw new Error('invalid isolation probe result');
+    if (names.has(check.name)) throw new Error('duplicate isolation probe result');
+    names.add(check.name);
+    report(check.name, check.ok);
+  }
+}

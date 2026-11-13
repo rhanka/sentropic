@@ -6,6 +6,17 @@ import { assertCleanStartup } from '../src/restart.js';
 import { nextNodeEpoch } from '../src/node-state.js';
 
 describe('restart admission fence', () => {
+  it.each(['null', '[]'])('should accept empty inventory %s and tenant lost+found', inventory => {
+    const root = mkdtempSync(join(tmpdir(), 'restart-empty-'));
+    try {
+      for (const tenant of ['sentropic', 'immo']) mkdirSync(join(root, 'tenants', tenant, 'lost+found'), { recursive: true });
+      const mountInfo = join(root, 'mountinfo'); writeFileSync(mountInfo, '');
+      assertCleanStartup(root, command => command === 'systemctl' ? '' : inventory, mountInfo);
+      for (const garbage of ['garbage', '{}', 'false', '0', '[null]', '[{}]']) {
+        expect(() => assertCleanStartup(root, command => command === 'systemctl' ? '' : garbage, mountInfo)).toThrow();
+      }
+    } finally { rmSync(root, { recursive: true }); }
+  });
   it.each(['scopes', 'runsc', 'directories', 'mounts', 'inventory-error'])('should refuse a fresh listener with surviving %s', kind => {
     const root = mkdtempSync(join(tmpdir(), 'restart-'));
     const listen = vi.fn();
