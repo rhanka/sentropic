@@ -18,7 +18,7 @@ describe('Linux errno mapping', () => {
     expect(isEdquot({ code: 'EDQUOT' })).toBe(true);
     for (const value of [null, {}, { errno: constants.errno.EDQUOT }, { code: 'UNKNOWN' }]) expect(isEdquot(value)).toBe(false);
     for (const code of ['EROFS', 'EXDEV', 'ELOOP', 'ENOTEMPTY'] as const) {
-      const error = { code: 'UNKNOWN', errno: -constants.errno[code] };
+      const error = Object.assign(new Error('UNKNOWN'), { code: 'UNKNOWN', errno: -constants.errno[code] });
       expect(() => throwFilesystemError(error)).toThrow(error);
     }
   });
