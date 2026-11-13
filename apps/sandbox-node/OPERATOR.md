@@ -39,6 +39,51 @@ k8s owns that execution, qualification receipts, installation and activation.
 
 ## Round 2 data plane and export
 
+AMD-28 is CO-SIGNED by k8s on 2026-11-13 (k8s commit `3b042fd`). Activation
+still requires both real-host gates to PASS on the pinned `release-20261102.0`
+runsc binary. k8s owns these exact keys in `/etc/execution-node/agent.env`:
+
+```dotenv
+EXECUTION_NODE_PORTS_ENABLED=false
+EXECUTION_NODE_PORTS_RUNSC_SHA256=
+EXECUTION_NODE_PORT_FORWARD_MAX=2
+```
+
+The archive defaults to closed with no qualified digest: shipment alone cannot
+activate an unqualified data plane. After PASS, k8s records the receipt's runsc
+SHA-256 beside literal `true` in its versioned configuration and installs that
+file root-owned, non-writable by tenants. Do not quote values. Production reads
+this file directly, including atomic replacements, every 50ms; admission uses
+the cached fail-closed result;
+no restart or new release is needed to close the switch. Missing, malformed or
+unreadable settings, false, or a different runsc digest remove `ports` from
+`GET /v1/node` supportedOps, refuse creation/start with `409 ports_disabled`,
+cut open HTTP/WS within 250ms, and destroy ports sandboxes. Cleanup failures are
+retried. Any runsc upgrade requires a new qualification before k8s reopens it.
+The gate opens only private qualification settings, pinning the binary after
+hardened prerequisites succeed; it never edits the production file. Switch
+scenarios use the production observer with a private config and a copy of the
+qualified binary, then atomically replace those gate files. Discovery uses the
+same capability builder as GET node.
+
+The stream owner observes configuration/stat/hash asynchronously, and closes
+activation immediately when the runsc identity changes, before rehashing it.
+Affirmative observations expire after 150ms on a monotonic clock, including
+when subsequent config/stat I/O hangs; late reads cannot extend that lease.
+Blocking runsc, mounts, file writes and export commands run in a dedicated
+worker thread embedded in the SEA (not an operator-supplied script). Both
+threads and forwarding helpers share the agent's 192M/128-task cgroup. Fixed
+tenant cgroup paths are validated before TLS listen so admission does not
+execute systemctl while streams are open. Custody closes locally before
+asynchronous WAL persistence; acknowledgement still waits for file and directory
+sync. Hermetic regressions hold HTTP/WS streams open while a real worker blocks
+in a host command, then measure cuts.
+Worker death closes admission and reconciles parent-retained launch identities
+in a cleanup-only worker, including interrupted launches and agent-side helpers.
+Reservations remain held until destruction succeeds. A failed custody WAL write
+does not roll back the local epoch: GET exposes it, and the control plane retries
+revocation or stop/delete with a fresh signed ticket at that epoch.
+
 The updated archive adds authenticated `ANY /v1/ports/5173/*` and WebSocket
 upgrades. Only mTLS CN `data-plane:artifact-content` may use these routes.
 `X-Tenant-Id`, `X-Expected-Physical-Uid` and API-signed `X-Custody-Token` are
@@ -46,12 +91,69 @@ mandatory; execution tickets are refused on this plane. The six custody claims
 are checked against the active sandbox owner/epoch, WAL revocation floor and
 60-second TTL. Expiry/revocation cuts HTTP and sends WS close 1008.
 
-The sandbox must opt into `network: ports`; gVisor still uses `--network=none`.
+Only profiles `live` and `standby` may opt into `network: ports` on fixed port
+5173. These are daemon session slots; the existing `node-22` wire profile is
+accepted only with an explicit derived live/standby slot at the runtime boundary.
+Artifact-build, prebundle, cold-materialize, browser-harness and all other
+profiles remain `none`. gVisor uses `--network=sandbox --platform=systrap`
+inside a fresh `unshare --net` namespace with only `lo` brought up. The OCI
+network namespace references `/proc/self/ns/net` of that private launcher.
+No host interface, veth, external route or host TCP listener is configured.
+Operator-provided prerequisites are `util-linux` (`unshare`, `nsenter`), `dash`
+(`sh`), `iproute2` (`ip`, `ss`), coreutils and `awk`; k8s explicitly installs
+and records them, rather than this archive. Both gates
+fail fast by executing a private namespace/netlink probe in a transient unit
+with the shipped CapabilityBoundingSet and SystemCallFilter. The launch fence
+requires exactly UP `lo`, only addresses 127.0.0.1/8 and ::1/128, and only
+loopback routes in every IPv4/IPv6 table, including `::1 dev lo` in main.
+The netns inode differs from PID 1. After start, the sentry's inode must match
+the launcher and differ from host/other sandboxes, with lo alone and no kernel
+listeners. Flags/specs forbid raw/proxy/XDP (except off), NAT/nftables replay,
+pcap, packet writes, flag overrides, dev.gvisor.* annotations and network
+devices; capabilities are empty and host UDS/FIFO are explicitly `none`.
+Any violation returns `500 network_isolation_violation`, destroys the sandbox
+and writes an audit record; there is no fallback.
+Gate scripts verify SHA256SUMS and load PATH and the helper cap from the shipped
+agent.env. They require and print the resolved runsc path, release-20261102.0
+version and SHA-256 alongside the digest-named verified archive identity.
+Both scripts forward QUALIFICATION_TIMEOUT_MS (default 120000, maximum 300000).
+The expanded VM budget has not been measured by this source-only lane; k8s must
+record its elapsed time and cleanup outcome in the real-host receipt.
+`--network=none` rejects gVisor's port-forward RPC and remains for other workloads.
+The data-plane qualification first verifies loopback-only interfaces and a TCP
+accept on 5173 from inside the sandbox (5-second bound). Its numbered `STEP`
+lines carry UTC timestamps and identify each probe: TLS/CN, custody, UDS,
+port-forward spawn/donation/exit, first byte, HTTP status and WS upgrade.
+Runtime stdout/stderr is drained and limited to 4096 bytes per stream/helper;
+request headers, custody tokens and keys are never included. On failure, the
+gate prints the selected runsc state fields and systemd scope result before
+cleanup. Each `FAIL` names its step; the final supervisor failure is a summary.
 The agent creates private UDS listeners under
 `/run/execution-node/ports/<physicalUid>/5173.sock`. Each connection is relayed
 through `runsc --root=/run/execution-node/runsc port-forward --stream=<uds>
 sandbox-<physicalUid> 5173`. This is gVisor stream mode: runsc connects once to
 the UDS and donates it to the sentry, then exits. No host TCP forwarding port.
+The `<local>:<remote>` form is prohibited. The agent fixes the destination at
+5173; request input cannot choose a different runtime port. UDS directories
+are root-owned 0700 and removed on DELETE. `EXECUTION_NODE_PORT_FORWARD_MAX`
+sets a process-wide cap from 1 to 8 (default 2, read at agent startup), counting
+donated live connections conservatively until close. Eight additional requests
+may queue for at most 100ms; saturation returns `429 ports_saturated`.
+Helpers inherit the agent's 192M/128-task cgroup, never a tenant scope.
+Qualification holds that cap, bursts twelve more mTLS connections and verifies
+refusals, slot drainage and effective cgroup limits. Initial connections start
+concurrently from idle; receipts record observed live-helper peak, memory.peak,
+sampled task peak and zero OOM-kill delta. It also probes TCP/UDP
+public IPv4 (22/8443), metadata IPv4/IPv6, global IPv6, DNS, host loopback,
+the other tenant's 5173 and a positive witness on the private kernel lo.
+The shipped native `network-probe` uses direct raw/packet/UDP socket syscalls;
+timeouts never count as UDP/TCP refusal. For off-sandbox UDP targets, a successful
+send fails qualification even if a remote ICMP rejection subsequently arrives;
+only local connect/send refusal proves egress denial. Gates compare host `ss -ltnup` before
+and after as protocol/local-address sets, ignoring volatile queues/PIDs/FDs.
+Tenant TCP/UDP self-controls bracket cross-tenant probes and require zero
+delivered probe datagrams. Gates reconcile scopes/processes/netns references after stop, failure,
+kernel-confirmed OOM and a real SIGKILL of the gate's disposable agent worker.
 The existing worker bootstrap multiplexes live and supervisor traffic on 5173.
 Operator qualification must cover concurrent HTTP/HMR, revocation and expiry
 using the installed pinned runsc before G-A; hermetic fake-runtime tests do not
@@ -112,7 +214,8 @@ tenant ancestry before writing scope-only `cgroup.kill`. Require
 - Separate operator/control-plane/data-plane certificates; CA, cert and
   key paths are mandatory. No plaintext agent listener.
 - Pin runsc systrap release-20261102.0 under `/opt/gvisor/20261102`.
-  Sandboxes use runsc `--network=none`; crun is benchmark witness only.
+  Sandboxes use runsc `--network=none`, or private loopback-only `sandbox` for
+  explicit `network: ports`; crun is benchmark witness only.
 - EROFS/overlay support; `/var/lib/builder/tenants/<tenantId>` mode 0700.
   Enforce 16 GiB project quota and inode quota per tenant at S1-A1a.
 - Install `e2fsprogs`, `quota` and loop-device support. Before launch the agent

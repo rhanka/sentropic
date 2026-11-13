@@ -192,6 +192,9 @@ export const EXECUTION_NODE_ISOLATE_POLICY = {
 } as const;
 
 export type ExecutionNodeErrorCode =
+  | 'network_isolation_violation'
+  | 'ports_saturated'
+  | 'ports_disabled'
   | 'sandbox_not_quiesced'
   | 'cgroup_tenant_mismatch'
   | 'custody_revoked'

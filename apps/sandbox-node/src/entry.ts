@@ -1,19 +1,35 @@
 import { isSea } from 'node:sea';
+import { spawn } from 'node:child_process';
+import { qualificationCrashWorker } from './qualification-crash.js';
 import { qualifyDisk, quotaWriter } from './qualification.js';
 import { qualifyIsolation } from './isolation-qualification.js';
 import { qualifyDataPlane } from './data-plane-qualification.js';
 import { acquireNodeLock } from './node-lock.js';
 import { superviseQualification } from './qualification-supervisor.js';
+import { ThreadRuntimeAdapter } from './thread-runtime.js';
+import assert from 'node:assert/strict';
 
 if (process.argv.includes('--self-test')) {
   if (!isSea()) throw new Error('single executable application required');
-  console.log('execution-node.v1 SEA self-test passed');
+  void (async () => {
+    const runtime = new ThreadRuntimeAdapter('/nonexistent-runsc');
+    try {
+      assert.equal((await runtime.forwardUsage()).inUse, 0);
+      await assert.rejects(runtime.runSandbox({ network: 'host' } as never), { code: 'command_id_payload_mismatch' });
+    } finally { await runtime.close(); }
+    console.log('execution-node.v1 SEA self-test passed');
+  })().catch(() => { process.exitCode = 1; });
+} else if (process.argv.includes('--qualify-crash-worker')) {
+  void qualificationCrashWorker(process.argv[process.argv.indexOf('--qualify-crash-worker') + 1]!).catch(() => process.exit(1));
 } else if (process.argv.includes('--qualify-data-plane-worker')) {
   void qualifyDataPlane().catch(() => { process.exit(1); });
 } else if (process.argv.includes('--qualify-data-plane')) {
-  void superviseQualification().catch(() => { console.error('FAIL data-plane qualification'); process.exitCode = 1; });
+  void superviseQualification().catch(() => { console.error('FAIL step=supervisor data-plane qualification'); process.exitCode = 1; });
+} else if (process.argv.includes('--qualify-isolation-worker')) {
+  void qualifyIsolation().catch(() => { process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-isolation')) {
-  void qualifyIsolation().catch(() => { console.error('FAIL isolation qualification'); process.exitCode = 1; });
+  void superviseQualification(undefined, () => spawn(process.execPath, ['--qualify-isolation-worker'], { stdio: 'inherit', detached: true }))
+    .catch(() => { console.error('FAIL isolation qualification'); process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-disk')) {
   qualifyDisk();
 } else if (process.argv.includes('--quota-writer')) {

@@ -1,13 +1,76 @@
 import { describe, expect, it, vi } from 'vitest';
 import { spawn, execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { privateNetworkScript } from '../src/private-network.js';
+vi.mock('../src/network-audit.js', () => ({ auditNetworkSpec: vi.fn(), auditStartedNetwork: vi.fn(() => '123') }));
+vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs')>(),
+  readFileSync: (path: string, ...args: any[]) => path === '/tmp/config.json' ? '{}' :
+    require('node:fs').readFileSync(path, ...args) }));
 import { FakeRuntimeAdapter, RunscRuntimeAdapter, createExecutionNode, ExecutionNodeDaemon } from '../src/index.js';
+import { SandboxCgroup } from '../src/cgroups.js';
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return { ...actual, spawn: vi.fn(actual.spawn), execFileSync: vi.fn(actual.execFileSync) };
 });
 
 describe('runtime adapters', () => {
+  it('should register a lost worker launch without host I/O and stop its scope before recovery metadata', async () => {
+    const adapter = new RunscRuntimeAdapter();
+    const stop = vi.spyOn(SandboxCgroup.prototype, 'stop').mockResolvedValue(true);
+    const original = vi.mocked(execFileSync).getMockImplementation()!;
+    vi.mocked(execFileSync).mockImplementation(() => { throw new Error('metadata unavailable'); });
+    try {
+      adapter.recoverSandbox({ tenantId: 'immo', sandboxUid: 'worker-lost', overlayUpper: '/private/upper' } as never);
+      expect(execFileSync).not.toHaveBeenCalled();
+      await expect(adapter.stopSandbox('runsc-immo-worker-lost')).resolves.toBe(true);
+      expect(stop).toHaveBeenCalledWith('builder-sbx-worker-lost.scope', 'immo');
+    } finally { vi.mocked(execFileSync).mockImplementation(original); vi.restoreAllMocks(); }
+  });
+  it('should stop the scope after runsc removal and retain deferred metadata cleanup', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
+    const available = vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter(); queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0); });
+      return child as ReturnType<typeof spawn>;
+    });
+    const stop = vi.spyOn(SandboxCgroup.prototype, 'stop').mockResolvedValue(true);
+    try {
+      const { runtimeId } = await adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'missing-binary', network: 'none',
+        mounts: [], overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 });
+      available.mockReturnValue(false);
+      await expect(adapter.stopSandbox(runtimeId)).resolves.toBe(true);
+      expect(stop).toHaveBeenCalledWith('builder-sbx-missing-binary.scope', 'immo');
+      await expect(adapter.destroySandbox(runtimeId)).rejects.toMatchObject({ runtimeId });
+    } finally { vi.restoreAllMocks(); }
+  });
+  it('should enable the gVisor forwarding API only for an explicit ports workload', () => {
+    const adapter = new RunscRuntimeAdapter();
+    const input = { tenantId: 'immo', sandboxUid: 'network', mounts: [], overlayUpper: '/tmp/upper',
+      overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 };
+    // release-20261102.0 Loader.portForward rejects NetworkNone; NetworkSandbox
+    // uses the OCI private network namespace (loopback only, no supplied path).
+    expect(adapter.runscArgs({ ...input, network: 'ports', profile: 'live' })).toContain('--network=sandbox');
+    expect(adapter.runscArgs({ ...input, network: 'none' })).toContain('--network=none');
+    expect(adapter.runscArgs(input)).toContain('--network=none');
+  });
+  it('should create and configure a fresh loopback namespace before executing a ports sandbox', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter(); queueMicrotask(() => child.emit('error', new Error('stop after recording argv')));
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'private', mounts: [], overlayUpper: '/tmp/upper',
+        overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000, network: 'ports', profile: 'live' })).rejects.toThrow();
+      const args = vi.mocked(spawn).mock.calls.at(-1)![1] as string[];
+      const offset = args.indexOf('unshare');
+      expect(offset).toBeGreaterThan(0);
+      expect(args.slice(offset, offset + 10)).toEqual(['unshare', '--net', '--', 'sh', '-ec',
+        privateNetworkScript, 'sandbox-network', '/tmp/netns.inode', 'runsc', '--root=/run/execution-node/runsc']);
+      expect(args).toContain('--network=sandbox');
+    } finally { vi.restoreAllMocks(); }
+  });
   it('should hard-bound the runtime version subprocess', () => {
     vi.mocked(execFileSync).mockImplementation(() => { throw new Error('version timeout'); });
     try {

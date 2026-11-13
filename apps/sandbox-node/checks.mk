@@ -1,6 +1,11 @@
 # Standalone qualification: no stack, no host dependencies, no deployment.
 SANDBOX_NODE_IMAGE := node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2
 SANDBOX_NODE_NPM_CACHE ?= $(HOME)/.cache/sentropic-sandbox-node/npm
+.PHONY: scope-check
+# Same host-harness C2 producer as the root target, without starting Docker.
+scope-check:
+	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
+	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
 .PHONY: check-sandbox-node
 qualify-sandbox-node-disk:
 	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac
@@ -39,9 +44,12 @@ verify-sandbox-node-artifact:
 	  if output=$$(/release/execution-node --qualify-isolation 2>&1); then exit 1; fi; \
 	  test "$$output" = "FAIL isolation qualification"; \
 	  if output=$$(/release/execution-node --qualify-data-plane 2>&1); then exit 1; fi; \
-	  test "$$output" = "FAIL data-plane qualification"'; \
+	  test "$$output" = "FAIL step=supervisor data-plane qualification"'; \
 	docker run --rm --user=65534:65534 --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
-	  --entrypoint /release/execution-node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e --self-test
+	  --entrypoint /release/execution-node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e --self-test; \
+	docker run --rm --user=65534:65534 --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
+	  -v "$(CURDIR)/apps/sandbox-node/tests/native-network-probe.mjs:/native-network-probe.mjs:ro" \
+	  --entrypoint node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e /native-network-probe.mjs
 
 check-sandbox-node:
 	@mkdir -p "$(SANDBOX_NODE_NPM_CACHE)"

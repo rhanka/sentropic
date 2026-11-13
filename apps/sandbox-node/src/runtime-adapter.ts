@@ -8,7 +8,13 @@ import { parseRunscList } from './runsc-inventory.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
-import { rmSync } from 'node:fs';
+import { rmSync, readFileSync, statSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { auditNetworkSpec, auditStartedNetwork } from './network-audit.js';
+import { ExecutionNodeError } from './errors.js';
+import { requireNetworkPolicy } from './network-policy.js';
+import { privateNetworkScript } from './private-network.js';
+import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-diagnostics.js';
 
 export interface SandboxMount {
   readonly source: string;
@@ -17,6 +23,9 @@ export interface SandboxMount {
 }
 
 export interface RunSandboxOptions {
+  readonly slot?: 'live' | 'standby' | 'build';
+  readonly profile?: string;
+  readonly network?: 'none' | 'ports';
   readonly diskQuotaMiB?: number;
   readonly quotaInodes?: number;
   readonly onExit?: (code: number | null) => void;
@@ -32,7 +41,8 @@ export interface RunSandboxOptions {
 }
 
 export interface RuntimeAdapter {
-  assertRunning?(runtimeId: string): void;
+  assertRunning?(runtimeId: string): void | Promise<void>;
+  forwardUsage?(): Promise<{ limit: number; inUse: number }>;
   portTarget?(runtimeId: string, port: number): Promise<{ socketPath: string }>;
   writeFile(runtimeId: string, path: string, bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void>;
   readonly kind: string;
@@ -96,13 +106,42 @@ export class FakeRuntimeAdapter implements RuntimeAdapter {
  */
 export class RunscRuntimeAdapter implements RuntimeAdapter {
   private readonly forwards = new Map<string, Map<number, ReturnType<typeof forwardSandboxPort>>>();
+  private readonly namespaces = new Map<string, string>();
+  private readonly portsSandboxes = new Set<string>();
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
   private readonly rootArg = '--root=/run/execution-node/runsc';
-  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean; exited?: boolean }>();
+  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean; exited?: boolean; recovered?: boolean }>();
 
-  constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle }) {
+  constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle },
+    private readonly diagnostic?: RuntimeDiagnostic) {
     this.binary = binary;
+  }
+
+  /** Recover only parent-retained launches after thread death; never launch again. */
+  recoverSandbox(options: RunSandboxOptions): void {
+    const path = dirname(options.overlayUpper);
+    this.scopes.set(`runsc-${options.tenantId}-${options.sandboxUid}`, {
+      scope: `builder-sbx-${options.sandboxUid}.scope`, tenantId: options.tenantId, uid: options.sandboxUid,
+      bundle: { path, mounted: [], workspace: join(path, 'workspace'), output: join(path, 'writable/output') }, stopped: false, recovered: true,
+    });
+  }
+
+  private recoverBundle(entry: { uid: string; bundle: Bundle }): void {
+    const path = entry.bundle.path;
+    // A helper belongs to the agent cgroup, so scope termination alone misses it.
+    for (const pid of readdirSync('/proc').filter(name => /^\d+$/.test(name))) {
+      try {
+        const argv = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0');
+        if (argv.includes(this.rootArg) && argv.includes('port-forward') && argv.includes(`sandbox-${entry.uid}`)
+          && argv.some(arg => arg.startsWith(`--stream=/run/execution-node/ports/${entry.uid}/`))) process.kill(Number(pid), 'SIGKILL');
+      } catch (error) { if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
+    }
+    const mounted = readFileSync('/proc/self/mountinfo', 'utf8').trim().split('\n')
+      .map(line => line.split(' ')[4]?.replace(/\\([0-7]{3})/g, (_, octal) => String.fromCharCode(parseInt(octal, 8))))
+      .filter((target): target is string => !!target && target.startsWith(`${path}/`))
+      .sort((a, b) => a.split('/').length - b.split('/').length);
+    entry.bundle.mounted = mounted;
   }
 
   hasRunsc(): boolean {
@@ -121,12 +160,13 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
 
   async portTarget(runtimeId: string, port: number): Promise<{ socketPath: string }> {
     this.assertRunning(runtimeId);
+    requireNetworkPolicy('ports', 'live', this.binary);
     const entry = this.scopes.get(runtimeId);
-    if (!entry || entry.stopped || port !== 5173) throw new Error('sandbox_port_unavailable');
+    if (!entry || entry.stopped || port !== 5173 || !this.portsSandboxes.has(runtimeId)) throw new Error('sandbox_port_unavailable');
     const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
     let forward = ports.get(port);
     if (!forward) {
-      forward = forwardSandboxPort(this.binary, this.rootArg, entry.uid, port, `/run/execution-node/ports/${entry.uid}/${port}.sock`);
+      forward = forwardSandboxPort(this.binary, this.rootArg, entry.uid, port, `/run/execution-node/ports/${entry.uid}/${port}.sock`, undefined, this.diagnostic);
       ports.set(port, forward);
     }
     try { return await forward.ready; } catch { ports.delete(port); throw new Error('sandbox_port_unavailable'); }
@@ -141,17 +181,46 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
-    const args = [this.rootArg, '--network=none', '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
+    requireNetworkPolicy(options.network, options.profile, this.binary, options.slot);
+    const args = [this.rootArg, `--network=${options.network === 'ports' ? 'sandbox' : 'none'}`, '--platform=systrap',
+      '--host-uds=none', '--host-fifo=none', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
 
   async runSandbox(options: RunSandboxOptions): Promise<{ runtimeId: string }> {
+    requireNetworkPolicy(options.network, options.profile, this.binary, options.slot);
     if (!this.hasRunsc()) failNoBinary();
-    const bundle = this.bundles.prepare(options);
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
+    let bundle: Bundle;
+    try { bundle = this.bundles.prepare(options); }
+    catch (error) {
+      const partial = (error as { bundle?: Bundle }).bundle;
+      if (partial) {
+        this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle: partial, stopped: true });
+        Object.assign(error as Error, { runtimeId });
+      }
+      throw error;
+    }
     this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle, stopped: false });
+    let args: string[];
+    try {
+      args = this.runscArgs(options);
+      auditNetworkSpec(args, JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')), options.network === 'ports');
+    } catch (error) {
+      this.scopes.get(runtimeId)!.stopped = true; // No scope was launched.
+      const violation = error instanceof ExecutionNodeError ? error : new ExecutionNodeError('network_isolation_violation');
+      Object.assign(violation, { runtimeId });
+      try { this.bundles.destroy(bundle); this.scopes.delete(runtimeId); }
+      catch { Object.assign(violation, { cleanupFailed: true }); }
+      throw violation;
+    }
+    // NetworkSandbox is required by gVisor's forwarding API. Start in a fresh,
+    // loopback-only namespace; never import the host's interfaces or routes.
+    const command = options.network === 'ports'
+      ? ['unshare', '--net', '--', 'sh', '-ec', privateNetworkScript, 'sandbox-network', join(bundle.path, 'netns.inode'), this.binary]
+      : [this.binary];
     // systemd-run uses PID 1's StartTransientUnit D-Bus method; Slice is explicit.
     const child = spawn('systemd-run', ['--scope', `--unit=${scope}`,
       `--slice=builder-tenant-${options.tenantId}.slice`,
@@ -159,7 +228,10 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       `--property=MemoryHigh=${options.quotaMiB > 704 ? '1408M' : '704M'}`,
       `--property=MemoryLow=${options.quotaMiB > 704 ? '0' : '704M'}`,
       `--property=CPUWeight=${options.quotaMiB > 704 ? 100 : 200}`,
-      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
+      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, ...command, ...args],
+    { stdio: this.diagnostic ? ['ignore', 'pipe', 'pipe'] : 'ignore' });
+    boundedRuntimeOutput(child.stdout, 'fixture stdout', this.diagnostic);
+    boundedRuntimeOutput(child.stderr, 'fixture/runsc stderr', this.diagnostic);
     let ready = false;
     try { await new Promise<void>((resolve, reject) => {
       const deadline = Date.now() + 5000;
@@ -167,23 +239,43 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       const fail = (error: Error) => { clearTimeout(timer); reject(error); };
       child.once('error', fail);
       child.once('exit', code => {
+        this.diagnostic?.('scope launcher exit', `code=${code}`);
         clearTimeout(timer);
         const entry = this.scopes.get(runtimeId);
         if (entry) entry.exited = true;
-        if (code === 0) resolve();
-        else reject(new Error(`sandbox launcher exited: ${code}`));
-        if (ready || code === 0) options.onExit?.(code);
+        if (code === 0 && (options.network !== 'ports' || ready)) resolve();
+        else if (code === 0) reject(new ExecutionNodeError('network_isolation_violation'));
+        else reject(code === 78 || options.network === 'ports' ? new ExecutionNodeError('network_isolation_violation') : new Error(`sandbox launcher exited: ${code}`));
+        if (ready || (code === 0 && options.network !== 'ports')) options.onExit?.(code);
       });
       const poll = () => {
         try {
           const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
-          if (state.status === 'running') { ready = true; resolve(); return; }
+          if (state.status === 'running') {
+            if (options.network === 'ports') {
+              try {
+                requireNetworkPolicy('ports', options.profile, this.binary, options.slot);
+                this.namespaces.set(runtimeId, auditStartedNetwork(state.pid, join(bundle.path, 'netns.inode'), this.namespaces.values()));
+                this.portsSandboxes.add(runtimeId);
+              } catch (error) {
+                fail(error instanceof ExecutionNodeError ? error : new ExecutionNodeError('network_isolation_violation')); return;
+              }
+            } else if (Number.isSafeInteger(state.pid) && state.pid > 1) {
+              this.namespaces.set(runtimeId, String(statSync(`/proc/${state.pid}/ns/net`).ino));
+            }
+            ready = true; resolve(); return;
+          }
         } catch { /* The runtime may not have created its state yet. */ }
         if (Date.now() >= deadline) { fail(new Error('sandbox runtime readiness timeout')); return; }
         timer = setTimeout(poll, 25);
       };
       child.once('spawn', () => { timer = setTimeout(poll, 0); });
     }); } catch (error) {
+      Object.assign(error as Error, { runtimeId });
+      if (error instanceof ExecutionNodeError && ['network_isolation_violation', 'ports_disabled'].includes(error.code)) {
+        try { await this.destroySandbox(runtimeId); }
+        catch { Object.assign(error, { cleanupFailed: true }); throw error; }
+      }
       try { throwFilesystemError(error); }
       catch (mapped) { throw Object.assign(mapped as Error, { runtimeId }); }
     }
@@ -191,7 +283,6 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async stopSandbox(runtimeId: string): Promise<boolean> {
-    if (!this.hasRunsc()) failNoBinary();
     const entry = this.scopes.get(runtimeId);
     if (!entry) throw new Error('unknown sandbox scope');
     if (entry.stopped) return true;
@@ -219,11 +310,15 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   async destroySandbox(runtimeId: string): Promise<void> {
     // prepareBundle can fail before any scope/runtime was registered; repeated cleanup is safe.
     if (!this.scopes.has(runtimeId)) return;
-    if (!this.hasRunsc()) failNoBinary();
-    if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     for (const forward of this.forwards.get(runtimeId)?.values() ?? []) forward.stop();
     this.forwards.delete(runtimeId);
+    if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     const entry = this.scopes.get(runtimeId)!;
+    // Scope termination precedes every fallible recovery inventory/metadata read.
+    if (entry.recovered) { this.recoverBundle(entry); entry.recovered = false; }
+    // cgroup termination and relay closure must work even after binary removal.
+    if (!this.hasRunsc()) throw Object.assign(new Error('runsc metadata cleanup unavailable; scope stopped'), { runtimeId });
+    this.namespaces.delete(runtimeId); this.portsSandboxes.delete(runtimeId);
     const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
     if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000, killSignal: 'SIGKILL' });
     try { execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000, killSignal: 'SIGKILL' }); }

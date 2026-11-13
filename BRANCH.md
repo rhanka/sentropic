@@ -1,19 +1,19 @@
-# Feature: Bounded isolated data-plane qualification
+# Fix: sandbox-node data-plane forwarding qualification
 
 ## Objective
-- [x] Repair the qualification workload, cancellation, private fixtures and custody verification roles.
+- [x] Diagnose and fix the first real-host data-plane connection failure, preserving deadlines and cleanup.
 
 ## Scope / Guardrails
-- [x] Worktree: `tmp/worktrees/sandbox-node-dpq`; branch: `fix/sandbox-node-data-plane-qual`; base: `origin/main`.
-- [x] Make-only, Docker-first; `ENV=test-sandbox-dpq` last; no VM access and no merge.
-- [x] Ports: API 9460, UI 5660, Maildev 1560; check availability before tests.
+- [x] Worktree `tmp/worktrees/sandbox-node-dpf`, branch `fix/sandbox-node-data-plane-forward`, base `origin/main`.
+- [x] Make-only, Docker-first; `ENV=test-sandbox-dpf` last; ports 9465 / 5665 / 1565 checked free.
+- [x] No VM access, deployment or merge; no production state writes or secrets in diagnostics.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `apps/sandbox-node/**`
-  - `api/src/services/artifacts/live/**`
-  - `api/tests/**`
   - `BRANCH.md`
+  - `spec/SPEC_EVOL_SANDBOX_NODE.md`
+  - `api/tests/unit/execution-node-rpc-fixture.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -21,51 +21,84 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] No exceptions declared.
+  - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
+  - [x] BRDPF-EX2: explicitly activate ports only in the synthetic API RPC fixture after CI proved nine ports_disabled refusals; test-only compatibility, no production default change; rollback with the AMD-28 switch.
 
 ## Feedback Loop
-- [x] Round 3 tests: 193 tests pass, including real prepareBundle capacity failure, repeated cleanup, simulated 384 MiB `/run`, and both gate orchestrations; both TypeScript projects and memory check pass.
-- [x] Round 3 capacity regression also exercises the actual generated spec through prepareBundle at 384 MiB free and asserts an 81 MiB loop image.
-- [ ] Round 3 delivery: rebuild/verify archive, push and exact-head CI; update report and recreate completion marker.
-- [x] Round 3 archive rebuilt and verified: SHA-256 `7400cffa2c788629119757fb749980038722e9a75eabfd5a35dc9f7f6e86b1f6`; 11 internal sums, shipped-file comparisons and SEA root/non-root checks pass.
-- [x] Round 3: move qualification images/bundles to disk-backed `/var/lib/builder/qualification`; preflight both gates, use 16 MiB/1024-inode fixtures, and make unregistered runtime cleanup idempotent.
-- [x] Round 2: reproduce CI EPERM under UID/GID 1001:1001; stub only test chown, assert 1000:1000 ownership and real modes under umask 077; all 185 tests pass unprivileged. Production chown and archive bytes are unchanged.
-- [x] Astra review: guard delayed launcher exit after scope-map teardown; add regression before archive rebuild.
-- [x] Astra review: reject empty/premature HTTP responses before first bytes; bound runsc version detection with SIGKILL.
-- [x] Enforce the wall-clock deadline in a separate supervisor event loop: SIGTERM the worker alone to preserve flock during cleanup, then process-group SIGKILL after 10 seconds for a blocked worker.
-- [x] Astra closure review APPROVE after signal-routing regression; report `.tmp/rv/dpq-review-astra-closure.md`.
-- [x] Independent security review APPROVE; Argon APPROVE with umask finding accepted: force output-parent traversal under UMask=0077.
-- [x] Strict 250ms revoke test failed while the artifact build ran concurrently; isolated rerun passed all 185 tests without changing the threshold. The umask regression then failed before chmod and passed after it.
-- [x] Packet references merged #1022; fetched `origin/main` is `87485f912` (#1020). Use the actual origin/main ancestry.
-- [x] Track import is reserved for the conductor, the designated single writer; deliver the updated branch checklist for import.
+- [x] CI 43519010410: API RPC fixture now explicitly opens synthetic ports availability and closes it on disposal; preserves production closed defaults and digest checks.
+- [x] Recovery ordering regression: register lost-worker scopes without host I/O and terminate them before fallible helper/mount/metadata inventories.
+- [x] R2 qualification-11 / recovery: OOM receipts include scope memory events and systemd result; worker recovery also kills exact-UID stream helpers outside tenant scopes before reconstructing mounted bundles.
+- [x] R2 qualification-2: real-host switch scenarios now use the production asynchronous file observer on private gate files, atomic switch/binary replacement and the shared GET-node capability builder.
+- [x] R2 qualification-3/5/7: gates verify the manifest and canonical PATH/pinned runsc version, pass the configured cap/timeout, start the burst concurrently from idle and receipt actual helper peaks/cgroup memory/tasks/OOM.
+- [x] R2 qualification-8/9/10: compare stable protocol/address listener sets, reserve disk for four/two sandboxes, require exact systrap/capability/network-namespace OCI shapes.
+- [x] R2 qualification-1: preserve the node-22 wire profile and thread the daemon-derived live/standby slot into the runtime; heavy/browser/unknown profiles remain refused.
+- [x] R2c-4: controlled TCP/UDP tenant witnesses self-connect before/after cross-tenant probes and fail on any delivered probe datagram; host UDP witnesses bind alongside TCP controls.
+- [x] R2c-3: keep ownership aligned with the irreversible custody cut after WAL failure; fresh signed tickets at the GET-visible epoch retry persistence and retain stop/delete access.
+- [x] R2c-2: retain launch identities in the TLS parent; worker death closes admission and starts cleanup-only reconciliation, including launches in flight, without releasing reservations early.
+- [x] R2c-1: expire affirmative switch observations after 150ms on the monotonic clock; hanging config/stat and late results cannot keep streams authorized.
+- [x] Request source: `.tmp/packets/s1-dataplane-qual-fix2.md`; Track import reserved for the conductor's single writer, as in PR #1023.
 
 ## AI Flaky tests
-- [x] No AI tests apply.
+- [x] No AI tests or accepted nondeterministic failures.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; independent code reviews after local validation.
+- [x] Mono-branch; no integration of other branches.
 
 ## UAT Management (in orchestration context)
-- [x] Real runsc qualification remains operator-owned; no VM access in this lane.
+- [x] Real VM qualification belongs to k8s; this lane uses a hermetic helper reproducing gVisor stream semantics.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read mandatory rules, packet, template and qualification implementation; mechanical branch check passed.
-- [x] **Lot 1 — Workload and runtime readiness**
-  - [x] Reproduce missing source parent permissions in `tests/bundle.test.ts`; failed before fix (0700), corrected to 0755.
-  - [x] Test actual generated qualification spec and execute its HTTP/WS server command in the mTLS harness.
-  - [x] Detect early workload/scope exit and refuse unavailable port targets; preserve legitimate short build completion.
-- [x] **Lot 2 — Bounded execution and cleanup**
-  - [x] Validate deadline, SIGTERM, early sandbox exit, probe failure and successful finalization using the real qualification entry with fake host/runtime dependencies.
-  - [x] Remove relay directories and refuse stale qualification resources, including the reported legacy `caf46fda` base; bases and bundles use private roots.
-  - [x] Apply private fixture handling and leftovers inventory to isolation qualification; all 13 isolation orchestration tests pass.
-- [x] **Lot 3 — Custody keys**
-  - [x] Validate separate `CUSTODY_PUBLIC_KEY` / `ARTIFACT_CUSTODY_ED25519_KEY_B64`; API tests prove cross-use refusal both ways.
-  - [x] Update node/API custody tests and operator installation instructions; dossier §A.3 separates the three ticket/token keys.
-- [ ] **Lot 4 — Final validation**
-  - [x] Local node checks: 185 tests, both TypeScript projects and memory check; API: 71 tests. Node/API source lint: zero errors.
-  - [x] Rebuild and verify through `docker-slot.sh`: archive SHA-256 `4dbea87df4692edcc1522823fbf1af2cd7103e5221d198806c80f5e327fb6f74`; all internal sums and root/non-root SEA checks pass.
-  - [x] Obtain independent code reviews and resolve findings; Astra closure and independent security review APPROVE, Argon umask finding accepted.
-  - [ ] Push, open PR using this file and verify green CI on exact head; do not merge.
-  - [x] Run `make down-volumes ENV=test-sandbox-dpq`; no branch stack remains.
-  - [ ] Write French report and completion marker under `.tmp/rv/`.
+- [x] Round 2a: explicit network refusal and disabled-by-default ports kill switch (409), including adapter enforcement.
+- [x] Round 2b: verify private namespace, hardening prerequisites and receipt digests; extra interface and IPv4/IPv6 route refusals tested.
+- [x] Round 2c: both network modes, two tenants, network witnesses and crash reconciliation qualification.
+- [x] Round 2c probes: host/public/metadata/IPv6/tenant TCP refusal, DNS refusal and positive host loopback listeners.
+- [x] Round 2c matrix: both modes and tenants simultaneous; scripts run under shipped unit hardening with bounded supervisors.
+- [x] Round 2c inventory: scope processes and private netns references (including host FDs) checked after cleanup.
+- [x] Round 2c data plane: live peer witness, ports network probes, HTTP/WS and revocation share a real-host run.
+- [x] Round 2c regressions: hardened prerequisites receipt and actual child SIGKILL orchestration in Docker.
+- [ ] Round 2d: tests, archive rebuild/verification, exact-head green CI and receipt.
+- [x] Co-signed AMD-28: qualified digest switch, profile fence, runtime audits, helper cap, UDP/raw/kernel witnesses and OOM qualification.
+- [x] AMD-28 switch: live root-owned config, digest-gated discovery/admission, stream cut and sandbox destruction on closure.
+- [x] AMD-28 audits: strict addresses/all-table loopback routes and sentry namespace/flags/spec auditors.
+- [x] AMD-28 runtime: enforce audits at launch, destroy on violations, emit daemon audit event, forbid forwarding non-ports sandboxes.
+- [x] AMD-28 helpers: global configurable 1..8 cap (default 2), bounded queue and typed 429 saturation; burst regression.
+- [x] AMD-28 regressions: address and host-namespace refusal, kernel main IPv6 loopback compatibility, qualified binary fixtures.
+- [x] AMD-28 native probes: raw/packet socket refusals, UDP refusal and positive private-kernel TCP/UDP witnesses shipped in the archive/rootfs.
+- [x] AMD-28 qualification authorization: in-memory digest pin after hardened prerequisites; no production switch write.
+- [x] AMD-28 gate coverage: kernel witnesses in ports namespaces, exact host TCP/UDP inventory, fixed-port refusal and kernel-confirmed OOM cleanup in both modes.
+- [x] AMD-28 revocation regressions: shared 50ms monitor, local cut before asynchronous stop, retry and reservation release.
+- [x] AMD-28 audit regressions: every forbidden flag, UDS/FIFO requirements, OCI annotations/capabilities/devices, sentry inode/host/peer/listener failures and profile/digest refusals.
+- [x] AMD-28 switch gate: real HTTP/WS cuts within 250ms, 409 admission and sandbox destruction for closed-switch and digest-mismatch scenarios.
+- [x] AMD-28 burst gate: hold the configured connection cap, saturate with twelve mTLS requests, verify typed refusals, slot drainage and actual 192M/128-task cgroup limits; hash files with bounded scratch memory.
+- [x] AMD-28 fixture alignment: ports exercise the live 704M profile, export lifecycle validates a stopped output archive, and supervision regressions cover both OOM variants.
+- [x] AMD-28 finalization: early ports exit fails the audit; namespace/spec failures destroy physical and logical sandboxes and release capacity.
+- [x] AMD-28 documentation: co-signed k8s 3b042fd contract, exact switch keys, closed defaults, dependencies, helper caps and qualification receipt rules.
+- [x] Digest identity: resolve the actual runsc executable; test binary identities use an isolated PATH fixture without an alternate production digest target.
+- [x] Switch integration regressions: actual HTTP/WS teardown and slot destruction, atomic config replacement and binary replacement without restart.
+- [x] Archive smoke regression: isolation worker reports failure through its supervisor once, preserving the authorization-refusal smoke contract.
+- [x] Native probe verification: unprivileged Docker controls prove raw/packet denial, TCP witnesses and UDP positive/negative behavior on IPv4/IPv6.
+- [x] Saturation protocol: preserve 429 ports_saturated on WebSocket handshakes as well as HTTP; included in the burst gate.
+- [x] Revocation diagnostics include measured cut latency without changing the 250ms contract.
+- [x] Security review fixes: check ss exit status; retain cleanup identity/reservations after failure; close relays and stop cgroups before requiring a working runsc binary.
+- [x] UDP evidence: external targets require local refusal before successful send; remote ICMP port-unreachable cannot qualify isolation.
+- [x] Standalone scope-check uses the installed host harness C2 producer with the same staged/unstaged inventory, avoiding Docker for mechanical checks.
+- [x] Runtime worker transport: bounded async RPC preserves runtime errors, cleanup identity, process-exit notifications and binary identity off the revocation event loop.
+- [x] Production worker integration: async activation observation/hash, cached fail-closed admission and independent runtime worker embedded as a verified SEA asset.
+- [x] Custody disk I/O: cut streams before asynchronous serialized WAL persistence; acknowledge only after file/directory sync, preserving restart monotonicity.
+- [x] Worker qualification integration: real data-plane gate uses the production runtime worker, forwards bounded diagnostics and measures its helper budget asynchronously.
+- [x] SEA worker self-test validates embedded worker startup, bounded forwarding usage and contractual error propagation in root/non-root smoke checks.
+- [x] Revocation-under-load regression: a real runtime worker blocks in a host command while existing HTTP/WS streams are cut within 250ms on the independent TLS loop.
+- [x] Cleanup and ss regressions: actual failing/positive ss executables, audit emission and retained runtime identity/capacity across failed destruction and retry.
+- [x] Missing-binary regression: cgroup stop succeeds independently of runsc availability; metadata cleanup retains its retry identity.
+- [x] Async activation regression: atomic config/binary replacements close under 250ms, duplicate settings refuse activation, and shutdown cannot reopen an in-flight refresh.
+- [x] Partial bundle failures retain cleanup ownership in the worker before launch; incomplete unmounts cannot disappear behind an unregistered runtime.
+- [x] Admission event loop: validate/cache fixed tenant cgroup paths before TLS listen; memory/quota reads no longer execute synchronous systemctl while streams are open.
+- [x] Final isolation fencing: launch failures return the contractual isolation code, and ports inode comparisons include running none-mode sandboxes.
+- [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
+- [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
+- [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
+- [x] Lot 2b: reproduce `socket hang up` with a NetworkNone helper and prove HTTP/WS with an actual cross-process socket donation surviving helper exit; add bounded internal readiness.
+- [x] Lot 3: full check 207 tests, TypeScript and memory pass; independent Astra high review APPROVE at 8d8941f89, with two optional test precision improvements applied afterward.
+- [x] Lot 4: archive 97bb367427f0c9389547c86bbf199b2775680047669deee5cc399b9721002407 built and verified via docker-slot, 42 GiB free before build; 11 internal sums and SEA root/non-root pass.
+- [x] Test-stack cleanup: `make down-volumes` completed for test-sandbox-dpf.
+- [ ] Lot 5: PR using this file, CI green on exact head, cleanup test volumes, French report and done marker; do not merge.

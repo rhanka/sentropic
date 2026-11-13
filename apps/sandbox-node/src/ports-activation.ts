@@ -1,0 +1,47 @@
+import { readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
+
+/** Hash/stat/config I/O never occupies the TLS revocation loop synchronously. */
+export class PortsActivation {
+  private affirmative = false;
+  private expires = 0;
+  get enabled() { return this.affirmative && performance.now() < this.expires; }
+  private fingerprint = '';
+  private digest = '';
+  private refreshing = false;
+  private closed = false;
+  private readonly timer: ReturnType<typeof setInterval>;
+  constructor(private readonly config: string, private readonly binary: string) {
+    this.timer = setInterval(() => { void this.refresh(); }, 50); this.timer.unref();
+    void this.refresh();
+  }
+  async refresh(): Promise<void> {
+    if (this.refreshing || this.closed) return;
+    this.refreshing = true;
+    const started = performance.now();
+    try {
+      const text = await readFile(this.config, 'utf8');
+      const flags = text.split('\n').filter(line => line.startsWith('EXECUTION_NODE_PORTS_ENABLED='));
+      const digests = text.split('\n').filter(line => line.startsWith('EXECUTION_NODE_PORTS_RUNSC_SHA256='));
+      const enabled = flags.length === 1 && flags[0] === 'EXECUTION_NODE_PORTS_ENABLED=true';
+      const expected = digests.length === 1 ? /^EXECUTION_NODE_PORTS_RUNSC_SHA256=([a-f0-9]{64})$/.exec(digests[0]!)?.[1] : undefined;
+      if (!enabled || !expected) { this.affirmative = false; return; }
+      const s = await stat(this.binary, { bigint: true });
+      const fingerprint = `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`;
+      if (fingerprint !== this.fingerprint) {
+        this.affirmative = false; // Replaced binary closes before potentially slow hashing.
+        const hash = createHash('sha256');
+        for await (const bytes of createReadStream(this.binary, { highWaterMark: 65536 })) hash.update(bytes);
+        this.digest = hash.digest('hex'); this.fingerprint = fingerprint;
+        return; // Re-read config and identity before activation, including during replacement.
+      }
+      // Authorization expires even if the next config/stat operation never settles.
+      // Anchor to observation start: late results cannot renew stale authorization.
+      this.expires = started + 150;
+      this.affirmative = !this.closed && this.digest === expected;
+    } catch { this.affirmative = false; }
+    finally { this.refreshing = false; }
+  }
+  close() { this.closed = true; clearInterval(this.timer); this.affirmative = false; }
+}

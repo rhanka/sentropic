@@ -82,8 +82,13 @@ export class AgentApi {
       return { status: 200, body: { written: true } };
     }
     if (operation === 'revoke-custody') {
-      const result = this.custody.revoke(tenantId, id, Number(body.minCustodyEpoch));
-      sandbox.ownership = { ...sandbox.ownership, custodyEpoch: result.activeCustodyEpoch };
+      const received = Number(body.minCustodyEpoch);
+      if (!Number.isSafeInteger(received) || received < 0) throw new ExecutionNodeError('command_id_payload_mismatch');
+      const epoch = Math.max(sandbox.ownership.custodyEpoch, received);
+      // The local cut is irrevocable even when WAL I/O fails. GET exposes the new
+      // epoch so a fresh signed command can retry persistence or stop/delete.
+      sandbox.ownership = { ...sandbox.ownership, custodyEpoch: epoch };
+      const result = await this.custody.revoke(tenantId, id, epoch);
       return { status: 200, body: result };
     }
     throw new ExecutionNodeError('command_id_payload_mismatch', 'unknown lifecycle operation');

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { validateDiskQuota } from './disk-quota.js';
+import { requireNetworkPolicy } from './network-policy.js';
 import type {
   ExecutionNodeClaimSpec,
   ExecutionNodeDevScope,
@@ -19,6 +20,7 @@ import { SERVICE_TIMEOUT_MS, type HeavyProfile } from './build-queue.js';
 import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths, validateDevScope } from './mounts.js';
 
 export interface SandboxRecord {
+  readonly profile?: string;
   readonly network?: 'none' | 'ports';
   readonly diskQuotaMiB: number;
   readonly quotaInodes: number;
@@ -223,6 +225,18 @@ export class ExecutionNodeDaemon {
     return [...this.sandboxes.values()].filter(sandbox => sandbox.tenantId === tenantId);
   }
 
+  async disablePorts(): Promise<void> {
+    await Promise.all([...this.sandboxes.values()].filter(box => box.network === 'ports' && box.state !== 'destroyed')
+      .map(box => this.transition(box.id, async () => {
+        if (box.runtimeId) {
+          box.state = 'stopping'; box.allProcessesExited = await this.adapter.stopSandbox(box.runtimeId);
+          await this.adapter.destroySandbox(box.runtimeId);
+        }
+        box.runtimeId = undefined; box.state = 'destroyed'; box.allProcessesExited = true;
+        this.releaseSlot(box); this.audit.record('sandbox.ports_disabled', box.tenantId, box.id);
+      })));
+  }
+
   async createSandbox(input: {
     spec: ExecutionNodeSandboxSpec;
     ownership: ExecutionNodeOwnership;
@@ -232,6 +246,9 @@ export class ExecutionNodeDaemon {
     compatibility?: ExecutionNodeClaimSpec['compatibility'];
   }): Promise<SandboxRecord> {
     input = structuredClone(input);
+    const slot = Object.hasOwn(SERVICE_TIMEOUT_MS, input.spec.profile) ? 'build'
+      : input.warmStandby === true ? 'standby' : 'live';
+    requireNetworkPolicy(input.spec.network, input.spec.profile, undefined, slot);
     validateDevScope(input.spec.devScope);
     validateDiskQuota(input.spec.quotaMiB, input.spec.quotaInodes);
     if (input.spec.tenantId !== input.ownership.tenantId) {
@@ -243,8 +260,6 @@ export class ExecutionNodeDaemon {
     const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
     return this.idempotent(input.spec.tenantId, input.commandId, 'POST', '/v1/sandboxes', body, async () => {
       const id = randomUUID();
-      const slot = Object.hasOwn(SERVICE_TIMEOUT_MS, input.spec.profile) ? 'build'
-        : input.warmStandby === true ? 'standby' : 'live';
       if (slot === 'build') await this.admission.admitBuild(input.spec.tenantId, input.spec.profile as HeavyProfile, async () => {
         await this.transition(id, async () => {
         const sandbox = this.getSandbox(input.spec.tenantId, id)!;
@@ -271,6 +286,7 @@ export class ExecutionNodeDaemon {
         diskQuotaMiB: input.spec.quotaMiB, quotaInodes: input.spec.quotaInodes,
         devScope: structuredClone(input.spec.devScope),
         network: input.spec.network,
+        profile: input.spec.profile,
         mounts,
         command: input.spec.command ?? ['/bin/sleep', 'infinity'],
         id,
@@ -343,6 +359,9 @@ export class ExecutionNodeDaemon {
         sandboxUid: id,
         mounts: sandbox.mounts,
         command: sandbox.command,
+        network: sandbox.network,
+        profile: sandbox.profile,
+        slot: sandbox.slot,
         onExit: code => {
           void Promise.resolve().then(() => this.runtimeExited(sandbox, code)).catch(error => {
             this.audit.record('sandbox.stop_failed', tenantId, id, String(error));
@@ -354,9 +373,17 @@ export class ExecutionNodeDaemon {
         diskQuotaMiB: sandbox.diskQuotaMiB, quotaInodes: sandbox.quotaInodes,
         uid: input.uid,
         gid: input.gid,
-      }).catch(error => {
+      }).catch(async error => {
         sandbox.runtimeId = (error as { runtimeId?: string }).runtimeId;
-        sandbox.state = 'failed'; throw error;
+        sandbox.state = 'failed';
+        if (error instanceof ExecutionNodeError && error.code === 'network_isolation_violation') {
+          this.audit.record('sandbox.network_isolation_violation', tenantId, id);
+          if ((error as { cleanupFailed?: boolean }).cleanupFailed) throw error;
+          if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
+          sandbox.runtimeId = undefined; sandbox.state = 'destroyed'; sandbox.allProcessesExited = true;
+          this.releaseSlot(sandbox); throw error;
+        }
+        throw error;
       });
       sandbox.runtimeId = runtimeId;
       sandbox.state = 'running';

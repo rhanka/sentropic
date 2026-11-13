@@ -41,6 +41,7 @@ describe('qualification session spec', () => {
     try {
       const box = await fixture.start();
       expect(box.network).toBe('ports');
+      expect(options!.network).toBe('ports');
       expect(options).toMatchObject({ uid: 1000, gid: 1000, command: ['/usr/local/bin/node', '-e', expect.any(String)] });
       expect(options).toMatchObject({ diskQuotaMiB: 16, quotaInodes: 1024 });
       expect(options!.overlayUpper.startsWith(directory + '/')).toBe(true);
@@ -52,15 +53,17 @@ describe('qualification session spec', () => {
       finally { capacity.mockRestore(); }
       expect(commands).toContainEqual(['truncate', ['-s', '81M', join(bundle.path, 'writable.ext4')]]);
       try {
-        expect(chownSync).toHaveBeenCalledExactlyOnceWith(bundle.output, 1000, 1000);
+        expect(chownSync).not.toHaveBeenCalled();
         expect(statSync(bundle.path).mode & 0o777).toBe(0o700);
         expect(statSync(join(bundle.path, 'writable/upper')).mode & 0o777).toBe(0o755);
-        expect(statSync(join(bundle.workspace, 'ui')).mode & 0o777).toBe(0o755);
+        expect(options!.profile).toBe('live'); expect(options!.quotaMiB).toBe(704);
         expect(statSync(bundle.output).mode & 0o777).toBe(0o700);
         const spec = JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8'));
         expect(spec.process).toMatchObject({ args: box.command, cwd: '/workspace', user: { uid: 1000, gid: 1000 } });
         expect(spec.process.env).toContain('HOME=/tmp');
-        expect(box.command[2]).toContain("s.listen(5173,'0.0.0.0')");
+        expect(spec.linux.namespaces.find((ns: { type: string }) => ns.type === 'network'))
+          .toEqual({ type: 'network', path: '/proc/self/ns/net' });
+        expect(box.command[2]).toContain("s.listen(5173,'127.0.0.1',");
         expect(box.command[2]).toContain("s.on('upgrade'");
       } finally { destroyBundle(bundle, () => {}); }
       await fixture.lifecycle();

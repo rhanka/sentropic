@@ -16,7 +16,7 @@ describe('qualification disk admission', () => {
     expect(fs.mkdirSync).toHaveBeenCalledWith(qualificationStorage, { recursive: true, mode: 0o700 });
   });
   it.each(['qd', 'qi'] as const)('should refuse low disk capacity or tmpfs before creating %s resources', kind => {
-    for (const capacity of [{ type: 0xef53n, bavail: 96n, ffree: 8192n },
+    for (const capacity of [{ type: 0xef53n, bavail: BigInt(kind === 'qi' ? 300 : 170), ffree: 8192n },
       { type: 0x01021994n, bavail: 384n, ffree: 8192n }, { type: 0xef53n, bavail: 1024n, ffree: 1n }]) {
       vi.mocked(fs.statfsSync).mockReturnValue({ ...capacity, bsize: 1048576n } as never);
       expect(() => createQualificationDirectory('/release', kind)).toThrow(/qualification storage.*free bytes.*free inodes/);

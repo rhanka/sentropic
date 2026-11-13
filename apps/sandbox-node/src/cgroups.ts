@@ -14,13 +14,18 @@ const host: CgroupIO = {
 };
 
 export class SandboxCgroup {
+  private readonly tenantGroups = new Map<string, string>();
   constructor(private readonly io: CgroupIO = host) {}
 
   tenantMemoryMiB(tenantId: string, swap = false): number {
     const name = `builder-tenant-${tenantId}.slice`;
-    const group = this.io.controlGroup(name);
-    if (!['sentropic', 'immo'].includes(tenantId)
-      || group !== `/builder.slice/builder-tenant.slice/${name}`) throw new ExecutionNodeError('cgroup_tenant_mismatch');
+    if (!['sentropic', 'immo'].includes(tenantId)) throw new ExecutionNodeError('cgroup_tenant_mismatch');
+    let group = this.tenantGroups.get(tenantId);
+    if (!group) {
+      group = this.io.controlGroup(name);
+      if (group !== `/builder.slice/builder-tenant.slice/${name}`) throw new ExecutionNodeError('cgroup_tenant_mismatch');
+      this.tenantGroups.set(tenantId, group);
+    }
     const bytes = Number(this.io.read(`/sys/fs/cgroup${group}/${swap ? 'memory.swap.current' : 'memory.current'}`).trim());
     if (!Number.isSafeInteger(bytes) || bytes < 0) throw new ExecutionNodeError('cgroup_tenant_mismatch');
     return bytes / 1048576;
