@@ -1,11 +1,22 @@
+import { tokenizer } from 'acorn';
+
 export function assertPortable(html) {
-  if (/(?:src|href)\s*=\s*["'](?:\.?\.?\/|\/)?assets\//i.test(html)
-    || /\bimport\s*\(/.test(html)
-    || /\b(?:from|import)\s*["'](?:\.?\.?\/|\/)/.test(html)
-    || /url\(\s*["']?(?!data:)[^)]*\bassets\//i.test(html)) {
-    throw new Error('Portable HTML still contains external dist asset references.');
+  // Imported diagram-core carries source examples as strings. Inspect script
+  // tokens so examples remain data while real chunk imports still fail closed.
+  for (const [, code] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const tokens = [...tokenizer(code, { ecmaVersion: 'latest', sourceType: 'module' })];
+    for (const [index, token] of tokens.entries()) {
+      if (token.type.label === 'import' && tokens[index + 1]?.type.label !== '.'
+        || token.type.label === 'export' && tokens.slice(index + 1).some(next => next.type.label === 'string' && /^(?:\.?\.?\/|\/)/.test(next.value))) {
+        throw new Error('Portable HTML still contains external dist asset references.');
+      }
+    }
   }
   const markup = html.replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1</script>');
+  if (/(?:src|href)\s*=\s*["'](?:\.?\.?\/|\/)?assets\//i.test(markup)
+    || /url\(\s*["']?(?!data:)[^)]*\bassets\//i.test(markup)) {
+    throw new Error('Portable HTML still contains external dist asset references.');
+  }
   if (/<(?:script|link|img|source|video|audio|iframe)\b[^>]*\b(?:src|href|poster)\s*=\s*["'](?!data:|#)[^"']+/i.test(markup)
     || /url\(\s*["']?(?!data:|#)[^\s"')][^)]*\)/i.test(markup)) {
     throw new Error('Portable HTML must be single-file with all resources inline.');

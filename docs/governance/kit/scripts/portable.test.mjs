@@ -26,3 +26,8 @@ test('should reject imports of assets when an entry is inlined', () => {
   }
   assert.throws(() => assertPortable('<style>body{background:url(./assets/a.png)}</style>'), /external dist asset/);
 });
+test('should keep diagram-core source examples as inert data while rejecting template interpolation imports', () => {
+  const examples = ['const source = `import x from "./document.js"`;', 'const source = \'import("./assets/scene.js")\';'];
+  for (const code of examples) inlinePortable('<head></head><script type="module" src="/assets/a.js"></script>', () => code);
+  assert.throws(() => inlinePortable('<head></head><script type="module" src="/assets/a.js"></script>', () => 'const source = `${import("./scene.js")}`'), /external dist asset/);
+});

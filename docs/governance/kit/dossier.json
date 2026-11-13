@@ -4,7 +4,7 @@
   "title": "Gouvernance des quatre projets",
   "revision": "r11",
   "status": "final — owner decisions recorded; capability map pending",
-  "architectureHash": "2c49df27b12dbb38e9d3c613790d0ba329036eeab2bf2a386000b474bce41a59",
+  "architectureHash": "fdfaf96c9d878fa61bd881c21f0bf68f3ed046379798389595d9d9fe7ad8f1e7",
   "summary": "G1, G2, G3 et H1 sont actés. Restent la carte de capacités à valider et la mise en œuvre à qualifier.",
   "truthBanner": "Décisions actées ≠ implémentations qualifiées. Les états du code, des publications et de l’exécution restent datés et distincts. La carte C01–C14 demeure une proposition.",
   "convergence": {
