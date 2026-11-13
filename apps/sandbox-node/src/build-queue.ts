@@ -9,7 +9,7 @@ export class BuildQueue {
   private holder?: ExecutionNodeTenantId;
   private last?: ExecutionNodeTenantId;
   private timer?: ReturnType<typeof setTimeout>;
-  private readonly pending = new Map<ExecutionNodeTenantId, Array<() => void>>([
+  private readonly pending = new Map<ExecutionNodeTenantId, Array<() => boolean>>([
     ['sentropic', []], ['immo', []],
   ]);
 
@@ -23,16 +23,19 @@ export class BuildQueue {
       queueDepth: [...this.pending.values()].reduce((n, queue) => n + queue.length, 0) };
   }
 
-  acquire(tenantId: ExecutionNodeTenantId, profile: HeavyProfile = 'artifact-build', onTimeout?: () => Promise<void>): Promise<void> {
+  acquire(tenantId: ExecutionNodeTenantId, profile: HeavyProfile = 'artifact-build', onTimeout?: () => Promise<void>, validate?: () => void): Promise<void> {
     const queue = this.pending.get(tenantId)!;
     if (queue.length + Number(this.holder === tenantId) >= this.maxOutstandingPerTenant) {
       return Promise.reject(new ExecutionNodeError('tenant_quota_exceeded', 'publish queue full', 250));
     }
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       queue.push(() => {
+        try { validate?.(); } catch (error) { reject(error); return false; }
+        this.holder = this.last = tenantId;
         this.timer = setTimeout(() => { void onTimeout?.().catch(() => { /* Keep capacity until cleanup succeeds. */ }); }, SERVICE_TIMEOUT_MS[profile]);
         this.timer.unref();
         resolve();
+        return true;
       });
       this.drain();
     });
@@ -52,8 +55,7 @@ export class BuildQueue {
     for (const tenantId of order) {
       const next = this.pending.get(tenantId)!.shift();
       if (!next) continue;
-      this.holder = this.last = tenantId;
-      next();
+      if (!next()) this.drain();
       return;
     }
   }
