@@ -8,13 +8,14 @@ import { checkQualificationReadiness, checkQualificationReaper, probeQualificati
 import { readQualificationReply } from './gw-native-qualification-http';
 import { readQualificationLedger } from './gw-native-qualification-ledger';
 import { serverToolQualifies } from './gw-native-qualification-receipts';
+import { qualificationFailure } from './gw-native-qualification-error';
 
 export const createFirstFailureGuard = (close: () => void) => {
   let failed = false;
   return { failed: () => failed, async run<T>(operation: () => Promise<T>): Promise<T> {
     requireQualification(!failed);
     try { return await operation(); }
-    catch { failed = true; try { close(); } finally { throw new Error('Qualification stopped at first failed case'); } }
+    catch (cause) { failed = true; try { close(); } finally { throw qualificationFailure('Qualification stopped at first failed case', cause); } }
   } };
 };
 const persist = (name: string, evidence: unknown) => writeFileSync(`${qualificationRoot}/${name}.json`, JSON.stringify(evidence), { flag: 'wx', mode: 0o600 });
@@ -32,7 +33,7 @@ export const createQualificationRun = async () => {
     mkdirSync(qualificationRoot, { recursive: true, mode: 0o700 });
     requireQualification(!existsSync(`${qualificationRoot}/1.sent.json`) && !existsSync(`${qualificationRoot}/closed.json`));
     persist('armed', { runId: randomUUID(), callCap: 13, readinessPassed: true });
-  } catch { await db.end(); throw new Error('Qualification readiness or construction evidence failed'); }
+  } catch (cause) { await db.end(); throw qualificationFailure('Qualification readiness or construction evidence failed', cause); }
   const cases = qualificationCases(fixture); let completed = 0;
   const guard = createFirstFailureGuard(() => closeQualificationRun());
   return { failed: guard.failed,
@@ -79,7 +80,7 @@ export const createQualificationRun = async () => {
         const unchanged = isDeepStrictEqual(before.identity, after.identity);
         persist('post-run', { probesPassed: true, cutoverPartitionUnchanged: unchanged, completedCases: completed });
         requireQualification(unchanged && (guard.failed() || completed === 13));
-      } catch { persist('post-run-failure', { probesPassed: false, completedCases: completed }); throw new Error('Qualification post-run readiness failed'); }
+      } catch (cause) { persist('post-run-failure', { probesPassed: false, completedCases: completed }); throw qualificationFailure('Qualification post-run readiness failed', cause); }
       finally { await db.end(); }
     },
   };
