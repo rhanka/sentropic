@@ -170,7 +170,14 @@ Run the real two-tenant isolation qualification as root on the isolated host:
 `QUALIFICATION_ONLY=isolated <release>/execution-node --qualify-isolation`, or
 `QUALIFICATION_ONLY=isolated QUAL_RELEASE_DIR=<release> sh <release>/qualify-isolation.sh`.
 It also requires `/etc/execution-node/isolated-qualification`, installed tenant
-loop mounts/slices, pinned runsc in PATH, and `mkfs.erofs`, quota and mount tools.
+loop mounts/slices, pinned runsc in PATH, and quota and mount tools.
+The archive ships `qualification.erofs`, covered by SHA256SUMS; no `mkfs.erofs`
+or erofs-utils installation is needed on the VM.
+The service must be stopped (systemd ActiveState=inactive) and the sandbox,
+scope and runsc inventories must be empty before creation. The agent and this
+command hold the same exclusive `/run/lock/execution-node.lock` throughout
+execution; concurrent service startup fails closed. The marker is consumed
+once under that lock after inventory validation; recreate it for each run.
 No agent listener, signing keys or host Node installation is needed.
 It creates one 704 MiB session sandbox per tenant through the production adapter,
 using the release EROFS rootfs and disposable tenant-private source/dependency bases.
@@ -312,13 +319,3 @@ curl --fail-with-body --tlsv1.3 --cacert ca.crt --cert operator.crt --key operat
   -X POST -H "X-Operator-Ticket: $TICKET" "$AGENT_URL/v1/node/drain"
 unset TICKET
 ```
-# Isolation qualification exclusion
-
-`--qualify-isolation` requires `execution-node.service` to be stopped (systemd
-ActiveState=inactive), an empty sandbox/scope/runsc inventory and the exclusive
-`/run/lock/execution-node.lock` shared with the agent for their entire lifetimes.
-Concurrent service startup fails closed. The isolated-qualification marker is
-consumed once under the lock after inventory validation; recreate it explicitly
-for each run. The archive ships `qualification.erofs`, covered by SHA256SUMS;
-no `mkfs.erofs` or erofs-utils installation is needed on the VM.
-
