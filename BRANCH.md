@@ -43,7 +43,7 @@
   - [ ] Test actual generated qualification spec and long-lived HTTP/WS fixture.
   - [x] Detect early workload/scope exit and refuse unavailable port targets; preserve legitimate short build completion.
 - [ ] **Lot 2 — Bounded execution and cleanup**
-  - [ ] Test deadline, signal interruption, scope/sandbox exit, hanging probes and finalization.
+  - [ ] Validate deadline, signal interruption, scope/sandbox exit, hanging probes and finalization; shared cancellation implemented.
   - [ ] Remove relay directories and refuse stale qualification resources; bases and bundles now use private roots.
   - [ ] Apply private fixture handling to isolation qualification and its tests.
 - [ ] **Lot 3 — Custody keys**
