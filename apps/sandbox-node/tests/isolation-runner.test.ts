@@ -21,13 +21,15 @@ describe('real-host qualification orchestration', () => {
       vi.spyOn(process, 'getuid').mockReturnValue(0);
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
       const paths = new Set<string>(), launched: RunSandboxOptions[] = [], cleaned: string[] = [];
-      vi.mocked(fs.existsSync).mockImplementation(path => path === '/etc/execution-node/isolated-qualification' || paths.has(String(path)));
+      let marker = true;
+      vi.mocked(fs.existsSync).mockImplementation(path => (path === '/etc/execution-node/isolated-qualification' && marker) || paths.has(String(path)));
       vi.mocked(fs.mkdtempSync).mockImplementation(prefix => { const path = `${prefix}fixture`; paths.add(path); return path; });
       vi.mocked(fs.rmSync).mockImplementation(path => {
         if (path !== '/etc/execution-node/isolated-qualification') cleaned.push(String(path));
+        else marker = false;
         paths.delete(String(path));
       });
-      vi.mocked(fs.readFileSync).mockImplementation(() => mode === 'mount-leak'
+      vi.mocked(fs.readFileSync).mockImplementation(() => mode === 'mount-leak' && launched.length > 0
         ? `1 0 0:1 / ${launched[0]!.overlayUpper.replace(/\/upper$/, '')}/writable rw - ext4 /dev/loop9 rw` : '');
       vi.spyOn(RunscRuntimeAdapter.prototype, 'runSandbox').mockImplementation(async (options: RunSandboxOptions) => {
           launched.push(options); paths.add(options.overlayUpper.replace(/\/upper$/, ''));
@@ -60,10 +62,13 @@ describe('real-host qualification orchestration', () => {
       else await expect(qualifyIsolation()).rejects.toThrow('isolation qualification failed');
       expect(launched.length).toBeGreaterThan(0);
       expect(release).toHaveBeenCalledOnce();
+      expect(marker).toBe(false);
+      if (mode === 'pass') await expect(qualifyIsolation()).rejects.toThrow('marker required');
       expect(fs.copyFileSync).toHaveBeenCalledWith(expect.stringMatching(/qualification\.erofs$/), expect.stringMatching(/source\.erofs$/));
       for (const options of launched) {
         expect(options.mounts[0]!.source).toMatch(/rootfs\.erofs$/);
         expect(options.uid).toBe(1000);
+        expect(fs.writeFileSync).toHaveBeenCalledWith(joinMarker(options.overlayUpper.replace(/\/upper$/, '')), 'foreign tenant sentinel', { mode: 0o666 });
         expect(cleaned).toContain(options.overlayUpper.replace(/\/upper$/, ''));
       }
       expect(cleaned.every(path => /^\/var\/lib\/builder\/tenants\/(sentropic|immo)\/(sandboxes|bases)\/qual-isolation-/.test(path))).toBe(true);
@@ -71,7 +76,7 @@ describe('real-host qualification orchestration', () => {
       if (mode === 'mount-leak') expect(paths.size).toBe(1); // Preserve that sandbox's bases for reconciliation.
       expect(log.mock.calls.some(([line]) => String(line).startsWith('FAIL'))).toBe(mode !== 'pass');
     });
-  it.each(['service', 'lock', 'scope', 'directory', 'container', 'garbage'])
+  it.each(['service', 'lock', 'scope', 'directory', 'container', 'garbage', 'mount'])
     ('should refuse live or unprovable activity before creating anything (%s)', async mode => {
       vi.stubEnv('QUALIFICATION_ONLY', 'isolated');
       vi.spyOn(process, 'getuid').mockReturnValue(0);
@@ -83,7 +88,8 @@ describe('real-host qualification orchestration', () => {
       });
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readdirSync).mockReturnValue(mode === 'directory' ? ['existing'] as never : []);
-      vi.mocked(fs.readFileSync).mockReturnValue('');
+      vi.mocked(fs.readFileSync).mockReturnValue(mode === 'mount'
+        ? '1 0 0:1 / /var/lib/builder/tenants/immo/sandboxes/existing/writable rw - ext4 /dev/loop9 rw' : '');
       vi.mocked(execFileSync).mockImplementation((file, args) => {
         if (file === 'runsc') return mode === 'garbage' ? '{}' : mode === 'container' ? '[{"id":"tenant"}]' : 'null';
         if (args?.[1] === 'execution-node.service') return mode === 'service' ? 'active' : 'inactive';
@@ -96,3 +102,4 @@ describe('real-host qualification orchestration', () => {
       if (mode !== 'lock') expect(release).toHaveBeenCalledOnce();
     });
 });
+function joinMarker(path: string): string { return `${path}/isolation-marker`; }
