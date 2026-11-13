@@ -3,15 +3,16 @@
 `SandboxBackend` is the runtime port boundary of the existing live controller.
 `ARTIFACT_SANDBOX_BACKEND=kubernetes` (the default) preserves the existing pool,
 supervisor, admission and cache composition. `execution-node` selects the node
-factory explicitly. It never silently falls back after a node refusal.
+backend explicitly. It never silently falls back after a node refusal.
 
-`ProductBuilderDeps.executionNodeBackend(node)` supplies the sealed-base/session
-registry composition. Without that factory the selected node backend refuses to
-compose. S1-B1 must supply it with authenticated tenant binding, registry-resolved
+`createExecutionNodeBackend` is composed by default for the selected node.
+`ProductBuilderDeps.executionNodeInputs` supplies sealed-base/session
+registry inputs. Without those inputs, allocation refuses before creating a sandbox.
+S1-B1 supplies authenticated tenant binding, registry-resolved
 devScope, base hydration and the candidate/publication bridge. The adapter alone
 does not qualify Focus live or publish, and is not an activation instruction.
 
-The factory returns the controller's pods, worker, cache, heavy and admission
+The backend implements the controller's pods, worker, cache, heavy and admission
 ports. Existing `/v1/live/*` and `/v1/builds` routes keep their host authorization,
 durable state, draft fencing and SG4 publication. S1-B1 must invoke the stateless
 source coalescer and tenant queue from that composition; these helpers do not
@@ -79,6 +80,8 @@ retryable refusal, never permission to export. Persist all command ids and URL
 with the intent so retries keep identical method/path/body triples.
 
 The shipped agent does not upload the supplied URL or emit the full frozen
-ArtifactProvenanceV1. Its current API dispatch also lacks sandbox/base GET routes.
-Those are agent-lane handoffs before complete status reconciliation or the full
-provenance/publication gate; this adapter does not fabricate those capabilities.
+ArtifactProvenanceV1. BRB0A-EX2 adds its frozen sandbox GET for lifecycle retries;
+k8s must release and deploy an updated agent before enabling this backend.
+Base GET and full provenance are agent-lane handoffs before complete status
+reconciliation or the full provenance/publication gate; no complete
+ArtifactProvenanceV1 qualification is claimed here.
