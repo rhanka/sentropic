@@ -82,6 +82,7 @@ export class ExecutionNodeDaemon {
   private readonly ticketPublicKeyPem?: string;
   private readonly now: () => number;
   private readonly sandboxes = new Map<string, SandboxRecord>();
+  private readonly launches = new Map<string, Promise<SandboxRecord>>();
   private readonly idempotence = new Map<string, { bodyHash: string; result: unknown }>();
 
   constructor(options: DaemonOptions) {
@@ -250,7 +251,27 @@ export class ExecutionNodeDaemon {
     return this.idempotent(tenantId, input.commandId, body, () => this.startRuntime(sandbox, input));
   }
 
-  private async startRuntime(sandbox: SandboxRecord, input: { uid: number; gid: number }): Promise<SandboxRecord> {
+  private startRuntime(sandbox: SandboxRecord, input: { uid: number; gid: number }): Promise<SandboxRecord> {
+    if (this.launches.has(sandbox.id)) return Promise.reject(new ExecutionNodeError('already_claimed'));
+    const pending = this.launchRuntime(sandbox, input).finally(() => { this.launches.delete(sandbox.id); });
+    this.launches.set(sandbox.id, pending);
+    return pending;
+  }
+
+  private async runtimeExited(sandbox: SandboxRecord, code: number | null): Promise<void> {
+    await this.launches.get(sandbox.id);
+    if (sandbox.state !== 'running') return;
+    if (code !== 0) { await this.failSandbox(sandbox.tenantId, sandbox.id, `runtime exited: ${code}`); return; }
+    sandbox.state = 'stopping';
+    sandbox.allProcessesExited = await this.adapter.stopSandbox(sandbox.runtimeId!);
+    if (sandbox.allProcessesExited) {
+      sandbox.state = 'stopped-output-retained';
+      sandbox.outputSubPath = 'ui/dist';
+      this.audit.record('sandbox.stopped', sandbox.tenantId, sandbox.id, sandbox.state);
+    }
+  }
+
+  private async launchRuntime(sandbox: SandboxRecord, input: { uid: number; gid: number }): Promise<SandboxRecord> {
       const { id, tenantId } = sandbox;
       if (sandbox.state !== 'creating' && sandbox.state !== 'standby') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
@@ -262,7 +283,7 @@ export class ExecutionNodeDaemon {
         mounts: sandbox.mounts,
         command: sandbox.command,
         onExit: code => {
-          if (sandbox.state === 'running') void this.failSandbox(tenantId, id, `runtime exited: ${code}`).catch(error => {
+          void this.runtimeExited(sandbox, code).catch(error => {
             this.audit.record('sandbox.stop_failed', tenantId, id, String(error));
           });
         },
@@ -433,6 +454,7 @@ export class ExecutionNodeDaemon {
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'DELETE', `/v1/sandboxes/${id}`, sandbox.ownership);
     return this.idempotent(tenantId, input.commandId, { id }, async () => {
+      await this.launches.get(id)?.catch(() => {});
       if (sandbox.state === 'running') {
         throw new ExecutionNodeError('sandbox_still_running', `sandbox ${id} is running`);
       }

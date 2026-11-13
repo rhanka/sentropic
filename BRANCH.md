@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 4 B1/B2: failing natural-exit and suspended-launch DELETE regressions now pass; confirm quiescence before retaining successful output and keep reservations through launch completion (54 tests pass).
 - [x] RUN 3 CI 43344836068: bundle fixture hard-coded uid/gid 1000 and failed EPERM on the runner's different uid; use the executing test user's identity and assert it in OCI config, preserving real ownership enforcement.
 - [x] RUN 3 revocation transport: signed regression reproduced rejection of the contractual minCustodyEpoch field; route now advances session ownership to the persisted epoch, rejects stale commands and accepts freshly signed renewal.
 - [x] RUN 3 lint: containerized API ESLint rules detected and removed one unused service import; existing warning-only console/constant-loop rules remain non-blocking.
