@@ -40,6 +40,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 5 spec reconciled with AMD-17..27: admission, exact memory/scope policy, key custody, shared rootfs channel, pull metrics and operator/control heartbeat separation; all real-host acceptance remains explicit.
 - [x] RUN 5 operator handoff: exact compact-JWS claims/encoding/TTL/audience/replay/rotation, N1 public key and worked Node/OpenSSL signing command documented; node provenance custody and public-key registration stated explicitly.
 - [x] RUN 5 exact-unit README regression failed first; operator guide now embeds the complete shipped unit verbatim, B-test command, and k8s-owned cutover/rollback.
 - [x] RUN 5 operator README reconciles AMD-17, slice/scope values, installed identities/paths, SEA/rootfs custody, S3 control-plane secrets, pull metrics and the exact control heartbeat protocol.
