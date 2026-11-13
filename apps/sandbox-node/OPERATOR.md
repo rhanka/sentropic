@@ -139,3 +139,63 @@ The SEA executes real non-root writes exceeding block and inode hard limits and
 requires `EDQUOT` in both cases; it unmounts/removes only its private test volumes.
 It requires root for mount/quota setup. It is not a substitute for the full
 runsc/EROFS lifecycle qualification and does not deploy the agent.
+
+## Exact execution-node.service
+
+Root is required for StartTransientUnit, loop/EROFS/overlay, quotas and scope
+cgroup.kill. `systemd-run --scope --slice=builder-tenant-<t>.slice` invokes
+PID 1 StartTransientUnit; no delegation or polkit. Capability/syscall lists
+must pass S1-K1 on the pinned host. No file namespacing directive is permitted:
+mounts must remain host-visible across crashes/restarts. ProtectControlGroups
+would block cgroup.kill; PrivateDevices would hide loop devices.
+
+```systemd
+[Unit]
+Description=Sentropic sandbox agent on standalone d2-4 VM
+After=network-online.target zram-modules-ensure.service
+Wants=network-online.target
+Requires=zram-modules-ensure.service
+RequiresMountsFor=/var/lib/builder/tenants/sentropic /var/lib/builder/tenants/immo
+Conflicts=execution-node-stub.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/execution-node/agent.env
+# RELEASE_DIR must be an immutable digest-named release verified by k8s.
+ExecStart=/usr/local/libexec/sandbox-node-start
+ExecStartPre=/bin/sh -ec 'grep -q "^/dev/zram0 " /proc/swaps'
+Restart=on-failure
+RestartSec=3
+StateDirectory=builder
+RuntimeDirectory=execution-node
+RuntimeDirectoryPreserve=yes
+UMask=0077
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER CAP_FSETID CAP_MKNOD CAP_SETPCAP CAP_KILL CAP_SYS_RESOURCE CAP_SYS_PTRACE CAP_NET_ADMIN
+SystemCallFilter=@system-service @mount @chown @setuid @resources chroot capset mknod mknodat pivot_root setns unshare ptrace process_vm_readv process_vm_writev quotactl
+# Tenant scopes are siblings managed through systemd, never inside this unit.
+MemoryMax=192M
+MemoryMin=64M
+MemorySwapMax=0
+CPUWeight=100
+TasksMax=128
+OOMPolicy=kill
+
+[Install]
+WantedBy=multi-user.target
+```
+
+S1-K1 B-test **agent restart with live mounts**: on an isolated host only,
+create `/etc/execution-node/isolated-qualification`, set
+`QUALIFICATION_ONLY=isolated` and `QUAL_RELEASE_DIR`, then run
+`make -f Makefile -f apps/sandbox-node/checks.mk qualify-sandbox-node-restart-mounts ENV=test-sandbox-host`.
+It mounts EROFS and loop-backed ext4/overlay in the running agent namespace,
+restarts the agent, verifies host/new-agent visibility and a written witness,
+then unmounts through the new agent namespace. Never run on prod/preprod.
+
+k8s owns cutover: install this unit replacing the stub (Conflicts= handles
+port ownership), restart it, and switch the probe to GET /v1/node. Drain
+before planned replacement. Rollback: stop/disable execution-node.service,
+re-enable/start execution-node-stub.service, restore the previous verified
+agent/rootfs digest when ready. No install/restart is performed by this lane.
