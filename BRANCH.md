@@ -40,6 +40,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 5 SEA build inputs: isolated build-only esbuild/postject exact manifest and lock; no agent runtime dependencies and no host npm installation.
 - [x] RUN 5 routes/config: drain admission regression failed first; canonical node heartbeat/drain/undrain/status and tenant PUT bases are wired. The VM reads only ticket public keys; its k8s-installed Ed25519 provenance key signs archive attestations and publishes the SPKI key for control-plane registration.
 - [x] RUN 5 AMD-22: missing-controller regression failed first. Heartbeats bind sentAt/node identity/epoch to the control-plane role; operator reads/drain never refresh custody. Drain/undrain state changes follow operator ticket verification.
 - [x] RUN 5 AMD-17/20/27: missing-state test failed first; 3819 MiB floor retains 2944 MiB parent with margin 171 and zram physical cap 128. Agent advances/fsyncs its own epoch; tenant high=2304/tasks=2048 and scope high=704/1408 match the co-signed dossier.
