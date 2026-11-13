@@ -1,13 +1,53 @@
 import { describe, expect, it, vi } from 'vitest';
 import { spawn, execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { FakeRuntimeAdapter, RunscRuntimeAdapter } from '../src/index.js';
+import { FakeRuntimeAdapter, RunscRuntimeAdapter, createExecutionNode, ExecutionNodeDaemon } from '../src/index.js';
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return { ...actual, spawn: vi.fn(actual.spawn), execFileSync: vi.fn(actual.execFileSync) };
 });
 
 describe('runtime adapters', () => {
+  it.each(['delete', 'expiry'])('should release capacity after exit and collected scope cleanup (%s)', async mode => {
+    vi.useFakeTimers();
+    const destroy = vi.fn();
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.spyOn(adapter, 'exportOutput').mockResolvedValue(Buffer.from('archive'));
+    vi.mocked(execFileSync).mockImplementation((file, args) => {
+      if (file === 'runsc') return '[]';
+      if (args?.[0] === 'stop') throw new Error('Unit not loaded');
+      if (args?.includes('--property=ControlGroup')) return '';
+      if (args?.includes('--property=ActiveState')) return 'inactive';
+      throw new Error('unexpected system call');
+    });
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0, null); });
+      return child as ReturnType<typeof spawn>;
+    });
+    const node = createExecutionNode();
+    const daemon = new ExecutionNodeDaemon({ ...node, adapter, nodeId: 'node', nodeInstanceId: 'instance', nodeEpoch: 1 });
+    const devScope = { kind: 'ui' as const, writable: ['ui/**'], refused: [], source: { repo: 'test', path: 'registry.ts', commit: 'abc' } };
+    const input = { commandId: 'create', ownership: { tenantId: 'immo' as const, poolOwned: false as const,
+      workspaceId: 'w', principalId: 'u', attemptId: 'a', purpose: 'build', generation: 1, custodyEpoch: 1 },
+      spec: { tenantId: 'immo' as const, profile: 'artifact-build', devScope, command: ['/bin/true'], baseMounts: [], quotaMiB: 512, quotaInodes: 1000, uid: 1000, gid: 1000,
+        physicalUid: 'collected', runtimeClass: 'gvisor' as const, network: 'none' as const, allowExec: true, allowPty: false, allowSnapshots: false } };
+    try {
+      const box = await daemon.createSandbox(input);
+      await daemon.promoteToRunning('immo', box.id, { commandId: 'start', devScope, uid: 1000, gid: 1000, quotaMiB: 1536 });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(box.state).toBe('stopped-output-retained');
+      expect(node.admission.reservedMiB('immo')).toBe(1536);
+      await daemon.exportArtifacts('immo', box.id, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 1000, presignedPutUrl: 'https://example.test' } });
+      if (mode === 'delete') await daemon.deleteSandbox('immo', box.id, { commandId: 'delete', devScope });
+      else await vi.advanceTimersByTimeAsync(300_000);
+      expect(box.state).toBe('destroyed');
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(node.admission.reservedMiB('immo')).toBe(0);
+      await expect(daemon.createSandbox({ ...input, commandId: 'next' })).resolves.toBeDefined();
+    } finally { vi.restoreAllMocks(); vi.useRealTimers(); }
+  });
   it('should retain a successful exit before the first runsc running observation', async () => {
     const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy: () => {} });
     vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);

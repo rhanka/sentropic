@@ -164,12 +164,16 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     if (entry.stopped) return true;
     try { entry.stopped = await new SandboxCgroup().stop(entry.scope, entry.tenantId); }
     catch (error) {
-      const group = execFileSync('systemctl', ['show', entry.scope, '--property=ControlGroup', '--value'], { encoding: 'utf8', timeout: 1000 }).trim();
-      const active = execFileSync('systemctl', ['show', entry.scope, '--property=ActiveState', '--value'], { encoding: 'utf8', timeout: 1000 }).trim();
-      if (group !== '' || !['inactive', 'failed'].includes(active)) throw error;
+      if (!this.scopeQuiescent(entry.scope)) throw error;
       entry.stopped = true;
     }
     return entry.stopped;
+  }
+
+  private scopeQuiescent(scope: string): boolean {
+    const group = execFileSync('systemctl', ['show', scope, '--property=ControlGroup', '--value'], { encoding: 'utf8', timeout: 1000 }).trim();
+    const active = execFileSync('systemctl', ['show', scope, '--property=ActiveState', '--value'], { encoding: 'utf8', timeout: 1000 }).trim();
+    return group === '' && ['inactive', 'failed'].includes(active);
   }
 
   async exportOutput(runtimeId: string, subPath: string, maxBytes?: number): Promise<Buffer> {
@@ -185,7 +189,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const entry = this.scopes.get(runtimeId)!;
     const runtimes = JSON.parse(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000 })) as Array<{ id: string }>;
     if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000 });
-    execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000 });
+    try { execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000 }); }
+    catch (error) { if (!this.scopeQuiescent(entry.scope)) throw error; }
     this.bundles.destroy(entry.bundle);
     this.scopes.delete(runtimeId);
   }
