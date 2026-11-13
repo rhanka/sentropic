@@ -16,8 +16,11 @@ import { createPrivateKey, createPublicKey, sign, createHash } from 'node:crypto
 import { assertCleanStartup } from './restart.js';
 import { createDataPlane } from './data-plane.js';
 import { custodyVerificationKey } from './custody-key.js';
-import { portsEnabled, useK8sPortsSwitch } from './network-policy.js';
+import { portsEnabled, usePortsAvailability } from './network-policy.js';
 import { monitorPorts } from './ports-monitor.js';
+import { PortsActivation } from './ports-activation.js';
+import { ThreadRuntimeAdapter } from './thread-runtime.js';
+import { execFileSync } from 'node:child_process';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -33,12 +36,15 @@ assertCleanStartup();
 const nodeEpoch = nextNodeEpoch();
 const custody = new CustodyGuard('/var/lib/builder/custody.wal');
 const { hostMemory, reservableMiB } = hostBudget(totalmem());
-const node = createExecutionNode({ useRunsc: true, nodeInstanceId, nodeEpoch,
+const binary = execFileSync('sh', ['-ec', 'command -v runsc'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }).trim();
+const runtime = new ThreadRuntimeAdapter(binary, true);
+const activation = new PortsActivation('/etc/execution-node/agent.env', binary);
+usePortsAvailability(() => activation.enabled && runtime.healthy);
+const node = createExecutionNode({ useRunsc: true, adapter: runtime, nodeInstanceId, nodeEpoch,
   sharedRootfs: { path: `${required('RELEASE_DIR')}/rootfs.erofs`, digest: required('ROOTFS_DIGEST') },
   reservableMiB,
   ticketPublicKeyPem: readFileSync(required('AGENT_TICKET_PUBLIC_KEY'), 'utf8') });
 const api = new AgentApi(node, custody);
-useK8sPortsSwitch();
 const operator = new OperatorGuard(required('AGENT_OPERATOR_PUBLIC_KEYS').split(',').map(path => readFileSync(path, 'utf8')), nodeInstanceId, nodeEpoch);
 const control = new NodeControl(nodeInstanceId, nodeEpoch, custody, operator);
 const provenanceKey = createPrivateKey(readFileSync('/etc/execution-node/keys/node-provenance.ed25519'));
@@ -113,4 +119,4 @@ server.on('upgrade', (req, socket, head) => { void dataPlane.upgrade(req, socket
 server.requestTimeout = 5000;
 server.maxHeadersCount = 64;
 server.listen(Number(process.env.AGENT_PORT ?? 8443), '0.0.0.0');
-process.on('SIGTERM', () => { server.close(); });
+process.on('SIGTERM', () => { activation.close(); dataPlane.cutPorts(); server.close(); void runtime.close(); });

@@ -17,8 +17,9 @@ COPY apps/sandbox-node/tsconfig.json apps/sandbox-node/tsconfig.build.json apps/
 RUN npx --no-install tsc --project apps/sandbox-node/tsconfig.build.json
 COPY apps/sandbox-node/k8s/build-tools /tools
 RUN npm ci --prefix /tools --no-audit --no-fund
-RUN /tools/node_modules/.bin/esbuild apps/sandbox-node/src/entry.ts --bundle --platform=node --format=cjs --target=node24 --outfile=agent.cjs \
- && printf '{"main":"agent.cjs","output":"sea.blob","disableExperimentalSEAWarning":true,"useCodeCache":false}' > sea.json \
+RUN /tools/node_modules/.bin/esbuild apps/sandbox-node/src/runtime-worker.ts --bundle --platform=node --format=cjs --target=node24 --outfile=runtime-worker.cjs \
+ && /tools/node_modules/.bin/esbuild apps/sandbox-node/src/entry.ts --bundle --platform=node --format=cjs --target=node24 --outfile=agent.cjs \
+ && printf '{"main":"agent.cjs","output":"sea.blob","disableExperimentalSEAWarning":true,"useCodeCache":false,"assets":{"runtime-worker":"runtime-worker.cjs"}}' > sea.json \
  && node --experimental-sea-config sea.json \
  && cp /usr/local/bin/node execution-node \
  && /tools/node_modules/.bin/postject execution-node NODE_SEA_BLOB sea.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
