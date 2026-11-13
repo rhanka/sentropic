@@ -48,6 +48,7 @@
 
   let nbUseCases = 10;
   let isCreatingDraft = false;
+  let draftCreation: Promise<string | null> | null = null;
   let draftError: string | null = null;
   let draftTimer: ReturnType<typeof setTimeout> | null = null;
   let docsUploading = false;
@@ -225,14 +226,15 @@
 
   const ensureDraftFolder = async (): Promise<string | null> => {
     if (folder.id) return folder.id;
+    if (draftCreation) return draftCreation;
     const name = (folder.name || '').trim();
     const context = (folder.description || '').trim();
     // If the user didn't provide a name yet, create a draft with an internal default name.
     // We'll keep Save disabled until a real name is provided.
     const draftName = name || (context ? AUTO_DRAFT_NAME : AUTO_DRAFT_NAME);
-    if (isCreatingDraft) return null;
     isCreatingDraft = true;
     draftError = null;
+    draftCreation = (async () => {
     try {
       const created = await createDraftFolder({
         name: draftName,
@@ -251,7 +253,10 @@
       return null;
     } finally {
       isCreatingDraft = false;
+      draftCreation = null;
     }
+    })();
+    return draftCreation;
   };
 
   // Create draft lazily once user typed a name (debounced), so documents can be attached before generation.
