@@ -83,9 +83,9 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Controller regression asserts replacement UID and route fence are durable before worker preparation and live exposure.
   - [x] Regress fresh wake replacement, absent-allocation cleanup, lost creation/revocation responses and 202 stop progression.
   - [x] Keep fault-injection clients on the fake node's explicit clock so custody freshness is exercised deterministically.
-- [ ] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
+- [x] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
   - [x] Independent owner-routed Astra review findings reconciled in .tmp/rv/s1-b0a-review.md; no multi-host h2a consensus claimed.
-  - [x] 17 hermetic tests pass; full API typecheck and scoped lint pass with workspace declarations built in an ephemeral container.
+  - [x] Final local gates: 60 files / 512 live+rollback+adapter tests pass, including 31 hermetic adapter tests; 30 targeted agent tests pass. Full API typecheck and scoped lint pass in ephemeral containers.
   - [x] Document preprod Secret names, heartbeat leadership, S1-C1 issuer and explicit S1-B1/agent handoffs in execution-node.md.
 - [ ] Lot 6: push, PR body from BRANCH.md, green exact-head CI; write .tmp/rv/s1-b0a-adapter.md and .done.
 - [x] Cleanup: down-volumes refused the packet's feat-* ENV by its test-only guard; make down succeeded. No Compose stack/volume was created; ephemeral --rm runners only. disk-hygiene reclaimed 0B. No merge/deployment.
