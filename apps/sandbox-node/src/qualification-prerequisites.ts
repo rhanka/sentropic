@@ -23,10 +23,12 @@ export function qualificationPrerequisites(release: string): void {
   try {
     run('systemd-run', ['--wait', '--pipe', '--collect', '--service-type=exec', ...properties,
       '--property=User=root', '--property=UMask=0077',
-      'sh', '-ec', 'command -v ip >/dev/null; command -v unshare >/dev/null; command -v sh >/dev/null; exec unshare --net -- sh -ec "$1" probe true',
+      'sh', '-ec', 'command -v ip >/dev/null; command -v unshare >/dev/null; command -v nsenter >/dev/null; command -v ss >/dev/null; command -v sh >/dev/null; exec unshare --net -- sh -ec "$1" probe /dev/null true',
       'prerequisites', privateNetworkScript]);
   } catch {
     throw new Error('hardening prerequisite failed: operator must provide iproute2 (ip), util-linux (unshare), and POSIX sh; check unit capabilities/syscalls');
   }
   console.log('PASS iproute2, util-linux, sh and private netns under unit hardening');
+  // In-memory gate authorization only. k8s's on-disk production switch stays closed.
+  process.env.EXECUTION_NODE_PORTS_RUNSC_SHA256 = createHash('sha256').update(readFileSync(binary)).digest('hex');
 }
