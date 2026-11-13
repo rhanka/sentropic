@@ -20,6 +20,8 @@ import type { HostIdentity } from './host-build-api';
 import { readWorkerSizing, type KubernetesCore } from './pods';
 import { installEnvironment, readInstallHeapMb } from './recipes';
 import type { LivePorts } from './ports';
+import { selectSandboxBackend, sandboxBackendKind, SANDBOX_BACKEND_ENV, type SandboxBackend } from './sandbox-backend';
+import type { ExecutionNodeAdapter } from './execution-node-adapter';
 
 type Env = Readonly<Record<string, string | undefined>>;
 /** Flag of the composed builder service (cm/api); anything but `1` keeps the 503 builder_unavailable mount. */
@@ -69,6 +71,8 @@ export interface ProductBuilderDeps {
    * then every forge read refuses `forge_unconfigured`. */
   gitHubApp: ForgeLeaseHost | null; log(event: string, error: unknown): void;
   now?: () => number; id?: () => string; fetch?: typeof fetch;
+  /** S1-B1: authenticated tenant/session registry, sealed-base hydration and candidate handoff. */
+  executionNodeBackend?(node: ExecutionNodeAdapter): SandboxBackend;
 }
 
 /**
@@ -92,6 +96,14 @@ export function createProductBuilder(env: Env, deps: ProductBuilderDeps) {
 
 function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const now = deps.now ?? Date.now; const id = deps.id ?? randomUUID;
+  const kind = read(SANDBOX_BACKEND_ENV, () => sandboxBackendKind(env));
+  const sandboxBackend = kind === 'execution-node' ? read(SANDBOX_BACKEND_ENV, () => selectSandboxBackend(env, {
+    kubernetes: () => undefined,
+    executionNode: node => {
+      if (!deps.executionNodeBackend) return refuse('ARTIFACT_EXECUTION_NODE_SESSION_REGISTRY');
+      return deps.executionNodeBackend(node);
+    },
+  })) : undefined;
   const placement = read(LABEL.test(env.ARTIFACT_BUILDER_NAMESPACE ?? '') ? 'ARTIFACT_BUILDER_SERVICE_DOMAIN'
     : 'ARTIFACT_BUILDER_NAMESPACE', () => builderPlacement(env));
   const signer = read(SUPERVISOR_KEY_ENV, () => supervisorKey(env));
@@ -124,6 +136,7 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   };
   const schedule = (work: () => Promise<void>) => { void work().catch(error => deps.log('artifact_builder_job_failed', error)); };
   service = createBuilderService({ pool: deps.pool, cacheBlobs: deps.cacheBlobs(cacheStorage), placement, supervisorKey: signer,
+    sandboxBackend,
     relayUrl, kubernetes: deps.kubernetes(placement), host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
     authenticate: deps.authenticate, schedule, liveWaitMs: PRODUCT_LIVE_WAIT_MS, now, id, binding,
     installBudget: readInstallBudget(env), sizing: readWorkerSizing(env),
