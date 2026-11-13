@@ -1,6 +1,6 @@
 import { createServer, type Server, type RequestListener } from 'node:http';
 import { createHash, createPublicKey } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import type { Duplex } from 'node:stream';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -20,6 +20,7 @@ import { once } from 'node:events';
 import { forwardSandboxPort } from '../src/port-forward.js';
 import { streamHelper } from './stream-helper.js';
 import { monitorPorts } from '../src/ports-monitor.js';
+import { ThreadRuntimeAdapter } from '../src/thread-runtime.js';
 
 describe('data-plane qualification harness (hermetic; real-host gate remains operator-owned)', () => {
   it('should refuse to touch the host without isolated qualification authorization', async () => {
@@ -60,6 +61,12 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     const forward = forwardSandboxPort('runsc', '--root=/private', sandbox.id, 5173, join(directory, 'forward'),
       streamHelper('sandbox', join(directory, 'upstream'), sockets));
     let enabled = true;
+    let delayed: ThreadRuntimeAdapter | undefined, pending: Promise<unknown> | undefined, finished = false;
+    if (mode === 'switch-closed') {
+      const binary = join(directory, 'delayed-runsc');
+      writeFileSync(binary, `#!/bin/sh\necho started > '${join(directory, 'command-started')}'\nsleep 0.6\nexit 1\n`, { mode: 0o700 });
+      delayed = new ThreadRuntimeAdapter(binary);
+    }
     const data = createDataPlane({ custody, publicKey: createPublicKey(keys.publicKeyPem), portsEnabled: () => enabled,
       sandbox: () => sandbox, target: () => forward.ready });
     const stopMonitor = monitorPorts(() => enabled, () => data.cutPorts(), () => fixture.node.daemon.disablePorts());
@@ -72,17 +79,28 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
       await new Promise<void>(resolve => server.listen(socketPath, resolve));
       const results: string[] = [];
       await probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, checkTcp() {},
-        ...(mode !== 'custody' ? { switchMode: mode, closeSwitch: () => { enabled = false; } } : {}),
+        ...(mode !== 'custody' ? { switchMode: mode, closeSwitch: async () => {
+          if (delayed) {
+            pending = delayed.runSandbox({ network: 'none' } as never).catch(() => {}).finally(() => { finished = true; });
+            const limit = Date.now() + 2000;
+            while (!existsSync(join(directory, 'command-started'))) {
+              expect(Date.now()).toBeLessThan(limit); await new Promise(resolve => setTimeout(resolve, 5));
+            }
+          }
+          enabled = false; return Date.now();
+        } } : {}),
         report: name => { results.push(name); }, node: { keys, get ownership() { return sandbox.ownership; },
           async revoke() { await custody.revoke('sentropic', sandbox.id, 2); sandbox.ownership = { ...sandbox.ownership, custodyEpoch: 2 }; } } });
       if (mode === 'custody') {
         expect(results).toContain('mTLS refuses absent and untrusted client certificates');
         expect(results.filter(name => name.startsWith('refuse '))).toHaveLength(8);
       } else expect(created.state).toBe('destroyed');
+      if (delayed) { expect(finished).toBe(false); await pending; }
       expect(results.filter(name => name.includes('within 250 ms'))).toHaveLength(mode === 'custody' ? 2 : 1);
       expect(upstream.listening).toBe(true);
     } finally {
       stopMonitor();
+      await delayed?.close();
       forward.stop();
       for (const socket of sockets) socket.destroy();
       await Promise.all([new Promise<void>(resolve => server.close(() => resolve())),

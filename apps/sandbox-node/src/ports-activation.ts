@@ -18,8 +18,10 @@ export class PortsActivation {
     this.refreshing = true;
     try {
       const text = await readFile(this.config, 'utf8');
-      const enabled = /^EXECUTION_NODE_PORTS_ENABLED=true$/m.test(text);
-      const expected = /^EXECUTION_NODE_PORTS_RUNSC_SHA256=([a-f0-9]{64})$/m.exec(text)?.[1];
+      const flags = text.split('\n').filter(line => line.startsWith('EXECUTION_NODE_PORTS_ENABLED='));
+      const digests = text.split('\n').filter(line => line.startsWith('EXECUTION_NODE_PORTS_RUNSC_SHA256='));
+      const enabled = flags.length === 1 && flags[0] === 'EXECUTION_NODE_PORTS_ENABLED=true';
+      const expected = digests.length === 1 ? /^EXECUTION_NODE_PORTS_RUNSC_SHA256=([a-f0-9]{64})$/.exec(digests[0]!)?.[1] : undefined;
       if (!enabled || !expected) { this.enabled = false; return; }
       const s = await stat(this.binary, { bigint: true });
       const fingerprint = `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`;

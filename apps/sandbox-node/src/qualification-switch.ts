@@ -11,12 +11,13 @@ import { portsEnabled } from './network-policy.js';
 import { monitorPorts } from './ports-monitor.js';
 import { waitForQualificationPort } from './qualification-runtime.js';
 import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
+import type { RuntimeAdapter } from './runtime-adapter.js';
 
 /** Uses only isolated in-memory settings; never opens k8s's production switch. */
-export async function qualifyPortsSwitch(directory: string, socketsRoot: string, release: string, signal: AbortSignal) {
+export async function qualifyPortsSwitch(directory: string, socketsRoot: string, release: string, signal: AbortSignal, adapter?: RuntimeAdapter) {
   for (const mode of ['switch-closed', 'digest-mismatch'] as const) {
     const previous = { enabled: process.env.EXECUTION_NODE_PORTS_ENABLED, digest: process.env.EXECUTION_NODE_PORTS_RUNSC_SHA256 };
-    const fixture = qualificationNode(join(directory, mode), release);
+    const fixture = qualificationNode(join(directory, mode), release, adapter);
     const sockets = new Set<Duplex>();
     let server: ReturnType<typeof createAgentServer> | undefined, stopMonitor = () => {};
     let processes: ReturnType<typeof qualificationProcesses> | undefined;

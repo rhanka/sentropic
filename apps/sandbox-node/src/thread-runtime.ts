@@ -3,6 +3,7 @@ import { getAsset, isSea } from 'node:sea';
 import { ExecutionNodeError, EXECUTION_NODE_HTTP_STATUS } from './errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import type { RuntimeAdapter, RunSandboxOptions } from './runtime-adapter.js';
+import type { RuntimeDiagnostic } from './qualification-diagnostics.js';
 
 /** Host commands/mounts run off the event loop that owns revocable TLS streams. */
 export class ThreadRuntimeAdapter implements RuntimeAdapter {
@@ -12,11 +13,12 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
   private readonly pending = new Map<number, { resolve(value: any): void; reject(error: Error): void }>();
   private readonly exits = new Map<string, (code: number | null) => void>();
   healthy = true;
-  constructor(binary: string, production = false) {
+  constructor(binary: string, production = false, diagnostic?: RuntimeDiagnostic) {
     this.worker = isSea()
       ? new Worker(getAsset('runtime-worker', 'utf8'), { eval: true, workerData: { binary, production } })
       : new Worker(new URL('../dist/runtime-worker.js', import.meta.url), { workerData: { binary, production } });
     this.worker.on('message', message => {
+      if (message.event === 'diagnostic') { diagnostic?.(message.stage, message.detail); return; }
       if (message.event === 'exit') { this.exits.get(message.uid)?.(message.code); return; }
       const call = this.pending.get(message.id); if (!call) return;
       this.pending.delete(message.id);

@@ -30,9 +30,13 @@ export class QualificationDeadline {
     process.once('SIGINT', this.interrupt); process.once('SIGTERM', this.interrupt);
   }
   abort(reason: unknown): void { this.controller.abort(reason); }
-  monitor(check: () => void): void {
-    check();
-    this.watch = setInterval(() => { try { check(); } catch (error) { this.abort(error); } }, 100);
+  monitor(check: () => void | Promise<void>): void {
+    let checking = false;
+    const poll = async () => {
+      if (checking || this.signal.aborted) return; checking = true;
+      try { await check(); } catch (error) { this.abort(error); } finally { checking = false; }
+    };
+    void poll(); this.watch = setInterval(() => { void poll(); }, 100);
   }
   stopMonitoring(): void { clearInterval(this.watch); }
   async wait<T>(operation: Promise<T>): Promise<T> {

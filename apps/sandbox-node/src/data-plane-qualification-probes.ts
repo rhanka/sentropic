@@ -14,8 +14,9 @@ export async function probeDataPlane(options: {
   report(name: string): void; checkTcp(): void;
   signal?: AbortSignal;
   diagnostic?: RuntimeDiagnostic; stage?(name: string): void;
-  switchMode?: 'switch-closed' | 'digest-mismatch'; closeSwitch?(): void;
-  verifyBurst?(): void;
+  switchMode?: 'switch-closed' | 'digest-mismatch'; closeSwitch?(): void | number | Promise<void | number>;
+  verifyBurst?(): void | Promise<void>;
+  forwardUsage?(): Promise<{ limit: number; inUse: number }>;
 }) {
   const { certificates: tls, uid, node, report } = options;
   let probe = 0;
@@ -99,12 +100,13 @@ export async function probeDataPlane(options: {
       upgrade.once('response', res => { res.resume(); resolve(res.statusCode!); }); upgrade.end();
     });
     assert.equal(wsStatus, 429, 'saturated WebSocket handshake must preserve typed refusal');
-    assert.equal(forwardBudget.inUse, forwardBudget.limit);
-    options.verifyBurst?.(); options.checkTcp();
+    const usage = options.forwardUsage ? await options.forwardUsage() : forwardBudget;
+    assert.equal(usage.inUse, usage.limit);
+    await options.verifyBurst?.(); options.checkTcp();
     report('data-plane burst: capped helpers, bounded queue, 429 saturation under unit caps');
   } finally { for (const res of held) res.destroy(); }
   const burstDeadline = Date.now() + 1000;
-  while (forwardBudget.inUse) {
+  while ((options.forwardUsage ? await options.forwardUsage() : forwardBudget).inUse) {
     assert.ok(Date.now() < burstDeadline, 'burst forwarding slots did not drain');
     await new Promise(resolve => setTimeout(resolve, 10));
   }
@@ -157,13 +159,13 @@ export async function probeDataPlane(options: {
         });
       }),
     ]);
-    const start = mode === 'expiry' ? issuedAt + ttl : Date.now();
+    let start = mode === 'expiry' ? issuedAt + ttl : Date.now();
     try {
       const bounded = Promise.race([cut, new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(`${mode} stream cut timeout`)), Math.max(0, start - Date.now()) + 1000);
       })]);
       if (mode === 'revoke-custody') await node.revoke();
-      if (mode === 'switch-closed' || mode === 'digest-mismatch') options.closeSwitch!();
+      if (mode === 'switch-closed' || mode === 'digest-mismatch') start = await options.closeSwitch!() ?? start;
       const ended = await bounded;
       for (const at of ended) assert.ok(at - start <= 250, `${mode} cut latency ${at - start}ms exceeds 250ms`);
       report(`${mode} concurrent HTTP + WS 1008 within 250 ms (and <=1s end-to-end)`);

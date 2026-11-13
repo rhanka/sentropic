@@ -16,7 +16,7 @@ import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
 import { createQualificationDirectory } from './qualification-storage.js';
 import { qualificationDiagnostics } from './qualification-diagnostics.js';
 import { waitForQualificationPort, qualificationFailureInventory } from './qualification-runtime.js';
-import { RunscRuntimeAdapter } from './runtime-adapter.js';
+import { ThreadRuntimeAdapter } from './thread-runtime.js';
 import { qualificationPrerequisites } from './qualification-prerequisites.js';
 import { qualificationPeer } from './qualification-peer.js';
 import { hostListeners, kernelNetworkWitness, networkProbeCount, hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost } from './qualification-network.js';
@@ -50,6 +50,7 @@ export async function qualifyDataPlane(): Promise<void> {
   let failed = false;
   let step = 'startup'; let uid: string | undefined;
   const diagnostic = qualificationDiagnostics();
+  let runtime: ThreadRuntimeAdapter | undefined;
   const stage = (name: string) => { step = name; diagnostic(name, 'begin'); };
   const report = (name: string) => { deadline.signal.throwIfAborted(); console.log(`PASS ${name}`); };
   try {
@@ -75,14 +76,15 @@ export async function qualifyDataPlane(): Promise<void> {
     await deadline.wait(peer.start(deadline.signal));
     socketDirectory = mkdtempSync('/run/execution-node/qd-');
     stage('sandbox launch');
-    fixture = qualificationNode(directory, dirname(process.execPath), new RunscRuntimeAdapter('runsc', undefined, diagnostic));
+    runtime = new ThreadRuntimeAdapter('runsc', false, diagnostic);
+    fixture = qualificationNode(directory, dirname(process.execPath), runtime);
     const sandbox = await fixture.start();
     uid = sandbox.id;
     kernel = await kernelNetworkWitness(uid, dirname(process.execPath));
     processes = qualificationProcesses(uid);
-    deadline.monitor(() => {
+    deadline.monitor(async () => {
       assert.equal(sandbox.state, 'running', 'sandbox exited before probes finished');
-      assert.ok(sandbox.runtimeId); fixture!.node.adapter.assertRunning?.(sandbox.runtimeId);
+      assert.ok(sandbox.runtimeId); await fixture!.node.adapter.assertRunning?.(sandbox.runtimeId);
     });
     report('real runsc sandbox started');
     stage('5173 readiness');
@@ -112,7 +114,7 @@ export async function qualifyDataPlane(): Promise<void> {
     const socketPath = join(socketDirectory, 'tls.sock');
     await new Promise<void>((resolve, reject) => { server!.once('error', reject); server!.listen(socketPath, resolve); });
     await deadline.wait(probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp, signal: deadline.signal, diagnostic, stage,
-      verifyBurst() {
+      forwardUsage: () => runtime!.forwardUsage(), async verifyBurst() {
         const group = readFileSync('/proc/self/cgroup', 'utf8').trim().split('::')[1];
         assert.ok(group?.startsWith('/'), 'qualification must have a unified cgroup');
         const value = (name: string) => Number(readFileSync(`/sys/fs/cgroup${group}/${name}`, 'utf8').trim());
@@ -123,7 +125,7 @@ export async function qualifyDataPlane(): Promise<void> {
     deadline.stopMonitoring();
     stage('authenticated lifecycle');
     await deadline.wait(fixture.lifecycle(deadline.signal)); report('authenticated GET / stop-202 progress / export / DELETE');
-    await deadline.wait(qualifyPortsSwitch(directory, socketDirectory, dirname(process.execPath), deadline.signal));
+    await deadline.wait(qualifyPortsSwitch(directory, socketDirectory, dirname(process.execPath), deadline.signal, runtime));
   } catch (error) {
     failed = true; console.error(`FAIL step=${step}:`, error instanceof Error ? error.message : 'unknown error');
     uid ??= fixture?.sandboxId;
@@ -153,7 +155,7 @@ export async function qualifyDataPlane(): Promise<void> {
       }
       if (listeners !== undefined) { assert.equal(hostListeners(), listeners); console.log('PASS host ss -ltnup unchanged'); }
     } catch { failed = true; console.error('FAIL step=cleanup data-plane qualification cleanup'); }
-    deadline.close(); unlock();
+    await runtime?.close(); deadline.close(); unlock();
   }
   if (failed || deadline.cancelled) throw new Error('data-plane qualification failed');
 }
