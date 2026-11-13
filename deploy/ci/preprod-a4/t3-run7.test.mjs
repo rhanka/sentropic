@@ -50,11 +50,12 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
     }
   });
 }
-test('RUN7 driver CLI preview preserves active state, request and recovery claim byte for byte', () => {
+test('RUN7 driver CLI preview preserves active state, request and recovery claim byte for byte', async () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-preview-'));
   const config = join(dir, 'config.json');
   writeFileSync(config, JSON.stringify({ namespace: 'sentropic-preprod', images: { candidate: 'c', ui: 'u' }, request: {} }));
-  const files = { 't3-window-state.json': JSON.stringify({ step: 'W3', driverPid: process.pid }),
+  const files = { 't3-window-state.json': JSON.stringify({ step: 'W3', driverPid: process.pid,
+    heartbeatMonoMs: monoMs(), stepDeadlineMonoMs: monoMs() + 30_000 }),
     'request.json': 'active request', 't3-recovering.lock': `pid-${process.pid}|1` };
   for (const [name, bytes] of Object.entries(files)) writeFileSync(join(dir, name), bytes);
   const out = spawnSync(process.execPath, [`${here}t3-window-driver.mjs`, '--config', config,
@@ -62,6 +63,7 @@ test('RUN7 driver CLI preview preserves active state, request and recovery claim
   assert.notEqual(out.status, 0);
   assert.match(out.stderr, /preview_active_state/);
   for (const [name, bytes] of Object.entries(files)) assert.equal(readFileSync(join(dir, name), 'utf8'), bytes, name);
+  assert.equal(await poll({ stateDir: dir, call: () => assert.fail('preview disarmed supervision') }), 'waiting');
 });
 
 for (const entry of ['emergency', 'classify', 'rollback', 'finish-open']) {
@@ -109,6 +111,8 @@ test('RUN7 watchdog kills a SIGSTOP recovery owner before its only writer restor
     const until = Date.now() + 3000;
     while (!loadState(dir)?.recoveryReason && Date.now() < until) await new Promise(r => setTimeout(r, 20));
     assert.ok(loadState(dir)?.recoveryReason, 'driver must enter real recover()');
+    const initial = loadState(dir);
+    assert.ok(initial.stepDeadlineMonoMs <= initial.t0MonoMs + 235_000, 'driver reserves independent watchdog time');
     await new Promise(r => setTimeout(r, 1100));
     let writes = 0;
     const code = await poll({ stateDir: dir, config: { revisions: {} }, print: () => {}, call: args => {
@@ -125,5 +129,6 @@ test('RUN7 watchdog kills a SIGSTOP recovery owner before its only writer restor
     assert.equal(code, 3);
     assert.ok(writes > 0);
     assert.equal(loadState(dir).step, 'DONE');
+    assert.ok(loadState(dir).stepDeadlineMonoMs <= initial.t0MonoMs + 300_000, 'takeover cannot extend the fence');
   } finally { driver.kill('SIGKILL'); }
 });
