@@ -13,6 +13,7 @@ import { OperatorGuard } from './operator.js';
 import { NodeControl } from './node-control.js';
 import { nodeMetrics } from './metrics.js';
 import { createPrivateKey, createPublicKey, sign, createHash } from 'node:crypto';
+import { assertCleanStartup } from './restart.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -24,6 +25,7 @@ const tls = { ca: readFileSync(required('AGENT_CA')), cert: readFileSync(require
   key: readFileSync(required('AGENT_KEY')) };
 const nodeInstanceId = readFileSync('/var/lib/builder/node-instance-id', 'utf8').trim();
 if (!nodeInstanceId) throw new Error('node-instance-id required');
+assertCleanStartup();
 const nodeEpoch = nextNodeEpoch();
 const custody = new CustodyGuard('/var/lib/builder/custody.wal');
 const { hostMemory, reservableMiB } = hostBudget(totalmem());
