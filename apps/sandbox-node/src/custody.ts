@@ -32,6 +32,9 @@ export class CustodyGuard {
   }
 
   heartbeat(): void { this.heartbeatAt = this.now(); }
+  requireHeartbeat(): void {
+    if (this.now() - this.heartbeatAt > 5000) throw new ExecutionNodeError('control_plane_unavailable');
+  }
 
   authorize(token: CustodyToken, tenantId: ExecutionNodeTenantId, resourceId: string, mutation = true): void {
     const issued = Date.parse(token.issuedAt), deadline = Date.parse(token.deadlineAt);
