@@ -4,8 +4,13 @@ import { testTls } from './data-plane-tls';
 import { liveHeaders } from '../src/live';
 import { d7AdmittedPath, viteAdmittedPath, liveFromEnv } from '../src/live-config';
 import type { LiveRoute } from '../src/live';
+import { X509Certificate } from 'node:crypto';
 
 describe('data-plane and CSP configuration', () => {
+  it('should generate certificates with a valid X.509 time window', () => {
+    const tls = testTls();
+    expect(Date.parse(new X509Certificate(tls.ca).validTo)).toBeGreaterThan(Date.now());
+  });
   it('should retain the k8s backend by default and fail closed on missing issuer or invalid selection', () => {
     expect(dataPlaneFromEnv({})).toBeUndefined();
     expect(dataPlaneFromEnv({ APP_ARTIFACT_SANDBOX_BACKEND: 'k8s' })).toBeUndefined();
@@ -24,7 +29,7 @@ describe('data-plane and CSP configuration', () => {
     expect(() => dataPlaneFromEnv({ ...env, SANDBOX_MTLS_DATA_PLANE_CERT_B64: env.SANDBOX_MTLS_CA_CERT_B64 }, issuer)).toThrow('TLS credentials');
   });
   it('should change only worker-src in the pre-authorized D7-A profile', () => {
-    const args = ['text/html', 10, 'https://artifact.example', 'session', []] as const;
+    const args: [string, number, string, string, string[]] = ['text/html', 10, 'https://artifact.example', 'session', []];
     const base = liveHeaders(...args); const d7 = liveHeaders(...args, 'D7-A');
     expect(base['content-security-policy']).toContain("worker-src 'none'");
     expect(d7).toEqual({ ...base, 'content-security-policy': base['content-security-policy']
