@@ -428,6 +428,7 @@ export class ExecutionNodeDaemon {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs must be between 0 and 300s');
     }
     return this.idempotent(tenantId, input.commandId, 'POST', `/v1/sandboxes/${id}/stop`, body, () => this.transition(id, async () => {
+      if (['stopped-output-retained', 'exported', 'destroyed'].includes(sandbox.state)) return sandbox;
       if (sandbox.state !== 'running' && sandbox.state !== 'stopping') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
       }
@@ -445,7 +446,7 @@ export class ExecutionNodeDaemon {
       }
       this.audit.record('sandbox.stopped', tenantId, id, sandbox.state);
       return sandbox;
-    }));
+    }), false);
   }
 
   async writeFile(tenantId: ExecutionNodeTenantId, id: string, input: {
