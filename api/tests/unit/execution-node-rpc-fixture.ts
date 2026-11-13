@@ -56,7 +56,7 @@ export async function custodyRpcFixture() {
   const subject = { kind: 'live' as const, route };
   const call = async (operation: string, subjectValue: unknown = subject, sign = true) => {
     const path = `${CUSTODY_RPC_BASE}/${operation}`; const body = JSON.stringify({ subject: subjectValue });
-    return fetch(apiUrl + path, { method: 'POST', body, headers: sign
+    return fetch(apiUrl + path, { method: 'POST', body, signal: AbortSignal.timeout(500), headers: sign
       ? { 'X-Custody-Rpc': signCustodyRpc(rpcKey, path, body) } : {} });
   };
   const open = (token: string, headers: Record<string, string> = {}, path = '/v1/ports/5173/') => request(new URL(path, fake.config.url), {

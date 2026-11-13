@@ -52,4 +52,36 @@ describe('real custody RPC to real agent data plane', () => {
     const res = await new Promise<import('node:http').IncomingMessage>(resolve => { req.once('response', resolve); req.end(); });
     res.resume(); await new Promise<void>(resolve => res.once('aborted', resolve));
   });
+  it('should close HMR with 1008 at the signed expiry', async () => {
+    const f = await setup(); const s = { ...session(), physicalUid: f.route.podUid };
+    const token = issueNodeCustody(f.fake.adapter, s, 'principal', 1, 60, f.fake.now()).headers['X-Custody-Token'];
+    const req = f.open(token, { connection: 'Upgrade', upgrade: 'websocket',
+      'sec-websocket-version': '13', 'sec-websocket-key': Buffer.alloc(16, 2).toString('base64') }); req.on('error', () => {});
+    const socket = await new Promise<import('node:stream').Duplex>(resolve => { req.once('upgrade', (_r, stream) => resolve(stream)); req.end(); });
+    const frame = await new Promise<Buffer>(resolve => socket.once('data', resolve));
+    expect(frame.subarray(0, 4)).toEqual(Buffer.from([0x88, 0x02, 0x03, 0xf0])); socket.destroy();
+  });
+  it('should notify two independent artifact-content replicas when API route authority changes', async () => {
+    const f = await setup(); const lease = await (await f.call('issue')).json();
+    const replicas = await Promise.all([0, 1].map(async () => {
+      const initial = await (await f.call('watch')).json();
+      const req = f.open(lease.token); req.on('error', () => {});
+      const res = await new Promise<import('node:http').IncomingMessage>(resolve => { req.once('response', resolve); req.end(); });
+      res.resume(); let timer: ReturnType<typeof setTimeout>; let disposed = false;
+      const ended = new Promise<void>(resolve => res.once('aborted', resolve));
+      const revoke = () => { disposed = true; clearTimeout(timer); req.destroy(); };
+      const poll = async () => {
+        try {
+          const response = await f.call('watch');
+          if (!response.ok || (await response.json()).version !== initial.version) { revoke(); return; }
+        } catch { revoke(); return; }
+        if (!disposed) timer = setTimeout(() => { void poll(); }, 250);
+      };
+      timer = setTimeout(() => { void poll(); }, 250);
+      return { ended, revoke };
+    }));
+    try { f.stop(); await Promise.all(replicas.map(replica => replica.ended)); }
+    finally { replicas.forEach(replica => replica.revoke()); }
+    expect((await f.call('issue')).status).toBe(403);
+  });
 });
