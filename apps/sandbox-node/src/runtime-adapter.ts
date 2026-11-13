@@ -9,6 +9,7 @@ import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
 import { rmSync } from 'node:fs';
+import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-diagnostics.js';
 
 export interface SandboxMount {
   readonly source: string;
@@ -101,7 +102,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   private readonly rootArg = '--root=/run/execution-node/runsc';
   private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean; exited?: boolean }>();
 
-  constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle }) {
+  constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle },
+    private readonly diagnostic?: RuntimeDiagnostic) {
     this.binary = binary;
   }
 
@@ -126,7 +128,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
     let forward = ports.get(port);
     if (!forward) {
-      forward = forwardSandboxPort(this.binary, this.rootArg, entry.uid, port, `/run/execution-node/ports/${entry.uid}/${port}.sock`);
+      forward = forwardSandboxPort(this.binary, this.rootArg, entry.uid, port, `/run/execution-node/ports/${entry.uid}/${port}.sock`, undefined, this.diagnostic);
       ports.set(port, forward);
     }
     try { return await forward.ready; } catch { ports.delete(port); throw new Error('sandbox_port_unavailable'); }
@@ -159,7 +161,10 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       `--property=MemoryHigh=${options.quotaMiB > 704 ? '1408M' : '704M'}`,
       `--property=MemoryLow=${options.quotaMiB > 704 ? '0' : '704M'}`,
       `--property=CPUWeight=${options.quotaMiB > 704 ? 100 : 200}`,
-      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
+      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, this.binary, ...this.runscArgs(options)],
+    { stdio: this.diagnostic ? ['ignore', 'pipe', 'pipe'] : 'ignore' });
+    boundedRuntimeOutput(child.stdout, 'fixture stdout', this.diagnostic);
+    boundedRuntimeOutput(child.stderr, 'fixture/runsc stderr', this.diagnostic);
     let ready = false;
     try { await new Promise<void>((resolve, reject) => {
       const deadline = Date.now() + 5000;
@@ -167,6 +172,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       const fail = (error: Error) => { clearTimeout(timer); reject(error); };
       child.once('error', fail);
       child.once('exit', code => {
+        this.diagnostic?.('scope launcher exit', `code=${code}`);
         clearTimeout(timer);
         const entry = this.scopes.get(runtimeId);
         if (entry) entry.exited = true;
