@@ -38,6 +38,7 @@
 - [x] Round 2a: explicit network refusal and disabled-by-default ports kill switch (409), including adapter enforcement.
 - [x] Round 2b: verify private namespace, hardening prerequisites and receipt digests; extra interface and IPv4/IPv6 route refusals tested.
 - [ ] Round 2c: both network modes, two tenants, network witnesses and crash reconciliation qualification.
+- [x] Round 2c probes: host/public/metadata/IPv6/tenant TCP refusal, DNS refusal and positive host loopback listeners.
 - [ ] Round 2d: tests, archive rebuild/verification, exact-head green CI and receipt.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
