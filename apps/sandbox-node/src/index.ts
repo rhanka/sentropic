@@ -66,6 +66,7 @@ export function createExecutionNode(config: ExecutionNodeConfig = {}): {
   } satisfies Record<ExecutionNodeTenantId, { maxLive: number; maxStandby: number }>;
   void EXECUTION_NODE_TENANT_SLICE_DEFAULTS;
   const adapter = config.adapter ?? (config.useRunsc === true ? new RunscRuntimeAdapter() : new FakeRuntimeAdapter());
+  if (adapter.kind === 'runsc-systrap' && !config.ticketPublicKeyPem) throw new Error('runsc requires an execution ticket verification key');
   const admission = new ExecutionNodeAdmission(quotas, { memoryCurrentMiB: config.memoryCurrentMiB
     ?? (adapter.kind === 'runsc-systrap' ? tenantId => new SandboxCgroup().tenantMemoryMiB(tenantId) : undefined) });
   const audit = new AuditLog(nodeInstanceId, config.now);
