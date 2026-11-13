@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -103,16 +103,18 @@ test('RUN7 watchdog kills a SIGSTOP recovery owner before its only writer restor
   const driver = spawn(process.execPath, ['--input-type=module', '-e', `
     import { recover } from '${here}t3-window-driver.mjs';
     import { monoMs } from '${here}t3-lib.mjs';
+    import { writeFileSync } from 'node:fs';
     await recover({stateDir:${JSON.stringify(dir)}, config:{}, recoveryBudgetMs:400,
-      call:()=>process.kill(process.pid,'SIGSTOP')},
+      call:()=>{ writeFileSync(${JSON.stringify(join(dir, 'replicas-api'))}, '0'); process.kill(process.pid,'SIGSTOP'); }},
       {step:'W3',driverPid:process.pid,t0MonoMs:monoMs(),heartbeatMonoMs:monoMs()-2000},'test');
   `], { stdio: 'ignore' });
   try {
     const until = Date.now() + 3000;
-    while (!loadState(dir)?.recoveryReason && Date.now() < until) await new Promise(r => setTimeout(r, 20));
+    while ((!loadState(dir)?.recoveryReason || !existsSync(join(dir, 'replicas-api'))) && Date.now() < until) await new Promise(r => setTimeout(r, 20));
     assert.ok(loadState(dir)?.recoveryReason, 'driver must enter real recover()');
     const initial = loadState(dir);
     assert.ok(initial.stepDeadlineMonoMs <= initial.t0MonoMs + 235_000, 'driver reserves independent watchdog time');
+    assert.equal(readFileSync(join(dir, 'replicas-api'), 'utf8'), '0', 'API stopped before driver suspension');
     await new Promise(r => setTimeout(r, 1100));
     let writes = 0;
     const code = await poll({ stateDir: dir, config: { revisions: {} }, print: () => {}, call: args => {
@@ -121,6 +123,8 @@ test('RUN7 watchdog kills a SIGSTOP recovery owner before its only writer restor
       assert.equal(running, false, 'old writer must be dead before any recovery command');
       writes++;
       const cmd = args.join(' ');
+      const scale = cmd.match(/^scale deployment\/(\S+) --replicas=(\d)$/);
+      if (scale) writeFileSync(join(dir, `replicas-${scale[1]}`), scale[2]);
       if (cmd.includes('get pods')) return '{"items":[]}';
       if (cmd.includes('exec')) return 'f|0';
       if (cmd.includes('get cronjob')) return '{"spec":{"suspend":true}}';
@@ -129,6 +133,9 @@ test('RUN7 watchdog kills a SIGSTOP recovery owner before its only writer restor
     assert.equal(code, 3);
     assert.ok(writes > 0);
     assert.equal(loadState(dir).step, 'DONE');
+    for (const component of ['api', 'auth-idp', 'ui']) {
+      assert.equal(readFileSync(join(dir, `replicas-${component}`), 'utf8'), '1', `${component} restored`);
+    }
     assert.ok(loadState(dir).stepDeadlineMonoMs <= initial.t0MonoMs + 300_000, 'takeover cannot extend the fence');
   } finally { driver.kill('SIGKILL'); }
 });
