@@ -333,14 +333,19 @@ const observationParams = ['model', 'messages', 'input', 'tools', 'tool_choice',
 const closedValue = (value, allowed) => allowed.includes(value) ? value : 'unknown';
 
 // Cancel only the copy: the SDK retains the original response and its bytes.
-async function boundedObservationJson(message) {
+async function boundedObservationJson(message, deadlineMs) {
   const reader = message.body?.getReader();
   if (!reader) return null;
+  let timer;
+  const deadline = deadlineMs === undefined ? null : new Promise(resolve => {
+    timer = setTimeout(() => resolve({ expired: true }), deadlineMs);
+  });
   try {
     const chunks = [];
     let size = 0;
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value, expired } = await (deadline ? Promise.race([reader.read(), deadline]) : reader.read());
+      if (expired) return null;
       if (done) break;
       size += value.byteLength;
       if (size > 65_536) return null;
@@ -351,7 +356,7 @@ async function boundedObservationJson(message) {
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch { return null; }
-  finally { void reader.cancel().catch(() => {}); }
+  finally { clearTimeout(timer); void reader.cancel().catch(() => {}); }
 }
 
 export function createProviderObserver({ fetchImpl = globalThis.fetch, record }) {
@@ -374,16 +379,21 @@ export function createProviderObserver({ fetchImpl = globalThis.fetch, record })
     });
     try {
       const response = await fetchImpl(request);
-      const error = response.ok ? null : (await boundedObservationJson(response.clone()))?.error;
-      record({ type: 'response', requestId, host, status: response.status,
-        ...(!response.ok ? { error: {
-          code: closedValue(error?.code, ['unsupported_parameter', 'unsupported_value', 'invalid_request_error',
-            'model_not_found', 'rate_limit_exceeded', 'insufficient_quota', 'invalid_api_key', 'context_length_exceeded']),
-          type: closedValue(error?.type, ['invalid_request_error', 'authentication_error', 'permission_error',
-            'rate_limit_error', 'server_error', 'api_error', 'overloaded_error']),
-          param: closedValue(error?.param, observationParams),
-        } } : {}),
-      });
+      record({ type: 'response', requestId, host, status: response.status });
+      if (!response.ok) {
+        // Observe independently: neither body reads nor tee cancellation may delay the SDK.
+        void (async () => {
+          const body = await boundedObservationJson(response.clone(), 1000);
+          const error = body?.error;
+          record({ type: 'response-error', requestId, host, status: response.status, error: {
+            code: closedValue(error?.code, ['unsupported_parameter', 'unsupported_value', 'invalid_request_error',
+              'model_not_found', 'rate_limit_exceeded', 'insufficient_quota', 'invalid_api_key', 'context_length_exceeded']),
+            type: closedValue(error?.type, ['invalid_request_error', 'authentication_error', 'permission_error',
+              'rate_limit_error', 'server_error', 'api_error', 'overloaded_error']),
+            param: closedValue(error?.param, observationParams),
+          } });
+        })().catch(() => {});
+      }
       return response;
     } catch (error) {
       record({ type: error?.name === 'AbortError' ? 'cancelled' : 'error', requestId, host });
