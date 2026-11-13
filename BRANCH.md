@@ -42,6 +42,6 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: collect log evidence and mechanically check branch.
 - [ ] Lot 1: regress daily suite selection and OAuth port alignment in scripts/ci/live-provider-receipt.test.mjs; fix runner and workflow (16 Docker tests passed; 2 failed before fix).
-- [ ] Lot 2: safe underlying readiness/case/teardown diagnostics in api/tests/ai/gw-native-qualification.test.ts and helpers; regress secret suppression (2 Vitest tests passed under Docker).
+- [x] Lot 2: safe underlying readiness/case/teardown diagnostics in api/tests/ai/gw-native-qualification.test.ts and helpers; regress secret suppression (2 Vitest tests passed under Docker).
 - [ ] Lot 3: 16 runner regressions and 2 diagnostic tests passed under Docker; two independent Astra high code reviews APPROVE, including S2S overlay follow-up; mechanical scope check passed.
 - [ ] Final validation: push, PR from BRANCH.md, normal CI green; report and completion marker; no merge.
