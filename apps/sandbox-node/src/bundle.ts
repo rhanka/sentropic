@@ -7,7 +7,7 @@ import { mountQuotaVolume } from './disk-quota.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 
 export type HostCommand = (command: string, args: string[], options?: { env: NodeJS.ProcessEnv }) => void;
-const host: HostCommand = (command, args, options) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000, ...options }); };
+const host: HostCommand = (command, args, options) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000, killSignal: 'SIGKILL', ...options }); };
 export interface Bundle { path: string; workspace: string; output: string; mounted: string[] }
 
 /** Only the agent writes source. Untrusted processes see a read-only workspace. */

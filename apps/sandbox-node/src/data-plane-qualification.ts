@@ -35,12 +35,12 @@ export async function qualifyDataPlane(): Promise<void> {
   const report = (name: string) => { deadline.signal.throwIfAborted(); console.log(`PASS ${name}`); };
   try {
     const state = execFileSync('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value'],
-      { encoding: 'utf8', timeout: 5000 }).trim();
+      { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).trim();
     assert.equal(state, 'inactive', 'service must be stopped');
     assertCleanStartup();
     assertNoQualificationLeftovers(dirname(process.execPath));
     assert.match(execFileSync('findmnt', ['--noheadings', '--raw', '--output=SOURCE', '--mountpoint', '/var/lib/builder/tenants/sentropic'],
-      { encoding: 'utf8', timeout: 5000 }).trim(), /^\/dev\/loop[0-9]+$/);
+      { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).trim(), /^\/dev\/loop[0-9]+$/);
     rmSync(marker); // Consume operator authorization once, under the service's shared flock.
     const baseline = tcpListeners();
     const checkTcp = () => { for (const listener of tcpListeners()) assert.ok(baseline.has(listener), 'new host TCP listener'); };

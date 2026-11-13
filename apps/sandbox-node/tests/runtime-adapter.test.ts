@@ -8,6 +8,26 @@ vi.mock('node:child_process', async importOriginal => {
 });
 
 describe('runtime adapters', () => {
+  it('should hard-bound the runtime version subprocess', () => {
+    vi.mocked(execFileSync).mockImplementation(() => { throw new Error('version timeout'); });
+    try {
+      expect(new RunscRuntimeAdapter().hasRunsc()).toBe(false);
+      expect(execFileSync).toHaveBeenCalledWith('runsc', ['--version'], { stdio: 'ignore', timeout: 1000, killSignal: 'SIGKILL' });
+    } finally { vi.restoreAllMocks(); }
+  });
+  it('should tolerate a launcher exit delivered after bundle destruction', async () => {
+    const child = new EventEmitter();
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true); vi.spyOn(adapter, 'stopSandbox').mockResolvedValue(true);
+    vi.mocked(execFileSync).mockImplementation((_file, args) => args?.includes('state') ? '{"status":"running"}' : args?.includes('list') ? '[]' : '');
+    vi.mocked(spawn).mockImplementation(() => { queueMicrotask(() => child.emit('spawn')); return child as ReturnType<typeof spawn>; });
+    try {
+      const { runtimeId } = await adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'delayed-exit', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 });
+      await adapter.destroySandbox(runtimeId);
+      expect(() => child.emit('exit', 0, null)).not.toThrow();
+    } finally { vi.restoreAllMocks(); }
+  });
   it.each(['inactive', 'failed'])('should refuse forwarding when a running container has a %s scope', async active => {
     const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
     vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
