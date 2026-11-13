@@ -96,15 +96,17 @@ export class ExecutionNodeAdapter {
     }
     return nodeJson(await this.command(session, 'POST', '/v1/sandboxes', commandId, { spec, ownership: session.ownership }));
   }
-  async status(session: NodeSession) {
+  async status(session: NodeSession, intendedCustodyEpoch?: number) {
     this.active(); if (!this.verified) await this.inspect();
     if (!/^[a-zA-Z0-9-]+$/.test(session.physicalUid)) throw new ExecutionNodeRefusal('invalid_node_session');
     const reply = await this.transport('GET', `/v1/sandboxes/${session.physicalUid}`,
       undefined, { 'X-Tenant-Id': session.ownership.tenantId, 'X-Expected-Physical-Uid': session.physicalUid });
     if (reply.status === 404) return undefined;
     const status = nodeJson(this.checked(reply)); this.identity(status);
+    const intended = intendedCustodyEpoch === undefined ? undefined : { ...session.ownership, custodyEpoch: intendedCustodyEpoch };
     if (status.tenantId !== session.ownership.tenantId || status.physicalUid !== session.physicalUid
-      || JSON.stringify(status.ownership) !== JSON.stringify(session.ownership)) throw new ExecutionNodeRefusal('invalid_node_session');
+      || (canonicalNodeJson(status.ownership) !== canonicalNodeJson(session.ownership)
+        && (!intended || canonicalNodeJson(status.ownership) !== canonicalNodeJson(intended)))) throw new ExecutionNodeRefusal('invalid_node_session');
     return status;
   }
   async putBase(session: NodeSession, base: ExecutionNodeBaseRef & { tenantId: 'sentropic' | 'immo' },
