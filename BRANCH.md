@@ -22,6 +22,10 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - `.github/workflows/ci.yml` (BR-SN1-EX7: sandbox qualification step only)
   - `e2e/fixtures/provider-server.mjs` (BR-SN1-EX8: Responses session-title fixture only)
   - `e2e/fixtures/provider-server.test.mjs` (BR-SN1-EX8 regression)
+  - `ui/src/routes/folder/new/+page.svelte` (BR-SN1-EX9: CI-blocking draft-creation race only)
+  - `e2e/tests/00-ai-generation.spec.ts` (BR-SN1-EX9: suspended-draft generation regression only)
+  - `ui/src/lib/components/chat/AppChatPanel.svelte` (BR-SN1-EX10: stale session hydration during attachment upload only)
+  - `e2e/tests/04-chat-image-paste.spec.ts` (BR-SN1-EX10: delayed history hydration regression only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -36,6 +40,8 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] BR-SN1-EX10: CI shard 6 uploads the pasted document successfully (201), but a concurrent deferred session selection clears the attachment band. Fence obsolete history hydration and stale session-list responses while creating an attachment target. Impact: session bootstrap concurrency only; rollback: revert the two declared chat UI/E2E files. Reuse the isolated EX9 test environment and ports.
+- [x] BR-SN1-EX9: CI 43355644224 shard 5 returned HTTP 201 for draft creation but AI generation failed because ensureDraftFolder returned null during an in-flight draft request. Shared pending promise and deterministic browser regression: old CI image fails waiting for generation; rebuilt UI passes (1 expected, 0 unexpected/retries). Impact: folder creation concurrency only; rollback: revert the two declared UI/E2E files. Local isolated ports API=9512, UI=5712, MAILDEV_UI=1512; ENV=e2e-sandbox-r4.
 - [x] RUN 4 M5 GC regression is committed in standalone qualification: restoring the reviewed retention policy retained all 8 archive buffers after GC (8 != 0); corrected policy reclaims all 64 MiB while daemon stays strongly reachable.
 - [x] RUN 4 final artifact after early-exit fix: 6438720be250517de1613b570c8df42c5e6f318fb03bfdf74b5a839af87e6969; 60 regression tests pass. Replaces the intermediate RUN 4 archive.
 - [x] RUN 4 early exit: failing callback-before-launch-return regression left a finished process marked running; defer exit handling until the launch promise is registered, then confirm stop and retain output (60 tests).
