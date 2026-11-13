@@ -75,6 +75,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN7 local gates: 145/145 operator tests and 6/6 classifier tests on separately migrated PostgreSQL databases; scope PASS C2. Preprod read-only probe refuses absent postgres pod; latency receipt in owner report.
 - [x] RUN7 process matrix supplies actual HTTP authentication responses through a local server, including pre-commit health verification; preview matrices start with an unused directory.
 - [x] RUN7 M2: require all S-3..S-9 probes before fence and acceptance; S-6 requires same-origin login Location without OAuth error. Six negative regressions failed first.
 - [x] RUN7 B2/B7: emergency and every real CLI share the original monotonic deadline; expired windows refuse writes; four latency regressions failed first.
@@ -128,6 +129,6 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - [x] M5 post-commit resume matrix (patch-in-place, no probe replay, BACKUP_RESUMED/ONE_HOST_OPEN) + Q5 present + Q6 planted enc row
   - [x] Suite: make test-preprod-a4 88/88 + make test-api-endpoints t3-classify 6/6 ENV=test-t3-driver
   - [x] make typecheck-api + make lint-api green; make scope-check PASS
-- [ ] **Lot 4 — PR + CI**
-  - [ ] Push feat/t3-window-driver, open PR, CI green
-  - [ ] No merge
+- [x] **Lot 4 — PR + CI**
+  - [x] PR #1011 exists; baseline CI 43314210874 succeeded; RUN7 exact-head CI receipt is recorded in the owner report.
+  - [x] No merge
