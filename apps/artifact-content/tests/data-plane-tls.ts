@@ -12,7 +12,7 @@ const oid = (hex: string) => der(6, Buffer.from(hex, 'hex'));
 const integer = (value: number) => der(2, Buffer.from([value]));
 const algorithm = seq(oid('2a864886f70d01010b'), der(5));
 const name = (cn: string) => seq(der(0x31, seq(oid('550403'), der(12, Buffer.from(cn)))));
-const time = (date: Date) => der(0x17, Buffer.from(date.toISOString().replace(/[-:]/g, '').slice(2, 14) + 'Z'));
+const time = (date: Date) => der(0x17, Buffer.from(date.toISOString().replace(/[-:T]/g, '').slice(2, 14) + 'Z'));
 const extension = (id: string, bytes: Buffer) => seq(oid(id), der(4, bytes));
 function certificate(cn: string, issuer: string, key: KeyObject, ca: KeyObject, isCa = false) {
   const tbs = seq(der(0xa0, integer(2)), integer(1), algorithm, name(issuer),

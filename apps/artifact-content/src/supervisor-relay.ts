@@ -106,7 +106,7 @@ export function createSupervisorRelay(options: SupervisorRelayOptions) {
       });
       const result = await forward(podName, frame, request.signal);
       if (result.status !== 200) return empty(result.status);
-      return new Response(result.body, { status: 200, headers: { 'content-type': 'application/octet-stream',
+      return new Response(new Uint8Array(result.body), { status: 200, headers: { 'content-type': 'application/octet-stream',
         'content-length': String(result.body.byteLength), 'cache-control': 'no-store' } });
     },
   };
