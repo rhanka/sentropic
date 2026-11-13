@@ -9,6 +9,7 @@ import { CustodyGuard } from './custody.js';
 import { basePath } from './mounts.js';
 import type { ExecutionNodeOwnership } from './contract.js';
 import type { SandboxRecord } from './daemon.js';
+import type { RuntimeAdapter } from './runtime-adapter.js';
 
 function fileHash(path: string) {
   const fd = openSync(path, 'r'), hash = createHash('sha256'), buffer = Buffer.alloc(1024 * 1024);
@@ -22,11 +23,11 @@ function fileHash(path: string) {
 }
 
 // A real daemon and adapter, with keys and state belonging only to this qualification.
-export function qualificationNode(directory: string, release: string) {
+export function qualificationNode(directory: string, release: string, adapter?: RuntimeAdapter) {
   const keys = generateTicketKeyPair();
   const rootfs = join(release, 'rootfs.erofs');
   const rootDigest = fileHash(rootfs);
-  const node = createExecutionNode({ useRunsc: true, ticketPublicKeyPem: keys.publicKeyPem,
+  const node = createExecutionNode({ useRunsc: true, adapter, stateRoot: directory, ticketPublicKeyPem: keys.publicKeyPem,
     sharedRootfs: { path: rootfs, digest: rootDigest } });
   const custody = new CustodyGuard(join(directory, 'custody.wal'));
   const api = new AgentApi(node, custody);
@@ -51,7 +52,7 @@ export function qualificationNode(directory: string, release: string) {
     async start() {
       const identityDigest = fileHash(join(release, 'qualification.erofs'));
       const base = { tenantId: 'sentropic' as const, kind: 'source' as const, baseId: 'qualification', identityDigest };
-      const path = basePath(base); mkdirSync(dirname(path), { recursive: true });
+      const path = basePath(base, directory); mkdirSync(dirname(path), { recursive: true });
       if (!existsSync(path)) { copyFileSync(join(release, 'qualification.erofs'), path); createdBases.push(path); }
       assert.equal(fileHash(path), identityDigest);
       node.bases.register(base);
@@ -67,8 +68,10 @@ export function qualificationNode(directory: string, release: string) {
         spec: { tenantId: 'sentropic', devScope, profile: 'artifact-build', network: 'ports',
           command: ['/usr/local/bin/node', '-e', script], uid: 1000, gid: 1000, quotaMiB: 1408, quotaInodes: 4096,
           baseMounts: [{ baseId: 'shared-rootfs', kind: 'rootfs', identityDigest: rootDigest }, base] } });
+      assert.equal(created.status, 201);
       sandbox = created.body as SandboxRecord;
-      await call(`/v1/sandboxes/${sandbox.id}/start`, { commandId: 'qualification-start', devScope, quotaMiB: 1408, uid: 1000, gid: 1000 });
+      const started = await call(`/v1/sandboxes/${sandbox.id}/start`, { commandId: 'qualification-start', devScope, quotaMiB: 1408, uid: 1000, gid: 1000 });
+      assert.equal(started.status, 200);
       return sandbox;
     },
     async revoke() {
@@ -96,7 +99,7 @@ export function qualificationNode(directory: string, release: string) {
       // Also recover bundles registered by a partially failed launcher, without touching foreign resources.
       if (sandbox && sandbox.state !== 'destroyed') {
         const runtimeId = sandbox.runtimeId ?? `runsc-sentropic-${sandbox.id}`;
-        if (existsSync(`/var/lib/builder/tenants/sentropic/sandboxes/${sandbox.id}`)) await node.adapter.destroySandbox(runtimeId);
+        await node.adapter.destroySandbox(runtimeId);
       }
       for (const path of createdBases) rmSync(path);
     },
