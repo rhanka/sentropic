@@ -1,4 +1,5 @@
-import { closeSync, existsSync, fsyncSync, openSync, readFileSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, ftruncateSync, openSync, readFileSync, writeSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { ExecutionNodeTenantId } from './contract.js';
 import { ExecutionNodeError } from './errors.js';
 
@@ -6,7 +7,7 @@ export interface CustodyToken {
   tenantId: ExecutionNodeTenantId; resourceId: string; custodyEpoch: number;
   issuedAt: string; deadlineAt: string;
 }
-type Stream = { epoch: number; close: (wsCode: 1008, tcpReset: true) => void };
+type Stream = { epoch: number; timer: ReturnType<typeof setTimeout>; close: (wsCode: 1008, tcpReset: true) => void };
 
 /** Caller authenticates mTLS and verifies the signed token before this epoch gate. */
 export class CustodyGuard {
@@ -16,9 +17,16 @@ export class CustodyGuard {
 
   constructor(private readonly walPath: string, private readonly now = Date.now) {
     if (existsSync(walPath)) {
-      for (const line of readFileSync(walPath, 'utf8').split('\n').filter(Boolean)) {
+      const bytes = readFileSync(walPath);
+      const end = bytes.lastIndexOf(10) + 1;
+      for (const line of bytes.subarray(0, end).toString('utf8').split('\n').filter(Boolean)) {
         const { key, epoch } = JSON.parse(line) as { key: string; epoch: number };
+        if (typeof key !== 'string' || !Number.isSafeInteger(epoch) || epoch < 0) throw new Error('invalid custody WAL');
         this.epochs.set(key, Math.max(this.epochs.get(key) ?? 0, epoch));
+      }
+      if (end !== bytes.length) {
+        const fd = openSync(walPath, 'r+');
+        try { ftruncateSync(fd, end); fsyncSync(fd); } finally { closeSync(fd); }
       }
     }
   }
@@ -41,9 +49,11 @@ export class CustodyGuard {
     this.authorize(token, token.tenantId, token.resourceId, false);
     const key = `${token.tenantId}:${token.resourceId}`;
     const streams = this.streams.get(key) ?? new Set<Stream>();
-    const stream = { epoch: token.custodyEpoch, close };
+    const timer = setTimeout(() => { streams.delete(stream); close(1008, true); }, Date.parse(token.deadlineAt) - this.now());
+    timer.unref();
+    const stream = { epoch: token.custodyEpoch, close, timer };
     streams.add(stream); this.streams.set(key, streams);
-    return () => { streams.delete(stream); };
+    return () => { clearTimeout(timer); streams.delete(stream); };
   }
 
   revoke(tenantId: ExecutionNodeTenantId, resourceId: string, received: number) {
@@ -53,11 +63,13 @@ export class CustodyGuard {
     const fd = openSync(this.walPath, 'a', 0o600);
     try { writeSync(fd, `${JSON.stringify({ key, epoch })}\n`); fsyncSync(fd); }
     finally { closeSync(fd); }
+    const directory = openSync(dirname(this.walPath), 'r');
+    try { fsyncSync(directory); } finally { closeSync(directory); }
     this.epochs.set(key, epoch);
     let closedStreams = 0;
     for (const stream of this.streams.get(key) ?? []) {
       if (stream.epoch >= epoch) continue;
-      stream.close(1008, true); this.streams.get(key)!.delete(stream); closedStreams++;
+      clearTimeout(stream.timer); stream.close(1008, true); this.streams.get(key)!.delete(stream); closedStreams++;
     }
     return { activeCustodyEpoch: epoch, closedStreams, ackedAt: new Date(this.now()).toISOString() };
   }
