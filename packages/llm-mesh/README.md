@@ -446,6 +446,9 @@ The host subpath also exports `createGeminiDecisionsAdapter`,
 Register this adapter separately and allowlist its exact evaluator reference;
 ordinary Gemini chat adapters never acquire this capability. Credentials must use
 the host's `environment-token` source named `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+Only developer API keys are supported; consumer OAuth and agy/Antigravity logins
+must never be used. Gemini remains disabled for immo in preprod and production
+following the Google ToS incident; this adapter does not change that policy.
 Google AI Studio is outside Canada and does not guarantee Canadian residency.
 Enable this evaluator only where its data processing is explicitly permitted;
 it is never a default evaluator or a fallback.

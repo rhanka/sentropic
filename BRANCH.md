@@ -13,6 +13,8 @@
   - `packages/llm-mesh/**`
   - `BRANCH.md`
   - `package-lock.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/llm-gateway/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -21,6 +23,9 @@
   - `api/**`
 
 ## Feedback Loop
+- [x] BRGD-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.
+- [x] RUN 2: rebase onto origin/main required no replay; published llm-mesh remains 0.36.0, below this branch version. Candidate lock changes exactly two consumer range cells; strict npm ci --ignore-scripts --dry-run passed without force or legacy-peer-deps.
+- [x] RUN 2: README confirms API keys only, no consumer OAuth/agy, no default or fallback, and immo preprod/production remains disabled; routing tests pass 12/12, including four OAuth credential rejection cases before egress.
 - [x] Official announcement: https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/
 - [x] Official REST request/response reference: https://aistudio.google.com/docs/decisions-api#request
 - [x] ai.google.dev/api/decisions is unavailable; the announcement links to AI Studio documentation.
