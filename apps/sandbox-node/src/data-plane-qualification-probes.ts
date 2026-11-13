@@ -31,7 +31,9 @@ export async function probeDataPlane(options: {
     const timer = setTimeout(() => req.destroy(new Error('qualification probe deadline exceeded')), 1000);
     const clear = () => clearTimeout(timer);
     req.once('error', clear); req.once('close', clear);
-    req.once('response', res => { res.once('data', clear); res.once('end', clear); });
+    req.once('response', res => {
+      for (const event of ['data', 'end', 'error', 'aborted', 'close']) res.once(event, clear);
+    });
     req.once('upgrade', (_res, socket) => {
       clear();
       const abort = () => socket.destroy();
@@ -42,8 +44,12 @@ export async function probeDataPlane(options: {
   };
   const http = (signed: string) => new Promise<IncomingMessage>((resolve, reject) => {
     const req = open(signed); req.once('error', reject); req.once('response', res => {
-      req.setTimeout(0); res.once('error', () => {});
+      req.setTimeout(0);
+      let received = false;
+      const ended = () => { if (!received) reject(new Error('qualification response ended before first bytes')); };
+      res.once('error', reject); res.once('end', ended); res.once('aborted', ended); res.once('close', ended);
       res.once('data', data => {
+        received = true;
         try { assert.equal(res.statusCode, 200); assert.equal(data.toString(), 'qualification-stream'); resolve(res); }
         catch (error) { res.destroy(); reject(error); }
       });

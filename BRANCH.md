@@ -24,6 +24,8 @@
   - [x] No exceptions declared.
 
 ## Feedback Loop
+- [x] Astra review: guard delayed launcher exit after scope-map teardown; add regression before archive rebuild.
+- [x] Astra review: reject empty/premature HTTP responses before first bytes; bound runsc version detection with SIGKILL.
 - [x] Packet references merged #1022; fetched `origin/main` is `87485f912` (#1020). Use the actual origin/main ancestry.
 - [x] Track import is reserved for the conductor, the designated single writer; deliver the updated branch checklist for import.
 
@@ -45,7 +47,7 @@
   - [x] Detect early workload/scope exit and refuse unavailable port targets; preserve legitimate short build completion.
 - [ ] **Lot 2 — Bounded execution and cleanup**
   - [x] Validate deadline, SIGTERM, early sandbox exit, probe failure and successful finalization using the real qualification entry with fake host/runtime dependencies.
-  - [x] Remove relay directories and refuse stale qualification resources; bases and bundles use private roots.
+  - [x] Remove relay directories and refuse stale qualification resources, including the reported legacy `caf46fda` base; bases and bundles use private roots.
   - [x] Apply private fixture handling and leftovers inventory to isolation qualification; all 13 isolation orchestration tests pass.
 - [ ] **Lot 3 — Custody keys**
   - [x] Validate separate `CUSTODY_PUBLIC_KEY` / `ARTIFACT_CUSTODY_ED25519_KEY_B64`; API tests prove cross-use refusal both ways.
