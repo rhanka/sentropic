@@ -4,6 +4,9 @@ import type { LookupFunction } from 'node:net';
 import { SUPERVISOR_PATH } from '../../../api/src/services/artifacts/live/bootstrap-server';
 import { MAX_FRAME_BYTES, MAX_REPLY_BYTES, openFrame, SIGNATURE_BYTES } from '../../../api/src/services/artifacts/live/supervisor-frame';
 import { DEFAULT_BUILDER_NAMESPACE } from './live';
+import type { DataPlaneTransport } from './data-plane';
+import { dataPlaneFetch } from './data-plane-http';
+import { combineAbortSignals } from './abort-signals';
 
 /** Pod hop bound: above the API's 320 s command bound, so the API side always gives up first. */
 export const RELAY_UPSTREAM_TIMEOUT_MS = 330_000;
@@ -19,6 +22,7 @@ export interface SupervisorRelayOptions {
   publicKeys: readonly KeyObject[];
   /** Per-environment worker namespace of the pods' :5173 Service. */
   namespace: string;
+  dataPlane?: DataPlaneTransport;
   now?: () => number;
   /** Test seam for the pod hop: Service DNS resolution and port. */
   upstream?: { port?: number; lookup?: LookupFunction };
@@ -97,9 +101,16 @@ export function createSupervisorRelay(options: SupervisorRelayOptions) {
       const at = now();
       const body = options.publicKeys.map(key => openFrame(key, frame, at)).find(Boolean);
       if (!body || body.fence.podName !== podName) return empty(403);
+      if (options.dataPlane) {
+        const response = await dataPlaneFetch(options.dataPlane, { kind: 'supervisor', podName }, SUPERVISOR_PATH, {
+          method: 'POST', headers: { 'content-type': 'application/octet-stream', 'content-length': String(frame.length) }, body: frame,
+          signal: combineAbortSignals([request.signal, AbortSignal.timeout(RELAY_UPSTREAM_TIMEOUT_MS)]), maxBytes: MAX_REPLY_BYTES,
+        });
+        return response.status === 200 || response.status === 403 ? response : empty(502);
+      }
       const result = await forward(podName, frame, request.signal);
       if (result.status !== 200) return empty(result.status);
-      return new Response(result.body, { status: 200, headers: { 'content-type': 'application/octet-stream',
+      return new Response(new Uint8Array(result.body), { status: 200, headers: { 'content-type': 'application/octet-stream',
         'content-length': String(result.body.byteLength), 'cache-control': 'no-store' } });
     },
   };
@@ -111,7 +122,7 @@ export type SupervisorRelay = ReturnType<typeof createSupervisorRelay>;
  * there is no relay; it does not depend on `APP_ARTIFACT_LIVE_ENABLED` or `APP_ARTIFACT_CONTENT_ENABLED`. An invalid
  * key list or namespace refuses startup.
  */
-export function supervisorRelayFromEnv(env: NodeJS.ProcessEnv) {
+export function supervisorRelayFromEnv(env: NodeJS.ProcessEnv, dataPlane?: DataPlaneTransport) {
   if (env.APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED !== '1') return undefined;
   const entries = (env[KEYS_ENV] ?? '').split(/\s+/).filter(Boolean);
   if (entries.length < 1 || entries.length > 2 || new Set(entries).size !== entries.length) {
@@ -127,5 +138,5 @@ export function supervisorRelayFromEnv(env: NodeJS.ProcessEnv) {
   });
   const namespace = env.APP_ARTIFACT_LIVE_BUILDER_NAMESPACE?.trim() || DEFAULT_BUILDER_NAMESPACE;
   if (!NAMESPACE.test(namespace)) throw new Error('Invalid supervisor relay builder namespace');
-  return createSupervisorRelay({ publicKeys, namespace });
+  return createSupervisorRelay({ publicKeys, namespace, dataPlane });
 }
