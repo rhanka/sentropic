@@ -228,7 +228,7 @@ export class ExecutionNodeDaemon {
         mounts: [],
         overlayUpper: paths.upper,
         overlayWork: paths.work,
-        quotaMiB: sandbox.slot === 'build' ? 1664 : 768,
+        quotaMiB: sandbox.slot === 'build' ? 1536 : 704,
         uid: input.uid,
         gid: input.gid,
       });

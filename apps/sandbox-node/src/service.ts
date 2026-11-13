@@ -29,7 +29,7 @@ const server = createAgentServer(tls, (req, res, role) => {
     const scope = requestScope(req.url ?? '/', typeof header === 'string' ? header : undefined, role);
     if (url.pathname === '/v1/node' && req.method === 'GET') {
       reply(200, { contractVersion: EXECUTION_NODE_CONTRACT_VERSION, nodeId: 'artifact-builder-vm-1',
-        nodeInstanceId, nodeEpoch, classes: ['sandbox'], parentSlice: { name: 'builder.slice', memoryMaxMiB: 3456 },
+        nodeInstanceId, nodeEpoch, classes: ['sandbox'], parentSlice: { name: 'builder.slice', memoryMaxMiB: 2944 },
         capabilities: { supportedOps: ['node', 'quotas'] } }); return;
     }
     if (scope.scope === 'tenant' && url.pathname === `/v1/tenants/${scope.tenantId}/quotas` && req.method === 'GET') {

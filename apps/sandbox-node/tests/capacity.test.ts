@@ -4,16 +4,18 @@ import { EXECUTION_NODE_CAPACITY, EXECUTION_NODE_TENANT_SLICE_DEFAULTS } from '.
 
 const quotas = { sentropic: { maxLive: 1, maxStandby: 1 }, immo: { maxLive: 1, maxStandby: 1 } };
 describe('d2-4 memory admission', () => {
-  it('should admit both warm sessions and one build within 3200 MiB including gVisor', async () => {
+  it('should keep two warm sessions, build and agent below the measured safe ceiling', async () => {
     const admission = new ExecutionNodeAdmission(quotas);
     admission.admit('sentropic', 'live', 'a');
     admission.admit('immo', 'standby', 'b');
     await admission.admitBuild('sentropic');
-    expect(admission.reservedMiB('sentropic') + admission.reservedMiB('immo')).toBe(3200);
-    expect(EXECUTION_NODE_CAPACITY.parentMemoryMaxMiB).toBe(3456);
-    expect(EXECUTION_NODE_TENANT_SLICE_DEFAULTS.immo).toMatchObject({ memoryMaxMiB: 2560, cpuWeight: 100 });
+    const reserved = admission.reservedMiB('sentropic') + admission.reservedMiB('immo');
+    expect(reserved).toBe(2944);
+    expect(reserved + 192).toBeLessThanOrEqual(3174);
+    expect(EXECUTION_NODE_CAPACITY.parentMemoryMaxMiB).toBe(2944);
+    expect(EXECUTION_NODE_TENANT_SLICE_DEFAULTS.immo).toMatchObject({ memoryMaxMiB: 2304, cpuWeight: 100 });
     admission.claim('immo');
-    expect(admission.reservedMiB('immo')).toBe(768);
+    expect(admission.reservedMiB('immo')).toBe(704);
   });
 
   it('should reject on full memory.current including cache and sentry before OOM', async () => {
