@@ -11,14 +11,18 @@ describe('runtime adapters', () => {
   it.each(['delete', 'expiry'])('should release capacity after exit and collected scope cleanup (%s)', async mode => {
     vi.useFakeTimers();
     const destroy = vi.fn();
+    let scopeState = 'inactive';
     const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy });
     vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
     vi.spyOn(adapter, 'exportOutput').mockResolvedValue(Buffer.from('archive'));
     vi.mocked(execFileSync).mockImplementation((file, args) => {
       if (file === 'runsc') return '[]';
       if (args?.[0] === 'stop') throw new Error('Unit not loaded');
-      if (args?.includes('--property=ControlGroup')) return '';
-      if (args?.includes('--property=ActiveState')) return 'inactive';
+      if (args?.includes('--property=ControlGroup')) return scopeState === 'active' ? '/live-scope' : '';
+      if (args?.includes('--property=ActiveState')) {
+        if (scopeState === 'unknown') throw new Error('systemd unavailable');
+        return scopeState;
+      }
       throw new Error('unexpected system call');
     });
     vi.mocked(spawn).mockImplementation(() => {
@@ -40,6 +44,12 @@ describe('runtime adapters', () => {
       expect(box.state).toBe('stopped-output-retained');
       expect(node.admission.reservedMiB('immo')).toBe(1536);
       await daemon.exportArtifacts('immo', box.id, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 1000, presignedPutUrl: 'https://example.test' } });
+      if (mode === 'delete') for (scopeState of ['active', 'unknown']) {
+        await expect(daemon.deleteSandbox('immo', box.id, { commandId: `unsafe-${scopeState}`, devScope })).rejects.toThrow();
+        expect(destroy).not.toHaveBeenCalled();
+        expect(node.admission.reservedMiB('immo')).toBe(1536);
+      }
+      scopeState = 'inactive';
       if (mode === 'delete') await daemon.deleteSandbox('immo', box.id, { commandId: 'delete', devScope });
       else await vi.advanceTimersByTimeAsync(300_000);
       expect(box.state).toBe('destroyed');

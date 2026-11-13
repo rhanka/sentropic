@@ -229,7 +229,7 @@ agent/rootfs digest when ready. No install/restart is performed by this lane.
 | --- | --- | --- |
 | Execution ticket/token Ed25519 | Sentropic control plane private key; VM public SPKI only at `/etc/execution-node/keys/execution-ticket.ed25519.pub.pem` (`AGENT_TICKET_PUBLIC_KEY`) | Control plane supplies the public key before installation; replace config and restart on rotation |
 | Operator ticket Ed25519 | k8s private key; shipped SPKI `/etc/execution-node/keys/operator-ticket.ed25519.pub.pem` | 365 days; `AGENT_OPERATOR_PUBLIC_KEYS` accepts one or two comma-separated public-key paths for overlap; restart config, then retire old key after 60 s |
-| Node provenance Ed25519 | k8s generates at install; PKCS#8 PEM `/etc/execution-node/keys/node-provenance.ed25519`, root 0600 | k8s coordinates rotation and control-plane pin registration; never copied to an `.env` or release |
+| Node provenance Ed25519 | k8s generates at install; PKCS#8 PEM `/etc/execution-node/keys/node-provenance.ed25519`, root 0400 | Rotate annually and on every rebuild, with public revocation and rebuild on compromise; k8s coordinates control-plane pin registration; never copied to an `.env` or release |
 
 The N1 shipped operator key is:
 
