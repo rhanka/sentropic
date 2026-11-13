@@ -39,7 +39,7 @@ export async function custodyRpcFixture() {
   const route = { ...key, sessionId: runtime.sessionId, generation: 1, routeEpoch: 1,
     podName: runtime.podName, podUid: runtime.podUid!, sourceRevision: 'revision', principalId: 'principal', expiresAt: Date.now() + 60_000 };
   const rpcKey = { kid: 'synthetic', key: Buffer.alloc(32, 7) };
-  const rpc = createCustodyRpc({ key: rpcKey, node: fake.adapter,
+  const rpc = createCustodyRpc({ key: rpcKey, node: fake.adapter, now: fake.now,
     resolve: createCustodyAuthority({ store: { async read() { return { runtime: structuredClone(runtime) } as never; },
       async active() { return [{ key, ownerId: runtime.ownerId, phase: runtime.phase }]; } },
     binding: async () => ({ generation: 1, ownerId: 'principal' }), session: r => backend.custody(r) }) });
