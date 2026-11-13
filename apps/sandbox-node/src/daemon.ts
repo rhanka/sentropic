@@ -311,11 +311,12 @@ export class ExecutionNodeDaemon {
       this.audit.record('sandbox.stopping', tenantId, id);
       sandbox.allProcessesExited = sandbox.runtimeId ? await this.adapter.stopSandbox(sandbox.runtimeId) : true;
       if (!sandbox.allProcessesExited) return sandbox;
-      this.releaseSlot(sandbox);
       if (input.stop.retainOutput === true) {
         sandbox.state = 'stopped-output-retained';
         sandbox.outputSubPath = input.stop.outputSubPath ?? 'ui/dist';
       } else {
+        if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
+        sandbox.runtimeId = undefined;
         sandbox.state = 'destroyed';
         this.releaseSlot(sandbox);
       }
@@ -385,12 +386,12 @@ export class ExecutionNodeDaemon {
     });
   }
 
-  failSandbox(tenantId: ExecutionNodeTenantId, id: string, detail?: string): SandboxRecord {
+  async failSandbox(tenantId: ExecutionNodeTenantId, id: string, detail?: string): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
     if (!TERMINAL.has(sandbox.state)) {
       sandbox.state = 'failed';
-      this.releaseSlot(sandbox);
+      sandbox.allProcessesExited = sandbox.runtimeId ? await this.adapter.stopSandbox(sandbox.runtimeId) : true;
       this.audit.record('sandbox.failed', tenantId, id, detail);
     }
     return sandbox;

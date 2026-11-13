@@ -70,7 +70,12 @@ describe('lifecycle', () => {
     adapter.exited = true;
     await daemon.stopSandbox('sentropic', created.id, { commandId: 'pending-stop-again', stop: { retainOutput: true } });
     expect(created).toMatchObject({ state: 'stopped-output-retained', allProcessesExited: true });
+    expect(admission.reservedMiB('sentropic')).toBe(704);
+    await expect(daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'replacement' }))
+      .rejects.toMatchObject({ status: 429 });
+    await daemon.deleteSandbox('sentropic', created.id, { commandId: 'delete-stopped' });
     expect(admission.reservedMiB('sentropic')).toBe(0);
+    await expect(daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'replacement' })).resolves.toBeDefined();
   });
 
   it('should serialize concurrent claims and allow rejected admission to retry', async () => {
@@ -146,7 +151,7 @@ describe('lifecycle', () => {
     const { daemon } = createExecutionNode();
     const created = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'f-1' });
     await daemon.promoteToRunning('sentropic', created.id, { commandId: 'f-run', quotaMiB: 512, uid: 1000, gid: 1000 });
-    expect(daemon.failSandbox('sentropic', created.id, 'boom').state).toBe('failed');
+    expect((await daemon.failSandbox('sentropic', created.id, 'boom')).state).toBe('failed');
     const destroyed = await daemon.deleteSandbox('sentropic', created.id, { commandId: 'f-del' });
     expect(destroyed.state).toBe('destroyed');
     try {
@@ -155,5 +160,27 @@ describe('lifecycle', () => {
     } catch (error) {
       expect((error as ExecutionNodeError).code).toBe('already_claimed');
     }
+  });
+  it('should keep build capacity while failed runtime refuses to stop', async () => {
+    class HungAdapter extends FakeRuntimeAdapter {
+      exited = false;
+      override async stopSandbox(): Promise<boolean> { return this.exited; }
+      override async destroySandbox(id: string): Promise<void> {
+        if (!this.exited) throw new Error('sandbox_not_quiesced');
+        return super.destroySandbox(id);
+      }
+    }
+    const adapter = new HungAdapter();
+    const { daemon, admission } = createExecutionNode({ adapter });
+    const box = await daemon.createSandbox({ spec: { ...spec(), profile: 'artifact-build' }, ownership: ownership(), commandId: 'build' });
+    await daemon.promoteToRunning('sentropic', box.id, { commandId: 'run', quotaMiB: 1536, uid: 1000, gid: 1000 });
+    await daemon.failSandbox('sentropic', box.id, 'failed');
+    expect(admission.builds.snapshot().holderTenantId).toBe('sentropic');
+    expect(adapter.isLive(box.runtimeId!)).toBe(true);
+    await expect(daemon.deleteSandbox('sentropic', box.id, { commandId: 'delete' })).rejects.toThrow();
+    expect(admission.builds.snapshot().holderTenantId).toBe('sentropic');
+    adapter.exited = true;
+    await daemon.deleteSandbox('sentropic', box.id, { commandId: 'delete' });
+    expect(admission.builds.snapshot().holderTenantId).toBeUndefined();
   });
 });
