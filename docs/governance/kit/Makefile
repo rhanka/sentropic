@@ -1,6 +1,6 @@
 NODE_IMAGE ?= node:24-bookworm-slim
 PROBE_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0
-DEPS_VOLUME ?= sentropic-governance-contract-deps
+DEPS_VOLUME ?= sentropic-governance-ecosystem-ds-deps
 PROBE_VOLUME ?= sentropic-governance-contract-probe
 R11_SHOTS_DIR ?= $(CURDIR)/.cache/r11-shots
 MOUNTS = -v "$(CURDIR)/..:/inputs" -v "$(DEPS_VOLUME):/inputs/kit/node_modules" -w /inputs/kit
@@ -9,8 +9,13 @@ NODE = docker run --rm --cpus=2 --memory=2048m --pids-limit=256 $(USER_ARGS) $(M
 PROBE = docker run --rm $(USER_ARGS) $(MOUNTS) -v "$(PROBE_VOLUME):/app:ro" $(PROBE_MOUNTS) $(PROBE_IMAGE)
 
 .PHONY: install prepare build check-source check-geometry check-browser check-convergence check-performance check-content export-static check-static validate deliver checksums
+.PHONY: update-dependencies inspect-ds
+update-dependencies:
+	@docker run --rm $(MOUNTS) $(NODE_IMAGE) npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+inspect-ds:
+	@$(NODE) sh -c 'head -n 180 node_modules/@sentropic/design-system-svelte/dist/DiagramSceneFigure.svelte; head -n 180 node_modules/@sentropic/design-system-svelte/dist/diagramCardModel.d.ts'
 install:
-	@docker run --rm $(MOUNTS) $(NODE_IMAGE) npm ci --force --no-audit --no-fund
+	@docker run --rm $(MOUNTS) $(NODE_IMAGE) npm ci --no-audit --no-fund
 	@docker run --rm -v "$(PROBE_VOLUME):/app" $(PROBE_IMAGE) npm install --prefix /app --no-audit --no-fund playwright@1.63.0
 
 prepare:
