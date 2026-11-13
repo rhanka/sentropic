@@ -1,18 +1,19 @@
 /** Executed by the release rootfs's Node inside runsc, never on the host. */
-export function isolationProbe(paths: readonly { path: string; directory: boolean }[]): string {
+export function isolationProbe(paths: readonly { path: string; directory: boolean; file?: string }[]): string {
   return `
 const fs = require('node:fs'), net = require('node:net'), os = require('node:os');
 const checks = [];
 function check(name, ok) { checks.push({ name, ok }); }
-for (const {path, directory} of ${JSON.stringify(paths)}) {
+for (const {path, directory, file} of ${JSON.stringify(paths)}) {
+  const target = file || (directory ? path + '/isolation-marker' : path);
   let denied = false;
-  try { if (directory) fs.readdirSync(path); else fs.readFileSync(path); }
-  catch (e) { denied = ['ENOENT', 'EACCES', 'ENOTDIR'].includes(e.code); }
+  try { fs.readFileSync(target); }
+  catch (e) { denied = ['ENOENT', 'EACCES', 'EROFS'].includes(e.code); }
   check('zero read ' + path, denied);
   denied = false;
   try {
-    fs.accessSync(path, fs.constants.W_OK);
-  } catch (e) { denied = ['ENOENT', 'EACCES', 'ENOTDIR'].includes(e.code); }
+    fs.closeSync(fs.openSync(target, 'r+'));
+  } catch (e) { denied = ['ENOENT', 'EACCES', 'EROFS'].includes(e.code); }
   check('zero write ' + path, denied);
 }
 for (const path of ['/workspace/isolation-marker', '/workspace/node_modules/isolation-marker']) {

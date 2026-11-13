@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, copyFileSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, copyFileSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RunscRuntimeAdapter } from './runtime-adapter.js';
@@ -47,13 +47,19 @@ export async function qualifyIsolation(): Promise<void> {
           ...['source', 'dependencies'].map(kind => ({ source: image, target: `/bases/${kind}/qualification`, readOnly: true }))],
       });
       boxes[boxes.length - 1]!.runtimeId = runtimeId;
+      for (const directory of [path, base]) {
+        const sentinel = join(directory, 'isolation-marker');
+        writeFileSync(sentinel, 'foreign tenant sentinel', { mode: 0o666 });
+        chmodSync(sentinel, 0o666);
+      }
       report(`${tenant} real runsc systrap started`, true);
     }
     for (const box of boxes) {
       assert.ok(!interrupted, 'qualification interrupted');
       const other = boxes.find(candidate => candidate.tenant !== box.tenant)!;
-      const paths = [{ path: other.path, directory: true }, { path: join(root, other.tenant, 'bases'), directory: true },
-        { path: other.loop, directory: false }, { path: join(root, other.tenant), directory: true },
+      const paths = [{ path: other.path, directory: true }, { path: other.base, directory: true },
+        { path: other.loop, directory: false }, { path: join(root, other.tenant), directory: true,
+          file: join(other.path, 'isolation-marker') },
         ...['/var/lib/builder', '/etc/execution-node/keys', '/run/execution-node'].map(path => ({ path, directory: true }))];
       const result = run('runsc', ['--root=/run/execution-node/runsc', 'exec', `sandbox-${box.uid}`,
         '/usr/local/bin/node', '-e', isolationProbe(paths)]);
