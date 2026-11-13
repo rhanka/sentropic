@@ -40,6 +40,12 @@ describe('data-plane and CSP configuration', () => {
     const route = {} as LiveRoute; const query = new URLSearchParams('worker&url');
     expect(await viteAdmittedPath(route, '/node_modules/maplibre/worker.js', query)).toBe(false);
     expect(await d7AdmittedPath(route, '/node_modules/maplibre/worker.js', query)).toBe(true);
+    for (const type of ['classic', 'module']) {
+      const workerFile = new URLSearchParams(`worker_file&type=${type}`);
+      expect(await d7AdmittedPath(route, '/src/worker.ts', workerFile)).toBe(true);
+      expect(await viteAdmittedPath(route, '/src/worker.ts', workerFile)).toBe(false);
+    }
+    expect(await d7AdmittedPath(route, '/src/worker.ts', new URLSearchParams('worker_file&type=unknown'))).toBe(false);
     for (const value of ['worker', 'worker=shared&url', 'worker&worker&url', 'worker&url&secret=1']) {
       expect(await d7AdmittedPath(route, '/src/main.ts', new URLSearchParams(value))).toBe(false);
     }

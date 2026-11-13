@@ -38,6 +38,10 @@ const VITE_QUERY = new Set(['v', 't', 'import', 'direct', 'url', 'raw', 'inline'
 export const viteAdmittedPath: LiveProxyPorts['admittedPath'] = async (_route, path, query) =>
   VITE_PATH.test(path) && [...query.keys()].every(name => VITE_QUERY.has(name));
 export const d7AdmittedPath: LiveProxyPorts['admittedPath'] = async (route, path, query) => {
+  if (query.has('worker_file')) return VITE_PATH.test(path)
+    && query.getAll('worker_file').length === 1 && query.get('worker_file') === ''
+    && query.getAll('type').length === 1 && ['module', 'classic'].includes(query.get('type') ?? '')
+    && [...query.keys()].every(name => ['worker_file', 'type'].includes(name) || VITE_QUERY.has(name));
   if (!query.has('worker')) return viteAdmittedPath(route, path, query);
   return VITE_PATH.test(path) && query.getAll('worker').length === 1 && query.get('worker') === ''
     && query.getAll('url').length === 1 && query.get('url') === ''

@@ -35,9 +35,10 @@ export function createLiveUpgrade(options: { live: LiveProxy; baseDomain: string
       } };
       const upstream = hop ? hop.open(admitted.path, requestOptions)
         : httpRequest(new URL(admitted.path, admitted.upstream), requestOptions);
-      let tunnel: Duplex | undefined; let checking = false; let upgraded = false;
-      const close = () => { socket.destroy(); tunnel?.destroy(); upstream.destroy(); cleanup?.(); };
+      let tunnel: Duplex | undefined; let checking = false; let upgraded = false; let stopped = false;
+      const close = () => { stopped = true; socket.destroy(); tunnel?.destroy(); upstream.destroy(); cleanup?.(); };
       const custodyClose = () => {
+        if (stopped) return; stopped = true;
         cleanup?.(); upstream.destroy(); tunnel?.destroy();
         if (!socket.destroyed) socket.end(upgraded ? Buffer.from([0x88, 0x02, 0x03, 0xf0])
           : 'HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
@@ -52,7 +53,7 @@ export function createLiveUpgrade(options: { live: LiveProxy; baseDomain: string
       let unguard = () => {};
       cleanup = () => { clearInterval(timer); unwatch(); unguard(); hop?.dispose(); };
       if (hop) unguard = hop.guard(custodyClose, true);
-      if (socket.destroyed) { cleanup(); upstream.destroy(); return; }
+      if (stopped || socket.destroyed) { cleanup(); upstream.destroy(); return; }
       socket.once('close', close); socket.once('error', close);
       upstream.once('timeout', close); upstream.once('error', close);
       upstream.once('response', response => { response.resume(); if (hop && response.statusCode === 403) custodyClose(); else close(); });
@@ -62,8 +63,8 @@ export function createLiveUpgrade(options: { live: LiveProxy; baseDomain: string
           const accept = createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
           if (response.statusCode !== 101 || response.headers['sec-websocket-accept'] !== accept
             || response.headers['sec-websocket-protocol'] !== 'vite-hmr' || socket.destroyed
-            || (hop && !hop.valid())
-            || !options.enabled() || !await options.live.valid(admitted.route)) { close(); return; }
+            || !options.enabled() || !await options.live.valid(admitted.route)
+            || stopped || (hop && !hop.valid())) { close(); return; }
           upgraded = true;
           socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\nSec-WebSocket-Protocol: vite-hmr\r\n\r\n`);
           if (head.length) peer.write(head);

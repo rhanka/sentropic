@@ -93,4 +93,4 @@ Agent integration prerequisite: the baseline `apps/sandbox-node/src/service.ts` 
 
 ## Live CSP D7-A
 
-`APP_ARTIFACT_LIVE_CSP_PROFILE=default` (or unset) retains `worker-src 'none'`. The pre-authorized `D7-A` profile changes only that directive to `worker-src 'self' blob:`. Invalid profiles refuse live-edge startup. D7-A also admits Vite's `?worker&url` form for MapLibre, through the host path allowlist; the default profile rejects it. All other isolation, request authorization and response headers stay in force.
+`APP_ARTIFACT_LIVE_CSP_PROFILE=default` (or unset) retains `worker-src 'none'`. The pre-authorized `D7-A` profile changes only that directive to `worker-src 'self' blob:`. Invalid profiles refuse live-edge startup. D7-A also admits Vite's `?worker&url` form for MapLibre and its generated `?worker_file&type=module|classic` entry, through the host path allowlist; the default profile rejects both. All other isolation, request authorization and response headers stay in force.
