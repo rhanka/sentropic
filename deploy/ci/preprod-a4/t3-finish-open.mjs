@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState, validateProbes } from './t3-lib.mjs';
 
@@ -156,7 +156,16 @@ async function runProbe(probe, p, opts = {}) {
     opts.print?.(`# dry-run: probe ${p.id} ${p.url} expect ${p.expect}`);
     return;
   }
-  const res = await probe(p.url, { ...p.options, redirect: 'manual', signal: AbortSignal.timeout(
+  let options = p.options;
+  if (p.id === 'S-9a' || p.id === 'S-9b') {
+    // A lost HTTP response may follow a committed code. Never replay its
+    // recipient: each attempt uses a fresh tag on the qualified probe mailbox.
+    const body = JSON.parse(options.body);
+    const [local, domain] = body.email.trim().toLowerCase().split('@');
+    options = { ...options, body: JSON.stringify({ ...body,
+      email: `${local}+t3-${randomBytes(12).toString('hex')}@${domain}` }) };
+  }
+  const res = await probe(p.url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(
     effectiveTimeout(p.timeoutMs ?? 5000, opts, (opts.now ?? monoMs)())) });
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
   if (p.id === 'S-6') {
