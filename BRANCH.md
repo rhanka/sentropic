@@ -52,6 +52,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Agent HTTP/WS proxy authenticates custody JWS, tenant, UID, principal, epoch and port; attaches revocable streams.
   - [x] Wire real listener and sandbox-private runsc UDS forwarding, preserving network=none confinement.
   - [x] Implement body-bound HMAC RPC and authoritative durable runtime/allocation resolution on issue and watch.
+  - [x] Mount RPC in selected-node API composition and reject allocations with pending creation, revocation or removal.
 - [ ] Round 2: fix review findings 2-7 with persisted controller export recovery and bounded heartbeat leadership.
   - [x] Capture ticket clock once; bind signed export to physical UID, attempt, source and command; restrict production agent copy to its type contract.
 - [ ] Round 2: hermetic real-agent/RPC E2E, archive SHA256SUMS, exact-head green CI and report.
