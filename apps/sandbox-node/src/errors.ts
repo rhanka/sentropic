@@ -1,6 +1,7 @@
 import type { ExecutionNodeErrorCode } from './contract.js';
 
 export const EXECUTION_NODE_HTTP_STATUS: Record<ExecutionNodeErrorCode, number> = {
+  ports_disabled: 409,
   sandbox_not_quiesced: 409,
   cgroup_tenant_mismatch: 500,
   custody_revoked: 403,

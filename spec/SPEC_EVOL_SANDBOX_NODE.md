@@ -52,7 +52,7 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 - Internal W3 behavior: claim starts a new frame without restarting vite; `attach`/`applyRevision` apply at L4 onto `/workspace` (gVisor inotify); `put`/`dependencies/install` returns `410 deprecated_on_overlay_node` on the VM.
 - Startup inventories tenant scopes, preserved runsc state, sandbox directories and mounts before creating admission counters/listening. Survivors or an inventory error block startup until operator reconciliation; complete adoption remains S1-A1b. Heartbeats cannot bypass the fence.
 - Successful exit before the first runsc `running` observation still delivers runtimeId/onExit; confirmed cgroup quiescence is required before export. At quiescence, execution timeout is cancelled while reservations/global build slot stay held. Retention expires from confirmed stop (requested retentionTtlMs=0..300000, default 300000; natural success=300000); exports do not extend it. Runtime destruction precedes capacity release.
-- Box network: `--network=none` plus a Unix socket (rule B1).
+- Box network: PROPOSED AMD-28, pending k8s co-signature: `network: ports` alone uses `--network=sandbox` in a private loopback-only netns; `--network=none` otherwise. Ports default disabled (`EXECUTION_NODE_PORTS_ENABLED=false`, contractual 409) until co-signature and real-host qualification. Unknown network values are refused; no host network or host UDS access.
 
 ## 6. Endpoints (frozen surface)
 

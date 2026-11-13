@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { validateDiskQuota } from './disk-quota.js';
+import { requireNetworkPolicy } from './network-policy.js';
 import type {
   ExecutionNodeClaimSpec,
   ExecutionNodeDevScope,
@@ -232,6 +233,7 @@ export class ExecutionNodeDaemon {
     compatibility?: ExecutionNodeClaimSpec['compatibility'];
   }): Promise<SandboxRecord> {
     input = structuredClone(input);
+    requireNetworkPolicy(input.spec.network);
     validateDevScope(input.spec.devScope);
     validateDiskQuota(input.spec.quotaMiB, input.spec.quotaInodes);
     if (input.spec.tenantId !== input.ownership.tenantId) {
