@@ -23,8 +23,8 @@
 - [x] Exceptions: none.
 
 ## Feedback Loop
-- [ ] C1-AGENT: agent owner must implement `/v1/ports/:port/*` and signed custody verification; absent from service.ts at the baseline. Acceptance: contract integration tests with HTTP/WS expiry and revocation; no live qualification claimed here.
-- [ ] C1-ISSUER: S1-B0a must fulfil the narrow issuer/route-resolution interface; startup must fail closed without it.
+- [ ] C1-AGENT: S1-B0a/PR #1022 owns real agent handlers, API authority and their integrated E2E; operator/browser qualification remains external to this lane.
+- [x] C1-ISSUER: published B0a Custody RPC is consumed by the real authenticated client; standalone execution-node composition refuses missing RPC configuration.
 - [x] Track single-writer: conductor imports this mergeable BRANCH.md; this concurrent lane does not append `.track`.
 
 ## AI Flaky tests
@@ -37,12 +37,16 @@
 - [x] Hermetic contract qualification only; no production or browser UAT claim.
 
 ## Plan / Todo (lot-based)
-- [ ] Round 2: compact EdDSA fixture, real agent custody guard, authenticated RPC client and replica-wide watch; exact-head CI.
+- [x] Round 2: compact EdDSA fixture, faithful agent custody guard, authenticated RPC client and replica-wide watch.
   - [x] Compact six-claim EdDSA JWS and real CustodyGuard WAL/stream lifecycle replace the two-segment fake and watcher-only revocation.
   - [x] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
   - [x] Published B0a Custody RPC contract consumed; standalone composition creates the authenticated issuer in execution-node mode.
   - [x] Round 2 review P1: mirror the unchanged agent guard in test-only content sources because the CI image omits sandbox-node; no Dockerfile/API scope expansion.
   - [x] Round 2 review P2: validate RPC lease primitive types before use and dispose on all transport validation exceptions; malformed date/token/UID regressions stop polling.
+  - [x] Tests: `data-plane-agent.test.ts`, `data-plane-custody.test.ts`, `data-plane-rpc.test.ts`; existing HTTP/WS/live/supervisor/config/CSP/k8s regressions.
+  - [x] Final local result: 221 tests in 16 files, types and lint pass; 221 tests plus types also pass with sandbox-node sources masked absent.
+  - [x] Independent Astra high closure APPROVE at fde2382bc04972dae19d06f4a6b866d67e67b837; this final commit is plan-only.
+  - [ ] Exact-head CI and final report/done marker: conductor closes this source item from the recorded final run to avoid a post-CI self-referential commit.
 - [x] Lot 0: read binding packet/spec/agent code; mechanically check branch and record isolated ports.
 - [x] Lot 1: issuer interface, env validation, mTLS transport and bounded custody lifetime.
 - [x] Lot 2: wire live HTTP/HMR and supervisor relay; retain k8s selection.
