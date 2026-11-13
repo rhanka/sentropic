@@ -49,7 +49,7 @@ No values belong in this document or a lane report.
 - `SANDBOX_S3_IMMO_USERID` (operator metadata, not used in signing)
 
 The conductor supplies the registered public key for instance
-`7c710995-cfa9-4e2f-8cad-61706f83d933` from the operator handoff. No node identity
+`7c710995-cfa9-4e2f-8cad-61706f83d933` from the operator handoff.
 The SPKI DER fingerprint is pinned in configuration validation:
 `74b5cd02287bead58bf4e27948dc7e2150d80ca5a20924d289325b95f6bc4aaa`.
 No node identity

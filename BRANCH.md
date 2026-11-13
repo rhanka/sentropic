@@ -52,6 +52,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [ ] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
   - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
   - [x] Do not initialize the Kubernetes client when execution-node is selected.
+  - [x] Broad rollback regression identified relay validation precedence; retain the original relay refusal before Kubernetes client validation.
   - [x] Concrete node backend implements lifecycle pods/renew/quiesce, persisted identities and deterministic command ids; B1 supplies sealed-base/W3 inputs.
   - [x] Compose the concrete node backend by default; missing B1 hydration inputs refuse allocation without disabling the authenticated route mount.
   - [x] Connect stateless forge/head coalescing and verified retained export into the selected backend; node mode never uses the codeload staging provider.

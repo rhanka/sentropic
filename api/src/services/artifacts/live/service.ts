@@ -68,8 +68,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   }) {
   if (options.sandboxBackend) return createLiveController({ ...options, store: createPostgresLiveStore(options.pool),
     ...options.sandboxBackend });
-  if (!options.kubernetes) throw new Error('kubernetes_backend_unconfigured');
   const channel = createRelaySupervisorChannel({ baseUrl: options.relayUrl });
+  if (!options.kubernetes) throw new Error('kubernetes_backend_unconfigured');
   const store = createPostgresLiveStore(options.pool);
   const { node, maxWaitMs, pollMs, budget } = options.heavy;
   const heavy = createQueuedHeavyGate({ node, maxWaitMs, pollMs, renewMs: budget.entryTtlMs / 3, holds: () => liveHolds(store),
