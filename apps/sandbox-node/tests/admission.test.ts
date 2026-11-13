@@ -7,6 +7,14 @@ const quotas = {
 };
 
 describe('admission fairness', () => {
+  it('should refuse new reservations during drain without blocking release', async () => {
+    const admission = new ExecutionNodeAdmission(quotas);
+    admission.admit('immo', 'live', 'existing'); admission.draining = true;
+    expect(() => admission.admit('sentropic', 'live', 'new')).toThrow();
+    await expect(admission.admitBuild('sentropic')).rejects.toThrow();
+    admission.release('immo', 'live'); expect(admission.reservedMiB('immo')).toBe(0);
+    admission.draining = false; admission.admit('sentropic', 'live', 'new');
+  });
   it('should reserve the build atomically without charging destroyed-scope cache', async () => {
     const admission = new ExecutionNodeAdmission(quotas, { memoryCurrentMiB: id => id === 'sentropic' ? 800 : 0 });
     admission.admit('sentropic', 'live', 'a'); admission.admit('immo', 'live', 'b');
