@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 AMD-13/15 observability: node reports physical budget and bounded swap; lower MemTotal reduces admission capacity; quotas publish heavy queue depths and service limits.
 - [x] RUN 3 B2/M10 follow-up: refuse output directory itself and hardlinked source paths; WAL writes handle partial writes before fsync/ack.
 - [x] RUN 3 integration: signed transport cycle covers write/export/delete and rejects absent/substituted scope; heartbeat loss fences mutations, runtime exits trigger stop, and naturally unloaded scopes can be cleaned safely.
 - [x] RUN 3 B2/B3g: source writes now reach the private overlay through a scoped, symlink-safe host writer; runtime source mounts remain read-only. HTTPS import uses a bounded streaming reader.
