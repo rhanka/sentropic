@@ -3,8 +3,8 @@ import { ExecutionNodeAdapter, nodeJson, type NodeSession } from './execution-no
 import { ExecutionNodeRefusal } from './execution-node-transport';
 import { executionNodeQueue } from './execution-node-queue';
 import { revokeNodeCustody } from './execution-node-custody';
-import { exportRetainedBuild } from './execution-node-lifecycle';
-import type { LiveAttempt, LiveKey, LiveRuntime } from './records';
+import { exportRetainedBuild, type ExportProgress } from './execution-node-lifecycle';
+import { LiveError, type LiveAttempt, type LiveKey, type LiveRuntime } from './records';
 import type { SupervisorSources } from './supervisor';
 import type { LivePorts } from './ports';
 import type { RemoteRows } from './remote-live';
@@ -27,6 +27,9 @@ export interface ExecutionNodeInputs {
   source: SupervisorSources['source'];
 }
 type Stored = { session: NodeSession; key: LiveKey; nodeInstanceId: string; nodeEpoch: number;
+  command?: readonly string[];
+  exporting?: { attemptId: string; intent: Parameters<typeof exportRetainedBuild>[2];
+    progress: ExportProgress; candidate?: { candidateDigest: string } };
   pendingSpec?: ExecutionNodeSandboxSpec; createCommandId: string; removalEpoch?: number;
   revoking?: { epoch: number; commandId: string }; closed?: true; attempted?: true };
 const unavailable = (): never => { throw new ExecutionNodeRefusal('node_base_hydration_unconfigured'); };
@@ -93,7 +96,8 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
             || prepared.session.ownership.principalId !== runtime.ownerId
             || prepared.session.ownership.generation !== runtime.generation
             || prepared.session.ownership.sessionId !== runtime.sessionId) throw new ExecutionNodeRefusal('invalid_node_session');
-          value = { key, session: prepared.session, pendingSpec: prepared.spec, createCommandId: command(runtime, 'create'),
+          value = { key, session: prepared.session, command: prepared.spec.command,
+            pendingSpec: prepared.spec, createCommandId: command(runtime, 'create'),
             nodeInstanceId: node.config.nodeInstanceId, nodeEpoch: node.config.nodeEpoch };
           const next = value;
           await rows.update<Stored, void>(row(runtime), current => {
@@ -147,10 +151,34 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       async live(runtime) { await start(runtime); return inputs?.worker.live(runtime) ?? unavailable(); },
       async build(runtime, attempt) {
         if (!inputs) return unavailable();
-        await start(runtime); await inputs.executeBuild(runtime, attempt);
-        const { session } = await stored(runtime);
-        const exported = await exportRetainedBuild(node, session, await inputs.exportIntent(runtime, attempt), inputs.exportOptions);
-        return inputs.acceptExport(runtime, attempt, exported);
+        let value = await stored(runtime);
+        if (!value.exporting) {
+          await start(runtime); await inputs.executeBuild(runtime, attempt);
+          const intent = await inputs.exportIntent(runtime, attempt);
+          if (!value.command) throw new ExecutionNodeRefusal('invalid_export_intent');
+          value = { ...value, exporting: { attemptId: attempt.id, intent: { ...intent, command: value.command }, progress: {} } };
+          const next = value; await rows.update<Stored, void>(row(runtime), () => ({ next, result: undefined }));
+        }
+        const exporting = value.exporting!;
+        if (exporting.attemptId !== attempt.id) throw new ExecutionNodeRefusal('invalid_export_intent');
+        if (exporting.candidate) return exporting.candidate;
+        try {
+          const exported = await exportRetainedBuild(node, value.session, exporting.intent, inputs.exportOptions,
+            exporting.progress, async progress => {
+              await rows.update<Stored, void>(row(runtime), current => {
+                if (!current?.exporting || current.exporting.attemptId !== attempt.id) throw new ExecutionNodeRefusal('invalid_export_intent');
+                return { next: { ...current, exporting: { ...current.exporting, progress } }, result: undefined };
+              });
+            });
+          const candidate = await inputs.acceptExport(runtime, attempt, exported);
+          await rows.update<Stored, void>(row(runtime), current => ({
+            next: { ...current!, exporting: { ...current!.exporting!, candidate } }, result: undefined }));
+          return candidate;
+        } catch { throw new LiveError('builder_unavailable', 'node_export_pending'); }
+      },
+      async pendingBuild(runtime) {
+        const value = await rows.read<Stored>(row(runtime));
+        return !!value?.exporting && !value.closed && value.exporting.attemptId === runtime.attempt?.id;
       },
       verify: (runtime, attempt) => inputs?.worker.verify(runtime, attempt) ?? unavailable(),
       async renew(runtime) { await node.mutate((await stored(runtime)).session, 'renew', `${command(runtime, 'renew')}:${runtime.rowVersion}`); },
