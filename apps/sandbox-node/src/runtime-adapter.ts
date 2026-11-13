@@ -111,7 +111,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
   private readonly rootArg = '--root=/run/execution-node/runsc';
-  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean; exited?: boolean }>();
+  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean; exited?: boolean; recovered?: boolean }>();
 
   constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle },
     private readonly diagnostic?: RuntimeDiagnostic) {
@@ -121,22 +121,27 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   /** Recover only parent-retained launches after thread death; never launch again. */
   recoverSandbox(options: RunSandboxOptions): void {
     const path = dirname(options.overlayUpper);
+    this.scopes.set(`runsc-${options.tenantId}-${options.sandboxUid}`, {
+      scope: `builder-sbx-${options.sandboxUid}.scope`, tenantId: options.tenantId, uid: options.sandboxUid,
+      bundle: { path, mounted: [], workspace: join(path, 'workspace'), output: join(path, 'writable/output') }, stopped: false, recovered: true,
+    });
+  }
+
+  private recoverBundle(entry: { uid: string; bundle: Bundle }): void {
+    const path = entry.bundle.path;
     // A helper belongs to the agent cgroup, so scope termination alone misses it.
     for (const pid of readdirSync('/proc').filter(name => /^\d+$/.test(name))) {
       try {
         const argv = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0');
-        if (argv.includes(this.rootArg) && argv.includes('port-forward') && argv.includes(`sandbox-${options.sandboxUid}`)
-          && argv.some(arg => arg.startsWith(`--stream=/run/execution-node/ports/${options.sandboxUid}/`))) process.kill(Number(pid), 'SIGKILL');
+        if (argv.includes(this.rootArg) && argv.includes('port-forward') && argv.includes(`sandbox-${entry.uid}`)
+          && argv.some(arg => arg.startsWith(`--stream=/run/execution-node/ports/${entry.uid}/`))) process.kill(Number(pid), 'SIGKILL');
       } catch (error) { if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
     }
     const mounted = readFileSync('/proc/self/mountinfo', 'utf8').trim().split('\n')
       .map(line => line.split(' ')[4]?.replace(/\\([0-7]{3})/g, (_, octal) => String.fromCharCode(parseInt(octal, 8))))
       .filter((target): target is string => !!target && target.startsWith(`${path}/`))
       .sort((a, b) => a.split('/').length - b.split('/').length);
-    this.scopes.set(`runsc-${options.tenantId}-${options.sandboxUid}`, {
-      scope: `builder-sbx-${options.sandboxUid}.scope`, tenantId: options.tenantId, uid: options.sandboxUid,
-      bundle: { path, mounted, workspace: join(path, 'workspace'), output: join(path, 'writable/output') }, stopped: false,
-    });
+    entry.bundle.mounted = mounted;
   }
 
   hasRunsc(): boolean {
@@ -308,10 +313,12 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     for (const forward of this.forwards.get(runtimeId)?.values() ?? []) forward.stop();
     this.forwards.delete(runtimeId);
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
+    const entry = this.scopes.get(runtimeId)!;
+    // Scope termination precedes every fallible recovery inventory/metadata read.
+    if (entry.recovered) { this.recoverBundle(entry); entry.recovered = false; }
     // cgroup termination and relay closure must work even after binary removal.
     if (!this.hasRunsc()) throw Object.assign(new Error('runsc metadata cleanup unavailable; scope stopped'), { runtimeId });
     this.namespaces.delete(runtimeId); this.portsSandboxes.delete(runtimeId);
-    const entry = this.scopes.get(runtimeId)!;
     const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
     if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000, killSignal: 'SIGKILL' });
     try { execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000, killSignal: 'SIGKILL' }); }
