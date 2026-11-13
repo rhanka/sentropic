@@ -68,6 +68,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Policy tests cover bounded alternation, fresh head coalescing, lazy rollback, BHS prefixes and heartbeat leadership.
   - [x] Add regressions for natural build exit, retry after failed S3 upload, invalid ticket signatures, both tenants and failed lock acquisition.
   - [x] Extend artifacts-live/product-builder.test.ts to assert configured-node composition does not initialize Kubernetes or query DB at boot.
+  - [x] Concrete backend tests cover persisted physical identity, real agent lifecycle, tenant-bound provisioning and connected observeHead coalescing.
 - [ ] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
   - [x] 17 hermetic tests pass; full API typecheck and scoped lint pass with workspace declarations built in an ephemeral container.
   - [x] Document preprod Secret names, heartbeat leadership, S1-C1 issuer and explicit S1-B1/agent handoffs in execution-node.md.
