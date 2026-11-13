@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, chownSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, chownSync, chmodSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { RunSandboxOptions } from './runtime-adapter.js';
 import { assertUnlinkedPath } from './mounts.js';
@@ -29,6 +29,9 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
     const upper = join(volume, 'upper'), work = join(volume, 'work');
     bundle.output = join(volume, 'output');
     mkdir(upper); mkdir(work); mkdir(bundle.workspace); mkdir(bundle.output);
+    // Overlay root permissions come from upper; the sandbox uid must traverse its cwd.
+    // The enclosing host bundle stays 0700 and the OCI workspace bind stays read-only.
+    chmodSync(upper, 0o755);
     mountImage(root.source, rootfs); mountImage(source.source, lower);
     run('mount', ['-t', 'overlay', 'overlay', '-o', `lowerdir=${lower},upperdir=${upper},workdir=${work}`, bundle.workspace]);
     bundle.mounted.push(bundle.workspace);

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, mkdirSync, symlinkSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, symlinkSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -16,6 +16,8 @@ describe('OCI bundle lifecycle', () => {
           { source: '/src.erofs', target: '/bases/source/s', readOnly: true }],
       }, () => {});
       expect(JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')).linux.resources.pids.limit).toBe(limit);
+      expect(statSync(join(bundle.path, 'writable/upper')).mode & 0o777).toBe(0o755);
+      expect(statSync(bundle.path).mode & 0o777).toBe(0o700);
       destroyBundle(bundle, () => {});
     } finally { rmSync(root, { recursive: true, force: true }); }
   });

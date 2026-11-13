@@ -28,6 +28,11 @@ verify-sandbox-node-artifact:
 	for name in agent.env execution-node.service operator-ticket.ed25519.pub.pem qualify-restart-mounts.sh qualify-isolation.sh start.sh; do \
 	  cmp "$$release/$$name" "apps/sandbox-node/k8s/$$name"; done; \
 	docker run --rm --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
+	  --entrypoint /bin/sh node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e -ec '\
+	  /release/execution-node --self-test; \
+	  if output=$$(/release/execution-node --qualify-isolation 2>&1); then exit 1; fi; \
+	  test "$$output" = "FAIL isolation qualification"'; \
+	docker run --rm --user=65534:65534 --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
 	  --entrypoint /release/execution-node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e --self-test
 
 check-sandbox-node:

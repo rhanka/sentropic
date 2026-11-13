@@ -25,6 +25,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - [x] No scope exception required.
 
 ## Feedback Loop
+- [x] K1 qualification prerequisite: production bundle upper root was 0700, inherited by overlay cwd, excluding sandbox uid 1000. Set only upper root to 0755; host bundle remains 0700 and workspace bind remains read-only. bundle.test.ts asserts both modes for session/build.
 - [x] K1 scoped verification: 31 tests pass; both TypeScript projects and export GC pass on ENV=test-sandbox-node-k1.
 - [ ] K1 review limitation: harness/review requires h2a_run MCP and two complementary reviewer hosts; no matching tool is exposed. No peer consensus claimed; not a VM isolation acceptance.
 - [x] RUN 8 EX10 test synchronization: CI 43402013380 shard 6 reached a ready image but timed out awaiting the obsolete history response event. Exact CI images pass locally (2 scoped tests, then 12 concurrent traced executions). Synchronize on the held route's completed delivery with a 2s assertion instead of an unbounded browser response wait; preserve delayed hydration, attachment persistence and send assertions. Application code unchanged; rollback: revert the one EX10 test hunk.

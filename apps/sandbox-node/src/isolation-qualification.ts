@@ -14,10 +14,14 @@ export async function qualifyIsolation(): Promise<void> {
   const run = (file: string, args: string[]) => execFileSync(file, args, { encoding: 'utf8', timeout: 10000 }).trim();
   let failed = false;
   const report = (name: string, ok: boolean) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if (!ok) failed = true; };
+  let interrupted = false;
+  const interrupt = () => { interrupted = true; report('qualification interrupted', false); };
+  process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const adapter = new RunscRuntimeAdapter();
   const boxes: Array<{ tenant: string; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string }> = [];
   try {
     for (const tenant of ['sentropic', 'immo']) {
+      assert.ok(!interrupted, 'qualification interrupted');
       // Require the installed tenant loop mounts; never create or modify them.
       const device = run('findmnt', ['--noheadings', '--raw', '--output=SOURCE', '--mountpoint', join(root, tenant)]);
       assert.match(device, /^\/dev\/loop[0-9]+$/);
@@ -42,13 +46,14 @@ export async function qualifyIsolation(): Promise<void> {
       report(`${tenant} real runsc systrap started`, true);
     }
     for (const box of boxes) {
+      assert.ok(!interrupted, 'qualification interrupted');
       const other = boxes.find(candidate => candidate.tenant !== box.tenant)!;
       const paths = [{ path: other.path, directory: true }, { path: join(root, other.tenant, 'bases'), directory: true },
         { path: other.loop, directory: false }, { path: join(root, other.tenant), directory: true },
         ...['/var/lib/builder', '/etc/execution-node/keys', '/run/execution-node'].map(path => ({ path, directory: true }))];
       const result = run('runsc', ['--root=/run/execution-node/runsc', 'exec', `sandbox-${box.uid}`,
         '/usr/local/bin/node', '-e', isolationProbe(paths)]);
-      requireIsolationResults(result, (name, ok) => report(`${box.tenant} ${name}`, ok));
+      requireIsolationResults(result, (name, ok) => report(`${box.tenant} ${name}`, ok), paths.length * 2 + 9);
       const scope = `builder-sbx-${box.uid}.scope`;
       for (const [property, expected] of Object.entries({ Slice: `builder-tenant-${box.tenant}.slice`,
         MemoryHigh: String(704 * 1048576), MemoryLow: String(704 * 1048576), CPUWeight: '200', TasksMax: '512', OOMPolicy: 'kill' })) {
@@ -76,6 +81,7 @@ export async function qualifyIsolation(): Promise<void> {
         report(`${box.tenant} test bases removed`, !existsSync(box.base));
       } catch { report(`${box.tenant} cleanup`, false); }
     }
+    process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
   }
   if (failed) throw new Error('isolation qualification failed');
 }
