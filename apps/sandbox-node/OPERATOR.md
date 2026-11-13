@@ -312,3 +312,13 @@ curl --fail-with-body --tlsv1.3 --cacert ca.crt --cert operator.crt --key operat
   -X POST -H "X-Operator-Ticket: $TICKET" "$AGENT_URL/v1/node/drain"
 unset TICKET
 ```
+# Isolation qualification exclusion
+
+`--qualify-isolation` requires `execution-node.service` to be stopped (systemd
+ActiveState=inactive), an empty sandbox/scope/runsc inventory and the exclusive
+`/run/lock/execution-node.lock` shared with the agent for their entire lifetimes.
+Concurrent service startup fails closed. The isolated-qualification marker is
+consumed once under the lock after inventory validation; recreate it explicitly
+for each run. The archive ships `qualification.erofs`, covered by SHA256SUMS;
+no `mkfs.erofs` or erofs-utils installation is needed on the VM.
+
