@@ -42,6 +42,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 6 operator/spec: document fail-closed restart inventory and k8s reconciliation, successful early termination, separate execution/retention deadlines and retained build-slot ownership. Existing real-host runsc/EROFS/EDQUOT/restart gate stays with k8s/S1-K1.
 - [x] RUN 6 restart blocker: six failing-first regressions reproduce fresh listening over two sessions plus one build. Startup now inventories scopes, preserved runsc state, sandbox directories and live mounts before epoch/counters/listen; any survivor or inventory error refuses startup. Full adoption remains S1-A1b; explicit operator reconciliation is required before restart.
 - [x] RUN 6 retention: stop and natural-success regressions failed because the 60s service timer destroyed retained output. Quiescence cancels execution deadline without releasing capacity; independent retention expiry (requested TTL, default 300s) destroys before releasing. Export at 70s succeeds; reservation survives until TTL expiry.
 - [x] RUN 6 early exit: real-adapter launcher regression failed on exit 0 before any running poll. Successful termination now returns the runtime id and delivers onExit exactly once; export still requires separate scope-quiescence confirmation. Nonzero launcher failure remains rejected.

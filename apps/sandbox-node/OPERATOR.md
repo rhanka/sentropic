@@ -106,6 +106,29 @@ host with pinned runsc, EROFS, overlayfs, systemd and tenant cgroups. Local
 dispatcher/bundle/filesystem regressions do not prove kernel isolation.
 Removal requires at least 7 days notice (D8).
 
+Restart is fail-closed until full adoption lands in S1-A1b. Before constructing
+fresh reservation counters or listening, the agent inventories all
+`builder-sbx-*.scope` units, `runsc --root=/run/execution-node/runsc list`,
+both tenants' sandbox directories and sandbox mount targets in mountinfo.
+Any survivor or inventory error aborts startup; a heartbeat cannot bypass this.
+k8s must reconcile surviving sessions/builds before restarting: identify their
+scope and runtime IDs, stop and confirm quiescence, delete the runsc state,
+unmount each bundle in reverse mount order, then remove its private directory.
+Preserve any required output before cleanup. Do not delete tenant roots, bases
+or the runsc root to bypass the check. Startup succeeds only after every
+inventory is empty. The shipped mount-visibility B-test uses a separate
+qualification directory; it does not prove adoption or admission recovery.
+
+Execution deadlines (60s artifact-build, 120s prebundle/cold-materialize) stop
+at confirmed quiescence. Retained output keeps its memory reservation and the
+global build slot until DELETE or retention expiry; it cannot be replaced by a
+new build meanwhile. Explicit stop uses `retentionTtlMs` (0..300000, default
+300000); natural successful exit retains `ui/dist` for 300000ms. Retention is
+measured from confirmed stop, and successful export does not extend it.
+Cleanup confirms destruction before releasing capacity; an error keeps it
+reserved. A successful launcher exit before the first `running` poll follows
+the same confirmed-stop/retained-output path, rather than becoming a failure.
+
 The host supplies devScope per session: `{kind,writable[],refused[],source:{repo,path,commit}}`.
 The agent contains no tenant-specific allowlist. Every session mutation repeats
 this exact policy; source writes go through `/write`, while sandbox processes
