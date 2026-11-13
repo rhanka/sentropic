@@ -60,6 +60,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Persist create intent before dispatch and replay it to reconcile uncertain creation; missing allocation rows are safe to remove. Replace stopped physical sandboxes on clean.
   - [x] Use explicit persisted closed tombstones (Postgres undefined means no write), and close definitive 4xx creation refusals; fake rows now match the real store semantics.
   - [x] Persist the attempted-dispatch boundary atomically before I/O; a later 4xx cannot discard an allocation with an earlier uncertain outcome.
+  - [x] Preserve the narrowed immutable pending spec across the persisted dispatch-boundary write.
   - [x] Persist revocation intent before the remote mutation; reconcile only that exact custody epoch and preserve stable removal command ids after lost responses.
   - [x] Refuse provisioning whose tenant/principal/generation/session does not match authenticated runtime inputs.
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
