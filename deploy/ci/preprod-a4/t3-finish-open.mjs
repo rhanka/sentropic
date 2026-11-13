@@ -191,7 +191,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const externalProbes = config.externalProbes ?? fromEndpoints.externalProbes;
   try {
     const done = await finishOpen({ call, probe: fetch, state,
-      save: next => saveState(stateDir, next), images: config.images,
+      save: dryRun ? () => {} : next => saveState(stateDir, next), images: config.images,
       probes, externalProbes, deadlineMs,
       dryRun, print: console.log });
     console.log(`finish_open_ok substate=${done.substate}`);
