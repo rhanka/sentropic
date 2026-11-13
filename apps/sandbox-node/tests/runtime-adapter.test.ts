@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { spawn, execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { privateNetworkScript } from '../src/private-network.js';
 import { FakeRuntimeAdapter, RunscRuntimeAdapter, createExecutionNode, ExecutionNodeDaemon } from '../src/index.js';
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
@@ -32,7 +33,7 @@ describe('runtime adapters', () => {
       const offset = args.indexOf('unshare');
       expect(offset).toBeGreaterThan(0);
       expect(args.slice(offset, offset + 9)).toEqual(['unshare', '--net', '--', 'sh', '-ec',
-        'ip link set lo up; exec "$@"', 'sandbox-network', 'runsc', '--root=/run/execution-node/runsc']);
+        privateNetworkScript, 'sandbox-network', 'runsc', '--root=/run/execution-node/runsc']);
       expect(args).toContain('--network=sandbox');
     } finally { vi.restoreAllMocks(); }
   });

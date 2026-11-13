@@ -36,7 +36,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Round 2a: explicit network refusal and disabled-by-default ports kill switch (409), including adapter enforcement.
-- [ ] Round 2b: verify private namespace, hardening prerequisites and receipt digests.
+- [x] Round 2b: verify private namespace, hardening prerequisites and receipt digests; extra interface and IPv4/IPv6 route refusals tested.
 - [ ] Round 2c: both network modes, two tenants, network witnesses and crash reconciliation qualification.
 - [ ] Round 2d: tests, archive rebuild/verification, exact-head green CI and receipt.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
