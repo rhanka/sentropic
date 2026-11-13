@@ -21,24 +21,24 @@ export interface TenantBase {
   readonly identityDigest: string;
 }
 
-export function basePath(base: TenantBase): string {
-  return `${tenantRoot(base.tenantId)}/bases/${base.kind}/${base.identityDigest}.erofs`;
+export function basePath(base: TenantBase, root = NODE_ROOT): string {
+  return `${root}/tenants/${base.tenantId}/bases/${base.kind}/${base.identityDigest}.erofs`;
 }
 
-export function sandboxPaths(tenantId: ExecutionNodeTenantId, uid: string): {
+export function sandboxPaths(tenantId: ExecutionNodeTenantId, uid: string, root = NODE_ROOT): {
   upper: string; work: string; retained: string;
 } {
-  const dir = `${tenantRoot(tenantId)}/sandboxes/${uid}`;
+  const dir = `${root}/tenants/${tenantId}/sandboxes/${uid}`;
   return { upper: `${dir}/upper`, work: `${dir}/work`, retained: `${dir}/retained` };
 }
 
 /** Per-tenant base registry: a miss returns undefined, never a foreign object. */
 export class TenantBaseRegistry {
   private readonly bases = new Map<string, TenantBase>();
-  constructor(private readonly sharedRootfs?: { path: string; digest: string }) {}
+  constructor(private readonly sharedRootfs?: { path: string; digest: string }, private readonly root = NODE_ROOT) {}
 
   path(base: TenantBase): string {
-    return base.kind === 'rootfs' && this.sharedRootfs ? this.sharedRootfs.path : basePath(base);
+    return base.kind === 'rootfs' && this.sharedRootfs ? this.sharedRootfs.path : basePath(base, this.root);
   }
 
   register(base: TenantBase): void {
