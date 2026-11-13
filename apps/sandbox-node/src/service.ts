@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createAgentServer, requestScope, sendJobAlertHeartbeat } from './transport.js';
-import { EXECUTION_NODE_CONTRACT_VERSION, EXECUTION_NODE_TENANT_SLICE_DEFAULTS } from './contract.js';
+import { EXECUTION_NODE_CONTRACT_VERSION } from './contract.js';
 import { CustodyGuard } from './custody.js';
 import { ExecutionNodeError } from './errors.js';
 import { createExecutionNode } from './index.js';
