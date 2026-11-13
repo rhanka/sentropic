@@ -40,7 +40,7 @@ export function decodeGeminiDecisionsResponse(candidate: unknown, request: Decis
   descriptor: DecisionEvaluatorDescriptor, requestId?: unknown): DecisionAdapterResult {
   const snapshot = snapshotBoundedJson(candidate);
   const body = snapshot.ok && isRecord(snapshot.value) ? snapshot.value : null;
-  const identity = decodeJevResponse({ model: body?.model ?? null, answers: body?.answers, usage: {} },
+  const identity = decodeJevResponse({ model: body?.model ?? null, answers: body?.answers ?? null, usage: {} },
     request, descriptor, requestId);
   const evidence = { usage: identity.usage, servedEvaluator: identity.servedEvaluator,
     servedModelId: identity.servedModelId,
@@ -61,7 +61,7 @@ export function decodeGeminiDecisionsResponse(candidate: unknown, request: Decis
     modalities.add(entry.modality); total += entry.tokens;
   }
   if (total !== usage.total_input_tokens) return invalid('USAGE_INVALID');
-  const normalized = { model: body.model ?? null, answers: body.answers,
+  const normalized = { model: body.model ?? null, answers: body.answers ?? null,
     usage: { input_tokens: usage.total_input_tokens, output_tokens: 0 } };
   evidence.usage = decodeJevResponse(normalized, request, descriptor, requestId).usage;
   if (!hasOnlyKeys(body, ['model', 'answers', 'usage'])) return invalid('VERDICT_INVALID');

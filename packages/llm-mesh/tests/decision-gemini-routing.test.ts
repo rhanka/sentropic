@@ -96,10 +96,11 @@ describe('Gemini Decisions host integration', () => {
     expect(f.budget.settle).not.toHaveBeenCalled(); expect(f.budget.release).not.toHaveBeenCalled();
   });
   it.each([
-    {}, { verdict: { type: 'noul', noul: 0.25, confidence: 0.1 } },
+    undefined, {}, { verdict: { type: 'noul', noul: 0.25, confidence: 0.1 } },
     { verdict: { type: 'choice', probabilities: { A: 0.25, B: 0.75 }, confidence: 0.1 } },
   ])('should retain valid billing evidence when answers are invalid: %j', async (answers) => {
-    const f = setup(); f.body.answers = answers;
+    const f = setup();
+    if (answers === undefined) delete f.body.answers; else f.body.answers = answers;
     expect(decodeGeminiDecisionsResponse(f.body, f.request, f.descriptor, 'request-123'))
       .toMatchObject({ ok: false, error: { code: 'VERDICT_INVALID' },
         usage: { tokens: { input: { value: 1000 }, output: { value: 0 } } },
