@@ -11,6 +11,8 @@ describe('pinned VM release startup', () => {
   });
   it('should preserve host-visible mounts and require both tenant filesystems', () => {
     const unit = readFileSync(new URL('../k8s/execution-node.service', import.meta.url), 'utf8');
+    const guide = readFileSync(new URL('../OPERATOR.md', import.meta.url), 'utf8');
+    expect(guide).toContain('```systemd\n' + unit + '```');
     for (const directive of ['ProtectSystem', 'ProtectHome', 'PrivateTmp', 'ReadWritePaths', 'MountFlags', 'ProtectControlGroups', 'PrivateDevices', 'Delegate']) {
       expect(unit).not.toMatch(new RegExp(`^${directive}=`, 'm'));
     }
