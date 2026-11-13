@@ -172,8 +172,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       lockSha256: createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'), installedPackages, applicationReceipts }, null, 2));
   } else if (command === 'run') {
     if (!/^(test|e2e)-/.test(process.env.COMPOSE_PROJECT_NAME ?? '')) throw new Error('Live qualification requires an isolated Make environment');
-    const invoke = args => spawnSync('make', [...args, 'API_PORT=9405', 'UI_PORT=5605',
-      'MAILDEV_UI_PORT=1505', `ENV=${process.env.COMPOSE_PROJECT_NAME}`], { stdio: 'inherit' }).status ?? 1;
+    // Seeded S2S audiences and the browser's resource must use the same public
+    // API origin; the container otherwise seeds its internal default port 8787.
+    const oauthOverlay = `${dir}/oauth-compose.json`;
+    writeFileSync(oauthOverlay, JSON.stringify({ services: { api: { environment: {
+      OAUTH_ISSUER_URL: 'http://localhost:9405', OAUTH_SERVICE_RESOURCE_URI: 'http://localhost:9405',
+    } } } }));
+    // Match the exact callback registered for the seeded example OAuth clients.
+    const invoke = args => spawnSync('make', [...args, 'API_PORT=9405', 'UI_PORT=5397',
+      'MAILDEV_UI_PORT=1505', `CI_PROVIDER_OVERLAY=-f docker-compose.ci-provider.yml -f ${oauthOverlay}`,
+      `ENV=${process.env.COMPOSE_PROJECT_NAME}`], { stdio: 'inherit' }).status ?? 1;
     writeFileSync(`${dir}/calls.jsonl`, '');
     chmodSync(`${dir}/calls.jsonl`, 0o666);
     const results = { api: 0, browser: 0, vscode: 0, spans: [] };
@@ -186,7 +194,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       results.api = measured('api-startup', ['up-api-test-ci']);
       if (!results.api) for (const name of ['initiative-generation-async', 'initiative-generation-sync',
         'executive-summary-sync', 'executive-summary-auto', 'company-enrichment-sync', 'chat-tools',
-        'chat-sync', 'documents-tool', 'comment-assistant', 'gw-native-qualification']) {
+        // Native qualification is an operator-only UAT, requiring sourced payload
+        // evidence, two sessions and an armed listener; ordinary CI must not arm it.
+        'chat-sync', 'documents-tool', 'comment-assistant']) {
         if (measured('api', ['test-api-ai', `SCOPE=tests/ai/${name}.test.ts`])) results.api = 1;
       }
       invoke(['down-api-ci']);

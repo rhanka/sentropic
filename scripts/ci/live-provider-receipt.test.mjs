@@ -185,17 +185,23 @@ process.exit(args.includes('test-e2e') && args.includes('E2E_SHARD=' + process.e
       });
       assert.equal(run.status, failedShard ? 1 : 0, run.stderr);
       const commands = readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse);
+      const overlay = `${receiptDir}/oauth-compose.json`;
+      assert.deepEqual(JSON.parse(readFileSync(overlay, 'utf8')), { services: { api: { environment: {
+        OAUTH_ISSUER_URL: 'http://localhost:9405', OAUTH_SERVICE_RESOURCE_URI: 'http://localhost:9405',
+      } } } });
+      assert.ok(commands.every(args => args.includes(`CI_PROVIDER_OVERLAY=-f docker-compose.ci-provider.yml -f ${overlay}`)));
       const browsers = commands.filter(args => args.includes('test-e2e'));
       assert.equal(browsers.length, 6);
       assert.deepEqual(browsers.map(args => args.find(arg => arg.startsWith('E2E_SHARD='))),
         [1, 2, 3, 4, 5, 6].map(id => `E2E_SHARD=${id}`));
       assert.ok(browsers.every(args => args[0] === 'clean' && args[1] === 'test-e2e'));
-      assert.equal(commands.filter(args => args[0] === 'test-api-ai').length, 10);
-      assert.ok(commands.some(args => args.includes('SCOPE=tests/ai/gw-native-qualification.test.ts')));
+      assert.equal(commands.filter(args => args[0] === 'test-api-ai').length, 9);
+      assert.ok(!commands.some(args => args.includes('SCOPE=tests/ai/gw-native-qualification.test.ts')),
+        'operator-only UAT requires local session, listener and sourced payload evidence');
       const vscode = commands.find(args => args.includes('test-e2e-vscode'));
       assert.deepEqual(vscode.slice(0, 2), ['clean', 'test-e2e-vscode']);
       assert.ok(commands.every(args => args.at(-1) === 'ENV=test-live-shards'
-        && ['API_PORT=9405', 'UI_PORT=5605', 'MAILDEV_UI_PORT=1505'].every(port => args.includes(port))));
+        && ['API_PORT=9405', 'UI_PORT=5397', 'MAILDEV_UI_PORT=1505'].every(port => args.includes(port))));
       const results = JSON.parse(readFileSync(`${receiptDir}/results.json`, 'utf8'));
       assert.equal(results.browser, failedShard ? 2 : 0);
       assert.equal(results.vscode, 0);
@@ -203,6 +209,14 @@ process.exit(args.includes('test-e2e') && args.includes('E2E_SHARD=' + process.e
       assert.equal(results.spans.filter(span => span.lane === 'browser' && span.status !== 0).length, failedShard ? 1 : 0);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('should use a seeded exact OAuth callback origin in the workflow and every live browser command', () => {
+  const seed = readFileSync('api/src/services/auth/oauth-client-seed.ts', 'utf8');
+  const workflow = readFileSync('.github/workflows/llm-live-daily.yml', 'utf8');
+  const port = workflow.match(/UI_PORT: '(\d+)'/)[1];
+  assert.ok(seed.includes(`'http://localhost:${port}/auth/oauth/callback'`),
+    `live UI port ${port} must be registered for example-mock-rp`);
 });
 
 test('should bound every GitHub response with an explicit maxBuffer and report the route on overflow', () => {
