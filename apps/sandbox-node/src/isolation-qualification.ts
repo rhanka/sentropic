@@ -12,6 +12,7 @@ import { createQualificationDirectory, qualificationDiskMiB, qualificationInodes
 import { qualificationPrerequisites } from './qualification-prerequisites.js';
 import { hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost, tenantWitnessScript } from './qualification-network.js';
 import { waitForQualificationPort } from './qualification-runtime.js';
+import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
 
 export async function qualifyIsolation(): Promise<void> {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
@@ -26,7 +27,7 @@ export async function qualifyIsolation(): Promise<void> {
   const interrupt = () => { interrupted = true; report('qualification interrupted', false); };
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const adapter = new RunscRuntimeAdapter();
-  const boxes: Array<{ tenant: string; network: 'none' | 'ports'; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string }> = [];
+  const boxes: Array<{ tenant: string; network: 'none' | 'ports'; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string; processes?: ReturnType<typeof qualificationProcesses> }> = [];
   let witnesses: Awaited<ReturnType<typeof hostNetworkWitnesses>> | undefined;
   const previousPorts = process.env.EXECUTION_NODE_PORTS_ENABLED;
   let directory: string | undefined, cleanupFailed = false;
@@ -61,6 +62,8 @@ export async function qualifyIsolation(): Promise<void> {
           ...['source', 'dependencies'].map(kind => ({ source: image, target: `/bases/${kind}/qualification`, readOnly: true }))],
       });
       boxes[boxes.length - 1]!.runtimeId = runtimeId;
+      boxes[boxes.length - 1]!.processes = qualificationProcesses(uid);
+      if (network === 'ports') assert.ok(boxes[boxes.length - 1]!.processes!.namespaces.length, 'private netns missing');
       await waitForQualificationPort(uid, AbortSignal.timeout(5000), () => {});
       for (const directory of [path, base]) {
         const sentinel = join(directory, 'isolation-marker');
@@ -101,6 +104,8 @@ export async function qualifyIsolation(): Promise<void> {
         // A launcher failure still registers a bundle in the real adapter.
         const runtimeId = box.runtimeId ?? `runsc-${box.tenant}-${box.uid}`;
         if (existsSync(box.path)) await adapter.destroySandbox(runtimeId);
+        if (box.processes) assertQualificationProcessesGone(box.processes);
+        report(`${box.tenant} ${box.network} processes and netns gone`, true);
         const mounts = readFileSync('/proc/self/mountinfo', 'utf8');
         const noMounts = !mounts.split('\n').some(line => {
           const target = line.split(' ')[4]; return target === box.path || target?.startsWith(`${box.path}/`);
