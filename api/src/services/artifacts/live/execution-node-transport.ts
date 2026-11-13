@@ -1,0 +1,66 @@
+import { Agent, request } from 'node:https';
+import { createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
+
+export interface NodeReply { status: number; headers: Record<string, string | string[] | undefined>; bytes: Buffer }
+export type NodeTransport = (method: string, path: string, body?: Buffer,
+  headers?: Record<string, string>) => Promise<NodeReply>;
+export interface ExecutionNodeConfig {
+  url: URL; nodeId: string; nodeInstanceId: string; nodeEpoch: number;
+  provenanceKey: KeyObject; ticketKey: KeyObject;
+  tls: { ca: Buffer; cert: Buffer; key: Buffer };
+}
+export class ExecutionNodeRefusal extends Error {
+  constructor(readonly code: string, readonly status = 503, readonly retryAfterMs?: number) { super(code); }
+}
+type Env = Readonly<Record<string, string | undefined>>;
+/** Values never appear in configuration errors. No implicit epoch adoption or TLS bypass. */
+export function executionNodeConfig(env: Env): ExecutionNodeConfig {
+  const required = (name: string) => {
+    if (!env[name]) throw new ExecutionNodeRefusal(`invalid_config:${name}`);
+    return env[name]!;
+  };
+  const parse = <T>(name: string, fn: (value: string) => T): T => {
+    try { return fn(required(name)); } catch { throw new ExecutionNodeRefusal(`invalid_config:${name}`); }
+  };
+  const url = parse('ARTIFACT_EXECUTION_NODE_URL', value => {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.pathname !== '/'
+      || parsed.search || parsed.hash) throw new Error();
+    return parsed;
+  });
+  const ed25519 = (key: KeyObject) => { if (key.asymmetricKeyType !== 'ed25519') throw new Error(); return key; };
+  return { url, nodeId: required('ARTIFACT_EXECUTION_NODE_ID'),
+    nodeInstanceId: required('ARTIFACT_EXECUTION_NODE_INSTANCE_ID'),
+    nodeEpoch: parse('ARTIFACT_EXECUTION_NODE_EPOCH', value => {
+      const epoch = Number(value); if (!Number.isSafeInteger(epoch) || epoch < 1) throw new Error(); return epoch;
+    }),
+    provenanceKey: parse('ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64', value =>
+      ed25519(createPublicKey(Buffer.from(value, 'base64')))),
+    ticketKey: parse('ARTIFACT_EXECUTION_TICKET_ED25519_KEY_B64', value =>
+      ed25519(createPrivateKey(Buffer.from(value, 'base64')))),
+    tls: { ca: Buffer.from(required('SANDBOX_MTLS_CA_CERT_B64'), 'base64'),
+      cert: Buffer.from(required('SANDBOX_MTLS_CONTROL_PLANE_CERT_B64'), 'base64'),
+      key: Buffer.from(required('SANDBOX_MTLS_CONTROL_PLANE_KEY_B64'), 'base64') } };
+}
+
+/** Bounded binary export, no redirects, normal hostname verification, TLS 1.3 + control-plane certificate. */
+export function executionNodeTransport(config: ExecutionNodeConfig): NodeTransport & { close(): void } {
+  const agent = new Agent({ ...config.tls, minVersion: 'TLSv1.3', keepAlive: true, rejectUnauthorized: true });
+  const call: NodeTransport = (method, path, body, headers = {}) => new Promise((resolve, reject) => {
+    if (!path.startsWith('/v1/') || path.includes('://')) { reject(new ExecutionNodeRefusal('invalid_node_path')); return; }
+    const req = request(new URL(path, config.url), { method, agent,
+      headers: { 'content-type': 'application/json', ...headers } }, res => {
+      let length = 0; const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => {
+        length += chunk.length;
+        if (length > 64 * 1024 * 1024) req.destroy(); else chunks.push(chunk);
+      });
+      res.on('error', () => reject(new ExecutionNodeRefusal('node_transport_failure')));
+      res.on('end', () => resolve({ status: res.statusCode ?? 503, headers: res.headers, bytes: Buffer.concat(chunks) }));
+    });
+    req.setTimeout(5000, () => req.destroy());
+    req.on('error', () => reject(new ExecutionNodeRefusal('node_transport_failure')));
+    req.end(body);
+  });
+  return Object.assign(call, { close: () => agent.destroy() });
+}
