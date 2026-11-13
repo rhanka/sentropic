@@ -46,6 +46,7 @@
   - [x] HMR 1008/reconnect and handshake refusal; config and both CSP profiles.
   - [x] Scoped data-plane checks: 15 passing tests; TLS fixture time encoding corrected with a focused regression.
   - [x] Live HTTP and signed supervisor integration tests added.
+  - [x] Issuance timeout/abort/revocation races and invalid token lifetimes covered.
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
   - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.

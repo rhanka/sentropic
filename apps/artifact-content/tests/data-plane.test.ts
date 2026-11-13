@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { request } from 'node:https';
 import { dataPlaneFetch } from '../src/data-plane-http';
 import { fakeDataPlane, subject } from './data-plane-fixture';
+import { dataPlaneFromEnv } from '../src/data-plane';
 
 const open: Awaited<ReturnType<typeof fakeDataPlane>>[] = [];
 const fixture = async () => { const f = await fakeDataPlane(); open.push(f); return f; };
@@ -34,6 +35,18 @@ describe('execution-node data plane', () => {
   });
   it('should obtain a fresh token for each new HTTP hop', async () => {
     const f = await fixture(); await get(f); await get(f); expect(f.issues).toBe(2);
+  });
+  it.each([0, 60_001])('should refuse invalid token lifetime %s before any node call', async ttl => {
+    const f = await fixture(); f.setTtl(ttl);
+    expect((await get(f)).status).toBe(403); expect(f.received).toHaveLength(0); expect(f.watchers).toBe(0);
+  });
+  it.each(['revocation', 'abort'] as const)('should cancel a blocked issuer on %s and unsubscribe', async kind => {
+    const f = await fixture();
+    const transport = dataPlaneFromEnv(f.env, { ...f.issuer, issue: async () => new Promise(() => {}) })!;
+    const controller = new AbortController();
+    const result = transport.prepare(subject, controller.signal);
+    if (kind === 'revocation') f.revoke(); else controller.abort();
+    await expect(result).rejects.toThrow('custody_revoked'); expect(f.watchers).toBe(0);
   });
   it.each(['expiry', 'revocation'] as const)('should cut pending HTTP on %s without releasing partial bytes', async kind => {
     const f = await fixture(); f.setTtl(200);
