@@ -36,7 +36,7 @@ const row = (runtime: LiveRuntime) => JSON.stringify(['execution-node', runtime.
  * persisted runtime rows and deterministic command ids reconcile lost creation responses.
  */
 export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: RemoteRows,
-  inputs?: ExecutionNodeInputs): SandboxBackend {
+  inputs?: ExecutionNodeInputs): SandboxBackend & { custody(runtime: LiveRuntime): Promise<NodeSession> } {
   const queue = executionNodeQueue(); const subjects = new Map<string, NodeSession>();
   const command = (runtime: LiveRuntime, op: string) => `${runtime.sessionId}:${runtime.leaseEpoch}:${runtime.routeEpoch}:${op}`;
   async function stored(runtime: LiveRuntime) {
@@ -172,5 +172,14 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       async hold() {}, async cancel() {}, async status() { return []; },
     },
   };
-  return backend;
+  return Object.assign(backend, { async custody(runtime: LiveRuntime) {
+    const value = await rows.read<Stored>(row(runtime));
+    if (!value || value.closed || value.pendingSpec || value.revoking || value.removalEpoch !== undefined
+      || value.nodeInstanceId !== node.config.nodeInstanceId || value.nodeEpoch !== node.config.nodeEpoch) {
+      throw new ExecutionNodeRefusal('custody_revoked', 403);
+    }
+    const status = await node.status(value.session);
+    if (status?.state !== 'running') throw new ExecutionNodeRefusal('custody_revoked', 403);
+    return value.session;
+  } });
 }
