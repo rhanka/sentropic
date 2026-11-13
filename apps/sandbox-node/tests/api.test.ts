@@ -45,6 +45,10 @@ describe('agent lifecycle transport', () => {
       await expect(call(`${path}/stop`, { commandId: first.commandId, devScope, stop: { retainOutput: true } })).rejects.toMatchObject({ status: 409 });
       expect(writes).toHaveBeenCalledTimes(2);
       await call(`${path}/stop`, { commandId: 'stop', devScope, stop: { retainOutput: true } });
+      // A completed write retry remains successful after the lifecycle advances.
+      await call(`${path}/write`, first);
+      expect(writes).toHaveBeenCalledTimes(2);
+      await expect(call(`${path}/write`, { ...first, commandId: 'new-after-stop' })).rejects.toMatchObject({ code: 'already_claimed' });
       expect((await call(`${path}/export`, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 10000 } })).status).toBe(200);
       const revoked = await call(`${path}/revoke-custody`, { commandId: 'revoke', devScope, minCustodyEpoch: 2, reason: 'owner transfer' });
       expect(revoked.body).toMatchObject({ activeCustodyEpoch: 2 });
