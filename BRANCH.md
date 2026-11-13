@@ -42,6 +42,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 7 signed write replay: Ed25519 transport regression failed with A/B/A. Cache writes by tenant/command plus POST route and body SHA-256; exact signed retry has no new effect, changed content/path or reused stop command returns 409. Scoped API regression passes.
 - [x] RUN 7 collected scope: failing-first real-adapter lifecycle tests reproduced DELETE rejection and retention expiry leaving capacity reserved. Confirm empty/inactive scope after systemctl stop failure before bundle cleanup; exit/collection/export/DELETE or expiry now permits admission. Scoped qualification accepts SCOPE.
 - [x] RUN 6 final artifact: d86295e5f58a1fa45871b819af62fcc85243ce04867a42cb3dae10b2ad7bc0a0 (SEA + shared rootfs + config/unit/operator guide/B-test). Archive digest and all eight file checksums verified; ELF/self-test passes. 86 standalone regressions, both TypeScript builds, shell syntax and export GC pass; scoped lint zero errors. Astra ROUND 3's four concrete findings addressed with failing-first tests; no new peer consensus (required h2a_run MCP unavailable).
 - [x] RUN 6 operator/spec: document fail-closed restart inventory and k8s reconciliation, successful early termination, separate execution/retention deadlines and retained build-slot ownership. Existing real-host runsc/EROFS/EDQUOT/restart gate stays with k8s/S1-K1.
