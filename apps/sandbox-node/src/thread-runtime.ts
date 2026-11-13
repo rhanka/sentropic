@@ -8,18 +8,24 @@ import type { RuntimeDiagnostic } from './qualification-diagnostics.js';
 /** Host commands/mounts run off the event loop that owns revocable TLS streams. */
 export class ThreadRuntimeAdapter implements RuntimeAdapter {
   readonly kind = 'runsc-systrap';
-  private readonly worker: Worker;
+  private worker: Worker;
+  private readonly launches = new Map<string, Omit<RunSandboxOptions, 'onExit'>>();
   private next = 0;
   private readonly pending = new Map<number, { resolve(value: any): void; reject(error: Error): void }>();
   private readonly exits = new Map<string, (code: number | null) => void>();
   healthy = true;
   private dead = false;
-  constructor(binary: string, production = false, diagnostic?: RuntimeDiagnostic) {
-    this.worker = isSea()
-      ? new Worker(getAsset('runtime-worker', 'utf8'), { eval: true, workerData: { binary, production } })
-      : new Worker(new URL('../dist/runtime-worker.js', import.meta.url), { workerData: { binary, production } });
-    this.worker.on('message', message => {
-      if (message.event === 'diagnostic') { diagnostic?.(message.stage, message.detail); return; }
+  constructor(private readonly binary: string, private readonly production = false, private readonly diagnostic?: RuntimeDiagnostic) {
+    this.worker = this.startWorker();
+  }
+  private startWorker(recovery = false): Worker {
+    const { binary, production } = this;
+    const workerData = { binary, production, recovery: recovery ? [...this.launches.values()] : [] };
+    const worker = isSea()
+      ? new Worker(getAsset('runtime-worker', 'utf8'), { eval: true, workerData })
+      : new Worker(new URL('../dist/runtime-worker.js', import.meta.url), { workerData });
+    worker.on('message', message => {
+      if (message.event === 'diagnostic') { this.diagnostic?.(message.stage, message.detail); return; }
       if (message.event === 'exit') { this.exits.get(message.uid)?.(message.code); return; }
       const call = this.pending.get(message.id); if (!call) return;
       this.pending.delete(message.id);
@@ -31,16 +37,22 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
       } else call.resolve(message.result);
     });
     const failed = () => {
+      if (worker !== this.worker || this.dead) return;
       this.healthy = false; this.dead = true;
       for (const call of this.pending.values()) call.reject(new Error('runtime worker unavailable'));
       this.pending.clear();
+      // Scope identity survives the failed worker, including an interrupted launch.
+      // Keep admission closed and reservations held; a fresh worker only reconciles.
+      if (!recovery) for (const id of this.launches.keys()) void this.stopSandbox(id).catch(() => {});
     };
-    this.worker.on('error', failed); this.worker.on('exit', failed);
-    this.worker.unref();
+    worker.on('error', () => { /* The exit event follows after thread teardown. */ }); worker.on('exit', failed);
+    worker.unref();
+    return worker;
   }
   hasRunsc() { return this.healthy; }
   private call<T>(method: string, args: unknown[], runtimeId?: string): Promise<T> {
     const cleanup = method === 'stopSandbox' || method === 'destroySandbox';
+    if (this.dead && cleanup) { this.worker = this.startWorker(true); this.dead = false; }
     if (this.dead || (!this.healthy && !cleanup) || this.pending.size >= 8) return Promise.reject(Object.assign(new Error('runtime worker unavailable or busy'), { runtimeId }));
     return new Promise<T>((resolve, reject) => {
       const id = ++this.next;
@@ -56,6 +68,7 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
   }
   async runSandbox(options: RunSandboxOptions) {
     const { onExit, ...serializable } = options;
+    this.launches.set(`runsc-${options.tenantId}-${options.sandboxUid}`, serializable);
     if (onExit) this.exits.set(options.sandboxUid, onExit);
     return this.call<{ runtimeId: string }>('runSandbox', [serializable], `runsc-${options.tenantId}-${options.sandboxUid}`);
   }
@@ -68,7 +81,7 @@ export class ThreadRuntimeAdapter implements RuntimeAdapter {
   async exportOutput(id: string, path: string, max?: number) {
     return Buffer.from(await this.call<Uint8Array>('exportOutput', [id, path, max], id));
   }
-  async destroySandbox(id: string) { await this.call<void>('destroySandbox', [id], id); this.exits.delete(id.split('-').slice(2).join('-')); }
+  async destroySandbox(id: string) { await this.call<void>('destroySandbox', [id], id); this.launches.delete(id); this.exits.delete(id.split('-').slice(2).join('-')); }
   forwardUsage() { return this.call<{ limit: number; inUse: number }>('forwardUsage', []); }
-  async close() { await this.worker.terminate(); }
+  async close() { this.dead = true; this.healthy = false; await this.worker.terminate(); }
 }
