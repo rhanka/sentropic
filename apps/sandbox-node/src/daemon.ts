@@ -370,6 +370,9 @@ export class ExecutionNodeDaemon {
         uid: input.uid,
         gid: input.gid,
       }).catch(error => {
+        if (error instanceof ExecutionNodeError && error.code === 'network_isolation_violation') {
+          this.audit.record('sandbox.network_isolation_violation', tenantId, id);
+        }
         sandbox.runtimeId = (error as { runtimeId?: string }).runtimeId;
         sandbox.state = 'failed'; throw error;
       });

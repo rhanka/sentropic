@@ -8,7 +8,10 @@ import { parseRunscList } from './runsc-inventory.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
-import { rmSync } from 'node:fs';
+import { rmSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { auditNetworkSpec, auditStartedNetwork } from './network-audit.js';
+import { ExecutionNodeError } from './errors.js';
 import { requireNetworkPolicy } from './network-policy.js';
 import { privateNetworkScript } from './private-network.js';
 import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-diagnostics.js';
@@ -101,6 +104,8 @@ export class FakeRuntimeAdapter implements RuntimeAdapter {
  */
 export class RunscRuntimeAdapter implements RuntimeAdapter {
   private readonly forwards = new Map<string, Map<number, ReturnType<typeof forwardSandboxPort>>>();
+  private readonly namespaces = new Map<string, string>();
+  private readonly portsSandboxes = new Set<string>();
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
   private readonly rootArg = '--root=/run/execution-node/runsc';
@@ -126,9 +131,10 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async portTarget(runtimeId: string, port: number): Promise<{ socketPath: string }> {
+    requireNetworkPolicy('ports', 'live', this.binary);
     this.assertRunning(runtimeId);
     const entry = this.scopes.get(runtimeId);
-    if (!entry || entry.stopped || port !== 5173) throw new Error('sandbox_port_unavailable');
+    if (!entry || entry.stopped || port !== 5173 || !this.portsSandboxes.has(runtimeId)) throw new Error('sandbox_port_unavailable');
     const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
     let forward = ports.get(port);
     if (!forward) {
@@ -148,7 +154,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
 
   runscArgs(options: RunSandboxOptions): string[] {
     requireNetworkPolicy(options.network, options.profile, this.binary);
-    const args = [this.rootArg, `--network=${options.network === 'ports' ? 'sandbox' : 'none'}`, '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
+    const args = [this.rootArg, `--network=${options.network === 'ports' ? 'sandbox' : 'none'}`, '--platform=systrap',
+      '--host-uds=none', '--host-fifo=none', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
@@ -160,10 +167,16 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
     this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle, stopped: false });
+    const args = this.runscArgs(options);
+    try { auditNetworkSpec(args, JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')), options.network === 'ports'); }
+    catch {
+      this.bundles.destroy(bundle); this.scopes.delete(runtimeId);
+      throw new ExecutionNodeError('network_isolation_violation');
+    }
     // NetworkSandbox is required by gVisor's forwarding API. Start in a fresh,
     // loopback-only namespace; never import the host's interfaces or routes.
     const command = options.network === 'ports'
-      ? ['unshare', '--net', '--', 'sh', '-ec', privateNetworkScript, 'sandbox-network', this.binary]
+      ? ['unshare', '--net', '--', 'sh', '-ec', privateNetworkScript, 'sandbox-network', join(bundle.path, 'netns.inode'), this.binary]
       : [this.binary];
     // systemd-run uses PID 1's StartTransientUnit D-Bus method; Slice is explicit.
     const child = spawn('systemd-run', ['--scope', `--unit=${scope}`,
@@ -172,7 +185,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       `--property=MemoryHigh=${options.quotaMiB > 704 ? '1408M' : '704M'}`,
       `--property=MemoryLow=${options.quotaMiB > 704 ? '0' : '704M'}`,
       `--property=CPUWeight=${options.quotaMiB > 704 ? 100 : 200}`,
-      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, ...command, ...this.runscArgs(options)],
+      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, ...command, ...args],
     { stdio: this.diagnostic ? ['ignore', 'pipe', 'pipe'] : 'ignore' });
     boundedRuntimeOutput(child.stdout, 'fixture stdout', this.diagnostic);
     boundedRuntimeOutput(child.stderr, 'fixture/runsc stderr', this.diagnostic);
@@ -188,19 +201,33 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
         const entry = this.scopes.get(runtimeId);
         if (entry) entry.exited = true;
         if (code === 0) resolve();
-        else reject(new Error(`sandbox launcher exited: ${code}`));
+        else reject(code === 78 ? new ExecutionNodeError('network_isolation_violation') : new Error(`sandbox launcher exited: ${code}`));
         if (ready || code === 0) options.onExit?.(code);
       });
       const poll = () => {
         try {
           const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
-          if (state.status === 'running') { ready = true; resolve(); return; }
+          if (state.status === 'running') {
+            if (options.network === 'ports') {
+              try {
+                requireNetworkPolicy('ports', options.profile, this.binary);
+                this.namespaces.set(runtimeId, auditStartedNetwork(state.pid, join(bundle.path, 'netns.inode'), this.namespaces.values()));
+                this.portsSandboxes.add(runtimeId);
+              } catch (error) {
+                fail(error instanceof ExecutionNodeError ? error : new ExecutionNodeError('network_isolation_violation')); return;
+              }
+            }
+            ready = true; resolve(); return;
+          }
         } catch { /* The runtime may not have created its state yet. */ }
         if (Date.now() >= deadline) { fail(new Error('sandbox runtime readiness timeout')); return; }
         timer = setTimeout(poll, 25);
       };
       child.once('spawn', () => { timer = setTimeout(poll, 0); });
     }); } catch (error) {
+      if (error instanceof ExecutionNodeError && ['network_isolation_violation', 'ports_disabled'].includes(error.code)) {
+        await this.destroySandbox(runtimeId);
+      }
       try { throwFilesystemError(error); }
       catch (mapped) { throw Object.assign(mapped as Error, { runtimeId }); }
     }
@@ -240,6 +267,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     for (const forward of this.forwards.get(runtimeId)?.values() ?? []) forward.stop();
     this.forwards.delete(runtimeId);
+    this.namespaces.delete(runtimeId); this.portsSandboxes.delete(runtimeId);
     const entry = this.scopes.get(runtimeId)!;
     const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
     if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000, killSignal: 'SIGKILL' });
