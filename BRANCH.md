@@ -63,6 +63,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [ ] Round 2: hermetic real-agent/RPC E2E, archive SHA256SUMS, exact-head green CI and report.
   - [x] Extend hermetic fixture with actual agent data-plane handlers and independent mTLS identities.
   - [x] Add real HTTP custody RPC harness using production mount/authenticator and durable allocation authority.
+  - [x] E2E assertions cover usable three-segment token, HTTP/WS revocation, expiry and unauthorized reissue refusal.
 - [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
 - [x] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
   - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
