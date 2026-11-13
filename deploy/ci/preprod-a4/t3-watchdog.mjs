@@ -42,7 +42,8 @@ export async function poll(ctx) {
 async function pollInner(ctx) {
   const me = `watchdog-pid-${process.pid}`;
   const state = loadState(ctx.stateDir);
-  if (!state || state.step === 'DONE' || state.watchdogDone) return 'done';
+  if (!state) return 'waiting';
+  if (state.step === 'DONE' || state.watchdogDone) return 'done';
   const now = monoMs();
   const stale = now - (state.heartbeatMonoMs ?? 0) > STALE_MS;
   const over = state.t0MonoMs != null && now - state.t0MonoMs > TOTAL_BUDGET_MS;
@@ -83,6 +84,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly,
     tier: config.tier, postgresPod: config.postgresPod ?? 'postgres-0',
     probe: fetch, print: console.log };
+  if (process.send) {
+    const initial = loadState(stateDir);
+    if (!initial || pidDead(initial.driverPid)) throw new Error('watchdog_state_not_initialized');
+    process.send({ armed: process.pid });
+  }
   const timer = setInterval(async () => {
     try {
       const out = await poll(ctx);
