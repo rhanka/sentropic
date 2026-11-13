@@ -40,7 +40,7 @@
 - [x] Lot 0: read binding packet/spec/agent code; mechanically check branch and record isolated ports.
 - [x] Lot 1: issuer interface, env validation, mTLS transport and bounded custody lifetime.
 - [x] Lot 2: wire live HTTP/HMR and supervisor relay; retain k8s selection.
-- [ ] Lot 3: D7-A opt-in CSP and worker query admission.
+- [x] Lot 3: D7-A opt-in CSP and worker query admission.
 - [ ] Lot 4: hermetic `data-plane.test.ts`, `data-plane-upgrade.test.ts`, `data-plane-config.test.ts`; existing live/relay/config regressions; typecheck and lint.
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
