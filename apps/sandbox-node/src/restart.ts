@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { parseRunscList } from './runsc-inventory.js';
 
 type InventoryCommand = (command: string, args: string[]) => string;
-const host: InventoryCommand = (command, args) => execFileSync(command, args, { encoding: 'utf8', timeout: 5000 });
+const host: InventoryCommand = (command, args) => execFileSync(command, args, { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
 
 /** Full adoption is S1-A1b; S1 must never reset reservations over surviving resources. */
 export function assertCleanStartup(root = '/var/lib/builder', run: InventoryCommand = host,

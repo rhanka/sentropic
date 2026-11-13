@@ -18,7 +18,7 @@ export function issueNodeCustody(node: ExecutionNodeAdapter, session: NodeSessio
   const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
   const input = `${head}.${payload}`;
-  const signature = sign(null, Buffer.from(input), node.config.ticketKey).toString('base64url');
+  const signature = sign(null, Buffer.from(input), node.config.custodyKey).toString('base64url');
   return { claims, headers: { 'X-Custody-Token': `${input}.${signature}`, 'X-Tenant-Id': ownership.tenantId,
     'X-Expected-Physical-Uid': physicalUid } };
 }

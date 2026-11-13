@@ -7,7 +7,7 @@ import { mountQuotaVolume } from './disk-quota.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 
 export type HostCommand = (command: string, args: string[], options?: { env: NodeJS.ProcessEnv }) => void;
-const host: HostCommand = (command, args, options) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000, ...options }); };
+const host: HostCommand = (command, args, options) => { execFileSync(command, args, { stdio: 'pipe', timeout: 5000, killSignal: 'SIGKILL', ...options }); };
 export interface Bundle { path: string; workspace: string; output: string; mounted: string[] }
 
 /** Only the agent writes source. Untrusted processes see a read-only workspace. */
@@ -49,6 +49,8 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
     }
     if (options.quotaMiB > 704) {
       assertUnlinkedPath(bundle.workspace, 'ui/dist');
+      mkdirSync(join(bundle.workspace, 'ui'), { recursive: true, mode: 0o755 });
+      chmodSync(join(bundle.workspace, 'ui'), 0o755);
       mkdir(join(bundle.workspace, 'ui/dist')); chownSync(bundle.output, options.uid, options.gid);
       mounts.push({ destination: '/workspace/ui/dist', type: 'bind', source: bundle.output, options: ['rbind', 'rw', 'nosuid', 'nodev', 'noexec'] });
     }

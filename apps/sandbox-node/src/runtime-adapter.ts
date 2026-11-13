@@ -8,6 +8,7 @@ import { parseRunscList } from './runsc-inventory.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
+import { rmSync } from 'node:fs';
 
 export interface SandboxMount {
   readonly source: string;
@@ -31,6 +32,7 @@ export interface RunSandboxOptions {
 }
 
 export interface RuntimeAdapter {
+  assertRunning?(runtimeId: string): void;
   portTarget?(runtimeId: string, port: number): Promise<{ socketPath: string }>;
   writeFile(runtimeId: string, path: string, bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void>;
   readonly kind: string;
@@ -97,7 +99,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
   private readonly rootArg = '--root=/run/execution-node/runsc';
-  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean }>();
+  private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean; exited?: boolean }>();
 
   constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle }) {
     this.binary = binary;
@@ -105,7 +107,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
 
   hasRunsc(): boolean {
     try {
-      execFileSync(this.binary, ['--version'], { stdio: 'ignore' });
+      execFileSync(this.binary, ['--version'], { stdio: 'ignore', timeout: 1000, killSignal: 'SIGKILL' });
       return true;
     } catch {
       return false;
@@ -118,6 +120,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async portTarget(runtimeId: string, port: number): Promise<{ socketPath: string }> {
+    this.assertRunning(runtimeId);
     const entry = this.scopes.get(runtimeId);
     if (!entry || entry.stopped || port !== 5173) throw new Error('sandbox_port_unavailable');
     const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
@@ -127,6 +130,14 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       ports.set(port, forward);
     }
     try { return await forward.ready; } catch { ports.delete(port); throw new Error('sandbox_port_unavailable'); }
+  }
+
+  assertRunning(runtimeId: string): void {
+    const entry = this.scopes.get(runtimeId);
+    if (!entry || entry.stopped || entry.exited) throw new Error('sandbox exited before probes finished');
+    const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${entry.uid}`], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
+    const active = execFileSync('systemctl', ['show', entry.scope, '--property=ActiveState', '--value'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }).trim();
+    if (state.status !== 'running' || active !== 'active') throw new Error('sandbox or scope exited before probes finished');
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
@@ -157,13 +168,15 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       child.once('error', fail);
       child.once('exit', code => {
         clearTimeout(timer);
+        const entry = this.scopes.get(runtimeId);
+        if (entry) entry.exited = true;
         if (code === 0) resolve();
         else reject(new Error(`sandbox launcher exited: ${code}`));
         if (ready || code === 0) options.onExit?.(code);
       });
       const poll = () => {
         try {
-          const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000 }));
+          const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
           if (state.status === 'running') { ready = true; resolve(); return; }
         } catch { /* The runtime may not have created its state yet. */ }
         if (Date.now() >= deadline) { fail(new Error('sandbox runtime readiness timeout')); return; }
@@ -191,8 +204,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   private scopeQuiescent(scope: string): boolean {
-    const group = execFileSync('systemctl', ['show', scope, '--property=ControlGroup', '--value'], { encoding: 'utf8', timeout: 1000 }).trim();
-    const active = execFileSync('systemctl', ['show', scope, '--property=ActiveState', '--value'], { encoding: 'utf8', timeout: 1000 }).trim();
+    const group = execFileSync('systemctl', ['show', scope, '--property=ControlGroup', '--value'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }).trim();
+    const active = execFileSync('systemctl', ['show', scope, '--property=ActiveState', '--value'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }).trim();
     return group === '' && ['inactive', 'failed'].includes(active);
   }
 
@@ -204,16 +217,19 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async destroySandbox(runtimeId: string): Promise<void> {
+    // prepareBundle can fail before any scope/runtime was registered; repeated cleanup is safe.
+    if (!this.scopes.has(runtimeId)) return;
     if (!this.hasRunsc()) failNoBinary();
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     for (const forward of this.forwards.get(runtimeId)?.values() ?? []) forward.stop();
     this.forwards.delete(runtimeId);
     const entry = this.scopes.get(runtimeId)!;
-    const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000 }));
-    if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000 });
-    try { execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000 }); }
+    const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }));
+    if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000, killSignal: 'SIGKILL' });
+    try { execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000, killSignal: 'SIGKILL' }); }
     catch (error) { if (!this.scopeQuiescent(entry.scope)) throw error; }
     this.bundles.destroy(entry.bundle);
+    rmSync(`/run/execution-node/ports/${entry.uid}`, { recursive: true, force: true });
     this.scopes.delete(runtimeId);
   }
 }

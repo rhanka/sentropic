@@ -7,6 +7,8 @@ import { RunscRuntimeAdapter } from './runtime-adapter.js';
 import { isolationProbe, requireIsolationResults } from './isolation-probe.js';
 import { acquireNodeLock } from './node-lock.js';
 import { assertCleanStartup } from './restart.js';
+import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
+import { createQualificationDirectory, qualificationDiskMiB, qualificationInodes } from './qualification-storage.js';
 
 export async function qualifyIsolation(): Promise<void> {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
@@ -22,9 +24,12 @@ export async function qualifyIsolation(): Promise<void> {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const adapter = new RunscRuntimeAdapter();
   const boxes: Array<{ tenant: string; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string }> = [];
+  let directory: string | undefined, cleanupFailed = false;
   try {
     assert.equal(run('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value']), 'inactive', 'service must be stopped');
     assertCleanStartup();
+    assertNoQualificationLeftovers(release);
+    directory = createQualificationDirectory(release, 'qi');
     // Consume the operator's authorization once, under the shared lock.
     rmSync('/etc/execution-node/isolated-qualification');
     for (const tenant of ['sentropic', 'immo']) {
@@ -34,14 +39,14 @@ export async function qualifyIsolation(): Promise<void> {
       assert.match(device, /^\/dev\/loop[0-9]+$/);
       const loop = run('losetup', ['--noheadings', '--output=BACK-FILE', device]);
       assert.ok(loop.startsWith('/'));
-      const uid = `qual-isolation-${randomUUID()}`, path = join(root, tenant, 'sandboxes', uid);
-      const base = mkdtempSync(join(root, tenant, 'bases', 'qual-isolation-'));
+      const uid = `qual-isolation-${randomUUID()}`, path = join(directory, tenant, 'sandboxes', uid);
+      const base = mkdtempSync(join(directory, `base-${tenant}-`));
       const image = join(base, 'source.erofs');
       boxes.push({ tenant, uid, path, base, image, loop });
       copyFileSync(join(release, 'qualification.erofs'), image);
       const { runtimeId } = await adapter.runSandbox({ tenantId: tenant, sandboxUid: uid,
         overlayUpper: join(path, 'upper'), overlayWork: join(path, 'work'), quotaMiB: 704,
-        diskQuotaMiB: 16, quotaInodes: 1024, uid: 1000, gid: 1000,
+        diskQuotaMiB: qualificationDiskMiB, quotaInodes: qualificationInodes, uid: 1000, gid: 1000,
         command: ['/usr/local/bin/node', '-e', 'setInterval(() => {}, 1000)'],
         mounts: [{ source: join(release, 'rootfs.erofs'), target: '/bases/rootfs/release', readOnly: true },
           ...['source', 'dependencies'].map(kind => ({ source: image, target: `/bases/${kind}/qualification`, readOnly: true }))],
@@ -72,7 +77,7 @@ export async function qualifyIsolation(): Promise<void> {
       const group = run('systemctl', ['show', scope, '--property=ControlGroup', '--value']);
       report(`${box.tenant} cgroup ancestry`, group.startsWith(`/builder.slice/builder-tenant.slice/builder-tenant-${box.tenant}.slice/`) && group.endsWith(`/${scope}`));
     }
-  } catch { report('real-host isolation execution', false); }
+  } catch (error) { console.error(error instanceof Error ? error.message : 'isolation execution failed'); report('real-host isolation execution', false); }
   finally {
     for (const box of boxes.reverse()) {
       try {
@@ -89,9 +94,10 @@ export async function qualifyIsolation(): Promise<void> {
         assert.ok(noMounts && !existsSync(box.path));
         rmSync(box.base, { recursive: true });
         report(`${box.tenant} test bases removed`, !existsSync(box.base));
-      } catch { report(`${box.tenant} cleanup`, false); }
+      } catch { cleanupFailed = true; report(`${box.tenant} cleanup`, false); }
     }
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
+    if (directory && !cleanupFailed) rmSync(directory, { recursive: true, force: true });
     releaseLock();
   }
   if (failed) throw new Error('isolation qualification failed');

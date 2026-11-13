@@ -11,6 +11,9 @@ import { createPublicKey } from 'node:crypto';
 import { qualificationCertificates } from './qualification-certificates.js';
 import { qualificationNode } from './data-plane-qualification-node.js';
 import { probeDataPlane } from './data-plane-qualification-probes.js';
+import { QualificationDeadline, qualificationDeadline, qualificationCleanup } from './qualification-deadline.js';
+import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
+import { createQualificationDirectory } from './qualification-storage.js';
 
 function tcpListeners() {
   return new Set(['/proc/net/tcp', '/proc/net/tcp6'].flatMap(path => readFileSync(path, 'utf8').trim().split('\n').slice(1)
@@ -23,27 +26,34 @@ export async function qualifyDataPlane(): Promise<void> {
   assert.equal(process.getuid?.(), 0, 'root required');
   const marker = '/etc/execution-node/isolated-qualification';
   assert.ok(existsSync(marker), 'isolated qualification marker required');
+  const timeout = qualificationDeadline();
   const unlock = await acquireNodeLock();
-  let directory: string | undefined, fixture: ReturnType<typeof qualificationNode> | undefined;
+  const deadline = new QualificationDeadline(timeout);
+  let directory: string | undefined, socketDirectory: string | undefined, fixture: ReturnType<typeof qualificationNode> | undefined;
   let server: ReturnType<typeof createAgentServer> | undefined;
   const sockets = new Set<Duplex>();
-  let interrupted = false, failed = false;
-  const interrupt = () => { interrupted = true; };
-  const report = (name: string) => { assert.ok(!interrupted, 'qualification interrupted'); console.log(`PASS ${name}`); };
-  process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
+  let failed = false;
+  const report = (name: string) => { deadline.signal.throwIfAborted(); console.log(`PASS ${name}`); };
   try {
     const state = execFileSync('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value'],
-      { encoding: 'utf8', timeout: 5000 }).trim();
+      { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).trim();
     assert.equal(state, 'inactive', 'service must be stopped');
     assertCleanStartup();
+    assertNoQualificationLeftovers(dirname(process.execPath));
     assert.match(execFileSync('findmnt', ['--noheadings', '--raw', '--output=SOURCE', '--mountpoint', '/var/lib/builder/tenants/sentropic'],
-      { encoding: 'utf8', timeout: 5000 }).trim(), /^\/dev\/loop[0-9]+$/);
+      { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' }).trim(), /^\/dev\/loop[0-9]+$/);
     rmSync(marker); // Consume operator authorization once, under the service's shared flock.
     const baseline = tcpListeners();
     const checkTcp = () => { for (const listener of tcpListeners()) assert.ok(baseline.has(listener), 'new host TCP listener'); };
-    directory = mkdtempSync('/run/execution-node/qd-');
+    directory = createQualificationDirectory(dirname(process.execPath), 'qd');
+    socketDirectory = mkdtempSync('/run/execution-node/qd-');
     fixture = qualificationNode(directory, dirname(process.execPath));
-    const sandbox = await fixture.start(); report('real runsc sandbox started');
+    const sandbox = await fixture.start();
+    deadline.monitor(() => {
+      assert.equal(sandbox.state, 'running', 'sandbox exited before probes finished');
+      assert.ok(sandbox.runtimeId); fixture!.node.adapter.assertRunning?.(sandbox.runtimeId);
+    });
+    report('real runsc sandbox started');
     const tls = qualificationCertificates();
     const data = createDataPlane({ custody: fixture.custody, publicKey: createPublicKey(fixture.keys.publicKeyPem),
       sandbox: (tenant, uid) => fixture!.node.daemon.peekSandbox(tenant, uid),
@@ -56,20 +66,32 @@ export async function qualifyDataPlane(): Promise<void> {
     server = createAgentServer({ ca: tls.ca, ...tls.server }, (req, res, role) => { void data.http(req, res, role); });
     server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
-    const socketPath = join(directory, 'tls.sock');
+    const socketPath = join(socketDirectory, 'tls.sock');
     await new Promise<void>((resolve, reject) => { server!.once('error', reject); server!.listen(socketPath, resolve); });
-    await probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp });
+    await deadline.wait(probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp, signal: deadline.signal }));
     checkTcp(); report('no host TCP listener opened');
-    await fixture.lifecycle(); report('authenticated GET / stop-202 progress / export / DELETE');
-  } catch { failed = true; console.error('FAIL real-host data-plane execution'); }
+    deadline.stopMonitoring();
+    await deadline.wait(fixture.lifecycle(deadline.signal)); report('authenticated GET / stop-202 progress / export / DELETE');
+  } catch (error) { failed = true; console.error('FAIL real-host data-plane execution:', error instanceof Error ? error.message : 'unknown error'); }
   finally {
-    for (const socket of sockets) socket.destroy();
-    if (server) await new Promise<void>(resolve => server!.close(() => resolve()));
+    deadline.abort(new Error('qualification finished'));
+    deadline.stopMonitoring();
     try {
-      await fixture?.close();
-      if (directory) { assertCleanStartup(); report('empty runtime, scope and mount inventory after cleanup'); rmSync(directory, { recursive: true }); }
+      for (const socket of sockets) socket.destroy();
+      // Start runtime cleanup even if the TLS listener refuses to finish closing.
+      const cleanup = [fixture?.close()];
+      if (server) cleanup.push(new Promise<void>(resolve => server!.close(() => resolve())));
+      try { await qualificationCleanup(async () => { await Promise.all(cleanup); }); }
+      finally {
+        if (socketDirectory) rmSync(socketDirectory, { recursive: true, force: true });
+        if (directory) {
+          assertCleanStartup(directory);
+          rmSync(directory, { recursive: true, force: true });
+          console.log('PASS empty runtime, scope and mount inventory after cleanup');
+        }
+      }
     } catch { failed = true; console.error('FAIL data-plane qualification cleanup'); }
-    process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt); unlock();
+    deadline.close(); unlock();
   }
-  if (failed || interrupted) throw new Error('data-plane qualification failed');
+  if (failed || deadline.cancelled) throw new Error('data-plane qualification failed');
 }

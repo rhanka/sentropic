@@ -19,7 +19,7 @@ export function forwardSandboxPort(binary: string, rootArg: string, uid: string,
     let child: ChildProcess | undefined; let timer: ReturnType<typeof setTimeout>; let closed = false;
     const close = () => {
       if (closed) return; closed = true;
-      clearTimeout(timer); local.destroy(); child?.kill(); if (bridge.listening) bridge.close(); bridges.delete(bridge);
+      clearTimeout(timer); local.destroy(); child?.kill('SIGKILL'); if (bridge.listening) bridge.close(); bridges.delete(bridge);
     };
     const bridge = createServer(remote => {
       clearTimeout(timer); sockets.add(remote); bridge.close(); bridges.delete(bridge);
@@ -46,6 +46,6 @@ export function forwardSandboxPort(binary: string, rootArg: string, uid: string,
   });
   return { ready, stop() {
     stopped = true; server.close(); for (const bridge of bridges) bridge.close();
-    for (const socket of sockets) socket.destroy(); for (const child of children) child.kill();
+    for (const socket of sockets) socket.destroy(); for (const child of children) child.kill('SIGKILL');
   } };
 }
