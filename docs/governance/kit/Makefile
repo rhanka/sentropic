@@ -1,5 +1,5 @@
 NODE_IMAGE ?= node:24-bookworm-slim
-PROBE_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0
+PROBE_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
 DEPS_VOLUME ?= sentropic-governance-ecosystem-ds-deps
 PROBE_VOLUME ?= sentropic-governance-contract-probe
 R11_SHOTS_DIR ?= $(CURDIR)/.cache/r11-shots
@@ -10,6 +10,9 @@ PROBE = docker run --rm $(USER_ARGS) $(MOUNTS) -v "$(PROBE_VOLUME):/app:ro" $(PR
 
 .PHONY: install prepare build check-source check-geometry check-browser check-convergence check-performance check-content export-static check-static validate deliver checksums
 .PHONY: update-dependencies inspect-ds
+.PHONY: check-ecosystem
+check-ecosystem:
+	@$(NODE) node scripts/check-ecosystem.mjs
 update-dependencies:
 	@docker run --rm $(MOUNTS) $(NODE_IMAGE) npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 inspect-ds:
