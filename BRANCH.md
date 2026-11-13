@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 operator alignment: bounded zram hierarchy, agent MemoryMin, swap usage, service deadlines, host-supplied scope and actual lifecycle protocol documented; real host qualification remains explicit.
 - [x] RUN 3 devScope completeness: all exported daemon session mutations, including claim and renew, now require and compare the supplied scope with the immutable session policy.
 - [x] RUN 3 AMD-13/15 observability: node reports physical budget and bounded swap; lower MemTotal reduces admission capacity; quotas publish heavy queue depths and service limits.
 - [x] RUN 3 B2/M10 follow-up: refuse output directory itself and hardlinked source paths; WAL writes handle partial writes before fsync/ack.
