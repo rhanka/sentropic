@@ -1,68 +1,51 @@
-# Feature: Land approved cluster-mesh specifications
+# Feature: VD-2.1 shared V8 compile contract
 
 ## Objective
-- [x] Execute the approved specs-landing packet from origin/main without changing specification bodies.
+- [ ] Deliver AMD-ISO and the versioned recipe, output and diagnostic schemas with shared conformance vectors.
 
 ## Scope / Guardrails
-- [x] Documentation only; no cluster, production, T3, application, workflow, or dependency changes.
-- [x] Worktree: tmp/worktrees/specs-landing; branch: docs/specs-landing.
-- [x] Test environment: test-cm-specs-land; API_PORT=9460, UI_PORT=5660, MAILDEV_UI_PORT=1560.
-- [x] Preserve approved specification bytes; prepend only the requested supersession notice to the two retired builder specs.
-- [x] One commit per large specification is explicitly permitted by the packet.
+- [x] Worktree tmp/worktrees/v8-contract; branch feat/v8-vd-2-1-contract from origin/main e44e2e2bf.
+- [x] Preserve execution-node.v1 and historical DsRecipeKeyV1 byte semantics.
+- [x] ENV=feat-v8-contract; tests ENV=test-v8-contract; API_PORT=9010 UI_PORT=5210 MAILDEV_UI_PORT=1110, checked free.
+- [x] Make-only, Docker-first, ENV last; no Python, secrets, timeout increases or merge.
+- [x] Re-read the live VD-2.1 specification row before each atomic commit below 150 lines.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `spec/CM_FIRST_ARTIFACTS.md`
-  - `spec/SPEC_EVOL_V8_ARTIFACT_DELIVERY.md`
-  - `spec/SPEC_EVOL_APP_VUE_VAPOR_MIGRATION.md`
-  - `spec/SPEC_EVOL_APP_CONTEXT_GENERIC.md`
-  - `spec/SPEC_EVOL_ARTIFACT_BUILDER_SLO.md`
-  - `spec/SPEC_EVOL_ARTIFACT_BUILDER_SERVERLESS.md`
-  - `spec/SPEC_EVOL_CLUSTER_MESH_GAS.md`
+  - `apps/sandbox-node/src/contract.ts`
+  - `packages/cluster-mesh/src/compile/contract/**`
+  - `packages/cluster-mesh/tests/compile/**`
+  - `packages/cluster-mesh/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `api/**`
-  - `ui/**`
-  - `packages/**`
-  - `deploy/**`
   - `.track/**`
+  - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `spec/SPEC_EVOL_CONNECTOR_ACCOUNT_WORKSPACE_EXPOSURE.md` (approval evidence required)
+  - `BRANCH.md`
+  - `.github/workflows/**`
+- **Exception process**:
+  - [x] BR21-EX1: BRANCH.md is required execution metadata; impact limited to this branch plan; rollback by removing it before integration.
 
 ## Feedback Loop
-- [x] Connector exposure: not landed: status unknown; source still says DRAFT / ARCHITECTURE DECISION, no approval found in .tmp/rv or git history.
-- [x] GAS: FROZEN r3 confirmed by .tmp/rv/spec-n1-frozen.md and commit a06c561934c52924e7d72b359f18ac310c79a98c; r3 co-review resolves OQ13/OQ14.
-- [x] Track source is this mergeable branch plan; shared .track remains owned by the conductor for its single-writer import.
+- [ ] Conductor owns Track writes and DS/h2a consumer receipts; questions recorded in .tmp/rv/v8-contract-questions.md.
 
 ## AI Flaky tests
-- [x] Not applicable: documentation only.
+- [x] No AI-dependent tests or flaky exceptions.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; no delegated implementation or integration required.
+- [x] Multi-branch: D6-A reserves this contract slot separately from the VD-2.0 spike; no integration or merge in this lane.
 
 ## UAT Management (in orchestration context)
-- [x] Not applicable: no runtime or UI behavior changes.
+- [x] Library contract only; no web, Chrome or VSCode product surface changes.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and approval evidence**
-  - [x] Read repository rules, common rules, packet, and consolidated plan; create isolated worktree from origin/main and pass harness check branch.
-  - [x] Verify V8 source SHA-256: ab53eb6a61a07fbff7c4092bcb64806b528825a8cf190e619008c680cccf2b9e.
-- [x] **Lot 1 — Approved specifications**
-  - [x] Land CM_FIRST_ARTIFACTS unchanged.
-  - [x] Land V8 delivery unchanged.
-  - [x] Land Vue Vapor migration unchanged.
-  - [x] Land generic app context unchanged.
-  - [x] Land frozen GAS r3 unchanged.
-- [x] **Lot 2 — Superseded builder specifications**
-  - [x] Land SLO with the requested supersession header and unchanged body.
-  - [x] Land serverless with the requested supersession header and unchanged body.
-- [ ] **Lot 3 — Final validation and handoff**
-  - [x] Verify exact source/body equivalence and git diff --check; pass make scope-check before every commit.
-  - [x] Inspect CI path classification; spec/** does not select application/package suites; do not modify ci.yml.
-  - [ ] Push final reviewed head; create PR with this plan as body and an execution-plan comment.
-  - [ ] Wait for successful CI on the exact PR head; do not merge.
-  - [ ] Write French report and completion marker under .tmp/rv with conductor Track import handoff.
+- [x] Lot 0: read rules, source contracts, normative recipe, options and gate requirements; check branch mechanically.
+- [ ] Lot 1: add shared closed types and AMD-ISO canonical re-exports without changing historical definitions.
+- [ ] Lot 2: implement portable canonical encoding, path/base64 checks, recipe and output validation with closed effective options.
+- [ ] Lot 3: packages/cluster-mesh/tests/compile/contract.spec.ts covers shared golden vectors, changes of identity, invalid paths/options, diagnostic codes, manifest/SRI identity and legacy preservation.
+- [ ] Lot 4: run scoped make test-cluster-mesh, typecheck-cluster-mesh and independent code review; resolve findings.
+- [ ] Lot 5: bump/export cluster-mesh after registry check; make scope-check before every commit.
+- [ ] Lot 6: push, open PR with this plan, wait for exact-head green CI; do not merge.
+- [ ] Lot 7: make down-volumes for test environment; write report with file:line evidence, PR and CI; then completion marker.
