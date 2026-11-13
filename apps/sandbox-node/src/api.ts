@@ -48,7 +48,7 @@ export class AgentApi {
       operation === 'claim' ? (body.claim as { ownership: ExecutionNodeOwnership }).ownership : sandbox.ownership);
     if (ticket) this.custody.authorize({ tenantId, resourceId: id, custodyEpoch: ticket.ticket.ownership.custodyEpoch,
       issuedAt: ticket.ticket.issuedAt, deadlineAt: ticket.ticket.deadlineAt }, tenantId, id);
-    if (method === 'DELETE' && !operation) return { status: 200, body: await daemon.deleteSandbox(tenantId, id, { ...body, commandId, ticket }) };
+    if (method === 'DELETE' && !operation) return { status: 200, body: await daemon.deleteSandbox(tenantId, id, { ...body, commandId, devScope, ticket }) };
     if (method !== 'POST') throw new ExecutionNodeError('command_id_payload_mismatch');
     if (operation === 'start') return { status: 200, body: await daemon.promoteToRunning(tenantId, id, { ...body, commandId, ticket } as Parameters<typeof daemon.promoteToRunning>[2]) };
     if (operation === 'claim') return { status: 200, body: await daemon.claimSandbox({ ...body, commandId, ticket, standbyId: id } as Parameters<typeof daemon.claimSandbox>[0]) };
@@ -60,7 +60,7 @@ export class AgentApi {
       const result = await daemon.exportArtifacts(tenantId, id, { ...body, commandId, ticket } as Parameters<typeof daemon.exportArtifacts>[2]);
       return { status: 200, body: result.bytes };
     }
-    if (operation === 'renew') return { status: 200, body: daemon.renewSandbox(tenantId, id) };
+    if (operation === 'renew') return { status: 200, body: daemon.renewSandbox(tenantId, id, { ...body, commandId, devScope, ticket }) };
     if (operation === 'write') {
       if (typeof body.path !== 'string' || typeof body.contentBase64 !== 'string') throw new ExecutionNodeError('command_id_payload_mismatch');
       await daemon.writeFile(tenantId, id, { ...body, path: body.path, commandId, devScope, contentBase64: body.contentBase64, ticket });

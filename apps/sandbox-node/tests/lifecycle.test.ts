@@ -65,7 +65,7 @@ describe('lifecycle', () => {
     const base = { baseId: 'root', kind: 'rootfs' as const, identityDigest: 'abc' };
     bases.register({ ...base, tenantId: 'sentropic' });
     const box = await daemon.createSandbox({ spec: { ...spec(), baseMounts: [base] }, ownership: ownership(), commandId: 'mount-create' });
-    await daemon.promoteToRunning('sentropic', box.id, { commandId: 'mount-start', uid: 1000, gid: 1000, quotaMiB: 704 });
+    await daemon.promoteToRunning('sentropic', box.id, { devScope: spec().devScope, commandId: 'mount-start', uid: 1000, gid: 1000, quotaMiB: 704 });
     expect(adapter.options?.mounts).toHaveLength(1);
   });
   it('should require signed tickets bound to executed spec, owner, command and node', async () => {
@@ -92,20 +92,20 @@ describe('lifecycle', () => {
     const adapter = new PendingAdapter();
     const { daemon, admission } = createExecutionNode({ adapter });
     const created = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'pending-create' });
-    await daemon.promoteToRunning('sentropic', created.id, { commandId: 'pending-run', quotaMiB: 512, uid: 1000, gid: 1000 });
-    const first = await daemon.stopSandbox('sentropic', created.id, { commandId: 'pending-stop', stop: { retainOutput: true } });
+    await daemon.promoteToRunning('sentropic', created.id, { devScope: spec().devScope, commandId: 'pending-run', quotaMiB: 512, uid: 1000, gid: 1000 });
+    const first = await daemon.stopSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'pending-stop', stop: { retainOutput: true } });
     expect(first).toMatchObject({ state: 'stopping', allProcessesExited: false });
     expect(admission.reservedMiB('sentropic')).toBe(704);
-    await expect(daemon.exportArtifacts('sentropic', created.id, { commandId: 'early-export',
+    await expect(daemon.exportArtifacts('sentropic', created.id, { devScope: spec().devScope, commandId: 'early-export',
       spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } }))
       .rejects.toMatchObject({ code: 'sandbox_not_quiesced' });
     adapter.exited = true;
-    await daemon.stopSandbox('sentropic', created.id, { commandId: 'pending-stop-again', stop: { retainOutput: true } });
+    await daemon.stopSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'pending-stop-again', stop: { retainOutput: true } });
     expect(created).toMatchObject({ state: 'stopped-output-retained', allProcessesExited: true });
     expect(admission.reservedMiB('sentropic')).toBe(704);
     await expect(daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'replacement' }))
       .rejects.toMatchObject({ status: 429 });
-    await daemon.deleteSandbox('sentropic', created.id, { commandId: 'delete-stopped' });
+    await daemon.deleteSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'delete-stopped' });
     expect(admission.reservedMiB('sentropic')).toBe(0);
     await expect(daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'replacement' })).resolves.toBeDefined();
   });
@@ -116,31 +116,31 @@ describe('lifecycle', () => {
       warmStandby: true, compatibility: compat() });
     const input = { claim: { tenantId: 'sentropic' as const, compatibility: compat(), ownership: ownership() },
       standbyId: warm.id, quotaMiB: 512, uid: 1000, gid: 1000 };
-    const first = daemon.claimSandbox({ ...input, commandId: 'first' });
-    await expect(daemon.claimSandbox({ ...input, commandId: 'second' })).rejects.toThrowError(/already_claimed/);
+    const first = daemon.claimSandbox({ ...input, devScope: spec().devScope, commandId: 'first' });
+    await expect(daemon.claimSandbox({ ...input, devScope: spec().devScope, commandId: 'second' })).rejects.toThrowError(/already_claimed/);
     await first;
     await expect(daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'retry' })).rejects.toMatchObject({ status: 429 });
-    await daemon.stopSandbox('sentropic', warm.id, { commandId: 'stop-warm', stop: { retainOutput: false } });
+    await daemon.stopSandbox('sentropic', warm.id, { devScope: spec().devScope, commandId: 'stop-warm', stop: { retainOutput: false } });
     expect((await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'retry' })).state).toBe('creating');
   });
   it('runs creating -> running -> stopping -> stopped-output-retained -> exported -> destroyed', async () => {
     const { daemon, audit } = createExecutionNode();
     const created = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'create-1' });
     expect(created.state).toBe('creating');
-    const running = await daemon.promoteToRunning('sentropic', created.id, { commandId: 'run-1', quotaMiB: 512, uid: 1000, gid: 1000 });
+    const running = await daemon.promoteToRunning('sentropic', created.id, { devScope: spec().devScope, commandId: 'run-1', quotaMiB: 512, uid: 1000, gid: 1000 });
     expect(running.state).toBe('running');
     const stopped = await daemon.stopSandbox('sentropic', created.id, {
-      commandId: 'stop-1',
+      devScope: spec().devScope, commandId: 'stop-1',
       stop: { retainOutput: true, outputSubPath: 'ui/dist', retentionTtlMs: 300_000 },
     });
     expect(stopped.state).toBe('stopped-output-retained');
     const { bytes, sandbox: exported } = await daemon.exportArtifacts('sentropic', created.id, {
-      commandId: 'export-1',
+      devScope: spec().devScope, commandId: 'export-1',
       spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1_000_000 },
     });
     expect(exported.state).toBe('exported');
     expect(bytes.length).toBeGreaterThan(0);
-    const destroyed = await daemon.deleteSandbox('sentropic', created.id, { commandId: 'delete-1' });
+    const destroyed = await daemon.deleteSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'delete-1' });
     expect(destroyed.state).toBe('destroyed');
     for (const type of ['sandbox.created', 'sandbox.running', 'sandbox.stopped', 'sandbox.exported', 'sandbox.destroyed']) {
       expect(audit.list({ tenantId: 'sentropic' }).some(event => event.type === type)).toBe(true);
@@ -155,18 +155,30 @@ describe('lifecycle', () => {
     });
     expect(warm.state).toBe('standby');
     const claim: ExecutionNodeClaimSpec = { tenantId: 'sentropic', compatibility: compat(), ownership: ownership() };
-    const claimed = await daemon.claimSandbox({ claim, commandId: 'claim-1', standbyId: warm.id, quotaMiB: 512, uid: 1000, gid: 1000 });
+    const claimed = await daemon.claimSandbox({ claim, devScope: spec().devScope, commandId: 'claim-1', standbyId: warm.id, quotaMiB: 512, uid: 1000, gid: 1000 });
     expect(claimed.state).toBe('running');
     expect(claimed.poolOwned).toBe(false);
     await expect(
-      daemon.claimSandbox({ claim, commandId: 'claim-2', standbyId: warm.id, quotaMiB: 512, uid: 1000, gid: 1000 }),
+      daemon.claimSandbox({ claim, devScope: spec().devScope, commandId: 'claim-2', standbyId: warm.id, quotaMiB: 512, uid: 1000, gid: 1000 }),
     ).rejects.toThrowError(/already_claimed/);
     await expect(
       daemon.exportArtifacts('sentropic', warm.id, {
-        commandId: 'export-1',
+        devScope: spec().devScope, commandId: 'export-1',
         spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 10 },
       }),
     ).rejects.toThrowError(/sandbox_not_quiesced/);
+  });
+
+  it('should refuse a replacement after claim and retained stop until DELETE', async () => {
+    const { daemon } = createExecutionNode();
+    const warm = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'claim-create', warmStandby: true, compatibility: compat() });
+    await daemon.claimSandbox({ claim: { tenantId: 'sentropic', ownership: ownership(), compatibility: compat() },
+      standbyId: warm.id, devScope: spec().devScope, commandId: 'claim', uid: 1000, gid: 1000, quotaMiB: 704 });
+    await daemon.stopSandbox('sentropic', warm.id, { devScope: spec().devScope, commandId: 'retain', stop: { retainOutput: true } });
+    const replacement = { spec: spec(), ownership: ownership(), commandId: 'replace-warm', warmStandby: true, compatibility: compat() };
+    await expect(daemon.createSandbox(replacement)).rejects.toMatchObject({ status: 429 });
+    await daemon.deleteSandbox('sentropic', warm.id, { devScope: spec().devScope, commandId: 'destroy-warm' });
+    expect((await daemon.createSandbox(replacement)).state).toBe('standby');
   });
 
   it('replays the identical command and rejects a mismatched body', async () => {
@@ -182,12 +194,12 @@ describe('lifecycle', () => {
   it('fails a running box to failed and destroys it', async () => {
     const { daemon } = createExecutionNode();
     const created = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'f-1' });
-    await daemon.promoteToRunning('sentropic', created.id, { commandId: 'f-run', quotaMiB: 512, uid: 1000, gid: 1000 });
+    await daemon.promoteToRunning('sentropic', created.id, { devScope: spec().devScope, commandId: 'f-run', quotaMiB: 512, uid: 1000, gid: 1000 });
     expect((await daemon.failSandbox('sentropic', created.id, 'boom')).state).toBe('failed');
-    const destroyed = await daemon.deleteSandbox('sentropic', created.id, { commandId: 'f-del' });
+    const destroyed = await daemon.deleteSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'f-del' });
     expect(destroyed.state).toBe('destroyed');
     try {
-      daemon.renewSandbox('sentropic', created.id);
+      daemon.renewSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'renew' });
       expect.unreachable();
     } catch (error) {
       expect((error as ExecutionNodeError).code).toBe('already_claimed');
@@ -205,14 +217,14 @@ describe('lifecycle', () => {
     const adapter = new HungAdapter();
     const { daemon, admission } = createExecutionNode({ adapter });
     const box = await daemon.createSandbox({ spec: { ...spec(), profile: 'artifact-build' }, ownership: ownership(), commandId: 'build' });
-    await daemon.promoteToRunning('sentropic', box.id, { commandId: 'run', quotaMiB: 1536, uid: 1000, gid: 1000 });
+    await daemon.promoteToRunning('sentropic', box.id, { devScope: spec().devScope, commandId: 'run', quotaMiB: 1536, uid: 1000, gid: 1000 });
     await daemon.failSandbox('sentropic', box.id, 'failed');
     expect(admission.builds.snapshot().holderTenantId).toBe('sentropic');
     expect(adapter.isLive(box.runtimeId!)).toBe(true);
-    await expect(daemon.deleteSandbox('sentropic', box.id, { commandId: 'delete' })).rejects.toThrow();
+    await expect(daemon.deleteSandbox('sentropic', box.id, { devScope: spec().devScope, commandId: 'delete' })).rejects.toThrow();
     expect(admission.builds.snapshot().holderTenantId).toBe('sentropic');
     adapter.exited = true;
-    await daemon.deleteSandbox('sentropic', box.id, { commandId: 'delete' });
+    await daemon.deleteSandbox('sentropic', box.id, { devScope: spec().devScope, commandId: 'delete' });
     expect(admission.builds.snapshot().holderTenantId).toBeUndefined();
   });
 });
