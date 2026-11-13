@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { QualificationDeadline, qualificationDeadline } from '../src/qualification-deadline.js';
+import { QualificationDeadline, qualificationDeadline, qualificationCleanup } from '../src/qualification-deadline.js';
 
 describe('qualification cancellation', () => {
+  it('should bound hung cleanup and remove its watchdog after successful cleanup', async () => {
+    vi.useFakeTimers();
+    try {
+      await qualificationCleanup(async () => {});
+      expect(vi.getTimerCount()).toBe(0);
+      const result = expect(qualificationCleanup(() => new Promise<void>(() => {}))).rejects.toThrow('cleanup deadline');
+      await vi.advanceTimersByTimeAsync(10_000); await result;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
   it('should default to 120 seconds and reject invalid or excessive overrides', () => {
     expect(qualificationDeadline()).toBe(120_000);
     expect(qualificationDeadline('2000')).toBe(2000);

@@ -21,10 +21,11 @@ vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs
 
 describe('real-host qualification finalization with fake runtime', () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); });
-  it.each(['SIGTERM', 'deadline', 'early-exit', 'probe-failure', 'stuck-close', 'success'])('should close resources, remove private files and release flock on %s', async cause => {
+  it.each(['SIGTERM', 'cleanup-SIGTERM', 'deadline', 'early-exit', 'probe-failure', 'stuck-close', 'success'])('should close resources, remove private files and release flock on %s', async cause => {
     vi.stubEnv('QUALIFICATION_ONLY', 'isolated'); vi.stubEnv('QUALIFICATION_TIMEOUT_MS', '120000');
     vi.spyOn(process, 'getuid').mockReturnValue(0);
     const release = vi.fn(), close = vi.fn(async () => {}), lifecycle = vi.fn(async () => {});
+    if (cause === 'cleanup-SIGTERM') close.mockImplementation(async () => { process.emit('SIGTERM'); });
     vi.mocked(acquireNodeLock).mockResolvedValue(release);
     const server = Object.assign(new EventEmitter(), { listen: (_path: string, done: () => void) => done(), close: (done: () => void) => { if (cause !== 'stuck-close') done(); } });
     vi.mocked(createAgentServer).mockReturnValue(server as never);
@@ -34,7 +35,7 @@ describe('real-host qualification finalization with fake runtime', () => {
     vi.mocked(probeDataPlane).mockImplementation(async () => {
       if (cause === 'SIGTERM') process.emit('SIGTERM');
       if (cause === 'probe-failure') throw new Error('probe failed');
-      if (cause === 'success' || cause === 'stuck-close') return;
+      if (['success', 'stuck-close', 'cleanup-SIGTERM'].includes(cause)) return;
       await new Promise<void>(() => {});
     });
     if (cause === 'deadline' || cause === 'stuck-close') vi.useFakeTimers();
@@ -45,6 +46,6 @@ describe('real-host qualification finalization with fake runtime', () => {
     await assertion;
     expect(close).toHaveBeenCalledOnce(); expect(release).toHaveBeenCalledOnce();
     if (cause !== 'stuck-close') expect(rmSync).toHaveBeenCalledWith('/run/execution-node/qd-test', { recursive: true });
-    if (!['success', 'stuck-close'].includes(cause)) expect(lifecycle).not.toHaveBeenCalled();
+    if (!['success', 'stuck-close', 'cleanup-SIGTERM'].includes(cause)) expect(lifecycle).not.toHaveBeenCalled();
   });
 });
