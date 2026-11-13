@@ -34,6 +34,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- RUN 2 CI `43329741351`: sandbox install failed with EACCES at /npm-cache/_cacache because Docker created a missing host cache as root. Fix: precreate a dedicated user-owned cache before mounting. E2E shard 6 fixture evaluator error is under evidence-first diagnosis.
 - `BR-SN1-EX7`: add sandbox container qualification to existing required typecheck-lint-api join. No new job/deployment permission; rollback removes that one step.
 - `BR-SN1-EX6`: owner-authorized RUN 2 restores published contracts 0.3.0 and its index/lock; the unreleased contract moves to apps/sandbox-node/src/contract.ts. No publication or consumer dependency changes. Rollback: revert relocation.
 - EX1/EX4/EX5 are superseded by EX6: contracts and all consumer manifests/fixtures remain byte-identical to base. Previous failed CI experiments are retained only in the RUN 1 report.
