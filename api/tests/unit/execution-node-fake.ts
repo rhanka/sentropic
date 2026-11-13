@@ -36,6 +36,9 @@ export async function fakeExecutionNode() {
       if (path === '/v1/node') { calls.push({ path, tenant }); reply(200, { contractVersion: 'execution-node.v1',
         nodeId: node.daemon.nodeId, nodeInstanceId: 'instance', nodeEpoch: 2,
         provenancePublicKey: provenance.publicKey.export({ type: 'spki', format: 'pem' }).toString() }); return; }
+      if (req.method === 'GET') { calls.push({ path, tenant });
+        const result = await api.dispatch({ path, method: 'GET', role, tenantId: tenant!, body: {} });
+        reply(result.status, result.body); return; }
       const body = await readJsonBody(req); calls.push({ path, tenant, body });
       if (path === '/v1/node/heartbeat') { if (tenant) throw new Error(); reply(200, control.heartbeat(role, body)); return; }
       const encoded = req.headers['x-execution-ticket'] as string;
