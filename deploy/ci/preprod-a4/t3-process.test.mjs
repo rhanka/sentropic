@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, openSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { emailProbe, probeEndpoints } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -34,7 +34,7 @@ for (const { mode, step, operation, substate, committed = false } of cases) {
     await until(() => existsSync(join(dir, 'port')));
     const endpoints = probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`);
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-      endpoints, emailProbe, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
+      endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
     writeFileSync(join(dir, 'kubectl'), `#!/usr/bin/env node
 const fs = require('node:fs'), a = process.argv.join(' ');
 fs.appendFileSync('${dir}/commands', a+'\\n');

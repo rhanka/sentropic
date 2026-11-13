@@ -10,7 +10,7 @@ import { finishOpen } from './t3-finish-open.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 function acceptanceContext() {
-  const config = { endpoints: probeEndpoints(), emailProbe, images: { candidate: 'c', ui: 'u' } };
+  const config = { endpoints: probeEndpoints(), emailProbe, expectedSigningKid: 'qualified-kid', images: { candidate: 'c', ui: 'u' } };
   const writes = [], saved = [], seen = [];
   const ctx = { config, images: config.images, ...buildProbes(config),
     state: { namespace: 'sentropic-preprod', middlewareSpec: {} }, save: s => saved.push({ ...s }),
@@ -42,6 +42,29 @@ test('RUN8 email probes satisfy the delivered JSON email input contract on both 
     assert.deepEqual(await req.json(), { email: config.emailProbe.email });
   }
 });
+
+for (const [id, body] of [
+  ['S-3', { status: 'error' }], ['S-3', '<html>login</html>'],
+  ['S-4', { issuer: 'https://wrong.test' }],
+  ['S-4', { issuer: 'https://idp.test', authorization_endpoint: 'https://idp.test/wrong', token_endpoint: 'https://idp.test/api/v1/auth/oauth/token' }],
+  ['S-5', { keys: [] }], ['S-5', { keys: [{ kid: 'wrong', kty: 'OKP', crv: 'Ed25519', x: 'public' }] }],
+  ['S-5', { keys: [{ kid: 'qualified-kid', kty: 'RSA', x: 'public' }] }],
+  ['S-7', { error: 'Authentication failed' }], ['S-8', {}],
+  ['S-9a', { success: false }], ['S-9b', { success: true, delivery: 'email', expiresAt: 'invalid' }],
+]) {
+  test(`RUN8 rejects functional proof ${id} ${JSON.stringify(body)} before ACCEPTED`, async () => {
+    const { ctx, saved, writes } = acceptanceContext();
+    const bad = ctx.probes.find(p => p.id === id).url;
+    const normal = ctx.probe;
+    ctx.probe = async (url, options) => url === bad
+      ? new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+        status: ctx.probes.find(p => p.id === id).expect,
+        headers: { 'content-type': typeof body === 'string' ? 'text/html' : 'application/json' } }) : normal(url, options);
+    await assert.rejects(finishOpen(ctx), /probe_failed/);
+    assert.equal(saved.length, 0);
+    assert.equal(writes.length, 0, 'no backup resume or traffic opening');
+  });
+}
 
 test('RUN8 missing dedicated email input refuses before fence', () => {
   assert.throws(() => validateProbes(buildProbes({ endpoints: probeEndpoints() }).probes), /email_probe_input/);

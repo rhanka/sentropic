@@ -9,7 +9,7 @@ import { poll } from './t3-watchdog.mjs';
 import { buildProbes } from './t3-lib.mjs';
 import { drive } from './t3-window-driver.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
-import { emailProbe } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeReply } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const endpoints = Object.fromEntries(['appHealth', 'idpConfig', 'idpJwks', 's6Authorize', 'appMe', 'idpMe', 'emailApp', 'emailIdp']
@@ -29,7 +29,7 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
   test(`RUN7 S-6 accepts only the error-free login redirect: ${location}`, async () => {
     const state = { namespace: 'sentropic-preprod', middlewareSpec: {} };
     const writes = [];
-    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints, emailProbe }), save: () => {},
+    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints, emailProbe, expectedSigningKid }), save: () => {},
       call: args => {
         const cmd = args.join(' ');
         if (cmd.includes('get deployment')) {
@@ -41,8 +41,11 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
         if (cmd.includes('get ingress')) return JSON.stringify({ metadata: { annotations: {
           'traefik.ingress.kubernetes.io/router.middlewares': 'sentropic-preprod-a4-verification@kubernetescrd' } } });
         writes.push(cmd); return '{}';
-      }, probe: async url => ({ status: url.endsWith('s6Authorize') ? 302 : url.endsWith('Me') ? 401 : 200,
-        headers: new Headers({ location }), body: { cancel: async () => {} } }) };
+      }, probe: async (url, options) => {
+        const reply = probeReply(url, options);
+        reply.headers.set('location', location);
+        return reply;
+      } };
     if (location === '/auth/login?continue=ok') await finishOpen(ctx);
     else {
       await assert.rejects(finishOpen(ctx), /probe_failed: S-6/);
