@@ -39,7 +39,7 @@
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read mandatory rules, packet, template and qualification implementation; mechanical branch check passed.
 - [ ] **Lot 1 — Workload and runtime readiness**
-  - [ ] Reproduce missing source parent permissions in `tests/bundle.test.ts`.
+  - [x] Reproduce missing source parent permissions in `tests/bundle.test.ts`; failed before fix (0700), corrected to 0755.
   - [ ] Test actual generated qualification spec and long-lived HTTP/WS fixture.
   - [ ] Reject early launcher exit and unavailable port targets in `tests/runtime-adapter.test.ts`.
 - [ ] **Lot 2 — Bounded execution and cleanup**

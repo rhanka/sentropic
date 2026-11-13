@@ -49,6 +49,7 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
     }
     if (options.quotaMiB > 704) {
       assertUnlinkedPath(bundle.workspace, 'ui/dist');
+      mkdirSync(join(bundle.workspace, 'ui'), { recursive: true, mode: 0o755 });
       mkdir(join(bundle.workspace, 'ui/dist')); chownSync(bundle.output, options.uid, options.gid);
       mounts.push({ destination: '/workspace/ui/dist', type: 'bind', source: bundle.output, options: ['rbind', 'rw', 'nosuid', 'nodev', 'noexec'] });
     }
