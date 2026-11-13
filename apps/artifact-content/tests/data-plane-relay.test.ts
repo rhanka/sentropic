@@ -10,6 +10,23 @@ const open: Awaited<ReturnType<typeof fakeDataPlane>>[] = [];
 afterEach(async () => { for (const f of open.splice(0)) await f.close(); });
 const fixture = async () => { const f = await fakeDataPlane(); open.push(f); return f; };
 describe('data-plane receiving integrations', () => {
+  it.each(['expiry', 'revocation'] as const)('should refuse live bytes when custody changes on %s during a post-fetch route check', async kind => {
+    const f = await fixture(); f.setTtl(200);
+    const route: LiveRoute = { storageScopeId: 'scope', artifactId: 'artifact', sessionId: 'session',
+      expiresAt: Date.now() + 30_000, podName: '', podUid: 'uid', generation: 1, routeEpoch: 1, sourceRevision: 'rev' };
+    route.podName = podName(route);
+    let entered!: () => void; let release!: () => void; let checks = 0;
+    const checking = new Promise<void>(resolve => { entered = resolve; });
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    const live = createLiveProxy({ authorize: async () => route, current: async () => {
+      if (++checks === 2) { entered(); await wait; } return true;
+    }, watch: () => () => {}, admittedPath: async () => true }, { dataPlane: f.transport });
+    const result = live.fetch(new Request('https://artifact.example/'), 'artifact'); await checking;
+    if (kind === 'revocation') f.revoke(); else await new Promise(resolve => setTimeout(resolve, 220));
+    release(); const response = await result;
+    expect(response?.status).toBe(403); expect(await response?.text()).toBe('{"error":"custody_revoked"}');
+    expect(f.watchers).toBe(0);
+  });
   it('should serve live content through mTLS while stripping browser and upstream authority', async () => {
     const f = await fixture();
     const route: LiveRoute = { storageScopeId: 'scope', artifactId: 'artifact', sessionId: 'session',
