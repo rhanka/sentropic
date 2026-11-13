@@ -22,6 +22,25 @@ describe('runtime adapters', () => {
         .rejects.toThrow();
     } finally { vi.restoreAllMocks(); }
   });
+  it('should start transient tenant scopes with protected warm memory and bounded build resources', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy: () => {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    const calls: string[][] = [];
+    vi.mocked(spawn).mockImplementation((_file, args) => {
+      calls.push(args as string[]); const child = new EventEmitter();
+      queueMicrotask(() => child.emit('error', new Error('fixture launch failure')));
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      for (const quotaMiB of [704, 1536]) await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'limits',
+        mounts: [], overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB, uid: 1000, gid: 1000 })).rejects.toThrow();
+      expect(calls[0]).toEqual(expect.arrayContaining(['--scope', '--slice=builder-tenant-immo.slice',
+        '--property=MemoryLow=704M', '--property=CPUWeight=200', '--property=OOMPolicy=kill', '--property=TasksMax=256']));
+      expect(calls[1]).toEqual(expect.arrayContaining(['--property=MemoryHigh=1280M', '--property=CPUWeight=100', '--property=MemoryLow=0']));
+      expect(calls.flat()).not.toContain('--property=MemoryOOMGroup=yes');
+      expect(calls.flat()).toContain('--root=/run/execution-node/runsc');
+    } finally { vi.restoreAllMocks(); }
+  });
   it('runs, stops, exports and destroys with the fake adapter', async () => {
     const adapter = new FakeRuntimeAdapter();
     expect(adapter.hasRunsc()).toBe(false);
