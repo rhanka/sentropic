@@ -60,7 +60,7 @@ export function createCustodyAuthority(options: {
       || session.ownership.generation !== runtime.generation || session.ownership.sessionId !== runtime.sessionId) return revoked();
     // Read again after remote node I/O: stop/replacement racing resolution cannot mint an old lease.
     if (canonicalNodeJson((await options.store.read(key))?.runtime) !== canonicalNodeJson(runtime)) return revoked();
-    const port = subject.kind === 'live' ? 5173 : 8792;
+    const port = 5173; // Existing bootstrap multiplexes supervisor frames and live on the worker service port.
     return { session, port, version: nodeHash(canonicalNodeJson({ runtime, session, port })) };
   };
 }

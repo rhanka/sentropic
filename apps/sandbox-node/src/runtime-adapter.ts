@@ -119,7 +119,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
 
   async portTarget(runtimeId: string, port: number): Promise<{ socketPath: string }> {
     const entry = this.scopes.get(runtimeId);
-    if (!entry || entry.stopped || ![5173, 8792].includes(port)) throw new Error('sandbox_port_unavailable');
+    if (!entry || entry.stopped || port !== 5173) throw new Error('sandbox_port_unavailable');
     const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
     let forward = ports.get(port);
     if (!forward) {

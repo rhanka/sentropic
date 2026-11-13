@@ -104,8 +104,9 @@ issuedAt, deadlineAt. API resolves the current live runtime, persisted node
 allocation and agent ownership/revocation floor before signing. Live route
 session/generation/routeEpoch/podUid/sourceRevision/principal and expiry must
 match current authority; supervisor podName is only a lookup into current
-active runtime state, never a grant. Ports are API-owned: live 5173, supervisor
-8792. Unknown, inactive, replaced, revoked or unowned subjects refuse issuance.
+active runtime state, never a grant. Port is API-owned: 5173 for live and the
+existing multiplexed supervisor service. Unknown, inactive, replaced, revoked
+or unowned subjects refuse issuance.
 
 `watch` returns `{version}` after the same authoritative resolution, without
 issuing a token. Version is a SHA-256 fence over the subject's current identity,
