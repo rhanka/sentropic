@@ -6,6 +6,13 @@ import { NODE_ROOT, type TenantBase } from './mounts.js';
 
 export async function ensureBase(base: TenantBase, url: string,
   options: { root?: string; fetchBase?: typeof fetch } = {}): Promise<string> {
+  const location = new URL(url);
+  const endpoint = 's3.bhs.io.cloud.ovh.net';
+  const virtualBucket = /^[a-z0-9][a-z0-9.-]*\.s3\.bhs\.io\.cloud\.ovh\.net$/.test(location.hostname);
+  const prefix = virtualBucket ? `/tenants/${base.tenantId}/` : `/${location.pathname.split('/')[1]}/tenants/${base.tenantId}/`;
+  if (location.protocol !== 'https:' || location.port || location.username || location.password || location.hash
+    || (location.hostname !== endpoint && !virtualBucket) || !location.pathname.startsWith(prefix)
+    || /[%\\]/.test(location.pathname) || location.pathname.length <= prefix.length) throw new Error('invalid BHS tenant base URL');
   if (!['sentropic', 'immo'].includes(base.tenantId) || !/^[a-zA-Z0-9_-]+$/.test(base.baseId)
     || !['rootfs', 'source', 'dependencies', 'prebundle', 'vendor-esm'].includes(base.kind)
     || !/^[a-f0-9]{64}$/.test(base.identityDigest) || !url.startsWith('https://')) throw new Error('invalid base import');
