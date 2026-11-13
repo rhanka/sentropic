@@ -72,6 +72,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Extend hermetic fixture with actual agent data-plane handlers and independent mTLS identities.
   - [x] Add real HTTP custody RPC harness using production mount/authenticator and durable allocation authority.
   - [x] E2E assertions cover usable three-segment token, HTTP/WS revocation, expiry and unauthorized reissue refusal.
+  - [x] Demonstrate watch-poll cuts streams on both independent edge replicas after an API-only route change, plus WS expiry 1008.
   - [x] Align multiplexed supervisor port with existing 5173 service; translate changed agent ownership into revoked custody.
 - [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
 - [x] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
