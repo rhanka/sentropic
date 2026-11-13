@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
 import { connect, type Socket } from 'node:net';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { streamHelper } from './stream-helper';
 import { request } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,22 +16,32 @@ describe('runsc stream-mode forwarding', () => {
   it.each(['none', 'sandbox'] as const)('should reproduce gVisor %s FD donation with an exiting helper process', async network => {
     const directory = mkdtempSync(join(tmpdir(), 'donate-')); cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
     const sockets = new Set<Socket>(); cleanup.push(() => sockets.forEach(socket => socket.destroy()));
-    const upstream = createServer((_req, res) => { res.writeHead(200); res.write('stream-alive'); });
+    let response: ServerResponse | undefined;
+    const upstream = createServer((_req, res) => { response = res; res.writeHead(200); res.write('stream-alive'); });
     upstream.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
     await new Promise<void>(resolve => upstream.listen(join(directory, 'app'), resolve)); cleanup.push(() => upstream.close());
     const events: string[] = [];
+    const exits: Array<Promise<number | null>> = [];
+    const helper = streamHelper(network, join(directory, 'app'), sockets);
     const forward = forwardSandboxPort('runsc', '--root=/private', 'uid', 5173, join(directory, 'port'),
-      streamHelper(network, join(directory, 'app'), sockets), (step, detail) => events.push(`${step}: ${detail}`));
+      (binary, args) => { const child = helper(binary, args); exits.push(new Promise(resolve => child.once('exit', resolve))); return child; },
+      (step, detail) => events.push(`${step}: ${detail}`));
     cleanup.push(() => forward.stop()); const target = await forward.ready;
-    const first = new Promise<string>((resolve, reject) => {
+    const first = new Promise<{ bytes: string; res: IncomingMessage }>((resolve, reject) => {
       const req = request({ ...target, agent: false }, res => {
-        res.once('data', bytes => { resolve(bytes.toString()); res.destroy(); });
+        res.once('data', bytes => resolve({ bytes: bytes.toString(), res }));
       }); req.once('error', reject); req.end();
     });
     if (network === 'none') {
       await expect(first).rejects.toThrow('socket hang up');
       expect(events.some(event => event.includes('unsupported network type'))).toBe(true);
-    } else { expect(await first).toBe('stream-alive'); }
+    } else {
+      const { bytes, res } = await first; expect(bytes).toBe('stream-alive');
+      expect(await exits[0]).toBe(0);
+      const next = new Promise<string>(resolve => res.once('data', bytes => resolve(bytes.toString())));
+      response!.write('after-helper-exit');
+      expect(await next).toBe('after-helper-exit'); res.destroy();
+    }
   });
   it('should donate a distinct UDS for every connection and keep streams after runsc exits successfully', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'node-ports-')); cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
