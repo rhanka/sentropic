@@ -48,6 +48,7 @@
   - [x] Live HTTP and signed supervisor integration tests added.
   - [x] Issuance timeout/abort/revocation races and invalid token lifetimes covered.
   - [x] Vite worker entry query verified against installed Vite source; opt-in admission preserves the default profile.
+  - [x] Revocation during asynchronous WS route recheck has a regression test.
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
   - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
