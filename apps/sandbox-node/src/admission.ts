@@ -49,7 +49,8 @@ export class ExecutionNodeAdmission {
 
   private checkMemory(tenantId: ExecutionNodeTenantId, additionalMiB: number): void {
     const tenants = ['sentropic', 'immo'] as const;
-    const usage = (id: ExecutionNodeTenantId) => Math.max(this.reservedMiB(id), this.options.memoryCurrentMiB?.(id) ?? 0);
+    // AMD-21: destroyed-scope file cache is telemetry, never an admission charge.
+    const usage = (id: ExecutionNodeTenantId) => this.reservedMiB(id);
     if (usage(tenantId) + additionalMiB > 2304
       || tenants.reduce((sum, id) => sum + usage(id), 0) + additionalMiB > Math.min(capacity.reservableMiB, this.options.reservableMiB ?? capacity.reservableMiB)) {
       throw new ExecutionNodeError('tenant_quota_exceeded', 'memory reservation exhausted', 250);
