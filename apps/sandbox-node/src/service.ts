@@ -17,6 +17,7 @@ import { assertCleanStartup } from './restart.js';
 import { createDataPlane } from './data-plane.js';
 import { custodyVerificationKey } from './custody-key.js';
 import { portsEnabled, useK8sPortsSwitch } from './network-policy.js';
+import { monitorPorts } from './ports-monitor.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -50,17 +51,8 @@ const dataPlane = createDataPlane({ custody, portsEnabled,
     if (!sandbox.runtimeId || !node.adapter.portTarget) throw new Error('sandbox_port_unavailable');
     return node.adapter.portTarget(sandbox.runtimeId, port);
   } });
-let disabling = false;
-const portsTimer = setInterval(() => {
-  if (portsEnabled()) return;
-  dataPlane.cutPorts();
-  if (!disabling) {
-    disabling = true;
-    void node.daemon.disablePorts().catch(() => { console.error('ports cleanup failed; retrying'); })
-      .finally(() => { disabling = false; });
-  }
-}, 50);
-portsTimer.unref();
+monitorPorts(portsEnabled, () => dataPlane.cutPorts(), () => node.daemon.disablePorts(),
+  () => { console.error('ports cleanup failed; retrying'); });
 export const server = createAgentServer(tls, async (req, res, role) => {
   const reply = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body)); };
   try {
