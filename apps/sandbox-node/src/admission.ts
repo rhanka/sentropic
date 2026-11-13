@@ -28,7 +28,7 @@ export class ExecutionNodeAdmission {
 
   constructor(
     quotas: Record<ExecutionNodeTenantId, TenantSlotQuota>,
-    private readonly options: { globalMaxLive?: number; retryAfterMs?: number;
+    private readonly options: { globalMaxLive?: number; retryAfterMs?: number; reservableMiB?: number;
       memoryCurrentMiB?: (tenantId: ExecutionNodeTenantId) => number } = {},
   ) {
     this.quotas = quotas;
@@ -50,7 +50,7 @@ export class ExecutionNodeAdmission {
     const tenants = ['sentropic', 'immo'] as const;
     const usage = (id: ExecutionNodeTenantId) => Math.max(this.reservedMiB(id), this.options.memoryCurrentMiB?.(id) ?? 0);
     if (usage(tenantId) + additionalMiB > 2304
-      || tenants.reduce((sum, id) => sum + usage(id), 0) + additionalMiB > capacity.reservableMiB) {
+      || tenants.reduce((sum, id) => sum + usage(id), 0) + additionalMiB > Math.min(capacity.reservableMiB, this.options.reservableMiB ?? capacity.reservableMiB)) {
       throw new ExecutionNodeError('tenant_quota_exceeded', 'memory reservation exhausted', 250);
     }
   }

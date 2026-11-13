@@ -15,8 +15,11 @@ export class BuildQueue {
 
   constructor(private readonly maxOutstandingPerTenant = 2) {}
 
-  snapshot(): { maxConcurrentBuildsGlobal: 1; holderTenantId?: ExecutionNodeTenantId; queueDepth: number } {
+  snapshot() {
     return { maxConcurrentBuildsGlobal: 1, holderTenantId: this.holder,
+      quantumJobs: 1, maxOutstandingHeavyPerTenant: this.maxOutstandingPerTenant,
+      serviceTimeoutMsByProfile: SERVICE_TIMEOUT_MS,
+      queueDepthByTenant: { sentropic: this.pending.get('sentropic')!.length, immo: this.pending.get('immo')!.length },
       queueDepth: [...this.pending.values()].reduce((n, queue) => n + queue.length, 0) };
   }
 

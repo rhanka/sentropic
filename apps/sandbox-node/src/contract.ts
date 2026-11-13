@@ -212,7 +212,9 @@ export interface ExecutionNodeInfo {
   readonly nodeInstanceId: string;
   readonly nodeEpoch: number;
   readonly classes: readonly ['sandbox'];
-  readonly parentSlice: { readonly name: 'builder.slice'; readonly memoryMaxMiB: 2944 };
+  readonly parentSlice: { readonly name: 'builder.slice'; readonly memoryMaxMiB: number; readonly memorySwapMaxMiB: 512 };
+  readonly hostMemory: { readonly memTotalBytes: number; readonly memTotalFloorMiB: number;
+    readonly hostBaseMiB: 512; readonly agentMemoryMaxMiB: 192; readonly unallocatedMarginMiB: 172; readonly zramNominalMiB: 1024 };
   readonly capabilities: { readonly supportedOps: readonly string[] };
 }
 

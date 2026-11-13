@@ -29,7 +29,8 @@ describe('global publish admission', () => {
     await queue.acquire('sentropic');
     const a = queue.acquire('sentropic').then(() => order.push('a'));
     const b = queue.acquire('immo').then(() => order.push('b'));
-    expect(queue.snapshot()).toEqual({ maxConcurrentBuildsGlobal: 1, holderTenantId: 'sentropic', queueDepth: 2 });
+    expect(queue.snapshot()).toMatchObject({ maxConcurrentBuildsGlobal: 1, holderTenantId: 'sentropic', queueDepth: 2,
+      quantumJobs: 1, maxOutstandingHeavyPerTenant: 2, serviceTimeoutMsByProfile: { 'artifact-build': 60000, prebundle: 120000, 'cold-materialize': 120000 } });
     queue.release('sentropic');
     await b;
     expect(order).toEqual(['b']);

@@ -36,6 +36,7 @@ export * from './custody.js';
 export * from './recipe-key.js';
 
 export interface ExecutionNodeConfig {
+  readonly reservableMiB?: number;
   readonly nodeId?: string;
   readonly nodeInstanceId?: string;
   readonly nodeEpoch?: number;
@@ -67,7 +68,7 @@ export function createExecutionNode(config: ExecutionNodeConfig = {}): {
   void EXECUTION_NODE_TENANT_SLICE_DEFAULTS;
   const adapter = config.adapter ?? (config.useRunsc === true ? new RunscRuntimeAdapter() : new FakeRuntimeAdapter());
   if (adapter.kind === 'runsc-systrap' && !config.ticketPublicKeyPem) throw new Error('runsc requires an execution ticket verification key');
-  const admission = new ExecutionNodeAdmission(quotas, { memoryCurrentMiB: config.memoryCurrentMiB
+  const admission = new ExecutionNodeAdmission(quotas, { reservableMiB: config.reservableMiB, memoryCurrentMiB: config.memoryCurrentMiB
     ?? (adapter.kind === 'runsc-systrap' ? tenantId => new SandboxCgroup().tenantMemoryMiB(tenantId) : undefined) });
   const audit = new AuditLog(nodeInstanceId, config.now);
   const bases = new TenantBaseRegistry();

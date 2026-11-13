@@ -7,6 +7,7 @@ import { createExecutionNode } from './index.js';
 import { AgentApi } from './api.js';
 import type { TicketEnvelope } from './daemon.js';
 import { readJsonBody } from './transport.js';
+import { totalmem } from 'node:os';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -22,7 +23,11 @@ if (!Number.isSafeInteger(nodeEpoch) || nodeEpoch < 1) throw new Error('invalid 
 const jobAlerts = required('JOB_ALERTS_URL');
 if (!jobAlerts.startsWith('https://')) throw new Error('JOB_ALERTS_URL must use HTTPS');
 const custody = new CustodyGuard('/var/lib/builder/custody.wal');
+const hostMemory = { memTotalBytes: totalmem(), memTotalFloorMiB: Math.floor(totalmem() / 1048576),
+  hostBaseMiB: 512, agentMemoryMaxMiB: 192, unallocatedMarginMiB: 172, zramNominalMiB: 1024 } as const;
+const reservableMiB = Math.min(2944, Math.max(0, hostMemory.memTotalFloorMiB - 876));
 const node = createExecutionNode({ useRunsc: true, nodeInstanceId, nodeEpoch,
+  reservableMiB,
   ticketPublicKeyPem: readFileSync(required('AGENT_TICKET_PUBLIC_KEY'), 'utf8') });
 const api = new AgentApi(node, custody);
 const server = createAgentServer(tls, async (req, res, role) => {
@@ -36,8 +41,8 @@ const server = createAgentServer(tls, async (req, res, role) => {
     const scope = requestScope(req.url ?? '/', typeof header === 'string' ? header : undefined, role);
     if (url.pathname === '/v1/node' && req.method === 'GET') {
       reply(200, { contractVersion: EXECUTION_NODE_CONTRACT_VERSION, nodeId: 'artifact-builder-vm-1',
-        nodeInstanceId, nodeEpoch, classes: ['sandbox'], parentSlice: { name: 'builder.slice', memoryMaxMiB: 2944 },
-        capabilities: { supportedOps: ['node', 'quotas', 'create', 'start', 'claim', 'stop', 'export', 'delete', 'renew', 'revoke-custody'] } }); return;
+        nodeInstanceId, nodeEpoch, classes: ['sandbox'], parentSlice: { name: 'builder.slice', memoryMaxMiB: reservableMiB, memorySwapMaxMiB: 512 }, hostMemory,
+        capabilities: { supportedOps: ['node', 'quotas', 'bases', 'create', 'start', 'claim', 'stop', 'export', 'delete', 'renew', 'revoke-custody', 'write'] } }); return;
     }
     if (scope.scope === 'tenant' && url.pathname === `/v1/tenants/${scope.tenantId}/quotas` && req.method === 'GET') {
       reply(200, node.admission.quotaSnapshot(scope.tenantId,
