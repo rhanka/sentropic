@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   ExecutionNodeClaimSpec,
+  ExecutionNodeDevScope,
   ExecutionNodeExportSpec,
   ExecutionNodeLifecycleState,
   ExecutionNodeOwnership,
@@ -13,9 +14,10 @@ import { checkTicket, sha256Hex, verifyTicketSignature } from './tickets.js';
 import type { RuntimeAdapter } from './runtime-adapter.js';
 import { ExecutionNodeAdmission } from './admission.js';
 import { AuditLog } from './audit.js';
-import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths } from './mounts.js';
+import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths, validateDevScope } from './mounts.js';
 
 export interface SandboxRecord {
+  readonly devScope: ExecutionNodeDevScope;
   readonly id: string;
   readonly tenantId: ExecutionNodeTenantId;
   state: ExecutionNodeLifecycleState;
@@ -173,6 +175,7 @@ export class ExecutionNodeDaemon {
     warmStandby?: boolean;
     compatibility?: ExecutionNodeClaimSpec['compatibility'];
   }): Promise<SandboxRecord> {
+    validateDevScope(input.spec.devScope);
     if (input.spec.tenantId !== input.ownership.tenantId) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', 'spec/ownership tenant mismatch');
     }
@@ -186,6 +189,7 @@ export class ExecutionNodeDaemon {
       const id = randomUUID();
       const paths = sandboxPaths(input.spec.tenantId, id);
       const record: SandboxRecord = {
+        devScope: structuredClone(input.spec.devScope),
         id,
         tenantId: input.spec.tenantId,
         state: input.warmStandby === true ? 'standby' : 'creating',
@@ -201,7 +205,7 @@ export class ExecutionNodeDaemon {
         scopeName: `builder-sbx-${id}.scope`,
       };
       this.sandboxes.set(this.key(record.tenantId, id), record);
-      this.audit.record('sandbox.created', record.tenantId, id, `mounts=${mounts.length}`);
+      this.audit.record('sandbox.created', record.tenantId, id, JSON.stringify({ mounts: mounts.length, devScope: record.devScope }));
       void paths;
       return record;
     });
@@ -326,7 +330,7 @@ export class ExecutionNodeDaemon {
     if (sandbox.state !== 'running') {
       throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}, writes require running`);
     }
-    checkWritePath(path);
+    checkWritePath(path, sandbox.devScope);
     this.audit.record('sandbox.write', tenantId, id, path);
   }
 

@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 B2: traversal, refused-file and symlink regressions reproduced; mandatory host-resolved devScope is persisted with provenance and enforced by normalized glob checks.
 - [x] RUN 3 M8/M10: reproduced missing deadline close and torn-tail restart crash; timers close streams and WAL recovery truncates uncommitted tail, syncs file and parent before ack.
 - [x] RUN 3 B1: failing memory regression reproduced 3200 MiB; AMD-13 reserves 2944 (704/session, 1536/build), tenant 2304/2048/704 with bounded swap.
 - `BR-SN1-EX8`: CI shard 6 passed all 49 browser tests but provider receipt rejected the two legitimate session-title Responses calls from chat-service.generateSessionTitle (system prompt, gpt-5.4-nano, 32 tokens). Fixture currently accepts only user-role reasoning classifiers. Add that exact title protocol with regression tests; preserve unknown-request/host rejection. Impact: test fixture only, no application behavior. Rollback: revert these two fixture files.
