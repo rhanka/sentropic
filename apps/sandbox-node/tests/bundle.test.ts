@@ -18,6 +18,13 @@ describe('OCI bundle lifecycle', () => {
       expect(JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8')).linux.resources.pids.limit).toBe(limit);
       expect(statSync(join(bundle.path, 'writable/upper')).mode & 0o777).toBe(0o755);
       expect(statSync(bundle.path).mode & 0o777).toBe(0o700);
+      if (quotaMiB > 704) {
+        // A fresh qualification source has no ui directory. UID 1000 must reach its output bind.
+        expect(statSync(join(bundle.workspace, 'ui')).mode & 0o005).toBe(0o005);
+        const spec = JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8'));
+        expect(spec.process.cwd).toBe('/workspace');
+        expect(spec.mounts.find((mount: { destination: string }) => mount.destination === '/workspace/ui/dist').source).toBe(bundle.output);
+      }
       destroyBundle(bundle, () => {});
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
