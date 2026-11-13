@@ -67,6 +67,10 @@ export function splitSql(text) {
 // One delivered A4 entry point (execution.mjs / ops.mjs / run.mjs / verify.mjs)
 // with file-path-only env, never secret values in argv.
 export function delivered(ctx, script, env, timeoutMs) {
+  if (script === 'execution.mjs' && env.A4_ACTION === 'fence') {
+    script = 't3-fence.mjs';
+    env = { ...env, T3_STATE_DIR: ctx.stateDir };
+  }
   const flat = Object.entries(env).map(([k, v]) => `${k}=${v}`).join(' ');
   if (ctx.dryRun) { ctx.print(`# dry-run: ${flat} node ${script}`); return ''; }
   try {
@@ -170,6 +174,19 @@ function heartbeat(ctx, state, step) {
 // keeps exactly one writer: the loser stands down with exit 5.
 let RECOVERY_IN_FLIGHT = false;
 export async function recover(ctx, state, reason) {
+  // An explicit false marker means the new driver's fence never began.
+  // The child persists it immediately before the first authorized write;
+  // reread after stopping automation so an in-flight fence cannot be missed.
+  if (state.fenceStarted === false) {
+    state.fenceStarted = loadState(ctx.stateDir)?.fenceStarted === true;
+    if (!state.fenceStarted) {
+      state.step = 'DONE';
+      state.watchdogDone = true;
+      state.refusalReason = reason;
+      saveState(ctx.stateDir, state);
+      return 1;
+    }
+  }
   // In-process single-flight: a second concurrent recover() (overlapping
   // watchdog ticks, or a drive() catch racing the watchdog) stands down
   // instead of running a second recovery in parallel.
@@ -384,7 +401,7 @@ export async function drive(ctx) {
 function initializeState(ctx) {
   assertPreviewSafe(ctx);
   validateProbes(buildProbes(ctx.config).probes);
-  const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
+  const state = { version: 1, step: 'W0', fenceStarted: false, startedAtUtc: utcNow(), driverPid: process.pid,
     watchdogPid: ctx.watchdogPid,
     childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
     stepDeadlineMonoMs: monoMs() + 600_000 };
@@ -410,9 +427,13 @@ async function driveInner(ctx, state) {
   // and routes to recovery instead of overrunning the step.
   const to = (ms, step) => Math.min(stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step]), left());
   heartbeat(ctx, state, 'W1');
+  // Injected executors own their mutation boundary; real execution records
+  // it inside t3-fence after authorization validation, before kubectl.
+  if (ctx.delivered) { state.fenceStarted = true; saveState(ctx.stateDir, state); }
   ctx.d1 = (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'fence',
     A4_AUTHORIZATION_FILE: ctx.config.authorizationFile,
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(30_000, 'W1'));
+  state.fenceStarted = loadState(ctx.stateDir)?.fenceStarted === true;
   if (monoMs() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
   heartbeat(ctx, state, 'W2');
   writeFileSync(`${ctx.stateDir}/request.json`, JSON.stringify(ctx.config.request), { mode: 0o600 });
