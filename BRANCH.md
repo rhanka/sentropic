@@ -29,6 +29,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 ## Feedback Loop
 - [x] Track single writer: conductor imports this plan and lane report; this lane does not mutate the shared journal.
 - [ ] Verify delivered agent wire format against freeze; document discrepancies and bounded consumer handoffs.
+  - [x] Fix explicit Content-Length for DELETE JSON; hermetic listener accepts both loopback families; sanitize synchronous TLS failures.
 
 ## AI Flaky tests
 - [x] No AI provider tests needed for the hermetic contract.
@@ -47,6 +48,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
 - [ ] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
   - [x] Dedicated Postgres advisory-lock heartbeat leadership and S1-C1 EdDSA custody issuing/revocation functions.
+  - [x] Product scheduler starts/stops selected-node leadership; identity mismatch latches an alarm and stops the loop.
   - [x] Bounded quantum-one tenant queue, concurrent head-read coalescing and retained-export-upload-delete client cycle.
   - [x] Tenant-specific BHS SigV4 presigned URLs; credentials remain in the API closure.
 - [ ] Lot 4: hermetic fake agent tests in api/tests/unit/execution-node*.test.ts; backend rollback regression.

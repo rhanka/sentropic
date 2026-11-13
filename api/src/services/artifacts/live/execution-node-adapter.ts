@@ -25,7 +25,8 @@ export class ExecutionNodeAdapter {
     this.transport = transport ?? executionNodeTransport(config);
   }
   private refuseIdentity(): never {
-    this.fenced = true; this.alarm('execution_node_identity_mismatch');
+    if (!this.fenced) this.alarm('execution_node_identity_mismatch');
+    this.fenced = true;
     throw new ExecutionNodeRefusal('execution_node_identity_mismatch');
   }
   private identity(value: Record<string, unknown>) {
@@ -35,7 +36,7 @@ export class ExecutionNodeAdapter {
   private checked(reply: NodeReply): NodeReply {
     if (reply.status >= 200 && reply.status < 300) return reply;
     const error = nodeJson(reply).error;
-    if (error === 'stale_node_epoch' || error === 'unknown_node_instance') this.refuseIdentity();
+    if (error === 'stale_node_epoch') this.refuseIdentity();
     // Untrusted response text/URLs never escape to application logs.
     const code = typeof error === 'string' && /^[a-z_]{1,80}$/.test(error) ? error : 'node_request_refused';
     const delay = Number(reply.headers['retry-after']);
