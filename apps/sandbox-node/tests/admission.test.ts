@@ -7,6 +7,12 @@ const quotas = {
 };
 
 describe('admission fairness', () => {
+  it('should add build memory after accounting for residual tenant consumption', async () => {
+    const admission = new ExecutionNodeAdmission(quotas, { memoryCurrentMiB: id => id === 'sentropic' ? 800 : 0 });
+    admission.admit('sentropic', 'live', 'a'); admission.admit('immo', 'live', 'b');
+    await expect(admission.admitBuild('sentropic')).rejects.toMatchObject({ status: 429 });
+    expect(admission.builds.snapshot().holderTenantId).toBeUndefined();
+  });
   it('returns 429 with retryAfterMs when a tenant quota is exhausted', () => {
     const admission = new ExecutionNodeAdmission(quotas, { retryAfterMs: 250 });
     admission.admit('sentropic', 'live', 'r1');

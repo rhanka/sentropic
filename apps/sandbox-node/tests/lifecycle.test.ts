@@ -92,7 +92,7 @@ describe('lifecycle', () => {
     expect(await outcome).toMatchObject({ code: 'sandbox_still_running' });
     expect(box.state).toBe('running');
   });
-  it('should reject a queued mutation whose ticket expires before admission', async () => {
+  it('should honor authenticated queued admission after the original ticket expires', async () => {
     let now = 100_000;
     const keys = generateTicketKeyPair();
     const { daemon, admission } = createExecutionNode({ ticketPublicKeyPem: keys.publicKeyPem, nodeInstanceId: 'i', now: () => now });
@@ -105,11 +105,11 @@ describe('lifecycle', () => {
     };
     await create('sentropic');
     const waiting = create('immo');
-    const outcome = expect(waiting).rejects.toThrow(/expired/);
-    now += 30_001;
+    now += 40_000;
     admission.builds.release('sentropic');
-    await outcome;
-    expect(admission.builds.snapshot().holderTenantId).toBeUndefined();
+    await expect(waiting).resolves.toMatchObject({ state: 'creating' });
+    expect(admission.builds.snapshot().holderTenantId).toBe('immo');
+    admission.builds.release('immo');
   });
   it('should pass validated base mounts and session command to the runtime', async () => {
     class CaptureAdapter extends FakeRuntimeAdapter {

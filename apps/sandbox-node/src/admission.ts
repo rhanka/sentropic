@@ -57,9 +57,7 @@ export class ExecutionNodeAdmission {
   }
 
   async admitBuild(tenantId: ExecutionNodeTenantId, profile?: HeavyProfile, onTimeout?: () => Promise<void>): Promise<void> {
-    await this.builds.acquire(tenantId, profile, onTimeout);
-    try { this.checkMemory(tenantId, 0); }
-    catch (error) { this.builds.release(tenantId); throw error; }
+    await this.builds.acquire(tenantId, profile, onTimeout, () => this.checkMemory(tenantId, capacity.buildMiB));
   }
 
   quotaSnapshot(tenantId: ExecutionNodeTenantId, controlGroup: string) {

@@ -184,12 +184,14 @@ export class ExecutionNodeDaemon {
     warmStandby?: boolean;
     compatibility?: ExecutionNodeClaimSpec['compatibility'];
   }): Promise<SandboxRecord> {
+    input = structuredClone(input);
     validateDevScope(input.spec.devScope);
     if (input.spec.tenantId !== input.ownership.tenantId) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', 'spec/ownership tenant mismatch');
     }
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, input.spec.tenantId, input.commandId, body, 'POST', '/v1/sandboxes', input.ownership);
+    const admittedEpoch = this.nodeEpoch;
     const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
     return this.idempotent(input.spec.tenantId, input.commandId, body, async () => {
       const id = randomUUID();
@@ -203,7 +205,8 @@ export class ExecutionNodeDaemon {
         }
       });
       else this.admission.admit(input.spec.tenantId, slot, input.commandId);
-      try { this.authorizeCommand(ticket, input.spec.tenantId, input.commandId, body, 'POST', '/v1/sandboxes', input.ownership); }
+      // Authentication grants this immutable queue entry; ticket expiry is not a service deadline.
+      try { if (this.nodeEpoch !== admittedEpoch) throw new ExecutionNodeError('custody_revoked', 'queued node epoch changed'); }
       catch (error) {
         if (slot === 'build') this.admission.builds.release(input.spec.tenantId);
         else this.admission.release(input.spec.tenantId, slot);
