@@ -66,7 +66,11 @@ export class AgentApi {
       await daemon.writeFile(tenantId, id, { ...body, path: body.path, commandId, devScope, contentBase64: body.contentBase64, ticket });
       return { status: 200, body: { written: true } };
     }
-    if (operation === 'revoke-custody') return { status: 200, body: this.custody.revoke(tenantId, id, Number(body.custodyEpoch)) };
+    if (operation === 'revoke-custody') {
+      const result = this.custody.revoke(tenantId, id, Number(body.minCustodyEpoch));
+      sandbox.ownership = { ...sandbox.ownership, custodyEpoch: result.activeCustodyEpoch };
+      return { status: 200, body: result };
+    }
     throw new ExecutionNodeError('command_id_payload_mismatch', 'unknown lifecycle operation');
   }
 }
