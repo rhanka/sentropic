@@ -17,6 +17,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - `BRANCH.md` (mandatory per-commit progress)
   - `deploy/ci/preprod-a4/t3-*`
   - `api/tests/api/t3-*`
+  - `e2e/tests/02-organizations.spec.ts` (T3-EX2: isolate viewer detail fixture after evidenced CI failure)
   - `deploy/ci/artifact-content/tests.mk` (one read-only `-v` mount line for the
     manifests gate so it resolves the same canonical `t3-classify.sql`; see T3-EX1)
 - **Forbidden Paths (must not change in this branch)**:
@@ -34,6 +35,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- **T3-EX2** (declared before use): limit the viewer detail E2E to its exact seeded organization ID, assert its completed status and heading, and preserve the separate list-click navigation test. CI 43347978881 / job 131633260600 clicked a draft URL then returned to the list instead of reaching the seeded detail. Reason: directly blocks requested green CI; outside AI-flaky allowlist, no exemption or rerun. Impact: test setup/navigation only, no runtime code or timeouts. Rollback: revert the single E2E file and this exception.
 - **T3-EX1** (declared before use): mount `api/tests/api` read-only into the
   `test-artifact-content-manifests` gate container (`deploy/ci/artifact-content/tests.mk`,
   one `-v` line). Reason: the single canonical `t3-classify.sql` lives under `api/` so the
@@ -75,6 +77,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN8 CI blocker T3-EX2: exact completed viewer fixture detail and heading/API assertions; complete organizations E2E file passed locally 11/11, zero retries, using receipt-verified CI runtime images; existing list-click coverage retained.
 - [x] RUN8 M4 boundary refinement: an authorized rollout-status read preceding every mutation cannot arm recovery; delivered-command regression failed first, then full focused RUN8 suite passed.
 - [x] RUN8 local gates: 164/164 operator tests (including 19 RUN8 regressions), then 18/18 focused HTTP/refusal tests including one added streamed-body deadline case; 6/6 SQL tests on separately migrated PostgreSQL 17 databases. No application package source changed.
 - [x] RUN8 integration strengthens annex refusal with valid authorization and tests a real HTTP body stalled after 200 headers within the shared deadline.

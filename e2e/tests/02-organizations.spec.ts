@@ -12,6 +12,7 @@ test.describe('Gestion des organisations', () => {
   const USER_B_STATE = './.auth/user-b.json';
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
   let workspaceAId = '';
+  let readOnlyOrganizationId = '';
 
   const createScopedPage = async (
     browser: import('@playwright/test').Browser,
@@ -54,6 +55,10 @@ test.describe('Gestion des organisations', () => {
     if (!orgRes.ok()) {
       throw new Error(`Impossible de créer organisation read-only (status ${orgRes.status()})`);
     }
+    const readOnlyOrganization = await orgRes.json();
+    expect(readOnlyOrganization.status).toBe('completed');
+    readOnlyOrganizationId = readOnlyOrganization.id;
+    expect(readOnlyOrganizationId).toBeTruthy();
     await userAApi.dispose();
   });
 
@@ -391,21 +396,16 @@ test.describe('Gestion des organisations', () => {
     test('détail: champs non éditables', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_B_STATE, workspaceAId);
       try {
-        await page.goto('/organizations');
-        await page.waitForLoadState('domcontentloaded');
-
-        await expect(page.getByText('Org Readonly E2E', { exact: true })).toBeVisible({ timeout: 10_000 });
-        const targetCard = page
-          .locator('article', { has: page.locator('h2', { hasText: 'Org Readonly E2E' }) })
-          .first();
         const detailResponse = page.waitForResponse(
-          (res) => res.url().includes('/api/v1/organizations/') && res.request().method() === 'GET' && res.status() === 200,
+          (res) => new URL(res.url()).pathname === `/api/v1/organizations/${readOnlyOrganizationId}`
+            && res.request().method() === 'GET' && res.status() === 200,
           { timeout: 10_000 },
         );
-        await targetCard.click();
-        await page.waitForURL(/\/organizations\/(?!new$)[a-zA-Z0-9-]+$/, { timeout: 10_000 });
+        await page.goto(`/organizations/${readOnlyOrganizationId}`);
+        await expect(page).toHaveURL(new RegExp(`/organizations/${readOnlyOrganizationId}$`));
         const detailRes = await detailResponse;
-        expect(detailRes.url()).toContain(page.url().split('/').pop() ?? '');
+        expect((await detailRes.json()).name).toBe('Org Readonly E2E');
+        await expect(page.locator('h1 textarea.editable-textarea, h1 input.editable-input')).toHaveValue('Org Readonly E2E');
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
         await expect(disabledField).toBeVisible({ timeout: 10_000 });
