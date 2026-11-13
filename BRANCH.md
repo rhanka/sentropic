@@ -46,6 +46,7 @@
 - [ ] Round 2d: tests, archive rebuild/verification, exact-head green CI and receipt.
 - [ ] Co-signed AMD-28: qualified digest switch, profile fence, runtime audits, helper cap, UDP/raw/kernel witnesses and OOM qualification.
 - [x] AMD-28 switch: live root-owned config, digest-gated discovery/admission, stream cut and sandbox destruction on closure.
+- [x] AMD-28 audits: strict addresses/all-table loopback routes and sentry namespace/flags/spec auditors.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
