@@ -43,7 +43,11 @@ export function executionNodeHeartbeat(pool: Pool, node: ExecutionNodeAdapter, a
       if (!current) return;
       await bound(current.query('SELECT 1'), 300);
       if (stopped || current !== client) return;
-      if (!verified) { await bound(node.inspect(abort.signal), 500); verified = true; }
+      if (!verified) {
+        await bound(node.inspect(abort.signal), 500);
+        if (stopped || current !== client || abort.signal.aborted) return;
+        verified = true;
+      }
       if (!stopped && current === client) await bound(node.heartbeat(abort.signal), 500);
     } catch (error) {
       if (error instanceof Error && error.message === 'execution_node_identity_mismatch') stopped = true;
