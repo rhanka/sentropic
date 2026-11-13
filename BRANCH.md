@@ -47,4 +47,5 @@
   - [x] Scoped data-plane checks: 15 passing tests; TLS fixture time encoding corrected with a focused regression.
   - [x] Live HTTP and signed supervisor integration tests added.
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
+  - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.

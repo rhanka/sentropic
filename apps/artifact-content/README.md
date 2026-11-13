@@ -65,3 +65,32 @@ artifact-content is the workers' only ingress, so every supervisor frame from th
 - `APP_ARTIFACT_LIVE_BUILDER_NAMESPACE` (default `sentropic-artifact-builders`) names the pods' Service namespace.
 
 Before the pod is touched: pod name `artifact-<40 hex>`, `application/octet-stream`, 65 bytes to 2 MiB (413 otherwise), a W3 frame verified with a configured key whose fence names the same pod (else an empty 403). The same bytes go to `http://<podName>.<namespace>.svc.cluster.local:5173/_supervisor/v1/frame` with no other header, over node:http (no undici headers timeout) bounded at 330 s, aborted when the API client closes. No queue; concurrent frames per pod are allowed. Pod 200 gives 200 with its body (over 2 MiB gives 502), pod 403 gives 403, anything else 502. Nothing about a frame is logged. The API side (`ARTIFACT_SUPERVISOR_RELAY_URL`) bounds each command at 320 s.
+
+## Execution-node data plane (S1-C1)
+
+`APP_ARTIFACT_SANDBOX_BACKEND=k8s` is the default and retains the existing pod HTTP/HMR and supervisor relay. Select `execution-node` to use the data-plane transport for both. Unknown selections refuse startup; an unavailable execution node never silently falls back to k8s. Returning the selector to `k8s` is the hot rollback.
+
+Execution-node configuration (names only):
+
+- `SANDBOX_NODE_URL`: HTTPS origin, no userinfo, path, query or fragment.
+- `SANDBOX_MTLS_DATA_PLANE_CERT_B64`: PEM client certificate, base64; CN `data-plane:artifact-content`.
+- `SANDBOX_MTLS_DATA_PLANE_KEY_B64`: its PEM private key, base64.
+- `SANDBOX_MTLS_CA_CERT_B64`: PEM CA certificate, base64.
+
+Only the data-plane pair is loaded. TLS 1.3, server hostname/CA verification and client authentication are mandatory. No credential values or frame/token contents are logged. No signing key or control-plane credentials belong here.
+
+The composing host must supply `startContentServer({ custodyIssuer })` in execution-node mode. The standalone entry point deliberately refuses that mode until S1-B0a supplies this dependency. The exported `CustodyIssuer` interface in `src/data-plane.ts` is the integration contract:
+
+- `issue(subject, signal)` resolves an authenticated live route (`kind: live`, full `LiveRoute`) or a verified supervisor target (`kind: supervisor`, deterministic `podName`) to its current tenant, principal, physical UID, custody epoch and sandbox port. It must recheck host/session/resource authority; a pod name alone never grants authority. Resolve the subject against API-owned state, never browser headers. Observe the abort signal.
+- Return `{tenantId, principalId, physicalUid, custodyEpoch, port, token, issuedAt, deadlineAt}`. `token` is the exact agent-verifiable signed `X-Custody-Token`; the edge treats its encoding as opaque. Its signed claims must match that metadata, with `resourceId=physicalUid`, ISO timestamps and TTL at most 60 seconds. S1-B0a owns wire encoding/signature agreement with the agent; this lane adds no competing token codec.
+- `watch(subject, revoke)` subscribes before issuance and immediately notifies on revoked custody or any resolved binding/tenant/principal/physical-UID change. Return an unsubscribe function. Do not allow a renewal to authorize a subject revoked in the meantime.
+
+Every new HTTP hop and WS handshake obtains fresh custody. The edge sends only its allowlisted application headers plus `X-Tenant-Id`, `X-Expected-Physical-Uid`, `X-Custody-Token` to `/v1/ports/:port/<original path and query>`. Browser cookies, Authorization and caller-supplied custody headers are never forwarded. Supervisor frames still pass the existing signature/fence checks before any custody is issued.
+
+HTTP is buffered within the existing size bound and the original token deadline. Expiry, issuer revocation or upstream 403 returns `403 {"error":"custody_revoked"}` without partial content. An active WS is never extended beyond the token admitted at its handshake: close with 1008 on revocation and proactively before its deadline (20% of TTL, capped at one second). Vite reconnects through the same authorization path to renew custody. This explicit reconnect avoids inventing an agent-side in-band token update protocol. The agent independently enforces expiry and minCustodyEpoch; its 1008 frame passes through the tunnel.
+
+Agent integration prerequisite: the baseline `apps/sandbox-node/src/service.ts` does not yet serve `/v1/ports/:port/*` or verify signed custody tokens. The agent owner must implement that contract before enabling this backend. Local tests use an ephemeral mTLS fake and a separate fake signing/verifying issuer; they do not qualify the VM or an agent token wire format.
+
+## Live CSP D7-A
+
+`APP_ARTIFACT_LIVE_CSP_PROFILE=default` (or unset) retains `worker-src 'none'`. The pre-authorized `D7-A` profile changes only that directive to `worker-src 'self' blob:`. Invalid profiles refuse live-edge startup. D7-A also admits Vite's `?worker&url` form for MapLibre, through the host path allowlist; the default profile rejects it. All other isolation, request authorization and response headers stay in force.
