@@ -39,13 +39,28 @@ k8s owns that execution, qualification receipts, installation and activation.
 
 ## Round 2 data plane and export
 
-AMD-28 is PROPOSED, pending k8s co-signature and qualification. This archive
-ships `EXECUTION_NODE_PORTS_ENABLED=false` in agent.env. Absent, false or
-unrecognized values refuse ports creation and runtime launch with HTTP 409
-`ports_disabled`; only literal `true` enables it. After co-signature and both
-real-host gates PASS, k8s may set true and restart the service. Set false and
-restart to refuse new ports sandboxes without a new release; existing scopes
-require explicit stop/reconciliation. Other network policies continue as none.
+AMD-28 is CO-SIGNED by k8s on 2026-11-13 (k8s commit `3b042fd`). Activation
+still requires both real-host gates to PASS on the pinned `release-20261102.0`
+runsc binary. k8s owns these exact keys in `/etc/execution-node/agent.env`:
+
+```dotenv
+EXECUTION_NODE_PORTS_ENABLED=false
+EXECUTION_NODE_PORTS_RUNSC_SHA256=
+EXECUTION_NODE_PORT_FORWARD_MAX=2
+```
+
+The archive defaults to closed with no qualified digest: shipment alone cannot
+activate an unqualified data plane. After PASS, k8s records the receipt's runsc
+SHA-256 beside literal `true` in its versioned configuration and installs that
+file root-owned, non-writable by tenants. Do not quote values. Production reads
+this file directly, including atomic replacements, every 50ms and on admission;
+no restart or new release is needed to close the switch. Missing, malformed or
+unreadable settings, false, or a different runsc digest remove `ports` from
+`GET /v1/node` supportedOps, refuse creation/start with `409 ports_disabled`,
+cut open HTTP/WS within 250ms, and destroy ports sandboxes. Cleanup failures are
+retried. Any runsc upgrade requires a new qualification before k8s reopens it.
+The gate opens only its own in-memory switch, pinning the binary after hardened
+prerequisites succeed; it never edits the production file.
 
 The updated archive adds authenticated `ANY /v1/ports/5173/*` and WebSocket
 upgrades. Only mTLS CN `data-plane:artifact-content` may use these routes.
@@ -54,16 +69,26 @@ mandatory; execution tickets are refused on this plane. The six custody claims
 are checked against the active sandbox owner/epoch, WAL revocation floor and
 60-second TTL. Expiry/revocation cuts HTTP and sends WS close 1008.
 
-The sandbox must opt into `network: ports`; gVisor uses `--network=sandbox`
+Only profiles `live` and `standby` may opt into `network: ports` on fixed port
+5173. Artifact-build, prebundle, cold-materialize, browser-harness and all other
+profiles remain `none`. gVisor uses `--network=sandbox --platform=systrap`
 inside a fresh `unshare --net` namespace with only `lo` brought up. The OCI
 network namespace references `/proc/self/ns/net` of that private launcher.
 No host interface, veth, external route or host TCP listener is configured.
-Operator-provided prerequisites are `util-linux` (`unshare`), POSIX `sh`,
-`iproute2` (`ip`) and `awk`; they are not installed by this archive. Both gates
+Operator-provided prerequisites are `util-linux` (`unshare`, `nsenter`), `dash`
+(`sh`), `iproute2` (`ip`, `ss`), coreutils and `awk`; k8s explicitly installs
+and records them, rather than this archive. Both gates
 fail fast by executing a private namespace/netlink probe in a transient unit
 with the shipped CapabilityBoundingSet and SystemCallFilter. The launch fence
-requires exactly UP `lo` and only local loopback IPv4/IPv6 routes, before
-runsc starts; any extra interface or external route aborts without fallback.
+requires exactly UP `lo`, only addresses 127.0.0.1/8 and ::1/128, and only
+loopback routes in every IPv4/IPv6 table, including `::1 dev lo` in main.
+The netns inode differs from PID 1. After start, the sentry's inode must match
+the launcher and differ from host/other sandboxes, with lo alone and no kernel
+listeners. Flags/specs forbid raw/proxy/XDP (except off), NAT/nftables replay,
+pcap, packet writes, flag overrides, dev.gvisor.* annotations and network
+devices; capabilities are empty and host UDS/FIFO are explicitly `none`.
+Any violation returns `500 network_isolation_violation`, destroys the sandbox
+and writes an audit record; there is no fallback.
 Gates print the digest-named verified archive identity and SHA-256 of the
 resolved runsc binary. Verify SHA256SUMS before invoking the gate.
 `--network=none` rejects gVisor's port-forward RPC and remains for other workloads.
@@ -80,6 +105,21 @@ The agent creates private UDS listeners under
 through `runsc --root=/run/execution-node/runsc port-forward --stream=<uds>
 sandbox-<physicalUid> 5173`. This is gVisor stream mode: runsc connects once to
 the UDS and donates it to the sentry, then exits. No host TCP forwarding port.
+The `<local>:<remote>` form is prohibited. The agent fixes the destination at
+5173; request input cannot choose a different runtime port. UDS directories
+are root-owned 0700 and removed on DELETE. `EXECUTION_NODE_PORT_FORWARD_MAX`
+sets a process-wide cap from 1 to 8 (default 2, read at agent startup), counting
+donated live connections conservatively until close. Eight additional requests
+may queue for at most 100ms; saturation returns `429 ports_saturated`.
+Helpers inherit the agent's 192M/128-task cgroup, never a tenant scope.
+Qualification holds that cap, bursts twelve more mTLS connections and verifies
+refusals, slot drainage and effective cgroup limits. It also probes TCP/UDP
+public IPv4 (22/8443), metadata IPv4/IPv6, global IPv6, DNS, host loopback,
+the other tenant's 5173 and a positive witness on the private kernel lo.
+The shipped native `network-probe` uses direct raw/packet/UDP socket syscalls;
+timeouts never count as UDP/TCP refusal. Gates compare host `ss -ltnup` before
+and after, and reconcile scopes/processes/netns references after stop, failure,
+kernel-confirmed OOM and a real SIGKILL of the gate's disposable agent worker.
 The existing worker bootstrap multiplexes live and supervisor traffic on 5173.
 Operator qualification must cover concurrent HTTP/HMR, revocation and expiry
 using the installed pinned runsc before G-A; hermetic fake-runtime tests do not
