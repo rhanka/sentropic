@@ -29,10 +29,10 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
 
 ## Feedback Loop
 - [x] K1 qualification prerequisite: production bundle upper root was 0700, inherited by overlay cwd, excluding sandbox uid 1000. Set only upper root to 0755; host bundle remains 0700 and workspace bind remains read-only. bundle.test.ts asserts both modes for session/build.
-- [x] K1 scoped verification: 31 tests pass; both TypeScript projects and export GC pass on ENV=test-sandbox-node-k1.
+- [x] K1 final local verification: 27 files / 118 tests pass; both TypeScript projects, shell syntax and export GC pass on ENV=test-sandbox-node-k1. No API/UI stack started.
 - [x] K1 cleanup regressions: isolation-runner.test.ts covers success, partial launch failure, failed probe, wrong scope policy, leaked mount and SIGTERM; cleanup is restricted to generated paths and preserves bases after a mount leak.
 - [ ] K1 review limitation: harness/review requires h2a_run MCP and two complementary reviewer hosts; no matching tool is exposed. No peer consensus claimed; not a VM isolation acceptance.
-- [x] Common-rules fallback: independent Astra high code review identified an umask-induced false failure in own-base EROFS checks. Explicit chmod of marker to 0666 and real-filesystem regressions under umask 0022/0077 address it; EACCES remains a failure.
+- [x] Common-rules fallback: independent Astra high review identified the marker umask defect. Explicit chmod 0666 and real-filesystem regressions under umask 0022/0077 address it; EACCES remains a failure. Reviewer closure at d327b599a confirms the correction and identifies no further blocker. Single review, no two-host consensus.
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance apply.
 
@@ -49,6 +49,6 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
 - [x] K1 Fix 2: real-adapter two-tenant isolation qualification, standalone SEA command, shipped shell wrapper and cleanup checks. Tests cover refusal guard and observable read/write/network failures; execution on VM remains the k8s-owned gate.
   - [x] Real-adapter runner and in-sandbox probes; guards refuse non-isolated/non-root execution.
 - [x] K1 Fix 3: archive root 0755, verification and operator custody modes.
-- [x] K1 build/verify: archive 0b1288e2a10bc5d2e61249997370cbd183a2593ad48cfa194b56127b9363bd54; nine internal checksums, extracted root 0755, SEA guard and uid 65534 self-test pass.
-- [ ] K1 final: full check-sandbox-node, push PR and wait for green CI; RUN 9 and done marker. Review availability is recorded above.
+- [x] K1 build/verify: archive f4cac77d73b130d770dd012a2196899b3fe1e51cc041a9c41d568485dc527818; nine internal checksums, extracted root 0755, SEA guard and uid 65534 self-test pass.
+- [x] K1 handoff preparation: local gates and review correction complete; exact-head PR/CI final outcome is maintained in .tmp/rv/s1-agent-core.md RUN 9 and the s1-agent-k1.done marker after push. No merge or deployment.
 - [ ] K1 Track handoff: designated conductor writer imports this BRANCH.md and RUN 9 evidence; this lane does not write the shared append-only journal.
