@@ -19,4 +19,6 @@ check-sandbox-node:
 	  sh -n k8s/start.sh k8s/build-artifact.sh; \
 	  node --check k8s/qualify-disk.mjs; \
 	  ../../node_modules/.bin/tsc --project tsconfig.json; \
+	  ../../node_modules/.bin/tsc --project tsconfig.build.json; \
+	  node --expose-gc tests/export-memory.mjs; \
 	  ../../node_modules/.bin/vitest run --config vitest.config.ts'

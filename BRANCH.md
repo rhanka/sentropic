@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 4 M5 GC regression is committed in standalone qualification: restoring the reviewed retention policy retained all 8 archive buffers after GC (8 != 0); corrected policy reclaims all 64 MiB while daemon stays strongly reachable.
 - [x] RUN 4 final artifact after early-exit fix: 6438720be250517de1613b570c8df42c5e6f318fb03bfdf74b5a839af87e6969; 60 regression tests pass. Replaces the intermediate RUN 4 archive.
 - [x] RUN 4 early exit: failing callback-before-launch-return regression left a finished process marked running; defer exit handling until the launch promise is registered, then confirm stop and retain output (60 tests).
 - [x] RUN 4 local verification: 59 regressions, TypeScript and shell/script syntax pass; compiled archive 01ffb345448177c33b6ecd7fe76a463026496c7817c8793ffbf71b29e1450bdb built without publication/deployment. Rebasing touched no public package source/version.
