@@ -125,7 +125,7 @@ export class ExecutionNodeAdapter {
     return this.command(session, operation === 'delete' ? 'DELETE' : 'POST',
       `/v1/sandboxes/${session.physicalUid}${operation === 'delete' ? '' : `/${operation}`}`, commandId, fields);
   }
-  verifyExport(reply: NodeReply, session: NodeSession, expected?: { buildId: string; command: readonly string[] }): Record<string, unknown> {
+  verifyExport(reply: NodeReply, session: NodeSession, expected: { buildId: string; command: readonly string[] }): Record<string, unknown> {
     try {
       const token = reply.headers['x-artifact-provenance']; if (typeof token !== 'string') throw new Error();
       const parts = token.split('.'); if (parts.length !== 3) throw new Error();
@@ -136,8 +136,8 @@ export class ExecutionNodeAdapter {
       if (claims.tenantId !== session.ownership.tenantId || claims.archiveSha256 !== nodeHash(reply.bytes)
         || claims.physicalUid !== session.physicalUid || claims.attemptId !== session.ownership.attemptId
         || canonicalNodeJson(claims.source) !== canonicalNodeJson(session.devScope.source)
-        || (expected && (claims.buildId !== expected.buildId
-          || canonicalNodeJson(claims.command) !== canonicalNodeJson(expected.command)))) throw new Error();
+        || claims.buildId !== expected.buildId
+        || canonicalNodeJson(claims.command) !== canonicalNodeJson(expected.command)) throw new Error();
       return claims;
     } catch { throw new ExecutionNodeRefusal('invalid_node_provenance'); }
   }

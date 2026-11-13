@@ -59,6 +59,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [ ] Round 2: fix review findings 2-7 with persisted controller export recovery and bounded heartbeat leadership.
   - [x] Capture ticket clock once; bind signed export to physical UID, attempt, source and command; restrict production agent copy to its type contract.
   - [x] Regress advancing ticket clock and valid signed-envelope substitution across resource/attempt/command/source/build/hash.
+  - [x] Require expected build and command on every export-verification call and update the delivered lifecycle contract.
   - [x] Bound heartbeat pool acquisition/queries/node calls; destroy failed leadership connections and abort outstanding HTTPS requests on lock loss.
   - [x] Add two-replica stalled-leader takeover, saturated-pool late-connect disposal and in-flight heartbeat cancellation regressions.
   - [x] Preserve WS close-frame flushing and reject stale identity completion after leadership loss.
