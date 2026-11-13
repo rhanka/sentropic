@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 describe('pinned VM release startup', () => {
+  it('should execute the shipped SEA without a host Node interpreter', () => {
+    const start = readFileSync(new URL('../k8s/start.sh', import.meta.url), 'utf8');
+    expect(start).toContain('exec ./execution-node');
+    expect(start).not.toContain('/usr/bin/node');
+  });
   it('should preserve host-visible mounts and require both tenant filesystems', () => {
     const unit = readFileSync(new URL('../k8s/execution-node.service', import.meta.url), 'utf8');
     for (const directive of ['ProtectSystem', 'ProtectHome', 'PrivateTmp', 'ReadWritePaths', 'MountFlags', 'ProtectControlGroups', 'PrivateDevices', 'Delegate']) {

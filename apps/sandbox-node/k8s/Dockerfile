@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1.4
-# Sandbox-node daemon image (S1 agent-core finalisation, no deployment).
-# Reproducible definition only: the k8s session (S1-K1) builds, publishes
-# by digest, and records the digest in PINS.md via build-artifact.sh.
-ARG BASE_IMAGE=node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2
+# Pinned glibc runtime: SEA executes on Ubuntu without a host Node installation.
+ARG BASE_IMAGE=node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e
+
+FROM ${BASE_IMAGE} AS rootfs
+RUN mkdir -p /workspace /tmp /proc /dev
 
 FROM ${BASE_IMAGE} AS build
 WORKDIR /workspace
@@ -13,11 +14,19 @@ RUN node scripts/ci/locked-tools.mjs --prefix /workspace --ignore-scripts --no-a
 COPY apps/sandbox-node apps/sandbox-node
 # Emit compiled daemon (tsconfig is noEmit by default for checks).
 RUN npx --no-install tsc --project apps/sandbox-node/tsconfig.build.json
+COPY apps/sandbox-node/k8s/build-tools /tools
+RUN npm ci --prefix /tools --no-audit --no-fund
+RUN /tools/node_modules/.bin/esbuild apps/sandbox-node/src/entry.ts --bundle --platform=node --format=cjs --target=node24 --outfile=agent.cjs \
+ && printf '{"main":"agent.cjs","output":"sea.blob","disableExperimentalSEAWarning":true,"useCodeCache":false}' > sea.json \
+ && node --experimental-sea-config sea.json \
+ && cp /usr/local/bin/node execution-node \
+ && /tools/node_modules/.bin/postject execution-node NODE_SEA_BLOB sea.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+ && ./execution-node --self-test
+RUN apt-get update && apt-get install -y --no-install-recommends erofs-utils && rm -rf /var/lib/apt/lists/*
+COPY --from=rootfs / /sandbox-rootfs/
+RUN mkfs.erofs -T 1767225600 --all-root rootfs.erofs /sandbox-rootfs
 
-FROM ${BASE_IMAGE} AS runtime
+FROM scratch AS runtime
 WORKDIR /srv/sandbox-node
-# Zero runtime dependencies: the daemon uses node builtins only.
-COPY --from=build /workspace/apps/sandbox-node/dist ./dist
-RUN printf '{"type":"module"}\n' > package.json
-USER 1000:1000
-ENTRYPOINT ["node", "dist/service.js"]
+COPY --from=build /workspace/execution-node /workspace/rootfs.erofs ./
+ENTRYPOINT ["/srv/sandbox-node/execution-node"]
