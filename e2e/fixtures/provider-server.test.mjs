@@ -4,16 +4,50 @@ import { once } from 'node:events';
 import { request } from 'node:http';
 import { createProviderServer, createProviderObserver, fixtureKey, installProviderBoundary, journeyResponse } from './provider-server.mjs';
 
+test('should deliver an open error stream immediately and finish observation by its deadline', async () => {
+  const rows = [];
+  let cancelled = false;
+  let recorded;
+  const observed = new Promise(resolve => { recorded = resolve; });
+  const response = new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('{"error":{"code":"rate_limit_exceeded"}}'));
+  }, cancel() { cancelled = true; } }), { status: 429 });
+  const observe = createProviderObserver({ fetchImpl: async () => response, record: row => {
+    rows.push(row);
+    if (row.type === 'response-error') recorded(row);
+  } });
+  let timer;
+  try {
+    const delivered = await Promise.race([observe('https://api.openai.com/v1/responses'),
+      new Promise(resolve => { timer = setTimeout(() => resolve(null), 100); })]);
+    assert.equal(delivered, response);
+    assert.equal(response.bodyUsed, false);
+    assert.equal(rows[1].status, 429);
+    const row = await observed;
+    assert.equal(row.requestId, rows[1].requestId);
+    assert.equal(row.status, 429);
+    assert.deepEqual(row.error, { code: 'unknown', type: 'unknown', param: 'unknown' });
+    assert.equal(response.bodyUsed, false);
+    await response.body.cancel();
+    assert.equal(cancelled, true);
+  } finally { clearTimeout(timer); void response.body.cancel().catch(() => {}); }
+});
+
 test('should observe safe request and rejection metadata while preserving SDK bytes', async () => {
   const secret = 'sensitive-sentinel-never-record';
   const rows = [];
+  let recorded;
+  const observed = new Promise(resolve => { recorded = resolve; });
   const body = { model: 'gpt-5.4-nano', messages: [{ role: 'system', content: secret }],
     stream: false, max_tokens: 32, temperature: 0.5, reasoning_effort: 'low',
     tools: [{ function: { name: secret, parameters: { secret } } }],
     response_format: { type: 'json_schema', json_schema: { name: secret } } };
   const wire = JSON.stringify({ error: { code: 'unsupported_parameter', type: 'invalid_request_error',
     param: 'max_tokens', message: secret, details: { secret } } });
-  const observe = createProviderObserver({ record: row => rows.push(row), fetchImpl: async request => {
+  const observe = createProviderObserver({ record: row => {
+    rows.push(row);
+    if (row.type === 'response-error') recorded(row);
+  }, fetchImpl: async request => {
     assert.deepEqual(await request.json(), body);
     assert.equal(request.headers.get('authorization'), secret);
     return new Response(wire, { status: 400 });
@@ -22,10 +56,13 @@ test('should observe safe request and rejection metadata while preserving SDK by
     method: 'POST', headers: { authorization: secret }, body: JSON.stringify(body),
   });
   assert.equal(await response.text(), wire);
+  await observed;
   assert.deepEqual(rows[0], { type: 'request', requestId: rows[0].requestId, host: 'api.openai.com',
     pathname: '/v1/chat/completions', model: 'gpt-5.4-nano', stream: false, toolsCount: 1,
     formatType: 'json_schema', reasoning: 'low', tokenLimits: { max_tokens: 32 }, temperaturePresent: true });
   assert.deepEqual(rows[1], { type: 'response', requestId: rows[0].requestId, host: 'api.openai.com', status: 400,
+  });
+  assert.deepEqual(rows[2], { type: 'response-error', requestId: rows[0].requestId, host: 'api.openai.com', status: 400,
     error: { code: 'unsupported_parameter', type: 'invalid_request_error', param: 'max_tokens' } });
   assert.ok(!JSON.stringify(rows).includes(secret));
 });
@@ -35,18 +72,24 @@ test('should fail closed for unknown metadata and bounded or invalid error bodie
   for (const wire of [JSON.stringify({ error: { code: secret, type: secret, param: secret, message: secret } }),
     secret, JSON.stringify({ padding: secret.repeat(5000), error: { code: 'unsupported_parameter' } })]) {
     const rows = [];
-    const observe = createProviderObserver({ record: row => rows.push(row),
+    let recorded;
+    const observed = new Promise(resolve => { recorded = resolve; });
+    const observe = createProviderObserver({ record: row => {
+      rows.push(row);
+      if (row.type === 'response-error') recorded(row);
+    },
       fetchImpl: async () => new Response(wire, { status: 400 }) });
     const response = await observe(`https://api.openai.com/${secret}?${secret}`, {
       method: 'POST', body: JSON.stringify({ model: secret, reasoning: { effort: secret },
         response_format: { type: secret }, max_completion_tokens: secret }),
     });
     assert.equal(await response.text(), wire);
+    await observed;
     assert.equal(rows[0].pathname, 'unknown');
     assert.equal(rows[0].model, 'unknown');
     assert.equal(rows[0].reasoning, 'unknown');
     assert.deepEqual(rows[0].tokenLimits, { max_completion_tokens: 'unknown' });
-    assert.deepEqual(rows[1].error, { code: 'unknown', type: 'unknown', param: 'unknown' });
+    assert.deepEqual(rows[2].error, { code: 'unknown', type: 'unknown', param: 'unknown' });
     assert.ok(!JSON.stringify(rows).includes(secret));
   }
 });
