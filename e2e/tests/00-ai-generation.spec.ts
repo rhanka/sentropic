@@ -11,6 +11,31 @@ const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 test.setTimeout(8 * 60_000);
 
 test.describe('Génération IA', () => {
+  test('should await a pending draft before starting AI generation', async ({ page }) => {
+    const folderId = '10000000-0000-0000-0000-000000000001';
+    let releaseDraft!: () => void;
+    let draftRequests = 0;
+    const pendingDraft = new Promise<void>(resolve => { releaseDraft = resolve; });
+    await page.route('**/api/v1/folders/draft*', async route => {
+      draftRequests += 1;
+      await pendingDraft;
+      await route.fulfill({ status: 201, json: { id: folderId, name: 'Pending draft', status: 'draft' } });
+    });
+    await page.route('**/api/v1/initiatives/generate*', route => route.fulfill({ status: 202, json: { jobId: 'draft-regression', folder_id: folderId } }));
+    await page.goto('/folder/new');
+    await page.waitForLoadState('domcontentloaded');
+    const context = page.locator('.markdown-input-wrapper [contenteditable="true"]').first();
+    await expect(context).toBeVisible();
+    await context.click();
+    await page.keyboard.type('Generate initiatives while the draft is still being created');
+    await page.getByRole('spinbutton').focus();
+    await expect.poll(() => draftRequests, { timeout: 2000 }).toBe(1);
+    const generation = page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/api/v1/initiatives/generate'), { timeout: 2000 });
+    await page.locator('button[title="IA"][aria-label="IA"]').first().click();
+    releaseDraft();
+    expect((await generation).postDataJSON().folder_id).toBe(folderId);
+    expect(draftRequests).toBe(1);
+  });
   // Ces tests sont coûteux (jobs async, appels externes mockés/ratelimités). Les retries globales (retries: 2)
   // triplent inutilement la durée et masquent les flakys. On les désactive pour ce fichier.
   test.describe.configure({ mode: 'serial', retries: 0 });
