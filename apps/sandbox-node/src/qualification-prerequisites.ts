@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { fileDigest } from './file-digest.js';
 import { privateNetworkScript } from './private-network.js';
 
 /** Execute the dependency and netlink probe with the shipped unit's hardening. */
@@ -13,7 +13,8 @@ export function qualificationPrerequisites(release: string): void {
     { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', maxBuffer: 16384 }).trim();
   const binary = run('sh', ['-ec', 'command -v runsc']);
   assert.ok(binary.startsWith('/'), 'absolute runsc path required');
-  console.log(`RECEIPT archive_sha256=${digest} runsc_sha256=${createHash('sha256').update(readFileSync(binary)).digest('hex')}`);
+  const binaryDigest = fileDigest(binary);
+  console.log(`RECEIPT archive_sha256=${digest} runsc_sha256=${binaryDigest}`);
   const unit = readFileSync(join(release, 'execution-node.service'), 'utf8');
   const properties = ['CapabilityBoundingSet', 'SystemCallFilter'].map(name => {
     const line = unit.split('\n').find(line => line.startsWith(`${name}=`));
@@ -30,5 +31,5 @@ export function qualificationPrerequisites(release: string): void {
   }
   console.log('PASS iproute2, util-linux, sh and private netns under unit hardening');
   // In-memory gate authorization only. k8s's on-disk production switch stays closed.
-  process.env.EXECUTION_NODE_PORTS_RUNSC_SHA256 = createHash('sha256').update(readFileSync(binary)).digest('hex');
+  process.env.EXECUTION_NODE_PORTS_RUNSC_SHA256 = binaryDigest;
 }

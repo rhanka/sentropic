@@ -1,5 +1,5 @@
 import { ExecutionNodeError } from './errors.js';
-import { createHash } from 'node:crypto';
+import { fileDigest } from './file-digest.js';
 import { readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
@@ -12,7 +12,7 @@ export function runscDigest(binary = process.env.EXECUTION_NODE_RUNSC ?? 'runsc'
   const s = statSync(path, { bigint: true });
   const identity = `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`;
   if (cached?.path !== path || cached.identity !== identity) {
-    cached = { path, identity, digest: createHash('sha256').update(readFileSync(path)).digest('hex') };
+    cached = { path, identity, digest: fileDigest(path) };
   }
   return cached.digest;
 }
